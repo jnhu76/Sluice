@@ -51,6 +51,12 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void request_scope_settlement_health_fail_fast() noexcept;
 
+[[noreturn]] void stackful_host_suspend_invariant_fail_fast() noexcept;
+
+[[noreturn]] void stackful_host_drive_health_fail_fast() noexcept;
+
+[[noreturn]] void stackful_host_live_task_fail_fast() noexcept;
+
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
 
 [[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept;

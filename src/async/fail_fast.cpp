@@ -138,6 +138,32 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void stackful_host_suspend_invariant_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::StackfulIoHost: a task reached a protocol-unreachable "
+                 "suspension/resume or publication state\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
+[[noreturn]] void stackful_host_drive_health_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::StackfulIoHost: progress health failed while driving "
+                 "tasks with accepted work; failing fast instead of returning with "
+                 "live borrows\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
+[[noreturn]] void stackful_host_live_task_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::StackfulIoHost: destroying the host while tasks are "
+                 "spawned but not retired discards suspended stacks and is a contract "
+                 "violation\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
 [[noreturn]] void request_slot_release_invariant_fail_fast() noexcept {
     std::terminate();
 }
