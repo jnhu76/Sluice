@@ -47,10 +47,12 @@ supported host and is dispositioned in §8.
 - All host mutation APIs other than `request_stop()` (`spawn`, `run`) are
   host-thread-only: a caller obligation, not a policed precondition (the only
   runtime guard rejects cross-host reentry from inside a task).
-  `request_stop()` is callable from any thread: it publishes a
-  stop flag, requests the single host-level stop token that every task's
-  `IoTaskContext` observes, and wakes a parked driver through
-  `interrupt_progress_waiters()` (THREAD-01: other threads may request stop).
+  `request_stop()` is callable from any thread: it publishes a stop flag and
+  requests the single host-level stop token that every task's
+  `IoTaskContext` observes (THREAD-01: other threads may request stop). It
+  writes nothing into the context's control plane — the host plants no
+  progress-source interrupt, so a stop that lands while the driver is not in
+  a wait leaves no unacknowledged control behind for the next owner.
   The host-owned latched flag (`stop_requested_`) is the stop authority the
   await precheck and spawn admission read; the token is the task-visible
   projection (exposed read-only, because a public `clear()`/`rearm()` would
@@ -69,6 +71,7 @@ supported host and is dispositioned in §8.
 | Wake/await state | one await link per suspension, at most one live per task slot, task-lifetime storage; no allocation after `run()` starts | none possible |
 | Timers | none | n/a |
 | Host-local request state | the awaited `Request<T>` lives in the task's await frame (task stack); at most one per task at any instant | n/a |
+| Task payload bytes | caller-dependent (`std::function` target size); the host bounds the retained instance count at `task_capacity`, not the byte size | count-bounded, not byte-bounded |
 
 Construction (`StackfulIoHost::create`) validates `task_capacity ≥ 1`,
 `stack_bytes ≥ 65536`, architecture support (`fiber_ctx::supported`), the
@@ -94,39 +97,50 @@ is the caller's own code.
   `bad_alloc` → `no_space`, other → `backend_error`, matching the existing
   `translate_task_exception` table). Stop-initiated early task exits are not
   errors.
-- `request_stop()`: idempotent. Requests the single host-level stop token, so
-  cooperative tasks observe stop at await boundaries and in their own loops,
-  closes host spawn admission, and wakes the driver. Stop never destroys a
-  suspended stack, never settles a request by fiat, and never implies physical
-  cancellation (CANCEL-01 `requested` at most).
+- `request_stop()`: idempotent. Requests the single host-level stop token,
+  so cooperative tasks observe stop at await boundaries and in their own
+  loops, and closes host spawn admission (`canceled`). Stop never destroys a
+  suspended stack, never settles a request by fiat, and never requests
+  cancellation of an accepted request — cancellation is a separate explicit
+  action (CANCEL-02) that no host path performs. An accepted request keeps
+  its responsibility; the host continues driving until its natural
+  publication, after which the task observes the token and retires. Stop
+  therefore does not wake a parked driver: convergence waits on the accepted
+  operations' own terminal states, and a request that never reaches a
+  terminal defers `run()` exit indefinitely (no bounded-stop promise; §9/§12).
 
 ## 5. The await protocol (host completed-return helper)
 
 `IoTaskContext` exposes completed-return operations over the four admitted
 request kinds — `read` / `write` / `sync_data` / `sync_all`, each with an
-optional-deadline form. One call owns at most one `Request<T>`:
+optional-deadline form. One call owns at most one `Request<T>`. The
+`IoTaskContext&` is valid only inside the task body invocation that received
+it; tasks must not retain it past return:
 
 ```text
 precheck host stop                     → return canceled (no acceptance)
 r = ctx.submit_<op>(op)                → rejection returns verbatim (no acceptance)
 link.request = &r; link.deadline=…; task.await_link = &link   (no-throw, stack storage)
 suspend fiber
-   [driver: poll_progress → wake when r.ready(); stop → r.cancel() once;
-    deadline expiry → r.cancel() once]
+   [driver: poll_progress → wake when r.ready()]
 resume: task.await_link = nullptr; obs = r.take_result()
 return obs result                      (borrow ended at acquired publication)
 ```
 
-- The wake link is written before the fiber suspends and is task-lifetime
-  storage, so **no fallible step exists between acceptance and suspension**
-  (OBS-04 reserve-before-acceptance arm; this structurally removes the
-  post-acceptance observation-failure mode). The driver's `cancel()` on a
-  suspended task's request is a THREAD-01-legal cross-thread cancel of a
-  quiescent handle.
-- The deadline bounds initial waiting only (CANCEL-02). On expiry the helper
-  initiates best-effort cancel and keeps the task suspended until publication;
-  it returns the operation's honest terminal result (data or `canceled`) — never
-  a fictitious timeout success, and never a returned Request.
+- The `AwaitLink` object itself is constructed after acceptance on the
+  task's own stack; what is pre-existing is the bounded observation capacity
+  (the fixed slot/stack/await-link storage allocated at construction). After
+  acceptance there is **no allocation, no throwing registration, and no
+  fallible observation setup** — the post-acceptance observation-failure
+  mode is eliminated by construction (OBS-04 reserve arm; H3's sibling
+  observation shows the reserved state during suspension).
+- The deadline bounds the driver's initial park window only (CANCEL-02,
+  PROG-04): on expiry the host neither cancels nor settles the request, and
+  the task stays suspended until its natural publication; the helper returns
+  the operation's real terminal result whenever it reaches one — never a
+  fictitious timeout success, never a returned Request, and never a
+  host-initiated cancellation. A non-positive wait provides no effective
+  bound (its deadline is already past).
 - Wake routing uses **no observer registration**: the driver polls each
   suspended task's `Request::ready()` after every progress pass (OBS-01 polling
   needs no allocation and no core state). One accepted request has one wake
@@ -149,9 +163,11 @@ wrapper captures exception → slot retired → stack reusable
 ```
 
 ```text
-stop/deadline while suspended
+stop while suspended (deadline expiry changes nothing: see §5)
     ↓
-driver best-effort cancels → publication follows (L1) → task resumes
+request keeps its responsibility → natural publication follows (L1)
+    ↓
+task resumes
     ↓
 helper takes/discards terminal result (settlement; borrow ends)
     ↓
@@ -201,9 +217,11 @@ host lands.
 General async runtime semantics; multi-worker execution (the host is
 single-driver); the public runtime-aware synchronization suite; transparent
 async open/close/resize; a second progress owner or driver handoff; backend or
-core knowledge of host/fiber identity; timeout-as-cancellation; bounded-stop
-guarantees (stop converges under the L1/L4 environment assumptions; a stalled
-filesystem is outside REQ-06); recoverable poison handling during host driving
+core knowledge of host/fiber identity; timeout-as-cancellation; writing the
+context's control plane from host stop; bounded-stop guarantees (stop
+converges when the accepted operations reach their terminal states under the
+L1/L4 environment assumptions; a stalled filesystem is outside REQ-06);
+recoverable poison handling during host driving
 (health failure during `run()` fails fast — the documented boundary until #401
 owns a recoverable form, same as D1).
 
@@ -219,22 +237,29 @@ the #400 operation matrix.
 ## 11. Validation obligations
 
 W-04 tracer (sequential read-fill → write → sync chain, ThreadPool and a
-successfully constructed io_uring); the HOST-03 matrix H1–H6 (task failure while
-another task's I/O is outstanding; stop during suspension; post-acceptance
-observation-failure structural elimination with mutation discrimination; wait
-timeout with settlement; exception during resumed processing; delivery/stop
-races with retirement); progress-owner composition evidence (second claim,
+successfully constructed io_uring); the HOST-03 matrix H1–H6 (task failure
+while another task's I/O is outstanding; stop during suspension with the
+accepted request settling on its natural outcome; post-acceptance
+observation-setup failure eliminated by construction with mutation
+discrimination; deadline expiry returning the real terminal result without
+cancellation; exception during resumed processing; delivery/stop races with
+retirement); run-reuse evidence (a failed run leaves no error state for the
+next run); stop control-plane evidence (host stop plants no context control
+for the next owner); progress-owner composition evidence (second claim,
 `RequestScope` on host context, re-claim after `run()`); bound evidence
-(capacity rejection, fixed stacks); mutation kills M1–M6 (recorded in the
-v1 conformance ledger D2 entry); ASan/TSan including fiber switches; core-only
-probes unchanged.
+(capacity rejection, fixed stacks); mutation kills M1–M9 (recorded in the
+v1 conformance ledger D2 entry); ASan/TSan including fiber switches;
+core-only probes unchanged.
 
 ## 12. Known limitations
 
 Plain stacks without guard pages (same as the legacy fiber substrate); x86_64
 Linux only (`fiber_ctx::supported`, explicit setup failure elsewhere); stop
-latency is bounded by cooperative tasks plus physical completion (no operation
-preemption); a task that ignores its token and never awaits can defer host
-exit indefinitely (documented cooperative rule, HOST-01); deadline forms are
-cancel-hinted waits, not timeout returns (CANCEL-02); health failure during
-`run()` fails fast rather than returning an error result.
+convergence requires the accepted operations to reach terminal states and
+cooperative tasks to observe the token (no operation preemption, no bounded
+stop promise, no driver wake from stop); a task that ignores its token and
+never awaits can defer host exit indefinitely (documented cooperative rule,
+HOST-01); deadline forms bound the driver's initial park window only and
+never cancel (CANCEL-02, PROG-04); a non-positive wait provides no effective
+bound; health failure during `run()` fails fast rather than returning an
+error result.
