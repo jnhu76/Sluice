@@ -30,7 +30,9 @@ class StackfulIoHost;
 
 // Handle passed to a task body. The token is the host-wide stop token,
 // shared by every task of the host: tasks observe it but cannot un-latch a
-// host stop (the returned reference is read-only).
+// host stop (the returned reference is read-only). The context is valid only
+// inside the task body invocation that received it; tasks must not retain it
+// past return.
 class IoTaskContext {
   public:
     const CancelToken& token() const noexcept { return *token_; }
@@ -68,15 +70,22 @@ class IoTaskContext {
 //
 // `run` claims the context's progress owner for the whole call, drives every
 // admitted task to retirement, and releases the owner on every exit; it
-// returns the first task error, if any. Blocking file management (open,
-// explicit close, resize) is outside the task region: perform it on the host
-// thread outside `run`.
+// returns the first task error of that call, if any. Blocking file management
+// (open, explicit close, resize) is outside the task region: perform it on
+// the host thread outside `run`.
 //
-// The `_for` forms bound only the initial wait: on expiry the host cancels
-// the awaited request once (best effort) and the task still settles by
-// observing the real terminal — the returned result is honest data or an
-// honest error, never a synthesized timeout. Destroying the host while
-// tasks are spawned but not retired fails fast.
+// `request_stop()` publishes the stop flag, requests the task stop token and
+// closes spawn admission. It neither cancels nor settles accepted requests
+// and it touches nothing in the context's control plane: an accepted request
+// keeps its responsibility until its natural publication, and stop
+// convergence waits on that settlement.
+//
+// The `_for` forms bound only the driver's initial park window for that
+// await: on expiry the request keeps its responsibility — the host neither
+// cancels nor settles it — and the helper returns the operation's real
+// terminal result whenever it reaches one. A non-positive wait provides no
+// effective bound. Destroying the host while tasks are spawned but not
+// retired fails fast.
 class StackfulIoHost {
   public:
     static Result<std::unique_ptr<StackfulIoHost>> create(AsyncIoContext& ctx,
@@ -119,11 +128,12 @@ class StackfulIoHost {
 
     struct AwaitLink {
         bool (*ready_fn)(void* request) noexcept = nullptr;
+#if defined(SLUICE_D2_MUTANT_DEADLINE_CANCELS)
         void (*cancel_fn)(void* request) noexcept = nullptr;
+#endif
         void* request = nullptr;
         std::chrono::steady_clock::time_point deadline{};
         bool has_deadline = false;
-        bool cancel_initiated = false;
     };
 
     struct TaskSlot {
@@ -149,8 +159,6 @@ class StackfulIoHost {
     void run_task_(TaskSlot& slot);
     void suspend_current_(AwaitLink& link);
     void wake_suspended_ready_();
-    void cancel_suspended_awaited_() noexcept;
-    void sweep_expired_deadlines_() noexcept;
     std::chrono::nanoseconds next_park_() const noexcept;
     void record_task_error_(const IoError& error) noexcept;
 
@@ -201,7 +209,9 @@ Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, 
     AwaitLink link;
     link.request = &request;
     link.ready_fn = [](void* p) noexcept { return static_cast<Request<T>*>(p)->ready(); };
+#if defined(SLUICE_D2_MUTANT_DEADLINE_CANCELS)
     link.cancel_fn = [](void* p) noexcept { (void)static_cast<Request<T>*>(p)->cancel(); };
+#endif
     if (bounded) {
         const auto now = std::chrono::steady_clock::now();
         link.deadline = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(

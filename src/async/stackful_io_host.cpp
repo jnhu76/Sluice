@@ -223,64 +223,28 @@ void StackfulIoHost::wake_suspended_ready_() {
     }
 }
 
-void StackfulIoHost::cancel_suspended_awaited_() noexcept {
-    for (std::size_t i = 0; i < task_capacity_; ++i) {
-        TaskSlot& slot = slots_[i];
-        if (!slot.live || slot.await_link == nullptr) {
-            continue;
-        }
-        AwaitLink& link = *slot.await_link;
-        if (link.cancel_initiated) {
-            continue;
-        }
-        link.cancel_initiated = true;
-        link.cancel_fn(link.request);
-    }
-}
-
-void StackfulIoHost::sweep_expired_deadlines_() noexcept {
-    const auto now = std::chrono::steady_clock::now();
-    for (std::size_t i = 0; i < task_capacity_; ++i) {
-        TaskSlot& slot = slots_[i];
-        if (!slot.live || slot.await_link == nullptr) {
-            continue;
-        }
-        AwaitLink& link = *slot.await_link;
-        if (!link.has_deadline || link.cancel_initiated) {
-            continue;
-        }
-        if (now < link.deadline) {
-            continue;
-        }
-        link.cancel_initiated = true;
-        link.cancel_fn(link.request);
-    }
-}
-
 std::chrono::nanoseconds StackfulIoHost::next_park_() const noexcept {
+    // A deadline bounds the initial park window only: once it is past, it
+    // stops bounding parks and the host waits unboundedly for natural
+    // settlement. Expiry never cancels.
+    const auto now = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point earliest =
         std::chrono::steady_clock::time_point::max();
-    bool any = false;
     for (std::size_t i = 0; i < task_capacity_; ++i) {
         const TaskSlot& slot = slots_[i];
         if (!slot.live || slot.await_link == nullptr) {
             continue;
         }
         const AwaitLink& link = *slot.await_link;
-        if (!link.has_deadline || link.cancel_initiated) {
+        if (!link.has_deadline || link.deadline <= now) {
             continue;
         }
-        any = true;
         if (link.deadline < earliest) {
             earliest = link.deadline;
         }
     }
-    if (!any) {
+    if (earliest == std::chrono::steady_clock::time_point::max()) {
         return std::chrono::nanoseconds::max();
-    }
-    const auto now = std::chrono::steady_clock::now();
-    if (earliest <= now) {
-        return std::chrono::nanoseconds::zero();
     }
     return std::chrono::duration_cast<std::chrono::nanoseconds>(earliest - now);
 }
@@ -335,7 +299,9 @@ Result<void> StackfulIoHost::spawn(std::function<void(IoTaskContext&)> task) {
 void StackfulIoHost::request_stop() noexcept {
     stop_requested_.store(true, std::memory_order_release);
     stop_token_.request();
+#if defined(SLUICE_D2_MUTANT_STOP_INTERRUPTS_CONTROL)
     ctx_.interrupt_progress_waiters();
+#endif
 }
 
 Result<void> StackfulIoHost::run() {
@@ -348,6 +314,11 @@ Result<void> StackfulIoHost::run() {
     if (!owner.has_value()) {
         return make_unexpected_void(owner.error());
     }
+#endif
+
+#if !defined(SLUICE_D2_MUTANT_STALE_ERROR_RETAINED)
+    first_task_error_set_ = false;
+    first_task_error_ = {};
 #endif
 
     struct RunningGuard {
@@ -397,10 +368,20 @@ Result<void> StackfulIoHost::run() {
             continue;
         }
 
-        if (stop_requested()) {
-            cancel_suspended_awaited_();
+#if defined(SLUICE_D2_MUTANT_DEADLINE_CANCELS)
+        for (std::size_t i = 0; i < task_capacity_; ++i) {
+            TaskSlot& slot = slots_[i];
+            if (!slot.live || slot.await_link == nullptr) {
+                continue;
+            }
+            AwaitLink& link = *slot.await_link;
+            if (!link.has_deadline ||
+                std::chrono::steady_clock::now() < link.deadline) {
+                continue;
+            }
+            link.cancel_fn(link.request);
         }
-        sweep_expired_deadlines_();
+#endif
 
         const std::chrono::nanoseconds park = next_park_();
         auto woke = park == std::chrono::nanoseconds::max() ? ctx_.wait_one()
