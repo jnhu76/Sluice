@@ -48,8 +48,6 @@ namespace sluice::async {
 
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth) : available_(false) {
     (void)queue_depth;
-    // Selecting the io_uring profile without liburing support is an explicit
-    // setup failure; it must never degrade into a constructed-but-dead profile.
     throw std::runtime_error(
         "sluice::async::UringAsyncBackend: io_uring profile unavailable (built without liburing)");
 }
@@ -1117,11 +1115,6 @@ void UringAsyncBackend::finalize_operation_terminal_(
     candidate.kind = detail::TerminalCandidateKind::physical_outcome;
     if (terminal.stored && terminal.is_error) {
         // A dispatched attempt that reached the kernel and reports failure
-        // carries no trustworthy byte count; the shared rule reports an
-        // unknown remainder rather than a fabricated zero. Cancellation racing
-        // an in-flight attempt keeps the same unknown-remainder rule. Metadata
-        // and sync attempts have no data effect, so their failures stay
-        // accounted zero.
         if (!is_byte_op) {
             if (terminal_is_kernel_cancel(terminal.error)) {
                 candidate.outcome = sluice::detail::IoOutcome::failure(
@@ -1503,9 +1496,6 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexc
         sqe = ::io_uring_get_sqe(&ring_state_->ring);
     }
     if (sqe == nullptr) {
-        // Bounded sticky intent: the intent stays recorded on the live route
-        // and later progress passes retry the control submission, so a
-        // reported `requested` cancel is never silently discarded.
         route.control_pending = sticky_intent_retained();
         return;
     }

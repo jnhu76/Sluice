@@ -504,9 +504,6 @@ bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
     Backend::AcceptedPreDispatchPauseGate gate;
     raw->set_accepted_pre_dispatch_pause_gate(&gate);
 
-    // The gate parks the submitting thread between acceptance and dispatch,
-    // so the submission runs on a helper thread and the main thread cancels
-    // through the bound completion while the window is open.
     Completion<std::size_t> completion;
     std::vector<std::byte> buffer(8, std::byte{0});
     std::thread submitter{[&] {
@@ -543,6 +540,11 @@ bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
     const Result<std::size_t> result = completion.result();
     t.check(!result.has_value() && result.error().code == IoError::Code::canceled,
             "the won cancel converges to a canceled terminal");
+    const auto canceled_slot = core.observe_slot(key->slot);
+    t.check(canceled_slot.has_value() && canceled_slot->terminal_chosen &&
+                canceled_slot->outcome.effect ==
+                    EffectReport{0, EffectCertainty::accounted},
+            "the pre-dispatch cancel is a known-zero terminal at the core");
     completion.reset();
     t.check(core_is_idle(core.snapshot()), "the canceled slot reclaims completely");
     return true;
@@ -563,15 +565,18 @@ bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
         AsyncIoContext ctx(std::move(backend));
         RequestCore& core = *ctx.context_core_for_test();
 
+        Backend::WorkerClaimedPauseGate gate;
+        raw->set_worker_claimed_pause_gate(&gate);
+
         auto submitted = ctx.submit_read(
             ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0});
         t.check(submitted.has_value(), "the running-window read is accepted");
-        if (!submitted.has_value())
+        if (!submitted.has_value()) {
+            raw->set_worker_claimed_pause_gate(nullptr);
             return false;
+        }
         Request<std::size_t> request = std::move(submitted).value();
 
-        Backend::WorkerClaimedPauseGate gate;
-        raw->set_worker_claimed_pause_gate(&gate);
         wait_gate_paused(gate);
         const auto disposition = request.cancel();
         t.check(
@@ -962,8 +967,11 @@ bool sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced(Tracker& t) {
     made.control->advance.store(true, std::memory_order_release);
     (void)made.ctx->poll();
     (void)made.ctx->poll();
-    t.check(made.backend->live_control_sqes_for_test() == 1,
+    const bool control_visible = made.backend->live_control_sqes_for_test() == 1;
+    t.check(control_visible,
             "the serviced intent became a kernel-visible control exactly once");
+    if (!control_visible)
+        return false;
     const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
     t.check(cookie.has_value(), "the stranded operation still holds a live cookie");
     if (!cookie.has_value())
@@ -1009,8 +1017,6 @@ bool success_and_cancel_converge_without_fabrication_under_the_fiction(Tracker& 
         return false;
     (void)made.ctx->poll();
 
-    // The device completed before the control took effect: the success CQE is
-    // authoritative and the cancel control retires afterwards.
     made.backend->inject_cqe_for_test(*cookie, 8);
     made.backend->inject_cqe_for_test(kControlTag | *cookie, 0);
     while (!request.ready())

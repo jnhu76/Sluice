@@ -566,9 +566,6 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
     }
     case detail::OperationKind::file_info:
     case detail::OperationKind::size: {
-        // A metadata syscall has no data effect on any path, so a failure is
-        // reported as accounted zero rather than through the dispatched-write
-        // unknown-remainder rule.
         struct ::stat st {};
         const int rc = sluice::detail::retry_on_eintr([&] { return ::fstat(p.fd, &st); });
         if (rc < 0)
@@ -788,9 +785,6 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
             }
             publication_pending_.push_back(detail::SlotHandle{key.slot, key.generation});
         } else if (disposition == detail::PublicCancel::requested) {
-            // Workers execute blocking syscalls to completion; no mechanism can
-            // interrupt a claimed operation, so the public disposition reports
-            // that physical fact while the recorded intent stays bounded.
 #if defined(SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED)
             disposition = detail::PublicCancel::requested;
 #else
