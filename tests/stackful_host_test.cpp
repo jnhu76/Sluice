@@ -1742,6 +1742,208 @@ bool host_convenience_parity_with_direct_invocation_semantics() {
     }
 }
 
+// A first primitive whose submission transaction is rejected — here because
+// request capacity is exhausted by a held occupier — accepted nothing, so
+// the invocation itself is rejected through the outer result. Folding that
+// rejection into the composition outcome would erase the accepted-versus-
+// never-accepted distinction the result contract keeps.
+bool first_primitive_admission_rejection_surfaces_as_outer_error() {
+    const std::string src_path = make_temp_file("abcdefgh");
+    const std::string occ_path = make_temp_file(std::string(8, 'o'));
+    auto src_open = File::open(src_path);
+    auto occ_open = File::open(occ_path);
+    ::unlink(src_path.c_str());
+    ::unlink(occ_path.c_str());
+    check(src_open.has_value() && occ_open.has_value(), "first-rejection opens");
+    if (!src_open.has_value() || !occ_open.has_value()) {
+        return false;
+    }
+    File src = std::move(src_open).value();
+    File occ = std::move(occ_open).value();
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{1, 1});
+    ThreadPoolBackend* raw = backend.get();
+    ThreadPoolBackend::WorkerClaimedPauseGate claimed_gate;
+    raw->set_worker_claimed_pause_gate(&claimed_gate);
+    AsyncIoContext ctx{std::move(backend)};
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "first-rejection host constructs");
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    std::vector<std::byte> occ_buffer(8, std::byte{0});
+    auto occ_submit =
+        ctx.submit_read(ReadOp{NativeFileRef{occ}, occ_buffer.data(), occ_buffer.size(), 0});
+    check(occ_submit.has_value(), "first-rejection occupier accepted");
+    if (!occ_submit.has_value()) {
+        return false;
+    }
+    Request<std::size_t> occupier = std::move(occ_submit).value();
+    wait_gate_paused(claimed_gate);
+
+    const Result<CompositionOutcome> rejected_unset = make_unexpected<CompositionOutcome>(
+        IoError{.code = IoError::Code::backend_error});
+    Result<CompositionOutcome> composed = rejected_unset;
+    std::vector<std::byte> buffer(8, std::byte{0});
+    check(host->spawn([&](IoTaskContext& task) {
+              composed = task.read_exact(NativeFileRef{src}, buffer, 0);
+          }).has_value(),
+          "first-rejection task admitted");
+
+    auto run = host->run();
+    check(run.has_value(), "first-rejection run settles");
+    const bool rejected_ok = !composed.has_value() &&
+                             composed.error().code == IoError::Code::would_block;
+    check(rejected_ok, "capacity-rejected first primitive rejects the invocation, nothing accepted");
+    check(ctx.outstanding() == 1, "first-rejection only the occupier is outstanding");
+    check(raw->syscall_count_for_test() == 0, "first-rejection dispatched no kernel operation");
+    const bool rejected_clean = rejected_ok && ctx.outstanding() == 1 &&
+                                raw->syscall_count_for_test() == 0;
+
+    resume_gate(claimed_gate);
+    auto owner = ctx.claim_progress_owner();
+    check(owner.has_value(), "first-rejection owner reclaimable");
+    auto reap = ctx.wait_one();
+    check(reap.has_value() && reap.value().completed == 1, "occupier settles after release");
+    const auto observed = occupier.take_result();
+    check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+              observed.result.value() == 8,
+          "first-rejection occupier keeps its real result");
+    return run.has_value() && rejected_clean && observed.readiness == RequestReadiness::ready;
+}
+
+// The paired discriminator: a first primitive that WAS accepted and then
+// failed terminally before any byte reports through the composition outcome
+// (primitive error, confirmed zero) inside a successful outer result — the
+// request was accepted, so this is an operation result, not an invocation
+// rejection. Together with the capacity rejection above, the two pin the
+// classification; either one alone would admit a wrong rule.
+bool first_primitive_terminal_error_keeps_outcome_shape() {
+    const std::string path = make_temp_file("abcdefgh");
+    auto open = File::open(path);
+    ::unlink(path.c_str());
+    check(open.has_value(), "first-terminal open");
+    if (!open.has_value()) {
+        return false;
+    }
+    File src = std::move(open).value();
+
+    OwnedBackend owned = make_threadpool();
+    ThreadPoolBackend::DispatchFailureInjection injection;
+    owned.raw->set_dispatch_failure_injection(&injection);
+    injection.armed.store(true, std::memory_order_release);
+    AsyncIoContext ctx{std::move(owned.backend)};
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "first-terminal host constructs");
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    std::atomic<bool> shape_ok{false};
+    std::vector<std::byte> buffer(8, std::byte{0});
+    check(host->spawn([&](IoTaskContext& task) {
+              auto composed = task.read_exact(NativeFileRef{src}, buffer, 0);
+              shape_ok = composed.has_value() &&
+                         composed.value().end == CompositionEnd::primitive_error &&
+                         composed.value().error.has_value() &&
+                         composed.value().error->code == IoError::Code::backend_error &&
+                         composed.value().confirmed_bytes == 0;
+          }).has_value(),
+          "first-terminal task admitted");
+
+    auto run = host->run();
+    check(run.has_value(), "first-terminal run settles");
+    check(shape_ok, "accepted first primitive terminal error is an operation result, not a rejection");
+    check(injection.fired.load(std::memory_order_acquire) == 1,
+          "first-terminal failure injected exactly once");
+    check(owned.raw->syscall_count_for_test() == 0, "first-terminal never reached the kernel");
+    check(ctx.outstanding() == 0, "first-terminal nothing outstanding");
+    check(host->test_live_task_count() == 0, "first-terminal tasks retired");
+    return run.has_value() && shape_ok &&
+           injection.fired.load(std::memory_order_acquire) == 1 &&
+           owned.raw->syscall_count_for_test() == 0;
+}
+
+// Other threads may submit context operations while the host drives
+// (THREAD-01), so a completion of such a request can be reaped by the
+// run-exit observation before the pending control is ever checked — with a
+// single exit wait the owner then releases with the control unobserved and
+// the next owner inherits it. The choreography pins that interleaving
+// exactly: after the task's final await settles, its epilogue (still on the
+// driver thread, so no progress pass can run) lets an external thread
+// publish a zero-length request and plant the control before returning, so
+// the exit observation's first pass reaps the external completion and
+// returns progress without the control check. The release must keep
+// observing until a pass reaps nothing with no control pending.
+bool external_completion_preceding_control_does_not_leak_to_next_owner() {
+    const std::string src_path = make_temp_file(std::string(32, 'k'));
+    auto src_open = File::open(src_path);
+    ::unlink(src_path.c_str());
+    check(src_open.has_value(), "exit-interleave open");
+    if (!src_open.has_value()) {
+        return false;
+    }
+    File src = std::move(src_open).value();
+
+    OwnedBackend owned = make_threadpool(1);
+    ThreadPoolBackend::WorkerClaimedPauseGate claimed_gate;
+    owned.raw->set_worker_claimed_pause_gate(&claimed_gate);
+    AsyncIoContext ctx{std::move(owned.backend)};
+    auto host_r = StackfulIoHost::create(ctx, StackfulHostConfig{});
+    check(host_r.has_value(), "exit-interleave host constructs");
+    std::unique_ptr<StackfulIoHost> host = std::move(host_r).value();
+
+    std::atomic<bool> real_outcome{false};
+    std::atomic<bool> epilogue_running{false};
+    std::atomic<bool> external_published{false};
+    std::atomic<bool> control_planted{false};
+    std::atomic<bool> external_may_finish{false};
+
+    std::vector<std::byte> buffer(32, std::byte{0});
+    check(host->spawn([&](IoTaskContext& task) {
+              auto r = task.read(NativeFileRef{src}, buffer, 0);
+              real_outcome = r.has_value() && r.value() == 32;
+              epilogue_running.store(true, std::memory_order_release);
+              epilogue_running.notify_all();
+              external_published.wait(false, std::memory_order_acquire);
+              control_planted.wait(false, std::memory_order_acquire);
+          }).has_value(),
+          "exit-interleave task admitted");
+
+    std::thread sequencer([&] {
+        wait_gate_paused(claimed_gate);
+        resume_gate(claimed_gate);
+    });
+
+    std::thread external([&] {
+        epilogue_running.wait(false, std::memory_order_acquire);
+        auto e = ctx.submit_read(ReadOp{NativeFileRef{src}, nullptr, 0, 0});
+        check(e.has_value(), "exit-interleave external no-op accepted");
+        external_published.store(true, std::memory_order_release);
+        external_published.notify_all();
+        ctx.interrupt_progress_waiters();
+        control_planted.store(true, std::memory_order_release);
+        control_planted.notify_all();
+        external_may_finish.wait(false, std::memory_order_acquire);
+    });
+
+    auto run = host->run();
+    sequencer.join();
+    check(run.has_value(), "exit-interleave run settles");
+    check(real_outcome, "exit-interleave task settled on its real result");
+
+    external_may_finish.store(true, std::memory_order_release);
+    external_may_finish.notify_all();
+    external.join();
+    check(ctx.outstanding() == 0, "exit-interleave external request retired");
+
+    auto owner = ctx.claim_progress_owner();
+    check(owner.has_value(), "exit-interleave next owner claims the context");
+    auto probe = ctx.wait_one();
+    check(probe.has_value() &&
+              probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress,
+          "exit-interleave: an external completion preceding control does not leak it");
+    return run.has_value() && real_outcome && probe.has_value() &&
+           probe.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
+}
+
 } // namespace
 
 int main() {
@@ -1785,6 +1987,12 @@ int main() {
          host_composition_stops_at_new_acceptance_under_stop},
         {"host_convenience_parity_with_direct_invocation_semantics",
          host_convenience_parity_with_direct_invocation_semantics},
+        {"first_primitive_admission_rejection_surfaces_as_outer_error",
+         first_primitive_admission_rejection_surfaces_as_outer_error},
+        {"first_primitive_terminal_error_keeps_outcome_shape",
+         first_primitive_terminal_error_keeps_outcome_shape},
+        {"external_completion_preceding_control_does_not_leak_to_next_owner",
+         external_completion_preceding_control_does_not_leak_to_next_owner},
     };
 
     for (const NamedTest& t : tests) {
