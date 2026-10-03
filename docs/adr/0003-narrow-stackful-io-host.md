@@ -241,15 +241,20 @@ recoverable poison handling during host driving
 owns a recoverable form, same as D1).
 
 On the supported conforming driver path, `run()` returns after all spawned
-tasks retire (§2); that is the promised structured exit. The exit performs a
-zero-duration wait that observes and retires any control left pending by a
-progress return: the wait path may reap a completion in the pass that follows
-a control wake and return progress without ever reporting the control
-(deliberate progress-first ordering), and an owner that stops waiting there
-would release with unacknowledged control — the exit observation closes that
-window and is the same owner discipline as the in-loop acknowledgement
-(both points are mutation-discriminated together). The remaining `run()`
-error escapes (progress/wait infrastructure failures surfacing through
+tasks retire (§2); that is the promised structured exit. The exit repeats a
+zero-duration wait while its passes keep reaping completions: the wait path
+may reap a completion in the pass that follows a control wake and return
+progress without ever reporting the control (deliberate progress-first
+ordering), and because other threads may still submit context operations
+while the host drives (THREAD-01), such completions can keep preceding the
+control observation indefinitely — a fixed count of exit waits proves
+nothing. The first exit pass that reaps nothing is the owner-release
+linearization point: either it observed no control pending, or it observed
+the control (the latest generation, atomically) and acknowledged it; control
+arriving after that observation belongs to the next owner. This is the same
+owner discipline as the in-loop acknowledgement (both points are
+mutation-discriminated together). The remaining `run()` error escapes
+(progress/wait infrastructure failures surfacing through
 `poll_progress`/`wait_one`) are contract-invalid or unreachable under
 conforming use, no structured cleanup behavior is promised for them, and
 control hygiene on a failed `run()` stays with the #401 health/shutdown
@@ -283,6 +288,20 @@ safe repeated primitive use under SEM-05 — as `IoTaskContext::read_exact` /
   rejection, `canceled`) rejects the whole invocation through the outer
   `Result` error with nothing accepted — invocation rejection is never folded
   into the composition outcome;
+- the same outer-result treatment covers an admission rejection of what
+  would have been the invocation's first accepted primitive (for example
+  request capacity exhausted, `would_block`): the submission transaction
+  accepted nothing, so ERR-01's accepted-versus-never-accepted distinction
+  makes it an invocation rejection. The classification is positional, not
+  error-code-based: the await helper reports whether the submission
+  transaction accepted, and a rejection before this invocation's first
+  acceptance goes to the outer result while an accepted primitive's terminal
+  error — even with zero confirmed bytes, for example a dispatch-stage
+  failure of the very first step — is an operation result reported through
+  the outcome's primitive-error arm. After any acceptance the composition
+  owns its progress, so later admission rejections (including a mid-
+  composition host stop rejecting the next boundary) also report through the
+  outcome with the confirmed prefix;
 - a zero-length invocation is a logical no-op that still crosses admission as
   one zero-length primitive request: the root's request-path no-op rule (an
   explicit request no-op still requires an open healthy context, compatible
@@ -337,12 +356,25 @@ progress return and retired at run exit; the next owner sees no stale control
 under both legal paths — kills the skip-control-ack mutant at both
 acknowledgement points, with the consumed-by-progress-return path forced
 deterministically by holding the driver at its prepark pause while the worker
-publishes); nested-spawn evidence
+publishes); the external-completion release interleave (an external thread
+publishes a zero-length request and plants control while the driver is inside
+the last task's epilogue, so the exit observation's first pass reaps that
+completion and returns progress before the control check — a single exit
+wait then releases with the control unobserved and the next owner inherits
+it; the loop's first completion-free pass retires it); nested-spawn evidence
 (capacity-1 refusal with clean retirement, capacity-2 child admission and
 single execution); first-task-error selection evidence (execution order, not
 admission order and not last-wins); the composition-convenience evidence
 (full completion, EOF-before-full prefix, stop at the next acceptance
 boundary with the confirmed prefix, one physical operation per step); the
+first-primitive admission-classification pair (a capacity-exhausted
+nonempty first primitive rejects the whole invocation through the outer
+result with nothing accepted and no kernel operation, while an accepted
+first primitive failing terminally before any byte reports through the
+outcome's primitive-error arm with zero confirmed bytes inside a successful
+outer result — the two pin the accepted-versus-never-accepted distinction
+from both sides, so neither the folded nor the naive zero-confirmed rule
+survives); the
 direct-vs-host invocation parity table (identical inputs through
 `blocking::read_exact_at`/`write_all_at` and the host conveniences across
 closed/illegal-access/invalid-range/empty/nonempty/full/EOF rows and both
