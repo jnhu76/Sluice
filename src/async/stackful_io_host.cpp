@@ -203,9 +203,9 @@ Result<blocking::CompositionOutcome> IoTaskContext::read_exact(NativeFileRef fil
             auto settled = StackfulIoHost::await_request_<std::size_t>(
                 *host_,
                 [&] {
+                    const std::span<std::byte> remaining = dst.subspan(confirmed);
                     return host_->ctx_.submit_read(
-                        ReadOp{file, dst.data() + confirmed, dst.size() - confirmed,
-                               offset + confirmed});
+                        ReadOp{file, remaining.data(), remaining.size(), offset + confirmed});
                 },
                 false, std::chrono::nanoseconds::max(), &accepted);
             return HostStep{accepted, std::move(settled)};
@@ -222,9 +222,9 @@ Result<blocking::CompositionOutcome> IoTaskContext::write_all(NativeFileRef file
             auto settled = StackfulIoHost::await_request_<std::size_t>(
                 *host_,
                 [&] {
+                    const std::span<const std::byte> remaining = src.subspan(confirmed);
                     return host_->ctx_.submit_write(
-                        WriteOp{file, src.data() + confirmed, src.size() - confirmed,
-                                offset + confirmed});
+                        WriteOp{file, remaining.data(), remaining.size(), offset + confirmed});
                 },
                 false, std::chrono::nanoseconds::max(), &accepted);
             return HostStep{accepted, std::move(settled)};
