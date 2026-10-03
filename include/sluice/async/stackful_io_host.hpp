@@ -56,15 +56,19 @@ class IoTaskContext {
     // invocation is validated first, like the direct forms: a closed file,
     // illegal access, an invalid range or an already-stopped host rejects
     // the whole call through the outer result, before anything is accepted.
-    // A zero-length invocation is a logical no-op that still crosses
-    // admission as one no-op request — inheriting the context's admission
-    // and slot rules — and completes without a data operation. Once
-    // composing, a primitive failure stops the loop and is reported in the
-    // outcome with the confirmed prefix retained, next to a structured stop
-    // reason (complete, EOF before full, write made no progress, primitive
-    // error); a host stop observed mid-composition rejects the next
-    // primitive boundary with `canceled` before acceptance, reported like
-    // any primitive error.
+    // So does an admission rejection of a primitive that would have been the
+    // invocation's first accepted request (for example request capacity
+    // exhausted): nothing was accepted, so the invocation itself is
+    // rejected. A zero-length invocation is a logical no-op that still
+    // crosses admission as one no-op request — inheriting the context's
+    // admission and slot rules — and completes without a data operation.
+    // Once any primitive of the invocation has been accepted, a later
+    // failure stops the loop and is reported in the outcome with the
+    // confirmed prefix retained, next to a structured stop reason (complete,
+    // EOF before full, write made no progress, primitive error); that
+    // includes a primitive terminal error before any byte and a host stop
+    // observed mid-composition, which rejects the next primitive boundary
+    // with `canceled` before acceptance, reported like any primitive error.
     Result<blocking::CompositionOutcome> read_exact(NativeFileRef file, std::span<std::byte> dst,
                                                     std::uint64_t offset);
     Result<blocking::CompositionOutcome> write_all(NativeFileRef file,
@@ -90,7 +94,9 @@ class IoTaskContext {
 // caller obligation, not a policed precondition.
 //
 // `run` claims the context's progress owner for the whole call, drives every
-// admitted task to retirement, and releases the owner on every exit; it
+// admitted task to retirement, and releases the owner on every exit, after a
+// release pass that has observed and retired any pending control wake (other
+// threads may still submit context operations while the host drives); it
 // returns the first task error of that call, if any. Blocking file management
 // (open, explicit close, resize) is outside the task region: perform it on
 // the host thread outside `run`.
@@ -194,7 +200,7 @@ class StackfulIoHost {
 
     template <class T, class Submit>
     static Result<T> await_request_(StackfulIoHost& host, Submit&& submit, bool bounded,
-                                    std::chrono::nanoseconds wait);
+                                    std::chrono::nanoseconds wait, bool* accepted = nullptr);
 
     AsyncIoContext& ctx_;
     std::size_t task_capacity_ = 0;
@@ -219,7 +225,7 @@ class StackfulIoHost {
 
 template <class T, class Submit>
 Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, bool bounded,
-                                         std::chrono::nanoseconds wait) {
+                                         std::chrono::nanoseconds wait, bool* accepted) {
     static_assert(std::is_nothrow_move_constructible_v<Request<T>>);
 #if !defined(SLUICE_STACKFUL_HOST_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED)
     if (host.stop_requested()) {
@@ -231,6 +237,9 @@ Result<T> StackfulIoHost::await_request_(StackfulIoHost& host, Submit&& submit, 
         return make_unexpected<T>(submitted.error());
     }
     Request<T> request = std::move(submitted.value());
+    if (accepted != nullptr) {
+        *accepted = true;
+    }
 #if defined(SLUICE_STACKFUL_HOST_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED)
     if (host.stop_requested()) {
         return make_unexpected<T>(IoError{IoError::Code::canceled});

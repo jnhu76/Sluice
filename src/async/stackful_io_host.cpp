@@ -61,20 +61,40 @@ compose_outcome(const sluice::detail::CompositionState& state) noexcept {
     return outcome;
 }
 
-// An accepted first step proves offset + total stays representable, so every
-// later offset advance lands inside the range that step validated.
+// One settled primitive of a host composition. A step the submission
+// transaction rejected (`accepted == false`) left no request behind: its
+// `settled` error is that rejection, not an operation result.
+struct HostStep {
+    bool accepted;
+    Result<std::size_t> settled;
+};
+
+// A rejection before this invocation's first accepted request accepted
+// nothing anywhere, so it rejects the invocation itself (outer result).
+// After any acceptance the composition owns its progress and every later
+// failure — including a terminal error with zero confirmed bytes and a
+// later admission rejection — reports through the outcome's primitive-error
+// arm with the confirmed prefix. An accepted first step also proves offset
+// + total stays representable, so every later offset advance lands inside
+// the range that step validated.
 template <class Primitive>
-blocking::CompositionOutcome compose_host_steps(sluice::detail::CompositionKind kind,
-                                                std::size_t total, Primitive&& primitive) {
+Result<blocking::CompositionOutcome> compose_host_steps(sluice::detail::CompositionKind kind,
+                                                        std::size_t total,
+                                                        Primitive&& primitive) {
     sluice::detail::CompositionState state;
+    bool any_accepted = false;
     while (!state.stopped && state.confirmed_bytes < total) {
         const std::size_t confirmed = state.confirmed_bytes;
-        auto step = primitive(confirmed);
-        if (!step.has_value()) {
-            state = sluice::detail::compose_error(state, step.error());
+        const HostStep step = primitive(confirmed);
+        if (!step.accepted && !any_accepted) {
+            return make_unexpected<blocking::CompositionOutcome>(step.settled.error());
+        }
+        any_accepted = any_accepted || step.accepted;
+        if (!step.accepted || !step.settled.has_value()) {
+            state = sluice::detail::compose_error(state, step.settled.error());
             break;
         }
-        state = sluice::detail::compose_progress(kind, total, state, step.value());
+        state = sluice::detail::compose_progress(kind, total, state, step.settled.value());
     }
     return compose_outcome(state);
 }
@@ -98,9 +118,14 @@ Result<blocking::CompositionOutcome> compose_host_invocation(
         return make_unexpected<blocking::CompositionOutcome>(IoError{.code = IoError::Code::canceled});
     }
     if (verdict == sluice::detail::DataOpVerdict::complete_empty) {
-        const auto no_op = primitive(0);
-        if (!no_op.has_value()) {
-            return make_unexpected<blocking::CompositionOutcome>(no_op.error());
+        const HostStep no_op = primitive(0);
+        if (!no_op.accepted) {
+            return make_unexpected<blocking::CompositionOutcome>(no_op.settled.error());
+        }
+        if (!no_op.settled.has_value()) {
+            sluice::detail::CompositionState state;
+            state = sluice::detail::compose_error(state, no_op.settled.error());
+            return compose_outcome(state);
         }
         return blocking::CompositionOutcome{};
     }
@@ -173,7 +198,18 @@ Result<blocking::CompositionOutcome> IoTaskContext::read_exact(NativeFileRef fil
                                                                std::uint64_t offset) {
     return compose_host_invocation(
         file, offset, dst, sluice::detail::FileOperation::read, host_->stop_requested(),
-        [&](std::size_t confirmed) { return read(file, dst.subspan(confirmed), offset + confirmed); });
+        [&](std::size_t confirmed) -> HostStep {
+            bool accepted = false;
+            auto settled = StackfulIoHost::await_request_<std::size_t>(
+                *host_,
+                [&] {
+                    return host_->ctx_.submit_read(
+                        ReadOp{file, dst.data() + confirmed, dst.size() - confirmed,
+                               offset + confirmed});
+                },
+                false, std::chrono::nanoseconds::max(), &accepted);
+            return HostStep{accepted, std::move(settled)};
+        });
 }
 
 Result<blocking::CompositionOutcome> IoTaskContext::write_all(NativeFileRef file,
@@ -181,7 +217,18 @@ Result<blocking::CompositionOutcome> IoTaskContext::write_all(NativeFileRef file
                                                               std::uint64_t offset) {
     return compose_host_invocation(
         file, offset, src, sluice::detail::FileOperation::write, host_->stop_requested(),
-        [&](std::size_t confirmed) { return write(file, src.subspan(confirmed), offset + confirmed); });
+        [&](std::size_t confirmed) -> HostStep {
+            bool accepted = false;
+            auto settled = StackfulIoHost::await_request_<std::size_t>(
+                *host_,
+                [&] {
+                    return host_->ctx_.submit_write(
+                        WriteOp{file, src.data() + confirmed, src.size() - confirmed,
+                                offset + confirmed});
+                },
+                false, std::chrono::nanoseconds::max(), &accepted);
+            return HostStep{accepted, std::move(settled)};
+        });
 }
 
 StackfulIoHost::StackfulIoHost(AsyncIoContext& ctx, std::size_t task_capacity)
@@ -522,15 +569,30 @@ Result<void> StackfulIoHost::run() {
         }
     }
 
-    // A progress return can consume a control wake without reporting it; the
-    // owner must still observe and retire that control before releasing.
-    auto release_control = ctx_.wait_one(std::chrono::nanoseconds::zero());
-    if (release_control.has_value() &&
-        release_control.value().kind ==
+    // A progress return can consume a control wake without reporting it, and
+    // completions of other threads' requests may keep preceding the control
+    // observation, so one bounded wait proves nothing: the release repeats
+    // the zero-duration wait while passes keep reaping completions. The first
+    // pass that reaps nothing is the release linearization point — either it
+    // observed no control pending, or it observed the control (the latest
+    // generation, atomically) and the acknowledge above retired it; control
+    // arriving after that observation belongs to the next owner.
+    for (;;) {
+        auto release_control = ctx_.wait_one(std::chrono::nanoseconds::zero());
+        if (!release_control.has_value()) {
+            break;
+        }
+        if (release_control.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress &&
+            release_control.value().completed > 0) {
+            continue;
+        }
+        if (release_control.value().kind ==
             AsyncIoContext::ProgressWaitOutcome::Kind::control_interrupted) {
 #if !defined(SLUICE_STACKFUL_HOST_MUTANT_SKIP_CONTROL_ACK)
-        ctx_.acknowledge_progress_control();
+            ctx_.acknowledge_progress_control();
 #endif
+        }
+        break;
     }
 
     if (first_task_error_set_) {
