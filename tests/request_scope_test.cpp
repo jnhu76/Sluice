@@ -800,6 +800,14 @@ class ThrowingSubmitBackend final : public AsyncBackend {
         throw std::runtime_error("pre-accept submission throw");
     }
 
+    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+        throw std::runtime_error("pre-accept submission throw");
+    }
+
+    Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+        throw std::runtime_error("pre-accept submission throw");
+    }
+
     detail::PublicCancel cancel_identity(detail::RequestKey) override {
         return detail::PublicCancel::not_found;
     }

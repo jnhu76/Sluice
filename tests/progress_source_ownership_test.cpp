@@ -159,6 +159,14 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
+        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
     };
 
     AsyncIoContext ctx(std::make_unique<NullBackend>());
@@ -330,6 +338,14 @@ bool backend_destructor_runs_while_progress_source_lives() {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
+        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
     };
 
     std::atomic<bool> signaled_in_destruction{false};
@@ -382,6 +398,14 @@ bool constructor_unwind_destroys_backend_before_progress_source() {
                 IoError{IoError::Code::not_supported});
         }
         Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
@@ -463,8 +487,12 @@ bool threadpool_close_admission_signals_only_the_open_to_closed_transition() {
 
 #if defined(SLUICE_HAS_LIBURING)
 bool uring_available() {
-    UringAsyncBackend backend;
-    return backend.available();
+    try {
+        UringAsyncBackend backend;
+        return backend.available();
+    } catch (...) {
+        return false;
+    }
 }
 
 bool uring_close_admission_signals_only_the_open_to_closed_transition() {

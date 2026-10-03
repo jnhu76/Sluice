@@ -50,6 +50,14 @@ struct FileInfo {
     std::optional<FileIdentity> identity;
 };
 
+// Value carrier for request-path `size` results: the regular-file length in
+// bytes, distinct from data-operation byte counts.
+struct FileSize {
+    std::uint64_t bytes = 0;
+
+    friend bool operator==(const FileSize&, const FileSize&) noexcept = default;
+};
+
 enum class IdentityMatch : std::uint8_t {
     same,
     different,

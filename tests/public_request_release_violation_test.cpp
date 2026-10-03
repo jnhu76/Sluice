@@ -34,7 +34,11 @@ using sluice::File;
 using Backend = UringAsyncBackend;
 
 std::unique_ptr<Backend> make_backend() {
-    return std::make_unique<UringAsyncBackend>(UringConfig{2, 8});
+    try {
+        return std::make_unique<UringAsyncBackend>(UringConfig{2, 8});
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 #else
@@ -216,7 +220,7 @@ int main() {
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
     {
         auto probe = make_backend();
-        if (!probe->available()) {
+        if (!probe || !probe->available()) {
             std::printf("SKIP release violation tests: io_uring is unavailable\n");
             return 0;
         }

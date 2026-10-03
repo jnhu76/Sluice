@@ -14,7 +14,7 @@ namespace sluice::async::detail {
 
 using sluice::detail::IoOutcome;
 
-enum class RequestOp : std::uint8_t { read, write, sync_data, sync_all };
+enum class RequestOp : std::uint8_t { read, write, sync_data, sync_all, file_info, size };
 
 struct BorrowFacts {
     int fd = -1;
@@ -68,6 +68,7 @@ enum class PublicCancel : std::uint8_t {
     requested,
     already_terminal,
     not_found,
+    physical_interruption_unsupported,
 };
 
 enum class BindingRelease : std::uint8_t { released, not_visible_yet, stale };
@@ -84,6 +85,10 @@ enum class TerminalCandidateKind : std::uint8_t {
 struct TerminalCandidate {
     TerminalCandidateKind kind = TerminalCandidateKind::physical_outcome;
     IoOutcome outcome{};
+    // Metadata-operation success payload (file_info/size); byte operations
+    // carry their result in outcome.effect.confirmed_bytes.
+    bool has_metadata = false;
+    sluice::FileInfo metadata{};
 };
 
 enum class TerminalVerdict : std::uint8_t {
@@ -115,6 +120,7 @@ struct PublicationPayload {
     std::uint64_t offset = 0;
     std::uint64_t requested_bytes = 0;
     IoOutcome outcome{};
+    sluice::FileInfo metadata{};
 };
 
 enum class PublicationGrant : std::uint8_t {
@@ -175,8 +181,16 @@ class RequestCore {
     PublicCancel cancel(RequestKey id) noexcept;
     BindingRelease release_public_binding(RequestKey id) noexcept;
     BindingRelease discard_public_result(RequestKey id) noexcept;
-    PublicObservation observe_public_result(RequestKey id, IoOutcome* out) const noexcept;
-    PublicConsumption consume_public_result(RequestKey id, IoOutcome* out) noexcept;
+    PublicObservation observe_public_result(RequestKey id, IoOutcome* out,
+                                            sluice::FileInfo* metadata_out) const noexcept;
+    PublicObservation observe_public_result(RequestKey id, IoOutcome* out) const noexcept {
+        return observe_public_result(id, out, nullptr);
+    }
+    PublicConsumption consume_public_result(RequestKey id, IoOutcome* out,
+                                            sluice::FileInfo* metadata_out) noexcept;
+    PublicConsumption consume_public_result(RequestKey id, IoOutcome* out) noexcept {
+        return consume_public_result(id, out, nullptr);
+    }
 
     TerminalVerdict offer_terminal(RequestKey id, const TerminalCandidate& candidate) noexcept;
     ExecutionClaim claim_execution(RequestKey id) noexcept;
@@ -238,6 +252,7 @@ class RequestCore {
         RequestDescriptor descriptor{};
         BorrowFacts borrow{};
         IoOutcome outcome{};
+        sluice::FileInfo metadata{};
     };
 
     Slot* resolve_internal_(RequestKey id) noexcept;

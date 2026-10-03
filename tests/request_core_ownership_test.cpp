@@ -362,6 +362,12 @@ class RecordingBackend final : public AsyncBackend {
     Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
+    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+        return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
+    }
+    Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+        return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
+    }
     detail::PublicCancel cancel_identity(detail::RequestKey) override {
         return detail::PublicCancel::not_found;
     }
@@ -496,8 +502,12 @@ bool move_assignment_transfers_the_same_core(Tracker& t) {
 #if defined(SLUICE_HAS_LIBURING)
 
 bool uring_context_carries_the_context_identity(Tracker& t) {
-    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 8});
-    if (!backend->available()) {
+    std::unique_ptr<UringAsyncBackend> backend;
+    try {
+        backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 8});
+    } catch (...) {
+    }
+    if (!backend || !backend->available()) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }

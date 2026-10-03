@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sluice/effect.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -284,17 +285,9 @@ constexpr std::optional<IoError> composition_error(const CompositionState& state
     return std::nullopt;
 }
 
-enum class EffectCertainty : std::uint8_t {
-    accounted,
-    unknown,
-};
+using EffectCertainty = sluice::EffectCertainty;
 
-struct IoEffect {
-    std::uint64_t confirmed_bytes = 0;
-    EffectCertainty remaining = EffectCertainty::accounted;
-
-    friend bool operator==(const IoEffect&, const IoEffect&) noexcept = default;
-};
+using IoEffect = sluice::EffectReport;
 
 struct IoOutcome {
     bool succeeded = false;

@@ -133,6 +133,7 @@ ReserveAttempt RequestCore::reserve() {
     slot.descriptor = {};
     slot.borrow = {};
     slot.outcome = {};
+    slot.metadata = {};
     return ReserveAttempt{ReserveStatus::reserved,
                           RequestReservation{SlotIndex{index}, slot.generation}};
 }
@@ -263,7 +264,8 @@ BindingRelease RequestCore::discard_public_result(RequestKey id) noexcept {
     return BindingRelease::released;
 }
 
-PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* out) const noexcept {
+PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* out,
+                                                     sluice::FileInfo* metadata_out) const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     const Slot* slot = resolve_public_(id);
     if (slot == nullptr) {
@@ -280,13 +282,17 @@ PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* o
     if (out != nullptr) {
         *out = slot->outcome;
     }
+    if (metadata_out != nullptr) {
+        *metadata_out = slot->metadata;
+    }
 #if defined(SLUICE_B2_MUTANT_OBSERVE_CONSUMES)
     const_cast<Slot*>(slot)->binding_live = false;
 #endif
     return PublicObservation::ready;
 }
 
-PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* out) noexcept {
+PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* out,
+                                                     sluice::FileInfo* metadata_out) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     Slot* slot = resolve_public_(id);
     if (slot == nullptr) {
@@ -297,6 +303,9 @@ PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* o
     }
     if (out != nullptr) {
         *out = slot->outcome;
+    }
+    if (metadata_out != nullptr) {
+        *metadata_out = slot->metadata;
     }
 #if !defined(SLUICE_B2_MUTANT_CONSUME_KEEPS_BINDING)
     slot->binding_live = false;
@@ -320,6 +329,9 @@ TerminalVerdict RequestCore::offer_terminal(RequestKey id,
     }
     slot->terminal_chosen = true;
     slot->outcome = candidate.outcome;
+    if (candidate.has_metadata) {
+        slot->metadata = candidate.metadata;
+    }
     slot->cancel_intent = false;
     return TerminalVerdict::chosen;
 }
@@ -414,6 +426,7 @@ PublicationGrant RequestCore::begin_publication(RequestKey id, PublicationPayloa
         out->offset = slot->descriptor.offset;
         out->requested_bytes = slot->descriptor.length;
         out->outcome = slot->outcome;
+        out->metadata = slot->metadata;
     }
     return PublicationGrant::granted;
 }
@@ -556,6 +569,7 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.descriptor = {};
     slot.borrow = {};
     slot.outcome = {};
+    slot.metadata = {};
     if (slot.generation.value == std::numeric_limits<std::uint64_t>::max()) {
         slot.phase = SlotPhase::retired;
         ++retired_count_;

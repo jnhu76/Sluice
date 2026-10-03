@@ -17,6 +17,7 @@
 #include <utility>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -165,6 +166,16 @@ Result<void> ThreadPoolBackend::validate_sync(SyncAllOp op) {
         op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_all));
 }
 
+Result<void> ThreadPoolBackend::validate_file_info(FileInfoOp op) {
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::file_info));
+}
+
+Result<void> ThreadPoolBackend::validate_size(SizeOp op) {
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::file_info));
+}
+
 Result<detail::RequestKey> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>* c) {
     return submit_request(op, c, detail::OperationKind::read, detail::RequestOp::read);
 }
@@ -181,6 +192,15 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Comp
     return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
+Result<detail::RequestKey> ThreadPoolBackend::submit_file_info(FileInfoOp op,
+                                                               Completion<FileInfo>* c) {
+    return submit_request(op, c, detail::OperationKind::file_info, detail::RequestOp::file_info);
+}
+
+Result<detail::RequestKey> ThreadPoolBackend::submit_size(SizeOp op, Completion<FileSize>* c) {
+    return submit_request(op, c, detail::OperationKind::size, detail::RequestOp::size);
+}
+
 template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) noexcept {
     if constexpr (std::is_same_v<Op, ReadOp>) {
         return validate_read(op);
@@ -188,8 +208,12 @@ template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) no
         return validate_write(op);
     } else if constexpr (std::is_same_v<Op, SyncDataOp>) {
         return validate_sync(op);
-    } else {
+    } else if constexpr (std::is_same_v<Op, SyncAllOp>) {
         return validate_sync(op);
+    } else if constexpr (std::is_same_v<Op, FileInfoOp>) {
+        return validate_file_info(op);
+    } else {
+        return validate_size(op);
     }
 }
 
@@ -338,7 +362,7 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Sl
         detail::threadpool_core_handoff_fail_fast();
     }
     DeliveryRecord& record = delivery_[h.slot.value];
-    record.publish(record.completion, payload.outcome);
+    record.publish(record.completion, payload);
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
         detail::threadpool_core_handoff_fail_fast();
     }
@@ -361,7 +385,7 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
     // complete_publication the slot may be reclaimed and re-initialized
     // concurrently, so no record field may be read past that point.
     const detail::OperationKind kind = record.kind;
-    record.publish(record.completion, payload.outcome);
+    record.publish(record.completion, payload);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_publication_epilogue_pause_();
@@ -382,7 +406,8 @@ void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationK
 }
 
 void ThreadPoolBackend::publish_size_ready(void* completion,
-                                           const sluice::detail::IoOutcome& outcome) noexcept {
+                                           const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
     Result<std::size_t> result = outcome.succeeded
                                      ? Result<std::size_t>{static_cast<std::size_t>(
                                            outcome.effect.confirmed_bytes)}
@@ -391,17 +416,36 @@ void ThreadPoolBackend::publish_size_ready(void* completion,
 }
 
 void ThreadPoolBackend::publish_void_ready(void* completion,
-                                           const sluice::detail::IoOutcome& outcome) noexcept {
+                                           const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
     Result<void> result = outcome.succeeded
                               ? Result<void>{}
                               : make_unexpected<void>(outcome.error);
     AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
 }
 
+void ThreadPoolBackend::publish_file_info_ready(void* completion,
+                                                const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
+    Result<FileInfo> result = outcome.succeeded
+                                  ? Result<FileInfo>{payload.metadata}
+                                  : make_unexpected<FileInfo>(outcome.error);
+    AsyncBackend::publish(*static_cast<Completion<FileInfo>*>(completion), std::move(result));
+}
+
+void ThreadPoolBackend::publish_size_value_ready(
+    void* completion, const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
+    Result<FileSize> result = outcome.succeeded
+                                  ? Result<FileSize>{FileSize{payload.metadata.size}}
+                                  : make_unexpected<FileSize>(outcome.error);
+    AsyncBackend::publish(*static_cast<Completion<FileSize>*>(completion), std::move(result));
+}
+
 void ThreadPoolBackend::publish_request_ready(void* completion,
-                                              const sluice::detail::IoOutcome& outcome) noexcept {
+                                              const detail::PublicationPayload& payload) noexcept {
     (void)completion;
-    (void)outcome;
+    (void)payload;
 }
 
 void ThreadPoolBackend::worker_loop() {
@@ -436,7 +480,8 @@ void ThreadPoolBackend::worker_loop() {
 
                 wait_worker_claimed_pause_();
 #endif
-                const sluice::detail::IoOutcome outcome = run_syscall(op);
+                sluice::FileInfo metadata;
+                const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
 
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
                 {
@@ -452,6 +497,12 @@ void ThreadPoolBackend::worker_loop() {
                 detail::TerminalCandidate candidate;
                 candidate.kind = detail::TerminalCandidateKind::physical_outcome;
                 candidate.outcome = outcome;
+                if (outcome.succeeded &&
+                    (op.kind == detail::OperationKind::file_info ||
+                     op.kind == detail::OperationKind::size)) {
+                    candidate.has_metadata = true;
+                    candidate.metadata = metadata;
+                }
                 if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
                     detail::threadpool_core_handoff_fail_fast();
                 }
@@ -475,7 +526,8 @@ void ThreadPoolBackend::worker_loop() {
     }
 }
 
-sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingOp& p) noexcept {
+sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingOp& p,
+                                                         sluice::FileInfo* metadata_out) noexcept {
     errno = 0;
     switch (p.kind) {
     case detail::OperationKind::read: {
@@ -493,7 +545,11 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
                             static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
+            #if defined(SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED)
+            return sluice::detail::IoOutcome::failure(sluice::from_errno_value(errno));
+#else
             return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+#endif
         return sluice::detail::IoOutcome::success(static_cast<std::uint64_t>(n));
     }
     case detail::OperationKind::sync_data: {
@@ -506,6 +562,24 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
         int rc = sluice::detail::retry_on_eintr([&] { return ::fsync(p.fd); });
         if (rc < 0)
             return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+        return sluice::detail::IoOutcome::success();
+    }
+    case detail::OperationKind::file_info:
+    case detail::OperationKind::size: {
+        // A metadata syscall has no data effect on any path, so a failure is
+        // reported as accounted zero rather than through the dispatched-write
+        // unknown-remainder rule.
+        struct ::stat st {};
+        const int rc = sluice::detail::retry_on_eintr([&] { return ::fstat(p.fd, &st); });
+        if (rc < 0)
+            return sluice::detail::IoOutcome::failure(sluice::from_errno_value(errno));
+        if (metadata_out != nullptr) {
+            metadata_out->kind = S_ISREG(st.st_mode) ? sluice::FileKind::regular
+                                                     : sluice::FileKind::other;
+            metadata_out->size = static_cast<std::uint64_t>(st.st_size);
+            metadata_out->identity = sluice::FileIdentity{
+                static_cast<std::uint64_t>(st.st_dev), static_cast<std::uint64_t>(st.st_ino)};
+        }
         return sluice::detail::IoOutcome::success();
     }
     }
@@ -713,6 +787,15 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
                 detail::threadpool_core_handoff_fail_fast();
             }
             publication_pending_.push_back(detail::SlotHandle{key.slot, key.generation});
+        } else if (disposition == detail::PublicCancel::requested) {
+            // Workers execute blocking syscalls to completion; no mechanism can
+            // interrupt a claimed operation, so the public disposition reports
+            // that physical fact while the recorded intent stays bounded.
+#if defined(SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED)
+            disposition = detail::PublicCancel::requested;
+#else
+            disposition = detail::PublicCancel::physical_interruption_unsupported;
+#endif
         }
     }
     if (disposition == detail::PublicCancel::won_before_execution) {

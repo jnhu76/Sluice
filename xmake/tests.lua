@@ -463,6 +463,68 @@ do
                           "SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
+-- E1 (#400) cross-backend File-contract conformance. One semantic suite is
+-- compiled once per profile: the ThreadPool variant runs the real worker
+-- path, and the io_uring variant runs the real ring plus the deterministic
+-- submit fiction for the claimed/stuck control windows. The uring variant
+-- also links the ThreadPool backend so both profiles' metadata records are
+-- compared in one process. The seam build compiles its own copies of the
+-- async TUs, mirroring the public request target's shape.
+do
+    local function e1_conformance_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/backend_conformance_e1_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/request_handle.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING", "SLUICE_E1_CONFORMANCE_URING")
+                add_links("uring")
+                table.insert(files, R .. "src/async/uring_backend.cpp")
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    e1_conformance_target("backend_conformance_e1_threadpool_test", false)
+    if has_config("liburing") then
+        e1_conformance_target("backend_conformance_e1_uring_test", true)
+
+        -- E1 named mutation builds. Each flips one load-bearing mechanism of
+        -- the #400 refinements and must be killed by the named failing
+        -- assertion of the conformance suite; they are executed and recorded
+        -- manually, never run as regular tests.
+        e1_conformance_target("e1_conformance_mut_metadata_drops_record", true,
+                              "SLUICE_E1_MUTANT_METADATA_DROPS_RECORD")
+        e1_conformance_target("e1_conformance_mut_byte_failure_accounted", true,
+                              "SLUICE_E1_MUTANT_BYTE_FAILURE_ACCOUNTED")
+        e1_conformance_target("e1_conformance_mut_sticky_intent_dropped", true,
+                              "SLUICE_E1_MUTANT_STICKY_INTENT_DROPPED")
+        e1_conformance_target("e1_conformance_mut_capability_probe_ignored", true,
+                              "SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED")
+    end
+    e1_conformance_target("e1_conformance_mut_write_failure_accounted", false,
+                          "SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED")
+    e1_conformance_target("e1_conformance_mut_cancel_reports_requested", false,
+                          "SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED")
+end
+
 -- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.

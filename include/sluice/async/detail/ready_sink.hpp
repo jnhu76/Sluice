@@ -11,6 +11,8 @@ enum class OperationKind : std::uint8_t {
     write,
     sync_data,
     sync_all,
+    file_info,
+    size,
 };
 
 struct ReadyEvent {

@@ -26,12 +26,16 @@
 struct io_uring;
 #endif
 
+// UAPI forward declaration; the full definition lives either in
+// <linux/statx.h> or in the guarded mirror inside uring_backend.cpp.
+#if defined(SLUICE_HAS_LIBURING)
+struct statx;
+#endif
+
 namespace sluice::async {
 
 #if defined(SLUICE_HAS_LIBURING)
-
 struct UringRingState;
-
 #endif
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -68,6 +72,8 @@ class UringAsyncBackend : public AsyncBackend {
     Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override;
     Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) override;
     Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) override;
+    Result<detail::RequestKey> submit_file_info(FileInfoOp op, Completion<FileInfo>* c) override;
+    Result<detail::RequestKey> submit_size(SizeOp op, Completion<FileSize>* c) override;
 
 #if defined(SLUICE_HAS_LIBURING)
   public:
@@ -126,6 +132,9 @@ class UringAsyncBackend : public AsyncBackend {
         return cancel_key(key);
     }
 
+    static void set_injected_statx_probe_failure(bool value) noexcept;
+    static bool injected_statx_probe_failure() noexcept;
+
     std::size_t sink_deliveries() const noexcept;
     detail::RequestKey sink_last_key() const noexcept;
 
@@ -159,7 +168,10 @@ class UringAsyncBackend : public AsyncBackend {
         std::size_t length = 0;
         unsigned native_length = 0;
         std::uint64_t offset = 0;
+        struct ::statx* statx_buffer = nullptr;
     };
+
+    bool probe_statx_support_() noexcept;
 
     bool progress_port_attached() noexcept override;
 
@@ -171,6 +183,9 @@ class UringAsyncBackend : public AsyncBackend {
         std::uint64_t cookie = 0;
         detail::SlotHandle handle{};
         ControlState control_state = ControlState::none;
+        // A cancel intent whose control SQE could not be allocated yet; serviced
+        // by later progress passes so the intent is never silently discarded.
+        bool control_pending = false;
         // The original operation's outcome has been offered to the core; the
         // entry must still survive until the control CQE when one is live.
         bool terminal_delivered = false;
@@ -184,7 +199,8 @@ class UringAsyncBackend : public AsyncBackend {
     // Completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
         void* completion = nullptr;
-        void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;
+        void (*publish)(void* completion,
+                        const detail::PublicationPayload& payload) noexcept = nullptr;
         detail::OperationKind kind = detail::OperationKind::read;
         // event_owed pairs with one core control ref on owed_key: the ref is
         // acquired before this flag is set and released after delivery.
@@ -200,6 +216,8 @@ class UringAsyncBackend : public AsyncBackend {
     static Result<void> validate_write(WriteOp op);
     static Result<void> validate_sync(SyncDataOp op);
     static Result<void> validate_sync(SyncAllOp op);
+    static Result<void> validate_file_info(FileInfoOp op);
+    static Result<void> validate_size(SizeOp op);
     template <class Op> static Result<void> validate_op(const Op& op) noexcept;
 
     template <class Op> static const std::byte* buffer_of(const Op& op) noexcept {
@@ -215,6 +233,10 @@ class UringAsyncBackend : public AsyncBackend {
     template <class Comp> static auto publish_thunk() noexcept {
         if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
             return &UringAsyncBackend::publish_size_ready;
+        } else if constexpr (std::is_same_v<Comp, Completion<FileInfo>>) {
+            return &UringAsyncBackend::publish_file_info_ready;
+        } else if constexpr (std::is_same_v<Comp, Completion<FileSize>>) {
+            return &UringAsyncBackend::publish_size_value_ready;
         } else {
             return &UringAsyncBackend::publish_void_ready;
         }
@@ -225,11 +247,15 @@ class UringAsyncBackend : public AsyncBackend {
                                               detail::RequestOp core_op);
 
     static void publish_size_ready(void* completion,
-                                   const sluice::detail::IoOutcome& outcome) noexcept;
+                                   const detail::PublicationPayload& payload) noexcept;
     static void publish_void_ready(void* completion,
-                                   const sluice::detail::IoOutcome& outcome) noexcept;
+                                   const detail::PublicationPayload& payload) noexcept;
+    static void publish_file_info_ready(void* completion,
+                                        const detail::PublicationPayload& payload) noexcept;
+    static void publish_size_value_ready(void* completion,
+                                         const detail::PublicationPayload& payload) noexcept;
     static void publish_request_ready(void* completion,
-                                      const sluice::detail::IoOutcome& outcome) noexcept;
+                                      const detail::PublicationPayload& payload) noexcept;
 
     void dispatch_after_accept(detail::SlotHandle h) noexcept;
     void publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept;
@@ -255,7 +281,8 @@ class UringAsyncBackend : public AsyncBackend {
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 
     void finalize_operation_terminal_(RouterEntry& route, std::size_t router_index,
-                                      const detail::TerminalResult& terminal) noexcept;
+                                      const detail::TerminalResult& terminal,
+                                      const sluice::FileInfo* metadata) noexcept;
 
     std::uint64_t allocate_cookie_() noexcept;
 
@@ -264,6 +291,7 @@ class UringAsyncBackend : public AsyncBackend {
     void retire_router_entry_(std::size_t router_index) noexcept;
 
     void issue_running_cancel_locked_(detail::SlotHandle h) noexcept;
+    void service_pending_controls_locked_() noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -286,6 +314,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::vector<DeliveryRecord> delivery_;
     std::vector<RouterEntry> router_;
     std::vector<detail::SlotIndex> cookie_free_list_;
+    std::vector<struct ::statx> statx_buffers_;
     std::uint64_t next_cookie_ = 1;
 
     detail::ReferenceReadySink sink_;

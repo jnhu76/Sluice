@@ -9,6 +9,7 @@
 
 #include <cstdio>
 #include <limits>
+#include <stdexcept>
 #include <utility>
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -19,6 +20,26 @@
 #include <cstring>
 #include <stdexcept>
 #include <thread>
+
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <sys/types.h>
+
+// The STATX_* mask bits live with the struct statx definition in glibc's
+// <sys/stat.h>; provide them only if this environment's headers do not.
+#ifndef STATX_TYPE
+#define STATX_TYPE 0x00000001u
+#endif
+#ifndef STATX_MODE
+#define STATX_MODE 0x00000002u
+#endif
+#ifndef STATX_SIZE
+#define STATX_SIZE 0x00000200u
+#endif
+#ifndef STATX_INO
+#define STATX_INO 0x00000400u
+#endif
 #endif
 
 namespace sluice::async {
@@ -27,6 +48,10 @@ namespace sluice::async {
 
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth) : available_(false) {
     (void)queue_depth;
+    // Selecting the io_uring profile without liburing support is an explicit
+    // setup failure; it must never degrade into a constructed-but-dead profile.
+    throw std::runtime_error(
+        "sluice::async::UringAsyncBackend: io_uring profile unavailable (built without liburing)");
 }
 
 UringAsyncBackend::~UringAsyncBackend() = default;
@@ -41,6 +66,12 @@ Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp, Compl
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
 Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp, Completion<void>*) {
+    return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
+}
+Result<detail::RequestKey> UringAsyncBackend::submit_file_info(FileInfoOp, Completion<FileInfo>*) {
+    return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
+}
+Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp, Completion<FileSize>*) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
 
@@ -89,9 +120,27 @@ inline void bump(sluice::AsyncStats* s, std::uint64_t sluice::AsyncStats::* fiel
         ++(s->*field);
 }
 
-constexpr bool cookie_terminal_is_canceled(const detail::TerminalResult& t) noexcept {
-    return t.stored && t.is_error && t.error.code == IoError::Code::canceled;
+constexpr bool terminal_is_kernel_cancel(const IoError& error) noexcept {
+    return error.code == IoError::Code::canceled || error.os_errno == ECANCELED;
 }
+
+#if defined(SLUICE_E1_MUTANT_STICKY_INTENT_DROPPED)
+constexpr bool sticky_intent_retained() noexcept {
+    return false;
+}
+#else
+constexpr bool sticky_intent_retained() noexcept {
+    return true;
+}
+#endif
+
+constexpr bool cookie_terminal_is_canceled(const detail::TerminalResult& t) noexcept {
+    return t.stored && t.is_error && terminal_is_kernel_cancel(t.error);
+}
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+std::atomic<bool> g_injected_statx_probe_failure{false};
+#endif
 
 }
 class UringAsyncBackend::BoundedDispatchQueue {
@@ -182,7 +231,7 @@ class UringAsyncBackend::TransportLedger {
                 detail::SlotHandle handle) noexcept {
         const std::uint32_t expected_physical =
             last_sequence_ == 0
-                ? 0
+                ? physical_position
                 : static_cast<std::uint32_t>(
                       (static_cast<std::uint64_t>(last_physical_position_) + 1u) % capacity_);
         if (size_ >= capacity_ || physical_position >= capacity_ || next_sequence_ == 0 ||
@@ -272,19 +321,32 @@ Result<void> UringAsyncBackend::validate_sync(SyncAllOp op) {
     return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
         op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_all));
 }
+Result<void> UringAsyncBackend::validate_file_info(FileInfoOp op) {
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::file_info));
+}
+Result<void> UringAsyncBackend::validate_size(SizeOp op) {
+    return sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
+        op.file.fd < 0, op.file.access, sluice::detail::FileOperation::file_info));
+}
 
 template <class Op> Result<void> UringAsyncBackend::validate_op(const Op& op) noexcept {
     if constexpr (std::is_same_v<Op, ReadOp>) {
         return validate_read(op);
     } else if constexpr (std::is_same_v<Op, WriteOp>) {
         return validate_write(op);
+    } else if constexpr (std::is_same_v<Op, FileInfoOp>) {
+        return validate_file_info(op);
+    } else if constexpr (std::is_same_v<Op, SizeOp>) {
+        return validate_size(op);
     } else {
         return validate_sync(op);
     }
 }
 
 void UringAsyncBackend::publish_size_ready(void* completion,
-                                           const sluice::detail::IoOutcome& outcome) noexcept {
+                                           const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
     Result<std::size_t> result =
         outcome.succeeded
             ? Result<std::size_t>{static_cast<std::size_t>(outcome.effect.confirmed_bytes)}
@@ -293,15 +355,34 @@ void UringAsyncBackend::publish_size_ready(void* completion,
 }
 
 void UringAsyncBackend::publish_void_ready(void* completion,
-                                           const sluice::detail::IoOutcome& outcome) noexcept {
+                                           const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
     Result<void> result = outcome.succeeded ? Result<void>{} : make_unexpected<void>(outcome.error);
     AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
 }
 
+void UringAsyncBackend::publish_file_info_ready(void* completion,
+                                                const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
+    Result<FileInfo> result = outcome.succeeded
+                                  ? Result<FileInfo>{payload.metadata}
+                                  : make_unexpected<FileInfo>(outcome.error);
+    AsyncBackend::publish(*static_cast<Completion<FileInfo>*>(completion), std::move(result));
+}
+
+void UringAsyncBackend::publish_size_value_ready(
+    void* completion, const detail::PublicationPayload& payload) noexcept {
+    const sluice::detail::IoOutcome& outcome = payload.outcome;
+    Result<FileSize> result = outcome.succeeded
+                                  ? Result<FileSize>{FileSize{payload.metadata.size}}
+                                  : make_unexpected<FileSize>(outcome.error);
+    AsyncBackend::publish(*static_cast<Completion<FileSize>*>(completion), std::move(result));
+}
+
 void UringAsyncBackend::publish_request_ready(void* completion,
-                                              const sluice::detail::IoOutcome& outcome) noexcept {
+                                              const detail::PublicationPayload& payload) noexcept {
     (void)completion;
-    (void)outcome;
+    (void)payload;
 }
 
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
@@ -325,24 +406,64 @@ UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
 UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
     : capacity_(config.request_capacity), prepared_ops_(config.request_capacity),
       delivery_(config.request_capacity), router_(config.request_capacity),
-      cookie_free_list_(config.request_capacity),
+      cookie_free_list_(config.request_capacity), statx_buffers_(config.request_capacity),
       ring_state_(std::make_unique<UringRingState>()) {
     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
         cookie_free_list_[i] = detail::SlotIndex{i};
     }
     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
-    if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) == 0) {
-        try {
-            transport_ledger_ =
-                std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
-        } catch (...) {
-            ::io_uring_queue_exit(&ring_state_->ring);
-            throw;
-        }
-        have_ring_ = true;
-        available_ = true;
+    if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) != 0) {
+        throw std::runtime_error(
+            "sluice::async::UringAsyncBackend: io_uring ring construction failed "
+            "(required-profile setup failure)");
     }
+    try {
+        transport_ledger_ =
+            std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
+    } catch (...) {
+        ::io_uring_queue_exit(&ring_state_->ring);
+        throw;
+    }
+    have_ring_ = true;
+#if defined(SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED)
+    if (false) {
+#else
+    if (!probe_statx_support_()) {
+#endif
+
+        ::io_uring_queue_exit(&ring_state_->ring);
+        have_ring_ = false;
+        throw std::runtime_error(
+            "sluice::async::UringAsyncBackend: io_uring statx mechanism unavailable "
+            "(required metadata capability missing at profile setup)");
+    }
+    available_ = true;
+}
+
+bool UringAsyncBackend::probe_statx_support_() noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    if (g_injected_statx_probe_failure.load(std::memory_order_acquire)) {
+        return false;
+    }
+#endif
+    struct ::statx probe_buffer {};
+    io_uring_sqe* sqe = ::io_uring_get_sqe(&ring_state_->ring);
+    if (sqe == nullptr) {
+        return false;
+    }
+    ::io_uring_prep_statx(sqe, AT_FDCWD, ".", 0, STATX_TYPE, &probe_buffer);
+    ::io_uring_sqe_set_data64(sqe, 0);
+    if (::io_uring_submit_and_wait(&ring_state_->ring, 1) < 0) {
+        return false;
+    }
+    io_uring_cqe* cqe = nullptr;
+    if (::io_uring_peek_cqe(&ring_state_->ring, &cqe) != 0 || cqe == nullptr) {
+        return false;
+    }
+    const int res = cqe->res;
+    ::io_uring_cqe_seen(&ring_state_->ring, cqe);
+    return res >= 0;
 }
 
 #if defined(SLUICE_HAS_LIBURING)
@@ -460,6 +581,14 @@ std::size_t UringAsyncBackend::dispatch_size_for_test() const noexcept {
     return dispatch_->size();
 }
 
+void UringAsyncBackend::set_injected_statx_probe_failure(bool value) noexcept {
+    g_injected_statx_probe_failure.store(value, std::memory_order_release);
+}
+
+bool UringAsyncBackend::injected_statx_probe_failure() noexcept {
+    return g_injected_statx_probe_failure.load(std::memory_order_acquire);
+}
+
 std::size_t UringAsyncBackend::transport_ledger_size_for_test() const noexcept {
     std::lock_guard<std::mutex> lk(dispatch_mtx_);
     return transport_ledger_ == nullptr ? 0 : transport_ledger_->size();
@@ -531,7 +660,11 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
     prepared_ops_[h.slot.value] =
         PreparedUringOp{kind, op.file.fd, buffer_of(op), static_cast<std::size_t>(length),
                         sluice::detail::uring_chunk_length(static_cast<std::size_t>(length)),
-                        offset};
+                        offset,
+                        (kind == detail::OperationKind::file_info ||
+                         kind == detail::OperationKind::size)
+                            ? &statx_buffers_[h.slot.value]
+                            : nullptr};
 
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -600,6 +733,15 @@ Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp op, Comp
     return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
+Result<detail::RequestKey> UringAsyncBackend::submit_file_info(FileInfoOp op,
+                                                               Completion<FileInfo>* c) {
+    return submit_request(op, c, detail::OperationKind::file_info, detail::RequestOp::file_info);
+}
+
+Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp op, Completion<FileSize>* c) {
+    return submit_request(op, c, detail::OperationKind::size, detail::RequestOp::size);
+}
+
 void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
     bool injected_dispatch_failure = false;
     bool newly_poisoned = false;
@@ -638,8 +780,10 @@ void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
                 if (!dispatch_one_locked(front))
                     break;
             }
-            if (!fatal_error_.has_value())
+            if (!fatal_error_.has_value()) {
                 (void)submit_transport_locked();
+                service_pending_controls_locked_();
+            }
             newly_poisoned = !poisoned_before && fatal_error_.has_value();
         }
 #if !defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
@@ -702,6 +846,12 @@ bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
         break;
     case detail::OperationKind::sync_all:
         ::io_uring_prep_fsync(sqe, prep.fd, 0);
+        break;
+    case detail::OperationKind::file_info:
+    case detail::OperationKind::size:
+        ::io_uring_prep_statx(sqe, prep.fd, "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW,
+                              STATX_TYPE | STATX_MODE | STATX_SIZE | STATX_INO,
+                              prep.statx_buffer);
         break;
     }
 
@@ -950,8 +1100,8 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept 
 }
 
 void UringAsyncBackend::finalize_operation_terminal_(
-    RouterEntry& route, std::size_t router_index,
-    const detail::TerminalResult& terminal) noexcept {
+    RouterEntry& route, std::size_t router_index, const detail::TerminalResult& terminal,
+    const sluice::FileInfo* metadata) noexcept {
     if (router_index >= router_.size() || !route.in_use || route.terminal_delivered) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: invalid operation terminal "
                              "finalization (invariant violation)\n");
@@ -966,11 +1116,35 @@ void UringAsyncBackend::finalize_operation_terminal_(
     detail::TerminalCandidate candidate;
     candidate.kind = detail::TerminalCandidateKind::physical_outcome;
     if (terminal.stored && terminal.is_error) {
-        candidate.outcome = sluice::detail::IoOutcome::failure(terminal.error);
+        // A dispatched attempt that reached the kernel and reports failure
+        // carries no trustworthy byte count; the shared rule reports an
+        // unknown remainder rather than a fabricated zero. Cancellation racing
+        // an in-flight attempt keeps the same unknown-remainder rule. Metadata
+        // and sync attempts have no data effect, so their failures stay
+        // accounted zero.
+        if (!is_byte_op) {
+            candidate.outcome = sluice::detail::IoOutcome::failure(terminal.error);
+        } else if (terminal_is_kernel_cancel(terminal.error)) {
+            candidate.outcome = sluice::detail::canceled_racing_in_flight_attempt(0);
+        } else {
+#if defined(SLUICE_E1_MUTANT_BYTE_FAILURE_ACCOUNTED)
+            candidate.outcome = sluice::detail::IoOutcome::failure(terminal.error);
+#else
+            candidate.outcome = sluice::detail::failed_dispatched_attempt(terminal.error);
+#endif
+        }
     } else if (is_byte_op) {
         candidate.outcome = sluice::detail::IoOutcome::success(terminal.bytes);
     } else {
         candidate.outcome = sluice::detail::IoOutcome::success();
+        if (metadata != nullptr) {
+#if defined(SLUICE_E1_MUTANT_METADATA_DROPS_RECORD)
+            candidate.has_metadata = false;
+#else
+            candidate.has_metadata = true;
+            candidate.metadata = *metadata;
+#endif
+        }
     }
     if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: operation terminal lost "
@@ -1058,6 +1232,10 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     const PreparedUringOp& prep = prepared_ops_[entry.handle.slot.value];
     const bool is_byte_op =
         (prep.kind == detail::OperationKind::read || prep.kind == detail::OperationKind::write);
+    const bool is_metadata_op =
+        (prep.kind == detail::OperationKind::file_info || prep.kind == detail::OperationKind::size);
+    sluice::FileInfo metadata;
+    const sluice::FileInfo* metadata_out = nullptr;
     detail::TerminalResult terminal;
     if (res < 0) {
 #if defined(SLUICE_B1C_MUTANT_DROP_ORIGINAL_OUTCOME)
@@ -1067,11 +1245,26 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         terminal = detail::TerminalResult::err(sluice::from_errno_value(-res));
     } else if (is_byte_op) {
         terminal = detail::TerminalResult::ok_bytes(static_cast<std::uint64_t>(res));
+    } else if (is_metadata_op) {
+        if ((prep.statx_buffer->stx_mask & STATX_SIZE) == 0 ||
+            (prep.statx_buffer->stx_mask & (STATX_TYPE | STATX_MODE)) == 0) {
+            terminal = detail::TerminalResult::err(IoError{IoError::Code::backend_error});
+        } else {
+            metadata.kind = S_ISREG(prep.statx_buffer->stx_mode) ? sluice::FileKind::regular
+                                                                 : sluice::FileKind::other;
+            metadata.size = prep.statx_buffer->stx_size;
+            metadata.identity = sluice::FileIdentity{
+                static_cast<std::uint64_t>(
+                    ::makedev(prep.statx_buffer->stx_dev_major, prep.statx_buffer->stx_dev_minor)),
+                prep.statx_buffer->stx_ino};
+            metadata_out = &metadata;
+            terminal = detail::TerminalResult::ok_void();
+        }
     } else {
         terminal = detail::TerminalResult::ok_void();
     }
 
-    finalize_operation_terminal_(entry, router_index, terminal);
+    finalize_operation_terminal_(entry, router_index, terminal, metadata_out);
 }
 
 void UringAsyncBackend::reap_cqes() noexcept {
@@ -1141,7 +1334,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
         detail::uring_core_handoff_fail_fast();
     }
     DeliveryRecord& record = delivery_[h.slot.value];
-    record.publish(record.completion, payload.outcome);
+    record.publish(record.completion, payload);
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
         detail::uring_core_handoff_fail_fast();
     }
@@ -1164,7 +1357,7 @@ void UringAsyncBackend::publish_one(detail::SlotHandle h) {
     // complete_publication the slot may be reclaimed and re-initialized
     // concurrently, so no record field may be read past that point.
     const detail::OperationKind kind = record.kind;
-    record.publish(record.completion, payload.outcome);
+    record.publish(record.completion, payload);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_publication_epilogue_pause_();
@@ -1194,8 +1387,10 @@ std::size_t UringAsyncBackend::poll() {
             }
         }
 
-        if (!fatal_error_.has_value())
+        if (!fatal_error_.has_value()) {
             (void)submit_transport_locked();
+            service_pending_controls_locked_();
+        }
     }
 
     reap_cqes();
@@ -1276,8 +1471,10 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexc
     if (idx == router_.size())
         return;
     RouterEntry& route = router_[idx];
-    if (route.control_state != RouterEntry::ControlState::none)
+    if (route.control_state != RouterEntry::ControlState::none) {
+        route.control_pending = false;
         return;
+    }
 
     const std::uint64_t target_cookie = route.cookie;
     if (target_cookie == 0 || target_cookie >= CONTROL_TAG) {
@@ -1296,8 +1493,13 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexc
         }
         sqe = ::io_uring_get_sqe(&ring_state_->ring);
     }
-    if (sqe == nullptr)
+    if (sqe == nullptr) {
+        // Bounded sticky intent: the intent stays recorded on the live route
+        // and later progress passes retry the control submission, so a
+        // reported `requested` cancel is never silently discarded.
+        route.control_pending = sticky_intent_retained();
         return;
+    }
 
 #if !defined(SLUICE_B1C_MUTANT_REMOVE_CONTROL_PIN)
     const detail::RequestKey key{core_->context(), h.slot, h.generation};
@@ -1308,11 +1510,24 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexc
     ::io_uring_prep_cancel64(sqe, target_cookie, 0);
     ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
     route.control_state = RouterEntry::ControlState::prepared;
+    route.control_pending = false;
     const auto& sq = ring_state_->ring.sq;
     const std::uint32_t physical_position =
         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
     transport_ledger_->append(TransportLedger::Kind::cancel_control, physical_position,
                               target_cookie, h);
+}
+
+void UringAsyncBackend::service_pending_controls_locked_() noexcept {
+    if (fatal_error_.has_value())
+        return;
+    for (std::size_t i = 0; i < router_.size(); ++i) {
+        const RouterEntry& route = router_[i];
+        if (route.in_use && route.control_state == RouterEntry::ControlState::none &&
+            route.control_pending) {
+            issue_running_cancel_locked_(route.handle);
+        }
+    }
 }
 
 void UringAsyncBackend::close_admission() {
