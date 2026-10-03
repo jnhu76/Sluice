@@ -626,3 +626,60 @@ do
                   R .. "src/async/detail/request_core.cpp")
         add_tests("runtime_waiter_observer_test")
 end
+
+-- Narrow stackful host: pipeline tracer, failure-path cases, progress-owner
+-- composition and bound evidence. Same self-contained seam topology as the
+-- runtime_waiter_observer_test target above (own copy of the async TUs with
+-- the internal-testing define; never linked with the production library).
+do
+    local function stackful_host_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            if has_config("liburing") then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+            end
+            add_files(R .. "tests/stackful_host_test.cpp",
+                      R .. "src/async/*.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    stackful_host_target("stackful_host_test", nil)
+
+    -- Named mutation builds; executed manually, never regular tests.
+    stackful_host_target("stackful_host_mut_second_owner", "SLUICE_STACKFUL_HOST_MUTANT_SECOND_OWNER_ALLOWED")
+    stackful_host_target("stackful_host_mut_wake_retired", "SLUICE_STACKFUL_HOST_MUTANT_WAKE_RETIRED_TASK")
+    stackful_host_target("stackful_host_mut_task_error_swallowed",
+                         "SLUICE_STACKFUL_HOST_MUTANT_TASK_ERROR_SWALLOWED")
+    stackful_host_target("stackful_host_mut_stop_returns_unsettled",
+                         "SLUICE_STACKFUL_HOST_MUTANT_STOP_RETURNS_UNSETTLED")
+    stackful_host_target("stackful_host_mut_await_stop_unsettled",
+                         "SLUICE_STACKFUL_HOST_MUTANT_AWAIT_STOP_RETURNS_UNSETTLED")
+    stackful_host_target("stackful_host_mut_double_wake", "SLUICE_STACKFUL_HOST_MUTANT_DOUBLE_WAKE")
+    stackful_host_target("stackful_host_mut_deadline_cancels",
+                         "SLUICE_STACKFUL_HOST_MUTANT_DEADLINE_CANCELS")
+    stackful_host_target("stackful_host_mut_stale_error_retained",
+                         "SLUICE_STACKFUL_HOST_MUTANT_STALE_ERROR_RETAINED")
+    stackful_host_target("stackful_host_mut_stop_interrupts_control",
+                         "SLUICE_STACKFUL_HOST_MUTANT_STOP_INTERRUPTS_CONTROL")
+    stackful_host_target("stackful_host_mut_stop_implicit_cancel",
+                         "SLUICE_STACKFUL_HOST_MUTANT_STOP_IMPLICIT_CANCEL")
+    stackful_host_target("stackful_host_mut_expired_deadline_spin",
+                         "SLUICE_STACKFUL_HOST_MUTANT_EXPIRED_DEADLINE_SPIN")
+    stackful_host_target("stackful_host_mut_skip_control_ack",
+                         "SLUICE_STACKFUL_HOST_MUTANT_SKIP_CONTROL_ACK")
+    stackful_host_target("stackful_host_mut_empty_precheck_bypass",
+                         "SLUICE_STACKFUL_HOST_MUTANT_EMPTY_COMPOSITION_BYPASSES_PRECHECK")
+end
