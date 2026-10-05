@@ -981,8 +981,8 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
 #if !defined(SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE)
     // Resolve each ledger entry against the kernel SQ head before poison:
     // entries the head already passed are kernel-visible and keep their real
-    // completion path; the remainder are provably invisible because the
-    // poisoned ring performs no further enter.
+    // completion path; the remainder are provably invisible because no
+    // submit runs after poison.
     (void)reconcile_ledger_with_kernel_locked_();
 #endif
     poison_and_recover_locked(IoError{IoError::Code::backend_error, err});
@@ -1051,9 +1051,10 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
     core_->note_health_failure();
 
     // Every ledger entry still present here was resolved against the kernel
-    // SQ head by the caller's reconciliation: the head has not passed it, and
-    // the poisoned ring performs no further enter (the overflow flush is
-    // gated on !fatal_error_), so it is provably kernel-invisible and Class-A
+    // SQ head by the caller's reconciliation: the head has not passed it and
+    // no submit runs after poison (dispatch, transport submission and new
+    // admission are gated on this flag; the overflow flush enters with a
+    // zero submit count), so it is provably kernel-invisible and Class-A
     // retirement is safe. Operations whose CQEs may still arrive left this
     // ledger during reconciliation and keep their real completion path.
     detail::SlotHandle local{};
@@ -1143,16 +1144,13 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         physical.class_a_recovery_retired = true;
     }
 
-#if defined(SLUICE_E1_MUTANT_STRANDED_OVERFLOW_SETTLE_DROPPED)
-    if (false) {
-#else
+    // Routes whose completions are absent from the visible CQ stay pending
+    // with their borrows: absence does not prove an operation finished (its
+    // CQE may be parked in the unflushable overflow list while the operation
+    // itself is still executing and still owns the caller's buffer), so only
+    // a delivered CQE may retire them.
+#if defined(SLUICE_E1_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT)
     if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
-#endif
-        // With the flush gated off, a completion parked in the kernel overflow
-        // list can never be delivered. A route stays borrowable only while its
-        // completion (or its control's) is ring-visible; everything else
-        // converges here on an unknown remainder instead of waiting behind an
-        // unreachable CQE.
         const auto& cq = ring_state_->ring.cq;
         const unsigned visible_ready = ::io_uring_cq_ready(&ring_state_->ring);
         const unsigned visible_head = *cq.khead;
@@ -1206,6 +1204,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
             }
         }
     }
+#endif
 
     signal_ready_progress();
 }
@@ -1464,18 +1463,27 @@ void UringAsyncBackend::reap_cqes() noexcept {
         }
     };
     reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
+#if defined(SLUICE_E1_MUTANT_POST_POISON_FLUSH_GATED)
     bool overflow_flush_allowed = true;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         overflow_flush_allowed = !fatal_error_.has_value();
     }
     if (overflow_flush_allowed && ::io_uring_cq_has_overflow(&ring_state_->ring)) {
+#else
+    if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
+#endif
         // Completions parked in the kernel overflow list are invisible to the
-        // shared-memory peek until an enter flushes them into the ring. A
-        // failed flush is a health event: the backend poisons, so every pass
-        // reports the failure instead of spinning on unserviceable overflow.
-        // The flush is skipped entirely once poisoned: an enter could fetch
-        // ledger entries whose invisibility the poison recovery just proved.
+        // shared-memory peek until an enter flushes them into the ring, so the
+        // flush must stay live after poison: this enter submits nothing and
+        // cannot consume the SQEs whose invisibility the poison recovery
+        // proved, while a recovered flush is the only way a parked completion
+        // still reaches its route. A failed flush is a health event: the
+        // poison is sticky and idempotent, so a persisting failure reports
+        // once per pass instead of spinning.
+        // The routes behind a still-unflushable overflow keep their borrows
+        // and stay pending under the failed health; their retirement proof is
+        // the delivered CQE, never absence from the visible ring.
 #if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
         (void)::io_uring_get_events(&ring_state_->ring);
         {

@@ -389,9 +389,12 @@ if has_config("liburing") then
     c2c_uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
                               R .. "tests/uring_progress_race_test.cpp",
                               "SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED")
-    c2c_uring_progress_target("uring_progress_race_mut_stranded_overflow_settle_dropped",
+    c2c_uring_progress_target("uring_progress_race_mut_overflow_absence_settles_inflight",
                               R .. "tests/uring_progress_race_test.cpp",
-                              "SLUICE_E1_MUTANT_STRANDED_OVERFLOW_SETTLE_DROPPED")
+                              "SLUICE_E1_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT")
+    c2c_uring_progress_target("uring_progress_race_mut_post_poison_flush_gated",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_E1_MUTANT_POST_POISON_FLUSH_GATED")
     c2c_uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
