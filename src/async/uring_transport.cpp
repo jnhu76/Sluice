@@ -319,7 +319,11 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         const detail::RequestKey key{core_->context(), local.slot, local.generation};
         detail::TerminalCandidate candidate;
         candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+#if defined(SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS)
+        candidate.outcome = sluice::detail::IoOutcome::success(0);
+#else
         candidate.outcome = sluice::detail::IoOutcome::failure(error);
+#endif
         if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
             std::fprintf(stderr, "sluice::async::UringAsyncBackend: local poison retirement "
                                  "lost terminal authority (invariant violation)\n");
@@ -365,7 +369,11 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
             if (!route.terminal_delivered) {
                 detail::TerminalCandidate candidate;
                 candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+#if defined(SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS)
+                candidate.outcome = sluice::detail::IoOutcome::success(0);
+#else
                 candidate.outcome = sluice::detail::IoOutcome::failure(error);
+#endif
                 if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
                     std::fprintf(stderr, "sluice::async::UringAsyncBackend: Class-A operation "
                                          "recovery lost terminal authority (invariant "
@@ -401,6 +409,22 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         physical.class_a_recovery_retired = true;
     }
 
+#if defined(SLUICE_E2_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW)
+    for (std::size_t router_index = 0; router_index < router_.size(); ++router_index) {
+        RouterEntry& route = router_[router_index];
+        if (!route.in_use || route.terminal_delivered)
+            continue;
+        const detail::RequestKey key{core_->context(), route.handle.slot, route.handle.generation};
+        detail::TerminalCandidate fabricated;
+        fabricated.kind = detail::TerminalCandidateKind::physical_outcome;
+        fabricated.outcome = sluice::detail::IoOutcome::uncertain(error);
+        if (core_->offer_terminal(key, fabricated) == detail::TerminalVerdict::chosen) {
+            route.terminal_delivered = true;
+            (void)core_->release_execution(key);
+            publication_pending_->push_back(route.handle);
+        }
+    }
+#endif
     // Routes whose completions are absent from the visible CQ stay pending
     // with their borrows: absence does not prove an operation finished (its
     // CQE may be parked in the unflushable overflow list while the operation

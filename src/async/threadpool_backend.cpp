@@ -865,6 +865,11 @@ bool ThreadPoolBackend::internal_work_retired() const noexcept {
 }
 
 void ThreadPoolBackend::stop_execution() noexcept {
+#if defined(SLUICE_E2_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION)
+    if (core_ != nullptr && core_->occupancy().accepted_live != 0) {
+        detail::threadpool_non_quiescent_destruction_fail_fast();
+    }
+#endif
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
         stopping_ = true;
@@ -888,7 +893,11 @@ void ThreadPoolBackend::retire_execution_resources() noexcept {
         if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
             any_event_owed_locked_() || occupancy.outstanding != 0 ||
             occupancy.execution_refs != 0 || occupancy.control_refs != 0 ||
-            occupancy.publication_inflight != 0 || occupancy.observer_registrations != 0) {
+            occupancy.publication_inflight != 0 || occupancy.observer_registrations != 0
+#if defined(SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION)
+            || occupancy.accepted_live != 0
+#endif
+        ) {
             detail::threadpool_non_quiescent_destruction_fail_fast();
         }
     }

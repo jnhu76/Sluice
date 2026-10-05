@@ -177,6 +177,49 @@ bool scenario_dies_aborting(void (*scenario)()) {
     return WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT;
 }
 
+// The contract names its always-on diagnostics; the death scenario must end
+// at the named guard, not at any abort that happens to be nearby.
+bool scenario_dies_aborting_named(void (*scenario)(), const char* needle) {
+    char diag[] = "/tmp/sluice_e2_death_XXXXXX";
+    const int capture = ::mkstemp(diag);
+    if (capture < 0)
+        return false;
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        ::close(capture);
+        ::unlink(diag);
+        return false;
+    }
+    if (pid == 0) {
+        ::dup2(capture, STDERR_FILENO);
+        ::close(capture);
+        ::alarm(30);
+        scenario();
+        std::_Exit(0);
+    }
+    ::close(capture);
+    int status = 0;
+    if (::waitpid(pid, &status, 0) != pid) {
+        ::unlink(diag);
+        return false;
+    }
+    std::string captured;
+    {
+        char buffer[512];
+        const int fd = ::open(diag, O_RDONLY);
+        if (fd >= 0) {
+            ssize_t n;
+            while ((n = ::read(fd, buffer, sizeof(buffer))) > 0)
+                captured.append(buffer, static_cast<std::size_t>(n));
+            ::close(fd);
+        }
+    }
+    ::unlink(diag);
+    if (!(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT))
+        return false;
+    return captured.find(needle) != std::string::npos;
+}
+
 void destroy_context_with_pending_live_binding() {
     auto opened = File::open(make_temp_file("shutdown pending binding\n"));
     if (!opened.has_value())
@@ -298,6 +341,13 @@ bool cancel_then_drain_shutdown_cancels_pending_without_fabricated_success(Track
     std::thread kernel([&] {
         while (!fire.load(std::memory_order_acquire)) {
         }
+        // The control must be submitted before its CQE exists; a settlement
+        // that skipped the passes never submits it and the injection would
+        // hit a control the ring never sent.
+        for (int i = 0; i < 4000000 && made.backend->live_control_sqes_for_test() == 0; ++i)
+            std::this_thread::yield();
+        if (made.backend->live_control_sqes_for_test() == 0)
+            return;
         const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
         if (cookie.has_value()) {
             made.backend->inject_cqe_for_test(*cookie, 32);
@@ -331,8 +381,10 @@ bool cancel_then_drain_shutdown_cancels_pending_without_fabricated_success(Track
 #endif
 
 bool destruction_with_pending_live_binding_fails_fast(Tracker& t) {
-    t.check(scenario_dies_aborting(destroy_context_with_pending_live_binding),
-            "destroying a context under a pending live binding aborts");
+    t.check(scenario_dies_aborting_named(destroy_context_with_pending_live_binding,
+                                         "outstanding public bindings"),
+            "destroying a context under a pending live binding aborts at the "
+            "named public-binding guard");
     return true;
 }
 

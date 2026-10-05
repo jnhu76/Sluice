@@ -60,6 +60,10 @@ namespace sluice::async::detail {
 }
 
 [[noreturn]] void async_context_outstanding_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::AsyncIoContext: relocating or destroying a context with "
+                 "outstanding public bindings (live Requests) is a contract violation\n");
+    std::fflush(stderr);
     std::terminate();
 }
 

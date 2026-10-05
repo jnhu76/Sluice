@@ -69,9 +69,11 @@ AsyncIoContext::~AsyncIoContext() {
         std::lock_guard<std::mutex> lk(access_mtx_);
         fail_fast_if_progress_binding_live_();
     }
+#if !defined(SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
     if (core_ && core_->occupancy().public_bindings != 0) {
         detail::async_context_outstanding_fail_fast();
     }
+#endif
     if (backend_ && drive_settlement_() != ShutdownOutcome::completed) {
         detail::async_context_settlement_fail_fast();
     }
@@ -113,9 +115,11 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
             std::lock_guard<std::mutex> lk(access_mtx_);
             fail_fast_if_progress_binding_live_();
         }
+#if !defined(SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
         if (core_ && core_->occupancy().public_bindings != 0) {
             detail::async_context_outstanding_fail_fast();
         }
+#endif
         if (backend_ && drive_settlement_() != ShutdownOutcome::completed) {
             detail::async_context_settlement_fail_fast();
         }
@@ -601,12 +605,26 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
         }
     }
 
+#if defined(SLUICE_E2_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE)
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        execution_closed_ = true;
+        settlement_outcome_ = ShutdownOutcome::completed;
+    }
+    return ShutdownOutcome::completed;
+#endif
+
     for (;;) {
         const detail::ProgressSource::Token token = progress_->snapshot();
         const AsyncBackend::ProgressPass pass = run_progress_pass_();
         (void)core_->retire_delivered_episodes();
 
         if (settlement_converged_()) {
+#if defined(SLUICE_E2_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
+            if (core_->occupancy().public_bindings != 0) {
+                return ShutdownOutcome::health_unresolved;
+            }
+#endif
             break;
         }
 

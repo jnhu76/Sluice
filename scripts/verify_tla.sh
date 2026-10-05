@@ -634,4 +634,22 @@ run_violate obs-cov-no-observer-settlement ObserverCoreCovNoObserverSettlement.c
 run_violate obs-cov-pinned-past-release ObserverCoreCovPinnedPastRelease.cfg ObserverCore InvCovPinnedPastRelease
 run_violate obs-cov-rearm ObserverCoreCovReArm.cfg ObserverCore InvCovReArm
 
+echo "== Stage E2: ShutdownCore safety =="
+run_clean e2-safety ShutdownCore.cfg ShutdownCore
+
+echo "== Stage E2: ShutdownCore C++ mutation-seam mirrors (each must violate its named invariant) =="
+run_violate e2-mut-m1-destroy-ignores-closure ShutdownCoreMutM1DestroyIgnoresClosure.cfg ShutdownCore InvDestroyRequiresExecutionClosed
+run_violate e2-mut-m6-snapshot-before-close ShutdownCoreMutM6SnapshotBeforeClose.cfg ShutdownCore InvNoAcceptAfterAdmissionClose
+run_violate e2-mut-m7-close-without-convergence ShutdownCoreMutM7CloseWithoutConvergence.cfg ShutdownCore InvExecutionClosedNoBorrowTouchingExecution
+run_violate e2-mut-m8-retire-fd-early ShutdownCoreMutM8RetireFdEarly.cfg ShutdownCore InvNotificationRetireRequiresNoDeliveryRefs
+
+echo "== Stage E2: ShutdownCore contract mutants (a clean run is the kill: the certified state becomes unreachable) =="
+run_clean e2-mut-m4-require-consumption ShutdownCoreMutM4RequireConsumption.cfg ShutdownCore
+
+echo "== Stage E2: ShutdownCore reachability certificates (each must be reachable) =="
+run_violate e2-cov-published-survives ShutdownCoreCovPublishedSurvivesExecutionClose.cfg ShutdownCore InvCovPublishedSurvivesExecutionClose
+run_violate e2-cov-unconsumed-converges ShutdownCoreCovUnconsumedResultConverges.cfg ShutdownCore InvCovUnconsumedResultConverges
+run_violate e2-cov-internal-pin ShutdownCoreCovInternalPinThenCleanClose.cfg ShutdownCore InvCovInternalPinThenCleanClose
+run_violate e2-cov-cancel-policy ShutdownCoreCovCancelPolicyCompletes.cfg ShutdownCore InvCovCancelPolicyCompletes
+
 echo "VERIFY_TLA: PASS"
