@@ -134,6 +134,8 @@ class UringAsyncBackend : public AsyncBackend {
 
     static void set_injected_statx_probe_failure(bool value) noexcept;
     static bool injected_statx_probe_failure() noexcept;
+    static void set_injected_opcode_probe_failure(bool value) noexcept;
+    static bool injected_opcode_probe_failure() noexcept;
 
     std::size_t sink_deliveries() const noexcept;
     detail::RequestKey sink_last_key() const noexcept;
@@ -172,6 +174,9 @@ class UringAsyncBackend : public AsyncBackend {
     };
 
     bool probe_statx_support_() noexcept;
+    bool probe_required_opcodes_() noexcept;
+    std::size_t reconcile_ledger_with_kernel_locked_() noexcept;
+    void mark_consumed_control_locked_(std::uint64_t cookie, detail::SlotHandle handle) noexcept;
 
     bool progress_port_attached() noexcept override;
 

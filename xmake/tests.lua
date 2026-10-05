@@ -518,6 +518,12 @@ do
                               "SLUICE_E1_MUTANT_STICKY_INTENT_DROPPED")
         e1_conformance_target("e1_conformance_mut_capability_probe_ignored", true,
                               "SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED")
+        e1_conformance_target("e1_conformance_mut_cancel_progress_signal_dropped", true,
+                              "SLUICE_E1_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED")
+        e1_conformance_target("e1_conformance_mut_submit_batch_invisible", true,
+                              "SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE")
+        e1_conformance_target("e1_conformance_mut_opcode_probe_ignored", true,
+                              "SLUICE_E1_MUTANT_OPCODE_PROBE_IGNORED")
     end
     e1_conformance_target("e1_conformance_mut_write_failure_accounted", false,
                           "SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED")

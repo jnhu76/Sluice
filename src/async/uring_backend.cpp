@@ -138,6 +138,7 @@ constexpr bool cookie_terminal_is_canceled(const detail::TerminalResult& t) noex
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 std::atomic<bool> g_injected_statx_probe_failure{false};
+std::atomic<bool> g_injected_opcode_probe_failure{false};
 #endif
 
 }
@@ -424,6 +425,17 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
         throw;
     }
     have_ring_ = true;
+#if defined(SLUICE_E1_MUTANT_OPCODE_PROBE_IGNORED)
+    if (false) {
+#else
+    if (!probe_required_opcodes_()) {
+#endif
+        ::io_uring_queue_exit(&ring_state_->ring);
+        have_ring_ = false;
+        throw std::runtime_error(
+            "sluice::async::UringAsyncBackend: io_uring required request opcodes unavailable "
+            "(required-profile setup failure)");
+    }
 #if defined(SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED)
     if (false) {
 #else
@@ -437,6 +449,29 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
             "(required metadata capability missing at profile setup)");
     }
     available_ = true;
+}
+
+bool UringAsyncBackend::probe_required_opcodes_() noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    if (g_injected_opcode_probe_failure.load(std::memory_order_acquire)) {
+        return false;
+    }
+#endif
+    static constexpr int kRequiredOpcodes[] = {IORING_OP_READ, IORING_OP_WRITE, IORING_OP_FSYNC,
+                                               IORING_OP_STATX};
+    struct ::io_uring_probe* probe = ::io_uring_get_probe_ring(&ring_state_->ring);
+    if (probe == nullptr) {
+        return false;
+    }
+    bool all_supported = true;
+    for (const int opcode : kRequiredOpcodes) {
+        if (::io_uring_opcode_supported(probe, opcode) == 0) {
+            all_supported = false;
+            break;
+        }
+    }
+    ::io_uring_free_probe(probe);
+    return all_supported;
 }
 
 bool UringAsyncBackend::probe_statx_support_() noexcept {
@@ -585,6 +620,14 @@ void UringAsyncBackend::set_injected_statx_probe_failure(bool value) noexcept {
 
 bool UringAsyncBackend::injected_statx_probe_failure() noexcept {
     return g_injected_statx_probe_failure.load(std::memory_order_acquire);
+}
+
+void UringAsyncBackend::set_injected_opcode_probe_failure(bool value) noexcept {
+    g_injected_opcode_probe_failure.store(value, std::memory_order_release);
+}
+
+bool UringAsyncBackend::injected_opcode_probe_failure() noexcept {
+    return g_injected_opcode_probe_failure.load(std::memory_order_acquire);
 }
 
 std::size_t UringAsyncBackend::transport_ledger_size_for_test() const noexcept {
@@ -917,20 +960,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
         for (std::size_t i = 0; i < consumed; ++i) {
             const TransportLedger::Entry entry = transport_ledger_->pop_front();
             if (entry.kind == TransportLedger::Kind::cancel_control) {
-                const std::size_t router_index = find_live_router_cookie_(entry.cookie);
-                if (router_index == router_.size() ||
-                    router_[router_index].handle.slot.value != entry.handle.slot.value ||
-                    router_[router_index].handle.generation.value !=
-                        entry.handle.generation.value ||
-                    router_[router_index].control_state != RouterEntry::ControlState::prepared) {
-                    std::fprintf(stderr, "sluice::async::UringAsyncBackend: consumed control "
-                                         "lost its exact prepared router reference "
-                                         "(invariant violation)\n");
-                    std::fflush(stderr);
-                    std::terminate();
-                }
-                router_[router_index].control_state = RouterEntry::ControlState::submitted;
-                live_control_sqes_.fetch_add(1, std::memory_order_relaxed);
+                mark_consumed_control_locked_(entry.cookie, entry.handle);
             }
         }
         return;
@@ -939,10 +969,65 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
         return;
 
     const int err = -rc;
-    if (err == EINTR || err == EAGAIN || err == EBUSY)
+    if (err == EINTR || err == EAGAIN || err == EBUSY) {
+#if !defined(SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE)
+        // A partial kernel fetch before the retryable error would otherwise
+        // desync this ledger against the next retry's consumed count.
+        (void)reconcile_ledger_with_kernel_locked_();
+#endif
         return;
+    }
 
+#if !defined(SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE)
+    // Resolve each ledger entry against the kernel SQ head before poison:
+    // entries the head already passed are kernel-visible and keep their real
+    // completion path; the remainder are provably invisible because the
+    // poisoned ring performs no further enter.
+    (void)reconcile_ledger_with_kernel_locked_();
+#endif
     poison_and_recover_locked(IoError{IoError::Code::backend_error, err});
+}
+
+void UringAsyncBackend::mark_consumed_control_locked_(std::uint64_t cookie,
+                                                      detail::SlotHandle handle) noexcept {
+    const std::size_t router_index = find_live_router_cookie_(cookie);
+    if (router_index == router_.size() ||
+        router_[router_index].handle.slot.value != handle.slot.value ||
+        router_[router_index].handle.generation.value != handle.generation.value ||
+        router_[router_index].control_state != RouterEntry::ControlState::prepared) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: consumed control "
+                             "lost its exact prepared router reference "
+                             "(invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    router_[router_index].control_state = RouterEntry::ControlState::submitted;
+    live_control_sqes_.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::size_t UringAsyncBackend::reconcile_ledger_with_kernel_locked_() noexcept {
+    if (transport_ledger_ == nullptr || transport_ledger_->empty())
+        return 0;
+    const auto& sq = ring_state_->ring.sq;
+    const unsigned khead = *sq.khead;
+    const unsigned tail = static_cast<unsigned>(sq.sqe_tail & sq.ring_mask);
+    const unsigned unconsumed = static_cast<unsigned>((tail - khead) & sq.ring_mask);
+    const std::size_t size = transport_ledger_->size();
+    if (unconsumed > size) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: kernel reports more "
+                             "unconsumed SQ slots than the physical ledger contains "
+                             "(invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
+    const std::size_t consumed = size - unconsumed;
+    for (std::size_t i = 0; i < consumed; ++i) {
+        const TransportLedger::Entry entry = transport_ledger_->pop_front();
+        if (entry.kind == TransportLedger::Kind::cancel_control) {
+            mark_consumed_control_locked_(entry.cookie, entry.handle);
+        }
+    }
+    return consumed;
 }
 
 void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
@@ -951,10 +1036,12 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
     fatal_error_ = error;
     core_->note_health_failure();
 
-    // Kernel-invisible work converges immediately: dispatch entries never
-    // reached an SQE and prepared ledger entries are never submitted again
-    // after poison. Submitted operations whose CQEs may still arrive are
-    // already outside this ledger and keep their real completion path.
+    // Every ledger entry still present here was resolved against the kernel
+    // SQ head by the caller's reconciliation: the head has not passed it, and
+    // the poisoned ring performs no further enter (the overflow flush is
+    // gated on !fatal_error_), so it is provably kernel-invisible and Class-A
+    // retirement is safe. Operations whose CQEs may still arrive left this
+    // ledger during reconciliation and keep their real completion path.
     detail::SlotHandle local{};
     while (dispatch_->pop_front(local)) {
         const detail::RequestKey key{core_->context(), local.slot, local.generation};
@@ -1299,13 +1386,24 @@ void UringAsyncBackend::reap_cqes() noexcept {
         }
     };
     reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
-    if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
+    bool overflow_flush_allowed = true;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        overflow_flush_allowed = !fatal_error_.has_value();
+    }
+    if (overflow_flush_allowed && ::io_uring_cq_has_overflow(&ring_state_->ring)) {
         // Completions parked in the kernel overflow list are invisible to the
         // shared-memory peek until an enter flushes them into the ring. A
         // failed flush is a health event: the backend poisons, so every pass
         // reports the failure instead of spinning on unserviceable overflow.
+        // The flush is skipped entirely once poisoned: an enter could fetch
+        // ledger entries whose invisibility the poison recovery just proved.
 #if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
         (void)::io_uring_get_events(&ring_state_->ring);
+        {
+            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+            (void)reconcile_ledger_with_kernel_locked_();
+        }
 #else
         int flush_rc = 0;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -1317,9 +1415,12 @@ void UringAsyncBackend::reap_cqes() noexcept {
         {
             flush_rc = ::io_uring_get_events(&ring_state_->ring);
         }
-        if (flush_rc < 0) {
+        {
             std::lock_guard<std::mutex> lk(dispatch_mtx_);
-            poison_and_recover_locked(IoError{IoError::Code::backend_error, -flush_rc});
+            (void)reconcile_ledger_with_kernel_locked_();
+            if (flush_rc < 0) {
+                poison_and_recover_locked(IoError{IoError::Code::backend_error, -flush_rc});
+            }
         }
 #endif
         reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
@@ -1459,6 +1560,17 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
     }
     if (disposition == detail::PublicCancel::won_before_execution) {
         bump(stats_, &AsyncStats::canceled_ops);
+        signal_ready_progress();
+    } else if (
+#if defined(SLUICE_E1_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED)
+        false
+#else
+        disposition == detail::PublicCancel::requested
+#endif
+    ) {
+        // A running cancel leaves actionable control state behind (a prepared
+        // cancel SQE or a sticky intent), so the sleep handshake must observe
+        // the obligation and come back to submit or service it.
         signal_ready_progress();
     }
 

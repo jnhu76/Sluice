@@ -18,6 +18,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <limits>
@@ -433,6 +434,17 @@ bool setup_failures_are_explicit(Tracker& t) {
     }
     UringAsyncBackend::set_injected_statx_probe_failure(false);
     t.check(threw, "a missing metadata capability refuses construction at setup");
+
+    UringAsyncBackend::set_injected_opcode_probe_failure(true);
+    threw = false;
+    try {
+        Backend broken(UringConfig{4, 8});
+        (void)broken;
+    } catch (const std::exception&) {
+        threw = true;
+    }
+    UringAsyncBackend::set_injected_opcode_probe_failure(false);
+    t.check(threw, "a missing required request opcode refuses construction at setup");
 #else
     threw = false;
     ThreadPoolBackend::set_injected_worker_spawn_failure_index(0);
@@ -846,6 +858,45 @@ struct HookedBackend {
     }
 };
 
+struct SubmitFictionControl {
+    std::atomic<int> mode{0};
+    std::atomic<unsigned> consume{0};
+};
+
+int fiction_submit(void* context, ::io_uring* ring) noexcept {
+    auto* control = static_cast<SubmitFictionControl*>(context);
+    const int mode = control->mode.load(std::memory_order_acquire);
+    if (mode == 1) {
+        return 0;
+    }
+    if (mode == 2) {
+        *ring->sq.khead = (*ring->sq.khead + control->consume.load(std::memory_order_acquire)) &
+                          ring->sq.ring_mask;
+        return -EIO;
+    }
+    const unsigned ready = ::io_uring_sq_ready(ring);
+    *ring->sq.ktail = ring->sq.sqe_tail;
+    *ring->sq.khead = ring->sq.sqe_tail;
+    return static_cast<int>(ready);
+}
+
+struct FictionBackend {
+    std::unique_ptr<AsyncIoContext> ctx;
+    Backend* backend = nullptr;
+    std::shared_ptr<SubmitFictionControl> control = std::make_shared<SubmitFictionControl>();
+
+    static FictionBackend create(std::size_t capacity, unsigned depth) {
+        FictionBackend made;
+        UringBackendSubmitTestHooks hooks;
+        hooks.submit = &fiction_submit;
+        hooks.context = made.control.get();
+        auto owned = std::make_unique<Backend>(UringConfig{capacity, depth}, hooks);
+        made.backend = owned.get();
+        made.ctx = std::make_unique<AsyncIoContext>(std::move(owned));
+        return made;
+    }
+};
+
 bool metadata_identity_agrees_across_backends(Tracker& t) {
     const std::string content = "sluice e1 cross-backend metadata";
     const std::string path = make_temp_file(content);
@@ -1032,6 +1083,127 @@ bool success_and_cancel_converge_without_fabrication_under_the_fiction(Tracker& 
     return true;
 }
 
+bool hard_submit_failure_resolves_per_entry_kernel_visibility(Tracker& t) {
+    Fixture fix = make_fixture("sluice e1 partial submit visibility conformance");
+    if (!fix.ok()) {
+        t.check(false, "fixture created");
+        return false;
+    }
+    FictionBackend made = FictionBackend::create(4, 8);
+    RequestCore& core = *made.ctx->context_core_for_test();
+
+    std::vector<std::byte> first(4, std::byte{0});
+    std::vector<std::byte> second(4, std::byte{0});
+    made.control->mode.store(1, std::memory_order_release);
+    auto front = made.ctx->submit_read(
+        ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, first.data(), 4, 0});
+    auto back = made.ctx->submit_read(
+        ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, second.data(), 4, 10});
+    t.check(front.has_value() && back.has_value(), "both stalled reads are accepted");
+    if (!front.has_value() || !back.has_value())
+        return false;
+    Request<std::size_t> visible = std::move(front).value();
+    Request<std::size_t> invisible = std::move(back).value();
+    t.check(made.backend->transport_ledger_size_for_test() == 2,
+            "both prepared entries sit in the transport ledger");
+
+    made.control->consume.store(1, std::memory_order_release);
+    made.control->mode.store(2, std::memory_order_release);
+    (void)made.ctx->poll();
+
+    const auto after_poison = invisible.try_result();
+    t.check(after_poison.readiness == RequestReadiness::ready && !after_poison.result.has_value() &&
+                after_poison.result.error().code == IoError::Code::backend_error,
+            "the provably invisible entry converges to the poison failure");
+    invisible.take_result();
+    t.check(visible.try_result().readiness == RequestReadiness::pending,
+            "the kernel-visible entry keeps its borrow and is not settled by the poison");
+
+    const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
+    t.check(cookie.has_value(), "the kernel-visible entry remains routable");
+    if (!cookie.has_value())
+        return false;
+    made.backend->inject_cqe_for_test(*cookie, 4);
+    while (!visible.ready())
+        (void)made.ctx->poll();
+    const auto observed = visible.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the kernel-visible entry publishes its real outcome, never the poison error");
+    t.check(observed.effect == EffectReport{4, EffectCertainty::accounted},
+            "the real completion keeps its accounted effect");
+    t.check(core_is_idle(core.snapshot()), "both resolutions leave no core residue");
+    t.check(backend_quiescent(*made.backend), "the ring holds no live cookies after convergence");
+    return true;
+}
+
+bool cancel_progress_wakes_a_parked_owner(Tracker& t) {
+    int pipe_fds[2] = {-1, -1};
+    if (::pipe(pipe_fds) != 0) {
+        t.check(false, "pipe fixture created");
+        return false;
+    }
+    auto owned_backend = make_backend(4);
+    Backend* raw = owned_backend.get();
+    AsyncIoContext ctx(std::move(owned_backend));
+    std::atomic<int> prepark{0};
+    ctx.set_progress_prepark_counter_for_test(&prepark);
+
+    std::vector<std::byte> buffer(8, std::byte{0});
+    auto submitted = ctx.submit_read(
+        ReadOp{NativeFileRef{pipe_fds[0], sluice::FileAccess::read_only}, buffer.data(), 8, 0});
+    t.check(submitted.has_value(), "the blocking pipe read is accepted");
+    if (!submitted.has_value()) {
+        ::close(pipe_fds[0]);
+        ::close(pipe_fds[1]);
+        return false;
+    }
+    Request<std::size_t> request = std::move(submitted).value();
+    const auto id = request.id();
+
+    AsyncIoContext::ProgressWaitOutcome::Kind owner_kind =
+        AsyncIoContext::ProgressWaitOutcome::Kind::deadline_expired;
+    std::thread owner{[&] {
+        auto waited = ctx.wait_one(std::chrono::seconds(10));
+        if (waited.has_value())
+            owner_kind = waited.value().kind;
+    }};
+
+    const auto parked_by = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (prepark.load(std::memory_order_acquire) < 1) {
+        if (std::chrono::steady_clock::now() > parked_by)
+            break;
+        std::this_thread::yield();
+    }
+    t.check(prepark.load(std::memory_order_acquire) >= 1, "the owner is confirmed parked");
+
+    const auto disposition = ctx.cancel(id);
+    t.check(disposition.has_value() && disposition.value() == CancelDisposition::requested,
+            "the running cancel reports requested and owes its control obligation");
+
+    owner.join();
+    t.check(owner_kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress,
+            "the parked owner wakes on the cancel obligation and services it");
+
+    const auto converge_by = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!request.ready() && std::chrono::steady_clock::now() < converge_by)
+        (void)ctx.poll();
+    t.check(request.ready(), "the serviced control makes the cancel kernel-visible on the real ring");
+    if (request.ready()) {
+        const auto observed = request.take_result();
+        t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                    observed.result.error().code == IoError::Code::canceled,
+                "the canceled in-flight read converges to its canceled terminal");
+        t.check(observed.effect == EffectReport{0, EffectCertainty::unknown},
+                "the canceled in-flight read reports an unknown remainder");
+    }
+    ::close(pipe_fds[0]);
+    ::close(pipe_fds[1]);
+    t.check(ctx.outstanding() == 0, "the context holds no outstanding work");
+    t.check(backend_quiescent(*raw), "the ring holds no live cookies or controls");
+    return true;
+}
+
 #endif  // SLUICE_E1_CONFORMANCE_URING
 
 }  // namespace
@@ -1069,6 +1241,9 @@ int main() {
          sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced},
         {"success_and_cancel_converge_without_fabrication_under_the_fiction",
          success_and_cancel_converge_without_fabrication_under_the_fiction},
+        {"hard_submit_failure_resolves_per_entry_kernel_visibility",
+         hard_submit_failure_resolves_per_entry_kernel_visibility},
+        {"cancel_progress_wakes_a_parked_owner", cancel_progress_wakes_a_parked_owner},
 #endif
         {"post_accept_dispatch_failure_converges_and_reclaims",
          post_accept_dispatch_failure_converges_and_reclaims},
