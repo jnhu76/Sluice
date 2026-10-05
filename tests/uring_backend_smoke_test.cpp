@@ -51,8 +51,12 @@ FileOpen writable_mode() {
 // Honest NOT-RUN: the real backend must exist and the kernel must accept
 // io_uring setup; otherwise every submission result is meaningless.
 bool uring_backend_available() {
-    UringAsyncBackend backend;
-    return backend.available();
+    try {
+        UringAsyncBackend backend;
+        return backend.available();
+    } catch (...) {
+        return false;
+    }
 }
 
 bool read_op_through_canonical_file() {

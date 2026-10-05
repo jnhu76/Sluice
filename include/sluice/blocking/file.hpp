@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sluice/effect.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
@@ -36,10 +37,7 @@ enum class CompositionEnd : std::uint8_t {
     primitive_error,
 };
 
-enum class EffectCertainty : std::uint8_t {
-    accounted,
-    unknown,
-};
+using EffectCertainty = sluice::EffectCertainty;
 
 struct CompositionOutcome {
     std::size_t confirmed_bytes = 0;

@@ -42,6 +42,7 @@ enum class CancelDisposition : std::uint8_t {
     requested,
     already_terminal,
     not_found,
+    physical_interruption_unsupported,
 };
 
 enum class RequestReadiness : std::uint8_t { empty, pending, ready };
@@ -50,6 +51,9 @@ template <class T> struct RequestObservation {
     RequestReadiness readiness = RequestReadiness::empty;
     // The payload is only meaningful when readiness is ready.
     Result<T> result{make_unexpected<T>(IoError{IoError::Code::invalid_state})};
+    // Data-effect report for the terminal (all-zero/accounted before ready,
+    // and for operations without a data effect).
+    sluice::EffectReport effect{};
 };
 
 template <class T> class Request {
@@ -94,14 +98,16 @@ template <class T> class Request {
             return {};
         }
         sluice::detail::IoOutcome outcome;
-        const detail::PublicObservation observed = core_->observe_public_result(key_, &outcome);
+        sluice::FileInfo metadata;
+        const detail::PublicObservation observed =
+            core_->observe_public_result(key_, &outcome, &metadata);
         if (observed == detail::PublicObservation::pending) {
             return {RequestReadiness::pending};
         }
         if (observed == detail::PublicObservation::stale) {
             detail::request_binding_invariant_fail_fast();
         }
-        return {RequestReadiness::ready, result_of_(outcome)};
+        return {RequestReadiness::ready, result_of_(outcome, metadata), effect_of_(outcome)};
     }
 
     RequestObservation<T> take_result() noexcept {
@@ -109,7 +115,9 @@ template <class T> class Request {
             return {};
         }
         sluice::detail::IoOutcome outcome;
-        const detail::PublicConsumption consumed = core_->consume_public_result(key_, &outcome);
+        sluice::FileInfo metadata;
+        const detail::PublicConsumption consumed =
+            core_->consume_public_result(key_, &outcome, &metadata);
         if (consumed == detail::PublicConsumption::pending) {
             return {RequestReadiness::pending};
         }
@@ -119,7 +127,7 @@ template <class T> class Request {
         core_ = nullptr;
         backend_ = nullptr;
         key_ = {};
-        return {RequestReadiness::ready, result_of_(outcome)};
+        return {RequestReadiness::ready, result_of_(outcome, metadata), effect_of_(outcome)};
     }
 
     void discard() noexcept { release_responsibility_(); }
@@ -158,10 +166,21 @@ template <class T> class Request {
         key_ = {};
     }
 
-    static Result<T> result_of_(const sluice::detail::IoOutcome& outcome) noexcept {
+    static Result<T> result_of_(const sluice::detail::IoOutcome& outcome,
+                                const sluice::FileInfo& metadata) noexcept {
         if constexpr (std::is_void_v<T>) {
             if (outcome.succeeded) {
                 return {};
+            }
+            return make_unexpected<T>(outcome.error);
+        } else if constexpr (std::is_same_v<T, sluice::FileInfo>) {
+            if (outcome.succeeded) {
+                return Result<T>{metadata};
+            }
+            return make_unexpected<T>(outcome.error);
+        } else if constexpr (std::is_same_v<T, sluice::FileSize>) {
+            if (outcome.succeeded) {
+                return Result<T>{FileSize{metadata.size}};
             }
             return make_unexpected<T>(outcome.error);
         } else {
@@ -170,6 +189,10 @@ template <class T> class Request {
             }
             return make_unexpected<T>(outcome.error);
         }
+    }
+
+    static sluice::EffectReport effect_of_(const sluice::detail::IoOutcome& outcome) noexcept {
+        return sluice::EffectReport{outcome.effect.confirmed_bytes, outcome.effect.remaining};
     }
 
     detail::RequestCore* core_ = nullptr;

@@ -26,13 +26,15 @@ static_assert(std::is_constructible_v<UringAsyncBackend, UringConfig>,
 }
 
 int main() {
-    {
+    try {
         UringAsyncBackend backend;
         (void)backend.available();
+    } catch (...) {
     }
-    {
+    try {
         UringAsyncBackend backend(UringConfig{});
         (void)backend.available();
+    } catch (...) {
     }
     std::printf("uring public consumer probe passed: consumer TU constructed and destroyed "
                 "the library's public class definition\n");

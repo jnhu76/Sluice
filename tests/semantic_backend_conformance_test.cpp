@@ -20,7 +20,12 @@ using sluice::async::UringAsyncBackend;
 
 // A kernel that refuses io_uring setup must produce NOT RUN, never a vacuous pass.
 int main() {
-    if (!UringAsyncBackend().available()) {
+    bool ring_available = false;
+    try {
+        ring_available = UringAsyncBackend().available();
+    } catch (...) {
+    }
+    if (!ring_available) {
         std::printf("NOT RUN: io_uring unavailable on this host (kernel/policy blocked)\n");
         return 0;
     }

@@ -52,6 +52,8 @@ class ThreadPoolBackend : public AsyncBackend {
     Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override;
     Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) override;
     Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) override;
+    Result<detail::RequestKey> submit_file_info(FileInfoOp op, Completion<FileInfo>* c) override;
+    Result<detail::RequestKey> submit_size(SizeOp op, Completion<FileSize>* c) override;
 
     Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
                                                       std::uint64_t gen) const override;
@@ -136,7 +138,8 @@ class ThreadPoolBackend : public AsyncBackend {
     // records, and completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
         void* completion = nullptr;
-        void (*publish)(void* completion, const sluice::detail::IoOutcome&) noexcept = nullptr;
+        void (*publish)(void* completion,
+                        const detail::PublicationPayload& payload) noexcept = nullptr;
         detail::OperationKind kind = detail::OperationKind::read;
         // event_owed pairs with one core control ref on owed_key: the ref is
         // acquired before this flag is set and released after delivery.
@@ -168,11 +171,12 @@ class ThreadPoolBackend : public AsyncBackend {
     static Result<void> validate_write(WriteOp op);
     static Result<void> validate_sync(SyncDataOp op);
     static Result<void> validate_sync(SyncAllOp op);
+    static Result<void> validate_file_info(FileInfoOp op);
+    static Result<void> validate_size(SizeOp op);
 
     template <class Op> static Result<void> validate_op(const Op& op) noexcept;
 
-    template <class Op>
-    static const std::byte* buffer_of(const Op& op) noexcept {
+    template <class Op> static const std::byte* buffer_of(const Op& op) noexcept {
         if constexpr (std::is_same_v<Op, ReadOp>) {
             return static_cast<const std::byte*>(op.dst);
         } else if constexpr (std::is_same_v<Op, WriteOp>) {
@@ -185,6 +189,10 @@ class ThreadPoolBackend : public AsyncBackend {
     template <class Comp> static auto publish_thunk() noexcept {
         if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
             return &ThreadPoolBackend::publish_size_ready;
+        } else if constexpr (std::is_same_v<Comp, Completion<FileInfo>>) {
+            return &ThreadPoolBackend::publish_file_info_ready;
+        } else if constexpr (std::is_same_v<Comp, Completion<FileSize>>) {
+            return &ThreadPoolBackend::publish_size_value_ready;
         } else {
             return &ThreadPoolBackend::publish_void_ready;
         }
@@ -201,13 +209,18 @@ class ThreadPoolBackend : public AsyncBackend {
     detail::PublicCancel cancel_key(detail::RequestKey key);
 
     static void publish_size_ready(void* completion,
-                                   const sluice::detail::IoOutcome& outcome) noexcept;
+                                   const detail::PublicationPayload& payload) noexcept;
     static void publish_void_ready(void* completion,
-                                   const sluice::detail::IoOutcome& outcome) noexcept;
+                                   const detail::PublicationPayload& payload) noexcept;
+    static void publish_file_info_ready(void* completion,
+                                        const detail::PublicationPayload& payload) noexcept;
+    static void publish_size_value_ready(void* completion,
+                                         const detail::PublicationPayload& payload) noexcept;
     static void publish_request_ready(void* completion,
-                                      const sluice::detail::IoOutcome& outcome) noexcept;
+                                      const detail::PublicationPayload& payload) noexcept;
 
-    static sluice::detail::IoOutcome run_syscall(const PreparedBlockingOp& p) noexcept;
+    static sluice::detail::IoOutcome run_syscall(const PreparedBlockingOp& p,
+                                                 sluice::FileInfo* metadata_out) noexcept;
 
     void worker_loop();
 

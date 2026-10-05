@@ -75,8 +75,13 @@ int main() {
     std::size_t uring_compared = 0;
     std::size_t uring_skipped = 0;
 #if defined(SLUICE_HAS_LIBURING)
-    sluice::async::UringAsyncBackend availability_probe(sluice::async::UringConfig{8, 8});
-    if (!availability_probe.available()) {
+    std::unique_ptr<sluice::async::UringAsyncBackend> availability_probe;
+    try {
+        availability_probe =
+            std::make_unique<sluice::async::UringAsyncBackend>(sluice::async::UringConfig{8, 8});
+    } catch (...) {
+    }
+    if (!availability_probe || !availability_probe->available()) {
         std::fprintf(stderr, "NOT RUN: io_uring unavailable on this host (kernel/policy "
                              "blocked); the precedence oracle ran without the uring half\n");
     } else {

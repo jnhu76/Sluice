@@ -60,6 +60,20 @@ class CountingBackend final : public AsyncBackend {
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::invalid_state});
     }
+    Result<sluice::async::detail::RequestKey> submit_file_info(FileInfoOp op,
+                                                               Completion<sluice::FileInfo>* c) override {
+        (void)op;
+        (void)c;
+        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
+            IoError{IoError::Code::invalid_state});
+    }
+    Result<sluice::async::detail::RequestKey> submit_size(SizeOp op,
+                                                          Completion<sluice::FileSize>* c) override {
+        (void)op;
+        (void)c;
+        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
+            IoError{IoError::Code::invalid_state});
+    }
 
     sluice::async::detail::PublicCancel cancel_identity(
         sluice::async::detail::RequestKey key) override {

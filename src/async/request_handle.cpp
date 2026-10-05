@@ -25,6 +25,26 @@ RequestHandle AsyncBackend::identity_of(Completion<void>& c) const noexcept {
                          c.bound_slot_.generation.value};
 }
 
+RequestHandle AsyncBackend::identity_of(Completion<FileInfo>& c) const noexcept {
+    if (auto key = core_binding(c)) {
+        return RequestHandle{key->context.value, key->slot.value, key->generation.value};
+    }
+    if (c.release_arena_ == nullptr)
+        return {};
+    return RequestHandle{c.release_arena_->context().value, c.bound_slot_.slot.value,
+                         c.bound_slot_.generation.value};
+}
+
+RequestHandle AsyncBackend::identity_of(Completion<FileSize>& c) const noexcept {
+    if (auto key = core_binding(c)) {
+        return RequestHandle{key->context.value, key->slot.value, key->generation.value};
+    }
+    if (c.release_arena_ == nullptr)
+        return {};
+    return RequestHandle{c.release_arena_->context().value, c.bound_slot_.slot.value,
+                         c.bound_slot_.generation.value};
+}
+
 Result<RequestHandleState>
 AsyncBackend::request_handle_state(const RequestHandle& h) const noexcept {
     if (!h.valid())

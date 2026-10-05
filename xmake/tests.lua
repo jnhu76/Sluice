@@ -1,5 +1,16 @@
 local R = SLUICE_ROOT
 
+-- The io_uring backend class is split across uring_backend.cpp (profile
+-- setup, admission, publication, public surface), uring_transport.cpp (SQ
+-- dispatch, transport ledger, poison recovery, cancel controls) and
+-- uring_completion.cpp (CQ reap and terminal handoff). Every seam build that
+-- compiles the backend must compile the three together.
+local uring_backend_sources = {
+    R .. "src/async/uring_backend.cpp",
+    R .. "src/async/uring_transport.cpp",
+    R .. "src/async/uring_completion.cpp",
+}
+
 sluice_one_file_target("binary", "test", "file_read_test", "tests", {"sluice_core", "sluice_async"})
 sluice_one_file_target("binary", "test", "file_resource_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "file_open_contract_test", "tests", "sluice_core")
@@ -246,7 +257,9 @@ do
             if with_liburing then
                 add_defines("SLUICE_HAS_LIBURING")
                 add_links("uring")
-                table.insert(files, R .. "src/async/uring_backend.cpp")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
             end
             add_files(files)
             add_tests(name)
@@ -287,7 +300,9 @@ do
             if with_liburing then
                 add_defines("SLUICE_HAS_LIBURING")
                 add_links("uring")
-                table.insert(files, R .. "src/async/uring_backend.cpp")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
             end
             add_files(files)
             if extra_define == nil then
@@ -362,6 +377,8 @@ if has_config("liburing") then
             add_links("uring")
             add_files(test_source,
                       R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/uring_transport.cpp",
+                      R .. "src/async/uring_completion.cpp",
                       R .. "src/async/uring_backend.cpp",
                       R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
@@ -389,6 +406,12 @@ if has_config("liburing") then
     c2c_uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
                               R .. "tests/uring_progress_race_test.cpp",
                               "SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED")
+    c2c_uring_progress_target("uring_progress_race_mut_overflow_absence_settles_inflight",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_E1_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT")
+    c2c_uring_progress_target("uring_progress_race_mut_post_poison_flush_gated",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_E1_MUTANT_POST_POISON_FLUSH_GATED")
     c2c_uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
@@ -421,7 +444,9 @@ do
             if with_liburing then
                 add_defines("SLUICE_HAS_LIBURING", "SLUICE_PUBLIC_REQUEST_URING")
                 add_links("uring")
-                table.insert(files, R .. "src/async/uring_backend.cpp")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
             end
             add_files(files)
             if extra_define == nil then
@@ -463,6 +488,78 @@ do
                           "SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
+-- E1 (#400) cross-backend File-contract conformance. One semantic suite is
+-- compiled once per profile: the ThreadPool variant runs the real worker
+-- path, and the io_uring variant runs the real ring plus the deterministic
+-- submit fiction for the claimed/stuck control windows. The uring variant
+-- also links the ThreadPool backend so both profiles' metadata records are
+-- compared in one process. The seam build compiles its own copies of the
+-- async TUs, mirroring the public request target's shape.
+do
+    local function e1_conformance_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/backend_conformance_e1_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/request_handle.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING", "SLUICE_E1_CONFORMANCE_URING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    e1_conformance_target("backend_conformance_e1_threadpool_test", false)
+    if has_config("liburing") then
+        e1_conformance_target("backend_conformance_e1_uring_test", true)
+
+        -- E1 named mutation builds. Each flips one load-bearing mechanism of
+        -- the #400 refinements and must be killed by the named failing
+        -- assertion of the conformance suite; they are executed and recorded
+        -- manually, never run as regular tests.
+        e1_conformance_target("e1_conformance_mut_metadata_drops_record", true,
+                              "SLUICE_E1_MUTANT_METADATA_DROPS_RECORD")
+        e1_conformance_target("e1_conformance_mut_byte_failure_accounted", true,
+                              "SLUICE_E1_MUTANT_BYTE_FAILURE_ACCOUNTED")
+        e1_conformance_target("e1_conformance_mut_sticky_intent_dropped", true,
+                              "SLUICE_E1_MUTANT_STICKY_INTENT_DROPPED")
+        e1_conformance_target("e1_conformance_mut_capability_probe_ignored", true,
+                              "SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED")
+        e1_conformance_target("e1_conformance_mut_cancel_progress_signal_dropped", true,
+                              "SLUICE_E1_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED")
+        e1_conformance_target("e1_conformance_mut_submit_batch_invisible", true,
+                              "SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE")
+        e1_conformance_target("e1_conformance_mut_opcode_probe_ignored", true,
+                              "SLUICE_E1_MUTANT_OPCODE_PROBE_IGNORED")
+        e1_conformance_target("e1_conformance_mut_masked_sq_cardinality", true,
+                              "SLUICE_E1_MUTANT_MASKED_SQ_CARDINALITY")
+    end
+    e1_conformance_target("e1_conformance_mut_write_failure_accounted", false,
+                          "SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED")
+    e1_conformance_target("e1_conformance_mut_cancel_reports_requested", false,
+                          "SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED")
+end
+
 -- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
@@ -491,7 +588,9 @@ do
             if with_liburing then
                 add_defines("SLUICE_HAS_LIBURING", "SLUICE_PUBLIC_REQUEST_URING")
                 add_links("uring")
-                table.insert(files, R .. "src/async/uring_backend.cpp")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
             end
             add_files(files)
             if extra_define == nil then
@@ -569,6 +668,8 @@ if has_config("liburing") then
             add_links("uring")
             add_files(R .. "tests/uring_core_cutover_test.cpp",
                       R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/uring_transport.cpp",
+                      R .. "src/async/uring_completion.cpp",
                       R .. "src/async/uring_backend.cpp",
                       R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",

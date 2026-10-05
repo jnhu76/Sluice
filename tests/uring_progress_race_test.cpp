@@ -925,11 +925,19 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     owner.join();
 
     // The injected flush failure must be observed, must become a persistent
-    // backend health fact (new submissions are rejected), and must strand
-    // nothing: the pass still converges well inside the deadline and every
-    // in-flight read retires once the failure clears. The mutant that
-    // restores the discarded-return behavior records no flush attempt and no
-    // poison, failing both the attempt and health assertions.
+    // backend health fact (new submissions are rejected), and must settle
+    // only what is proven: the pass converges well inside the deadline with
+    // the ring-visible completions retired through their real outcomes, while
+    // the parked overflow completion stays pending with its borrow held and
+    // retires with its real outcome only once the failure clears and the
+    // flush delivers it. The mutant that restores the discarded-return
+    // behavior records no flush attempt and no poison, failing both the
+    // attempt and health assertions; the mutant that gates the flush off
+    // after poison strands the parked completion forever (the failure-clear
+    // retirement loop times out); the mutant that settles routes by absence
+    // from the visible ring publishes a fabricated terminal for the parked
+    // read and is killed here by the real-outcome assertion after the flush
+    // recovers, and decisively by the mixed-state test below.
     const bool first_wait_ok = driver.value.has_value() &&
                                driver.value->kind == WaitKind::progress &&
                                driver.value->completed >= 2 && driver.elapsed_ms < 1000 &&
@@ -965,13 +973,110 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     for (auto& r : reads) {
         for (int i = 0; i < 20000 && !r.completion.ready(); ++i) {
             (void)ctx.poll_progress();
-            std::this_thread::sleep_for(std::chrono::microseconds(200));
+            std::this_thread::sleep_for(std::chrono::microseconds{200});
         }
         all_retired = all_retired && r.completion.ready();
         r.completion.reset();
         r.close_pipe();
     }
     return first_wait_ok && health_visible && all_retired;
+}
+
+// M-C8 lifetime oracle: at a flush-failure poison the CQ ring holds
+// completions of finished operations, the overflow list parks more of them,
+// and a still-executing operation has no CQE anywhere — its cookie is absent
+// from the visible ring for exactly the same reason as a parked one. Absence
+// is not a retirement proof: the executing read's kernel side still owns the
+// caller's buffer, so the poison must keep its borrow and leave it pending
+// under the failed health. Its retirement proof is the delivered CQE once
+// the pipe is written and the flush has recovered, never a visible-ring
+// scan.
+bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
+    FlushFailureState state;
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &state;
+    hooks.get_events = &flush_failure_hook;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 1}, hooks);
+    AsyncIoContext ctx(std::move(backend));
+
+    std::vector<BlockedPipeRead> reads(4);
+    for (auto& r : reads) {
+        if (!r.arm(ctx, 4))
+            return false;
+    }
+    {
+        auto claim = ctx.claim_progress_owner();
+        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+            return false;
+    }
+
+    // Three reads complete (the two-slot CQ ring holds two, the third parks
+    // in the overflow); the fourth is still executing inside the kernel with
+    // the test's buffer borrowed.
+    for (std::size_t i = 0; i + 1 < reads.size(); ++i)
+        reads[i].release_bytes(1);
+    state.fail.store(true, std::memory_order_release);
+
+    TimedWait driver;
+    std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
+    owner.join();
+
+    const bool pass_ok = driver.value.has_value() &&
+                         driver.value->kind == WaitKind::progress &&
+                         driver.value->completed >= 2 && driver.elapsed_ms < 1000 &&
+                         state.calls.load(std::memory_order_relaxed) >= 1;
+
+    // The still-inflight read must not be retired by the poison: no terminal
+    // exists for it, so its completion stays not-ready. The mutant that
+    // settles routes by visible-ring absence publishes a fabricated unknown
+    // terminal for it here and releases the borrow.
+    const bool inflight_pending = !reads[3].completion.ready();
+
+    // The poisoned backend must reject new submissions outright.
+    std::vector<std::byte> sink(4, std::byte{0});
+    int probe_fds[2];
+    if (::pipe(probe_fds) != 0)
+        return false;
+    const std::string one_byte(1, 'p');
+    const ssize_t probe_wrote = ::write(probe_fds[1], one_byte.data(), 1);
+    (void)probe_wrote;
+    Completion<std::size_t> probe;
+    const bool health_visible =
+        !ctx.submit_read(
+                 ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
+                        sink.size(), 0},
+                 probe)
+             .has_value();
+    for (int i = 0; !health_visible && i < 20000 && !probe.ready(); ++i) {
+        (void)ctx.poll_progress();
+        std::this_thread::sleep_for(std::chrono::microseconds{200});
+    }
+    probe.reset();
+    ::close(probe_fds[0]);
+    ::close(probe_fds[1]);
+
+    // Recovery: the failure clears and the pipe is written. The retained
+    // borrow lets the kernel complete the original read into the original
+    // buffer, so the real outcome (four accounted bytes) surfaces — a
+    // fabricated terminal released at poison time would have made this
+    // completion carry the poison error instead.
+    state.fail.store(false, std::memory_order_release);
+    reads[3].release_bytes(4);
+    bool all_retired = true;
+    for (auto& r : reads) {
+        for (int i = 0; i < 20000 && !r.completion.ready(); ++i) {
+            (void)ctx.poll_progress();
+            std::this_thread::sleep_for(std::chrono::microseconds{200});
+        }
+        all_retired = all_retired && r.completion.ready();
+    }
+    const auto fourth = reads[3].completion.result();
+    const bool real_outcome = fourth.has_value() && fourth.value() == 4;
+    for (auto& r : reads) {
+        r.completion.reset();
+        r.close_pipe();
+    }
+    return pass_ok && inflight_pending && health_visible && all_retired && real_outcome;
 }
 
 // F1 oracle: one pass publishes at most the publication work pending at its
@@ -1202,6 +1307,8 @@ int main() {
         {"u2b_accepted_dispatch_wakes_parked_owner", u2b_accepted_dispatch_wakes_parked_owner},
         {"overflow_flush_failure_becomes_observable_health_event",
          overflow_flush_failure_becomes_observable_health_event},
+        {"overflow_flush_failure_does_not_release_still_inflight_borrow",
+         overflow_flush_failure_does_not_release_still_inflight_borrow},
         {"f1_publication_pass_is_entry_bounded", f1_publication_pass_is_entry_bounded},
         {"f2_backend_poison_reaches_owner_health_verdict",
          f2_backend_poison_reaches_owner_health_verdict},

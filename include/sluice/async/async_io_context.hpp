@@ -55,6 +55,12 @@ struct SyncDataOp {
 struct SyncAllOp {
     NativeFileRef file;
 };
+struct FileInfoOp {
+    NativeFileRef file;
+};
+struct SizeOp {
+    NativeFileRef file;
+};
 
 class AsyncBackend {
   public:
@@ -132,6 +138,9 @@ class AsyncBackend {
     virtual Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) = 0;
     virtual Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) = 0;
     virtual Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) = 0;
+    virtual Result<detail::RequestKey> submit_file_info(FileInfoOp op,
+                                                        Completion<FileInfo>* c) = 0;
+    virtual Result<detail::RequestKey> submit_size(SizeOp op, Completion<FileSize>* c) = 0;
 
     virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
                                                               std::uint32_t slot,
@@ -150,6 +159,8 @@ class AsyncBackend {
 
     RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
     RequestHandle identity_of(Completion<void>& c) const noexcept;
+    RequestHandle identity_of(Completion<FileInfo>& c) const noexcept;
+    RequestHandle identity_of(Completion<FileSize>& c) const noexcept;
 
     Result<RequestHandleState> request_handle_state(const RequestHandle& h) const noexcept;
 
@@ -250,16 +261,22 @@ class AsyncIoContext {
     Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
     Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
     Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
+    Result<void> submit_file_info(FileInfoOp op, Completion<FileInfo>& c);
+    Result<void> submit_size(SizeOp op, Completion<FileSize>& c);
 
     Result<Request<std::size_t>> submit_read(ReadOp op);
     Result<Request<std::size_t>> submit_write(WriteOp op);
     Result<Request<void>> submit_sync_data(SyncDataOp op);
     Result<Request<void>> submit_sync_all(SyncAllOp op);
+    Result<Request<FileInfo>> submit_file_info(FileInfoOp op);
+    Result<Request<FileSize>> submit_size(SizeOp op);
 
     Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
     Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
     Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
     Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
+    Result<RequestHandle> submit_file_info_request(FileInfoOp op, Completion<FileInfo>& c);
+    Result<RequestHandle> submit_size_request(SizeOp op, Completion<FileSize>& c);
 
     Result<CancelDisposition> cancel(const RequestId& id);
 
@@ -471,6 +488,8 @@ template <class T> Result<CancelDisposition> Request<T>::cancel() {
         return CancelDisposition::already_terminal;
     case detail::PublicCancel::not_found:
         return CancelDisposition::not_found;
+    case detail::PublicCancel::physical_interruption_unsupported:
+        return CancelDisposition::physical_interruption_unsupported;
     }
     return CancelDisposition::not_found;
 }

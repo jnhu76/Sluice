@@ -200,8 +200,12 @@ bool pipeline_tracer_threadpool() {
 #if defined(SLUICE_HAS_LIBURING)
 
 bool uring_backend_available() {
-    UringAsyncBackend probe;
-    return probe.available();
+    try {
+        UringAsyncBackend probe;
+        return probe.available();
+    } catch (...) {
+        return false;
+    }
 }
 
 bool pipeline_tracer_uring() {
@@ -706,6 +710,14 @@ bool create_rejects_non_signaling_backend() {
                 IoError{IoError::Code::not_supported});
         }
         Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+            return sluice::make_unexpected<detail::RequestKey>(
+                IoError{IoError::Code::not_supported});
+        }
+        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
