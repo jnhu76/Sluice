@@ -125,10 +125,10 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
 ThreadPoolBackend::~ThreadPoolBackend() {
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
-        const detail::CoreOccupancy occupancy =
-            core_ != nullptr ? core_->occupancy() : detail::CoreOccupancy{};
-        if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
-            occupancy.accepted_live != 0) {
+        // A pre-dispatch cancel win leaves a claim-failed entry that only the
+        // worker lane drains, so the quiescence verdict must run after the
+        // join; genuinely unsettled accepted work is rejected before it.
+        if (core_ != nullptr && core_->occupancy().accepted_live != 0) {
             detail::threadpool_non_quiescent_destruction_fail_fast();
         }
         stopping_ = true;
@@ -137,6 +137,15 @@ ThreadPoolBackend::~ThreadPoolBackend() {
     for (auto& w : workers_) {
         if (w.joinable())
             w.join();
+    }
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        const detail::CoreOccupancy occupancy =
+            core_ != nullptr ? core_->occupancy() : detail::CoreOccupancy{};
+        if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
+            occupancy.accepted_live != 0) {
+            detail::threadpool_non_quiescent_destruction_fail_fast();
+        }
     }
 }
 

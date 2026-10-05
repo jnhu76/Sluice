@@ -389,6 +389,9 @@ if has_config("liburing") then
     c2c_uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
                               R .. "tests/uring_progress_race_test.cpp",
                               "SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED")
+    c2c_uring_progress_target("uring_progress_race_mut_stranded_overflow_settle_dropped",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_E1_MUTANT_STRANDED_OVERFLOW_SETTLE_DROPPED")
     c2c_uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
@@ -524,6 +527,8 @@ do
                               "SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE")
         e1_conformance_target("e1_conformance_mut_opcode_probe_ignored", true,
                               "SLUICE_E1_MUTANT_OPCODE_PROBE_IGNORED")
+        e1_conformance_target("e1_conformance_mut_masked_sq_cardinality", true,
+                              "SLUICE_E1_MUTANT_MASKED_SQ_CARDINALITY")
     end
     e1_conformance_target("e1_conformance_mut_write_failure_accounted", false,
                           "SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED")

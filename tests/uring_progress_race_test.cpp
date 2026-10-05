@@ -926,10 +926,14 @@ bool overflow_flush_failure_becomes_observable_health_event() {
 
     // The injected flush failure must be observed, must become a persistent
     // backend health fact (new submissions are rejected), and must strand
-    // nothing: the pass still converges well inside the deadline and every
-    // in-flight read retires once the failure clears. The mutant that
-    // restores the discarded-return behavior records no flush attempt and no
-    // poison, failing both the attempt and health assertions.
+    // nothing: the pass converges well inside the deadline and every
+    // in-flight read retires — the parked overflow completions through the
+    // poison settlement with an unknown remainder, the ring-visible ones
+    // through their real outcomes. The mutant that restores the
+    // discarded-return behavior records no flush attempt and no poison,
+    // failing both the attempt and health assertions; the mutant that drops
+    // the stranded settlement leaves a read unretired and dies on its
+    // nonterminal completion reset.
     const bool first_wait_ok = driver.value.has_value() &&
                                driver.value->kind == WaitKind::progress &&
                                driver.value->completed >= 2 && driver.elapsed_ms < 1000 &&

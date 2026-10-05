@@ -1009,10 +1009,24 @@ std::size_t UringAsyncBackend::reconcile_ledger_with_kernel_locked_() noexcept {
     if (transport_ledger_ == nullptr || transport_ledger_->empty())
         return 0;
     const auto& sq = ring_state_->ring.sq;
+#if defined(SLUICE_E1_MUTANT_MASKED_SQ_CARDINALITY)
     const unsigned khead = *sq.khead;
     const unsigned tail = static_cast<unsigned>(sq.sqe_tail & sq.ring_mask);
     const unsigned unconsumed = static_cast<unsigned>((tail - khead) & sq.ring_mask);
+#else
+    // Cardinality is a difference of the free-running SQ counters (the
+    // io_uring_sq_ready contract); masking either side before the subtraction
+    // aliases a full ring onto an empty one.
+    const unsigned unconsumed = ::io_uring_sq_ready(&ring_state_->ring);
+#endif
     const std::size_t size = transport_ledger_->size();
+    if (unconsumed > sq.ring_entries) {
+        std::fprintf(stderr, "sluice::async::UringAsyncBackend: kernel reports more "
+                             "unconsumed SQ slots than the ring holds "
+                             "(invariant violation)\n");
+        std::fflush(stderr);
+        std::terminate();
+    }
     if (unconsumed > size) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: kernel reports more "
                              "unconsumed SQ slots than the physical ledger contains "
@@ -1127,6 +1141,70 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
             retire_router_entry_(router_index);
         }
         physical.class_a_recovery_retired = true;
+    }
+
+#if defined(SLUICE_E1_MUTANT_STRANDED_OVERFLOW_SETTLE_DROPPED)
+    if (false) {
+#else
+    if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
+#endif
+        // With the flush gated off, a completion parked in the kernel overflow
+        // list can never be delivered. A route stays borrowable only while its
+        // completion (or its control's) is ring-visible; everything else
+        // converges here on an unknown remainder instead of waiting behind an
+        // unreachable CQE.
+        const auto& cq = ring_state_->ring.cq;
+        const unsigned visible_ready = ::io_uring_cq_ready(&ring_state_->ring);
+        const unsigned visible_head = *cq.khead;
+        const auto completion_visible = [&](std::uint64_t raw_user_data) noexcept {
+            for (unsigned i = 0; i < visible_ready; ++i) {
+                const ::io_uring_cqe* cqe = &cq.cqes[(visible_head + i) & *cq.kring_mask];
+                if (::io_uring_cqe_get_data64(cqe) == raw_user_data)
+                    return true;
+            }
+            return false;
+        };
+        for (std::size_t router_index = 0; router_index < router_.size(); ++router_index) {
+            RouterEntry& route = router_[router_index];
+            if (!route.in_use || route.terminal_delivered)
+                continue;
+            const bool control_visible = completion_visible(make_control_cookie(route.cookie));
+            const bool original_visible = completion_visible(route.cookie);
+            if (control_visible && original_visible)
+                continue;
+            const detail::RequestKey key{core_->context(), route.handle.slot, route.handle.generation};
+            if (!control_visible && route.control_state != RouterEntry::ControlState::none) {
+                if (route.control_state == RouterEntry::ControlState::submitted) {
+                    live_control_sqes_.fetch_sub(1, std::memory_order_relaxed);
+                }
+                route.control_state = RouterEntry::ControlState::none;
+                if (core_->release_control(key) != detail::ControlRelease::released) {
+                    detail::uring_core_handoff_fail_fast();
+                }
+            }
+            if (!original_visible) {
+                detail::TerminalCandidate candidate;
+                candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+                candidate.outcome = sluice::detail::IoOutcome::uncertain(error);
+                if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
+                    std::fprintf(stderr,
+                                 "sluice::async::UringAsyncBackend: stranded-completion "
+                                 "settlement lost terminal authority (invariant violation)\n");
+                    std::fflush(stderr);
+                    std::terminate();
+                }
+                if (core_->release_execution(key) !=
+                    detail::ExecutionRelease::borrow_touch_fully_retired) {
+                    detail::uring_core_handoff_fail_fast();
+                }
+                route.terminal_delivered = true;
+                publication_pending_->push_back(route.handle);
+                bump(stats_, &AsyncStats::completion_errors);
+            }
+            if (route.terminal_delivered && route.control_state == RouterEntry::ControlState::none) {
+                retire_router_entry_(router_index);
+            }
+        }
     }
 
     signal_ready_progress();

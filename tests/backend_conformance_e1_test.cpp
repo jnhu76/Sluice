@@ -870,8 +870,9 @@ int fiction_submit(void* context, ::io_uring* ring) noexcept {
         return 0;
     }
     if (mode == 2) {
-        *ring->sq.khead = (*ring->sq.khead + control->consume.load(std::memory_order_acquire)) &
-                          ring->sq.ring_mask;
+        // The kernel's shared SQ head is a free-running consumed counter, not
+        // a ring position; masking it here would alias a full ring to empty.
+        *ring->sq.khead += control->consume.load(std::memory_order_acquire);
         return -EIO;
     }
     const unsigned ready = ::io_uring_sq_ready(ring);
@@ -1204,6 +1205,149 @@ bool cancel_progress_wakes_a_parked_owner(Tracker& t) {
     return true;
 }
 
+bool full_ring_zero_consumed_hard_error_settles_every_entry(Tracker& t) {
+    Fixture fix = make_fixture("sluice e1 full-ring reconcile conformance");
+    if (!fix.ok()) {
+        t.check(false, "fixture created");
+        return false;
+    }
+    FictionBackend made = FictionBackend::create(8, 8);
+    RequestCore& core = *made.ctx->context_core_for_test();
+
+    made.control->mode.store(1, std::memory_order_release);
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::vector<Request<std::size_t>> requests;
+    bool all_accepted = true;
+    for (unsigned offset = 0; offset < 8 && all_accepted; ++offset) {
+        auto submitted = made.ctx->submit_read(
+            ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 4, offset});
+        all_accepted = submitted.has_value();
+        if (all_accepted)
+            requests.push_back(std::move(submitted).value());
+    }
+    t.check(all_accepted && requests.size() == 8, "a full ring of stalled reads is accepted");
+    if (!all_accepted)
+        return false;
+    t.check(made.backend->transport_ledger_size_for_test() == 8,
+            "the transport ledger holds the full ring");
+    t.check(made.backend->sq_ready_for_test() == 8,
+            "the kernel head has consumed none of the full ring");
+
+    made.control->mode.store(2, std::memory_order_release);
+    (void)made.ctx->poll();
+
+    t.check(made.backend->transport_ledger_size_for_test() == 8,
+            "a zero-consumed hard error retires nothing before poison classification");
+    bool all_settled = false;
+    for (int spin = 0; spin < 1000 && !all_settled; ++spin) {
+        (void)made.ctx->poll();
+        all_settled = true;
+        for (auto& request : requests)
+            all_settled = all_settled && request.ready();
+    }
+    t.check(all_settled, "every full-ring entry settles after the hard submit failure");
+    if (!all_settled)
+        return false;
+    for (auto& request : requests) {
+        const auto observed = request.take_result();
+        t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                    observed.result.error().code == IoError::Code::backend_error,
+                "every proven-invisible entry converges to the poison failure");
+        t.check(observed.effect == EffectReport{0, EffectCertainty::accounted},
+                "a proven-invisible entry reports its known-zero effect, never an unknown remainder");
+    }
+    t.check(core_is_idle(core.snapshot()), "the full-ring poison reclaims every request");
+    t.check(backend_quiescent(*made.backend), "the poisoned ring holds no live cookies");
+    return true;
+}
+
+bool wrapped_head_partial_consumption_keeps_logical_cardinality(Tracker& t) {
+    Fixture fix = make_fixture("sluice e1 wrapped-head reconcile conformance");
+    if (!fix.ok()) {
+        t.check(false, "fixture created");
+        return false;
+    }
+    FictionBackend made = FictionBackend::create(4, 4);
+    RequestCore& core = *made.ctx->context_core_for_test();
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    for (unsigned round = 0; round < 5; ++round) {
+        auto submitted = made.ctx->submit_read(
+            ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 4, 0});
+        t.check(submitted.has_value(), "the wrapped-round read is accepted");
+        if (!submitted.has_value())
+            return false;
+        Request<std::size_t> request = std::move(submitted).value();
+        const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
+        t.check(cookie.has_value(), "the wrapped-round read holds a live cookie");
+        if (!cookie.has_value())
+            return false;
+        made.backend->inject_cqe_for_test(*cookie, 4);
+        while (!request.ready())
+            (void)made.ctx->poll();
+        const auto observed = request.take_result();
+        t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                    observed.result.value() == 4,
+                "the wrapped-round read completes through the fiction");
+        if (!observed.result.has_value())
+            return false;
+    }
+
+    made.control->mode.store(1, std::memory_order_release);
+    auto front = made.ctx->submit_read(
+        ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 4, 0});
+    auto middle = made.ctx->submit_read(
+        ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 4, 10});
+    auto back = made.ctx->submit_read(
+        ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 4, 20});
+    t.check(front.has_value() && middle.has_value() && back.has_value(),
+            "three stalled reads are accepted across the wrapped head");
+    if (!front.has_value() || !middle.has_value() || !back.has_value())
+        return false;
+    Request<std::size_t> visible = std::move(front).value();
+    Request<std::size_t> invisible_first = std::move(middle).value();
+    Request<std::size_t> invisible_last = std::move(back).value();
+    t.check(made.backend->transport_ledger_size_for_test() == 3 &&
+                made.backend->sq_ready_for_test() == 3,
+            "the wrapped physical positions hold three logically pending entries");
+
+    made.control->consume.store(1, std::memory_order_release);
+    made.control->mode.store(2, std::memory_order_release);
+    (void)made.ctx->poll();
+
+    const auto settled_first = invisible_first.take_result();
+    t.check(settled_first.readiness == RequestReadiness::ready &&
+                !settled_first.result.has_value() &&
+                settled_first.result.error().code == IoError::Code::backend_error,
+            "the invisible suffix settles through the poison across the wrap");
+    const auto settled_last = invisible_last.take_result();
+    t.check(settled_last.readiness == RequestReadiness::ready &&
+                !settled_last.result.has_value() &&
+                settled_last.result.error().code == IoError::Code::backend_error,
+            "the invisible tail settles through the poison across the wrap");
+    t.check(visible.try_result().readiness == RequestReadiness::pending,
+            "the consumed prefix keeps its borrow across the wrapped head");
+    t.check(made.backend->transport_ledger_size_for_test() == 2,
+            "the wrap leaves exactly the unconsumed suffix in the ledger");
+
+    const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
+    t.check(cookie.has_value(), "the consumed prefix remains routable across the wrap");
+    if (!cookie.has_value())
+        return false;
+    made.backend->inject_cqe_for_test(*cookie, 4);
+    while (!visible.ready())
+        (void)made.ctx->poll();
+    const auto observed = visible.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the consumed prefix publishes its real outcome across the wrap");
+    t.check(observed.effect == EffectReport{4, EffectCertainty::accounted},
+            "the consumed prefix keeps its accounted effect across the wrap");
+    t.check(core_is_idle(core.snapshot()), "the wrapped-head resolutions leave no core residue");
+    t.check(backend_quiescent(*made.backend), "the ring holds no live cookies after the wrap");
+    return true;
+}
+
 #endif  // SLUICE_E1_CONFORMANCE_URING
 
 }  // namespace
@@ -1243,6 +1387,10 @@ int main() {
          success_and_cancel_converge_without_fabrication_under_the_fiction},
         {"hard_submit_failure_resolves_per_entry_kernel_visibility",
          hard_submit_failure_resolves_per_entry_kernel_visibility},
+        {"full_ring_zero_consumed_hard_error_settles_every_entry",
+         full_ring_zero_consumed_hard_error_settles_every_entry},
+        {"wrapped_head_partial_consumption_keeps_logical_cardinality",
+         wrapped_head_partial_consumption_keeps_logical_cardinality},
         {"cancel_progress_wakes_a_parked_owner", cancel_progress_wakes_a_parked_owner},
 #endif
         {"post_accept_dispatch_failure_converges_and_reclaims",
