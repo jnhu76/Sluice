@@ -113,6 +113,15 @@ class AsyncBackend {
 
     virtual std::size_t outstanding() const noexcept = 0;
 
+    // retire_execution_resources is valid only after internal_work_retired
+    // holds; internal_work_retired must report a real retirement witness, so
+    // no default is provided.
+    virtual bool internal_work_retired() const noexcept = 0;
+    virtual void stop_execution() noexcept {}
+    virtual void retire_execution_resources() noexcept {}
+
+    virtual bool backend_health_failed() const noexcept { return false; }
+
     // Whether the backend produces physical progress signals, so a driver can
     // park productively on the context progress source. Backends that answer
     // false are not v1 request backends: the context refuses to wait on them,
@@ -224,6 +233,20 @@ class AsyncBackend {
 };
 
 class AsyncIoContext;
+
+enum class ShutdownPolicy : std::uint8_t {
+    drain,
+    cancel_then_drain,
+};
+
+// completed retires execution and notification references, not public
+// results; a health outcome leaves the context unsettled, with borrows and
+// resources retained.
+enum class ShutdownOutcome : std::uint8_t {
+    completed,
+    health_unresolved,
+    health_failed,
+};
 
 // Release handle for the context's fixed driving authority: claiming records
 // this thread as the context's progress owner; the handle's destruction or
@@ -370,6 +393,21 @@ class AsyncIoContext {
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
 
+    // shutdown is owner-only and blocking; it returns invalid_state when
+    // called from a non-owner, inside a drive, on an inert context, or while
+    // an external notification interest is live (the host detaches first).
+    // All three calls are idempotent; request_stop may upgrade a recorded
+    // drain to cancellation but never reopens admission.
+    void close_admission() noexcept;
+    void request_stop(ShutdownPolicy policy) noexcept;
+    Result<ShutdownOutcome> shutdown(ShutdownPolicy policy);
+
+    bool admission_open() const noexcept;
+
+    // Stays false when shutdown reported a health outcome: the context then
+    // keeps its borrows and execution resources.
+    bool execution_closed() const noexcept;
+
     void set_ready_sink(detail::SynchronousReadySink* sink);
 
     struct ObserverAttachment {
@@ -460,6 +498,14 @@ class AsyncIoContext {
     // domain; the public drive entry points gate before using this.
     AsyncBackend::ProgressPass run_progress_pass_();
 
+    // Drives to the execution-closed transition. The caller holds the drive
+    // domain (shutdown) or the destructor's exclusive position.
+    ShutdownOutcome drive_settlement_();
+
+    bool settlement_converged_() const noexcept;
+
+    void upgrade_stop_policy_(ShutdownPolicy policy) noexcept;
+
     struct DriveGuard {
         AsyncIoContext* ctx;
         explicit DriveGuard(AsyncIoContext* c) noexcept : ctx(c) {}
@@ -473,6 +519,15 @@ class AsyncIoContext {
     bool owner_claimed_ = false;
     std::thread::id owner_thread_{};
     bool notification_interest_live_ = false;
+
+    // Strongest policy ever requested; monotone, never reopens. Written
+    // under access_mtx_.
+    ShutdownPolicy stop_policy_ = ShutdownPolicy::drain;
+
+    // Written once by the settling owner after the underlying facts held and
+    // the resources they describe were retired, so it is not recomputable.
+    bool execution_closed_ = false;
+    ShutdownOutcome settlement_outcome_ = ShutdownOutcome::health_failed;
 };
 
 template <class T> Result<CancelDisposition> Request<T>::cancel() {

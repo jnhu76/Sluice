@@ -139,6 +139,7 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
       public:
         std::size_t poll() override { return 0; }
         std::size_t outstanding() const noexcept override { return 0; }
+        bool internal_work_retired() const noexcept override { return true; }
         std::size_t slot_capacity() const noexcept override { return 0; }
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;
@@ -318,6 +319,7 @@ bool backend_destructor_runs_while_progress_source_lives() {
 
         std::size_t poll() override { return 0; }
         std::size_t outstanding() const noexcept override { return 0; }
+        bool internal_work_retired() const noexcept override { return true; }
         std::size_t slot_capacity() const noexcept override { return 0; }
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;
@@ -382,6 +384,7 @@ bool constructor_unwind_destroys_backend_before_progress_source() {
       private:
         std::size_t poll() override { return 0; }
         std::size_t outstanding() const noexcept override { return 0; }
+        bool internal_work_retired() const noexcept override { return true; }
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;
         }

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace sluice::async {
 
@@ -71,8 +72,8 @@ AsyncIoContext::~AsyncIoContext() {
     if (core_ && core_->occupancy().public_bindings != 0) {
         detail::async_context_outstanding_fail_fast();
     }
-    if (backend_ && backend_->outstanding() != 0) {
-        detail::async_context_outstanding_fail_fast();
+    if (backend_ && drive_settlement_() != ShutdownOutcome::completed) {
+        detail::async_context_settlement_fail_fast();
     }
 }
 
@@ -94,8 +95,14 @@ AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept {
         std::lock_guard<std::mutex> lk(other.access_mtx_);
         owner_thread_ = other.owner_thread_;
         notification_interest_live_ = other.notification_interest_live_;
+        stop_policy_ = other.stop_policy_;
+        execution_closed_ = other.execution_closed_;
+        settlement_outcome_ = other.settlement_outcome_;
         other.owner_thread_ = std::thread::id{};
         other.notification_interest_live_ = false;
+        other.stop_policy_ = ShutdownPolicy::drain;
+        other.execution_closed_ = false;
+        other.settlement_outcome_ = ShutdownOutcome::health_failed;
         other.stats_ = nullptr;
     }
 }
@@ -109,8 +116,8 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
         if (core_ && core_->occupancy().public_bindings != 0) {
             detail::async_context_outstanding_fail_fast();
         }
-        if (backend_ && backend_->outstanding() != 0) {
-            detail::async_context_outstanding_fail_fast();
+        if (backend_ && drive_settlement_() != ShutdownOutcome::completed) {
+            detail::async_context_settlement_fail_fast();
         }
         {
             std::lock_guard<std::mutex> lk(other.access_mtx_);
@@ -123,11 +130,17 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
         progress_ = std::move(other.progress_);
         stats_ = other.stats_;
         {
-            std::lock_guard<std::mutex> lk(other.access_mtx_);
+            std::lock_guard<std::mutex> lk(access_mtx_);
             owner_thread_ = other.owner_thread_;
             notification_interest_live_ = other.notification_interest_live_;
+            stop_policy_ = other.stop_policy_;
+            execution_closed_ = other.execution_closed_;
+            settlement_outcome_ = other.settlement_outcome_;
             other.owner_thread_ = std::thread::id{};
             other.notification_interest_live_ = false;
+            other.stop_policy_ = ShutdownPolicy::drain;
+            other.execution_closed_ = false;
+            other.settlement_outcome_ = ShutdownOutcome::health_failed;
             other.stats_ = nullptr;
         }
     }
@@ -557,6 +570,86 @@ void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
     }
 }
 
+void AsyncIoContext::upgrade_stop_policy_(ShutdownPolicy policy) noexcept {
+    if (policy == ShutdownPolicy::cancel_then_drain) {
+        stop_policy_ = ShutdownPolicy::cancel_then_drain;
+    }
+}
+
+bool AsyncIoContext::settlement_converged_() const noexcept {
+    if (!backend_->internal_work_retired()) {
+        return false;
+    }
+    const detail::CoreOccupancy occupancy = core_->occupancy();
+    return occupancy.outstanding == 0 && occupancy.execution_refs == 0 &&
+           occupancy.control_refs == 0 && occupancy.publication_inflight == 0 &&
+           occupancy.observer_registrations == 0;
+}
+
+ShutdownOutcome AsyncIoContext::drive_settlement_() {
+    if (execution_closed_) {
+        return settlement_outcome_;
+    }
+
+    (void)core_->close_admission();
+
+    if (stop_policy_ == ShutdownPolicy::cancel_then_drain) {
+        std::vector<detail::RequestKey> outstanding;
+        core_->collect_outstanding(outstanding);
+        for (const detail::RequestKey key : outstanding) {
+            (void)backend_->cancel_identity(key);
+        }
+    }
+
+    for (;;) {
+        const detail::ProgressSource::Token token = progress_->snapshot();
+        const AsyncBackend::ProgressPass pass = run_progress_pass_();
+        (void)core_->retire_delivered_episodes();
+
+        if (settlement_converged_()) {
+            break;
+        }
+
+        if (progress_->wait_health_failed()) {
+            return ShutdownOutcome::health_failed;
+        }
+
+        if (pass.health_failed && pass.completed == 0 && !pass.immediate_work_remains &&
+            !pass.dispatch_retry_remains) {
+            return ShutdownOutcome::health_unresolved;
+        }
+
+        if (pass.completed == 0 && !pass.immediate_work_remains &&
+            !pass.dispatch_retry_remains) {
+            const detail::ProgressSource::WakeReason reason =
+                progress_->wait_if_unchanged(token, std::chrono::nanoseconds::max(),
+                                             [](void* self) noexcept {
+                                                 return static_cast<AsyncIoContext*>(self)
+                                                     ->backend_has_immediate_physical_work_();
+                                             },
+                                             this);
+            if (reason == detail::ProgressSource::WakeReason::interrupted) {
+                // The observation and retirement of the owner control that
+                // woke this driver; without it every later park would
+                // return instantly and spin.
+                progress_->acknowledge_control();
+            } else if (reason == detail::ProgressSource::WakeReason::failed) {
+                return ShutdownOutcome::health_failed;
+            }
+        }
+    }
+
+    backend_->stop_execution();
+    backend_->retire_execution_resources();
+    progress_->retire_notification();
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        execution_closed_ = true;
+        settlement_outcome_ = ShutdownOutcome::completed;
+    }
+    return ShutdownOutcome::completed;
+}
+
 bool AsyncIoContext::backend_has_immediate_physical_work_() noexcept {
     return backend_ && backend_->has_immediate_physical_work();
 }
@@ -871,6 +964,50 @@ bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
 std::size_t AsyncIoContext::outstanding() const noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
     return backend_ ? backend_->outstanding() : 0;
+}
+
+void AsyncIoContext::close_admission() noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (core_ && core_->close_admission()) {
+        progress_->signal();
+    }
+}
+
+void AsyncIoContext::request_stop(ShutdownPolicy policy) noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    upgrade_stop_policy_(policy);
+    if (core_ && core_->close_admission()) {
+        progress_->signal();
+    }
+    progress_->interrupt();
+}
+
+Result<ShutdownOutcome> AsyncIoContext::shutdown(ShutdownPolicy policy) {
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (!backend_ || notification_interest_live_) {
+            return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
+        }
+        upgrade_stop_policy_(policy);
+        if (execution_closed_) {
+            return settlement_outcome_;
+        }
+    }
+    if (!drive_entry_admitted_()) {
+        return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
+    }
+    DriveGuard guard(this);
+    return drive_settlement_();
+}
+
+bool AsyncIoContext::admission_open() const noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    return core_ && core_->admission_open();
+}
+
+bool AsyncIoContext::execution_closed() const noexcept {
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    return execution_closed_;
 }
 
 }

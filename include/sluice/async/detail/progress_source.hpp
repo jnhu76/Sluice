@@ -228,39 +228,35 @@ class ProgressSource {
     }
 
     void interrupt() noexcept {
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            // The bump advances the control generation so a control that
-            // arrives between the owner's observation and its acknowledgement
-            // stays distinguishable; stickiness is the unacknowledged gap
-            // between the current and acknowledged generations.
-            // Same saturation discipline as signal(): a frozen control epoch
-            // lets the exhaustion sequence carry freshness. Once the pair is
-            // spent it can no longer distinguish anything, so every wait on
-            // it must treat control as pending instead of parking.
-            if (control_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
-                ++control_epoch_;
-            } else if (control_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
-                ++control_exhaustion_;
-            }
+        std::lock_guard<std::mutex> lk(mtx_);
+        // The bump advances the control generation so a control that
+        // arrives between the owner's observation and its acknowledgement
+        // stays distinguishable; stickiness is the unacknowledged gap
+        // between the current and acknowledged generations.
+        // Same saturation discipline as signal(): a frozen control epoch
+        // lets the exhaustion sequence carry freshness. Once the pair is
+        // spent it can no longer distinguish anything, so every wait on
+        // it must treat control as pending instead of parking.
+        if (control_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
+            ++control_epoch_;
+        } else if (control_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
+            ++control_exhaustion_;
         }
-        wake_notification_();
+        wake_notification_nolock_();
     }
 
     void signal() noexcept {
-        {
-            std::lock_guard<std::mutex> lk(mtx_);
-            // Saturation, not wrap: an active token must never alias a later
-            // epoch. Once frozen, the exhaustion sequence carries freshness;
-            // a saturated signal that skipped it would be revalidated as
-            // stale and its notification drained from a parked owner.
-            if (progress_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
-                ++progress_epoch_;
-            } else if (progress_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
-                ++progress_exhaustion_;
-            }
+        std::lock_guard<std::mutex> lk(mtx_);
+        // Saturation, not wrap: an active token must never alias a later
+        // epoch. Once frozen, the exhaustion sequence carries freshness;
+        // a saturated signal that skipped it would be revalidated as
+        // stale and its notification drained from a parked owner.
+        if (progress_epoch_ != std::numeric_limits<std::uint64_t>::max()) {
+            ++progress_epoch_;
+        } else if (progress_exhaustion_ != std::numeric_limits<std::uint64_t>::max()) {
+            ++progress_exhaustion_;
         }
-        wake_notification_();
+        wake_notification_nolock_();
     }
 
     bool exhausted() const noexcept {
@@ -277,6 +273,17 @@ class ProgressSource {
     }
 
     int notification_fd() const noexcept { return notification_fd_; }
+
+    // Only the settled owner calls this; no park or external interest may be
+    // live. A later wake on the retired source is a no-op: execution is
+    // closed, so no waiter exists to lose.
+    void retire_notification() noexcept {
+        std::lock_guard<std::mutex> lk(mtx_);
+        if (notification_fd_ >= 0) {
+            ::close(notification_fd_);
+            notification_fd_ = -1;
+        }
+    }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     void set_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
@@ -403,7 +410,12 @@ class ProgressSource {
         }
     }
 
-    void wake_notification_() noexcept {
+    // Caller holds mtx_; a retired source (execution closed) has no waiter
+    // that could miss the wake, so the write is skipped instead of failing.
+    void wake_notification_nolock_() noexcept {
+        if (notification_fd_ < 0) {
+            return;
+        }
         const std::uint64_t one = 1;
         for (;;) {
             errno = 0;

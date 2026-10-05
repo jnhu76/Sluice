@@ -775,6 +775,10 @@ class ThrowingSubmitBackend final : public AsyncBackend {
         return 0;
     }
 
+    bool internal_work_retired() const noexcept override {
+        return true;
+    }
+
     bool signals_physical_progress() const noexcept override {
         return true;
     }

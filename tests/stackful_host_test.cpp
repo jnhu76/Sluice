@@ -693,6 +693,7 @@ bool create_rejects_non_signaling_backend() {
       public:
         std::size_t poll() override { return 0; }
         std::size_t outstanding() const noexcept override { return 0; }
+        bool internal_work_retired() const noexcept override { return true; }
         std::size_t slot_capacity() const noexcept override { return 0; }
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;

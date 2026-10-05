@@ -63,6 +63,15 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
+[[noreturn]] void async_context_settlement_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::AsyncIoContext: destruction-time settlement could not "
+                 "establish safe internal retirement; refusing to free storage over "
+                 "unresolved obligations\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
 [[noreturn]] void async_context_progress_binding_fail_fast() noexcept {
     std::fprintf(stderr,
                  "sluice::async::AsyncIoContext: relocating or destroying a context with a "

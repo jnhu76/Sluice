@@ -90,6 +90,8 @@ class UringAsyncBackend : public AsyncBackend {
     detail::PublicCancel cancel_identity(detail::RequestKey key) override;
 
   public:
+    bool backend_health_failed() const noexcept override;
+
 #endif
 
     std::size_t poll() override;
@@ -100,6 +102,10 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t outstanding() const noexcept override;
 
     bool available() const noexcept;
+
+    bool internal_work_retired() const noexcept override;
+
+    void retire_execution_resources() noexcept override;
 
     void close_admission();
 
