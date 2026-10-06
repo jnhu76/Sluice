@@ -45,8 +45,45 @@ CoreOccupancy RequestCore::occupancy() const noexcept {
         if (!slot.published) {
             ++occupancy.outstanding;
         }
+        occupancy.execution_refs += slot.execution_refs;
+        occupancy.control_refs += slot.control_refs;
+        if (slot.publication_inflight) {
+            ++occupancy.publication_inflight;
+        }
+        if (slot.observer_phase != ObserverPhase::unattached &&
+            slot.observer_phase != ObserverPhase::retired) {
+            ++occupancy.observer_registrations;
+        }
     }
     return occupancy;
+}
+
+void RequestCore::collect_outstanding(std::vector<RequestKey>& out) const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (std::size_t i = 0; i < slots_.size(); ++i) {
+        const Slot& slot = slots_[i];
+        if (slot.phase != SlotPhase::accepted || slot.published) {
+            continue;
+        }
+        out.push_back(RequestKey{context_, SlotIndex{static_cast<std::uint32_t>(i)},
+                                 slot.generation});
+    }
+}
+
+std::size_t RequestCore::retire_delivered_episodes() noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::size_t retired = 0;
+    for (std::size_t i = 0; i < slots_.size(); ++i) {
+        Slot& slot = slots_[i];
+        if (slot.phase != SlotPhase::accepted ||
+            slot.observer_phase != ObserverPhase::delivering) {
+            continue;
+        }
+        slot.observer_phase = ObserverPhase::retired;
+        try_reclaim_(slot, i);
+        ++retired;
+    }
+    return retired;
 }
 
 RequestCore::Slot* RequestCore::resolve_reserved_(RequestReservation reservation) noexcept {
@@ -459,6 +496,9 @@ ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
     Slot* slot = resolve_public_(id);
     if (slot == nullptr) {
         return ObserverRegistration::not_found;
+    }
+    if (!admission_open_) {
+        return ObserverRegistration::admission_closed;
     }
     if (slot->observer_phase != ObserverPhase::unattached &&
         slot->observer_phase != ObserverPhase::retired) {

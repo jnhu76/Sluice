@@ -63,6 +63,14 @@ std::atomic<std::size_t> g_allocations{0};
 
 }
 
+// The allocation-count fixture pairs std::malloc with std::free by design;
+// the sanitizer build's cross-function allocator analysis cannot see the
+// pairing through the operator-new indirection and false-positives here.
+#if defined(__SANITIZE_ADDRESS__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
+
 void* operator new(std::size_t n) {
     const int saved = errno;
     g_allocations.fetch_add(1, std::memory_order_relaxed);
@@ -87,12 +95,16 @@ void operator delete[](void* p) noexcept {
 }
 
 void operator delete(void* p, std::size_t) noexcept {
-    std::free(p);
+    ::operator delete(p);
 }
 
 void operator delete[](void* p, std::size_t) noexcept {
-    std::free(p);
+    ::operator delete[](p);
 }
+
+#if defined(__SANITIZE_ADDRESS__)
+#pragma GCC diagnostic pop
+#endif
 
 namespace {
 
@@ -773,6 +785,10 @@ class ThrowingSubmitBackend final : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override {
         return 0;
+    }
+
+    bool internal_work_retired() const noexcept override {
+        return true;
     }
 
     bool signals_physical_progress() const noexcept override {

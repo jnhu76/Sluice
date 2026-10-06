@@ -16,6 +16,7 @@ enum class ObserverRegistration : std::uint8_t {
     armed,
     duplicate,
     already_terminal,
+    admission_closed,
     not_found,
 };
 

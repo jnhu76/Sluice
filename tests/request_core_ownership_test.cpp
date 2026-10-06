@@ -348,6 +348,7 @@ class RecordingBackend final : public AsyncBackend {
 
     std::size_t poll() override { return 0; }
     std::size_t outstanding() const noexcept override { return 0; }
+    bool internal_work_retired() const noexcept override { return true; }
 
   private:
     Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {

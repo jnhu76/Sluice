@@ -123,30 +123,8 @@ ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
 }
 
 ThreadPoolBackend::~ThreadPoolBackend() {
-    {
-        std::lock_guard<std::mutex> lk(work_mtx_);
-        // A pre-dispatch cancel win leaves a claim-failed entry that only the
-        // worker lane drains, so the quiescence verdict must run after the
-        // join; genuinely unsettled accepted work is rejected before it.
-        if (core_ != nullptr && core_->occupancy().accepted_live != 0) {
-            detail::threadpool_non_quiescent_destruction_fail_fast();
-        }
-        stopping_ = true;
-    }
-    work_cv_.notify_all();
-    for (auto& w : workers_) {
-        if (w.joinable())
-            w.join();
-    }
-    {
-        std::lock_guard<std::mutex> lk(work_mtx_);
-        const detail::CoreOccupancy occupancy =
-            core_ != nullptr ? core_->occupancy() : detail::CoreOccupancy{};
-        if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
-            occupancy.accepted_live != 0) {
-            detail::threadpool_non_quiescent_destruction_fail_fast();
-        }
-    }
+    stop_execution();
+    retire_execution_resources();
 }
 
 Result<void> ThreadPoolBackend::validate_read(ReadOp op) {
@@ -869,6 +847,60 @@ void ThreadPoolBackend::close_admission() {
         signal_ready_progress();
     }
 #endif
+}
+
+bool ThreadPoolBackend::any_event_owed_locked_() const noexcept {
+    for (const DeliveryRecord& record : delivery_) {
+        if (record.event_owed) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool ThreadPoolBackend::internal_work_retired() const noexcept {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    return dispatch_.empty() && active_workers_ == 0 && publication_pending_.empty() &&
+           !any_event_owed_locked_();
+}
+
+void ThreadPoolBackend::stop_execution() noexcept {
+#if defined(SLUICE_E2_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION)
+    if (core_ != nullptr && core_->occupancy().accepted_live != 0) {
+        detail::threadpool_non_quiescent_destruction_fail_fast();
+    }
+#endif
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        stopping_ = true;
+    }
+    work_cv_.notify_all();
+}
+
+void ThreadPoolBackend::retire_execution_resources() noexcept {
+    for (auto& w : workers_) {
+        if (w.joinable())
+            w.join();
+    }
+    {
+        std::lock_guard<std::mutex> lk(work_mtx_);
+        const detail::CoreOccupancy occupancy =
+            core_ != nullptr ? core_->occupancy() : detail::CoreOccupancy{};
+        // A pre-dispatch cancel win leaves a claim-failed entry that only the
+        // worker lane drains, so this quiescence verdict runs after the join.
+        // Published slots with live public bindings may remain: they are
+        // retained results; everything else accepted is unsettled work.
+        if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
+            any_event_owed_locked_() || occupancy.outstanding != 0 ||
+            occupancy.execution_refs != 0 || occupancy.control_refs != 0 ||
+            occupancy.publication_inflight != 0 || occupancy.observer_registrations != 0
+#if defined(SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION)
+            || occupancy.accepted_live != 0
+#endif
+        ) {
+            detail::threadpool_non_quiescent_destruction_fail_fast();
+        }
+    }
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

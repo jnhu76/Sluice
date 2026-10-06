@@ -488,6 +488,79 @@ do
                           "SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
+-- E2 (#452) shutdown lifecycle oracles: retained results at execution close,
+-- the destructor death matrix, notification-fd retirement and reuse, the
+-- observer settlement path, the admission-close dual winner and the
+-- poison/control-pin retirement evidence. Same seam-build shape as the
+-- public request targets: the target compiles its own copies of the async
+-- TUs, and the uring profile links the real backend plus the fiction hooks.
+do
+    local function shutdown_lifecycle_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/shutdown_lifecycle_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/request_handle.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING", "SLUICE_SHUTDOWN_URING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    shutdown_lifecycle_target("shutdown_lifecycle_test", false)
+    if has_config("liburing") then
+        shutdown_lifecycle_target("shutdown_lifecycle_uring_test", true)
+    end
+
+    -- E2 named mutation builds; executed manually, never regular tests.
+    -- M6, M7 and M8 are killed by the ShutdownCore TLA+ mirrors in
+    -- scripts/verify_tla.sh; the rest must be killed by the named failing
+    -- assertion recorded next to each target.
+    if has_config("liburing") then
+        shutdown_lifecycle_target("shutdown_mut_m1_occupancy_zero_destroyable", true,
+                                  "SLUICE_E2_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE")
+        shutdown_lifecycle_target("shutdown_mut_m5_poison_fabricates_success", true,
+                                  "SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS")
+        shutdown_lifecycle_target("shutdown_mut_m9_poison_releases_running_borrow", true,
+                                  "SLUICE_E2_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW")
+        shutdown_lifecycle_target("shutdown_mut_m11_allow_notification_borrow_during_shutdown",
+                                  true,
+                                  "SLUICE_E2_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN")
+        shutdown_lifecycle_target("shutdown_mut_m12_execution_closed_fast_path_before_owner_check",
+                                  true,
+                                  "SLUICE_E2_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK")
+    end
+    shutdown_lifecycle_target("shutdown_mut_m2_control_pin_caller_violation", false,
+                              "SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION")
+    shutdown_lifecycle_target("shutdown_mut_m3_destructor_ignores_live_binding", false,
+                              "SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING")
+    shutdown_lifecycle_target("shutdown_mut_m4_close_requires_consumption", false,
+                              "SLUICE_E2_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION")
+    shutdown_lifecycle_target("shutdown_mut_m10_prejoin_stale_dispatch_violation", false,
+                              "SLUICE_E2_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION")
+end
+
 -- E1 (#400) cross-backend File-contract conformance. One semantic suite is
 -- compiled once per profile: the ThreadPool variant runs the real worker
 -- path, and the io_uring variant runs the real ring plus the deterministic

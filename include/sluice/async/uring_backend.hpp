@@ -101,6 +101,10 @@ class UringAsyncBackend : public AsyncBackend {
 
     bool available() const noexcept;
 
+    bool internal_work_retired() const noexcept override;
+
+    void retire_execution_resources() noexcept override;
+
     void close_admission();
 
 #if defined(SLUICE_HAS_LIBURING)

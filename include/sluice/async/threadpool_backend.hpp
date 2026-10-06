@@ -69,6 +69,12 @@ class ThreadPoolBackend : public AsyncBackend {
 
     std::size_t outstanding() const noexcept override;
 
+    bool internal_work_retired() const noexcept override;
+
+    void stop_execution() noexcept override;
+
+    void retire_execution_resources() noexcept override;
+
     void close_admission();
 
     std::size_t slot_capacity() const noexcept override { return capacity_; }
@@ -225,6 +231,8 @@ class ThreadPoolBackend : public AsyncBackend {
     void worker_loop();
 
     void signal_ready_progress() noexcept;
+
+    bool any_event_owed_locked_() const noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

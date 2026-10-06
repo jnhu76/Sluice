@@ -70,6 +70,10 @@ void UringAsyncBackend::close_admission() {}
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
 }
+bool UringAsyncBackend::internal_work_retired() const noexcept {
+    return true;
+}
+void UringAsyncBackend::retire_execution_resources() noexcept {}
 bool UringAsyncBackend::available() const noexcept {
     return available_;
 }
@@ -360,38 +364,74 @@ UringAsyncBackend::~UringAsyncBackend() {
         const bool ledger_quiescent =
             transport_ledger_ == nullptr || transport_ledger_->empty() ||
             (fatal_error_.has_value() && transport_ledger_->all_class_a_recovery_retired());
+        bool event_owed = false;
+        for (const DeliveryRecord& record : delivery_) {
+            if (record.event_owed) {
+                event_owed = true;
+                break;
+            }
+        }
+        // Published slots with live public bindings may remain: they are
+        // retained results; every other accepted fact here is unsettled work.
         if (!dispatch_->empty() || !publication_pending_->empty() ||
             live_cookies_.load(std::memory_order_relaxed) != 0 ||
             live_control_sqes_.load(std::memory_order_relaxed) != 0 || !ledger_quiescent ||
-            occupancy.accepted_live != 0) {
+            event_owed || occupancy.outstanding != 0 || occupancy.execution_refs != 0 ||
+            occupancy.control_refs != 0 || occupancy.publication_inflight != 0 ||
+            occupancy.observer_registrations != 0) {
             detail::uring_non_quiescent_destruction_fail_fast();
         }
     }
-    if (have_ring_) {
-        if (eventfd_registered_) {
-            int rc = 0;
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-            eventfd_unregistrations_.fetch_add(1, std::memory_order_relaxed);
-            if (ring_state_->test_hooks.unregister_eventfd != nullptr) {
-                rc = ring_state_->test_hooks.unregister_eventfd(ring_state_->test_hooks.context,
-                                                                &ring_state_->ring);
-            } else {
-                rc = ::io_uring_unregister_eventfd(&ring_state_->ring);
-            }
-#else
-            rc = ::io_uring_unregister_eventfd(&ring_state_->ring);
-#endif
-            if (rc != 0) {
-                std::fprintf(stderr, "sluice::async::UringAsyncBackend: eventfd unregister "
-                                     "failed before ring exit (invariant violation)\n");
-                std::fflush(stderr);
-                std::terminate();
-            }
-            eventfd_registered_ = false;
-        }
-        ::io_uring_queue_exit(&ring_state_->ring);
-        have_ring_ = false;
+    retire_execution_resources();
+}
+
+bool UringAsyncBackend::internal_work_retired() const noexcept {
+    if (!have_ring_) {
+        return true;
     }
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    const bool ledger_quiescent =
+        transport_ledger_ == nullptr || transport_ledger_->empty() ||
+        (fatal_error_.has_value() && transport_ledger_->all_class_a_recovery_retired());
+    bool event_owed = false;
+    for (const DeliveryRecord& record : delivery_) {
+        if (record.event_owed) {
+            event_owed = true;
+            break;
+        }
+    }
+    return dispatch_->empty() && publication_pending_->empty() && !event_owed &&
+           live_cookies_.load(std::memory_order_relaxed) == 0 &&
+           live_control_sqes_.load(std::memory_order_relaxed) == 0 && ledger_quiescent;
+}
+
+void UringAsyncBackend::retire_execution_resources() noexcept {
+    if (!have_ring_) {
+        return;
+    }
+    if (eventfd_registered_) {
+        int rc = 0;
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        eventfd_unregistrations_.fetch_add(1, std::memory_order_relaxed);
+        if (ring_state_->test_hooks.unregister_eventfd != nullptr) {
+            rc = ring_state_->test_hooks.unregister_eventfd(ring_state_->test_hooks.context,
+                                                            &ring_state_->ring);
+        } else {
+            rc = ::io_uring_unregister_eventfd(&ring_state_->ring);
+        }
+#else
+        rc = ::io_uring_unregister_eventfd(&ring_state_->ring);
+#endif
+        if (rc != 0) {
+            std::fprintf(stderr, "sluice::async::UringAsyncBackend: eventfd unregister "
+                                 "failed before ring exit (invariant violation)\n");
+            std::fflush(stderr);
+            std::terminate();
+        }
+        eventfd_registered_ = false;
+    }
+    ::io_uring_queue_exit(&ring_state_->ring);
+    have_ring_ = false;
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

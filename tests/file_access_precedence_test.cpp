@@ -64,6 +64,7 @@ class CountingBackend final : public AsyncBackend {
 
     std::size_t poll() override { return 0; }
     std::size_t outstanding() const noexcept override { return 0; }
+    bool internal_work_retired() const noexcept override { return true; }
     bool supports_request_identity() const noexcept override { return true; }
 
   private:

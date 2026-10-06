@@ -42,14 +42,15 @@ int temp_file_fd(const std::string& content) {
     return fd;
 }
 
-// Borrows the context notification fd for readiness probes and retires the
-// external interest on scope exit; these tests exercise the park handshake,
-// not host-registration lifetime.
+// Borrows the context notification fd once for readiness probes and retires
+// the external interest on scope exit; these tests exercise the park
+// handshake, not host-registration lifetime. The fd is captured here, before
+// any drive starts, because a borrow during an active drive is refused.
 struct HostInterest {
     AsyncIoContext& ctx;
-    explicit HostInterest(AsyncIoContext& c) noexcept : ctx(c) {
-        (void)ctx.progress_notification_fd();
-    }
+    int fd;
+    explicit HostInterest(AsyncIoContext& c) noexcept
+        : ctx(c), fd(c.progress_notification_fd()) {}
     ~HostInterest() { ctx.detach_progress_host(); }
 };
 
@@ -67,14 +68,13 @@ bool notification_fd_readable(int fd) {
 // Readiness produced by a resumed worker lands asynchronously; a caller that
 // must observe it while holding a pause gate waits bounded instead of racing
 // one poll.
-bool wait_notification_readable(AsyncIoContext& ctx) {
-    const int fd = ctx.progress_notification_fd();
+bool wait_notification_readable(const HostInterest& interest) {
     for (int i = 0; i < 20000; ++i) {
-        if (notification_fd_readable(fd))
+        if (notification_fd_readable(interest.fd))
             return true;
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
-    return notification_fd_readable(fd);
+    return notification_fd_readable(interest.fd);
 }
 
 void wait_gate_paused(PauseGate& gate) {
@@ -191,7 +191,7 @@ bool r1_signal_before_wait_is_serviced_without_parking() {
     Completion<std::size_t> c;
     if (!submit_zero_op(ctx, c))
         return false;
-    if (!notification_fd_readable(ctx.progress_notification_fd()))
+    if (!notification_fd_readable(interest.fd))
         return false;
 
     std::atomic<int> prepark{0};
@@ -330,7 +330,7 @@ bool r5_postdrain_signal_readiness_persists_into_poll() {
     Completion<std::size_t> zero;
     if (!submit_zero_op(ctx, zero))
         return false;
-    const bool readable_while_paused = notification_fd_readable(ctx.progress_notification_fd());
+    const bool readable_while_paused = notification_fd_readable(interest.fd);
     resume_gate(gate);
     driver.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
@@ -366,7 +366,7 @@ bool r8_empty_pass_signal_immediately_before_poll_entry() {
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
-    const int nfd = ctx.progress_notification_fd();
+    const int nfd = interest.fd;
     const bool drained_before_signal = !notification_fd_readable(nfd);
     Completion<std::size_t> zero;
     if (!submit_zero_op(ctx, zero))
@@ -502,7 +502,7 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
         const auto drained = ctx.poll_progress();
         settled_zero = drained.has_value() && drained.value().completed == 1 && zero.ready();
         zero.reset();
-        stale_readable = notification_fd_readable(ctx.progress_notification_fd());
+        stale_readable = notification_fd_readable(interest.fd);
     }
     if (!settled_zero || !stale_readable)
         return false;
@@ -518,7 +518,7 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
     std::thread driver([&] { DriverClaim owner{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     const bool reached = wait_counter_reaches(prepark, 1);
     const bool stale_drained_at_park =
-        reached && !notification_fd_readable(ctx.progress_notification_fd());
+        reached && !notification_fd_readable(interest.fd);
 
     read.release();
     driver.join();
@@ -660,7 +660,7 @@ bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
     read.release();
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     driver.join();
@@ -708,7 +708,7 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
     ctx.interrupt_progress_waiters();
-    const bool readable = notification_fd_readable(ctx.progress_notification_fd());
+    const bool readable = notification_fd_readable(interest.fd);
 
     resume_gate(gate);
     driver.join();
@@ -742,12 +742,12 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
 
     const bool ok = [&] {
         ctx.interrupt_progress_waiters();
-        if (!notification_fd_readable(ctx.progress_notification_fd()))
+        if (!notification_fd_readable(interest.fd))
             return false;
 
         for (int round = 0; round < 3; ++round) {
             ctx.interrupt_progress_waiters();
-            if (!notification_fd_readable(ctx.progress_notification_fd()))
+            if (!notification_fd_readable(interest.fd))
                 return false;
 
             std::atomic<int> prepark{0};
@@ -793,7 +793,7 @@ bool token_exhaustion_saturates_without_alias_and_closes_admission() {
         return false;
     if (!ctx.progress_exhausted_for_test())
         return false;
-    if (!notification_fd_readable(ctx.progress_notification_fd()))
+    if (!notification_fd_readable(interest.fd))
         return false;
 
     const auto r = wait_one_value(ctx, std::chrono::milliseconds{5000});
@@ -871,12 +871,12 @@ bool saturated_notification_still_wakes_parked_owner() {
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
     ctx.saturate_progress_notification_for_test();
-    if (!notification_fd_readable(ctx.progress_notification_fd()))
+    if (!notification_fd_readable(interest.fd))
         return false;
 
     read.release();
     const bool readable_after_saturated_signal =
-        notification_fd_readable(ctx.progress_notification_fd());
+        notification_fd_readable(interest.fd);
     resume_gate(gate);
     driver.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
@@ -913,7 +913,7 @@ bool coalesced_prearmed_signals_are_all_discoverable_in_one_pass() {
         z.reset();
     }
     ctx.acknowledge_progress_notification();
-    return all_ready && !notification_fd_readable(ctx.progress_notification_fd());
+    return all_ready && !notification_fd_readable(interest.fd);
 }
 
 // F1 oracle: one poll_progress invocation publishes at most the publication
@@ -936,7 +936,7 @@ bool f1_publication_pass_is_entry_bounded() {
                          a)
              .has_value())
         return false;
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
 
     GatedWorkerRead gated;
@@ -1024,8 +1024,11 @@ bool record_handoff_survives_submit_racing_owner_sweep() {
     resume_threadpool_gate(gate);
 
     std::size_t delivered = 0;
-    for (int i = 0; i < 2000 && delivered == 0; ++i)
+    for (int i = 0; i < 200000 && delivered == 0; ++i) {
         delivered += raw->poll();
+        if (delivered == 0)
+            std::this_thread::yield();
+    }
     submitter.join();
     const std::size_t settle = raw->poll();
 

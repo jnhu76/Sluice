@@ -151,6 +151,10 @@ struct CoreOccupancy {
     std::size_t accepted_live = 0;
     std::size_t outstanding = 0;
     std::size_t public_bindings = 0;
+    std::size_t execution_refs = 0;
+    std::size_t control_refs = 0;
+    std::size_t publication_inflight = 0;
+    std::size_t observer_registrations = 0;
 };
 
 class RequestCore {
@@ -176,6 +180,14 @@ class RequestCore {
     bool admission_open() const noexcept;
     void note_health_failure() noexcept;
     bool health_failed() const noexcept;
+
+    // The caller copies keys out and must re-validate through normal paths:
+    // a later pass may retire a slot before the key is acted on.
+    void collect_outstanding(std::vector<RequestKey>& out) const noexcept;
+
+    // Retires delivery episodes in the delivering phase; the caller must run
+    // this only when no synchronous delivery hook is still on the stack.
+    std::size_t retire_delivered_episodes() noexcept;
 
     PublicLookup lookup(RequestKey id) const noexcept;
     PublicCancel cancel(RequestKey id) noexcept;
