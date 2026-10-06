@@ -92,6 +92,7 @@ VARIABLES
     published,      \* [OpId -> BOOLEAN]
     borrow_refs,    \* [OpId -> Nat]   execution_refs
     control_refs,   \* [OpId -> Nat]   control_refs
+    cancel_targeted,  \* [OpId -> BOOLEAN]: a cancel action targeted the op
     episode_refs,   \* [OpId -> Nat]   observer_registrations
     bindings,       \* [OpId -> Nat]   public_bindings
     reclaimed,      \* [OpId -> BOOLEAN]
@@ -111,6 +112,7 @@ TypeOK ==
     /\ published \in [OpSet -> BOOLEAN]
     /\ borrow_refs \in [OpSet -> Nat]
     /\ control_refs \in [OpSet -> Nat]
+    /\ cancel_targeted \in [OpSet -> BOOLEAN]
     /\ episode_refs \in [OpSet -> Nat]
     /\ bindings \in [OpSet -> Nat]
     /\ reclaimed \in [OpSet -> BOOLEAN]
@@ -139,7 +141,7 @@ Accept(o) ==
     /\ bindings' = [bindings EXCEPT ![o] = 1]
     /\ UNCHANGED <<reclaimed, admission_open, close_snapshot, policy,
                    stop_recorded, execution_closed, notification_open,
-                   host_interest, destroyed>>
+                   host_interest, destroyed, cancel_targeted>>
 
 ConsumeOrDiscard(o) ==
     /\ published[o]
@@ -148,7 +150,7 @@ ConsumeOrDiscard(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, cancel_targeted>>
 
 RegisterHost ==
     /\ ~destroyed
@@ -157,7 +159,7 @@ RegisterHost ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, destroyed>>
+                   notification_open, destroyed, cancel_targeted>>
 
 UnregisterHost ==
     /\ host_interest > 0
@@ -165,7 +167,7 @@ UnregisterHost ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, destroyed>>
+                   notification_open, destroyed, cancel_targeted>>
 
 (* The destructor's always-on preconditions: an external caller violation
    has no successor state -- the process terminates instead.  MutM1 is the
@@ -185,7 +187,7 @@ Destroy ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, host_interest>>
+                   notification_open, host_interest, cancel_targeted>>
 
 -------------------------------------------------------------------------------
 (* Driver surface: the settlement path *)
@@ -198,7 +200,7 @@ RecordCancelPolicy ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, execution_closed, notification_open,
-                   host_interest, destroyed>>
+                   host_interest, destroyed, cancel_targeted>>
 
 CloseAdmission ==
     /\ admission_open
@@ -207,7 +209,7 @@ CloseAdmission ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, policy, stop_recorded,
                    execution_closed, notification_open, host_interest,
-                   destroyed>>
+                   destroyed, cancel_targeted>>
 
 (* cancel_then_drain against an operation the kernel has not entered yet:
    the cancel wins before execution, the borrow retires and the canceled
@@ -223,6 +225,7 @@ CancelOutstandingWin(o) ==
     /\ terminal' = [terminal EXCEPT ![o] = "canceled"]
     /\ borrow_refs' = [borrow_refs EXCEPT ![o] = 0]
     /\ published' = [published EXCEPT ![o] = TRUE]
+    /\ cancel_targeted' = [cancel_targeted EXCEPT ![o] = TRUE]
     /\ UNCHANGED <<accepted, control_refs, episode_refs, bindings, reclaimed,
                    admission_open, close_snapshot, policy, stop_recorded,
                    execution_closed, notification_open, host_interest,
@@ -241,26 +244,29 @@ CancelOutstandingControl(o) ==
     /\ borrow_refs[o] = 1
     /\ control_refs[o] = 0
     /\ control_refs' = [control_refs EXCEPT ![o] = 1]
+    /\ cancel_targeted' = [cancel_targeted EXCEPT ![o] = TRUE]
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, episode_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
                    notification_open, host_interest, destroyed>>
 
 (* The kernel completes a pinned operation: the borrow retires and the
-   physical terminal is chosen; publication follows in a later pass. *)
+   physical terminal is chosen; publication follows in a later pass.  A
+   kernel only reports ECANCELED to operations a cancel control actually
+   targeted (the C++ terminal mint at uring_completion), so the canceled
+   terminal requires cancel_targeted[o]. *)
 KernelComplete(o) ==
     /\ accepted[o]
     /\ ~published[o]
     /\ terminal[o] = "none"
     /\ borrow_refs[o] = 1
     /\ terminal' = [terminal EXCEPT ![o] =
-                        IF policy = "cancel_then_drain" /\ stop_recorded
-                        THEN "canceled" ELSE "ok"]
+                        IF cancel_targeted[o] THEN "canceled" ELSE "ok"]
     /\ borrow_refs' = [borrow_refs EXCEPT ![o] = 0]
     /\ UNCHANGED <<accepted, published, control_refs, episode_refs, bindings,
                    reclaimed, admission_open, close_snapshot, policy,
                    stop_recorded, execution_closed, notification_open,
-                   host_interest, destroyed>>
+                   host_interest, destroyed, cancel_targeted>>
 
 (* The control retires once the terminal is chosen (delivered CQE or Class-A
    recovery); this is the internal retirement obligation of D4. *)
@@ -271,7 +277,7 @@ RetireControl(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, episode_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, cancel_targeted>>
 
 BeginPublish(o) ==
     /\ terminal[o] # "none"
@@ -280,7 +286,7 @@ BeginPublish(o) ==
     /\ UNCHANGED <<accepted, terminal, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, cancel_targeted>>
 
 ClaimEpisode(o) ==
     /\ (notification_open \/ MutM8RetireFdEarly)
@@ -292,7 +298,7 @@ ClaimEpisode(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, cancel_targeted>>
 
 RetireEpisode(o) ==
     /\ episode_refs[o] = 1
@@ -300,7 +306,7 @@ RetireEpisode(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, cancel_targeted>>
 
 (* The convergence predicate: settlement_converged_ -- the backend internal
    retirement witness (all controls retired; the dispatch/publication facts
@@ -322,7 +328,7 @@ CloseExecution ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, notification_open,
-                   host_interest, destroyed>>
+                   host_interest, destroyed, cancel_targeted>>
 
 (* SHUT ordering: the notification retires only after the delivery episodes
    are retired -- a wake can never be lost or land on a reused descriptor
@@ -334,7 +340,7 @@ RetireNotification ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   host_interest, destroyed>>
+                   host_interest, destroyed, cancel_targeted>>
 
 (* try_reclaim_: the slot frees only when every reference is gone.  A
    retained published result keeps the slot (V20). *)
@@ -351,7 +357,7 @@ Reclaim(o) ==
     /\ UNCHANGED <<terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, cancel_targeted>>
 
 Next ==
     \/ \E o \in OpSet: Accept(o)
@@ -399,6 +405,11 @@ InvDestroyRequiresNoBorrowTouchingRefs ==
 InvExecutionClosedNoBorrowTouchingExecution ==
     execution_closed => /\ \A o \in OpSet: borrow_refs[o] = 0
                         /\ \A o \in OpSet: control_refs[o] = 0
+
+(* The kernel never reports ECANCELED for an operation no cancel control
+   targeted: a canceled terminal is reachable only through a cancel action. *)
+InvCanceledRequiresTargeting ==
+    \A o \in OpSet: terminal[o] = "canceled" => cancel_targeted[o]
 
 (* The slot frees only when every reference the contract requires has
    retired; a retained published result keeps its slot legally. *)
@@ -448,12 +459,22 @@ InvCovUnconsumedResultConverges ==
     ~(execution_closed /\ \E o \in OpSet: published[o] /\ bindings[o] = 1
                                                 /\ terminal[o] = "ok")
 
+(* Holding forms for the MutM4 run: with the close requiring every binding
+   consumed, the certified retained-result states are unreachable, so these
+   invariants hold and the clean run is the kill. *)
+CertM4CloseRequiresZeroBindings ==
+    execution_closed => \A o \in OpSet: bindings[o] = 0
+
+CertM4NoRetainedResultAtClose ==
+    execution_closed => ~\E o \in OpSet: published[o] /\ bindings[o] = 1
+
 Init ==
     /\ accepted = [o \in OpSet |-> FALSE]
     /\ terminal = [o \in OpSet |-> "none"]
     /\ published = [o \in OpSet |-> FALSE]
     /\ borrow_refs = [o \in OpSet |-> 0]
     /\ control_refs = [o \in OpSet |-> 0]
+    /\ cancel_targeted = [o \in OpSet |-> FALSE]
     /\ episode_refs = [o \in OpSet |-> 0]
     /\ bindings = [o \in OpSet |-> 0]
     /\ reclaimed = [o \in OpSet |-> FALSE]
@@ -469,7 +490,7 @@ Init ==
 vars == <<accepted, terminal, published, borrow_refs, control_refs,
           episode_refs, bindings, reclaimed, admission_open, close_snapshot,
           policy, stop_recorded, execution_closed, notification_open,
-          host_interest, destroyed>>
+          host_interest, destroyed, cancel_targeted>>
 
 Spec ==
     Init /\ [][Next]_vars
