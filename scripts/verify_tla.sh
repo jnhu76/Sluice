@@ -680,9 +680,10 @@ run_violate e2-cov-unconsumed-converges ShutdownCoreCovUnconsumedResultConverges
 run_violate e2-cov-internal-pin ShutdownCoreCovInternalPinThenCleanClose.cfg ShutdownCore InvCovInternalPinThenCleanClose
 run_violate e2-cov-cancel-policy ShutdownCoreCovCancelPolicyCompletes.cfg ShutdownCore InvCovCancelPolicyCompletes
 
-echo "== Stage E2: ShutdownCore conditional liveness (the SHUT-03 convergence fragment) =="
+echo "== Stage E2: ShutdownCore conditional liveness (the SHUT-03 convergence statement) =="
 run_live_clean e2-live ShutdownCoreLive.cfg ShutdownCore
-run_temporal_violate e2-live-nofair ShutdownCoreLiveNoFair.cfg ShutdownCore
+run_temporal_violate e2-live-ops-nofair ShutdownCoreLiveOpsNoFair.cfg ShutdownCore
+run_temporal_violate e2-live-close-nofair ShutdownCoreLiveCloseNoFair.cfg ShutdownCore
 
 drain
 

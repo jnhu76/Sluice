@@ -547,6 +547,9 @@ do
         shutdown_lifecycle_target("shutdown_mut_m11_allow_notification_borrow_during_shutdown",
                                   true,
                                   "SLUICE_E2_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN")
+        shutdown_lifecycle_target("shutdown_mut_m12_execution_closed_fast_path_before_owner_check",
+                                  true,
+                                  "SLUICE_E2_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK")
     end
     shutdown_lifecycle_target("shutdown_mut_m2_control_pin_caller_violation", false,
                               "SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION")

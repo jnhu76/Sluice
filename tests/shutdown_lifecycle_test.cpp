@@ -827,6 +827,36 @@ bool shutdown_refuses_while_host_interest_is_live(Tracker& t) {
     return true;
 }
 
+bool shutdown_from_non_owner_after_execution_close_is_refused(Tracker& t) {
+    auto backend = make_backend();
+    if (backend == nullptr) {
+        t.skip("the backend is unavailable on this host");
+        return true;
+    }
+    AsyncIoContext ctx(std::move(backend));
+
+    const auto closed = ctx.shutdown(ShutdownPolicy::drain);
+    t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
+            "the owner's shutdown completes on the idle context");
+    t.check(ctx.execution_closed(), "the execution-closed record stands");
+
+    const auto owner_repeat = ctx.shutdown(ShutdownPolicy::drain);
+    t.check(owner_repeat.has_value() && owner_repeat.value() == ShutdownOutcome::completed,
+            "the owner's repeated shutdown returns the recorded outcome");
+
+    std::atomic<bool> foreign_invalid{false};
+    std::thread foreign([&] {
+        const auto refused = ctx.shutdown(ShutdownPolicy::drain);
+        foreign_invalid.store(!refused.has_value() &&
+                                  refused.error().code == IoError::Code::invalid_state,
+                              std::memory_order_release);
+    });
+    foreign.join();
+    t.check(foreign_invalid.load(),
+            "a non-owner's shutdown after execution close is refused as invalid state");
+    return true;
+}
+
 #if !defined(SLUICE_SHUTDOWN_URING)
 bool zero_op_internal_pin_retires_at_shutdown(Tracker& t) {
     auto file = open_temp_file(t, "shutdown zero-op pin payload");
@@ -1106,6 +1136,8 @@ int main() {
 #endif
         {"shutdown_refuses_while_host_interest_is_live",
          shutdown_refuses_while_host_interest_is_live},
+        {"shutdown_from_non_owner_after_execution_close_is_refused",
+         shutdown_from_non_owner_after_execution_close_is_refused},
 #if !defined(SLUICE_SHUTDOWN_URING)
         {"zero_op_internal_pin_retires_at_shutdown",
          zero_op_internal_pin_retires_at_shutdown},

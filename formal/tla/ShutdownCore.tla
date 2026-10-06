@@ -55,6 +55,8 @@
 (*   control_refs    backend control pins (CoreOccupancy.control_refs)     *)
 (*   episode_refs    delivery episodes claimed but not retired             *)
 (*                   (CoreOccupancy.observer_registrations)                *)
+(*   episode_claimed_once  a delivery episode already happened for this    *)
+(*                   request incarnation; registration is one-shot         *)
 (*   bindings        live public Request bindings                          *)
 (*   reclaimed       the slot returned to the free set (release_slot_)     *)
 (* Context facts:                                                          *)
@@ -69,10 +71,11 @@
 (*   host_interest   external progress/notification registrations          *)
 (*   destroyed       the context storage is freed                          *)
 (*                                                                         *)
-(* Fairness: none.  Every liveness claim in this slice is conditional on   *)
-(* backend/progress assumptions outside this model; the model asserts      *)
-(* safety only, plus reachability certificates for the states the          *)
-(* contract requires to be reachable.                                      *)
+(* Fairness: the safety invariants and reachability certificates hold on    *)
+(* Spec alone. The conditional liveness pair (LiveOpsSettle,                *)
+(* LiveShutdownCloses) holds on LSpec, whose WF conjuncts are the explicit  *)
+(* backend/progress assumptions; each property is separately violated on    *)
+(* the fairness-free Spec by its own negative-control configuration.        *)
 (***************************************************************************)
 EXTENDS Naturals, Sequences, TLC
 
@@ -94,6 +97,7 @@ VARIABLES
     control_refs,   \* [OpId -> Nat]   control_refs
     cancel_targeted,  \* [OpId -> BOOLEAN]: a cancel action targeted the op
     episode_refs,   \* [OpId -> Nat]   observer_registrations
+    episode_claimed_once,  \* [OpId -> BOOLEAN]: one registration per request
     bindings,       \* [OpId -> Nat]   public_bindings
     reclaimed,      \* [OpId -> BOOLEAN]
     \* context facts
@@ -114,6 +118,7 @@ TypeOK ==
     /\ control_refs \in [OpSet -> Nat]
     /\ cancel_targeted \in [OpSet -> BOOLEAN]
     /\ episode_refs \in [OpSet -> Nat]
+    /\ episode_claimed_once \in [OpSet -> BOOLEAN]
     /\ bindings \in [OpSet -> Nat]
     /\ reclaimed \in [OpSet -> BOOLEAN]
     /\ admission_open \in BOOLEAN
@@ -138,6 +143,7 @@ Accept(o) ==
     /\ borrow_refs' = [borrow_refs EXCEPT ![o] = 1]
     /\ control_refs' = [control_refs EXCEPT ![o] = 0]
     /\ episode_refs' = [episode_refs EXCEPT ![o] = 0]
+    /\ episode_claimed_once' = [episode_claimed_once EXCEPT ![o] = FALSE]
     /\ bindings' = [bindings EXCEPT ![o] = 1]
     /\ UNCHANGED <<reclaimed, admission_open, close_snapshot, policy,
                    stop_recorded, execution_closed, notification_open,
@@ -150,7 +156,7 @@ ConsumeOrDiscard(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed, cancel_targeted>>
+                   notification_open, host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 RegisterHost ==
     /\ ~destroyed
@@ -159,7 +165,7 @@ RegisterHost ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, destroyed, cancel_targeted>>
+                   notification_open, destroyed, cancel_targeted, episode_claimed_once>>
 
 UnregisterHost ==
     /\ host_interest > 0
@@ -167,7 +173,7 @@ UnregisterHost ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, destroyed, cancel_targeted>>
+                   notification_open, destroyed, cancel_targeted, episode_claimed_once>>
 
 (* The destructor's always-on preconditions: an external caller violation
    has no successor state -- the process terminates instead.  MutM1 is the
@@ -187,7 +193,7 @@ Destroy ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, cancel_targeted>>
+                   notification_open, host_interest, cancel_targeted, episode_claimed_once>>
 
 -------------------------------------------------------------------------------
 (* Driver surface: the settlement path *)
@@ -200,7 +206,7 @@ RecordCancelPolicy ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, execution_closed, notification_open,
-                   host_interest, destroyed, cancel_targeted>>
+                   host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 CloseAdmission ==
     /\ admission_open
@@ -209,7 +215,7 @@ CloseAdmission ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, policy, stop_recorded,
                    execution_closed, notification_open, host_interest,
-                   destroyed, cancel_targeted>>
+                   destroyed, cancel_targeted, episode_claimed_once>>
 
 (* cancel_then_drain against an operation the kernel has not entered yet:
    the cancel wins before execution, the borrow retires and the canceled
@@ -229,7 +235,7 @@ CancelOutstandingWin(o) ==
     /\ UNCHANGED <<accepted, control_refs, episode_refs, bindings, reclaimed,
                    admission_open, close_snapshot, policy, stop_recorded,
                    execution_closed, notification_open, host_interest,
-                   destroyed>>
+                   destroyed, episode_claimed_once>>
 
 (* cancel_then_drain against a kernel-visible operation: the control pins
    the slot (CoreOccupancy.control_refs) until the control retires; the
@@ -248,7 +254,7 @@ CancelOutstandingControl(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, episode_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed>>
+                   notification_open, host_interest, destroyed, episode_claimed_once>>
 
 (* The kernel completes a pinned operation: the borrow retires and the
    physical terminal is chosen; publication follows in a later pass.  A
@@ -266,7 +272,7 @@ KernelComplete(o) ==
     /\ UNCHANGED <<accepted, published, control_refs, episode_refs, bindings,
                    reclaimed, admission_open, close_snapshot, policy,
                    stop_recorded, execution_closed, notification_open,
-                   host_interest, destroyed, cancel_targeted>>
+                   host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 (* The control retires once the terminal is chosen (delivered CQE or Class-A
    recovery); this is the internal retirement obligation of D4. *)
@@ -277,7 +283,7 @@ RetireControl(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, episode_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed, cancel_targeted>>
+                   notification_open, host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 BeginPublish(o) ==
     /\ terminal[o] # "none"
@@ -286,15 +292,22 @@ BeginPublish(o) ==
     /\ UNCHANGED <<accepted, terminal, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed, cancel_targeted>>
+                   notification_open, host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
+(* OBS-01: at most one active terminal-notification registration per
+   request, and SHUT-02 closes new attachment during shutdown while the
+   existing registrations retire. The claimed-once bit is that finiteness:
+   without it ClaimEpisode/RetireEpisode could alternate forever and the
+   settlement could fairly evade execution close. *)
 ClaimEpisode(o) ==
     /\ (notification_open \/ MutM8RetireFdEarly)
     /\ ~execution_closed
     /\ published[o]
     /\ ~reclaimed[o]
     /\ episode_refs[o] = 0
+    /\ ~episode_claimed_once[o]
     /\ episode_refs' = [episode_refs EXCEPT ![o] = 1]
+    /\ episode_claimed_once' = [episode_claimed_once EXCEPT ![o] = TRUE]
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
@@ -306,7 +319,7 @@ RetireEpisode(o) ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    bindings, reclaimed, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed, cancel_targeted>>
+                   notification_open, host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 (* The convergence predicate: settlement_converged_ -- the backend internal
    retirement witness (all controls retired; the dispatch/publication facts
@@ -328,7 +341,7 @@ CloseExecution ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, notification_open,
-                   host_interest, destroyed, cancel_targeted>>
+                   host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 (* SHUT ordering: the notification retires only after the delivery episodes
    are retired -- a wake can never be lost or land on a reused descriptor
@@ -340,7 +353,7 @@ RetireNotification ==
     /\ UNCHANGED <<accepted, terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, reclaimed, admission_open,
                    close_snapshot, policy, stop_recorded, execution_closed,
-                   host_interest, destroyed, cancel_targeted>>
+                   host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 (* try_reclaim_: the slot frees only when every reference is gone.  A
    retained published result keeps the slot (V20). *)
@@ -357,7 +370,7 @@ Reclaim(o) ==
     /\ UNCHANGED <<terminal, published, borrow_refs, control_refs,
                    episode_refs, bindings, admission_open, close_snapshot,
                    policy, stop_recorded, execution_closed,
-                   notification_open, host_interest, destroyed, cancel_targeted>>
+                   notification_open, host_interest, destroyed, cancel_targeted, episode_claimed_once>>
 
 Next ==
     \/ \E o \in OpSet: Accept(o)
@@ -476,6 +489,7 @@ Init ==
     /\ control_refs = [o \in OpSet |-> 0]
     /\ cancel_targeted = [o \in OpSet |-> FALSE]
     /\ episode_refs = [o \in OpSet |-> 0]
+    /\ episode_claimed_once = [o \in OpSet |-> FALSE]
     /\ bindings = [o \in OpSet |-> 0]
     /\ reclaimed = [o \in OpSet |-> FALSE]
     /\ admission_open = TRUE
@@ -488,7 +502,8 @@ Init ==
     /\ destroyed = FALSE
 
 vars == <<accepted, terminal, published, borrow_refs, control_refs,
-          episode_refs, bindings, reclaimed, admission_open, close_snapshot,
+          episode_refs, episode_claimed_once, bindings, reclaimed,
+          admission_open, close_snapshot,
           policy, stop_recorded, execution_closed, notification_open,
           host_interest, destroyed, cancel_targeted>>
 
@@ -518,8 +533,13 @@ LSpec == Spec /\ Fairness
 LiveOpsSettle ==
     \A o \in OpSet: accepted[o] ~> terminal[o] # "none"
 
-LiveExecutionCloses ==
-    (Converged /\ ~notification_open /\ ~admission_open /\ ~destroyed)
-        ~> execution_closed
+(* SHUT-03 conditional convergence over the whole settlement, not a
+   post-retirement fragment: once admission has closed and the context is
+   not destroyed, fair kernel completion, fair physical/control retirement
+   and fair progress drive the state to the execution-closed record. The
+   one-shot episode abstraction keeps the registration region finite, so no
+   fair behavior can loop forever short of the close. *)
+LiveShutdownCloses ==
+    (~admission_open /\ ~destroyed) ~> execution_closed
 
 =============================================================================

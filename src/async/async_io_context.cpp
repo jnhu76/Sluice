@@ -1054,6 +1054,11 @@ Result<ShutdownOutcome> AsyncIoContext::shutdown(ShutdownPolicy policy) {
         if (!backend_ || notification_interest_live_ || drive_active_) {
             return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
         }
+#if defined(SLUICE_E2_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK)
+        if (execution_closed_) {
+            return settlement_outcome_;
+        }
+#endif
         if (owner_thread_ == std::thread::id{}) {
             owner_thread_ = std::this_thread::get_id();
         } else if (owner_thread_ != std::this_thread::get_id()) {

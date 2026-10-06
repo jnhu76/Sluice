@@ -182,7 +182,12 @@ execution close; idempotent completion is an owner-thread behavior. The
 earlier implementation's fast path returned the recorded outcome before any
 owner check — more permissive than the root — and was corrected; the
 shutdown entry now performs the owner verification inside the same critical
-section as the drive acquisition.
+section as the drive acquisition. Regression evidence for the corrected
+order: `shutdown_from_non_owner_after_execution_close_is_refused` (owner
+completes, owner's repeat returns the recorded outcome, non-owner post-close
+call is `invalid_state`), killed by mutant M12
+(`shutdown_mut_m12_execution_closed_fast_path_before_owner_check`), which
+restores the pre-check fast path.
 
 **Queued observer registrations are internal retirement obligations, not
 destructor entry violations.** SHUT-04's precondition inventory is
