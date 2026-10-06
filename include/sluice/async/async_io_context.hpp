@@ -493,6 +493,8 @@ class AsyncIoContext {
 
     bool settlement_converged_() const noexcept;
 
+    void cancel_outstanding_for_stop_() noexcept;
+
     void upgrade_stop_policy_(ShutdownPolicy policy) noexcept;
 
     struct DriveGuard {

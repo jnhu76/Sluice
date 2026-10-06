@@ -110,7 +110,7 @@ has `outstanding()==0` with a live public binding; an internal pin state has
 
 | Mechanism | Classification | Writer / linearization | Necessity | Evidence |
 |---|---|---|---|---|
-| `AsyncIoContext::stop_policy_` | semantic authority for the strongest requested policy | any thread under `access_mtx_`; monotone upgrade | the upgrade rule must survive across threads between `request_stop` and the owner's `shutdown` | M6 + policy-upgrade test |
+| `AsyncIoContext::stop_policy_` | semantic authority for the strongest requested policy | any thread under `access_mtx_`; monotone upgrade; the settling driver re-reads it every pass (release/acquire) | the upgrade rule must survive across threads between `request_stop` and the owner's `shutdown`, including a stop that races an in-flight drive | M6 + policy-upgrade test + mid-drive upgrade oracle |
 | `AsyncIoContext::execution_closed_` + recorded outcome | linearization record of the SHUT-02 step-7 transition; after the transition the source facts are dismantled (ring exited, notification retired), so it is not recomputable | the owner thread inside `shutdown()` | SHUT-03 idempotence; refuse new external notification interest; ExecutionClosed≠Destroyable | V20, M1, M4, idempotence test |
 | `CoreOccupancy` extension (`execution_refs`, `control_refs`, `publication_inflight`, observer episode count) | derived aggregate view | core mutex | the settlement predicate composes authoritative per-slot facts; the aggregate already exists for `accepted_live/outstanding/public_bindings` | M1, M7, V26 |
 | `RequestCore::admission-closed observer rejection` | protocol gate on the existing admission authority | core mutex | SHUT-02 step 3 | observer shutdown test (E2-F) |
@@ -131,6 +131,9 @@ entry: drive guard (THREAD-01 owner-only, no nested drive, no external
   outstanding keys and issue best-effort cancels (CANCEL-01 dispositions)
 3 loop (bounded passes; park through the ProgressSource handshake between
   passes when nothing is actionable):
+    every pass re-reads the policy: a request_stop that raced the drive
+    upgrades an already-running drain into cancellation before the next
+    pass (THREAD-01, PROG-04, SHUT-02 step 2)
     pass = one progress pass (existing run_progress_pass_: reap/publish/
            deliver/dispatch/service controls)
     retire delivery episodes claimed by the pass (OBS-02 hook→retire)
@@ -144,7 +147,11 @@ entry: drive guard (THREAD-01 owner-only, no nested drive, no external
 ```
 
 The destructor runs the same driver after checking the external
-preconditions (SHUT-04): fail-fast on detectable external violations, then
+preconditions (SHUT-04): the observation of zero public bindings and the
+admission close are one critical section under the context mutex — submits
+hold the same mutex across reserve/accept, so a binding can never land
+between the check and the close (a landing binding fail-fasts instead).
+The driver then fail-fasts on detectable external violations, performs its
 own internal retirement (may block), then member cleanup. If settlement
 cannot establish safe retirement, the destructor follows the BACKEND-03 /
 SHUT-04 fail-fast boundary — it never frees storage over unresolved

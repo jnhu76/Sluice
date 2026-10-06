@@ -310,6 +310,79 @@ bool shutdown_completes_and_retained_results_stay_consumable(Tracker& t) {
 }
 
 #if defined(SLUICE_SHUTDOWN_URING)
+// THREAD-01 lets request_stop race the owner's drive, and the upgrade it
+// records must reach a driver that already entered its drain. The pipe stays
+// open and empty, so the read can never complete on its own and convergence
+// is reachable only through the mid-drive cancellation.
+bool stop_upgrade_during_parked_shutdown_converges(Tracker& t) {
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        t.check(false, "the upgrade scenario forks");
+        return true;
+    }
+    if (pid == 0) {
+        ::alarm(30);
+        auto backend = make_backend();
+        if (backend == nullptr)
+            std::_Exit(3);
+        AsyncIoContext ctx(std::move(backend));
+
+        int fds[2];
+        if (::pipe(fds) != 0)
+            std::_Exit(3);
+        std::vector<std::byte> buffer(16, std::byte{0});
+        auto submitted = ctx.submit_read(
+            ReadOp{NativeFileRef{fds[0], sluice::FileAccess::read_only}, buffer.data(),
+                   buffer.size(), 0});
+        if (!submitted.has_value())
+            std::_Exit(4);
+        Request<std::size_t> request = std::move(submitted).value();
+
+        std::atomic<bool> done{false};
+        bool closed_ok = false;
+        ShutdownOutcome outcome = ShutdownOutcome::health_failed;
+        std::thread driver([&] {
+            auto closed = ctx.shutdown(ShutdownPolicy::drain);
+            closed_ok = closed.has_value();
+            if (closed.has_value())
+                outcome = closed.value();
+            done.store(true, std::memory_order_release);
+        });
+        // drive_settlement_ closes admission as its first act, so observing
+        // it closed places the racing stop strictly inside the live drive.
+        for (int i = 0; i < 2000000 && ctx.admission_open(); ++i) {
+        }
+        ctx.request_stop(ShutdownPolicy::cancel_then_drain);
+        driver.join();
+
+        bool ok = done.load(std::memory_order_acquire) && closed_ok &&
+                  outcome == ShutdownOutcome::completed;
+        auto observed = request.try_result();
+        ok = ok && observed.readiness == RequestReadiness::ready &&
+             !observed.result.has_value() &&
+             observed.result.error().code == IoError::Code::canceled;
+        std::_Exit(ok ? 0 : 1);
+    }
+    int status = 0;
+    if (::waitpid(pid, &status, 0) != pid) {
+        t.check(false, "the upgrade scenario is reaped");
+        return true;
+    }
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 3) {
+        t.skip("io_uring is unavailable on this host");
+        return true;
+    }
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 4) {
+        t.skip("the kernel refused the pipe read");
+        return true;
+    }
+    t.check(WIFEXITED(status) && WEXITSTATUS(status) == 0,
+            "the mid-drive stop upgrade converges the shutdown and cancels the read");
+    return true;
+}
+#endif
+
+#if defined(SLUICE_SHUTDOWN_URING)
 bool cancel_then_drain_shutdown_cancels_pending_without_fabricated_success(Tracker& t) {
     auto file = open_temp_file(t, "shutdown cancel pending payload");
     if (!file.has_value())
@@ -924,6 +997,8 @@ int main() {
 #if defined(SLUICE_SHUTDOWN_URING)
         {"cancel_then_drain_shutdown_cancels_pending_without_fabricated_success",
          cancel_then_drain_shutdown_cancels_pending_without_fabricated_success},
+        {"stop_upgrade_during_parked_shutdown_converges",
+         stop_upgrade_during_parked_shutdown_converges},
 #endif
         {"destruction_with_pending_live_binding_fails_fast",
          destruction_with_pending_live_binding_fails_fast},

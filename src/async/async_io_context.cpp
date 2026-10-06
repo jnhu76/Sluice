@@ -68,12 +68,19 @@ AsyncIoContext::~AsyncIoContext() {
     {
         std::lock_guard<std::mutex> lk(access_mtx_);
         fail_fast_if_progress_binding_live_();
-    }
 #if !defined(SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
-    if (core_ && core_->occupancy().public_bindings != 0) {
-        detail::async_context_outstanding_fail_fast();
-    }
+        if (core_ && core_->occupancy().public_bindings != 0) {
+            detail::async_context_outstanding_fail_fast();
+        }
 #endif
+        // Submits take this same mutex across reserve/accept, so closing
+        // admission inside the critical section that observed zero bindings
+        // removes the window where a late accept would be frozen into the
+        // settled set and freed under a live Request.
+        if (core_) {
+            (void)core_->close_admission();
+        }
+    }
     if (backend_ && drive_settlement_() != ShutdownOutcome::completed) {
         detail::async_context_settlement_fail_fast();
     }
@@ -115,12 +122,15 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
         {
             std::lock_guard<std::mutex> lk(access_mtx_);
             fail_fast_if_progress_binding_live_();
-        }
 #if !defined(SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
-        if (core_ && core_->occupancy().public_bindings != 0) {
-            detail::async_context_outstanding_fail_fast();
-        }
+            if (core_ && core_->occupancy().public_bindings != 0) {
+                detail::async_context_outstanding_fail_fast();
+            }
 #endif
+            if (core_) {
+                (void)core_->close_admission();
+            }
+        }
         if (backend_ && drive_settlement_() != ShutdownOutcome::completed) {
             detail::async_context_settlement_fail_fast();
         }
@@ -579,9 +589,17 @@ void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
     }
 }
 
+void AsyncIoContext::cancel_outstanding_for_stop_() noexcept {
+    std::vector<detail::RequestKey> outstanding;
+    core_->collect_outstanding(outstanding);
+    for (const detail::RequestKey key : outstanding) {
+        (void)backend_->cancel_identity(key);
+    }
+}
+
 void AsyncIoContext::upgrade_stop_policy_(ShutdownPolicy policy) noexcept {
     if (policy == ShutdownPolicy::cancel_then_drain) {
-        stop_policy_.store(ShutdownPolicy::cancel_then_drain, std::memory_order_relaxed);
+        stop_policy_.store(ShutdownPolicy::cancel_then_drain, std::memory_order_release);
     }
 }
 
@@ -602,13 +620,10 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
 
     (void)core_->close_admission();
 
-    const ShutdownPolicy policy = stop_policy_.load(std::memory_order_relaxed);
-    if (policy == ShutdownPolicy::cancel_then_drain) {
-        std::vector<detail::RequestKey> outstanding;
-        core_->collect_outstanding(outstanding);
-        for (const detail::RequestKey key : outstanding) {
-            (void)backend_->cancel_identity(key);
-        }
+    bool cancellation_applied =
+        stop_policy_.load(std::memory_order_acquire) == ShutdownPolicy::cancel_then_drain;
+    if (cancellation_applied) {
+        cancel_outstanding_for_stop_();
     }
 
 #if defined(SLUICE_E2_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE)
@@ -621,6 +636,14 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
 #endif
 
     for (;;) {
+        // THREAD-01 lets request_stop race an in-flight drive; the policy
+        // upgrade it records must take effect even if the driver already
+        // passed the initial cancellation above.
+        if (!cancellation_applied &&
+            stop_policy_.load(std::memory_order_acquire) == ShutdownPolicy::cancel_then_drain) {
+            cancellation_applied = true;
+            cancel_outstanding_for_stop_();
+        }
         const detail::ProgressSource::Token token = progress_->snapshot();
         const AsyncBackend::ProgressPass pass = run_progress_pass_();
         (void)core_->retire_delivered_episodes();
