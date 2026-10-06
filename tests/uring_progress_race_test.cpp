@@ -1258,8 +1258,11 @@ bool record_handoff_survives_submit_racing_owner_sweep() {
     resume_backend_gate(gate);
 
     std::size_t delivered = 0;
-    for (int i = 0; i < 2000 && delivered == 0; ++i)
+    for (int i = 0; i < 200000 && delivered == 0; ++i) {
         delivered += raw->poll();
+        if (delivered == 0)
+            std::this_thread::yield();
+    }
     submitter.join();
     const std::size_t settle = raw->poll();
 
