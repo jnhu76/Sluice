@@ -1,6 +1,6 @@
 # ADR-0004: E2 Shutdown State Contract and Public Spelling (#401 / #452)
 
-- **Status**: PROPOSED (E2-B slice, gate `E2_B_CONTRACT_DERIVED`)
+- **Status**: ADOPTED (merged via PR #453 at master `eb7bf055`; human final review APPROVE)
 - **Parent requirements**: SHUT-01, SHUT-02, SHUT-03, SHUT-04, PROG-04,
   THREAD-01, REQ-02/REQ-05/REQ-06, BACKEND-01/BACKEND-03, OBS-02, HANDLE-03,
   BOUND-02, VERIFY-04 (V20–V23, V26)
