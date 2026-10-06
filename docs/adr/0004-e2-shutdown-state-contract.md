@@ -124,8 +124,15 @@ single admission authority.
 ## 5. Settlement driver (the one canonical shutdown path)
 
 ```text
-entry: drive guard (THREAD-01 owner-only, no nested drive, no external
-       notification interest)
+entry: one critical section under the context mutex performs the whole
+       linearization: refuse if the backend is gone, external notification
+       interest is live, or a drive is already active; establish or verify
+       the THREAD-01 owner (unconditionally, including the idempotent
+       execution-closed return); upgrade the policy; then take the drive
+       domain. Because progress_notification_fd() takes the same mutex, a
+       borrow can never land between the interest check and the drive
+       acquisition (the borrow itself refuses while a drive is active or
+       execution is closed).
 1 close admission on the canonical authority; freeze the finite accepted set
 2 policy = strongest(requested); if cancel_then_drain: enumerate core
   outstanding keys and issue best-effort cancels (CANCEL-01 dispositions)
@@ -156,6 +163,44 @@ own internal retirement (may block), then member cleanup. If settlement
 cannot establish safe retirement, the destructor follows the BACKEND-03 /
 SHUT-04 fail-fast boundary — it never frees storage over unresolved
 borrow-touching work and never fabricates retirement.
+
+## 6. Root adjudications (round-3 human review)
+
+Two behaviors previously flagged as open root ambiguities are derived from
+the root; neither is a gap.
+
+**Non-owner `shutdown()` on an execution-closed context is refused.**
+THREAD-01's owner-only restriction on driving shutdown is stated without a
+lifecycle-state qualifier ("Only the progress owner drives shutdown";
+"other threads request_stop"; the matrix row is "Owner only"), and line
+"Cross-thread code calls `request_stop(policy)`" designates the cross-thread
+alternative explicitly. SHUT-03's idempotence sentence governs the outcome of
+a repeated call on an already execution-closed context, not thread
+eligibility. Composition is therefore unique: `shutdown(policy)` from a
+non-owner thread is refused in every lifecycle state, including after
+execution close; idempotent completion is an owner-thread behavior. The
+earlier implementation's fast path returned the recorded outcome before any
+owner check — more permissive than the root — and was corrected; the
+shutdown entry now performs the owner verification inside the same critical
+section as the drive acquisition.
+
+**Queued observer registrations are internal retirement obligations, not
+destructor entry violations.** SHUT-04's precondition inventory is
+exhaustive and enumerates caller-held facts only: live public
+Request/observer/experimental bindings, external API calls, host
+registrations. A delivery queued inside the core (OBS-02 Armed→Queued) on a
+request whose public binding was released is none of these: it is core-owned
+delivery machinery, and SHUT-02 steps 4–5 plus SHUT-04's "the destructor
+performs remaining deterministic owned-resource cleanup" assign its
+retirement to the settling driver. A delivery copied into an external host
+queue is governed by OBS-02's adapter contract (the host owns the queued
+wake's lifetime and stale-token validation), which is the D3
+host-registration precondition, and a still-held observer registration
+object is a live observer binding whose presence at entry fail-fasts. The
+entry predicate and the release-time invariant thus compose without
+conflict: entry checks caller-held facts; the driver retires core-owned
+facts before execution close; SHUT-04 fail-fast applies exactly to the
+detectable caller-held violations.
 
 ## 6. What this contract explicitly preserves
 

@@ -544,6 +544,9 @@ do
                                   "SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS")
         shutdown_lifecycle_target("shutdown_mut_m9_poison_releases_running_borrow", true,
                                   "SLUICE_E2_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW")
+        shutdown_lifecycle_target("shutdown_mut_m11_allow_notification_borrow_during_shutdown",
+                                  true,
+                                  "SLUICE_E2_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN")
     end
     shutdown_lifecycle_target("shutdown_mut_m2_control_pin_caller_violation", false,
                               "SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION")

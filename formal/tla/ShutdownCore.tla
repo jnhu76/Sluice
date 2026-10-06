@@ -495,4 +495,31 @@ vars == <<accepted, terminal, published, borrow_refs, control_refs,
 Spec ==
     Init /\ [][Next]_vars
 
+(* Conditional liveness for the SHUT-03 convergence fragment: the owner
+   keeps driving settlement steps and the kernel eventually reports each
+   outstanding physical outcome. The C++ poison-stuck-borrow branch (V22:
+   health_unresolved, execution stays open) is excluded by the kernel
+   fairness assumption, not modeled as a stuck state. *)
+Fairness ==
+    /\ WF_vars(CloseAdmission)
+    /\ WF_vars(RetireNotification)
+    /\ WF_vars(CloseExecution)
+    /\ \A o \in OpSet:
+        /\ WF_vars(KernelComplete(o))
+        /\ WF_vars(CancelOutstandingWin(o))
+        /\ WF_vars(CancelOutstandingControl(o))
+        /\ WF_vars(RetireControl(o))
+        /\ WF_vars(BeginPublish(o))
+        /\ WF_vars(ClaimEpisode(o))
+        /\ WF_vars(RetireEpisode(o))
+
+LSpec == Spec /\ Fairness
+
+LiveOpsSettle ==
+    \A o \in OpSet: accepted[o] ~> terminal[o] # "none"
+
+LiveExecutionCloses ==
+    (Converged /\ ~notification_open /\ ~admission_open /\ ~destroyed)
+        ~> execution_closed
+
 =============================================================================

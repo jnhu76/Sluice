@@ -205,22 +205,111 @@ fi
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
+# Parallel execution: the run_* helpers enqueue jobs; drain() launches them
+# through a pool of concurrent TLC JVMs and aggregates the verdicts. The
+# product SLUICE_TLA_JOBS x SLUICE_TLA_WORKERS should roughly match the host
+# core count (inter-model parallelism x intra-model worker threads). Raise
+# SLUICE_TLA_WORKERS when a single large model dominates (the rcore liveness
+# stage); lower it when several large models would otherwise run concurrently
+# and exhaust memory or metadir disk. SLUICE_TLA_JAVA_OPTS is passed to every
+# JVM (e.g. -Xmx).
+SLUICE_TLA_JOBS="${SLUICE_TLA_JOBS:-$(($(nproc 2>/dev/null || echo 4) / 2))}"
+SLUICE_TLA_WORKERS="${SLUICE_TLA_WORKERS:-2}"
+case "$SLUICE_TLA_JOBS" in ''|*[!0-9]*|0) SLUICE_TLA_JOBS=1;; esac
+case "$SLUICE_TLA_WORKERS" in ''|*[!0-9]*|0) SLUICE_TLA_WORKERS=1;; esac
+
+queue="$work/queue.tsv"
+: > "$queue"
+
+enqueue() {
+    printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" >> "$queue"
+}
+
+tlc() {
+    java ${SLUICE_TLA_JAVA_OPTS:-} -cp "$jar" tlc2.TLC \
+        -workers "$SLUICE_TLA_WORKERS" -deadlock -config "$tla/$2" \
+        -metadir "$work/mc-$1" "$tla/$3" > "$work/$1.log" 2>&1
+}
+
+pass_verdict() { echo "PASS" > "$work/$1.verdict"; }
+fail_verdict() { printf 'FAIL %s\n' "$2" > "$work/$1.verdict"; }
+
+worker() {
+    local kind="$1" label="$2" cfg="$3" module="$4" inv="$5"
+    local rc=0
+    tlc "$label" "$cfg" "$module" || rc=$?
+    case "$kind" in
+    clean)
+        if [[ "$rc" -ne 0 ]] \
+            || ! grep -q "Model checking completed. No error has been found." "$work/$label.log"
+        then
+            fail_verdict "$label" "did not complete cleanly"
+            return
+        fi
+        ;;
+    violate)
+        if [[ "$rc" -eq 0 ]]; then
+            fail_verdict "$label" "passed -- $inv does not bite"
+            return
+        fi
+        if ! grep -qE "Invariant ($inv) is violated" "$work/$label.log"; then
+            fail_verdict "$label" "failed for the wrong reason (expected: $inv)"
+            return
+        fi
+        ;;
+    live_clean)
+        if [[ "$rc" -ne 0 ]] \
+            || ! grep -q "Model checking completed. No error has been found." "$work/$label.log" \
+            || ! grep -q "Finished checking temporal properties" "$work/$label.log"
+        then
+            fail_verdict "$label" "did not complete cleanly with temporal properties"
+            return
+        fi
+        ;;
+    temporal_violate)
+        if [[ "$rc" -eq 0 ]]; then
+            fail_verdict "$label" "passed -- the liveness obligation does not bite"
+            return
+        fi
+        if ! grep -q "Temporal properties were violated" "$work/$label.log"; then
+            fail_verdict "$label" "failed for the wrong reason (expected: temporal violation)"
+            return
+        fi
+        ;;
+    esac
+    pass_verdict "$label"
+}
+
+drain() {
+    local failed=0 kind label cfg module inv
+    while IFS=$'\t' read -r kind label cfg module inv; do
+        while [[ "$(jobs -rp | wc -l)" -ge "$SLUICE_TLA_JOBS" ]]; do
+            wait -n || true
+        done
+        worker "$kind" "$label" "$cfg" "$module" "$inv" &
+    done < "$queue"
+    wait
+    while IFS=$'\t' read -r kind label cfg module inv; do
+        if [[ "$(cat "$work/$label.verdict")" == PASS ]]; then
+            grep -hE "Model checking completed|Temporal properties were violated|Invariant .* is violated" "$work/$label.log" | head -1
+            grep -h "states generated" "$work/$label.log" | tail -1
+        else
+            echo "FAIL: $label -- $(cat "$work/$label.verdict")" >&2
+            cat "$work/$label.log"
+            failed=1
+        fi
+    done < "$queue"
+    if [[ "$failed" -ne 0 ]]; then
+        echo "VERIFY_TLA: FAIL" >&2
+        exit 1
+    fi
+}
+
 # run_clean <label> <cfg> <module>: TLC must complete with no error.
 run_clean() {
     local label="$1" cfg="$2" module="$3"
     echo "== TLC: $label =="
-    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
-        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1 || {
-        cat "$work/$label.log"
-        echo "FAIL: $label did not complete cleanly" >&2
-        exit 1
-    }
-    grep -q "Model checking completed. No error has been found." "$work/$label.log" || {
-        cat "$work/$label.log"
-        echo "FAIL: $label did not report clean completion" >&2
-        exit 1
-    }
-    grep -E "Model checking completed|states generated" "$work/$label.log"
+    enqueue clean "$label" "$cfg" "$module" ""
 }
 
 # run_violate <label> <cfg> <module> <invariant>: TLC must fail with that
@@ -229,22 +318,7 @@ run_clean() {
 run_violate() {
     local label="$1" cfg="$2" module="$3" inv="$4"
     echo "== TLC: $label (must violate $inv) =="
-    set +e
-    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
-        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1
-    local rc=$?
-    set -e
-    if [[ "$rc" -eq 0 ]]; then
-        cat "$work/$label.log"
-        echo "FAIL: $label passed -- $inv does not bite" >&2
-        exit 1
-    fi
-    grep -q "Invariant $inv is violated" "$work/$label.log" || {
-        cat "$work/$label.log"
-        echo "FAIL: $label failed for the wrong reason (expected: $inv)" >&2
-        exit 1
-    }
-    grep -E "Invariant $inv is violated|states generated" "$work/$label.log"
+    enqueue violate "$label" "$cfg" "$module" "$inv"
 }
 
 # run_violate_any <label> <cfg> <module> "<inv1>|<inv2>": TLC must fail with
@@ -254,22 +328,7 @@ run_violate() {
 run_violate_any() {
     local label="$1" cfg="$2" module="$3" invs="$4"
     echo "== TLC: $label (must violate one of: $invs) =="
-    set +e
-    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
-        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1
-    local rc=$?
-    set -e
-    if [[ "$rc" -eq 0 ]]; then
-        cat "$work/$label.log"
-        echo "FAIL: $label passed -- none of ($invs) bites" >&2
-        exit 1
-    fi
-    grep -qE "Invariant ($invs) is violated" "$work/$label.log" || {
-        cat "$work/$label.log"
-        echo "FAIL: $label failed for the wrong reason (expected one of: $invs)" >&2
-        exit 1
-    }
-    grep -E "Invariant .* is violated|states generated" "$work/$label.log"
+    enqueue violate "$label" "$cfg" "$module" "$invs"
 }
 
 # run_live_clean <label> <cfg> <module>: TLC must complete cleanly with the
@@ -277,23 +336,7 @@ run_violate_any() {
 run_live_clean() {
     local label="$1" cfg="$2" module="$3"
     echo "== TLC: $label (temporal properties) =="
-    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
-        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1 || {
-        cat "$work/$label.log"
-        echo "FAIL: $label did not complete cleanly" >&2
-        exit 1
-    }
-    grep -q "Model checking completed. No error has been found." "$work/$label.log" || {
-        cat "$work/$label.log"
-        echo "FAIL: $label did not report clean completion" >&2
-        exit 1
-    }
-    grep -q "Finished checking temporal properties" "$work/$label.log" || {
-        cat "$work/$label.log"
-        echo "FAIL: $label never checked its temporal properties" >&2
-        exit 1
-    }
-    grep -E "Model checking completed|states generated" "$work/$label.log"
+    enqueue live_clean "$label" "$cfg" "$module" ""
 }
 
 # run_temporal_violate <label> <cfg> <module>: TLC must fail because a
@@ -301,22 +344,7 @@ run_live_clean() {
 run_temporal_violate() {
     local label="$1" cfg="$2" module="$3"
     echo "== TLC: $label (must violate a temporal property) =="
-    set +e
-    java -cp "$jar" tlc2.TLC -deadlock -config "$tla/$cfg" \
-        -metadir "$work/mc-$label" "$tla/$module" > "$work/$label.log" 2>&1
-    local rc=$?
-    set -e
-    if [[ "$rc" -eq 0 ]]; then
-        cat "$work/$label.log"
-        echo "FAIL: $label passed -- the liveness obligation does not bite" >&2
-        exit 1
-    fi
-    grep -q "Temporal properties were violated" "$work/$label.log" || {
-        cat "$work/$label.log"
-        echo "FAIL: $label failed for the wrong reason (expected: temporal violation)" >&2
-        exit 1
-    }
-    grep -E "Temporal properties were violated|states generated" "$work/$label.log"
+    enqueue temporal_violate "$label" "$cfg" "$module" ""
 }
 
 echo "== Stage 1V2.2: Event =="
@@ -651,5 +679,11 @@ run_violate e2-cov-published-survives ShutdownCoreCovPublishedSurvivesExecutionC
 run_violate e2-cov-unconsumed-converges ShutdownCoreCovUnconsumedResultConverges.cfg ShutdownCore InvCovUnconsumedResultConverges
 run_violate e2-cov-internal-pin ShutdownCoreCovInternalPinThenCleanClose.cfg ShutdownCore InvCovInternalPinThenCleanClose
 run_violate e2-cov-cancel-policy ShutdownCoreCovCancelPolicyCompletes.cfg ShutdownCore InvCovCancelPolicyCompletes
+
+echo "== Stage E2: ShutdownCore conditional liveness (the SHUT-03 convergence fragment) =="
+run_live_clean e2-live ShutdownCoreLive.cfg ShutdownCore
+run_temporal_violate e2-live-nofair ShutdownCoreLiveNoFair.cfg ShutdownCore
+
+drain
 
 echo "VERIFY_TLA: PASS"

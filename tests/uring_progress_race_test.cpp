@@ -27,13 +27,14 @@ using sluice::IoError;
 
 using PauseGate = detail::ProgressSource::PauseGate;
 
-// Borrows the context notification fd for readiness probes and retires the
-// external interest on scope exit.
+// Borrows the context notification fd once for readiness probes and retires
+// the external interest on scope exit. The fd is captured here, before any
+// drive starts, because a borrow during an active drive is refused.
 struct HostInterest {
     AsyncIoContext& ctx;
-    explicit HostInterest(AsyncIoContext& c) noexcept : ctx(c) {
-        (void)ctx.progress_notification_fd();
-    }
+    int fd;
+    explicit HostInterest(AsyncIoContext& c) noexcept
+        : ctx(c), fd(c.progress_notification_fd()) {}
     ~HostInterest() { ctx.detach_progress_host(); }
 };
 
@@ -48,14 +49,13 @@ bool notification_fd_readable(int fd) {
     return rc > 0 && (p.revents & POLLIN) != 0;
 }
 
-bool wait_notification_readable(AsyncIoContext& ctx) {
-    const int fd = ctx.progress_notification_fd();
+bool wait_notification_readable(const HostInterest& interest) {
     for (int i = 0; i < 20000; ++i) {
-        if (notification_fd_readable(fd))
+        if (notification_fd_readable(interest.fd))
             return true;
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
-    return notification_fd_readable(fd);
+    return notification_fd_readable(interest.fd);
 }
 
 void wait_gate_paused(PauseGate& gate) {
@@ -190,7 +190,7 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
     read.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
@@ -226,10 +226,10 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
     const std::uint64_t one = 1;
-    const ssize_t n = ::write(ctx.progress_notification_fd(), &one, sizeof(one));
+    const ssize_t n = ::write(interest.fd, &one, sizeof(one));
     if (n != static_cast<ssize_t>(sizeof(one)))
         return false;
-    if (!notification_fd_readable(ctx.progress_notification_fd()))
+    if (!notification_fd_readable(interest.fd))
         return false;
     resume_gate(gate);
     if (!wait_counter_reaches(prepark, 2))
@@ -269,7 +269,7 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
     read.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
@@ -339,7 +339,7 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
 
     for (auto& r : reads)
         r.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     resume_gate(gate);
@@ -376,7 +376,7 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
         return false;
 
     const std::uint64_t one = 1;
-    const ssize_t n = ::write(ctx.progress_notification_fd(), &one, sizeof(one));
+    const ssize_t n = ::write(interest.fd, &one, sizeof(one));
     if (n != static_cast<ssize_t>(sizeof(one)))
         return false;
     if (!wait_counter_reaches(prepark, 2))
@@ -418,7 +418,7 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
 
     ctx.interrupt_progress_waiters();
     read.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
@@ -461,7 +461,7 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
 
     ctx.interrupt_progress_waiters();
     read.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
@@ -504,7 +504,7 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
 
     ctx.saturate_progress_notification_for_test();
     read.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
@@ -542,7 +542,7 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
     resume_gate(gate);
     if (!wait_counter_reaches(prepark, 2))
         return false;
-    const bool drained_before_release = !notification_fd_readable(ctx.progress_notification_fd());
+    const bool drained_before_release = !notification_fd_readable(interest.fd);
 
     read.release_bytes(1);
     owner.join();
@@ -614,7 +614,7 @@ bool k13_cq_overflow_completions_are_not_stranded() {
 
     for (auto& r : reads)
         r.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     resume_gate(gate);
@@ -677,7 +677,7 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
     read.release_bytes(1);
-    if (!wait_notification_readable(ctx))
+    if (!wait_notification_readable(interest))
         return false;
 
     // A peer drive while the owner holds the domain is rejected, not

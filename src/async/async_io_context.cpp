@@ -919,9 +919,15 @@ bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
 
 int AsyncIoContext::progress_notification_fd() noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
+#if defined(SLUICE_E2_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN)
     if (progress_ == nullptr) {
         return -1;
     }
+#else
+    if (progress_ == nullptr || drive_active_ || execution_closed_) {
+        return -1;
+    }
+#endif
     const int fd = progress_->notification_fd();
     if (fd >= 0) {
         notification_interest_live_ = true;
@@ -1045,16 +1051,19 @@ void AsyncIoContext::request_stop(ShutdownPolicy policy) noexcept {
 Result<ShutdownOutcome> AsyncIoContext::shutdown(ShutdownPolicy policy) {
     {
         std::lock_guard<std::mutex> lk(access_mtx_);
-        if (!backend_ || notification_interest_live_) {
+        if (!backend_ || notification_interest_live_ || drive_active_) {
+            return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
+        }
+        if (owner_thread_ == std::thread::id{}) {
+            owner_thread_ = std::this_thread::get_id();
+        } else if (owner_thread_ != std::this_thread::get_id()) {
             return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
         }
         upgrade_stop_policy_(policy);
         if (execution_closed_) {
             return settlement_outcome_;
         }
-    }
-    if (!drive_entry_admitted_()) {
-        return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
+        drive_active_ = true;
     }
     DriveGuard guard(this);
     return drive_settlement_();

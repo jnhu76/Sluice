@@ -371,7 +371,10 @@ class AsyncIoContext {
     // the fd; acknowledgement runs through acknowledge_progress_notification();
     // and the interest must be retired through detach_progress_host() before
     // the notification source is torn down. A retired borrow may be followed
-    // by a new one.
+    // by a new one. Returns -1 without starting an interest while the owner
+    // is inside a drive callback or once execution has closed; a host that
+    // needs the fd registers it before the owner starts driving or after a
+    // drive callback returns.
     int progress_notification_fd() noexcept;
 
     void acknowledge_progress_notification() noexcept;
