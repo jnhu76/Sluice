@@ -74,10 +74,14 @@ void finish_asan_switch(Switch* resumed_by, void* fake_stack) noexcept {
 #endif
 }
 
+extern "C" {
 #if SLUICE_FIBER_ASAN_ENABLED
 __attribute__((no_sanitize("address")))
 #endif
-extern "C" void fiber_entry_trampoline_bridge(Switch* resumed_by, void* user_data, Entry entry) {
+void fiber_entry_trampoline_bridge(Switch* resumed_by, void* user_data, Entry entry);
+}
+
+void fiber_entry_trampoline_bridge(Switch* resumed_by, void* user_data, Entry entry) {
 #if SLUICE_FIBER_ASAN_ENABLED
     finish_asan_switch(resumed_by, resumed_by->new_->asan_fake_stack);
 #endif
@@ -99,7 +103,11 @@ asm(".text\n"
 namespace {
 
 #if SLUICE_FIBER_ASAN_ENABLED || SLUICE_FIBER_TSAN_ENABLED
+#if defined(__clang__)
 __attribute__((disable_sanitizer_instrumentation))
+#else
+__attribute__((no_sanitize("address", "thread")))
+#endif
 #endif
 Switch* native_context_switch(Switch* s) noexcept {
     Switch* resumed_by;
@@ -125,7 +133,11 @@ Switch* native_context_switch(Switch* s) noexcept {
 }
 
 #if SLUICE_FIBER_TSAN_ENABLED
+#if defined(__clang__)
 __attribute__((disable_sanitizer_instrumentation))
+#else
+__attribute__((no_sanitize("thread")))
+#endif
 #endif
 void prepare_tsan_switch(Switch* s) noexcept {
 #if SLUICE_FIBER_TSAN_ENABLED
@@ -156,7 +168,11 @@ Switch* context_switch(Switch* s) noexcept {
 }
 
 #if SLUICE_FIBER_ASAN_ENABLED || SLUICE_FIBER_TSAN_ENABLED
+#if defined(__clang__)
 __attribute__((disable_sanitizer_instrumentation))
+#else
+__attribute__((no_sanitize("address", "thread")))
+#endif
 #endif
 void context_switch_final(Context& old, const Context& new_) noexcept {
 

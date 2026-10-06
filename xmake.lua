@@ -65,3 +65,24 @@ includes("xmake/helpers.lua")
 includes("xmake/libraries.lua")
 includes("xmake/apps.lua")
 includes("xmake/tests.lua")
+
+option("sanitizers")
+    set_default("")
+    set_description("Enable sanitizer sets: asan, asan+ubsan or tsan (comma-separated keywords).")
+option_end()
+
+if has_config("sanitizers") then
+    local sets = get_config("sanitizers")
+    if sets:find("asan") then
+        add_cxxflags("-fsanitize=address", "-fno-omit-frame-pointer")
+        add_ldflags("-fsanitize=address")
+    end
+    if sets:find("ubsan") then
+        add_cxxflags("-fsanitize=undefined", "-fno-sanitize-recover=all")
+        add_ldflags("-fsanitize=undefined")
+    end
+    if sets:find("tsan") then
+        add_cxxflags("-fsanitize=thread", "-fno-omit-frame-pointer")
+        add_ldflags("-fsanitize=thread")
+    end
+end

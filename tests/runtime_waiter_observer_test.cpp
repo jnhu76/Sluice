@@ -196,9 +196,11 @@ bool completion_wake_rides_the_observer_adapter(Tracker& t) {
 
     rt->request_stop();
     t.check(rt->drain().has_value(), "the runtime drains");
-    t.check(rt->join().has_value(), "the runtime joins");
+    // The scheduler is destroyed by join; the last valid observation point
+    // for the registry is after the drain, before the join frees it.
     t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
             "no wait record survives the runtime");
+    t.check(rt->join().has_value(), "the runtime joins");
     return t.failures == 0;
 }
 
