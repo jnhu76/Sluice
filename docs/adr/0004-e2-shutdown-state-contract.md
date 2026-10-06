@@ -48,10 +48,12 @@ bool execution_closed() const noexcept;             // linearization record view
 - `request_stop(policy)` = `close_admission()` + policy upgrade + owner
   control signal (PROG-04).
 - `shutdown(policy)` is the canonical driving shutdown: blocking, no finite
-  timeout guarantee, idempotent on an already execution-closed context
-  (returns the recorded outcome). It fails with `invalid_state` when called
-  by a non-owner/inside a drive, on an inert context, or while an external
-  notification interest is live (the host must detach first; PROG-03).
+  timeout guarantee. It fails with `invalid_state` when called on an inert
+  context or while an external notification interest is live (the host must
+  detach first; PROG-03), and when the drive domain is held or owned by
+  another thread. On an already execution-closed context it is an
+  idempotent outcome query for any caller and returns the recorded
+  outcome; the recorded outcome is written only by a settling owner.
 
 ## 2. State table (derived from SHUT-01/SHUT-02)
 
@@ -87,8 +89,9 @@ internal_retirement_complete ≡ core: outstanding == 0
                                (ThreadPool: dispatch empty ∧ no active worker
                                 ∧ no owed publication ∧ no owed delivery event;
                                 io_uring: dispatch empty ∧ no owed publication
-                                ∧ live_cookies == 0 ∧ live_control_sqes == 0
-                                ∧ transport ledger empty)
+                                ∧ no owed delivery event ∧ live_cookies == 0
+                                ∧ live_control_sqes == 0 ∧ transport ledger
+                                empty)
 
 execution_closed (recorded transition) ≡ internal_retirement_complete held
     ∧ backend execution resources stopped/joined/closed
@@ -111,7 +114,7 @@ has `outstanding()==0` with a live public binding; an internal pin state has
 | `AsyncIoContext::execution_closed_` + recorded outcome | linearization record of the SHUT-02 step-7 transition; after the transition the source facts are dismantled (ring exited, notification retired), so it is not recomputable | the owner thread inside `shutdown()` | SHUT-03 idempotence; refuse new external notification interest; ExecutionClosed≠Destroyable | V20, M1, M4, idempotence test |
 | `CoreOccupancy` extension (`execution_refs`, `control_refs`, `publication_inflight`, observer episode count) | derived aggregate view | core mutex | the settlement predicate composes authoritative per-slot facts; the aggregate already exists for `accepted_live/outstanding/public_bindings` | M1, M7, V26 |
 | `RequestCore::admission-closed observer rejection` | protocol gate on the existing admission authority | core mutex | SHUT-02 step 3 | observer shutdown test (E2-F) |
-| backend seam `stop_execution()` / `retire_execution_resources()` / `internal_work_retired()` / `backend_health_failed()` | mechanism interface (BACKEND-01); per-backend physical facts, no shared representation | backend's own synchronization | the context composes the unified semantic view without forcing a shared backend state layout (root §17 unified predicate, distinct mechanisms) | backend retirement tests; M7, M10 |
+| backend seam `stop_execution()` / `retire_execution_resources()` / `internal_work_retired()` | mechanism interface (BACKEND-01); per-backend physical facts, no shared representation | backend's own synchronization | the context composes the unified semantic view without forcing a shared backend state layout (root §17 unified predicate, distinct mechanisms) | backend retirement tests; M7, M10 |
 | `ProgressSource` notification retirement (fd close at step 7, wake no-op afterwards) | physical obligation | `shutdown()` step 7, single-threaded with the owner | SHUT-02 step 7 "close ProgressSource"; prevents post-close eventfd writes | V23 |
 
 No `destroyable_` flag is added: Destroyable is derived. No context-level

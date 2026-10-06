@@ -434,11 +434,6 @@ void UringAsyncBackend::retire_execution_resources() noexcept {
     have_ring_ = false;
 }
 
-bool UringAsyncBackend::backend_health_failed() const noexcept {
-    std::lock_guard<std::mutex> lk(dispatch_mtx_);
-    return fatal_error_.has_value();
-}
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void UringAsyncBackend::set_injected_statx_probe_failure(bool value) noexcept {
     g_injected_statx_probe_failure.store(value, std::memory_order_release);

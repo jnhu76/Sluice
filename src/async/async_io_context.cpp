@@ -97,12 +97,13 @@ AsyncIoContext::AsyncIoContext(AsyncIoContext&& other) noexcept {
         std::lock_guard<std::mutex> lk(other.access_mtx_);
         owner_thread_ = other.owner_thread_;
         notification_interest_live_ = other.notification_interest_live_;
-        stop_policy_ = other.stop_policy_;
+        stop_policy_.store(other.stop_policy_.load(std::memory_order_relaxed),
+                           std::memory_order_relaxed);
         execution_closed_ = other.execution_closed_;
         settlement_outcome_ = other.settlement_outcome_;
         other.owner_thread_ = std::thread::id{};
         other.notification_interest_live_ = false;
-        other.stop_policy_ = ShutdownPolicy::drain;
+        other.stop_policy_.store(ShutdownPolicy::drain, std::memory_order_relaxed);
         other.execution_closed_ = false;
         other.settlement_outcome_ = ShutdownOutcome::health_failed;
         other.stats_ = nullptr;
@@ -134,15 +135,19 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
         progress_ = std::move(other.progress_);
         stats_ = other.stats_;
         {
-            std::lock_guard<std::mutex> lk(access_mtx_);
+            // The source's mutex guards its scalar state while the target's
+            // drive/fail-fast domain was already released above; the target's
+            // fields here belong to the replaced object.
+            std::lock_guard<std::mutex> lk(other.access_mtx_);
             owner_thread_ = other.owner_thread_;
             notification_interest_live_ = other.notification_interest_live_;
-            stop_policy_ = other.stop_policy_;
+            stop_policy_.store(other.stop_policy_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
             execution_closed_ = other.execution_closed_;
             settlement_outcome_ = other.settlement_outcome_;
             other.owner_thread_ = std::thread::id{};
             other.notification_interest_live_ = false;
-            other.stop_policy_ = ShutdownPolicy::drain;
+            other.stop_policy_.store(ShutdownPolicy::drain, std::memory_order_relaxed);
             other.execution_closed_ = false;
             other.settlement_outcome_ = ShutdownOutcome::health_failed;
             other.stats_ = nullptr;
@@ -576,7 +581,7 @@ void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
 
 void AsyncIoContext::upgrade_stop_policy_(ShutdownPolicy policy) noexcept {
     if (policy == ShutdownPolicy::cancel_then_drain) {
-        stop_policy_ = ShutdownPolicy::cancel_then_drain;
+        stop_policy_.store(ShutdownPolicy::cancel_then_drain, std::memory_order_relaxed);
     }
 }
 
@@ -597,7 +602,8 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
 
     (void)core_->close_admission();
 
-    if (stop_policy_ == ShutdownPolicy::cancel_then_drain) {
+    const ShutdownPolicy policy = stop_policy_.load(std::memory_order_relaxed);
+    if (policy == ShutdownPolicy::cancel_then_drain) {
         std::vector<detail::RequestKey> outstanding;
         core_->collect_outstanding(outstanding);
         for (const detail::RequestKey key : outstanding) {
@@ -632,8 +638,11 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
             return ShutdownOutcome::health_failed;
         }
 
-        if (pass.health_failed && pass.completed == 0 && !pass.immediate_work_remains &&
-            !pass.dispatch_retry_remains) {
+        // A health-failed pass with no completions and no dispatch retry is
+        // unresolved even when the backend still advertises immediate work:
+        // after the pass drained publications, the residue is the unflushable
+        // overflow component, which no number of further passes can clear.
+        if (pass.health_failed && pass.completed == 0 && !pass.dispatch_retry_remains) {
             return ShutdownOutcome::health_unresolved;
         }
 
@@ -683,6 +692,13 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     }
     if (!backend_->signals_physical_progress()) {
         return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::not_supported});
+    }
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (execution_closed_) {
+            return make_unexpected<ProgressWaitOutcome>(
+                IoError{IoError::Code::invalid_state});
+        }
     }
 
     {
@@ -883,8 +899,11 @@ int AsyncIoContext::progress_notification_fd() noexcept {
     if (progress_ == nullptr) {
         return -1;
     }
-    notification_interest_live_ = true;
-    return progress_->notification_fd();
+    const int fd = progress_->notification_fd();
+    if (fd >= 0) {
+        notification_interest_live_ = true;
+    }
+    return fd;
 }
 
 void AsyncIoContext::acknowledge_progress_notification() noexcept {

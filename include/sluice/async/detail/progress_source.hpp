@@ -391,6 +391,9 @@ class ProgressSource {
 #endif
 
     void drain_notification_nolock_() noexcept {
+        if (notification_fd_ < 0) {
+            return;
+        }
         std::uint64_t value = 0;
         for (;;) {
             errno = 0;

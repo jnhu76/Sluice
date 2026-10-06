@@ -120,8 +120,6 @@ class AsyncBackend {
     virtual void stop_execution() noexcept {}
     virtual void retire_execution_resources() noexcept {}
 
-    virtual bool backend_health_failed() const noexcept { return false; }
-
     // Whether the backend produces physical progress signals, so a driver can
     // park productively on the context progress source. Backends that answer
     // false are not v1 request backends: the context refuses to wait on them,
@@ -239,9 +237,6 @@ enum class ShutdownPolicy : std::uint8_t {
     cancel_then_drain,
 };
 
-// completed retires execution and notification references, not public
-// results; a health outcome leaves the context unsettled, with borrows and
-// resources retained.
 enum class ShutdownOutcome : std::uint8_t {
     completed,
     health_unresolved,
@@ -393,19 +388,13 @@ class AsyncIoContext {
     void cancel(Completion<std::size_t>& c);
     void cancel(Completion<void>& c);
 
-    // shutdown is owner-only and blocking; it returns invalid_state when
-    // called from a non-owner, inside a drive, on an inert context, or while
-    // an external notification interest is live (the host detaches first).
-    // All three calls are idempotent; request_stop may upgrade a recorded
-    // drain to cancellation but never reopens admission.
+    // shutdown is blocking; see ADR-0004 for the caller contract.
     void close_admission() noexcept;
     void request_stop(ShutdownPolicy policy) noexcept;
     Result<ShutdownOutcome> shutdown(ShutdownPolicy policy);
 
     bool admission_open() const noexcept;
 
-    // Stays false when shutdown reported a health outcome: the context then
-    // keeps its borrows and execution resources.
     bool execution_closed() const noexcept;
 
     void set_ready_sink(detail::SynchronousReadySink* sink);
@@ -520,9 +509,10 @@ class AsyncIoContext {
     std::thread::id owner_thread_{};
     bool notification_interest_live_ = false;
 
-    // Strongest policy ever requested; monotone, never reopens. Written
-    // under access_mtx_.
-    ShutdownPolicy stop_policy_ = ShutdownPolicy::drain;
+    // Strongest policy ever requested; monotone, never reopens. Upgrade is
+    // recorded under access_mtx_; the settling driver may read it without
+    // that lock (THREAD-01 lets request_stop race an in-flight drive).
+    std::atomic<ShutdownPolicy> stop_policy_{ShutdownPolicy::drain};
 
     // Written once by the settling owner after the underlying facts held and
     // the resources they describe were retired, so it is not recomputable.
