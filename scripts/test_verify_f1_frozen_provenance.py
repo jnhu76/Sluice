@@ -113,5 +113,29 @@ class FrozenBaselineProvenanceTests(unittest.TestCase):
             verifier.resolve_production_baseline(self.repo, {})
 
 
+    def test_pinned_sha_is_not_a_volatile_key(self):
+        # The forbidden cheat-fix — hiding the identity key behind the volatile
+        # set — would pass every functional test above, so pin the invariant.
+        self.assertNotIn("PRODUCTION_BASELINE_SHA", verifier.VOLATILE_MANIFEST_KEYS)
+
+    def test_freeze_mode_discovers_merge_base_baseline(self):
+        baseline = self.baseline_tree()
+        local_head = self.commit("docs/readme.md", "v2\n", "docs ahead of baseline")
+        origin = Path(self._tmp.name) / "origin.git"
+        self.git("clone", "-q", "--bare", str(self.repo), str(origin))
+        self.commit("docs/notes.md", "only on origin\n", "origin moves on")
+        self.git("push", "-q", str(origin), "master")
+        self.git("reset", "-q", "--hard", local_head)
+        self.git("remote", "add", "origin", str(origin))
+        self.git("fetch", "-q", "origin")
+        self.assertEqual(verifier.resolve_production_baseline(self.repo, None),
+                         self.git("merge-base", "HEAD", "origin/master"))
+
+    def test_non_dict_frozen_manifest_is_rejected_cleanly(self):
+        self.baseline_tree()
+        with self.assertRaises(SystemExit):
+            verifier.resolve_production_baseline(self.repo, ["not", "a", "dict"])
+
+
 if __name__ == "__main__":
     unittest.main()

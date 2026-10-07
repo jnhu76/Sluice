@@ -29,7 +29,10 @@ PRODUCTION_BASELINE_SHA (it must exist as a commit and be an ancestor of
 HEAD), so a reproduction is invariant to later docs-only advancement of
 master/origin; only src/include drift from the pinned baseline fails the
 provenance gate. A freeze run (no --check-frozen) discovers the baseline as
-the merge-base with origin/master per the F1 protocol.
+the merge-base with origin/master per the F1 protocol. The pinned baseline
+must be present in the local history: a shallow checkout (fetch-depth 1)
+cannot validate ancestry, so a CI reproduction run needs fetch-depth: 0 or an
+explicit fetch of the pinned SHA.
 """
 
 import argparse
@@ -104,6 +107,8 @@ def resolve_production_baseline(repo, frozen_data=None):
     """
     if frozen_data is None:
         return git_out("merge-base", "HEAD", "origin/master", cwd=repo)
+    if not isinstance(frozen_data, dict):
+        raise SystemExit("--check-frozen: frozen manifest is not a JSON object")
     pinned = str(frozen_data.get("PRODUCTION_BASELINE_SHA") or "")
     if not pinned:
         raise SystemExit("--check-frozen: frozen manifest has no PRODUCTION_BASELINE_SHA")
