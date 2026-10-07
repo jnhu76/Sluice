@@ -1,8 +1,9 @@
 # M0 Consumer Migration Census (live consumer census)
 
 Issue #402 Phase M / M0 — 消费者迁移前提的普查工件。本文件是语义解读；机器可读全量数据在
-[`docs/review/m-consumer-edges.json`](m-consumer-edges.json)（EDGES 29 个边键、215 条 EDGES
-消费者记录、APPS 四 app 深审 47 条消费者记录、BLOCKERS、UNKNOWN_EXTERNAL_USE）。
+[`docs/review/m-consumer-edges.json`](m-consumer-edges.json)（EDGES 29 个边键、216 条 EDGES
+消费者记录（含 R2 审查轮补录 c-new02-901，见 §7.2）、APPS 四 app 深审 47 条消费者记录、
+BLOCKERS、UNKNOWN_EXTERNAL_USE U-01..U-08）。
 
 - **BASE_SHA**: `c782099f56c6afd62daad2929944673059aef573`（master，`git rev-parse HEAD` 实测；= F1 adopted baseline）
 - **GENERATED_AT**: `2026-10-07T14:22:14Z`（`date -u +%FT%TZ` 实测）
@@ -31,6 +32,9 @@ Issue #402 Phase M / M0 — 消费者迁移前提的普查工件。本文件是�
   M-R/CALL/UNMIGRATED，行号集合与 family 判定不同）。两条记录都保留，family 归属留待
   M1 裁定；其余同路径多记录是输入数据的 per-symbol 记录设计（如 X-03 的
   stackful_io_host.hpp ×4、X-11 的 ObserverCore.tla ×3），非重复。
+- R2 审查轮（三视角评审后回写，2026-10-07）为修正两条已证伪/遗漏的断言，追加了第七路
+  输入 `review-r2`（1 条消费者记录 c-new02-901 + U-05 文本翻案 + U-08 补录 + B-01
+  gate 范围细化），修订命令与输出见 §7.2 与 §10。
 
 ## 2. X-01..X-18 逐边结论
 
@@ -76,18 +80,19 @@ Issue #402 Phase M / M0 — 消费者迁移前提的普查工件。本文件是�
 
 ## 4. consumer 统计（family × edge_kind）
 
-EDGES 消费者记录 215 条（live-rescan 198 + f0-hunter 17）；APPS 深审消费者记录 47 条。
+EDGES 消费者记录 216 条（live-rescan 198 + f0-hunter 17 + review-r2 1）；
+APPS 深审消费者记录 47 条。
 
-EDGES（215）：
+EDGES（216）：
 
 | family | BUILD_CONFIG | CALL | DIRECT_INCLUDE | DOC_CLAIM | FORMAL_CORRESPONDENCE | HISTORICAL_REFERENCE | LINK | MACRO_LAYOUT | NAME_ONLY | OWNERSHIP | TEST_ORACLE | TRANSITIVE_INCLUDE | TYPE | TYPE_LAYOUT | total |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| M-F | 1 | 9 | 1 | 1 | . | 1 | . | . | . | . | 15 | . | 6 | . | **34** |
+| M-F | 1 | 10 | 1 | 1 | . | 1 | . | . | . | . | 15 | . | 6 | . | **35** |
 | M-H | . | 18 | 3 | 8 | 5 | 1 | . | 3 | . | . | 16 | . | 10 | 2 | **66** |
 | M-R | . | 20 | 9 | 3 | 3 | . | . | . | 1 | 1 | 19 | 1 | 10 | 8 | **75** |
 | aux | 5 | 2 | 7 | 4 | . | . | . | 3 | 3 | . | 9 | 5 | . | . | **38** |
 | none | . | . | . | 1 | . | . | 1 | . | . | . | . | . | . | . | **2** |
-| **total** | **6** | **49** | **20** | **17** | **8** | **2** | **1** | **6** | **4** | **1** | **59** | **6** | **26** | **10** | **215** |
+| **total** | **6** | **50** | **20** | **17** | **8** | **2** | **1** | **6** | **4** | **1** | **59** | **6** | **26** | **10** | **216** |
 
 APPS（47）：
 
@@ -101,10 +106,10 @@ APPS（47）：
 
 分布（EDGES / APPS）：
 
-- migration_state：UNMIGRATED 160/30；COMPAT_TEST_RETAINED 37/–；NOT_A_CONSUMER 9/17；POLICY_ISOLATED 9/–
-- owner：F3 97/12；M 51/12；F2 48/9；F4 13/6；none 6/8
-- runtime_relevance：runtime 98/31；test-only 87/4；docs-only 19/8；build-only 11/4
-- profile：both 198/47；liburing 10/–；noliburing 7/–
+- migration_state：UNMIGRATED 161/30；COMPAT_TEST_RETAINED 37/–；NOT_A_CONSUMER 9/17；POLICY_ISOLATED 9/–
+- owner：F3 97/12；M 51/12；F2 48/9；F4 14/6；none 6/8
+- runtime_relevance：runtime 99/31；test-only 87/4；docs-only 19/8；build-only 11/4
+- profile：both 199/47；liburing 10/–；noliburing 7/–
 
 读法提示（非处置）：M-R 最大（75）反映 Completion/RequestArena 携带面横跨
 类型/调用/测试 oracle；TEST_ORACLE 合计 59+4 条——语义 oracle 是迁移证据主体而非可改写
@@ -114,7 +119,7 @@ transport；`none` family 多为后端选择/构建事实/已删除引用的历�
 
 | id | 阻塞 | 依据（consumer/边记录） | owner |
 |---|---|---|---|
-| B-01 | F1 冻结包基线：任何公共头增/删/改名需同 slice 重冻结（glob 收缩、79 头门保持为真、双 manifest + 归档基线 sha256、`verify_f1_package.py --check-frozen` 复现） | c-new03-901/902/903、c-x10-901、c-new01-902/903、c-x12-901..903 | 各收缩 slice（F2/F3/F4）；harness 归 M |
+| B-01 | F1 冻结包基线：任何公共头增/删/改名需同 slice 重冻结（glob 收缩、79 头门保持为真、双 manifest + 归档基线 sha256、`verify_f1_package.py --check-frozen` 复现）。R2 细化：production_diff 范围为 `git diff {baseline}..HEAD -- src include`（verify_f1_package.py:401-402），F1_B_PROVENANCE_VERIFIED 要求其为空（:462-463）——已安装头的内容编辑（含私有段）或任何生产 src 变更同样使 --check-frozen 复现失败，触已安装头内容的 slice 须同 slice 重冻结，即使无增/删/改名 | c-new03-901/902/903、c-x10-901、c-new01-902/903、c-x12-901..903 | 各收缩 slice（F2/F3/F4）；harness 归 M |
 | B-02 | `SLUICE_COPY_INTERNAL_TESTING` 未接线 → DirFsyncScript EINTR 注入 oracle 不可达，X-13 迁移缺对照证据 | NEW-02c、c-new02-001、c-x13-001 required_evidence | M（先接线）再 F4 |
 | B-03 | 本机缺系统 liburing：liburing=y app 链接失败（cannot find -luring），liburing profile app 构建/链接未端到端验证 | c-copy-013、c-hash-011、c-grep-011、c-tail-012 | F5 证据义务 |
 | B-04 | 宿主替换未决：StackfulIoHost 为 ADR-0003 PROPOSED / D2 IMPLEMENTED_UNVERIFIED，未采纳；multi-worker→single-owner 静默转换被 M 禁令禁止 → 四 app 迁移无目标拼写前不可开工 | c-x08-001..008 / c-x09-001..004 replacement 字段；c-copy-001/002、c-hash-001/002、c-grep-001/002、c-tail-001/002 | F3 决策（走 root/ADR 流程） |
@@ -134,9 +139,10 @@ M 铁律：安装头收缩 = 收缩 F1 包面；下列 surface 的处置必须�
 | U-02 | include/sluice/memory_io_context.hpp | c-new02-003（零用户实测；f1-package-manifest-liburing.json:95,:99 约束） |
 | U-03 | include/sluice/io_context.hpp（BlockingIoContext） | X-07 live evidence (3)(6)（零 consumer）；c-x07-001 |
 | U-04 | include/sluice/file.hpp（FileReader/FileWriter legacy 面） | X-06/X-07 live 证据（in-repo 消费者已全列）；c-x07-001 required_evidence；c-new03-901 |
-| U-05 | include/sluice/wal.hpp、copy.hpp、observed.hpp | c-new02-001/002、c-x06-003（零用户实测）；c-new03-901（经 sluice_core glob 安装）；B-07 门控 |
+| U-05 | include/sluice/wal.hpp、copy.hpp、observed.hpp | R2 修订（§7.2）：copy 半句翻案——copy_all 非仅自身 TU：src/reader.cpp:3 include copy.hpp、Reader::stream_to 两重载即 copy_all 调用（reader.cpp:48-56，公开 API reader.hpp:23-28，reader.hpp 在冻结 manifest HEADERS 内）= 生产消费者 c-new02-901；tests 0/apps 0 仍成立。wal/observed 零下游经 R2 复核为真（grep -rln sluice/wal.hpp|sluice/observed.hpp → 仅 wal.cpp/observed.cpp）。NEW-02b 静默搁浅对 copy.hpp 在 in-repo 已实现：退役 copy.hpp 须同批切断 reader.hpp/reader.cpp→copy.hpp 反向边（公开 API + B-01）。安装经 sluice_core glob（c-new03-901）；B-07 门控 |
 | U-06 | include/sluice/detail/posix_retry.hpp | X-13 live 证据（两份 manifest :88 均安装）；c-x13-002；c-new03-901 |
 | U-07 | 待收缩的 async 旧家族头（completion.hpp、detail/request_arena.hpp、fiber.hpp、fiber_ctx.hpp、scheduler.hpp、batch.hpp、…） | NEW-03 hunter 证据（79 头冻结集全含）；c-new03-902/903——外部包消费者只受 B-01 重冻结契约约束 |
+| U-08 | Scheduler/Fiber 耦合的 select/event/queue/future/wait_policy 安装面：include/sluice/async/{select,event,future,wait_policy,wait_queue,timer_registration,select_fwd,lock_guard,mutex}.hpp + include/sluice/async/detail/{queue_item,queue_port,select_registration}.hpp（R2 补录，见 §7.2） | 12 头全在两份 F1 manifest 79 头集内，M0 六路扫描零消费者路径记录（生成时对本文件+JSON 精确匹配 0 命中——M 铁律：零 grep≠无用）。live include 图（R2 实读）：select.hpp:10 include scheduler.hpp、TimerSelectCase(Scheduler&,:92、friend :58/:85/:96；event.hpp:16 `Event(Scheduler&,…)`；wait_queue.hpp:32、timer_registration.hpp:70 friend；select_fwd.hpp:23 `select(Scheduler&…)`；scheduler.hpp:3-17 安装 detail/{queue_port,select_registration}+select_fwd+lock_guard+mutex+timer_registration+wait_queue（另 fiber/fiber_ctx）；group.hpp:5 安装 future.hpp（X-17/M-R 记了 Group 本体未记此边）；evented_wait_policy.hpp:4 安装 wait_policy.hpp（NEW-01a 记了 evented 本体未记随之安装的 WaitPolicy/Future 面）。in-repo 消费者=scheduler 机制 TU 自身（src/async/scheduler*.cpp、select*.cpp、queue_port.cpp）+ 安装头闭包（async_mutex/semaphore/condition/async_rwlock 骑 wait_queue.hpp）；外部使用不可排除。F0 adopted census 已定角色：H-14 Future『only consumer is Group』、H-15 WaitPolicy、H-17/H-18 dormant-primitives family、H-19 wait_queue INTERNAL（f0-role-profile-census.md:206-211）+ :98-99 mutex_test_seam 生产传递闭包。处置=U-01 同类 F5 包面/外部使用政策决定；M-H host 裁决（B-04）的耦合安装面输入须按 ~17 头计 |
 
 ## 7. FALSE_OLD_ASSUMPTION（F0/旧记录被推翻的断言）
 
@@ -170,6 +176,24 @@ M 铁律：安装头收缩 = 收缩 F1 包面；下列 surface 的处置必须�
 - wal 下游计数漂移：census L-06 'tst 1' → 实测 0（c-new02-002 内记录）。
 - copy/hash README "usage error (exit 1)" 对 --buffer-size 不成立（实测 exit 2；仅 tail 对
   buffer-size 封顶成立，cli_parse.cpp:99-103）。
+
+### 7.2 R2 审查轮修订（三视角评审后回写，2026-10-07）
+
+本节记录对两条 M0 断言的翻案/补录。修订仅落在计划工件（本文件 + m-consumer-edges.json +
+#458），不改任何生产代码、不改写任何 f1-*.json 冻结基线；JSON 编辑脚本与输出存
+/tmp/m-r2-fixes/（apply_r2.py + stats-after.txt），§4 统计由该脚本重算打印。
+
+1. **U-05『copy_all: own TU / zero downstream users』半句翻案**：`grep -rn copy_all src
+   include tests apps` → src/copy.cpp（自身重载族）+ src/reader.cpp:51,:55 两个生产调用点
+   （reader.cpp:3 `#include <sluice/copy.hpp>`；Reader::stream_to 两重载声明于公开头
+   reader.hpp:23-28，reader.hpp 在 F1 冻结 manifest HEADERS 内）。『tests 0/apps 0』经复核
+   仍成立；wal/observed 零下游复核为真。补录消费者记录 c-new02-901（NEW-02b/M-F/CALL/
+   UNMIGRATED/owner F4/stream review-r2）；NEW-02b 的静默搁浅对 copy.hpp 在 in-repo 已实现。
+2. **Scheduler 耦合安装面补录（U-08）**：12 个已安装头（9 公共 + 3 已安装 detail）在 M0
+   生成时对 census MD+JSON 精确匹配 0 命中，系扫描流未产出该面消费者路径，非该面不存在。
+   M-H exposureCounts 的『公共头 5』由此系统性少算 Scheduler 世界的耦合安装面（实测 ~17 头，
+   计入 U-08 的 9 公共 + 3 detail + 原记录 5）。家族裁定（M-H B-04、U-01 类包面政策）输入
+   以 U-08 为准。
 
 ## 8. 数据歧义与统计口径（不裁决，留 M1/评审）
 
@@ -218,6 +242,24 @@ date -u +%FT%TZ               # 生成时间戳（JSON GENERATED_AT）
 python3 /tmp/m0-census/build_census.py   # 由 /tmp/m0-census/{edges-live-1..4,edges-hunter,apps-1,apps-2,hunter}.json
                                          # 机械生成 docs/review/m-consumer-edges.json 并输出 §4 统计
 python3 -m json.tool docs/review/m-consumer-edges.json > /dev/null   # JSON 合法性
+```
+
+R2 审查轮修订（2026-10-07）复现：
+
+```bash
+# U-05 翻案 + U-08 补录 + B-01 细化（脚本同时重算 §4 统计）
+python3 /tmp/m-r2-fixes/apply_r2.py                      # 输出存 /tmp/m-r2-fixes/stats-after.txt
+grep -rn copy_all src include tests apps                 # → src/copy.cpp 重载族 + src/reader.cpp:51,:55
+grep -rln "sluice/wal.hpp\|sluice/observed.hpp" src include tests apps   # → 仅 wal.cpp/observed.cpp
+python3 - <<'EOF'   # 12 头 vs 冻结 manifest 与两份 census 工件的精确匹配（生成时 0 命中）
+import json
+hdrs = json.load(open('docs/review/f1-package-manifest-noliburing.json'))['HEADERS']
+targets = ["async/select.hpp","async/event.hpp","async/future.hpp","async/wait_policy.hpp",
+"async/wait_queue.hpp","async/timer_registration.hpp","async/select_fwd.hpp","async/lock_guard.hpp",
+"async/mutex.hpp","async/detail/queue_item.hpp","async/detail/queue_port.hpp",
+"async/detail/select_registration.hpp"]
+print(all(any(h.endswith(t) for h in hdrs) for t in targets))   # True = 全部在 79 头集内
+EOF
 ```
 
 扫描输入快照（47 份边报告 + 4 份 app 深审 + 4 条 hunter 假设）保存在 /tmp/m0-census/，

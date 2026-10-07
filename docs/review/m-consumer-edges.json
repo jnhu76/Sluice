@@ -3761,7 +3761,7 @@
           "runtime_relevance": "runtime",
           "replacement": "",
           "migration_state": "UNMIGRATED",
-          "required_evidence": "Zero users verified live; before L-01 removal either a canonical Reader/Writer adapter over File exists or copy_all is retired through its own consumer/migration audit (MIG-02)",
+          "required_evidence": "R2 correction: 'zero users' is false for copy.hpp as stated - production consumer src/reader.cpp recorded as c-new02-901 (Reader::stream_to delegates to copy_all); zero test/app users verified live. Before L-01 removal either a canonical Reader/Writer adapter over File exists or copy_all is retired through its own consumer/migration audit (MIG-02), cutting the reverse reader.cpp edge in the same slice.",
           "owner": "F4",
           "stream": "live-rescan"
         },
@@ -3796,6 +3796,22 @@
           "required_evidence": "Zero users verified live; retention-or-retire decision for the IoContext surface must be recorded against the F1 installed-manifest constraint (f1-package-manifest-liburing.json:95,:99)",
           "owner": "F4",
           "stream": "live-rescan"
+        },
+        {
+          "consumer_id": "c-new02-901",
+          "path": "src/reader.cpp",
+          "symbol": "Reader::stream_to overloads implemented as copy_all (reader.cpp:3 #include <sluice/copy.hpp>; :48-56 two call sites; declared include/sluice/reader.hpp:23-28)",
+          "family": "M-F",
+          "edge_kind": "CALL",
+          "semantic_role": "Production caller of the copy_all composition: Reader::stream_to is a public sluice_core API whose both overloads delegate to copy_all (F0 L-02: Reader embeds the stream_to composition)",
+          "profile": "both",
+          "build_target": "sluice_core",
+          "runtime_relevance": "runtime",
+          "replacement": "",
+          "migration_state": "UNMIGRATED",
+          "required_evidence": "R2 review-round correction of the U-05/c-new02-001 'copy_all: own TU' half-claim (live grep -rn copy_all src include tests apps -> src/copy.cpp overload family + src/reader.cpp:51,:55 only). Retiring copy.hpp requires cutting this reverse edge and re-typing or retiring Reader::stream_to in the same slice (public sluice_core API change; B-01 re-freeze).",
+          "owner": "F4",
+          "stream": "review-r2"
         }
       ],
       "subject": "Reader/Writer implementation-family coupling: copy.hpp / wal.hpp / memory_io_context.hpp",
@@ -4020,7 +4036,7 @@
     {
       "id": "B-01",
       "blocker": "F1 frozen package baseline: every public-header add/remove/rename requires a same-slice re-freeze",
-      "detail": "xmake/libraries.lua add_headerfiles + scripts/verify_f1_package.py install/walk/freeze (hard 79-headers/2-libs gate at :598-600) froze docs/review/f1-package-manifest-*.json and the archive baselines. F2 (completion.hpp, detail/request_arena.hpp), F3 (fiber.hpp/fiber_ctx.hpp) and F4 (sluice/file.hpp) contractions must each shrink the globs, keep the 79-count gate truthful, re-freeze both manifests + archive baselines, and demonstrate verify_f1_package.py --check-frozen in the same slice.",
+      "detail": "xmake/libraries.lua add_headerfiles + scripts/verify_f1_package.py install/walk/freeze (hard 79-headers/2-libs gate at :598-600) froze docs/review/f1-package-manifest-*.json and the archive baselines. F2 (completion.hpp, detail/request_arena.hpp), F3 (fiber.hpp/fiber_ctx.hpp) and F4 (sluice/file.hpp) contractions must each shrink the globs, keep the 79-count gate truthful, re-freeze both manifests + archive baselines, and demonstrate verify_f1_package.py --check-frozen in the same slice. R2 precision: scripts/verify_f1_package.py:401-402 scopes production_diff to `git diff {baseline}..HEAD -- src include` and :462-463 requires it empty for F1_B_PROVENANCE_VERIFIED - any installed-header content edit (e.g. a private-section change) or production src change fails the frozen reproduction, so a slice touching installed-header content owes the same-slice re-freeze even when no header is added/removed/renamed.",
       "basis": [
         "c-new03-901",
         "c-new03-902",
@@ -4163,10 +4179,10 @@
     {
       "id": "U-05",
       "surface": "include/sluice/wal.hpp, copy.hpp, observed.hpp",
-      "detail": "Zero downstream users verified live (wal: only wal.hpp/wal.cpp; copy_all: own TU; ObservedReader/ObservedWriter: zero). Installed via the sluice_core header glob; vectored-API decisions gate them (B-07).",
+      "detail": "wal: only wal.hpp/wal.cpp (zero downstream). observed: zero downstream. copy: R2 CORRECTION - copy_all is NOT own-TU-only: src/reader.cpp:3 includes <sluice/copy.hpp> and both Reader::stream_to overloads are implemented as copy_all calls (src/reader.cpp:48-56; public API include/sluice/reader.hpp:23-28, reader.hpp is in the frozen manifest HEADERS set) - a production sluice_core consumer, recorded as c-new02-901. Zero test/app users stands. NEW-02b stranding is therefore already realized in-repo for copy.hpp (not only wal/memory_io_context): retiring copy.hpp requires cutting the reverse reader.hpp/reader.cpp->copy.hpp edge (public sluice_core API change + B-01 re-freeze), not only the Reader/Writer abstract dependency. Installed via the sluice_core header glob; vectored-API decisions gate them (B-07).",
       "basis": [
         "c-new02-001 (NEW-02b)",
-        "c-new02-002 (NEW-02b)",
+        "c-new02-901 (NEW-02b, review-r2)",
         "c-x06-003",
         "c-new03-901"
       ]
@@ -4189,6 +4205,16 @@
         "NEW-03/f0-hunter evidence",
         "c-new03-902",
         "c-new03-903"
+      ]
+    },
+    {
+      "id": "U-08",
+      "surface": "Scheduler/Fiber-coupled select/event/queue/future/wait_policy installed face: include/sluice/async/{select,event,future,wait_policy,wait_queue,timer_registration,select_fwd,lock_guard,mutex}.hpp + include/sluice/async/detail/{queue_item,queue_port,select_registration}.hpp",
+      "detail": "Twelve installed frozen-manifest headers (all twelve in the 79-header HEADERS sets of both manifests) for which the M0 scan streams emitted zero consumer-path records (zero hits in this file and the census MD at generation time). Live include graph (R2 review round): select.hpp:10 includes scheduler.hpp, TimerSelectCase(Scheduler&,..) :92, friend class Scheduler :58/:85/:96; event.hpp:16 Event(Scheduler&,..); wait_queue.hpp:32 and timer_registration.hpp:70 friend class Scheduler; select_fwd.hpp:23 select(Scheduler&,..); scheduler.hpp:3-17 installs detail/queue_port + detail/select_registration + select_fwd + lock_guard + mutex + timer_registration + wait_queue (plus fiber/fiber_ctx); group.hpp:5 installs future.hpp (X-17/M-R recorded the Group surface but not this edge); evented_wait_policy.hpp:4 installs wait_policy.hpp (NEW-01a recorded the evented header itself but not the WaitPolicy/Future face it installs along). In-repo consumers are the scheduler mechanism TUs themselves (src/async/scheduler*.cpp, select*.cpp, queue_port.cpp) plus the installed-header closure (async_mutex/semaphore/condition/async_rwlock ride wait_queue.hpp); external use cannot be excluded from the repo. F0 adopted census already roles this family (H-14 Future 'only consumer is Group', H-15 WaitPolicy, H-17 Event / H-18 select in the dormant-primitives family, H-19 wait_queue INTERNAL; :98-99 puts detail/mutex_test_seam on the production transitive closure of mutex/lock_guard/wait_queue/scheduler/event/select/group/async_rwlock). M rule: zero grep does not mean useless - removal decisions on this face are F5 package-surface/external-use policy calls exactly like U-01, and the M-H host-replacement ruling (B-04) must count this face as installed coupling surface (~17 headers including application_runtime/scheduler/fiber/fiber_ctx/evented_wait_policy).",
+      "basis": [
+        "f1-package-manifest-noliburing.json / -liburing.json HEADERS (79) - all twelve present",
+        "F0 adopted census f0-role-profile-census.md:206-211 (H-14/H-15/H-17/H-18/H-19) and :98-99",
+        "R2 live include-graph read: select.hpp:10,:58,:85,:92,:96; event.hpp:16; wait_queue.hpp:32; timer_registration.hpp:70; select_fwd.hpp:23; scheduler.hpp:3-17; group.hpp:5; evented_wait_policy.hpp:3-4"
       ]
     }
   ],
