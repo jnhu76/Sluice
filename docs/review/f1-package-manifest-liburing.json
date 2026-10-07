@@ -4,9 +4,9 @@
   "PRODUCTION_BASELINE_SHA": "a34d96c64f5ac8647b7d0f57c5511e68301b0f0e",
   "PRODUCTION_DIFF_EMPTY": true,
   "ORIGIN_MASTER_TIP": "a34d96c64f5ac8647b7d0f57c5511e68301b0f0e",
-  "VERIFICATION_HEAD": "68681c5727eefff4484dbd99bd3de3ab7cb820c0",
+  "VERIFICATION_HEAD": "751ac94ac9d3913916f9212396dc4dbe8a1d3ecd",
   "VERIFICATION_HEAD_DIRTY": false,
-  "GENERATED_UTC": "2026-10-07T09:44:55.947437+00:00",
+  "GENERATED_UTC": "2026-10-07T10:56:52.465577+00:00",
   "COMPILER": "g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
   "ARCH": "x86_64",
   "KERNEL": "6.18.33.2-microsoft-standard-WSL2",
@@ -104,7 +104,8 @@
     "sluice/wal.hpp",
     "sluice/writer.hpp"
   ],
-  "STANDALONE_HEADER_COMPILES": 79,
+  "STANDALONE_HEADER_TOTAL": 79,
+  "STANDALONE_DIRECT_HEADER_COMPILES": 78,
   "STANDALONE_FRAGMENT_EXCEPTIONS": [
     {
       "header": "sluice/detail/blocking_io_pool_impl.hpp",
@@ -122,10 +123,11 @@
   ],
   "ARCHIVE_BASELINE": {
     "file": "docs/review/f1-archive-baseline-liburing.json",
-    "sha256": "57db4d05b40b8ead2c9c5d8c3ba327eb26c591eb410a94bab45d381d02994897",
+    "sha256": "718d813d6468d25ae3232f9d7b7470dc6b375ce47ee6673fd7acec3e90149711",
     "archives": 2,
     "objects": 50,
-    "defined_symbols": 1501
+    "defined_symbols": 1501,
+    "external_undefined_symbols": 108
   },
   "PUBLIC_DEFINES": [
     "SLUICE_HAS_LIBURING"
