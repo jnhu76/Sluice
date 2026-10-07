@@ -1,6 +1,6 @@
 # F0 Package Profile & Compatibility Policy (#454, parent #402)
 
-- **Status**: `PACKAGE_PROFILE_POLICY_DEFINED` + `COMPATIBILITY_DISPOSITION_DEFINED` candidate
+- **Status**: `PACKAGE_PROFILE_POLICY_DEFINED` + `COMPATIBILITY_DISPOSITION_DEFINED` candidate. Revision 2 resolves Round-1 human-review findings P1-1 (host profile split per PROD-02) and P1-2 (RequestHandle disposition → UNDECIDED, F2-owned); record: `f0-role-profile-census.md` §4.1.
 - **Baseline**: `989d5c3fa5fa803c05ac87ebfe6c99db9d87564b`, root v1-r3 (see `f0-role-profile-census.md` §0 for provenance; row IDs below reference its §2 census)
 - **Authority order**: root > adopted ADR (ADR-0004 only) > #402 phase policy > ledger/evidence > implementation. This file is a **policy definition for later phases**, not a deletion authorization; every disposition below is `CANDIDATE` until the owning ticket decides.
 
@@ -20,11 +20,13 @@ Classification result (row IDs from `f0-role-profile-census.md` §2):
 
 | Class | Rows |
 |---|---|
-| `CANONICAL` | V-01..V-05, R-01..R-05, R-15, H-01, H-03, H-04, H-27, H-28, P-05, P-06 |
-| `OPT_SUPPORTED` (shipped optional profile; W-04/ADR-0003 gate) | H-06..H-13, H-16, H-26 |
-| `COMPAT` (compatibility/dormant retained surface) | R-06 (`Completion<T>` caller-owned result), R-08 (`Batch`), H-05 (`op_helpers` completed-return + busy-spin), H-14 (`Future<T>`), H-15 (`WaitPolicy`/`EventedWaitPolicy`), H-17 (`Event`), H-18 (`select`), H-22 (5 dormant wrappers), L-01..L-09 (legacy stream world) |
+| `CANONICAL` | V-01..V-05, R-01..R-04, R-15, H-01, H-03, H-04, H-27, H-28, P-05, P-06 |
+| `OPTIONAL_CANDIDATE` (optional-profile candidate; support gated on W-04 + ADR-0003 adoption) | H-09 (`StackfulIoHost`/`IoTaskContext` — the only configuration PROD-02 admits as an optional build profile; single-owner stackful adapter only) |
+| `OPTIONAL_SUPPORTED` | — **empty today**; no shipped surface may claim this class until the H-09 gate completes |
+| `COMPAT` (compatibility/dormant retained surface) | R-06 (`Completion<T>` caller-owned result), R-08 (`Batch`), H-05 (`op_helpers` completed-return + busy-spin), **H-06, H-07, H-08, H-10, H-13, H-16, H-26, H-29 (root-DEFERRED multi-worker runtime world per PROD-02 — not optional-supported)**, H-14 (`Future<T>`), H-15 (`WaitPolicy`/`EventedWaitPolicy`), H-17 (`Event`), H-18 (`select`), H-22 (5 dormant wrappers), L-01..L-09 (legacy stream world) |
 | `EXPERIMENTAL` | L-12 (`experimental/uring_*`) |
-| `INTERNAL` | all `detail/` substrates + backend seam + runtime mechanism (V-06..V-09, R-07, R-09..R-11, R-13, R-14, P-01..P-04, H-02, H-19..H-21, H-23..H-25) |
+| `INTERNAL` | all `detail/` substrates + backend seam + host substrate mechanisms (V-06..V-09, R-07, R-09..R-11, R-13, R-14, P-01..P-04, H-02, **H-11 `Fiber`, H-12 `fiber_ctx` as mechanisms**, H-19..H-21, H-23..H-25) |
+| `UNDECIDED (F2-owned spelling)` | R-05 (`RequestHandle`: the copied-identity/state-probe capability is MIG-02-required; the spelling's disposition is **UNDECIDED** — retain \| fold into `RequestId`/context lookup \| internalize, decided by F2) |
 | `TEST_ONLY` | L-10, L-11, R-12 |
 
 ### 1.2 Is compatibility installed?
@@ -36,7 +38,7 @@ Classification result (row IDs from `f0-role-profile-census.md` §2):
 **No umbrella header exists.** All 81 headers are peer includes; no canonical header transitively includes a `COMPAT` surface as part of its own contract **except**:
 
 - `async_io_context.hpp` (canonical hub) includes `completion.hpp` because its own submit/cancel/observer spellings still accept `Completion&` (compat overloads on the canonical context);
-- `application_runtime.hpp`/`stackful_io_host.hpp` include the host runtime world (their own profile);
+- `application_runtime.hpp`/`stackful_io_host.hpp` include the host runtime world (their own profiles);
 - `request.hpp` — the **canonical** result carrier — directly includes `detail/request_core.hpp` (an INTERNAL edge, recorded in census §1.4).
 
 Consequence: today, including canonical async headers **transitively compiles** the compatibility carrier and the detail substrate. Compatibility is not quarantined behind an opt-in include; this is a factual exposure record for F1–F4 planning, not a defect verdict.
@@ -48,7 +50,7 @@ Consequence: today, including canonical async headers **transitively compiles** 
 | W-01 (ordinary utility) | Must be satisfiable **without** any compatibility surface (direct `File` + `blocking::` only). Verified as a census fact: `blocking/file.hpp` + `file_resource.hpp` depend on nothing async. |
 | W-02 (bounded pipeline) | Canonical path is `RequestScope` (R-15, D1 VERIFIED) + `Request<T>`. `Batch` (R-08, COMPAT) is a parallel compatibility spelling; `RequestScope` does not use it. |
 | W-03 (external loop) | Canonical path is `AsyncIoContext` + `ProgressOwner` + notification fd. No compatibility surface participates; the (removed) `BackendWaitSource`/`WaiterToken` vocabulary is `ALREADY_MIGRATED`. |
-| W-04 (stackful host) | Shipped in two spellings: `StackfulIoHost` (narrow, ADR-0003 PROPOSED) and `ApplicationRuntime` + `await_op_helpers`/`async/file.hpp`/`task_result` (multi-worker runtime + `Completion`-based conveniences = compatibility-spelled host conveniences). The `Completion&` parameters inside otherwise-OPT_SUPPORTED helpers (H-06/H-07) and in `Scheduler::await_completion`/`RuntimeTaskContext::await_completion` (H-08/H-10) are compatibility edges riding on the optional-supported profile. |
+| W-04 (stackful host) | PROD-02 distinguishes two host configurations and this policy keeps them separate: the **narrow single-owner stackful adapter** (`StackfulIoHost`, H-09) is the only optional-profile *candidate* (`OPTIONAL_CANDIDATE`; support claim gated on W-04 pass + ADR-0003 adoption — ADR-0003 is PROPOSED, so nothing claims W-04 support today), while the **multi-worker task host** (`ApplicationRuntime`/`Scheduler` + `await_op_helpers`/`async/file.hpp`/`task_result`, H-06..H-08/H-10/H-26) is root-**DEFERRED** and classified `COMPAT` with `Completion`-spelled conveniences. The `Completion&` parameters inside those helpers and in `Scheduler::await_completion`/`RuntimeTaskContext::await_completion` are compatibility edges of the DEFERRED world, not optional-supported surface. |
 
 ### 1.5 What source compatibility is actually promised?
 
@@ -88,23 +90,25 @@ Profiles (superset of the six required classes; `SHIPPED` facts vs `SUPPORTED` c
 | Profile | Definition |
 |---|---|
 | `CANONICAL` | Required v1 surface per root; target of the convergence; workload acceptance defined by W-01–W-03 + required profiles |
-| `OPTIONAL_SUPPORTED` | Shipped optional profile (stackful host family + its conveniences); supported only if its gate (W-04, D2 review, ADR-0003 adoption) completes; otherwise `EXPERIMENTAL` by PROD-02/MIG-03 |
-| `COMPATIBILITY` | Retained pre-v1 / dormant surface per §1.1; no promise; retirable under §1.7 |
+| `OPTIONAL_CANDIDATE` | Implemented **narrow single-owner stackful adapter** (H-09) shipped as an optional-profile candidate; its support claim is gated on W-04 pass + D2 review + ADR-0003 adoption (PROD-02). Until the gate completes it is a candidate, not a supported product profile; if the gate never completes it degrades to `EXPERIMENTAL` by PROD-02/MIG-03. |
+| `OPTIONAL_SUPPORTED` | Optional build profile **after** its gate completes. **Currently empty**: PROD-02 admits only the single-owner stackful adapter into this class and marks the multi-worker task host DEFERRED, so no shipped surface claims it today. |
+| `COMPATIBILITY` | Retained pre-v1 / dormant surface per §1.1 — including the root-DEFERRED multi-worker runtime world; no promise; retirable under §1.7 |
 | `EXPERIMENTAL` | Clearly isolated unsupported experiments (LIFE-03/MIG-02); must not be described as v1 conforming |
-| `INTERNAL_ONLY` | `detail/` mechanism + backend seam + runtime mechanism; consumer-visible today only via the public include path; must never be consumed directly by new external code |
+| `INTERNAL_ONLY` | `detail/` mechanism + backend seam + host substrate mechanisms (`Fiber`/`fiber_ctx` as mechanisms); consumer-visible today only via the public include path; must never be consumed directly by new external code |
+| `UNDECIDED` | Capability recorded as required by MIG-02, but the current public spelling's disposition is owned by a later phase; today exactly one row: `RequestHandle` (F2) |
 | `TEST_ONLY` | Public-tree test doubles/seams; exist for evidence, not product |
 | `HISTORICAL_RESEARCH` | Archived authorities, research results, historical models (GOV-03; formal map dispositions) |
 
 Per-profile obligations (current facts, not aspirations):
 
-| Attribute | CANONICAL | OPTIONAL_SUPPORTED | COMPATIBILITY | EXPERIMENTAL | INTERNAL_ONLY | TEST_ONLY | HISTORICAL_RESEARCH |
-|---|---|---|---|---|---|---|---|
-| INSTALLED (today) | NO | NO | NO | NO | NO | NO | NO |
-| PUBLIC_HEADERS (today) | yes (include path) | yes | yes | yes | yes (detail/, de-facto transitive) | yes | docs/formal trees |
-| TARGET_LINKABLE (today) | `sluice_core`+`sluice_async` | same + app/test binaries | via the same libs | **no target at all** (orphan TUs, FA-2) | inside the two libs | inside the two libs | not build products |
-| CANONICAL_DOCS | root + README target sections | ADR-0003 (PROPOSED) + D2 ledger | MIG-02 disposition rows only | LIFE-03/MIG-02 constraints | ARCH/BACKEND/REQ/OBS/PROG rules | none | supersession banners |
-| WORKLOAD_ACCEPTANCE | W-01–W-03 (+V01–V27 where evidenced) | W-04 gate | none required; must not regress canonical evidence | none | exercised through canonical tests | test-only | none |
-| REQUIRED_EVIDENCE | ledger VERIFIED per slice | W-04 tracer + D2 rounds + ADR adoption | consumer audit + migration evidence before any change | root amendment before any supported claim | follows the owning slice | mutation/oracle records | none (retained for provenance) |
+| Attribute | CANONICAL | OPTIONAL_CANDIDATE (H-09) | OPTIONAL_SUPPORTED | COMPATIBILITY | EXPERIMENTAL | INTERNAL_ONLY | UNDECIDED (R-05) | TEST_ONLY | HISTORICAL_RESEARCH |
+|---|---|---|---|---|---|---|---|---|---|
+| INSTALLED (today) | NO | NO | — (empty) | NO | NO | NO | NO | NO | NO |
+| PUBLIC_HEADERS (today) | yes (include path) | yes | — | yes | yes | yes (detail/, de-facto transitive) | yes | yes | docs/formal trees |
+| TARGET_LINKABLE (today) | `sluice_core`+`sluice_async` | same + host tests | — | via the same libs | **no target at all** (orphan TUs, FA-2) | inside the two libs | inside the two libs | inside the two libs | not build products |
+| CANONICAL_DOCS | root + README target sections | ADR-0003 (**PROPOSED**) + D2 ledger row (`IMPLEMENTED_UNVERIFIED`) | — | MIG-02 disposition rows only | LIFE-03/MIG-02 constraints | ARCH/BACKEND/REQ/OBS/PROG rules | MIG-02 capability requirement + #402 F2 scope note | none | supersession banners |
+| WORKLOAD_ACCEPTANCE | W-01–W-03 (+V01–V27 where evidenced) | W-04 gate only — **not claimable today** | W-04 pass required (class currently empty) | none required; must not regress canonical evidence | none | exercised through canonical/host tests | none (not a workload surface) | test-only | none |
+| REQUIRED_EVIDENCE | ledger VERIFIED per slice | W-04 tracer + D2 review + ADR-0003 adoption **before any supported claim** (PROD-02) | the completed H-09 gate record | consumer audit + migration evidence before any change | root amendment before any supported claim | follows the owning slice | explicit F2 disposition record (retain \| fold \| internalize) | mutation/oracle records | none (retained for provenance) |
 
 The load-bearing asymmetry: **`physically installed ≠ supported canonical`** (currently nothing is installed, so the discriminating case is future) and **`not installed ≠ internal by definition`** (today everything public is merely on an include path; `EXPERIMENTAL` headers are neither installed nor internal).
 
@@ -116,7 +120,8 @@ There is no repository compatibility/API policy document (GREP of docs/, ADRs, R
 |---|---|---|
 | CANONICAL surfaces | recorded in census §2 | `unknown` (no policy ⇒ cannot assert zero external use, but canonical surfaces are not removal candidates anyway) |
 | `Completion<T>` + `Batch` + `op_helpers` | 15 test files include `completion.hpp`, **25 test files name the type**; **4 apps construct/settle `Completion` in task code** (copy/hash/grep/tail via `await_op_helpers`); `Batch`: 1 test; `op_helpers`: 1 test | `unknown` — and the app usage means Completion retirement **cannot** be scoped as a test-only migration (DAG X-01) |
-| Host/runtime family (H-06..H-13, H-16, H-26) | 4 apps + host tests + scheduler TUs | `unknown` |
+| Host/runtime family — root-DEFERRED multi-worker runtime (H-06..H-08, H-10, H-13, H-16, H-26, H-29) | 4 apps + host tests + scheduler TUs | `unknown` |
+| Optional-profile candidate host (H-09 `StackfulIoHost`/`IoTaskContext`) | src 1 + host tests 1 | `unknown` |
 | Concrete backends (H-27/H-28) | apps construct `ThreadPoolBackend` directly (6 TUs); uring backend construction gated on availability | `unknown` for direct construction |
 | Legacy stream world (L-01..L-09) | src-core factories + tests; 0 apps | `unknown` |
 | Dormant wrappers (H-22) + `Future`/`WaitPolicy`/`Event`/`select` | 0 direct includes (condition/semaphore/async_queue), 1 (async_mutex via condition), **10 src TUs (async_rwlock, mechanical)** | `unknown` |
@@ -146,7 +151,7 @@ Nothing here authorizes deletion; `FINAL_DECISION_OWNER` is #402 (with #454 as e
 | D-13 | `fault.hpp`/`memory_io_context.hpp` (L-10/L-11) | KEEP (relocate or INTERNALIZE candidate) | TEST_ONLY | test-reachable only | — | tests; L-11 has 0 includes | n/a (not product) | HIGH | FA-5 |
 | D-14 | experimental uring write surfaces (L-12) | REMOVE or ISOLATE (decide at install-rule time) | EXPERIMENTAL | not even compiled | canonical uring backend | 0 | LIFE-03 requires root amendment for any support | MEDIUM | FA-2, LIFE-03 |
 | D-15 | `op_helpers` completed-return helpers (H-05) | RETIRE after re-typing; **carries the live MIG-02 busy-poll obligation**: `one_step` spin loop (`while (!c.ready()) (void)ctx.poll();`, `op_helpers.cpp:18-24,84-90`) | COMPAT | physically reachable | `Request<T>` + `RequestScope` | src 1 + tst 1 | replacement must (a) settle on every exit and (b) eliminate the busy-spin in favor of the progress/wait contract | HIGH | census H-05; DAG review C-7 |
-| D-16 | `StackfulIoHost` fiber exposure (H-09 boundary) | KEEP_PUBLIC, **fix header boundary first** (F3 prerequisite) | OPT_SUPPORTED | — | n/a (it is the replacement) | src 1 + tst 1 | n/a | HIGH | census §1.4 |
-| D-17 | `RequestHandle` (R-05) | KEEP_PUBLIC (identity token; MIG-02 separation) | CANONICAL | implemented (RECORD); adoption state pending ledger | n/a | src + tst | n/a; `identity_of` arena fallback is D-02's precondition | HIGH | census R-05; DAG review C-5 |
+| D-16 | `StackfulIoHost` fiber exposure (H-09 boundary) | KEEP_PUBLIC candidate, **fix header boundary first** (F3 prerequisite); support claim gated on W-04 + ADR-0003 adoption (PROD-02) | OPTIONAL_CANDIDATE | — | n/a (it is the replacement) | src 1 + tst 1 | n/a (boundary fix is a prerequisite of F3, not of retention) | HIGH | census §1.4 |
+| D-17 | `RequestHandle` (R-05) | **UNDECIDED — owned by F2** per #402 (retain \| fold into `RequestId`/context lookup \| internalize); F0 records capability and dependencies only | UNDECIDED (spelling); the copied-identity/state-probe capability is MIG-02-required | implemented (RECORD); adoption state pending ledger | the capability is already carried by `RequestId` + core lookup (R-02/R-09) — F2 evaluates whether the spelling adds state-probe value | src + tst | F2 disposition record + `identity_of` arena fallback re-ownership (D-02 precondition) | HIGH (facts) | census R-05; DAG review C-5 |
 
-`KEEP_PUBLIC` rows are intentionally few: the CANONICAL + OPT_SUPPORTED row sets of §1.1 (listed there by reference to the census rather than duplicated).
+No `COMPAT`-family row above is KEEP_PUBLIC. The only retention-flavored candidates are the OPTIONAL_CANDIDATE host boundary (D-16) and the explicitly UNDECIDED `RequestHandle` spelling (D-17, F2-owned); retention of CANONICAL/OPTIONAL_CANDIDATE rows needs no entry here — it follows from the census §3 ID sets.
