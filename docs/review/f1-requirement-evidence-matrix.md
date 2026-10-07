@@ -7,10 +7,13 @@
   already establishes; where a row's internal evidence is a ledger-recorded
   correspondence from an earlier slice, that is stated per row and F1 did not
   re-derive it.
-- **Baseline**: `SOURCE_SHA = a34d96c64f5ac8647b7d0f57c5511e68301b0f0e`
-  (F1 branch point == F0 adopted SHA); external probe evidence produced by
-  `scripts/verify_f1_package.py` on this branch (both profiles, 3 stable runs
-  each; manifests: `f1-package-manifest-{noliburing,liburing}.json`).
+- **Baseline**: `PRODUCTION_BASELINE_SHA = a34d96c64f5ac8647b7d0f57c5511e68301b0f0e`
+  (merge-base with origin/master == F0 adopted SHA; production diff empty);
+  external probe evidence produced by `scripts/verify_f1_package.py` on this
+  branch (both profiles from the final verifier state, clean verification
+  head; manifests + archive/object/symbol baselines:
+  `f1-package-manifest-{noliburing,liburing}.json`,
+  `f1-archive-baseline-{noliburing,liburing}.json`).
 - **Layer vocabulary**: A = clean-room installed-prefix consumer;
   B = internal deterministic test/fault seam; C = formal model (TLA+);
   D = real kernel/backend.
@@ -105,18 +108,25 @@ is possible or meaningful).
    stale-wake-toward-destroyed-context discriminator remains the internal M11
    oracle.
 3. W-04 evidence is OPTIONAL_CANDIDATE-only: the W-04 tracer and the H5
-   exception arm are solid external evidence; the H1 arm (failure while the
-   sibling's silent-pipe I/O is outstanding, run() error asserted) and the
-   combined H2/H4 arm (stop mid-suspension, await deadline expires, the real
-   EOF terminal arrives without cancellation — suspension manufactured with a
-   silent pipe, the in-repo shutdown-oracle pattern, FIFOs being outside the
-   regular-file profile) exercise the named paths from outside; H3/H6
-   discrimination and the W-04 support gate stay with the D2 record and
-   ADR-0003 (PROPOSED).
+   exception arm are solid external evidence in both profiles. The
+   suspension-shaped arms are structurally ordered and uring-profile-only
+   (measured: the threadpool backend preads, so non-seekable fds fail
+   immediately and no external suspension exists without liburing): the H1
+   arm's failure lands strictly between the sibling's proven suspension and
+   its writer-gated real EOF; the H2 arm issues `request_stop` only after the
+   suspension is published and gates the writer close on the stop call
+   returning, so the task's real EOF terminal (never `canceled`) cannot be
+   reached before the stop request existed; the H4 `_for` arm's assertions
+   hold under either interleaving of park-window expiry and EOF, so no
+   ordering claim rests on timing — the fine-grained expiry-vs-terminal
+   interleaving and H3/H6 discrimination stay with the D2 record and
+   ADR-0003 (PROPOSED). The no-liburing profile records the explicit
+   measured UNAVAILABLE outcome (exit 2) for these arms.
 4. The uring profile's external evidence on this machine ran against a
    user-prefix liburing 2.9 on WSL2 (version recorded in the manifest's
    `LIBURING_VERSION` field); the ledger's real-kernel E1/E2 records remain
    the D-layer backend evidence.
 5. The E1 threadpool CI stall (recurring finding, #454 §4.2) did not reproduce
-   during F1's six verification runs; the standing rerun protocol applies and
-   no F1 assertion was weakened for it.
+   during F1's verification runs (adversarial round and review-round reruns
+   included); the standing rerun protocol applies and no F1 assertion was
+   weakened for it.

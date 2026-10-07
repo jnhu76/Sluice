@@ -36,14 +36,33 @@ No OPTIONAL_SUPPORTED claim exists anywhere in F1.
 ## Running
 
 ```sh
-python3 scripts/verify_f1_package.py                        # P0/P1/P3 profile (no liburing)
+python3 scripts/verify_f1_package.py \
+    --manifest-out docs/review/f1-package-manifest-noliburing.json \
+    --archive-baseline-out docs/review/f1-archive-baseline-noliburing.json
 python3 scripts/verify_f1_package.py --liburing \
     --uring-prefix /path/to/liburing/prefix \
-    --profile-name P2-liburing                              # real io_uring profile
+    --profile-name P2-liburing \
+    --manifest-out docs/review/f1-package-manifest-liburing.json \
+    --archive-baseline-out docs/review/f1-archive-baseline-liburing.json
 ```
 
-Each run writes the manifest to the recorded path and prints the gate summary;
-exit status 0 = all gates PASS.
+Each run writes the manifest and the archive/object/symbol baseline to the
+recorded paths and prints the gate summary; exit status 0 = all gates PASS.
+`--check-frozen` reproduces a frozen manifest at the current head (the full
+verification reruns, then the fresh manifest must match the frozen one outside
+the volatile provenance/timestamp fields and the archive-baseline sha256 must
+match):
+
+```sh
+python3 scripts/verify_f1_package.py \
+    --check-frozen docs/review/f1-package-manifest-noliburing.json \
+    --manifest-out /tmp/f1-check-manifest.json \
+    --archive-baseline-out /tmp/f1-check-baseline.json
+```
+
+A freeze run requires a clean worktree at start: the recorded
+`VERIFICATION_HEAD` must identify the exact content that was built, installed
+and probed.
 
 ## Consumer map
 
@@ -61,7 +80,8 @@ exit status 0 = all gates PASS.
 | `contract_shutdown.cpp` | P1 | SHUT-01..03: retained results survive execution close, idempotent re-shutdown |
 | `contract_durability.cpp` | P1 | SEM-06/07: request-path metadata ops, resize coverage through request sync (V27) |
 | `contract_backend_availability.cpp` | P1/P2 | PROD-02/BACKEND-02: named construction, explicit unavailability, no silent fallback |
-| `odr_two_tu_{a,b}.cpp` | P1/P2 | multi-TU ODR probe with one shared macro view |
+| `odr_two_tu_{a,b}.cpp` | P1/P2 | ODR discriminator: two TUs observe the SAME `Result<std::size_t>`/`Request<std::size_t>` specializations plus the macro-sensitive `UringAsyncBackend` layout under one shared macro view; the binary cross-checks both TUs' facts |
+| `negative_odr_view_{a,b,main}.cpp` | negative (P2) | two TUs compiled with OPPOSITE `SLUICE_HAS_LIBURING` views must report a divergent `sizeof(UringAsyncBackend)`; the binary fails (deterministically) when it observes the mismatch |
 | `negative_async_symbols_in_core.cpp` | negative | link against core lib only MUST fail (async symbols are not in the core archive) |
 
 Evidence layering (F1 §18 of the phase brief): these consumers are Layer A

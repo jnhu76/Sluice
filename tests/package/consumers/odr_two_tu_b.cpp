@@ -1,20 +1,28 @@
-// Clean-room ODR probe, TU-B. Instantiates the same public templates for a
-// different T; identical macro/config view is mandatory (SLUICE_HAS_LIBURING
-// ODR rule, DAG X-12).
+// Clean-room ODR discriminator, TU-B. Computes the same facts as TU-A from
+// the SAME specializations (Result<std::size_t>, Request<std::size_t>) and
+// the same macro-sensitive UringAsyncBackend layout, in this TU, under the
+// verifier-supplied macro view.
 #include <sluice/async/request.hpp>
-#include <sluice/file_resource.hpp>
+#include <sluice/async/uring_backend.hpp>
+#include <sluice/result.hpp>
 
 #include <cstddef>
 
-std::size_t odr_b_result_size_bytes() {
-    sluice::Result<sluice::FileInfo> info{sluice::FileInfo{}};
-    return info.has_value() ? sizeof(sluice::FileInfo) : 0u;
-}
+void odr_b_facts(std::size_t* facts, unsigned* view) {
+    facts[0] = sizeof(sluice::async::UringAsyncBackend);
+    facts[1] = alignof(sluice::async::UringAsyncBackend);
 
-bool odr_b_request_ready_shape(bool) {
-    sluice::async::Request<sluice::FileInfo> request;
-    if (request.valid())
-        return false;
-    const auto observation = request.try_result();
-    return observation.readiness == sluice::async::RequestReadiness::empty;
+    sluice::Result<std::size_t> ok{std::size_t{7}};
+    (void)ok.has_value();
+    sluice::async::Request<std::size_t> request;
+    (void)request.try_result();
+    facts[2] = sizeof(sluice::Result<std::size_t>);
+    facts[3] = sizeof(sluice::async::Request<std::size_t>);
+
+    *view =
+#if defined(SLUICE_HAS_LIBURING)
+        1;
+#else
+        0;
+#endif
 }

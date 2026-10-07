@@ -2,15 +2,28 @@
 // OPTIONAL_CANDIDATE profile (H-09 + H-30/H-31 closure). This probe records
 // externally observable evidence only; it does not claim OPTIONAL_SUPPORTED
 // status and does not adopt ADR-0003.
+//
+// The suspension-shaped arms (failure while sibling I/O is outstanding, stop
+// during suspension) need a backend whose reads can park on a pipe; the
+// threadpool backend preads and non-seekable fds fail immediately, so they
+// run only under SLUICE_HAS_LIBURING and the binary reports the explicit
+// unavailable outcome (exit 2) without it — the same pattern as the w03
+// uring variant.
 #include <sluice/async/stackful_io_host.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
+#if defined(SLUICE_HAS_LIBURING)
+#include <sluice/async/uring_backend.hpp>
+#endif
+
 #include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
+#include <memory>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -46,6 +59,20 @@ sluice::FileOpen create_read_write() {
     mode.existence = sluice::FileExistence::create_if_missing;
     return mode;
 }
+
+#if defined(SLUICE_HAS_LIBURING)
+
+void write_byte(int fd) {
+    const char b = 'x';
+    (void)::write(fd, &b, 1);
+}
+
+void read_byte(int fd) {
+    char b;
+    (void)::read(fd, &b, 1);
+}
+
+#endif
 
 } // namespace
 
@@ -121,44 +148,6 @@ int main() {
         ::unlink(path.c_str());
     }
 
-    // Task failure while another task's I/O is outstanding: the sibling task
-    // occupies a worker on a silent-pipe read (the in-repo deterministic
-    // suspension pattern) while this task fails; run() reports the first task
-    // error and the sibling still settles — no stranded work.
-    {
-        int pipe_fds[2];
-        CHECK(::pipe(pipe_fds) == 0);
-        std::thread writer([&] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(150));
-            ::close(pipe_fds[1]);
-        });
-
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 8,
-                                                                  .worker_count = 2}));
-        auto host = StackfulIoHost::create(ctx, StackfulHostConfig{.task_capacity = 4});
-        CHECK(host.has_value());
-
-        const NativeFileRef reader{pipe_fds[0], FileAccess::read_only};
-        std::atomic<bool> sibling_done{false};
-        host.value()->spawn([&](IoTaskContext& io) {
-            std::vector<std::byte> buf(4, std::byte{0});
-            const auto r = io.read_for(reader, buf, 0, std::chrono::milliseconds(400));
-            sibling_done = true;
-            (void)r;
-        });
-        host.value()->spawn([&](IoTaskContext& io) {
-            (void)io;
-            throw std::runtime_error("failing task while sibling I/O outstanding");
-        });
-        const auto outcome = host.value()->run();
-        CHECK(!outcome.has_value());
-        CHECK(sibling_done.load());
-        writer.join();
-        ::close(pipe_fds[0]);
-        CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
-    }
-
     // Exception during task processing: the host boundary catches it, no
     // borrow is abandoned, and run() returns the mapped error.
     {
@@ -194,46 +183,196 @@ int main() {
         ::unlink(path.c_str());
     }
 
-    // Stop during suspension with deadline expiry: the task parks on a
-    // silent-pipe read; stop lands mid-suspension; the await deadline expires
-    // first; the operation's real terminal (EOF when the writer closes)
-    // arrives without any host-side cancellation.
-    {
-        int pipe_fds[2];
-        CHECK(::pipe(pipe_fds) == 0);
-        std::thread writer([&] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(250));
-            ::close(pipe_fds[1]);
-        });
+#if defined(SLUICE_HAS_LIBURING)
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 8,
-                                                                  .worker_count = 1}));
+    // A task failure while another task's I/O is genuinely outstanding,
+    // structurally ordered: the sibling parks on an empty-pipe read, the
+    // single-driver run() starts the failing task only after that
+    // suspension, the failing task's throw is announced on throw_pipe, and
+    // the writer closes (the sibling's real EOF) only after the throw. The
+    // failure therefore lands strictly between the sibling's suspension and
+    // its settlement; run() reports the task error and the sibling still
+    // settles with its real terminal — no abandoned borrow.
+    {
+        int data_pipe[2];
+        int suspend_pipe[2];
+        int throw_pipe[2];
+        CHECK(::pipe(data_pipe) == 0);
+        CHECK(::pipe(suspend_pipe) == 0);
+        CHECK(::pipe(throw_pipe) == 0);
+
+        auto backend = std::make_unique<UringAsyncBackend>(
+            UringConfig{.request_capacity = 8, .queue_depth = 8});
+        AsyncIoContext ctx(std::move(backend));
         auto host = StackfulIoHost::create(ctx, StackfulHostConfig{.task_capacity = 4});
         CHECK(host.has_value());
 
-        const NativeFileRef reader{pipe_fds[0], FileAccess::read_only};
-        std::atomic<bool> task_returned{false};
-        std::atomic<bool> terminal_was_canceled{false};
-        std::thread stopper([&] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            host.value()->request_stop();
-        });
+        const NativeFileRef reader{data_pipe[0], FileAccess::read_only};
+        std::atomic<bool> sibling_returned{false};
+        std::atomic<bool> sibling_eof{false};
+        std::atomic<bool> sibling_canceled{false};
         host.value()->spawn([&](IoTaskContext& io) {
             std::vector<std::byte> buf(4, std::byte{0});
-            const auto r = io.read_for(reader, buf, 0, std::chrono::milliseconds(100));
-            if (!r.has_value() && r.error().code == IoError::Code::canceled)
-                terminal_was_canceled = true;
+            const auto r = io.read(reader, buf, 0);
+            sibling_eof = r.has_value() && r.value() == 0;
+            sibling_canceled = !r.has_value() && r.error().code == IoError::Code::canceled;
+            sibling_returned = true;
+        });
+        host.value()->spawn([&](IoTaskContext& io) {
+            (void)io;
+            write_byte(suspend_pipe[1]);
+            write_byte(throw_pipe[1]);
+            throw std::runtime_error("failing task while sibling I/O outstanding");
+        });
+
+        std::thread closer([&] {
+            read_byte(suspend_pipe[0]);
+            read_byte(throw_pipe[0]);
+            ::close(data_pipe[1]);
+        });
+        const auto outcome = host.value()->run();
+        closer.join();
+        CHECK(!outcome.has_value());
+        CHECK(outcome.error().code == IoError::Code::backend_error);
+        CHECK(sibling_returned.load());
+        CHECK(sibling_eof.load());
+        CHECK(!sibling_canceled.load());
+        ::close(data_pipe[0]);
+        ::close(suspend_pipe[0]);
+        ::close(suspend_pipe[1]);
+        ::close(throw_pipe[0]);
+        ::close(throw_pipe[1]);
+        CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
+    }
+
+    // Stop during suspension, structurally ordered: the reader task parks on
+    // an empty pipe (writer open), the single-driver run() starts the second
+    // task only after that suspension, so the second task's byte on
+    // suspend_pipe proves the read request was accepted and outstanding.
+    // request_stop is issued only after that byte, and the writer closes
+    // (the real EOF) only after request_stop returned. The asserted terminal
+    // therefore cannot be reached before the stop request existed, and stop
+    // must neither cancel nor settle the accepted request: the task observes
+    // the real EOF, the stop flag visible through its token, and retires
+    // normally.
+    {
+        int data_pipe[2];
+        int suspend_pipe[2];
+        int go_pipe[2];
+        CHECK(::pipe(data_pipe) == 0);
+        CHECK(::pipe(suspend_pipe) == 0);
+        CHECK(::pipe(go_pipe) == 0);
+
+        auto backend = std::make_unique<UringAsyncBackend>(
+            UringConfig{.request_capacity = 8, .queue_depth = 8});
+        AsyncIoContext ctx(std::move(backend));
+        auto host = StackfulIoHost::create(ctx, StackfulHostConfig{.task_capacity = 4});
+        CHECK(host.has_value());
+
+        const NativeFileRef reader{data_pipe[0], FileAccess::read_only};
+        std::atomic<bool> task_returned{false};
+        std::atomic<bool> terminal_eof{false};
+        std::atomic<bool> terminal_canceled{false};
+        std::atomic<bool> stop_visible_in_task{false};
+        host.value()->spawn([&](IoTaskContext& io) {
+            std::vector<std::byte> buf(4, std::byte{0});
+            const auto r = io.read(reader, buf, 0);
+            terminal_eof = r.has_value() && r.value() == 0;
+            terminal_canceled = !r.has_value() && r.error().code == IoError::Code::canceled;
+            stop_visible_in_task = io.token().is_requested();
             task_returned = true;
+        });
+        host.value()->spawn([&](IoTaskContext& io) {
+            (void)io;
+            write_byte(suspend_pipe[1]);
+        });
+
+        std::thread stopper([&] {
+            read_byte(suspend_pipe[0]);
+            host.value()->request_stop();
+            write_byte(go_pipe[1]);
+        });
+        std::thread writer([&] {
+            read_byte(go_pipe[0]);
+            ::close(data_pipe[1]);
         });
         const auto outcome = host.value()->run();
         stopper.join();
         writer.join();
+        CHECK(outcome.has_value());
         CHECK(host.value()->stop_requested());
         CHECK(task_returned.load());
-        CHECK(!terminal_was_canceled.load());
-        (void)outcome;
-        ::close(pipe_fds[0]);
+        CHECK(terminal_eof.load());
+        CHECK(!terminal_canceled.load());
+        CHECK(stop_visible_in_task.load());
+        ::close(data_pipe[0]);
+        ::close(suspend_pipe[0]);
+        ::close(suspend_pipe[1]);
+        ::close(go_pipe[0]);
+        ::close(go_pipe[1]);
+        CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
+    }
+
+    // The bounded (`_for`) path under the same structurally ordered stop: the
+    // wait parameter bounds only the driver's park window, so whichever comes
+    // first — park-window expiry or the writer-gated EOF — the task must see
+    // the operation's real terminal, never a cancellation. The assertions
+    // hold under both interleavings, so no timing assumption is baked in.
+    {
+        int data_pipe[2];
+        int suspend_pipe[2];
+        int go_pipe[2];
+        CHECK(::pipe(data_pipe) == 0);
+        CHECK(::pipe(suspend_pipe) == 0);
+        CHECK(::pipe(go_pipe) == 0);
+
+        auto backend = std::make_unique<UringAsyncBackend>(
+            UringConfig{.request_capacity = 8, .queue_depth = 8});
+        AsyncIoContext ctx(std::move(backend));
+        auto host = StackfulIoHost::create(ctx, StackfulHostConfig{.task_capacity = 4});
+        CHECK(host.has_value());
+
+        const NativeFileRef reader{data_pipe[0], FileAccess::read_only};
+        std::atomic<bool> task_returned{false};
+        std::atomic<bool> terminal_eof{false};
+        std::atomic<bool> terminal_canceled{false};
+        std::atomic<bool> stop_visible_in_task{false};
+        host.value()->spawn([&](IoTaskContext& io) {
+            std::vector<std::byte> buf(4, std::byte{0});
+            const auto r = io.read_for(reader, buf, 0, std::chrono::milliseconds(50));
+            terminal_eof = r.has_value() && r.value() == 0;
+            terminal_canceled = !r.has_value() && r.error().code == IoError::Code::canceled;
+            stop_visible_in_task = io.token().is_requested();
+            task_returned = true;
+        });
+        host.value()->spawn([&](IoTaskContext& io) {
+            (void)io;
+            write_byte(suspend_pipe[1]);
+        });
+
+        std::thread stopper([&] {
+            read_byte(suspend_pipe[0]);
+            host.value()->request_stop();
+            write_byte(go_pipe[1]);
+        });
+        std::thread writer([&] {
+            read_byte(go_pipe[0]);
+            ::close(data_pipe[1]);
+        });
+        const auto outcome = host.value()->run();
+        stopper.join();
+        writer.join();
+        CHECK(outcome.has_value());
+        CHECK(host.value()->stop_requested());
+        CHECK(task_returned.load());
+        CHECK(terminal_eof.load());
+        CHECK(!terminal_canceled.load());
+        CHECK(stop_visible_in_task.load());
+        ::close(data_pipe[0]);
+        ::close(suspend_pipe[0]);
+        ::close(suspend_pipe[1]);
+        ::close(go_pipe[0]);
+        ::close(go_pipe[1]);
         CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
     }
 
@@ -243,4 +382,16 @@ int main() {
     }
     std::printf("w04_stackful_candidate: PASS\n");
     return 0;
+
+#else
+
+    if (g_failures != 0) {
+        std::fprintf(stderr, "w04_stackful_candidate: %d failure(s)\n", g_failures);
+        return 1;
+    }
+    std::printf("w04_stackful_candidate: structural suspension arms UNAVAILABLE "
+                "(threadpool backend preads; non-seekable fds fail immediately)\n");
+    return 2;
+
+#endif
 }
