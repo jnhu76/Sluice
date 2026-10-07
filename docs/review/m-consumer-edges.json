@@ -3800,7 +3800,7 @@
         {
           "consumer_id": "c-new02-901",
           "path": "src/reader.cpp",
-          "symbol": "Reader::stream_to overloads implemented as copy_all (reader.cpp:3 #include <sluice/copy.hpp>; :48-56 two call sites; declared include/sluice/reader.hpp:23-28)",
+          "symbol": "Reader::stream_to overloads implemented as copy_all (reader.cpp:3 #include <sluice/copy.hpp>; :48-56 two call sites; declared include/sluice/reader.hpp:24-29)",
           "family": "M-F",
           "edge_kind": "CALL",
           "semantic_role": "Production caller of the copy_all composition: Reader::stream_to is a public sluice_core API whose both overloads delegate to copy_all (F0 L-02: Reader embeds the stream_to composition)",
@@ -4179,7 +4179,7 @@
     {
       "id": "U-05",
       "surface": "include/sluice/wal.hpp, copy.hpp, observed.hpp",
-      "detail": "wal: only wal.hpp/wal.cpp (zero downstream). observed: zero downstream. copy: R2 CORRECTION - copy_all is NOT own-TU-only: src/reader.cpp:3 includes <sluice/copy.hpp> and both Reader::stream_to overloads are implemented as copy_all calls (src/reader.cpp:48-56; public API include/sluice/reader.hpp:23-28, reader.hpp is in the frozen manifest HEADERS set) - a production sluice_core consumer, recorded as c-new02-901. Zero test/app users stands. NEW-02b stranding is therefore already realized in-repo for copy.hpp (not only wal/memory_io_context): retiring copy.hpp requires cutting the reverse reader.hpp/reader.cpp->copy.hpp edge (public sluice_core API change + B-01 re-freeze), not only the Reader/Writer abstract dependency. Installed via the sluice_core header glob; vectored-API decisions gate them (B-07).",
+      "detail": "wal: only wal.hpp/wal.cpp (zero downstream). observed: zero downstream. copy: R2 CORRECTION - copy_all is NOT own-TU-only: src/reader.cpp:3 includes <sluice/copy.hpp> and both Reader::stream_to overloads are implemented as copy_all calls (src/reader.cpp:48-56; public API include/sluice/reader.hpp:24-29, reader.hpp is in the frozen manifest HEADERS set) - a production sluice_core consumer, recorded as c-new02-901. Zero test/app users stands. NEW-02b stranding is therefore already realized in-repo for copy.hpp (not only wal/memory_io_context): retiring copy.hpp requires cutting the reverse reader.hpp/reader.cpp->copy.hpp edge (public sluice_core API change + B-01 re-freeze), not only the Reader/Writer abstract dependency. Installed via the sluice_core header glob; vectored-API decisions gate them (B-07).",
       "basis": [
         "c-new02-001 (NEW-02b)",
         "c-new02-901 (NEW-02b, review-r2)",
