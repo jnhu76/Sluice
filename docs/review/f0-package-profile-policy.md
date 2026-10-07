@@ -20,11 +20,11 @@ Classification result (row IDs from `f0-role-profile-census.md` §2):
 
 | Class | Rows |
 |---|---|
-| `CANONICAL` | V-01..V-05, R-01..R-05, R-15, H-01..H-04, H-27, H-28, P-05, P-06 |
+| `CANONICAL` | V-01..V-05, R-01..R-05, R-15, H-01, H-03, H-04, H-27, H-28, P-05, P-06 |
 | `OPT_SUPPORTED` (shipped optional profile; W-04/ADR-0003 gate) | H-06..H-13, H-16, H-26 |
 | `COMPAT` (compatibility/dormant retained surface) | R-06 (`Completion<T>` caller-owned result), R-08 (`Batch`), H-05 (`op_helpers` completed-return + busy-spin), H-14 (`Future<T>`), H-15 (`WaitPolicy`/`EventedWaitPolicy`), H-17 (`Event`), H-18 (`select`), H-22 (5 dormant wrappers), L-01..L-09 (legacy stream world) |
 | `EXPERIMENTAL` | L-12 (`experimental/uring_*`) |
-| `INTERNAL` | all `detail/` substrates + backend seam + runtime mechanism (V-06..V-09, R-07, R-09..R-14, P-01..P-04, H-02, H-19..H-21, H-23..H-25) |
+| `INTERNAL` | all `detail/` substrates + backend seam + runtime mechanism (V-06..V-09, R-07, R-09..R-11, R-13, R-14, P-01..P-04, H-02, H-19..H-21, H-23..H-25) |
 | `TEST_ONLY` | L-10, L-11, R-12 |
 
 ### 1.2 Is compatibility installed?

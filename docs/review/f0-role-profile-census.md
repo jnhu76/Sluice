@@ -275,11 +275,11 @@ Forbidden inferences held both ways (recorded, per #454 §14): no asset is delet
 
 | Field | Rows |
 |---|---|
-| CANONICAL_PROFILE_SURFACES (19) | V-01..V-05, R-01..R-05, R-15, H-01..H-04, H-27, H-28, P-05, P-06 |
-| OPTIONAL_SUPPORTED_SURFACES (9) | H-06..H-13, H-16, H-26 |
+| CANONICAL_PROFILE_SURFACES (18) | V-01..V-05, R-01..R-05, R-15, H-01, H-03, H-04, H-27, H-28, P-05, P-06 |
+| OPTIONAL_SUPPORTED_SURFACES (10) | H-06..H-13, H-16, H-26 |
 | COMPATIBILITY_ONLY_SURFACES (17) | R-06, R-08, H-05, H-14, H-15, H-17, H-18, H-22, L-01..L-09 |
 | EXPERIMENTAL_SURFACES (1) | L-12 |
-| INTERNAL_ONLY_SURFACES (21) | V-06..V-09, R-07, R-09..R-14, P-01..P-04, H-02, H-19..H-21, H-23..H-25 |
+| INTERNAL_ONLY_SURFACES (21) | V-06..V-09, R-07, R-09..R-11, R-13, R-14, P-01..P-04, H-02, H-19..H-21, H-23..H-25 |
 | TEST_ONLY_SURFACES (3) | L-10, L-11, R-12 |
 | HISTORICAL_RESEARCH_SURFACES | 4 asset sets (§2.6): Lean family, baseline TLA 8, docs/archive, research/RESULTS |
 
