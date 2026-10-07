@@ -23,6 +23,16 @@ Usage:
                                                      # manifest: committed frozen
                                                      # baseline == manifest-bound
                                                      # sha256 == fresh baseline
+
+--check-frozen pins the production baseline to the frozen manifest's
+PRODUCTION_BASELINE_SHA (it must exist as a commit and be an ancestor of
+HEAD), so a reproduction is invariant to later docs-only advancement of
+master/origin; only src/include drift from the pinned baseline fails the
+provenance gate. A freeze run (no --check-frozen) discovers the baseline as
+the merge-base with origin/master per the F1 protocol. The pinned baseline
+must be present in the local history: a shallow checkout (fetch-depth 1)
+cannot validate ancestry, so a CI reproduction run needs fetch-depth: 0 or an
+explicit fetch of the pinned SHA.
 """
 
 import argparse
@@ -77,8 +87,48 @@ def capture(cmd):
     return run(cmd, capture_output=True, text=True).stdout.strip()
 
 
-def git_out(*args):
-    return run(["git", *args], capture_output=True, text=True, cwd=REPO).stdout.strip()
+def git_out(*args, cwd=REPO):
+    return run(["git", *args], capture_output=True, text=True, cwd=cwd).stdout.strip()
+
+
+def git_ok(*args, cwd=REPO):
+    return run(["git", *args], capture_output=True, text=True, cwd=cwd).returncode == 0
+
+
+def resolve_production_baseline(repo, frozen_data=None):
+    """Production baseline for this verification run.
+
+    --check-frozen pins it to the frozen manifest's PRODUCTION_BASELINE_SHA:
+    the frozen identity must not move with the branch tip, so it is validated
+    (exists as a commit, is an ancestor of HEAD) instead of being re-derived,
+    and origin/master is never consulted. A freeze run discovers it as the
+    merge-base with origin/master (the F0/adopted baseline) per the F1
+    protocol.
+    """
+    if frozen_data is None:
+        return git_out("merge-base", "HEAD", "origin/master", cwd=repo)
+    if not isinstance(frozen_data, dict):
+        raise SystemExit("--check-frozen: frozen manifest is not a JSON object")
+    pinned = str(frozen_data.get("PRODUCTION_BASELINE_SHA") or "")
+    if not pinned:
+        raise SystemExit("--check-frozen: frozen manifest has no PRODUCTION_BASELINE_SHA")
+    if not git_ok("cat-file", "-e", f"{pinned}^{{commit}}", cwd=repo):
+        raise SystemExit(
+            f"--check-frozen: pinned production baseline {pinned} is not a "
+            "commit in this repository")
+    if not git_ok("merge-base", "--is-ancestor", pinned, "HEAD", cwd=repo):
+        raise SystemExit(
+            f"--check-frozen: pinned production baseline {pinned} is not an "
+            "ancestor of HEAD; the frozen identity does not bind this tree")
+    return pinned
+
+
+def production_diff_paths(repo, baseline_sha):
+    """src/include files changed from the production baseline to HEAD; the
+    provenance gate requires this set to be empty."""
+    out = git_out("diff", "--name-only", f"{baseline_sha}..HEAD", "--", "src",
+                  "include", cwd=repo)
+    return out.splitlines() if out else []
 
 
 def sha256_bytes(data):
@@ -344,12 +394,14 @@ def main():
     args = ap.parse_args()
 
     frozen_manifest = None
+    frozen_data = None
     if args.check_frozen:
         frozen_manifest = Path(args.check_frozen)
         if not frozen_manifest.exists():
             sys.exit(f"frozen manifest not found: {frozen_manifest}")
         if not args.archive_baseline_out:
             sys.exit("--check-frozen needs --archive-baseline-out for the fresh baseline")
+        frozen_data = json.loads(frozen_manifest.read_text())
 
     if not os.environ.get("TMPDIR"):
         os.environ["TMPDIR"] = "/tmp"
@@ -372,14 +424,16 @@ def main():
     print(f"prefix={prefix} consumer_build={build_dir}")
 
     # Provenance is measured before anything else can dirty the tree: the
-    # production baseline is the merge-base with origin/master (the F0/adopted
-    # baseline), the verification head is the commit this run executes from,
-    # and a dirty tree means the recorded head does not identify the built
-    # content. The run's own declared outputs (manifest, archive baseline) are
-    # excluded from the cleanliness measurement: they do not feed the build
-    # or the probes, and a freeze pass over both profiles always runs with the
-    # first profile's artifacts already on disk.
-    production_baseline_sha = git_out("merge-base", "HEAD", "origin/master")
+    # production baseline is pinned to the frozen manifest under --check-frozen
+    # (a frozen identity must not move with the branch tip) and discovered as
+    # the merge-base with origin/master on a freeze run; the verification head
+    # is the commit this run executes from, and a dirty tree means the recorded
+    # head does not identify the built content. The run's own declared outputs
+    # (manifest, archive baseline) are excluded from the cleanliness
+    # measurement: they do not feed the build or the probes, and a freeze pass
+    # over both profiles always runs with the first profile's artifacts already
+    # on disk.
+    production_baseline_sha = resolve_production_baseline(REPO, frozen_data)
     verification_head = git_out("rev-parse", "HEAD")
     origin_master_tip = git_out("rev-parse", "origin/master")
     declared_outputs = {str(Path(args.manifest_out).resolve()),
@@ -398,8 +452,8 @@ def main():
         if str(Path(path).resolve()) not in declared_outputs:
             dirty_paths.append(line)
     worktree_clean = not dirty_paths
-    production_diff = git_out("diff", "--name-only", f"{production_baseline_sha}..HEAD",
-                              "--", "src", "include") if production_baseline_sha else ["<no merge-base>"]
+    production_diff = (production_diff_paths(REPO, production_baseline_sha)
+                       if production_baseline_sha else ["<no merge-base>"])
     production_diff_empty = not production_diff
 
     # 1. Configure + build (xmake native). The liburing switch is passed
@@ -459,10 +513,12 @@ def main():
                     uring_version = line.split(":", 1)[1].strip()
     macro_view = ["-DSLUICE_HAS_LIBURING"] if args.liburing else []
 
+    baseline_source = ("pinned from frozen manifest" if frozen_data is not None
+                       else "merge-base with origin/master")
     gate("F1_B_PROVENANCE_VERIFIED",
          bool(production_baseline_sha) and production_diff_empty and worktree_clean,
-         f"(production baseline {production_baseline_sha[:12]}, origin/master "
-         f"{origin_master_tip[:12]}, head {verification_head[:12]}, "
+         f"(production baseline {production_baseline_sha[:12]} [{baseline_source}], "
+         f"origin/master {origin_master_tip[:12]}, head {verification_head[:12]}, "
          f"production diff={[Path(p).name for p in production_diff]}, "
          f"worktree_clean={worktree_clean}, non-output dirt={dirty_paths[:3]})")
 
@@ -763,8 +819,8 @@ def main():
         print(f"\nF1 package verification: {len(failures)} gate(s) FAILED")
         return 1
 
-    if frozen_manifest is not None:
-        frozen = json.loads(frozen_manifest.read_text())
+    if frozen_data is not None:
+        frozen = frozen_data
         fresh = json.loads(manifest_out.read_text())
         frozen_baseline_ref = frozen.get("ARCHIVE_BASELINE", {})
         frozen_file = frozen_baseline_ref.get("file")
@@ -790,7 +846,8 @@ def main():
                   f"frozen baseline {frozen_file} match={committed_match}")
             return 1
         print(f"\nFROZEN_MANIFEST_REPRODUCED: {frozen_manifest} "
-              f"(verified at head {verification_head[:12]}; volatile fields "
+              f"(pinned production baseline {production_baseline_sha[:12]}, "
+              f"verified at head {verification_head[:12]}; volatile fields "
               f"{sorted(VOLATILE_MANIFEST_KEYS)} excluded; committed frozen "
               f"baseline == manifest sha256 == fresh baseline "
               f"({baseline_sha[:12]} matched)")

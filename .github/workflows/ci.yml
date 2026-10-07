@@ -50,6 +50,19 @@ jobs:
       - name: Scan C++ comments
         run: python3 scripts/check_cpp_comment_authority.py .
 
+  f1-verifier-selftests:
+    name: F1 verifier provenance self-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Frozen-baseline provenance discriminators
+        run: python3 scripts/test_verify_f1_frozen_provenance.py
+
   linux-build:
     name: Linux ${{ matrix.mode }} build + tests
     runs-on: ubuntu-latest
