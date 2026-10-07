@@ -1,0 +1,172 @@
+{
+ "revisionNote": "R2 审查轮（2026-10-07）：M-R Batch 内部重定型移出 tier-1（移入 B-01 重冻结批次随 F2 执行）、attach_observer 观察者 oracle 三测试豁免（保留 Completion& 拼写随 F2 处置）、M-H exposureCounts『公共头 5』少算修正+U-08 补录、M-A2 U-05 copy 反向边修正（c-new02-901）。R3 终审轮（2026-10-08）：生成器与 /tmp/m1_result.json、docs/review/m-family-decomposition.json 三方同步；权威文本=issue #458 §3/§6/§7，普查底册=census.md+m-consumer-edges.json（U-08/c-new02-901 已入册）。",
+ "families": [
+  {
+   "id": "M-R",
+   "title": "Completion caller-owned result 流 → 公共 Request<T>/RequestId over context-owned RequestCore（含 Batch、op_helpers、RequestArena/identity fallback 边界）",
+   "oldAuthority": "caller-owned Completion<T> 载体流（X-01，46 记录）：4 app 任务体 Completion 成员/栈上 Completion（copy_task.cpp:37-38,55 等）；Batch::Slot 按值存储（batch.hpp:56-68，仅 threadpool_external_loop_test 消费）；AsyncIoContext Completion& 重载与 backend seam 的 Completion* 参数（async_io_context.hpp:145-151，null=仅经 core 发布）；await_op_helpers/async/file.hpp Completion 拼写便利（含 live busy-spin：op_helpers.cpp:18-24,84-90，D-15/MIG-02 行 928 非历史）；RuntimeTaskContext submit_*(Completion&)/submit_*_request→RequestHandle/await_completion/cancel_waiter（application_runtime.hpp:32-46）；Scheduler await_completion/cancel_waiter/park_wake（scheduler.hpp:153-163,:460,:415-505）；Fiber::CompletionWaitOutcome（fiber.hpp:22-26）；attach_observer→backend_->identity_of 的 Completion→identity 转换（async_io_context.cpp:970-1015）；RequestArena 兼容 release + identity_of fallback（X-02：install_binding 零调用者、fallback 在 master 休眠但为指定 release owner，completion.hpp:169,358）。root MIG-02（root:924）裁定 caller Completion=Compatibility only、不得作 canonical result authority。",
+   "replacement": "公共 Request<T>/RequestId 单一 move-only settlement 责任绑定（AsyncIoContext 六类 submit_*→Result<Request<T>>，async_io_context.hpp:285-290）+ RequestScope（W-02 有界 owned-driver 流，root:713-715）+ PROG wait/poll 契约（替换 busy-spin await 语义）。注意：runtime 面覆盖拼写尚不存在——RuntimeTaskContext 只有 Completion& 与 RequestHandle 拼写（application_runtime.hpp:32-46），无 Request<T> 返回 submit；X-16 await 机制（Scheduler/RuntimeTaskContext/Fiber::CompletionWaitOutcome）无已采纳替换形态。",
+   "replacementAdopted": "PASS",
+   "adoptionEvidence": "就 ask 点名四组件逐一核实（本轮实读）：(1) Request<T>+RequestId：根 v1-r3 ARCH-02 root:272（Public Request<T> 唯一结果/settlement 责任绑定）+HANDLE-01..03 root:489-510（已采纳 Sole normative root）；在树 include/sluice/async/request.hpp:18,59；ledger docs/roadmap/v1-conformance.md:41-42 B1-A..D+B2 记录（两生产后端由 context-owned RequestCore 治理、accepted identity 流向返回的公共 Request、publication-inflight 死亡证据、六突变体 killed；RequestCore.tla Consume/DiscardPublic 形式对应）；#395 CLOSED（gh issue view，2026-09-26）。(2) RequestScope：ledger:49 D1 VERIFIED+HUMAN_FINAL_REVIEW=APPROVE+六突变体，#398 CLOSED（2026-10-02）。(3) RequestCore：root §8 root:425 + B1-B/B1-C/B1-D（ThreadPool/io_uring 权威切换+seam 收缩）。CAVEAT（如实记录）：ledger :41-42 整行仍 NOT_ASSESSED（'whole-row verdicts wait for independent final review'）——采纳（root+#395/#398 关闭+在树实现）≠整行 conformance 终审；B2 记录自述 assessment rows 保持 NOT_ASSESSED。",
+   "readiness": "PARTIALLY_READY",
+   "blockers": [
+    "runtime 面无可达替换拼写：RuntimeTaskContext 无 Request<T> 返回 submit（application_runtime.hpp:32-46），4 app 任务体/await_op_helpers/async/file.hpp/task_result 的重定型需 runtime 世界表面改动（B-04/B-08，owner F3）→ 该层按 x16Ruling 显式 policy-isolated pending F3，不在 M 内迁移",
+    "B-05：RequestHandle 最终拼写 UNDECIDED（F0 D-17，F2-owned）挡 identity_of arena fallback 移除——fallback 今日休眠（install_binding 零调用者）但仍是指定 release owner（X-02）；arena 子域边界=F2",
+    "X-16 节点未收口：F0 DAG 明示两序收敛、节点不可避，且 F2_PREREQUISITES 含 X-16——Completion 退役（F2 drop Completion& overloads→remove completion.hpp→remove arena）不得在 M 内执行",
+    "ledger :41-42 独立终审未记录：RequestCore/公共 Request 面的整行 conformance 判定缺席（不挡采纳，挡'已验证'声明）",
+    "census §8 contract_observer.cpp 双记录（c-x01-041 aux/TEST_ORACLE/COMPAT_TEST_RETAINED vs c-x01-901 M-R/CALL/UNMIGRATED）——本分解裁定为 compat 正探针（aux 侧），随 F2 同批处置，不计 tier-1 迁移对象。R2 扩展为观察者拼写缺位裁定：context 面观察者 attach/cancel 仅有 Completion& 拼写（async_io_context.hpp:420-423，经 async_io_context.cpp:970-1015 identity_of 转换），六类 Request<T> submit 以 nullptr completion 仅经 core 发布（async_io_context.hpp:144-150 seam），不存在 RequestId/Request 拼写的 attach（c-x01-901 自记 no observer-specific successor spelling recorded）——凡消费 attach_observer 的测试都是 context 级 OBS 投递 oracle（grep -ln attach_observer tests/*.cpp → 恰 shutdown_lifecycle_test/threadpool_core_cutover_test/uring_core_cutover_test 三个，c-x01-022/023/026，TEST_ORACLE UNMIGRATED owner F2），tier-1 不得按字面整体重定型：保留 attach_observer/Completion& oracle 拼写、只迁移其可表达的 submit 面，与 contract_observer.cpp 同判（随 F2 处置）",
+    "Batch 内部重定型不在 M tier-1（R2 修订，移入 B-01 重冻结批次随 F2 执行）：Batch::next() 按 Completion::reap_seq（publish 序：completion.hpp:22-24 原子计数、:181 publish_from_reap 内 :188 赋值）+ index 决胜弹出（batch.cpp:126-141）——完成序是 Batch 的可观察契约，而已采纳替换面不携带等价排序来源：Request<T> 仅 valid/id/ready/try_result/take_result/cancel/discard（request.hpp:59-201），request_core.hpp 无任何发布序号（仅 published 标志位），request_slot.hpp:79 submit_seq_ 是提交序非完成序。强行重定型会把多 slot 乱序完成时的弹出序退化为 index/提交序（静默语义变更），或须发明 core 侧新排序状态（未经采纳，触发 Mechanism Justification Gate）。且全仓唯一 Batch 消费者 tests/threadpool_external_loop_test.cpp:875-906 只用单 slot（batch.add 全文件恰 1 处）——多 slot 完成序今日无在树 oracle，迁移对照在该不变量上没有对照物。重定型必改 batch.hpp 私有段（batch.hpp:55-68 Slot 按值存 Completion）+batch.cpp（:27-36 Completion& 重载提交）=生产 src+已安装冻结头内容变更，触发 B-01 重冻结（production_diff 覆盖 src include 全集，见 census §5 B-01 R2 细化）"
+   ],
+   "consumerCounts": "EDGES 75（census §4）：CALL 20 / TEST_ORACLE 19 / TYPE 10 / DIRECT_INCLUDE 9 / TYPE_LAYOUT 8 / FORMAL_CORRESPONDENCE 3 / DOC_CLAIM 3 / NAME_ONLY 1 / OWNERSHIP 1 / TRANSITIVE_INCLUDE 1；migration_state UNMIGRATED 70 / COMPAT_TEST_RETAINED 4 / NOT_A_CONSUMER 1。APPS 深审 9：CALL 4 / TYPE 3 / DIRECT_INCLUDE 1 / TYPE_LAYOUT 1（copy 3、hash 2、grep 2、tail 2）。owner 分布 F2 37 / F3 28 / M 10。",
+   "exposureCounts": "唯一路径 60（本轮从 JSON 实测）：apps 5 / tests 19 / src 13 / 公共头 19 / docs 4（README.md+README.zh-CN.md+formal 2）。APPS 4/4 全覆盖。package：旧家族头（completion.hpp、batch.hpp、detail/request_arena.hpp 等，U-07）全部在 F1 冻结 79 头集内——任何增删触发 B-01 同 slice 重冻结（f1-package-manifest-*.json + 归档 sha256 三方闭合）；R2 细化：production_diff 覆盖 `git diff {baseline}..HEAD -- src include` 全集（verify_f1_package.py:401-402,:462-463），已安装头私有段编辑同样使 check-frozen 复现失败（batch.hpp:55-68 私有段即此类别）。formal：RequestCore.tla ReleaseBind=compat Completion release flavor（map:268，B-06 重映射义务）。build：X-14 seam（12 add_includedirs 声明点→81+2/43+2 target）。",
+   "migrationStrategy": "两层拆分（防 X-16 串老）。Tier-1（M 内可执行，不依赖任何未采纳面；R2 修订后可执行面）：迁移可达已采纳 context 面的消费者——直接用 AsyncIoContext 的测试消费者改用六类 submit_*/Request<T>（blockers 5 豁免：attach_observer 观察者 oracle 三测试保留混合拼写、随 F2 处置）；删 5 个零符号 #include <sluice/file.hpp>（c-x06-004..008，owner=M）；接线 SLUICE_COPY_INTERNAL_TESTING（B-02，M 拥有）。Batch 不在 tier-1（R2 修订，原稿高估了 PARTIALLY_READY 的可执行面）：Batch::next() 按 Completion::reap_seq（publish 序：completion.hpp:22-24 原子计数、:181 publish_from_reap 内 :188 赋值）+ index 决胜弹出（batch.cpp:126-141）——完成序是 Batch 的可观察契约，而已采纳替换面不携带等价排序来源：Request<T> 仅 valid/id/ready/try_result/take_result/cancel/discard（request.hpp:59-201），request_core.hpp 无任何发布序号（仅 published 标志位），request_slot.hpp:79 submit_seq_ 是提交序非完成序。强行重定型会把多 slot 乱序完成时的弹出序退化为 index/提交序（静默语义变更），或须发明 core 侧新排序状态（未经采纳，触发 Mechanism Justification Gate）。且全仓唯一 Batch 消费者 tests/threadpool_external_loop_test.cpp:875-906 只用单 slot（batch.add 全文件恰 1 处）——多 slot 完成序今日无在树 oracle，迁移对照在该不变量上没有对照物。重定型必改 batch.hpp 私有段（batch.hpp:55-68 Slot 按值存 Completion）+batch.cpp（:27-36 Completion& 重载提交）=生产 src+已安装冻结头内容变更，触发 B-01 重冻结（production_diff 覆盖 src include 全集，见 census §5 B-01 R2 细化）——Batch 内部重定型移入 B-01 重冻结批次随 F2 Completion 退役 slice 执行（owner F2，见 blockers 6）。Tier-2（X-16 policy-isolated pending F3）：runtime 面消费者（4 app 任务体、await_op_helpers、async/file.hpp、task_result/run_task_to_result、RuntimeTaskContext/Scheduler await/cancel 拼写、Fiber::CompletionWaitOutcome）显式隔离并写隔离出口条件，移交 F3。DOC_CLAIM（X-10/X-18）随批迁移（M gate NO_UNQUALIFIED_CANONICAL_DOC_CLAIMS_FOR_RETIRED_AUTHORITY）。禁止：删 consumer 凑零计数、静默 multi-worker→single-owner、把 Batch 语义偷升格为 root 未命名的新 compound op。",
+   "evidencePlan": "每消费者组迁移=迁移前后可观察行为对照（同输入同输出、退出码、drain/settlement 次序不变）+双 profile（noliburing/liburing）构建+四个 app_*_consumption_test 全绿（NEW-01c：app 引擎 TU 编进测试二进制，引擎迁移共同迁移）；X-02 休眠 fallback 不动性由 request_core_ownership/public_request oracle 间接锚定；F1 基线复现用 verify_f1_package.py --check-frozen（输出写 /tmp/m-*，绝不改写 docs/review/f1-*.json，B-01）；B-02 接线后 DirFsyncScript EINTR 注入 oracle 可达性实测；ledger MIG-02 行（:54，NOT_ASSESSED）登记迁移证据。本轮为只读分解，未运行构建/测试——evidencePlan 的全部执行项留待 exec issue。",
+   "rollbackUnit": "单消费者组一个提交组（每 app/每测试族独立 git revert）；Tier-1 全部为测试/app 侧与 include 行删除，不触生产库表面与 F1 冻结物（R2 修订后此句成立：Batch 重定型已移出 tier-1——原稿把 Batch 划入 tier-1 时该句与 batch.hpp:55-68/batch.cpp 变更直接矛盾，见 blockers 6）；Tier-2 隔离声明是文档工件，可独立撤回。",
+   "downstreamOwner": "F2",
+   "dependsOn": []
+  },
+  {
+   "id": "M-H",
+   "title": "ApplicationRuntime/Scheduler/Fiber/Group/Future/WaitPolicy multi-worker runtime 世界 → StackfulIoHost/IoTaskContext（替换未采纳）+ canonical Request 底座（已采纳）",
+   "oldAuthority": "ApplicationRuntime/RuntimeBuilder/RuntimeTaskContext（application_runtime.hpp；sched_ unique_ptr+wake_handle_ 按值公开布局 :182,:184，X-04）；Scheduler（await_completion/cancel_waiter/park_wake，scheduler.hpp:153-163/460/415-505，X-16；ReadyRoutingSink 唯二实现者之一 X-15）；Fiber/fiber_ctx（fiber.hpp 按值嵌入唯一公共头 stackful_io_host.hpp:181，X-03；fiber_ctx.hpp ODR/布局面）；Group/Future/WaitPolicy（group.hpp:139-199 inline make_unique<Fiber> complete-type 依赖，X-17）；EventedWaitPolicy（NEW-01a：第三块安装头级 Scheduler/SchedulerWakeHandle 暴露，唯一 repo 消费者 group.cpp:22）；task_result/run_task_to_result（4 app + 8 测试文件，X-09）；dormant 同步原语（condition.hpp 零 repo includer/semaphore/async_queue；async_rwlock 10 src TU 机械包含，X-17）；multi-worker app 用法（copy --workers/pipeline、tail 阻塞宿主 worker 假设）。root MIG-02 行 931-933：ApplicationRuntime/Scheduler/Fiber=Optional narrow adapter、Group/Future/WaitPolicy=仅 retained adapter 所需、dormant 原语=Outside v1；PROD-02/ledger:55 multi-worker=DEFERRED_OUT_OF_SCOPE。",
+   "replacement": "StackfulIoHost/IoTaskContext 窄 single-owner host（ADR-0003 D2，SUPPORT_W04）——候选，未采纳；canonical Request 底座（Request<T>/PROG/wait_one）已采纳，承接 result 流但不构成 host 替换。Fiber/fiber_ctx retained stackful substrate（ADR-0003 §8 PROPOSED 文本）同样未采纳。",
+   "replacementAdopted": "FAIL",
+   "adoptionEvidence": "本轮逐一实读：ADR-0003 Status: PROPOSED（docs/adr/0003-narrow-stackful-io-host.md:3，#399/D2）——无更高权威采纳它；ledger:53 Optional stackful host=IMPLEMENTED_UNVERIFIED（D2_IMPLEMENTED_PENDING_REVIEW，'human review pending'）；ledger:55 multi-worker host=DEFERRED_OUT_OF_SCOPE（PROD-02：supported 需 root 修订）；F1 把 W-04 记为 OPTIONAL_CANDIDATE evidence PASS、明文 'no support claim'；唯一已采纳 ADR 是 ADR-0004（docs/adr/0004 头：Status ADOPTED，PR #453——只冻结 shutdown 拼写/五态生命周期，不裁 host 替换）；#402 正文 F3b 条件句 'StackfulIoHost/IoTaskContext 是 supported optional host 时保留'——预设采纳，非采纳本身。结论：宿主替换无任何已采纳权威 ⇒ M-H_REPLACEMENT_ADOPTED=FAIL。",
+   "readiness": "BLOCKED_REPLACEMENT_NOT_ADOPTED",
+   "blockers": [
+    "B-04：宿主替换未决（StackfulIoHost=ADR-0003 PROPOSED/D2 IMPLEMENTED_UNVERIFIED）→ 四 app 迁移无目标拼写前不可开工；multi-worker→single-owner 静默转换被 M 铁律+#402 禁令+HOST-01/PROD-02 双重禁止——owner F3 决策（走 root/ADR 流程）",
+    "U-01（独立 blocker 类，不得被 B-04 掩盖）：dormant 原语 condition.hpp/semaphore.hpp/async_queue.hpp 安装面外部使用未知——处置必须走包面政策/外部使用决定，不得以 in-repo 零消费者推定安全。R2 扩展：同类安装面还有 U-08（Scheduler/Fiber 耦合的 select/event/future/wait_policy/wait_queue/timer_registration/select_fwd/lock_guard/mutex 9 公共头 + detail/{queue_item,queue_port,select_registration} 3 已安装 detail 头，含 group→future、evented→wait_policy 传递安装边）——本族裁决输入面按 U-01+U-08 全集计",
+    "X-03/X-04 头边界（fiber 按值嵌入公共头×1、Scheduler 布局暴露）是 F3 内化前置，不是本族解锁条件；B-08 helper-before-runtime 编译序未证明",
+    "B-03：本机缺系统 liburing，liburing profile 的 D2/W-04 端到端构建/链接未验证（F5 证据义务）"
+   ],
+   "consumerCounts": "EDGES 66（census §4）：CALL 18 / TEST_ORACLE 16 / TYPE 10 / DOC_CLAIM 8 / FORMAL_CORRESPONDENCE 5 / DIRECT_INCLUDE 3 / MACRO_LAYOUT 3 / TYPE_LAYOUT 2 / HISTORICAL_REFERENCE 1；states UNMIGRATED 48 / COMPAT_TEST_RETAINED 14 / POLICY_ISOLATED 2 / NOT_A_CONSUMER 2；owner F3 35 / M 27 / none 3。APPS 深审 16（每 app 4：run_task_to_result/RuntimeBuilder/await 便利/include 面）。",
+   "exposureCounts": "唯一路径 49（本轮实测）：apps 16 / tests 17 / src 4 / 公共头 5 / docs 7（README×2、CHANGELOG、visuals、formal 4）。R2 修订：『公共头 5』系统性少算 Scheduler 世界的耦合安装面——sluice/async/{select,event,future,wait_policy,wait_queue,timer_registration,select_fwd,lock_guard,mutex}.hpp + sluice/async/detail/{queue_item,queue_port,select_registration}.hpp 共 12 个已安装头零消费者路径记录（U-08 补录，全在 F1 冻结 79 头集内），真实耦合安装面 ~17 头（原记录 5：application_runtime/scheduler/fiber/fiber_ctx/evented_wait_policy + U-08 的 9 公共头 + 3 已安装 detail 头）；group.hpp:5 安装 future.hpp、evented_wait_policy.hpp:4 安装 wait_policy.hpp 两条传递安装边随 U-08 补录；M-H 裁决（B-04）与包面政策输入以 U-08 为准（M 铁律：零 grep≠无用）。package：fiber.hpp/fiber_ctx.hpp/cancel.hpp 在两份 F1 manifest HEADERS 内（NEW-01e：H-30/H31 闭包冻结，noliburing.json:56+ODR 注 :146）；fiber_ctx 按值布局写进 F1 CONFIG_REQUIREMENTS（sanitizer 一致性条款）；X-12 ODR：SLUICE_HAS_LIBURING 公共 define+link 单点。",
+   "migrationStrategy": "M 内零迁移执行（无目标拼写）。产出裁决议题：F3 走 root/ADR 流程裁决 host 替换（采纳 ADR-0003、修正后采纳、或另作裁决——三者均需权威行为，M 不得秘密采纳）。M 仅维护：消费者台账（本 census+JSON）、tier-2 显式隔离声明（见 x16Ruling）、DOC_CLAIM 修正待办（X-18：四 app README 'installed' 半句事实底座已被 F1 改变，随 app 迁移批次修）。dormant 原语单列外部使用政策决定（U-01→F5/包面），与 host 裁决解耦。被删除的 consumer 不是被迁移的 consumer（census §7.1：9 个已删测试目标+hardening.py 不计证据）；现存唯一 app oracle=四个 app_*_consumption_test。",
+   "evidencePlan": "裁决议题输入包：D2 记录全文、ADR-0003 全文（412 行）及其 §12 留给 #402 的收缩债（stop 投影三重态）、F1 W-04 证据（P2_W04_STRUCTURAL_STOP=PASS、P1_W04_STRUCTURAL_ARMS_UNAVAILABLE=PASS rc=2、H5 异常臂）、ledger:53/:55 现状、U-08 Scheduler 耦合安装面（census §6 U-08+§7.2：12 头已在冻结安装集、M-H exposureCounts 少算修正——外部使用政策输入按 U-01+U-08 全集计）。不产生新迁移证据；B-03 缺口如实记录为 F5 义务。X-15 协议自身有 Scheduler 无关 oracle（progress_source_ownership_test 双 profile 变体）——host 裁决不触及 ready-routing 权威。",
+   "rollbackUnit": "本族 M 内无迁移执行（裁决议题本身可逆）。F3 执行期回滚单元=每 app / 每 runtime 组件（ApplicationRuntime、Scheduler、Group/Future/WaitPolicy、helpers 各自独立批次）。",
+   "downstreamOwner": "F3",
+   "dependsOn": []
+  },
+  {
+   "id": "M-F",
+   "title": "legacy Reader/Writer/FileReader/FileWriter/IoContext 第二原生权威 + 仓库唯一 vectored 实现 → canonical File/NativeFileRef/blocking::（vectored 能力裁决未回答）",
+   "oldAuthority": "FileReader/FileWriter 独立 fd 拥有者（include/sluice/file.hpp——注意角色倒置：此头是 legacy 流世界非 canonical File；独立定义 open/close/move/sync，X-06 负判定：与 canonical File 无语义边、共享 oracle 降为 PARTIAL——legacy 关闭 fd 伪造 permission_denied vs oracle invalid_state，src/file.cpp:93-94=ledger:149 GAP）；Reader/Writer 抽象族（file.hpp:16,:67；file-backed 实现仅 FileReader/FileWriter，NEW-02b）；IoContext/BlockingIoContext 工厂（io_context.hpp——legacy 面唯一生产 CALL 消费者且自身零下游，X-07）；vectored 面 read_vec/read_vec_at/write_vec/write_vec_at（readv/writev，file.hpp:50-107）+唯一原生 Writer::write_all_vec；legacy open/close/move。",
+   "replacement": "canonical sluice::File（所有权/access 权威，root MIG-02 行 919）+ NativeFileRef（internal borrow/provenance，无第二所有权，行 920）+ blocking::*（direct invocation adapter，共享语义 oracle 不经 RequestCore，行 921）；IoContext 工厂→File::open（file_resource.hpp:75）+blocking:: 自由函数（blocking/file.hpp:14-59，c-x07-001 replacement）。",
+   "replacementAdopted": "PARTIAL",
+   "adoptionEvidence": "已采纳半：root MIG-02 行 919-921（v1-r3 采纳文本）+ledger :37-40 A2 VERIFIED 行（read_exact/write_all、SEM-07 metadata、显式 close/RAII、Direct invocation W-01 VERIFIED）+F1 W-01 clean-room PASS（P0_W01_CORE_ONLY_CLEAN_ROOM）。未采纳/未覆盖半：(a) canonical 面无 vectored 对应物——vectored 能力裁决未回答（PROD-03 root:127 'not automatically admitted'；ledger:56 DEFERRED_OUT_OF_SCOPE 'Workload and root amendment'；唯一描述现有 vectored 能力的文本在已废止 ADR-0002——非现行权威）；(b) A1 共享 oracle 行 IMPLEMENTED_UNVERIFIED（ledger:36）+legacy permission_denied 伪造 GAP（ledger:149）——oracle 共享是 PARTIAL。",
+   "readiness": "BLOCKED_EXPRESSIVENESS_GAP",
+   "blockers": [
+    "B-07（ask 点名）：vectored readv/writev 能力裁决权威未回答——root 是否要求/是否入 v1/现有能力是否有意退役/canonical File 是否该获得/是否 compat-only 可隔离，五问均无现行权威答案；NEW-01b 分发不对称（read_vec_all 逐 slice 走 read_some 不派发虚 read_vec、reader.cpp:81-96 vs write_all_vec 派发 write_vec、writer.cpp:48-56；read_vec_all 全仓零调用者）必须计入该决策",
+    "D-09(1) 第二权威问题未答：FileReader/FileWriter 独立 fd 权威是否有保留消费义务（X-06 负判定+D-09 前置问 1）",
+    "U-04/U-03：include/sluice/file.hpp 与 io_context.hpp 为 F1 冻结安装头，外部使用未知——处置走包面政策，不得以 in-repo 计数推定",
+    "A1 GAP（ledger:149）：legacy 关闭 fd 伪造 permission_denied——迁移对照证据缺口（oracle 要求 invalid_state）",
+    "B-02：SLUICE_COPY_INTERNAL_TESTING 未接线→X-13 posix_retry 迁移缺 EINTR 注入对照证据（owner M 先接线再 F4）"
+   ],
+   "consumerCounts": "EDGES 35（census §4；R2 修订：+1 CALL=c-new02-901 src/reader.cpp→copy_all 生产消费边）：TEST_ORACLE 15 / CALL 10 / TYPE 6 / BUILD_CONFIG 1 / DIRECT_INCLUDE 1 / DOC_CLAIM 1 / HISTORICAL_REFERENCE 1；states UNMIGRATED 26 / COMPAT_TEST_RETAINED 5 / NOT_A_CONSUMER 3 / POLICY_ISOLATED 1。live in-repo 实测（X-06/X-07）：IoContext 工厂唯一生产 CALL + wal.cpp + 6 测试文件、apps=0。APPS 深审 6（copy 2/hash 1/grep 1/tail 2，主要是 blocking::/NativeFileRef 已在 canonical 面的用法）。",
+   "exposureCounts": "唯一路径 27（本轮实测；R2 修订：+src/reader.cpp，c-new02-901）：apps 1 / tests 12 / src 7 / 公共头 5 / docs 2。package：sluice/file.hpp、io_context.hpp、wal/copy/observed（经 sluice_core glob）、detail/posix_retry.hpp（X-13 关键细化：detail/≠内部，是已安装头 libraries.lua:20+两 manifest:88——收缩它即收缩 F1 包面；threadpool_backend.hpp:8 构成公开头→detail 传递边）。归档：libsluice_core.a 含 file.cpp.o/io_context.cpp.o/blocking_file.cpp.o/wal.cpp.o/copy.cpp.o/copy_strategy.cpp.o/blocking_io_pool.cpp.o（F1 v2 baseline 本轮实测成员）。",
+   "migrationStrategy": "裁决先行：vectored 能力 + 第二权威两问均未回答，走 F4+root 修订流程；裁决前不动任何 FileReader/FileWriter 消费者（F0 DAG：两决策先于一切迁移，因为它们决定行为是经委托保留、canonical 重实现、还是有意降级）。裁决后序（F0 DAG 采纳序）：IoContext/BlockingIoContext 工厂移除→6 测试文件迁移（其中 4 个是在册 ledger oracle：semantic_range/request_core_ownership/public_request/shutdown_lifecycle——同 slice 重跑并重录受影响 ledger 行）→remove sluice/file.hpp。X-13 posix_retry：M 先接线 B-02 seam，迁移 Home 待 F4 裁决（canonical 拼写或 app 本地 helper）。app-specific rename/dir-sync/safe-temp 逻辑不得偷升格 canonical File 语义（#402 F4 禁令）。M 内不在 canonical 面发明 vectored I/O。",
+   "evidencePlan": "裁决议题输入：NEW-01b 不对称实测（reader.cpp:81-96 vs writer.cpp:48-56、read_vec_all 零调用者）、file.hpp:50-107 vectored 面、wal 依赖链（wal.hpp:19→wal.cpp:103-105 writer.write_all_vec）、ledger:56+PROD-03 文本、ADR-0002 废止状态。迁移证据：oracle 矩阵双 profile 重跑+ledger 重录（4 个在册 oracle 测试同 slice）；U-03/U-04 外部使用政策记录；B-02 接线后 EINTR 注入对照。本轮只读分解未运行构建——执行项留裁决后的迁移议题。",
+   "rollbackUnit": "裁决议题本身可逆。迁移期：IoContext 工厂单独一批；每测试文件一族（oracle 重录绑定批次，回滚=revert 批次+恢复 ledger 行）。",
+   "downstreamOwner": "F4",
+   "dependsOn": []
+  },
+  {
+   "id": "M-A1",
+   "title": "BlockingIoPool：PROD-03 工作量/能力准入未裁决的零消费者安装面（独立准入裁决，不并入 M-F vectored 裁决）",
+   "oldAuthority": "BlockingIoPool/Task<T>/PoolStats（blocking_io_pool.hpp + detail/blocking_io_pool_impl.hpp + src/blocking_io_pool.cpp；F0 L-05 COMPAT、D-11 CANDIDATE UNDECIDED LOW confidence）",
+   "replacement": "无既定 replacement——候选 ThreadPoolBackend（canonical request 世界，F0 D-11 'workload/capability audit first'）；准入裁决前不得假定任何替换",
+   "replacementAdopted": "FAIL",
+   "adoptionEvidence": "F0 policy D-11（docs/review/f0-package-profile-policy.md:149）：CANDIDATE UNDECIDED、confidence LOW、准入门='workload/capability audit first'；ledger 无 BlockingIoPool 工作量行；PROD-03（root:127）未准入。无任何 adopted replacement 证据。",
+   "readiness": "BLOCKED_AUTHORITY_DECISION",
+   "blockers": [
+    "PROD-03 工作量/能力准入未裁决（F0 D-11）：accepted workload 或 named correctness/resource obligation 缺席",
+    "外部使用未知：blocking_io_pool.hpp 与 detail/blocking_io_pool_impl.hpp（78+1 standalone 记账中的锚定 _impl 片段）均为 F1 冻结安装头；已编译进 F1 冻结 libsluice_core.a（blocking_io_pool.cpp.o，本轮实测归档成员）——包面收缩触发 B-01",
+    "计数口径差异如实记录：F0 D-11 冻结值 'src 1 + tests'，本轮 live 全仓 grep（BlockingIoPool|blocking_io_pool|enqueue_job|PoolStats|sluice::Task，cpp/hpp/lua，排除 build/）仅命中自身 3 文件——tests 半句在 HEAD 未复现，按 live 值记录"
+   ],
+   "consumerCounts": "M0 JSON 无任何 BlockingIoPool 消费者记录（仅 c-x10-004 历史性提及=NOT_A_CONSUMER）；本轮 live 扫描 in-repo 消费者=0（apps 0/tests 0/src 仅自身 TU）。",
+   "exposureCounts": "公共头 2（均安装、均在 F1 冻结 79 头集）/src 1（入 libsluice_core.a）/tests 0/apps 0/docs 1（ADR-0002 历史提及，superseded）。",
+   "migrationStrategy": "独立准入裁决（PROD-03）：不并入 M-F vectored 裁决（不同 authority gate——这是工作量准入，不是表达能力），不并入 wal 族（不同消费结构）。裁决前零动作；若准入：需 workload 定义+oracle+与 canonical request 世界的边界论证（为何不是 ThreadPoolBackend 直接用法）；若不准入：退役/隔离走 B-01 重冻结。",
+   "evidencePlan": "裁决记录须引用：本轮 live 零消费者扫描命令与输出、F1 归档成员证据（blocking_io_pool.cpp.o 在 libsluice_core.a）、F0 D-11 原文、PROD-03 文本；若准入则补 workload+oracle 证据。",
+   "rollbackUnit": "裁决议题本身（可逆）；若后续退役：头+TU+归档成员一个批次（B-01 同 slice 重冻结）。",
+   "downstreamOwner": "F4",
+   "dependsOn": []
+  },
+  {
+   "id": "M-A2",
+   "title": "wal/copy/buffer/observed 高层 helper 族：无 v1 工作量准入（PRODUCT_SCOPE 类）+ vectored 依赖双重未决",
+   "oldAuthority": "wal.hpp（write_record_vec→Writer::write_all_vec，wal.hpp:19→wal.cpp:103-105）、copy.hpp（copy_all(Reader&,Writer&,…) 重载族）、observed.hpp（ObservedReader/Writer 的 read_vec/write_vec 覆盖）、buffer/copy_strategy/sync/iovec/limit/measurement 等 L-06..L-09 面（F0 D-12 CANDIDATE UNDECIDED——no v1 workload admits them）",
+   "replacement": "无 adopted replacement——候选 canonical File ops（F0 D-12）；最可能结局是 PRODUCT_SCOPE_BLOCKED（PROD-03 无准入工作量则不属 v1，退役或隔离）",
+   "replacementAdopted": "FAIL",
+   "adoptionEvidence": "F0 policy D-12（docs/review/f0-package-profile-policy.md:150）：CANDIDATE UNDECIDED（no v1 workload admits them）、confidence LOW、'root amendment or retirement per audit; D-09 vectored decision binds wal::write_record_vec'；ledger 无 wal/copy 工作量行；PROD-03（root:127）未准入。无 adopted replacement。",
+   "readiness": "BLOCKED_AUTHORITY_DECISION",
+   "blockers": [
+    "PROD-03 工作量准入未裁决（无 accepted workload）——root 修订或退役二选一未决",
+    "vectored 裁决绑定：wal::write_record_vec 依赖 Writer::write_all_vec（仓库唯一原生 vectored 写路径）——依赖 M-F 裁决输出（F0 D-12 明文）",
+    "NEW-02b 实现族耦合：Reader/Writer 的 file-backed 实现仅 FileReader/FileWriter——L-01 退役而无 canonical 适配器会静默搁浅 copy.hpp/wal.hpp/memory_io_context.hpp（R2：该搁浅对 copy.hpp 在 in-repo 已实现——copy.hpp 有生产消费者 reader.cpp，见 blocker 4 与 exposureCounts）",
+    "U-05：wal.hpp/copy.hpp/observed.hpp 经 sluice_core glob 安装（F1 冻结），外部使用未知。R2 修订：『copy_all 仅自身 TU/零下游』半句为假——src/reader.cpp:3 include copy.hpp、Reader::stream_to 两重载即 copy_all 调用（reader.cpp:48-56，公开 API reader.hpp:24-29）= 生产消费者 c-new02-901；tests 0/apps 0 仍成立，wal/observed 零下游复核为真"
+   ],
+   "consumerCounts": "census 记录：c-x06-002（wal.cpp→FileWriter::write_vec，F4）、c-x06-003（observed.cpp，aux/F4）、c-new02-001/002（copy.hpp/wal.hpp TYPE，F4）；live：wal 下游测试 0（census §7.1 漂移：L-06 'tst 1'→0）；apps 0。",
+   "exposureCounts": "src 3（wal.cpp/observed.cpp/reader.cpp——R2 修订：reader.cpp 经 Reader::stream_to 生产消费 copy_all，census 记录 c-new02-901，且 reader.hpp 在 F1 冻结安装集）/公共头 3+（wal/copy/observed 经 glob 安装，另有 buffer/copy_strategy 等 L-06..L-09 面）/tests 0/apps 0；libsluice_core.a 含 wal.cpp.o/copy.cpp.o/copy_strategy.cpp.o（F1 v2 baseline 本轮实测）。",
+   "migrationStrategy": "裁决序：先 M-F vectored/第二权威裁决，再 PROD-03 工作量准入（root 修订或退役）。若退役：先解 Reader/Writer 抽象依赖（NEW-02b 闭包），再删头（B-01 同 slice 重冻结）；R2 修订：还须同批切断反向安装边 reader.hpp/reader.cpp→copy.hpp——copy.hpp 不再是『仅自身 TU』，Reader::stream_to（sluice_core 公开 API，reader.hpp:24-29）的实现即 copy_all 调用（reader.cpp:3,:48-56），删头前必须先重定型/退役 stream_to 拼写本身，否则破坏 sluice_core 公开 API；NEW-02b 的静默搁浅因此对 copy.hpp 已在 in-repo 实现（不止 wal/memory_io_context）；copy 的 app-specific dir-sync/rename 逻辑不得偷升格 canonical（#402 F4 禁令）。若准入：逐头补 workload+oracle。",
+   "evidencePlan": "裁决输入：NEW-02b 依赖闭包（file.hpp:16,:67、fault.hpp:39,:16、observed.hpp:38,:57）、wal vectored 依赖（wal.cpp:103-105）、R2 反向边实测（grep -rn copy_all src include tests apps → src/copy.cpp 重载族 + src/reader.cpp:51,:55；reader.cpp:3 include）、F0 D-12 原文、live 计数；准入后逐头 oracle。",
+   "rollbackUnit": "每头一族（wal/copy/observed 可独立退役/准入，互不绑定）。",
+   "downstreamOwner": "F4",
+   "dependsOn": [
+    "M-F"
+   ]
+  },
+  {
+   "id": "M-A3",
+   "title": "测试替身面（fault.hpp Memory 双亲 + memory_io_context.hpp）：TEST_ONLY 保留，包面隔离/内化候选",
+   "oldAuthority": "fault.hpp（MemoryReader/MemoryWriter 测试替身——Reader/Writer 实现族成员，NEW-02b）、memory_io_context.hpp（F1 冻结安装头（manifest:99）、零 repo 用户（U-02 实测）、L-11 writer 侧不回写 store 缺陷在案）（F0 L-10/L-11 TEST_ONLY、D-13 KEEP）",
+   "replacement": "无产品 replacement（F0 D-13：KEEP，relocate/internalize 候选，'n/a (not product)'，confidence HIGH）——处置方向已记录，relocate-vs-internalize 的包面决定未决",
+   "replacementAdopted": "PARTIAL",
+   "adoptionEvidence": "F0 policy D-13（docs/review/f0-package-profile-policy.md:151）：KEEP（relocate or INTERNALIZE candidate）、TEST_ONLY、HIGH confidence——处置已记录但 relocate/internalize 的落点未采纳/未决；L-11 缺陷为 F0 记录（记录不修）。本轮实测：fault.hpp 与 memory_io_context.hpp 均在 F1 冻结安装集内（f1-package-manifest-noliburing.json:92,:99）。",
+   "readiness": "POLICY_ISOLATION_CANDIDATE",
+   "blockers": [
+    "包面决定未决：两头的 relocate/internalize/维持 installed 现状未裁——任何隔离动作是 F1 冻结安装集变化，触发 B-01 同 slice 重冻结",
+    "L-11 缺陷记录在案（writer 侧不回写 store）——TEST_ONLY 面不修产品缺陷，但隔离/退役时须随批处置或显式保留理由",
+    "与 M-F 联动：MemoryReader/MemoryWriter 只在 Reader/Writer 抽象存在时有意义——L-01 处置改变时本族须跟随"
+   ],
+   "consumerCounts": "census：c-new02-003（memory_io_context TYPE，F4）；fault.hpp 无独立消费者记录（其用户为各测试内 Memory 替身用法）；memory_io_context 零 repo 用户（U-02）；L-11 零 includes（F0 D-13）。",
+   "exposureCounts": "公共头 2（均 F1 冻结安装）/src 0/tests 间接（Memory 替身消费）/apps 0/docs 1（ADR-0002 历史提及）。",
+   "migrationStrategy": "随 M-F/L-01 处置联动：若 Reader/Writer 世界退役，替身随批 relocate（tests/ 或 internal seam）或内化；memory_io_context.hpp 的 L-11 缺陷不修，记录随隔离处置；包面变化走 B-01。不建执行议题，仅建记录/包面决定议题。",
+   "evidencePlan": "U-02 零用户扫描记录；L-11 缺陷引用 F0 census；若 relocate：替身消费测试全绿证据；B-01 重冻结复现（/tmp/m-*）。",
+   "rollbackUnit": "每头一族（fault.hpp 与 memory_io_context.hpp 可独立处置）。",
+   "downstreamOwner": "F4",
+   "dependsOn": [
+    "M-F"
+   ]
+  },
+  {
+   "id": "M-A4",
+   "title": "experimental uring 写面：F1 已隔离（不安装、零编译消费者）——处置已执行，M 零动作",
+   "oldAuthority": "include/sluice/experimental/uring_io_context.hpp + uring_write_batch.hpp + src/experimental/ 2 TU（TU orphaned，FA-2 不入任何 target；F0 L-12 EXPERIMENTAL、D-14 REMOVE or ISOLATE）",
+   "replacement": "canonical uring 后端（uring_transport/uring_completion/uring_backend——F1 两 profile 归档在案，E1/B1-C 证据链）",
+   "replacementAdopted": "PASS",
+   "adoptionEvidence": "canonical uring backend 是生产面（ledger :44 io_uring profile 行+B1-C/E1 记录+F1 归档成员 uring_backend.cpp.o 等本轮实测）。隔离处置已执行并冻结：xmake/libraries.lua:14-15 明文 'include/sluice/experimental/ is deliberately absent'；两份 F1 manifest HEADERS 不含 experimental；负探针 NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED 冻结；本轮实测两 profile 归档均无 experimental TU（仅 canonical uring 三 TU）。",
+   "readiness": "ALREADY_MIGRATED",
+   "blockers": [],
+   "consumerCounts": "0（TU orphaned：无 target/脚本/CI 引用；census 仅 c-x12-003 宏布局记录=POLICY_ISOLATED owner=none）。注意 M 铁律：'零 grep'≠无用——零消费者的处置依据是 D-14 处置+LIFE-03，不是计数本身。",
+   "exposureCounts": "公共头 2（不安装）/src 2（不入任何冻结归档）/tests 0/apps 0/docs 0。",
+   "migrationStrategy": "M 零动作。防复活条款：任何安装/编译接入=LIFE-03 root 修订义务+provider-affine RAII 绑定+不得称 v1 conforming；任何包面变化触发 B-01。残余'整树删除 vs 保留为明确隔离实验'是 F5/包面政策，非 M 下游（root MIG-02 行 935 两种形态均合规，F1 已满足'隔离'形态）。",
+   "evidencePlan": "已冻结证据（本轮复核）：libraries.lua:14-15、两 manifest HEADERS 集合、NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED、归档成员扫描输出。无新证据义务。",
+   "rollbackUnit": "n/a（处置已执行并冻结；无迁移可回滚）。",
+   "downstreamOwner": "none",
+   "dependsOn": []
+  }
+ ],
+ "mermaidDag": "graph TD\n  subgraph Rulings[\"裁决波——与 M-R tier-1 同波并行开启\"]\n    MH[\"M-H host 替换裁决 (BLOCKED_REPLACEMENT_NOT_ADOPTED; ADR-0003 PROPOSED / D2 IMPLEMENTED_UNVERIFIED; owner F3+root/ADR)\"]\n    MF[\"M-F vectored+第二权威裁决 (BLOCKED_EXPRESSIVENESS_GAP; owner F4+root 修订)\"]\n    MA1[\"M-A1 BlockingIoPool PROD-03 准入裁决 (BLOCKED_AUTHORITY_DECISION; owner F4)\"]\n  end\n  MR[\"M-R Completion 消费者迁移 (PARTIALLY_READY: tier-1 可执行面已收窄——Batch 移入 B-01 重冻结批次、观察者 oracle 豁免; tier-2 X-16 policy-isolated pending F3)\"]\n  MA2[\"M-A2 wal/copy/buffer/observed (BLOCKED_AUTHORITY_DECISION)\"]\n  MA3[\"M-A3 fault/memory_io_context (POLICY_ISOLATION_CANDIDATE)\"]\n  MA4[\"M-A4 experimental uring (ALREADY_MIGRATED: F1 已隔离)\"]\n  MR -. \"仅 tier-2: X-16 显式隔离 (B-04/B-08), 非 R→H 串行\" .-> MH\n  MA2 --> MF\n  MA3 --> MF\n  MR --> F2[\"F2 result/identity contraction (drop Completion& overloads 需 X-16 先收口)\"]\n  MH --> F3[\"F3 host/runtime contraction (X-03/X-04/X-05/X-09/X-14/X-17)\"]\n  MF --> F4[\"F4 native resource retirement (X-06/X-07/X-13+D-11/D-12)\"]\n  MA1 --> F4\n  MA2 --> F4\n  MA3 --> F4\n  MA4 -.-> F5[\"F5 package 残余处置 (B-01/B-03)\"]\n",
+ "dependencyTable": "family,dependsOn,readiness,replacementAdopted,downstreamOwner,issueType\nM-R,(none; tier-2 经 x16Ruling 显式隔离移交 F3),PARTIALLY_READY,PASS(点名四组件),F2,execution(runnable now; R2: Batch 移入 B-01 重冻结批次随 F2、观察者 oracle 豁免见 blockers 5)\nM-H,(none — 自身即裁决链根),BLOCKED_REPLACEMENT_NOT_ADOPTED,FAIL,F3,ruling\nM-F,(none — 自身即裁决链根),BLOCKED_EXPRESSIVENESS_GAP,PARTIAL,F4,ruling\nM-A1,(none),BLOCKED_AUTHORITY_DECISION,FAIL,F4,ruling\nM-A2,M-F,BLOCKED_AUTHORITY_DECISION,FAIL,F4,ruling(after M-F)\nM-A3,M-F,POLICY_ISOLATION_CANDIDATE,PARTIAL,F4,record/package-decision\nM-A4,(none),ALREADY_MIGRATED,PASS,none,none(record-only)",
+ "childIssueSplit": "执行议题（READY 面立即建）与裁决议题（BLOCKED 族各建）：\n1) M-R-exec：tier-1 消费者迁移（AsyncIoContext 直接测试消费者→六类 submit_*/Request<T>，其中 attach_observer 观察者 oracle 三测试——shutdown_lifecycle/threadpool_core_cutover/uring_core_cutover——豁免：保留 Completion& attach 拼写与 OBS 投递 oracle、只迁移可表达面、随 F2 处置，见 M-R blockers 5；删 5 个零符号 sluice/file.hpp include c-x06-004..008；B-02 接线 SLUICE_COPY_INTERNAL_TESTING。Batch 内部重定型不在本议题——移入 B-01 重冻结批次随 F2 Completion 退役 slice 执行，见 M-R blockers 6）。验收=双 profile 对照+4 个 app_*_consumption_test+F1 --check-frozen 复现（输出 /tmp/m-*）。\n2) M-R-isolation：tier-2 X-16 显式隔离声明+出口条件写档（按 x16Ruling；不迁移、不裁 Scheduler 命运）。\n3) M-H-ruling（裁决议题，F3 owner）：host 替换裁决——输入 D2 记录/ADR-0003 全文/F1 W-04 OPTIONAL_CANDIDATE 证据；禁止秘密采纳 ADR-0003、禁止 multi-worker→single-owner 改判；U-01 dormant 原语外部使用政策单列（R2：连同 U-08 的 Scheduler 耦合安装面 12 头一并进入外部使用政策，见 M-H blockers 2/evidencePlan）。\n4) M-F-ruling（裁决议题，F4+root 修订）：vectored 能力五问+第二权威问——输入 NEW-01b 不对称、file.hpp:50-107、wal 依赖链、ledger:56/PROD-03；不得在 M 内发明 canonical vectored I/O。\n5) M-A1-ruling：BlockingIoPool PROD-03 准入（独立于 4）。\n6) M-A2-ruling：wal/copy/buffer/observed 工作量准入（依赖 4 的输出）。\n7) M-A3-record：测试替身包面决定（B-01 联动）。\n8) M-A4：无议题（已隔离；仅包面变化时随 B-01 复核）。\nM1 裁定项落地：contract_observer.cpp 双记录裁定=compat 正探针（aux/TEST_ORACLE/COMPAT_TEST_RETAINED 侧），随 F2 处置、不计 tier-1 迁移对象；aux(38)+none(2) EDGES 记录与 APPS none(16) 不建家族（无独立权威/回滚边界）——X-12 ODR、X-14 seam、NEW-03 包面耦合、NEW-02c 作为跨族证据义务（B-01/B-02）挂相关家族 evidencePlan；X-10/X-18 DOC_CLAIM 随各家族迁移批次履行（M gate：NO_UNQUALIFIED_CANONICAL_DOC_CLAIMS_FOR_RETIRED_AUTHORITY）。",
+ "executionOrder": [
+  "M-R",
+  "M-H",
+  "M-F",
+  "M-A1",
+  "M-A2",
+  "M-A3",
+  "M-A4"
+ ],
+ "x16Ruling": "X-16 交点裁决（M1 分解裁定，M 权限内）：X-16 = Completion 退役链与 Scheduler/runtime 退役链的交点（Scheduler::await_completion/cancel_waiter + park_wake、RuntimeTaskContext::await_completion/cancel_waiter、attach_observer→backend_->identity_of 的 Completion→identity 转换、Fiber::CompletionWaitOutcome；scheduler.hpp:153-163/460、fiber.hpp:22-26、async_io_context.cpp:970-1015）。裁定：**X-16 在 Phase M 内 policy-isolated pending F3**，具体四条：(1) Scheduler 及 RuntimeTaskContext/Fiber await 机制在 M 全程保留为兼容机制——Completion 消费者迁移不得实现为、也不得演变为 Scheduler/runtime retirement；禁止任何 multi-worker→single-owner 静默转换（M 铁律+#402 禁令+HOST-01/PROD-02）。依据：root MIG-02 行 931-932 现行处置即保留（'Optional narrow adapter'/'completed-return helpers 仅带 every-exit settlement 保留'），而唯一能改变它的 ADR-0003 仍 PROPOSED（docs/adr/0003:3）、D2 行 IMPLEMENTED_UNVERIFIED（ledger:53）——M 无权采纳。(2) M-R 只迁移 context-level tier（AsyncIoContext 六类 Request 返回 submit、直接上下文测试——attach_observer 观察者 oracle 三测试豁免保留混合拼写、零符号 include 清理；R2 修订：Batch 内部重定型移出 M tier-1，移入 B-01 重冻结批次随 F2 执行）；runtime-facing tier（4 app 任务体、await_op_helpers、async/file.hpp、task_result、RuntimeTaskContext 全部提交/等待拼写）显式隔离——判定依据是本轮实读的硬事实：RuntimeTaskContext 今天没有任何 Request<T> 返回 submit（application_runtime.hpp:32-46，仅 Completion& 与 RequestHandle 拼写），即 runtime 面不存在可达的已采纳替换拼写。(3) await 机制'in-place 重定型 vs runtime 先退役'的 arm 选择是 F3 的裁决（B-04 宿主替换 + B-08 helper-before-runtime 编译序；走 root/ADR 流程）——F0 DAG 已证两序均收敛、节点本身不可避，M 不强行定序。(4) 后果：F2 的 drop-Completion&-overloads 节点继续被 X-16 门控（F2_PREREQUISITES 含 X-16），不在 M 发生；M-R 家族出口=tier-1 已迁移+tier-2 显式隔离且有证据（#402 M gate RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED），外加 Batch 显式延后声明（重定型属 B-01 重冻结批次随 F2 Completion 退役 slice 执行，见 M-R blockers 6——被延后的 consumer 须显式声明，不得静默留在 UNMIGRATED）；ObserverCore↔RuntimeTaskContext waiter path 形式对应（B-06）在 F3 移动该面的同 slice 重映射；Fiber::CompletionWaitOutcome 的公开地位不得被载体迁移预判（c-x16-005）。因此 M-R dependsOn 不含 M-H——两族真实关系是'部分重叠的 blocker+显式隔离移交'，不是 R→H 串行。"
+}
