@@ -121,13 +121,17 @@ int main() {
         ::unlink(path.c_str());
     }
 
-    // Task failure while another task's I/O is outstanding: run() reports
-    // the first task error without stranding the other task.
+    // Task failure while another task's I/O is outstanding: the sibling task
+    // occupies a worker on a silent-pipe read (the in-repo deterministic
+    // suspension pattern) while this task fails; run() reports the first task
+    // error and the sibling still settles — no stranded work.
     {
-        const std::string path = make_temp_path();
-        auto opened = File::open(path, create_read_write());
-        CHECK(opened.has_value());
-        File file = std::move(opened).value();
+        int pipe_fds[2];
+        CHECK(::pipe(pipe_fds) == 0);
+        std::thread writer([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            ::close(pipe_fds[1]);
+        });
 
         AsyncIoContext ctx(
             std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 8,
@@ -135,30 +139,24 @@ int main() {
         auto host = StackfulIoHost::create(ctx, StackfulHostConfig{.task_capacity = 4});
         CHECK(host.has_value());
 
-        const NativeFileRef ref{file};
-        std::atomic<bool> other_finished{false};
-        // NativeFileRef with a negative fd is rejected at the invocation
-        // boundary (closed/invalid resource) — a deterministic task error.
-        const NativeFileRef bad_ref{-1, FileAccess::read_write};
-
+        const NativeFileRef reader{pipe_fds[0], FileAccess::read_only};
+        std::atomic<bool> sibling_done{false};
         host.value()->spawn([&](IoTaskContext& io) {
-            // Failing task: rejected before acceptance.
-            (void)io.read(ref, std::span<std::byte>{}, 0);
-        });
-        host.value()->spawn([&](IoTaskContext& io) {
-            std::vector<std::byte> buf(8, std::byte{0});
-            const auto r = io.read_for(ref, buf, 0, std::chrono::milliseconds(50));
-            other_finished = true;
+            std::vector<std::byte> buf(4, std::byte{0});
+            const auto r = io.read_for(reader, buf, 0, std::chrono::milliseconds(400));
+            sibling_done = true;
             (void)r;
         });
+        host.value()->spawn([&](IoTaskContext& io) {
+            (void)io;
+            throw std::runtime_error("failing task while sibling I/O outstanding");
+        });
         const auto outcome = host.value()->run();
-        // run() returns; both tasks retired; the second task ran to its own
-        // terminal even though the first failed (no stranded work).
-        (void)outcome;
-        CHECK(other_finished.load());
+        CHECK(!outcome.has_value());
+        CHECK(sibling_done.load());
+        writer.join();
+        ::close(pipe_fds[0]);
         CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
-        file.close();
-        ::unlink(path.c_str());
     }
 
     // Exception during task processing: the host boundary catches it, no
@@ -196,17 +194,17 @@ int main() {
         ::unlink(path.c_str());
     }
 
-    // Stop during suspension: the accepted request settles on its natural
-    // outcome (no implicit cancellation by the host stop), and run() returns.
+    // Stop during suspension with deadline expiry: the task parks on a
+    // silent-pipe read; stop lands mid-suspension; the await deadline expires
+    // first; the operation's real terminal (EOF when the writer closes)
+    // arrives without any host-side cancellation.
     {
-        const std::string path = make_temp_path();
-        auto opened = File::open(path, create_read_write());
-        CHECK(opened.has_value());
-        File file = std::move(opened).value();
-        const std::string payload = "stop-during-suspension";
-        const std::span<const std::byte> bytes(
-            reinterpret_cast<const std::byte*>(payload.data()), payload.size());
-        CHECK(sluice::blocking::write_all(file, bytes).has_value());
+        int pipe_fds[2];
+        CHECK(::pipe(pipe_fds) == 0);
+        std::thread writer([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            ::close(pipe_fds[1]);
+        });
 
         AsyncIoContext ctx(
             std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 8,
@@ -214,26 +212,29 @@ int main() {
         auto host = StackfulIoHost::create(ctx, StackfulHostConfig{.task_capacity = 4});
         CHECK(host.has_value());
 
-        const NativeFileRef ref{file};
-        std::vector<std::byte> buf(8, std::byte{0});
+        const NativeFileRef reader{pipe_fds[0], FileAccess::read_only};
         std::atomic<bool> task_returned{false};
+        std::atomic<bool> terminal_was_canceled{false};
         std::thread stopper([&] {
             std::this_thread::sleep_for(std::chrono::milliseconds(20));
             host.value()->request_stop();
         });
         host.value()->spawn([&](IoTaskContext& io) {
-            const auto r = io.read_for(ref, buf, 0, std::chrono::milliseconds(500));
+            std::vector<std::byte> buf(4, std::byte{0});
+            const auto r = io.read_for(reader, buf, 0, std::chrono::milliseconds(100));
+            if (!r.has_value() && r.error().code == IoError::Code::canceled)
+                terminal_was_canceled = true;
             task_returned = true;
-            (void)r;
         });
         const auto outcome = host.value()->run();
         stopper.join();
+        writer.join();
         CHECK(host.value()->stop_requested());
         CHECK(task_returned.load());
+        CHECK(!terminal_was_canceled.load());
         (void)outcome;
+        ::close(pipe_fds[0]);
         CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
-        file.close();
-        ::unlink(path.c_str());
     }
 
     if (g_failures != 0) {

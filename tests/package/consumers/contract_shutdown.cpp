@@ -93,6 +93,24 @@ int main() {
     file.close();
     ::unlink(path.c_str());
 
+    // Driving shutdown refuses while a host notification interest is live;
+    // after the ordered detach the same call completes.
+    {
+        AsyncIoContext ctx(
+            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
+                                                                  .worker_count = 1}));
+        auto owner = ctx.claim_progress_owner();
+        CHECK(owner.has_value());
+        const int borrowed = ctx.progress_notification_fd();
+        CHECK(borrowed >= 0);
+        const auto refused = ctx.shutdown(ShutdownPolicy::drain);
+        CHECK(!refused.has_value());
+        CHECK(!ctx.execution_closed());
+        ctx.detach_progress_host();
+        const auto completed = ctx.shutdown(ShutdownPolicy::drain);
+        CHECK(completed.has_value() && completed.value() == ShutdownOutcome::completed);
+    }
+
     if (g_failures != 0) {
         std::fprintf(stderr, "contract_shutdown: %d failure(s)\n", g_failures);
         return 1;

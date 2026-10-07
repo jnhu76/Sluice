@@ -1,10 +1,16 @@
 {
   "PROFILE": "P2-liburing",
-  "SOURCE_SHA": "a34d96c64f5ac8647b7d0f57c5511e68301b0f0e",
-  "GENERATED_UTC": "2026-10-07T07:08:00.416961+00:00",
+  "PROFILE_NOTE": "tiers are packaging labels; the F0 policy classes ride inside them: P0/P1/P3 carry the CANONICAL surfaces, P1 carries the OPTIONAL_CANDIDATE host closure (H-30/H-31 rows: cancel.hpp + fiber.hpp + fiber_ctx.hpp) and the COMPATIBILITY/INTERNAL/TEST_ONLY headers that the current public closure reaches; no OPTIONAL_SUPPORTED claim exists",
+  "SOURCE_SHA": "284debcab795497ac87a931be65f3f544c203768",
+  "GENERATING_COMMIT": "284debcab795497ac87a931be65f3f544c203768",
+  "GENERATED_UTC": "2026-10-07T07:46:13.212693+00:00",
   "COMPILER": "g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+  "ARCH": "x86_64",
+  "KERNEL": "6.18.33.2-microsoft-standard-WSL2",
+  "FILESYSTEM": "tmpfs",
   "BUILD_MODE": "release",
   "LIBURING": "/tmp/f1-deps/uring-prefix",
+  "LIBURING_VERSION": "2.9",
   "PREFIX_LAYOUT": {
     "include": 79,
     "lib": [
@@ -113,6 +119,9 @@
   ],
   "CONFIG_REQUIREMENTS": [
     "C++20",
+    "thread support: no separate -pthread measured on this toolchain (glibc >= 2.34 merged libpthread); other toolchains may need -pthread for sluice_async consumers",
+    "sanitizer ODR discipline: installed headers embed fiber_ctx layout by value (stackful_io_host.hpp, scheduler.hpp), so consumer TUs must be compiled with the same sanitizer configuration (ASan/TSan autodetect) as the installed archive",
+    "installed headers contain SLUICE_ASYNC_INTERNAL_TESTING and SLUICE_*_MUTANT_* guarded regions; package consumers must NEVER define these macros (under liburing the combination also includes an uninstalled src/-only header and fails)",
     "liburing headers/lib at /tmp/f1-deps/uring-prefix (ODR: every TU must see SLUICE_HAS_LIBURING identical to the archive build)"
   ],
   "EXPECTED_EXTERNAL_WORKLOADS": [

@@ -91,6 +91,27 @@ int main() {
         CHECK(ro.value().close().has_value());
     }
 
+    // Zero buffer with an invalid resource / illegal access: the resource and
+    // access rejections take precedence over the zero-length no-op.
+    {
+        const NativeFileRef bad{-1, FileAccess::read_only};
+        auto r = ctx.submit_read(ReadOp{.file = bad, .dst = nullptr, .len = 0});
+        CHECK(!r.has_value());
+        CHECK(r.error().code == IoError::Code::invalid_state);
+
+        auto ro = File::open(path, [] {
+            sluice::FileOpen mode;
+            mode.access = FileAccess::read_only;
+            return mode;
+        }());
+        CHECK(ro.has_value());
+        auto w = ctx.submit_write(
+            WriteOp{.file = NativeFileRef{ro.value()}, .src = nullptr, .len = 0});
+        CHECK(!w.has_value());
+        CHECK(w.error().code == IoError::Code::invalid_argument);
+        CHECK(ro.value().close().has_value());
+    }
+
     // Zero-length request: legal, needs one slot, publishes immediately ready,
     // never dispatches a data syscall.
     {

@@ -24,8 +24,8 @@ is possible or meaningful).
 
 | Case | External clean-room probe (Layer A) | Internal / fault seam (Layer B) | Formal (Layer C) / real-kernel (Layer D) | CURRENT_STATUS |
 |---|---|---|---|---|
-| V01 closed+zero | `contract_admission` (bad fd → `invalid_state`, `outstanding()==0`) | `semantic_reference_case_test` (named V01 direct+request rows; A2/B1 ledger VERIFIED) | RequestCore.tla (B1) | PASS |
-| V02 illegal access+zero | `contract_admission` (read-only write → `invalid_argument`) | `semantic_reference_case_test` (named V02 rows) | RequestCore.tla | PASS |
+| V01 closed+zero | `contract_admission` (bad fd → `invalid_state`, `outstanding()==0`; also with a zero buffer, precedence before the no-op short circuit) | `semantic_reference_case_test` (named V01 direct+request rows; A2/B1 ledger VERIFIED) | RequestCore.tla (B1) | PASS |
+| V02 illegal access+zero | `contract_admission` (read-only write → `invalid_argument`, including the zero-buffer form) | `semantic_reference_case_test` (named V02 rows) | RequestCore.tla | PASS |
 | V03 zero request vs full table | `contract_admission` (request no-op occupies a slot; full table rejects `would_block` while the same direct op succeeds) | `semantic_reference_case_test` (named V03 rows) | RequestCore.tla | PASS |
 | V04 acceptance × admission-close race | NOT_APPLICABLE_WITH_REASON — needs a deterministic admission/acceptance interleaving; not manufacturable externally without seams or sleeps | B1 slice seam evidence (ledger B1-A..D; acceptance linearization under serialized authority) | RequestCore.tla (admission-close actions) | PASS (B/C) · KNOWN_GAP (A) |
 | V05 dispatch failure after acceptance | NOT_APPLICABLE_WITH_REASON — requires post-accept dispatch fault injection | `ThreadPoolBackend::DispatchFailureInjection` seam (ledger B1-B/C records) | RequestCore.tla | PASS (B/C) · NOT_APPLICABLE (A) |
@@ -41,7 +41,7 @@ is possible or meaningful).
 | V15 unknown-effect failure | NOT_APPLICABLE_WITH_REASON — needs a fault-injected write with untrustworthy count | `semantic_reference_case_test` (named V15 rows; fault seam) | ERR-02 reference rules (A2) | PASS (B) · NOT_APPLICABLE (A) |
 | V16 write-then-sync ordering | `contract_cancel_effect` (sync after completed write covers confirmed bytes) — the *negative* coverage claim (no guarantee for the outstanding write) is not externally falsifiable | `semantic_reference_case_test` (named V16 rows), `semantic_durability_reference_test` (reference byte model; A2 ledger) | SEM-06 tables | KNOWN_GAP (A) by design · PASS (B) |
 | V17 observed write/resize + conflicting mutation | NOT_APPLICABLE_WITH_REASON — needs a concurrent external mutator with deterministic observation; supersession discrimination is reference-model evidence | `semantic_reference_case_test` (named V17 rows), durability reference model | SEM-06 tables | PASS (B) · NOT_APPLICABLE (A) |
-| V18 second pipeline submission fails | `w02_pipeline` (capacity 1: second submit rejected, scope settles the first on the early-return path) | `request_scope_test` (D1 VERIFIED) | — | PASS |
+| V18 second pipeline submission fails | `w02_pipeline` (capacity 1: second submit rejected; settlement of the first on the early-return path is observed through the absence of the always-on nonterminal-release fail-fast plus the healthy post-unwind shutdown — no direct settlement observation) | `request_scope_test` (D1 VERIFIED) | — | PASS |
 | V19 wait timeout with I/O running | KNOWN_GAP (A) — the external probe asserts scope cleanup paths but not a timed mid-I/O deadline return; timing-shaped discrimination is internal | `request_scope_test` timeout rows (D1) | — | PASS (B) · KNOWN_GAP (A) |
 | V20 shutdown with ready unconsumed results | `contract_shutdown` (consume after execution close; no deadlock; idempotent re-shutdown) | `shutdown_lifecycle_test` (E2 VERIFIED; 9 TP / 17 uring scenarios) | ShutdownCore.tla (171-run gate PASS) | PASS |
 | V21 destruction with live binding | NOT_APPLICABLE_WITH_REASON — always-on fail-fast is process-fatal; not catchable in-process | `public_request_release_violation_test`, `shutdown_lifecycle_test` destructor preconditions (E2) | ShutdownCore.tla | PASS (B) · NOT_APPLICABLE (A) |
@@ -63,7 +63,7 @@ is possible or meaningful).
 | S5 caller reuse follows acquired terminal | `w02`/`w03` reuse buffers only after ready/reap | B/C primary, A subset | PASS |
 | S6 reclaim predicate | capacity-return probes (`w02` retained-results, `contract_request_lifetime` resubmit) | A subset + B/C | PASS |
 | S7 observer failure cannot orphan accepted work | `contract_observer` (cancel/retire paths leave the operation settling) | C1-G (B) + ObserverCore.tla | PASS |
-| S8 shutdown cannot destroy referenced owners | ordered teardown in `w03` (unregister → detach → shutdown); refuse-on-live-interest observed | E2 (B) + ShutdownCore.tla | PASS |
+| S8 shutdown cannot destroy referenced owners | ordered teardown in `w03` (unregister → detach → shutdown) and `contract_shutdown` (shutdown refused while the notification interest is live, then completed after the detach) | E2 (B) + ShutdownCore.tla | PASS |
 | S9 no sleep past unadvertised obligation | `contract_progress`/`w03` full no-lost-wake loop (arm → ack → poll → wait) | A + C2 (B) + ProgressSource.tla | PASS |
 | S10 durability meets SEM-06, no invented snapshot | `contract_durability` + `w01` | A + A2 reference model (B) | PASS |
 
@@ -90,6 +90,7 @@ is possible or meaningful).
 | Metadata/durability (V16/V17/V27, SEM-06/07) | `contract_durability`, `w01_direct` | A2 rows; durability reference model | coverage-vs-snapshot distinction is model evidence |
 | Backend availability (PROD-02, BACKEND-02) | `contract_backend_availability`, `w03` uring variant | E1 real-kernel record; D2 host capability check | no-liburing: installed shell is abstract (compile-time unavailability); liburing: construction succeeds or fails explicitly; no silent fallback exists to select |
 | Workloads W-01..W-04 | `w01_direct`, `w02_pipeline`, `w03_external_loop`, `w04_stackful_candidate` | A2/D1/E2/D2 ledger rows | W-04 recorded as OPTIONAL_CANDIDATE evidence only (no support claim, ADR-0003 PROPOSED) |
+| Root-DEFERRED runtime family + legacy stream world (H-06..H-18, H-22, H-26, H-29, L-01..L-09) | none by design — manifest header-set diff is the detector | F0 policy §3 consumer register | these surfaces carry no root-visible workload observation (PROD-02 DEFERRED / MIG-02 compat); class removal with headers retained is invisible to F1 gates by design and rides the F2/F3/F4 consumer audits |
 
 ## 5. Known gaps and honest limits of the F1 baseline
 
@@ -103,12 +104,19 @@ is possible or meaningful).
 2. V23's external arm exercises re-borrow after ordered detach; the
    stale-wake-toward-destroyed-context discriminator remains the internal M11
    oracle.
-3. W-04 evidence is OPTIONAL_CANDIDATE-only (H1/H2/H4/H5 externally observable
-   subsets); H3/H6 discrimination and the W-04 support gate stay with the D2
-   record and ADR-0003 (PROPOSED).
+3. W-04 evidence is OPTIONAL_CANDIDATE-only: the W-04 tracer and the H5
+   exception arm are solid external evidence; the H1 arm (failure while the
+   sibling's silent-pipe I/O is outstanding, run() error asserted) and the
+   combined H2/H4 arm (stop mid-suspension, await deadline expires, the real
+   EOF terminal arrives without cancellation — suspension manufactured with a
+   silent pipe, the in-repo shutdown-oracle pattern, FIFOs being outside the
+   regular-file profile) exercise the named paths from outside; H3/H6
+   discrimination and the W-04 support gate stay with the D2 record and
+   ADR-0003 (PROPOSED).
 4. The uring profile's external evidence on this machine ran against a
-   user-prefix liburing 2.9 on WSL2 (recorded in the manifest); the ledger's
-   real-kernel E1/E2 records remain the D-layer backend evidence.
+   user-prefix liburing 2.9 on WSL2 (version recorded in the manifest's
+   `LIBURING_VERSION` field); the ledger's real-kernel E1/E2 records remain
+   the D-layer backend evidence.
 5. The E1 threadpool CI stall (recurring finding, #454 §4.2) did not reproduce
    during F1's six verification runs; the standing rerun protocol applies and
    no F1 assertion was weakened for it.

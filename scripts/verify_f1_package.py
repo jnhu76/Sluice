@@ -22,6 +22,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -72,7 +73,8 @@ def check_clean_room(command_strs, prefix):
     for cmd in command_strs:
         tokens = cmd.split()
         for i, tok in enumerate(tokens):
-            for flag in ("-I", "-isystem", "-L", "-include", "-idirafter"):
+            for flag in ("-I", "-isystem", "-iquote", "-imacros", "-L",
+                         "-include", "-idirafter"):
                 if tok.startswith(flag) and len(tok) > len(flag):
                     path = tok[len(flag):]
                 elif tok in (flag,):
@@ -80,32 +82,72 @@ def check_clean_room(command_strs, prefix):
                 else:
                     continue
                 rp = str(Path(path).resolve())
-                if rp.startswith(str(REPO)) and not rp.startswith(prefix_str):
+                if prefix_str == rp or rp.startswith(prefix_str + os.sep):
+                    continue
+                if rp == str(REPO) or rp.startswith(str(REPO) + os.sep):
                     violations.append((cmd, flag, rp))
     return violations
 
 
+INCLUDE_RE = re.compile(r"^\s*#\s*include\s*(.+?)\s*$")
+
+
 def scan_consumer_includes():
-    """Consumer sources must use angle-bracket includes only: no quoted include
-    can sneak a source-tree header relative to the consumer file."""
+    """Consumer sources may include only bare angle-bracket headers. Quoted
+    includes, absolute paths, `..` traversal and macro operands can each reach
+    source-tree headers, so every include operand must be `<...>` with no
+    quote, no leading `/` and no `..` segment."""
     violations = []
     for src in sorted(CONSUMERS.glob("*.cpp")):
         for lineno, line in enumerate(src.read_text().splitlines(), 1):
-            s = line.strip()
-            if s.startswith("#include") and '"' in s:
-                violations.append((src.name, lineno, s))
+            m = INCLUDE_RE.match(line.strip())
+            if not m:
+                continue
+            operand = m.group(1)
+            ok = (operand.startswith("<") and operand.endswith(">")
+                  and '"' not in operand and not operand.lstrip("<").startswith("/")
+                  and ".." not in operand)
+            if not ok:
+                violations.append((src.name, lineno, operand))
     return violations
+
+
+CONSUMER_ENV_KEEP = (
+    "PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR",
+    "LD_LIBRARY_PATH",
+)
+ENV_PATH_VARS = ("CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH",
+                 "OBJC_INCLUDE_PATH", "CXXFLAGS", "CFLAGS", "CPPFLAGS",
+                 "LDFLAGS", "LIBRARY_PATH")
+
+
+def consumer_env(extra=None):
+    """Consumers see a whitelisted environment. An include/lib path variable
+    pointing into the repository would silently reintroduce the source tree,
+    so its presence is a hard failure, not a scrub."""
+    env = {k: v for k, v in os.environ.items() if k in CONSUMER_ENV_KEEP}
+    for var in ENV_PATH_VARS:
+        if var not in os.environ:
+            continue
+        for part in os.environ[var].split(os.pathsep):
+            if not part:
+                continue
+            rp = str(Path(part).resolve())
+            if rp == str(REPO) or rp.startswith(str(REPO) + os.sep):
+                raise SystemExit(
+                    f"clean-room violation: env {var} contains repository path {part}")
+    if extra:
+        env.update(extra)
+    return env
 
 
 def compile_consumer(build_dir, prefix, sources, out, extra_cxxflags, extra_ldflags,
                      command_log, extra_env=None):
-    cxx = os.environ.get("CXX", "g++")
+    cxx = "g++"
     objdir = build_dir / (out.name + ".objs")
     objdir.mkdir(parents=True, exist_ok=True)
     objs = []
-    env = dict(os.environ)
-    if extra_env:
-        env.update(extra_env)
+    env = consumer_env(extra_env)
     for src in sources:
         obj = objdir / (Path(src).stem + ".o")
         cmd = [cxx, "-std=c++20", "-Wall", "-Wextra", f"-I{prefix}/include",
@@ -146,12 +188,14 @@ def main():
     ap.add_argument("--mode", default="release", choices=["release", "debug"])
     ap.add_argument("--liburing", action="store_true")
     ap.add_argument("--uring-prefix", default="/tmp/f1-deps/uring-prefix")
-    ap.add_argument("--manifest-out", default=str(REPO / "docs" / "review" / "f1-package-manifest.json"))
+    ap.add_argument("--manifest-out", required=True)
     ap.add_argument("--profile-name", default=None,
                     help="manifest PROFILE label (derived from flags when omitted)")
     ap.add_argument("--keep-prefix", action="store_true")
     args = ap.parse_args()
 
+    if not os.environ.get("TMPDIR"):
+        os.environ["TMPDIR"] = "/tmp"
     profile = args.profile_name or ("P2-liburing" if args.liburing else "P0P1P3-noliburing")
     uring_prefix = Path(args.uring_prefix)
     prefix = Path(tempfile.mkdtemp(prefix="sluice-f1-prefix-"))
@@ -201,13 +245,37 @@ def main():
     experimental = [h for h in headers if "experimental" in h]
     public_defines = ["SLUICE_HAS_LIBURING"] if args.liburing else []
     public_link_libs = ["uring"] if args.liburing else []
+    kernel = run(["uname", "-r"], capture_output=True, text=True).stdout.strip()
+    arch = run(["uname", "-m"], capture_output=True, text=True).stdout.strip()
+    fs = run(["stat", "-f", "-c", "%T", str(prefix)], capture_output=True,
+             text=True).stdout.strip()
+    uring_version = ""
+    if args.liburing:
+        pc = uring_prefix / "lib" / "pkgconfig" / "liburing.pc"
+        if pc.exists():
+            for line in pc.read_text().splitlines():
+                if line.startswith("Version:"):
+                    uring_version = line.split(":", 1)[1].strip()
     manifest = {
         "PROFILE": profile,
+        "PROFILE_NOTE": ("tiers are packaging labels; the F0 policy classes ride "
+                         "inside them: P0/P1/P3 carry the CANONICAL surfaces, P1 "
+                         "carries the OPTIONAL_CANDIDATE host closure (H-30/H-31 "
+                         "rows: cancel.hpp + fiber.hpp + fiber_ctx.hpp) and the "
+                         "COMPATIBILITY/INTERNAL/TEST_ONLY headers that the "
+                         "current public closure reaches; no OPTIONAL_SUPPORTED "
+                         "claim exists"),
         "SOURCE_SHA": git_sha(),
+        "GENERATING_COMMIT": run(["git", "rev-parse", "HEAD"], capture_output=True,
+                                 text=True, cwd=REPO).stdout.strip(),
         "GENERATED_UTC": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "COMPILER": compiler_id(),
+        "ARCH": arch,
+        "KERNEL": kernel,
+        "FILESYSTEM": fs,
         "BUILD_MODE": args.mode,
         "LIBURING": (str(uring_prefix) if args.liburing else "none"),
+        "LIBURING_VERSION": uring_version,
         "PREFIX_LAYOUT": {"include": len(headers), "lib": libs},
         "HEADERS": headers,
         "LIBRARIES": libs,
@@ -217,6 +285,17 @@ def main():
         "PUBLIC_LINK_LIBS": ["sluice_async", "sluice_core", *public_link_libs],
         "CONFIG_REQUIREMENTS": [
             "C++20",
+            "thread support: no separate -pthread measured on this toolchain "
+            "(glibc >= 2.34 merged libpthread); other toolchains may need "
+            "-pthread for sluice_async consumers",
+            "sanitizer ODR discipline: installed headers embed fiber_ctx "
+            "layout by value (stackful_io_host.hpp, scheduler.hpp), so "
+            "consumer TUs must be compiled with the same sanitizer "
+            "configuration (ASan/TSan autodetect) as the installed archive",
+            "installed headers contain SLUICE_ASYNC_INTERNAL_TESTING and "
+            "SLUICE_*_MUTANT_* guarded regions; package consumers must NEVER "
+            "define these macros (under liburing the combination also includes "
+            "an uninstalled src/-only header and fails)",
             *([f"liburing headers/lib at {uring_prefix} (ODR: every TU must see "
                "SLUICE_HAS_LIBURING identical to the archive build)"] if args.liburing else
               ["the installed sluice_async archive was built without liburing; "
@@ -235,6 +314,11 @@ def main():
             *(["link_without_uring_fails"] if args.liburing else []),
         ],
     }
+    for d in (prefix, build_dir):
+        rd = str(Path(d).resolve())
+        if rd == str(REPO) or rd.startswith(str(REPO) + os.sep):
+            raise SystemExit(f"clean-room violation: scratch dir {d} is inside the repository")
+
     manifest_out = Path(args.manifest_out)
     manifest_out.parent.mkdir(parents=True, exist_ok=True)
     manifest_out.write_text(json.dumps(manifest, indent=2) + "\n")
@@ -259,7 +343,9 @@ def main():
     # as the archive (ODR rule, DAG X-12): the define comes from the manifest,
     # never hand-copied per consumer.
     macro_view = ["-DSLUICE_HAS_LIBURING"] if args.liburing else []
-    uring_link = ["-luring"] if args.liburing else []
+    # The external uring dependency is linked by explicit path so the audited
+    # command stream is self-contained (no env LIBRARY_PATH reliance).
+    uring_link = [f"-L{uring_prefix}/lib", "-luring"] if args.liburing else []
     p1_cases = [(name, f"{name.rsplit('_', 1)[0]}.cpp" if name.endswith("_threadpool")
                  else f"{name}.cpp",
                  ["threadpool"] if name.endswith("_threadpool") else [])
@@ -311,7 +397,7 @@ def main():
         cmd = [cxx, "-std=c++20", f"-I{prefix}/include", "-DSLUICE_HAS_LIBURING", "-c",
                CONSUMERS / "contract_backend_availability.cpp", "-o", obj]
         command_log.append(" ".join(str(c) for c in cmd))
-        compiled = run(cmd, env={**os.environ, "CPLUS_INCLUDE_PATH": str(uring_prefix / "include")}).returncode == 0
+        compiled = run(cmd, env=consumer_env()).returncode == 0
         if compiled:
             link = run([cxx, obj, f"-L{prefix}/lib", "-lsluice_async", "-lsluice_core",
                         "-o", build_dir / "neg_uring.out"], capture_output=True)

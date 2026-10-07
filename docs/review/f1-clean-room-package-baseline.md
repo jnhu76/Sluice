@@ -58,10 +58,15 @@ baseline SHA):
 
 ```text
 TOOLCHAIN   = g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0; clang 21.1.8 present; xmake v2.9.7+20250101
+ARCH        = x86_64
 KERNEL      = Linux 6.18.33.2-microsoft-standard-WSL2 x86_64; io_uring_disabled = 0 (usable)
+FILESYSTEM  = ext4 (the scratch prefixes and all probe working files)
 LIBURING    = 2.9 built from source (github.com/axboe/liburing, tag liburing-2.9) into
               /tmp/f1-deps/uring-prefix (liburing.a/.so.2.9) — system liburing absent
               (no pkg-config entry, no /usr/include/liburing.h); sudo unavailable
+PROVENANCE  = manifests record SOURCE_SHA (branch point a34d96c6…) and
+              GENERATING_COMMIT (the F1 commit carrying the install rules and
+              verifier); the F1 diff touches no production source
 ```
 
 P2 consequences: the liburing-enabled build and its clean-room probes run
@@ -126,7 +131,7 @@ P1_W03_URING_EXPLICIT_UNAVAILABLE  = PASS   (no-liburing profile: rc=2, explicit
 contract_* (8 families)            = PASS   (see f1-requirement-evidence-matrix.md)
 F1_E_ODR_TWO_TU                    = PASS   (two TUs, one macro view)
 NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE = PASS   (core-only link of an async user fails)
-NEGATIVE_EXPERIMENTAL_NOT_INSTALLED= PASS
+NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED = PASS
 NEGATIVE_LINK_WITHOUT_URING_FAILS  = PASS   (P2: undeclared -luring must fail)
 CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY = PASS (per-command audit + include scan)
 ```
@@ -164,7 +169,13 @@ source change).
 - **ODR audit**: `odr_two_tu` links two TUs instantiating `Request<T>`/
   `Result<T>` under one shared macro view, in both profiles; the
   `SLUICE_HAS_LIBURING` ODR rule (DAG X-12) is enforced by the verifier
-  supplying the define from the manifest rather than per-consumer flags.
+  supplying the define from the manifest rather than per-consumer flags. Two
+  further same-flags ODR obligations are recorded in the manifests: the fiber
+  sanitizer-variant layout embedded by value in installed public headers
+  (consumer TUs must match the archive's sanitizer configuration), and the
+  prohibition on consumers defining `SLUICE_ASYNC_INTERNAL_TESTING` /
+  `SLUICE_*_MUTANT_*` (installed headers carry guarded seam regions; the
+  seam+liburing combination includes an uninstalled src/-only header).
 - **Config audit**: `contract_backend_availability` + the `w03` uring variant
   prove named-backend selection is explicit in both profiles; the no-liburing
   installed shell is **abstract** from any external TU (the two
@@ -185,8 +196,42 @@ requirements fail.
 
 ## 5. F1-F — Adversarial review record
 
-Three independent reviewers (A: clean-room contamination, B: requirement
-coverage holes, C: profile/package/config mismatch) record their verdicts here.
+Three independent reviewers attacked the committed F1 state
+(dd5aaaca/95ef2728/284debca): A — clean-room contamination, B — requirement
+coverage holes, C — profile/package/config mismatch. Verdicts: A PASS,
+B PASS, C FAIL; 10 P1 and 14 P2 findings total, all adjudicated below. No P0
+(no retirement-invisible root observation, no broken shipped package).
+
+| Reviewer | Finding | Resolution |
+|---|---|---|
+| A-1 (P1) | gate env-blind: `CPATH`/`LIBRARY_PATH`-style env could silently supply repo headers/libs to consumer builds | `consumer_env()` whitelist for consumer compiles/links/runs; any include/lib path env var resolving under the repository is a hard failure |
+| A-2 (P1) | include scan bypassable (absolute angle include, `..` traversal, macro-quoted, `# include`) | scan hardened: operand must be bare `<...>`, no quote, no leading `/`, no `..` segment, whitespace-normalized |
+| A-3 (P1) | P2 link resolved `-luring` via env `LIBRARY_PATH`, invisible to the audited command stream | explicit `-L<uring-prefix>/lib` on every P2 link; runtime still via recorded `LD_LIBRARY_PATH` |
+| A-4 (P2) | prefix exemption not anchored; TMPDIR could nest scratch dirs in the repo | `commonpath`-style anchoring for the prefix exemption; scratch dirs checked not to resolve inside the repository; TMPDIR pinned to `/tmp` when unset |
+| A-5 (P2) | audit flag list missing `-iquote`/`-imacros` | added |
+| A-6/C-7 (P2) | stray untracked default-path manifest | deleted; `--manifest-out` is now required so no non-frozen artifact is produced implicitly |
+| A-7 (P2) | README overstated detector scope | README documents the env whitelist and its guarantee |
+| B-1 (P1) | W-04 H-claims overclaimed: H4 had no external arm; H1's failing task was rejected pre-acceptance with `run()` error discarded; H2's task finished before the stop landed | w04 rewritten: H1 arm now fails via a task exception while the sibling's silent-pipe read is outstanding (run() error asserted, sibling settlement asserted); the H2/H4 arm parks a task on a silent-pipe read, lands stop mid-suspension, lets the await deadline expire and asserts the real EOF terminal arrives without cancellation (FIFO is outside the regular-file profile — the in-repo shutdown-oracle suspension pattern; recorded in the matrix) |
+| B-2 (P1) | S8 "refuse-on-live-interest observed" had no external arm | `contract_shutdown` gained the refusal arm: shutdown with a live notification interest is refused (context stays open), completes after the ordered detach |
+| B-3 (P1) | V01/V02 rows claimed full PASS without the root's zero-buffer schedule element | `contract_admission` gained zero-buffer invalid-resource and illegal-access arms (precedence before the no-op short circuit); rows upgraded to full PASS |
+| B-4 (P2) | hub→compat-carrier include edge (F0 policy §1.3) has no executable detector | recorded: the load-bearing substance (hub's `Completion&` spellings) is compile-baselined by `contract_observer`; the include edge itself rides F2 (the removal of the edge changes no root-visible observation) |
+| B-5 (P2) | V18 external arm contained a tautological assertion | matrix wording corrected to the honest form (settlement via fail-fast absence + post-unwind shutdown health) |
+| B-6 (P2) | V21 fork-based probing feasible | recorded as an option; kept NOT_APPLICABLE for F1 (the internal fail-fast oracles own it) |
+| B-7 (P2) | V04 statistical arm possible | recorded; per-trial disjunction without admission synchronization cannot distinguish the winner, seam evidence stays primary |
+| B-8 (P2) | compat-family surfaces are manifest-diff-only baselined | matrix §4 family table now states this explicitly (no root-visible observation by design) |
+| B-9 (P2) | RequestHandle runtime behavior unprobed | already recorded (UNDECIDED/F2-owned); unchanged |
+| B-10 (P2) | gate-name mismatch in baseline §2 | fixed |
+| C-1 (P1) | baseline claimed the thread requirement is "recorded in the manifest" but manifests were silent | manifests now carry the toolchain-qualified thread statement (no separate `-pthread` measured on glibc ≥ 2.34; other toolchains may need it) |
+| C-2 (P1) | sanitizer-configuration ODR constraint missing from the frozen records | manifests now carry the same-sanitizer-config requirement (fiber_ctx layout embedded by value in installed headers) |
+| C-3 (P1) | seam macros undeclared although 17 installed headers carry guarded regions | manifests now carry the NEVER-DEFINE prohibition for `SLUICE_ASYNC_INTERNAL_TESTING` / `SLUICE_*_MUTANT_*`; baseline §4 states the seam regions |
+| C-4 (P2) | PROFILE tier labels unmapped to F0 classes | manifests carry `PROFILE_NOTE` and the README maps the tiers (P3 is the no-liburing profile tier label; OPTIONAL_CANDIDATE closure rides inside P1) |
+| C-5 (P2) | manifest SOURCE_SHA is the branch point, not the install-rule commit | manifests now record both `SOURCE_SHA` (content baseline a34d96c6…, production diff empty) and `GENERATING_COMMIT` |
+| C-6 (P2) | PROD-02 environment fields partial | manifests record ARCH/KERNEL/FILESYSTEM/LIBURING_VERSION; baseline §0.2 records the same plus filesystem |
+| C-7 | (same as A-6) | resolved above |
+
+Post-fix state: the hardened harness re-ran both profiles end-to-end with all
+gates PASS (the strengthened w04/contract_admission/contract_shutdown arms
+included), and the manifests were re-frozen with the new declaration fields.
 
 ## 6. Gate statement
 
@@ -195,9 +240,12 @@ coverage holes, C: profile/package/config mismatch) record their verdicts here.
 - `F1_C_EXTERNAL_WORKLOADS_RECORDED` = PASS (§2; 6/6 stable runs)
 - `F1_D_REQUIREMENT_MATRIX_COMPLETE` = PASS-candidate (`f1-requirement-evidence-matrix.md`)
 - `F1_E_PACKAGE_DECLARATIONS_MATCH_REALITY` = PASS (§4)
-- `F1_F_ADVERSARIAL_REVIEW_COMPLETE` = pending (§5)
+- `F1_F_ADVERSARIAL_REVIEW_COMPLETE` = PASS (§5: three reviewers, all findings
+  adjudicated; P1s fixed and re-verified, P2s resolved or recorded)
 - `CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY` = PASS (§2)
 - `PACKAGE_USAGE_REQUIREMENTS_AND_DECLARATIONS_MATCH_BASELINE` = PASS (§4)
 - `REQUIREMENT_EVIDENCE_COVERAGE_COMPLETE_FOR_BASELINE` = PASS-candidate
   (matrix §5 records the honest KNOWN_GAP rows with their B/C/D layers)
-- `F1_CANONICAL_BASELINE_FROZEN` = pending F1-F
+- `F1_CANONICAL_BASELINE_FROZEN` = PASS (additive baseline frozen at
+  GENERATING_COMMIT; production source diff 0; F2–F5 diff targets are the two
+  frozen manifests and this record)

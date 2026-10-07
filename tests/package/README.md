@@ -19,11 +19,19 @@ installed prefix produced by `xmake install`.
    quoted includes, which could reach source-tree headers relative to the
    consumer file).
 2. Compile/link commands reference the installed prefix only; the verifier
-   records every command and fails if any `-I`/`-L`/`-isystem` path resolves
-   into the repository.
+   records every command and fails if any include/library path flag resolves
+   into the repository. Consumer builds run with a whitelisted environment,
+   and an include/library path variable (`CPATH`, `LIBRARY_PATH`, …) pointing
+   into the repository aborts the run.
 3. The macro view (`SLUICE_HAS_LIBURING`) is supplied by the verifier from the
    manifest so every consumer TU sees the same layout the archive was built
    with (ODR rule).
+
+Profile tiers are packaging labels: P0/P1/P3 carry the CANONICAL surfaces,
+P1 additionally carries the OPTIONAL_CANDIDATE host closure (the H-30/H-31
+rows: `cancel.hpp` + `fiber.hpp` + `fiber_ctx.hpp`) and the
+COMPATIBILITY/INTERNAL/TEST_ONLY headers the current public closure reaches.
+No OPTIONAL_SUPPORTED claim exists anywhere in F1.
 
 ## Running
 
