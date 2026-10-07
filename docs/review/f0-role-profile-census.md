@@ -1,6 +1,6 @@
 # F0 Role / Profile Census (#454, parent #402)
 
-- **Status**: `F0_ROLE_PROFILE_CENSUS_COMPLETE` candidate — CANDIDATE DISPOSITIONS ONLY, no deletion authorization. Round-1 human review (`F0_HUMAN_REVIEW = REQUEST_CHANGES`, PR #455 comment 6030469392): revision 2 resolves P1-1/P1-2/P2-1/P2-2/P2-3 (record: §4.1); gates stay candidate pending Round-2 review.
+- **Status**: `F0_ROLE_PROFILE_CENSUS_COMPLETE` candidate — CANDIDATE DISPOSITIONS ONLY, no deletion authorization. Round-1 human review (`F0_HUMAN_REVIEW = REQUEST_CHANGES`, PR #455 comment 6030469392): revision 2 resolves P1-1/P1-2/P2-1/P2-2/P2-3 (§4.1). Round-2 review (`F0_HUMAN_REVIEW_ROUND_2 = REQUEST_CHANGES`, comment 6031614724): `COMPATIBILITY_DISPOSITION_DEFINED` + `CONSUMER_MIGRATION_DAG_DEFINED` = PASS(candidate); revision 3 closes the residual census/policy P1 (OPTIONAL_CANDIDATE public closure, §4.2). Gates stay candidate pending Round-3 review.
 - **Baseline (frozen)**: `MASTER_SHA = 989d5c3fa5fa803c05ac87ebfe6c99db9d87564b` (live master at census start; branch `docs/454-f0-role-profile-census`)
 - **Root**: `docs/explicit-io-v1-final-decision.md`, revision `v1-r3` (sole normative authority)
 - **Adopted ADRs**: ADR-0004 (ADOPTED, PR #453 at `eb7bf055`). ADR-0003 is **PROPOSED** (D2 ledger row `IMPLEMENTED_UNVERIFIED`, human review pending). ADR-0001/0002 superseded (GOV-03).
@@ -27,10 +27,13 @@ could not be established say `UNKNOWN`; nothing is guessed.
 
 Census primary key (per #454): `surface_id` × `semantic_role` × `shipped_profile`.
 Surfaces are never classified by file name, age, or naming similarity; where a
-surface carries more than one role, each role gets its own row
+surface carries more than one role — or one role whose public exposure rides a
+different profile — each role × profile gets its own row
 (e.g. `Completion<T>` = compatibility result carrier **and** retained arena
 release substrate; `SynchronousReadySink` = routing interface **and**
-backend-embedded no-op).
+backend-embedded no-op; `CancelToken`/`Fiber`/`fiber_ctx` split into
+mechanism, legacy-runtime exposure, and OPTIONAL_CANDIDATE public-closure
+exposure rows).
 
 Two standing caveats on mechanical evidence:
 
@@ -127,7 +130,7 @@ No P0/P1. All findings are recorded, not repaired (F0 forbids production changes
 
 Legend for compact columns:
 
-- `PROFILE`: `CANONICAL` (adopted v1 surface), `OPTIONAL_CANDIDATE` (implemented optional-profile candidate; support claim gated on W-04 + ADR-0003 adoption — PROD-02 makes only the single-owner stackful adapter optional and marks the multi-worker task host DEFERRED), `COMPAT` (compatibility/dormant retained surface, no promise attached; includes the root-DEFERRED multi-worker runtime world), `EXPERIMENTAL`, `INTERNAL` (detail/host mechanism; still consumer-visible via the public include path), `UNDECIDED` (capability recorded; public-spelling disposition owned by a later phase), `TEST_ONLY` (public-tree test doubles).
+- `PROFILE`: `CANONICAL` (adopted v1 surface), `OPTIONAL_CANDIDATE` (implemented optional-profile candidate; support claim gated on W-04 + ADR-0003 adoption — PROD-02 makes only the single-owner stackful adapter optional and marks the multi-worker task host DEFERRED; **exposure rows riding H-09's public closure inherit its gate**), `COMPAT` (compatibility/dormant retained surface, no promise attached; includes the root-DEFERRED multi-worker runtime world), `EXPERIMENTAL`, `INTERNAL` (detail/host mechanism; still consumer-visible via the public include path), `UNDECIDED` (capability recorded; public-spelling disposition owned by a later phase), `TEST_ONLY` (public-tree test doubles).
 - Authority codes (which authority the surface **owns**; `·` = none): `R`esult/settlement, `O`wnership (native/stack/memory), `A`ccess (provenance/legality), `L`ifetime (borrow/binding/reclaim), `P`rogress (driver/notification), `I`dentity/routing, `S`emantic-oracle (shared meaning).
 - `STATUS` (evidence state): `VERIFIED` (ledger row VERIFIED), `RECORD` (named evidence record exists; ledger aggregate row open or human review pending), `SHIPPED` (present, no v1 claim), `DORMANT` (zero consumer), `PROPOSED` (ADR pending), `TEST_ONLY`, `HISTORICAL`.
 - Consumers: `src`/`tst`/`app`/`hdr` counts from the include graph (`hdr` = only reached via other headers).
@@ -202,7 +205,7 @@ Not found (recorded `ALREADY_MIGRATED`, per #454 §6): `WaiterToken`, `RoutingLe
 | H-13 | `Group` | `sluice/async/group.hpp` | class | COMPAT (DEFERRED) | O, R | fork-join over threads or evented fibers — part of the root-DEFERRED multi-worker runtime (PROD-02); owns stack bytes + `Future` cells + group `CancelToken`; **complete-type dependency on `Fiber`** (`unique_ptr<Fiber>` members, `init_fiber`) — F3 prerequisite (DAG X-17); retained as ApplicationRuntime's root group (HOST-01) | SHIPPED | src 2 · hdr 1 | HOST-01, MIG-02, PROD-02 |
 | H-14 | `Future<T>` | `sluice/async/future.hpp` | template | COMPAT | R | one-shot result cell over `WaitPolicy`; **only consumer is `Group`** | SHIPPED (Group-only) | hdr 1 | MIG-02 "Group/Future/WaitPolicy" |
 | H-15 | `WaitPolicy`, `ThreadedWaitPolicy`, `EventedWaitPolicy` | `sluice/async/wait_policy.hpp`, `evented_wait_policy.hpp` | interface | COMPAT | · | blocking strategy seam for `Future` (threaded vs scheduler-evented) | SHIPPED (Future-only) | hdr 2 | MIG-02 |
-| H-16 | `CancelToken/CancelState/CancelGuard/CancelProtection/check_cancel` | `sluice/async/cancel.hpp` | latch vocab | COMPAT (DEFERRED-world vocabulary) | L | cooperative cancellation latch + epoch acknowledge protocol for the task/host world — consumers span the DEFERRED runtime (Future/Fiber/Group) **and** the OPTIONAL_CANDIDATE host (`StackfulIoHost::stop_token_`), so it must not retire with the runtime world without re-homing the host stop token; **not** a request-cancel surface (CANCEL-01 lives in `Request::cancel`) | SHIPPED | hdr 5 · src-async 1 (+ host tests) | HOST-01, MIG-02 runtime family |
+| H-16 | `CancelToken/CancelState/CancelGuard/CancelProtection/check_cancel` | `sluice/async/cancel.hpp` | latch vocab | COMPAT (DEFERRED-world vocabulary exposure) | L | cooperative cancellation latch + epoch acknowledge protocol — the **legacy multi-worker runtime exposure** role (Future/Fiber/Group consumers); the same physical surface's **current H-09 public-signature dependency** role is a separate row (H-30, OPTIONAL_CANDIDATE exposure); **not** a request-cancel surface (CANCEL-01 lives in `Request::cancel`) | SHIPPED | hdr 5 · src-async 1 (+ host tests) | HOST-01, MIG-02 runtime family |
 | H-17 | `Event` | `sluice/async/event.hpp` | class | COMPAT | L | runtime event flag + select arm; live in scheduler/select paths, wrapper class consumed only via scheduler | SHIPPED | src 12 | MIG-02 dormant-primitives family |
 | H-18 | `select()/SelectResult/EventSelectCase/TimerSelectCase`, `select_fwd` concept | `sluice/async/select.hpp`, `select_fwd.hpp` | variadic template | COMPAT | L | runtime select over {event,timer} arms; arbitration in Scheduler | SHIPPED | src 10 | MIG-02 dormant-primitives family |
 | H-19 | `WaitNode/WaitResume/ActorId/WaitOutcome`, `WaitQueue` | `sluice/async/wait_node.hpp`, `wait_queue.hpp` | intrusive vocab | INTERNAL (mechanism) | L | scheduler wait-list machinery; mutations friended to Scheduler only; name `Fiber*` (DAG X-17) | SHIPPED | hdr only (via scheduler) | — |
@@ -215,7 +218,9 @@ Not found (recorded `ALREADY_MIGRATED`, per #454 §6): `WaiterToken`, `RoutingLe
 | H-26 | `TaskResultSlot<T>`, `translate_task_exception<T>`, `run_task_to_result` | `sluice/async/task_result.hpp` | header-only templates | COMPAT (DEFERRED; rides H-08) | R, S | app-facing blocking bridge into the root-DEFERRED multi-worker runtime: one-shot task-result mailbox (first publish wins) + exception→`IoError` translation + inline ApplicationRuntime lifecycle driver; **not** a request-settlement authority | SHIPPED | app 4 · tst 8 | HOST-01, MIG-02 completed-return family |
 | H-27 | `ThreadPoolBackend` (+`ThreadPoolConfig`) | `sluice/async/threadpool_backend.hpp` | concrete backend | CANONICAL (required profile spelling) | O, A | required ThreadPool request backend: owns worker threads + dispatch/publication rings + delivery records; publishes through the context-owned core; public class that apps construct directly for explicit backend selection | RECORD (E1) | src-async 2 · tst 19 · app 6 TUs | BACKEND-01..03, PROD-02 |
 | H-28 | `UringAsyncBackend` (+`UringConfig` when guarded) | `sluice/async/uring_backend.hpp` | concrete backend | CANONICAL (required supported profile; availability-gated) | O, A | io_uring request backend: ring transport, cookie ledger/router, statx metadata buffers, eventfd registration, poison/recover; body fragments guarded by `SLUICE_HAS_LIBURING` (stub throws at construction) | RECORD (E1; real-kernel evidence recorded) | src-async 3 · tst 16 | BACKEND-01..03, PROD-02 |
-| H-29 | public `fiber.hpp`/`fiber_ctx.hpp` spellings (legacy-runtime exposure) | `sluice/async/fiber.hpp`, `sluice/async/fiber_ctx.hpp` | public headers | COMPAT (DEFERRED-world exposure) | · | the H-11/H-12 mechanism as **public-header exposure** to the legacy runtime world: `Scheduler`/`Group`/`AsyncMutex`/wait vocabulary name `Fiber` in public headers (layout + complete-type edges X-03/X-04/X-17) and the sanitizer-variant layout propagates into `scheduler.hpp`/`stackful_io_host.hpp` (§1.5); F3 internalizes these spellings only after the 🔒 prerequisites (DAG §5) | SHIPPED | src 12 · hdr 5 | MIG-02, PROD-02 |
+| H-29 | public `fiber.hpp`/`fiber_ctx.hpp` spellings (legacy-runtime exposure) | `sluice/async/fiber.hpp`, `sluice/async/fiber_ctx.hpp` | public headers | COMPAT (DEFERRED-world exposure) | · | the H-11/H-12 mechanism as **public-header exposure to the legacy multi-worker runtime**: `Scheduler`/`Group`/`AsyncMutex`/wait vocabulary name `Fiber` in public headers (complete-type edge X-17; layout edge X-04 via `application_runtime.hpp`) and the sanitizer-variant layout propagates into `scheduler.hpp` (§1.5); F3 internalizes these spellings only after the 🔒 prerequisites (DAG §5). The separate **current H-09 compile/layout exposure** is row H-31 | SHIPPED | src 12 · hdr 5 | MIG-02, PROD-02 |
+| H-30 | `CancelToken` as H-09 public-signature dependency | `sluice/async/cancel.hpp` (via `stackful_io_host.hpp`) | public signature + private member | OPTIONAL_CANDIDATE (exposure; inherits the H-09 gate) | · | `stackful_io_host.hpp:4` publicly includes `cancel.hpp`; `IoTaskContext::token()` returns `const CancelToken&` (`stackful_io_host.hpp:39`); private `StackfulIoHost::stop_token_` member (`:221`). Until F3 re-homes the stop/latch vocabulary, a clean-room OPTIONAL_CANDIDATE host package must carry `cancel.hpp`; the retention spelling is not automatically canonical | SHIPPED | via H-09 (src 1 · tst 1) | HOST-01, W-04, PROD-02 |
+| H-31 | `Fiber`/`fiber_ctx` as H-09 public compile/layout exposure | `sluice/async/fiber.hpp`, `sluice/async/fiber_ctx.hpp` (via `stackful_io_host.hpp`) | public headers (compile + TYPE_LAYOUT) | OPTIONAL_CANDIDATE (exposure; inherits the H-09 gate) | · | `stackful_io_host.hpp:6-7` directly includes `fiber.hpp`+`fiber_ctx.hpp`; private `TaskSlot::fiber` embeds `Fiber` **by value** (`:181`), `fiber_ctx::Context driver_ctx_` (`:219`), `fiber_ctx::Switch*` bridge parameter (`:197`) — every TU compiling the public header needs both headers, and the sanitizer-variant layout propagates into this public header (§1.5, X-03). Until the F3 boundary fix (X-03/D-16), a clean-room OPTIONAL_CANDIDATE host package must carry `fiber.hpp`/`fiber_ctx.hpp` even though the mechanism's target disposition is KEEP_INTERNAL | SHIPPED | via H-09 (src 1 · tst 1) | HOST-01, W-04, PROD-02 |
 
 ### 2.5 Resource / stream world (`sluice_core`, root SEM/LIFE + MIG-02)
 
@@ -272,13 +277,13 @@ Forbidden inferences held both ways (recorded, per #454 §14): no asset is delet
 
 ## 3. Summary matrices (#454 §19)
 
-### Profile summary (71 surface rows; ID sets are the source of truth, not the counts)
+### Profile summary (73 surface rows; ID sets are the source of truth, not the counts)
 
 | Field | Rows |
 |---|---|
 | CANONICAL_PROFILE_SURFACES (17) | V-01..V-05, R-01..R-04, R-15, H-01, H-03, H-04, H-27, H-28, P-05, P-06 |
-| OPTIONAL_CANDIDATE_SURFACES (1; gated on W-04 + ADR-0003 adoption) | H-09 |
-| COMPATIBILITY_ONLY_SURFACES (25) | R-06, R-08, H-05, H-06, H-07, H-08, H-10, H-13, H-14, H-15, H-16, H-17, H-18, H-22, H-26, H-29, L-01..L-09 (H-06..H-08, H-10, H-13, H-16, H-26, H-29 = root-DEFERRED multi-worker runtime world per PROD-02) |
+| OPTIONAL_CANDIDATE_SURFACES (3; all gated on W-04 + ADR-0003 adoption) | H-09 + its public-closure exposure rows H-30 (`CancelToken` signature dependency), H-31 (`Fiber`/`fiber_ctx` compile/layout exposure) — the exposure rows inherit the host gate |
+| COMPATIBILITY_ONLY_SURFACES (25) | R-06, R-08, H-05, H-06, H-07, H-08, H-10, H-13, H-14, H-15, H-16, H-17, H-18, H-22, H-26, H-29, L-01..L-09 (the host-family members are the root-DEFERRED multi-worker runtime world per PROD-02) |
 | EXPERIMENTAL_SURFACES (1) | L-12 |
 | INTERNAL_ONLY_SURFACES (23) | V-06..V-09, R-07, R-09..R-11, R-13, R-14, P-01..P-04, H-02, H-11, H-12, H-19..H-21, H-23..H-25 |
 | UNDECIDED_SPELLING_SURFACES (1; F2-owned) | R-05 |
@@ -353,10 +358,19 @@ Human review verdict: `F0_HUMAN_REVIEW = REQUEST_CHANGES` (P0=0, P1=2, P2=3, P3=
 | P2-2 — X-10 contradicted X-18 on current-doc claims | X-10 reworded (DAG §2): no **normative source/ABI compatibility promise** exists (policy §1.5/§1.6), while current **non-normative product/docs claims do exist** — README's retained-baseline framing and the app READMEs' ApplicationRuntime-lifecycle and "installed/public headers only" claims (X-18) are real DOC_CLAIM/product-surface evidence that must migrate with their surfaces. |
 | P2-3 — F4 prerequisite summary mis-bound X-18 | X-18 removed from `F4_PREREQUISITES` (it is a host/Completion DOC_CLAIM edge, not a native-resource dependency); F4 = X-06, X-07, X-13 + the D-11/D-12 undecided rows; X-18 assigned to the F2/F3 documentation-migration path (DAG §6). |
 
+## 4.2 Round-2 human review (PR #455 comment 6031614724) — resolution record
+
+Human review verdict: `F0_HUMAN_REVIEW_ROUND_2 = REQUEST_CHANGES` (P0=0, P1=1, P2=1). Round-1 items P1-2/P2-1/P2-2/P2-3 = CLOSED; P1-1 = PARTIALLY CLOSED (semantic split correct, public closure under-classified). This revision closes the residual:
+
+| Finding | Resolution |
+|---|---|
+| Residual P1 — OPTIONAL_CANDIDATE public compile/API closure under-classified | Applied the primary-key rule (same physical surface, different role × profile ⇒ separate rows) to H-09's real public closure, verified against `stackful_io_host.hpp` at the baseline: new **H-30** (`CancelToken` as H-09 public-signature dependency — `stackful_io_host.hpp:4` publicly includes `cancel.hpp`, `IoTaskContext::token() → const CancelToken&` at `:39`, private `stop_token_` member at `:221`) and new **H-31** (`Fiber`/`fiber_ctx` as H-09 public compile/layout exposure — `:6-7` includes both headers, `TaskSlot::fiber` embeds `Fiber` by value at `:181`, `fiber_ctx::Context driver_ctx_` at `:219`, sanitizer layout propagation §1.5/X-03). **H-29** rewritten to carry only the legacy-runtime exposure (its `stackful_io_host.hpp` prose moved to H-31); **H-16** scoped to the legacy-runtime vocabulary role with a cross-ref to H-30. `OPTIONAL_CANDIDATE_SURFACES` = H-09, H-30, H-31 (exposure rows inherit the H-09 gate); row total 71 → 73. Package rule recorded in policy §2: **until F3 repairs the H-09 header boundary, a clean-room OPTIONAL_CANDIDATE host package must carry every header/type required to compile that public header (`fiber.hpp`/`fiber_ctx.hpp`/`cancel.hpp` among them), even where the underlying mechanism's target disposition is KEEP_INTERNAL.** DAG X-03 and the F3 chain updated to cite H-30/H-31. ADR-0003 stays PROPOSED; no production change. |
+| P2 — stale PR body metadata | PR #455 body refreshed to the current row count/profile distribution and review-round state. |
+
 ## 5. Gate statement
 
 - `F0_A_TREE_BUILD_INSTALL` = recorded (§1)
-- `F0_B_SEMANTIC_ROLE` = recorded (§2, 71 surface rows across 6 families + formal/evidence assets)
+- `F0_B_SEMANTIC_ROLE` = recorded (§2, 73 surface rows across 6 families + formal/evidence assets)
 - Production deletions / authority retirements performed by F0: **0**
 - Candidate dispositions and policies: see companion files; nothing here authorizes removal.
-- Round-1 human review = REQUEST_CHANGES (comment 6030469392); revision 2 resolves its P1-1/P1-2/P2-1/P2-2/P2-3 (§4.1). Gates remain **candidate** until Round-2 human review; F1 stays BLOCKED pending that verdict.
+- Round-1 human review = REQUEST_CHANGES (comment 6030469392) — resolved by revision 2 (§4.1). Round-2 human review = REQUEST_CHANGES (comment 6031614724): `COMPATIBILITY_DISPOSITION_DEFINED` and `CONSUMER_MIGRATION_DAG_DEFINED` = PASS(candidate); the residual census/policy P1 (OPTIONAL_CANDIDATE public closure) is resolved by revision 3 (§4.2). Gates remain **candidate** until Round-3 human review; F1 stays BLOCKED pending that verdict.

@@ -1,6 +1,6 @@
 # F0 Package Profile & Compatibility Policy (#454, parent #402)
 
-- **Status**: `PACKAGE_PROFILE_POLICY_DEFINED` + `COMPATIBILITY_DISPOSITION_DEFINED` candidate. Revision 2 resolves Round-1 human-review findings P1-1 (host profile split per PROD-02) and P1-2 (RequestHandle disposition → UNDECIDED, F2-owned); record: `f0-role-profile-census.md` §4.1.
+- **Status**: `PACKAGE_PROFILE_POLICY_DEFINED` + `COMPATIBILITY_DISPOSITION_DEFINED` candidate. Revision 2 resolves Round-1 findings P1-1/P1-2 (§4.1 there). Revision 3 closes the Round-2 residual P1 — the OPTIONAL_CANDIDATE public-closure rows H-30/H-31 and the clean-room packaging rule (§2); record: `f0-role-profile-census.md` §4.2.
 - **Baseline**: `989d5c3fa5fa803c05ac87ebfe6c99db9d87564b`, root v1-r3 (see `f0-role-profile-census.md` §0 for provenance; row IDs below reference its §2 census)
 - **Authority order**: root > adopted ADR (ADR-0004 only) > #402 phase policy > ledger/evidence > implementation. This file is a **policy definition for later phases**, not a deletion authorization; every disposition below is `CANDIDATE` until the owning ticket decides.
 
@@ -21,7 +21,7 @@ Classification result (row IDs from `f0-role-profile-census.md` §2):
 | Class | Rows |
 |---|---|
 | `CANONICAL` | V-01..V-05, R-01..R-04, R-15, H-01, H-03, H-04, H-27, H-28, P-05, P-06 |
-| `OPTIONAL_CANDIDATE` (optional-profile candidate; support gated on W-04 + ADR-0003 adoption) | H-09 (`StackfulIoHost`/`IoTaskContext` — the only configuration PROD-02 admits as an optional build profile; single-owner stackful adapter only) |
+| `OPTIONAL_CANDIDATE` (optional-profile candidate; support gated on W-04 + ADR-0003 adoption) | H-09 (`StackfulIoHost`/`IoTaskContext` — the only configuration PROD-02 admits as an optional build profile; single-owner stackful adapter only) **plus its current public-closure exposure rows H-30 (`CancelToken` public-signature dependency) and H-31 (`Fiber`/`fiber_ctx` public compile/layout exposure), which inherit the H-09 gate** |
 | `OPTIONAL_SUPPORTED` | — **empty today**; no shipped surface may claim this class until the H-09 gate completes |
 | `COMPAT` (compatibility/dormant retained surface) | R-06 (`Completion<T>` caller-owned result), R-08 (`Batch`), H-05 (`op_helpers` completed-return + busy-spin), **H-06, H-07, H-08, H-10, H-13, H-16, H-26, H-29 (root-DEFERRED multi-worker runtime world per PROD-02 — not optional-supported)**, H-14 (`Future<T>`), H-15 (`WaitPolicy`/`EventedWaitPolicy`), H-17 (`Event`), H-18 (`select`), H-22 (5 dormant wrappers), L-01..L-09 (legacy stream world) |
 | `EXPERIMENTAL` | L-12 (`experimental/uring_*`) |
@@ -90,7 +90,7 @@ Profiles (superset of the six required classes; `SHIPPED` facts vs `SUPPORTED` c
 | Profile | Definition |
 |---|---|
 | `CANONICAL` | Required v1 surface per root; target of the convergence; workload acceptance defined by W-01–W-03 + required profiles |
-| `OPTIONAL_CANDIDATE` | Implemented **narrow single-owner stackful adapter** (H-09) shipped as an optional-profile candidate; its support claim is gated on W-04 pass + D2 review + ADR-0003 adoption (PROD-02). Until the gate completes it is a candidate, not a supported product profile; if the gate never completes it degrades to `EXPERIMENTAL` by PROD-02/MIG-03. |
+| `OPTIONAL_CANDIDATE` | Implemented **narrow single-owner stackful adapter** (H-09) shipped as an optional-profile candidate; its support claim is gated on W-04 pass + D2 review + ADR-0003 adoption (PROD-02). Until the gate completes it is a candidate, not a supported product profile; if the gate never completes it degrades to `EXPERIMENTAL` by PROD-02/MIG-03. **Public-closure rule:** the profile's surface set includes every header/type required to compile `stackful_io_host.hpp` today — exposure rows H-30 (`cancel.hpp`) and H-31 (`fiber.hpp`/`fiber_ctx.hpp`) — even where the underlying mechanism's target disposition is KEEP_INTERNAL: **until F3 repairs the H-09 header boundary, a clean-room OPTIONAL_CANDIDATE host package must carry all of them.** |
 | `OPTIONAL_SUPPORTED` | Optional build profile **after** its gate completes. **Currently empty**: PROD-02 admits only the single-owner stackful adapter into this class and marks the multi-worker task host DEFERRED, so no shipped surface claims it today. |
 | `COMPATIBILITY` | Retained pre-v1 / dormant surface per §1.1 — including the root-DEFERRED multi-worker runtime world; no promise; retirable under §1.7 |
 | `EXPERIMENTAL` | Clearly isolated unsupported experiments (LIFE-03/MIG-02); must not be described as v1 conforming |
@@ -110,7 +110,7 @@ Per-profile obligations (current facts, not aspirations):
 | WORKLOAD_ACCEPTANCE | W-01–W-03 (+V01–V27 where evidenced) | W-04 gate only — **not claimable today** | W-04 pass required (class currently empty) | none required; must not regress canonical evidence | none | exercised through canonical/host tests | none (not a workload surface) | test-only | none |
 | REQUIRED_EVIDENCE | ledger VERIFIED per slice | W-04 tracer + D2 review + ADR-0003 adoption **before any supported claim** (PROD-02) | the completed H-09 gate record | consumer audit + migration evidence before any change | root amendment before any supported claim | follows the owning slice | explicit F2 disposition record (retain \| fold \| internalize) | mutation/oracle records | none (retained for provenance) |
 
-The load-bearing asymmetry: **`physically installed ≠ supported canonical`** (currently nothing is installed, so the discriminating case is future) and **`not installed ≠ internal by definition`** (today everything public is merely on an include path; `EXPERIMENTAL` headers are neither installed nor internal).
+The load-bearing asymmetries: **`physically installed ≠ supported canonical`** (currently nothing is installed, so the discriminating case is future), **`not installed ≠ internal by definition`** (today everything public is merely on an include path; `EXPERIMENTAL` headers are neither installed nor internal), and **`target disposition ≠ current package closure`** — a mechanism whose destination is INTERNAL (H-11 `Fiber`, H-12 `fiber_ctx`) or whose vocabulary serves the DEFERRED runtime (H-16 `CancelToken`) is still part of the OPTIONAL_CANDIDATE package closure today (H-30/H-31) until the F3 boundary work lands.
 
 ## 3. External-use uncertainty register
 
@@ -121,7 +121,7 @@ There is no repository compatibility/API policy document (GREP of docs/, ADRs, R
 | CANONICAL surfaces | recorded in census §2 | `unknown` (no policy ⇒ cannot assert zero external use, but canonical surfaces are not removal candidates anyway) |
 | `Completion<T>` + `Batch` + `op_helpers` | 15 test files include `completion.hpp`, **25 test files name the type**; **4 apps construct/settle `Completion` in task code** (copy/hash/grep/tail via `await_op_helpers`); `Batch`: 1 test; `op_helpers`: 1 test | `unknown` — and the app usage means Completion retirement **cannot** be scoped as a test-only migration (DAG X-01) |
 | Host/runtime family — root-DEFERRED multi-worker runtime (H-06..H-08, H-10, H-13, H-16, H-26, H-29) | 4 apps + host tests + scheduler TUs | `unknown` |
-| Optional-profile candidate host (H-09 `StackfulIoHost`/`IoTaskContext`) | src 1 + host tests 1 | `unknown` |
+| Optional-profile candidate host + its public-closure exposure rows (H-09, H-30, H-31) | src 1 + host tests 1 (compile `stackful_io_host.hpp`, which pulls `cancel.hpp`/`fiber.hpp`/`fiber_ctx.hpp`) | `unknown` |
 | Concrete backends (H-27/H-28) | apps construct `ThreadPoolBackend` directly (6 TUs); uring backend construction gated on availability | `unknown` for direct construction |
 | Legacy stream world (L-01..L-09) | src-core factories + tests; 0 apps | `unknown` |
 | Dormant wrappers (H-22) + `Future`/`WaitPolicy`/`Event`/`select` | 0 direct includes (condition/semaphore/async_queue), 1 (async_mutex via condition), **10 src TUs (async_rwlock, mechanical)** | `unknown` |

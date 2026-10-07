@@ -25,7 +25,7 @@
 |---|---|---|---|
 | X-01 | legacy host world → `Completion<T>` | COMPILE + CALL + TYPE_LAYOUT | consumer set (include-count vs type-use vs app-use are different numbers): 15 test files include `completion.hpp`; **25 test files name the type**; **all 4 apps construct/settle `Completion` objects in task code** (`apps/sluice-copy/copy_task.cpp:37-38,55`, `apps/sluice-hash/hash_task.cpp:43`, `apps/sluice-grep/grep_task.cpp:45`, `apps/sluice-tail/tail_task.cpp:112-233`); `Batch::Slot` holds `Completion` by value; the compat result carrier is baked into every legacy spelling of submission — retiring it test-only would break all four app builds |
 | X-02 | `Completion<T>` (R-07 release path) + `AsyncBackend::identity_of` → `RequestArena` | COMPILE + CALL | `completion.hpp` includes `detail/request_arena.hpp`; release may still route `release_completed_binding` when the legacy binding is installed, and `request_handle.cpp:8-42` derives a `RequestHandle` from arena fields when no core binding is installed — the arena cannot be removed before both paths are re-owned |
-| X-03 | `StackfulIoHost` (public header) → `Fiber`/`fiber_ctx` | TRANSITIVE_INCLUDE + TYPE_LAYOUT (`TaskSlot::fiber` by value; `fiber_ctx::Context driver_ctx_`; `fiber_ctx::Switch*` param) | **public-header layout dependency**: F3 internalization must re-spell this header first (PIMPL/opaque slot) or every `stackful_io_host.hpp` consumer breaks |
+| X-03 | `StackfulIoHost` (public header) → `Fiber`/`fiber_ctx` | TRANSITIVE_INCLUDE + TYPE_LAYOUT (`TaskSlot::fiber` by value; `fiber_ctx::Context driver_ctx_`; `fiber_ctx::Switch*` param) | **public-header layout dependency**: F3 internalization must re-spell this header first (PIMPL/opaque slot) or every `stackful_io_host.hpp` consumer breaks. This exposure is a first-class OPTIONAL_CANDIDATE profile row (census H-31) and, with the `CancelToken` signature dependency `IoTaskContext::token()` (census H-30), part of the clean-room optional-host package closure until this fix lands |
 | X-04 | `ApplicationRuntime` (public header) → `Scheduler`/`SchedulerWakeHandle` | TRANSITIVE_INCLUDE + TYPE_LAYOUT (`unique_ptr<Scheduler>`, `SchedulerWakeHandle` by value) | same class of exposure for the runtime world |
 | X-05 | `await_op_helpers` / `RuntimeTaskContext` → `Scheduler`/runtime | TRANSITIVE_INCLUDE (`await_op_helpers.hpp` → `application_runtime.hpp` → `scheduler.hpp` → `fiber*.hpp`) | helper family cannot outlive the runtime world; migration order: helpers before runtime |
 | X-06 | `FileReader`/`FileWriter` → canonical `File` semantics | **NO EDGE (negative finding)** | they define open/close/move/sync independently on raw `fd_` (`src/file.cpp`); they share the *oracle* (`detail/file_semantics.hpp`) but not the *resource authority*; additionally they hold the repo's **only native vectored implementation** (`read_vec/write_vec` via `readv`/`writev`) and the only native `Writer::write_all_vec` — flagged as second-authority candidate + expressiveness gap, decision owned by the audit phase |
@@ -99,7 +99,8 @@ Retire Scheduler/runtime (D-family around H-08/H-10):
   (runtime sync primitives H-17/H-18/H-22 retire with or before it)
 
 Internalize Fiber (F3):
-  [🔒 stackful_io_host.hpp boundary fix (X-03/D-16)] →
+  [🔒 stackful_io_host.hpp boundary fix (X-03/D-16) — drops the OPTIONAL_CANDIDATE
+     exposure rows H-30/H-31 from the clean-room host package closure] →
   [🔒 application_runtime.hpp boundary fix (X-04)]   →
   [🔒 X-17: Group retired AND AsyncMutex demoted (D-06) AND
      wait/select vocab internalized with Scheduler]  →
