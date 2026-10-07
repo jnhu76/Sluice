@@ -1,6 +1,6 @@
 # F1 Clean-Room Package Baseline (#402 Phase F1)
 
-- **Status**: in progress. Gates recorded per phase; nothing here authorizes deletion or a supported-profile claim.
+- **Status**: `F1_CANONICAL_BASELINE_FROZEN` accepted by the recorded human re-review (round 3, APPROVE); merge pending. Gates recorded per phase; nothing here authorizes deletion or a supported-profile claim.
 - **Execution**: F1 branch `feat/402-f1-clean-room-baseline`; umbrella #402; F0 adopted via #454 / PR #455.
 - **Normative root**: `docs/explicit-io-v1-final-decision.md` v1-r3. Authority order: root > adopted ADR (ADR-0004) > #402 phase policy > adopted F0 evidence/policy > ledger/test/model/source evidence > implementation accident.
 - **F1 modification boundary**: additive install/package rules, export/config metadata, clean-room external consumers, manifests, verification scripts, F1 docs. No public API removed/renamed/internalized; no consumer migrated; no semantic change; no F0 UNDECIDED disposition resolved (`RequestHandle` stays F2-owned UNDECIDED; ADR-0003 stays PROPOSED).
@@ -105,10 +105,11 @@ python3 scripts/verify_f1_package.py --check-frozen \
 re-runs the full verification and requires the fresh manifest to equal the
 frozen one outside the volatile fields (`GENERATED_UTC`, `VERIFICATION_HEAD`,
 `VERIFICATION_HEAD_DIRTY`, `ORIGIN_MASTER_TIP`, and the `file` path inside
-`ARCHIVE_BASELINE`), and the archive-baseline sha256 bound in the frozen
-manifest to match the fresh baseline byte-for-byte. The archive/object/symbol
-baseline content itself is head-independent, so a matching sha256 proves the
-shipped artifact content reproduced.
+`ARCHIVE_BASELINE`), and closes the three-way baseline loop: the committed
+frozen baseline file, the sha256 bound in the frozen manifest, and the
+freshly regenerated baseline must all hash identically. The
+archive/object/symbol baseline content itself is head-independent, so a
+matching sha256 proves the shipped artifact content reproduced.
 
 ## 1. F1-B — Additive package prefix
 
@@ -174,9 +175,11 @@ gates from the final verifier state (per-run records in the frozen manifests;
 ```text
 F1_B_PROVENANCE_VERIFIED           = PASS  (clean tree, production diff empty vs a34d96c6…)
 F1_B_PACKAGE_PREFIX_READY          = PASS  (79 headers, 2 archives)
-F1_E_STANDALONE_HEADER_COMPILES    = PASS  (all 79 installed headers, each profile's macro view;
-                                            blocking_io_pool_impl.hpp is an anchored _impl fragment, §4)
-F1_E_ARCHIVE_BASELINE_RECORDED     = PASS  (2 archives, 50 objects, 1501 defined symbols per profile)
+F1_E_STANDALONE_HEADER_COMPILES    = PASS  (78 direct sole-include compiles + 1 anchored _impl
+                                            fragment = all 79 installed headers, each profile's
+                                            macro view; §4)
+F1_E_ARCHIVE_BASELINE_RECORDED     = PASS  (2 archives, 50 objects; defined-symbol records
+                                            1382 no-liburing / 1501 liburing per profile)
 F1_E_ARCHIVE_MATCHES_PROFILE       = PASS  (liburing archive references io_uring + UringConfig ctor;
                                             no-liburing archive does neither — stale-cache guard)
 F1_E_ODR_TWO_TU                    = PASS  (same-specialization + macro-sensitive layout discriminator; §4)
@@ -240,8 +243,13 @@ before-contraction baseline F2–F5 diff against):
   ODR-critical same-macro-view requirement for every consumer TU).
 - `docs/review/f1-archive-baseline-noliburing.json` /
   `docs/review/f1-archive-baseline-liburing.json` — archive/object/symbol
-  baseline per profile: per-archive sha256, per-object member sha256 and
-  defined symbols, and the union of undefined (external) symbols. Head-independent
+  baseline per profile (format v2): per-archive sha256, per-object member
+  sha256 and defined symbols, the per-archive union of undefined references,
+  and the profile-level `EXTERNAL_UNDEFINED_SYMBOLS` set (references no
+  object of the profile defines — the true link-external residue). Undefined
+  references are link inputs, not a resolved external set: of the no-liburing
+  async archive's 264, 182 are defined by sibling objects in the same archive
+  (profile-level residue: 97 no-liburing / 108 liburing). Head-independent
   content, bound into the manifest by sha256 (`ARCHIVE_BASELINE` field).
 
 Both manifests record `PRODUCTION_BASELINE_SHA = a34d96c6…` with
@@ -260,12 +268,13 @@ no-liburing archive lacks — enforced per run by
   transitive completeness is exercised by the consumer set, which transitively
   pulls `detail/` substrates (the current closure, not the F3/F5 target).
 - **Standalone-compile audit** (#402 F1): every installed header must compile
-  as the sole include of a TU under the profile's macro view — 79/79 in both
-  profiles. `sluice/detail/blocking_io_pool_impl.hpp` is a `*_impl` fragment
-  (valid only after its primary header's declarations) and is exempted as a
-  recorded class, with the mechanical anchor that a standalone-compiling
-  installed header (`blocking_io_pool.hpp`) includes it; an unanchored
-  fragment fails the gate.
+  as the sole include of a TU under the profile's macro view — 78 direct
+  compiles + the anchored `*_impl` fragment = all 79 installed headers
+  accounted per profile. `sluice/detail/blocking_io_pool_impl.hpp` is a
+  `*_impl` fragment (valid only after its primary header's declarations) and
+  is exempted as a recorded class, with the mechanical anchor that a
+  standalone-compiling installed header (`blocking_io_pool.hpp`) includes it;
+  an unanchored fragment fails the gate.
 - **Link audit**: `w01` links `-lsluice_core` only (no async, no uring, no
   pthread needed on glibc 2.4x — measured; recorded per toolchain in the
   manifest); async consumers link `-lsluice_async -lsluice_core` (P2 adds
@@ -273,8 +282,10 @@ no-liburing archive lacks — enforced per run by
   core archive, and the P2 negative proves an undeclared `-luring` fails.
 - **Archive/object/symbol audit** (#402 F1): the verifier records per archive
   the sha256, every object member with its own sha256 and defined symbols,
-  and the union of undefined externals (2 archives, 50 objects, 1501 defined
-  symbols per profile on this toolchain). F2–F5 deletions diff these files.
+  the per-archive union of undefined references, and the profile-level
+  external undefined set (2 archives, 50 objects; defined-symbol records 1382
+  no-liburing / 1501 liburing; external undefined 97 / 108 on this toolchain).
+  F2–F5 deletions diff these files.
 - **ODR audit** (discriminating, not repeat-evidence): `odr_two_tu` links two
   TUs that observe the SAME template specializations
   (`Result<std::size_t>`, `Request<std::size_t>`, inline members ODR-used in
@@ -363,7 +374,7 @@ a clean tree at the final verifier state.
 |---|---|
 | R-1 (P1) manifest provenance self-contradictory: both manifests carried `SOURCE_SHA = GENERATING_COMMIT = 284debca…` while the doc claimed the F0 baseline, and the verifier derived both from `git rev-parse HEAD` | executable provenance model (§0.3): `PRODUCTION_BASELINE_SHA` = merge-base with origin/master, `PRODUCTION_DIFF_EMPTY` gate, `VERIFICATION_HEAD` recorded from a clean worktree at run start; the old fields are gone; manifests are regenerated from the final verifier state and `--check-frozen` proves reproduction at the freeze head |
 | R-2 (P1) filesystem evidence contradictory (doc said ext4, manifests measured tmpfs) | per-point recording (§0.2): source tree ext2/ext3, scratch prefix + consumer build dir tmpfs; manifests carry `FILESYSTEM_SOURCE_TREE` / `FILESYSTEM_SCRATCH_PREFIX` / `FILESYSTEM_CONSUMER_BUILD` |
-| R-3 (P1) #402 F1 mandatory package audit missing (target/object/archive manifest, canonical entry-header standalone compile, archive/object/symbol baseline) and `SYMBOL_OBJECT_BASELINE` was deferred to F5 | implemented in F1: standalone compile of all 79 installed headers per profile (with the anchored `*_impl` fragment class, §4) and the archive/object/symbol baseline files (§3) bound into the manifests; the F5 deferral is withdrawn — F5 owns final alignment, not first creation |
+| R-3 (P1) #402 F1 mandatory package audit missing (target/object/archive manifest, canonical entry-header standalone compile, archive/object/symbol baseline) and `SYMBOL_OBJECT_BASELINE` was deferred to F5 | implemented in F1: standalone compile of the 78 direct headers + 1 anchored `*_impl` fragment per profile (all 79 installed headers; §4) and the archive/object/symbol baseline files (§3) bound into the manifests; the F5 deferral is withdrawn — F5 owns final alignment, not first creation |
 | R-4 (P1) W04 H2/H4 was a timing-shaped oracle (20/100/250 ms sleeps; `stop_requested()` checked only after joins) | structural rewrite (§2.1): suspension, stop, throw and EOF are ordered by single-driver scheduling plus pipe-byte handoffs; during the rewrite the prior "silent-pipe suspension" was measured to never suspend under the threadpool backend (`pread`/ESPIPE → immediate `backend_error`), so the arms moved to a real uring context under the liburing profile and the no-liburing profile records the explicit measured UNAVAILABLE outcome (exit 2) — no assertion depends on any interleaving timing |
 | R-5 (P1) the ODR probe instantiated different specializations per TU and never observed the macro-sensitive surface | discriminator rewrite (§4): both TUs observe the same `Result<std::size_t>`/`Request<std::size_t>` specializations AND `sizeof`/`alignof` of `UringAsyncBackend` (layout entirely inside the `SLUICE_HAS_LIBURING` guard); sensitivity evidenced per profile (48 vs 304 bytes) and by the deterministic divergent-view negative probe that must observe and reject the mismatch |
 | R-6 (P1) README reproduction commands omit the now-required `--manifest-out` | README commands pass the two canonical frozen manifest paths and the archive-baseline paths explicitly; `--check-frozen` documented |
@@ -380,6 +391,19 @@ no-liburing build, and the `F1_E_ARCHIVE_MATCHES_PROFILE` gate proving per
 run that the built archive carries its profile's macro view (io_uring
 externals + `UringConfig` ctor present iff liburing).
 
+### 5.3 Round 3: F1 human re-review (final verdict on PR #456, 2026-10-07)
+
+Verdict: `F1_CANONICAL_BASELINE_FROZEN accepted. APPROVE.` Four P2
+evidence-precision findings; the reviewer required only mechanical fixes and
+a re-run of `--check-frozen`, no third review round:
+
+| Finding | Resolution |
+|---|---|
+| E-1 (P2) prose summaries claimed "1501 defined symbols per profile"; the no-liburing profile records 1382 | every summary now states the per-profile records (1382 no-liburing / 1501 liburing); the manifests already recorded each profile correctly |
+| E-2 (P2) `STANDALONE_HEADER_COMPILES=79` overstated the compile count | manifests record `STANDALONE_HEADER_TOTAL=79` and `STANDALONE_DIRECT_HEADER_COMPILES=78` plus the anchored-fragment exception (§4) |
+| E-3 (P2) the baseline's `undefined_symbols` conflated undefined references with the external unresolved set (182 of the no-liburing async archive's 264 are defined by sibling objects) | per-archive field renamed `undefined_references`; profile-level `EXTERNAL_UNDEFINED_SYMBOLS` residue added (97 no-liburing / 108 liburing); baseline format v2 (§3) |
+| E-4 (P2) `--check-frozen` did not hash the committed frozen baseline file itself | three-way closure: committed frozen file == manifest-bound sha256 == freshly regenerated baseline (§0.3) |
+
 ## 6. Gate statement
 
 - `F1_A_REALITY_FROZEN` = PASS (§0)
@@ -389,8 +413,8 @@ externals + `UringConfig` ctor present iff liburing).
   verifier state)
 - `F1_D_REQUIREMENT_MATRIX_COMPLETE` = PASS-candidate (`f1-requirement-evidence-matrix.md`)
 - `F1_E_PACKAGE_DECLARATIONS_MATCH_REALITY` = PASS (§4)
-- `F1_F_ADVERSARIAL_REVIEW_COMPLETE` = PASS (§5: rounds 1 and 2, all findings
-  adjudicated and re-verified)
+- `F1_F_ADVERSARIAL_REVIEW_COMPLETE` = PASS (§5: rounds 1–3, all findings
+  adjudicated and re-verified; round 3 verdict APPROVE)
 - `CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY` = PASS (§2)
 - `PACKAGE_USAGE_REQUIREMENTS_AND_DECLARATIONS_MATCH_BASELINE` = PASS (§4)
 - `REQUIREMENT_EVIDENCE_COVERAGE_COMPLETE_FOR_BASELINE` = PASS-candidate

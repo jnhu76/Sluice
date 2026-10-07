@@ -20,7 +20,9 @@ Usage:
       --manifest-out M.json --archive-baseline-out B.json
   python3 scripts/verify_f1_package.py --check-frozen M.json \
       --archive-baseline-out /tmp/B.json             # reproduce a frozen
-                                                     # manifest at this head
+                                                     # manifest: committed frozen
+                                                     # baseline == manifest-bound
+                                                     # sha256 == fresh baseline
 """
 
 import argparse
@@ -230,38 +232,47 @@ def parse_nm_symbols(obj_path, defined):
 
 def build_archive_baseline(prefix, profile, scratch_dir):
     """Archive/object/symbol baseline: per-archive sha256, per-object member
-    sha256 and defined symbols, and the union of undefined (external)
-    symbols. The content is head-independent so a frozen file can be
-    reproduced byte-for-byte by --check-frozen."""
+    sha256 and defined symbols, the per-archive union of undefined references
+    (sibling objects in the same or the other archive may define some of
+    them), and the profile-level external undefined set (undefined references
+    no object of the profile defines). The content is head-independent so a
+    frozen file can be reproduced byte-for-byte by --check-frozen."""
     archives = []
+    profile_defined = set()
+    profile_undefined = set()
     for lib in sorted((prefix / "lib").glob("*.a")):
         members = [m for m in capture(["ar", "t", str(lib)]).splitlines() if m.strip()]
         objects = []
-        external_undefined = set()
+        undefined_refs = set()
         for member in members:
             data = subprocess.run(["ar", "p", str(lib), member],
                                   capture_output=True, check=True).stdout
             obj = scratch_dir / f"{lib.name}.{member}"
             obj.write_bytes(data)
+            defined = parse_nm_symbols(obj, defined=True)
             objects.append({
                 "member": member,
                 "bytes": len(data),
                 "sha256": sha256_bytes(data),
-                "defined_symbols": parse_nm_symbols(obj, defined=True),
+                "defined_symbols": defined,
             })
-            external_undefined.update(parse_nm_symbols(obj, defined=False))
+            profile_defined.update(defined)
+            undefined = parse_nm_symbols(obj, defined=False)
+            undefined_refs.update(undefined)
+            profile_undefined.update(undefined)
             obj.unlink()
         archives.append({
             "path": f"lib/{lib.name}",
             "bytes": lib.stat().st_size,
             "sha256": sha256_bytes(lib.read_bytes()),
             "objects": objects,
-            "undefined_symbols": sorted(external_undefined),
+            "undefined_references": sorted(undefined_refs),
         })
     return {
-        "FORMAT": "f1-archive-baseline-v1",
+        "FORMAT": "f1-archive-baseline-v2",
         "PROFILE": profile,
         "ARCHIVES": archives,
+        "EXTERNAL_UNDEFINED_SYMBOLS": sorted(profile_undefined - profile_defined),
     }
 
 
@@ -277,6 +288,7 @@ def standalone_compile_headers(build_dir, prefix, headers, macro_view, command_l
     fragments = [h for h in headers if h.endswith("_impl.hpp")]
     regular = [h for h in headers if not h.endswith("_impl.hpp")]
     failed = []
+    failed_direct = []
     compiled_ok = set()
     for rel in regular:
         tu = tu_dir / (rel.replace("/", "_") + ".cpp")
@@ -287,6 +299,7 @@ def standalone_compile_headers(build_dir, prefix, headers, macro_view, command_l
         command_log.append(" ".join(str(c) for c in cmd))
         if run(cmd, env=consumer_env()).returncode != 0:
             failed.append(rel)
+            failed_direct.append(rel)
         else:
             compiled_ok.add(rel)
     exceptions = []
@@ -302,7 +315,13 @@ def standalone_compile_headers(build_dir, prefix, headers, macro_view, command_l
         })
         if not anchored:
             failed.append(f"{frag} (unanchored _impl fragment)")
-    return failed, exceptions
+    return {
+        "direct_total": len(regular),
+        "direct_failed": failed_direct,
+        "fragment_total": len(fragments),
+        "failed": failed,
+        "exceptions": exceptions,
+    }
 
 
 def main():
@@ -317,7 +336,8 @@ def main():
     ap.add_argument("--check-frozen", metavar="FROZEN_MANIFEST",
                     help="run the full verification, then reproduce the frozen "
                          "manifest byte-for-byte outside the volatile fields and "
-                         "match the archive-baseline sha256 it binds")
+                         "close the three-way baseline loop (committed frozen "
+                         "file == manifest-bound sha256 == fresh baseline)")
     ap.add_argument("--profile-name", default=None,
                     help="manifest PROFILE label (derived from flags when omitted)")
     ap.add_argument("--keep-prefix", action="store_true")
@@ -365,7 +385,13 @@ def main():
     declared_outputs = {str(Path(args.manifest_out).resolve()),
                         str(Path(args.archive_baseline_out).resolve())}
     dirty_paths = []
-    for line in git_out("status", "--porcelain").splitlines():
+    # Raw capture: git_out strips leading whitespace, which would eat the
+    # first line's status column and corrupt its path.
+    status_out = run(["git", "status", "--porcelain"], capture_output=True, text=True,
+                     cwd=REPO).stdout
+    for line in status_out.splitlines():
+        if not line:
+            continue
         path = line[3:]
         if " -> " in path:
             path = path.split(" -> ", 1)[1]
@@ -442,12 +468,13 @@ def main():
 
     # 3a. Standalone compile: every installed header as the sole include of a
     # TU, under the profile's macro view.
-    standalone_failed, standalone_exceptions = standalone_compile_headers(
-        build_dir, prefix, headers, macro_view, command_log)
-    gate("F1_E_STANDALONE_HEADER_COMPILES", not standalone_failed,
-         f"({len(headers) - len(standalone_failed)}/{len(headers)} headers; "
-         f"failed={standalone_failed[:3]}; _impl fragments anchored: "
-         f"{[e['header'] for e in standalone_exceptions]})")
+    standalone = standalone_compile_headers(build_dir, prefix, headers, macro_view,
+                                            command_log)
+    gate("F1_E_STANDALONE_HEADER_COMPILES", not standalone["failed"],
+         f"({standalone['direct_total'] - len(standalone['direct_failed'])}/"
+         f"{standalone['direct_total']} direct sole-include compiles; "
+         f"{standalone['fragment_total']} anchored _impl fragments: "
+         f"{[e['header'] for e in standalone['exceptions']]})")
 
     # 3b. Archive/object/symbol baseline.
     baseline_scratch = build_dir / "archive-baseline"
@@ -473,7 +500,7 @@ def main():
     if async_archive is None:
         gate("F1_E_ARCHIVE_MATCHES_PROFILE", False, "(no async archive in baseline)")
     else:
-        has_uring_refs = any("io_uring" in s for s in async_archive["undefined_symbols"])
+        has_uring_refs = any("io_uring" in s for s in async_archive["undefined_references"])
         has_config_ctor = any("UringAsyncBackendC" in s and "UringConfigE" in s
                               for o in async_archive["objects"]
                               for s in o["defined_symbols"])
@@ -509,8 +536,10 @@ def main():
         "LIBURING_VERSION": uring_version,
         "PREFIX_LAYOUT": {"include": len(headers), "lib": libs},
         "HEADERS": headers,
-        "STANDALONE_HEADER_COMPILES": len(headers) - len(standalone_failed),
-        "STANDALONE_FRAGMENT_EXCEPTIONS": standalone_exceptions,
+        "STANDALONE_HEADER_TOTAL": len(headers),
+        "STANDALONE_DIRECT_HEADER_COMPILES": (standalone["direct_total"]
+                                              - len(standalone["direct_failed"])),
+        "STANDALONE_FRAGMENT_EXCEPTIONS": standalone["exceptions"],
         "LIBRARIES": libs,
         "ARCHIVE_BASELINE": {
             "file": str(baseline_path),
@@ -518,6 +547,7 @@ def main():
             "archives": len(baseline["ARCHIVES"]),
             "objects": archive_object_count,
             "defined_symbols": symbol_count,
+            "external_undefined_symbols": len(baseline["EXTERNAL_UNDEFINED_SYMBOLS"]),
         },
         "PUBLIC_DEFINES": public_defines,
         "PUBLIC_INCLUDE_PATHS": [f"<prefix>/include"],
@@ -736,6 +766,8 @@ def main():
     if frozen_manifest is not None:
         frozen = json.loads(frozen_manifest.read_text())
         fresh = json.loads(manifest_out.read_text())
+        frozen_baseline_ref = frozen.get("ARCHIVE_BASELINE", {})
+        frozen_file = frozen_baseline_ref.get("file")
         for side in (frozen, fresh):
             side.get("ARCHIVE_BASELINE", {}).pop("file", None)
         diffs = []
@@ -746,14 +778,22 @@ def main():
                 diffs.append(key)
         frozen_baseline_ref = frozen.get("ARCHIVE_BASELINE", {})
         baseline_match = frozen_baseline_ref.get("sha256") == baseline_sha
-        if diffs or not baseline_match:
+        committed_path = Path(frozen_file) if frozen_file else None
+        if committed_path is not None and not committed_path.is_absolute():
+            committed_path = REPO / committed_path
+        committed_match = (committed_path is not None and committed_path.exists()
+                           and sha256_bytes(committed_path.read_bytes())
+                           == frozen_baseline_ref.get("sha256"))
+        if diffs or not baseline_match or not committed_match:
             print(f"\n--check-frozen FAILED: manifest key diffs={diffs}, "
-                  f"archive baseline sha256 match={baseline_match}")
+                  f"fresh archive baseline match={baseline_match}, committed "
+                  f"frozen baseline {frozen_file} match={committed_match}")
             return 1
         print(f"\nFROZEN_MANIFEST_REPRODUCED: {frozen_manifest} "
               f"(verified at head {verification_head[:12]}; volatile fields "
-              f"{sorted(VOLATILE_MANIFEST_KEYS)} excluded; archive baseline "
-              f"sha256 {baseline_sha[:12]} matched)")
+              f"{sorted(VOLATILE_MANIFEST_KEYS)} excluded; committed frozen "
+              f"baseline == manifest sha256 == fresh baseline "
+              f"({baseline_sha[:12]} matched)")
 
     print("\nF1 package verification: all gates PASS")
     return 0
