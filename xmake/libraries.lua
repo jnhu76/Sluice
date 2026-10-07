@@ -11,6 +11,13 @@ target("sluice_core")
     set_kind("static")
     add_includedirs(R .. "include", {public = true})
     add_files(core_sources())
+    -- Installed header set. include/sluice/experimental/ is deliberately absent:
+    -- the install rule isolates the experimental uring write surface instead of
+    -- shipping it (docs/review/f1-clean-room-package-baseline.md §1); do not
+    -- widen these globs to include it.
+    add_headerfiles(R .. "include/(sluice/*.hpp)",
+                    R .. "include/(sluice/blocking/*.hpp)",
+                    R .. "include/(sluice/detail/*.hpp)")
 
 -- Async runtime library (sluice-CORE-017+). OPT-IN, namespace sluice::async.
 -- Built alongside the core but kept a separate static lib so the blocking
@@ -23,6 +30,11 @@ target("sluice_async")
     add_includedirs(R .. "include", {public = true})
     add_deps("sluice_core")
     add_files(R .. "src/async/*.cpp")
+    -- Installed header set (see the sluice_core note): the current public
+    -- closure reaches detail/ substrates from public headers, so the installed
+    -- package must carry them until the boundary contraction lands.
+    add_headerfiles(R .. "include/(sluice/async/*.hpp)",
+                    R .. "include/(sluice/async/detail/*.hpp)")
     -- The non-recursive glob above misses src/async/detail/. The context
     -- identity domain and the RequestCore substrate that the context owns are
     -- production now, so they are listed explicitly.
