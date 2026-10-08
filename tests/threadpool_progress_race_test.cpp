@@ -111,8 +111,13 @@ AsyncIoContext make_pool_context(std::size_t capacity, std::size_t workers,
 struct GatedWorkerRead {
     ThreadPoolBackend* backend = nullptr;
     ThreadPoolBackend::WorkerOutcomePreTerminalPauseGate gate;
-    Completion<std::size_t> completion;
+    Request<std::size_t> request;
     int fd = -1;
+
+    ~GatedWorkerRead() {
+        if (backend != nullptr && !released_)
+            release();
+    }
 
     bool arm(AsyncIoContext& ctx, ThreadPoolBackend* backend_ptr) {
         backend = backend_ptr;
@@ -121,32 +126,63 @@ struct GatedWorkerRead {
             return false;
         backend->set_worker_outcome_pre_terminal_pause_gate(&gate);
         buffer_.resize(32, std::byte{0});
-        if (!ctx
-                 .submit_read(ReadOp{NativeFileRef(fd, sluice::FileAccess::read_only),
-                                     buffer_.data(), buffer_.size(), 0},
-                              completion)
-                 .has_value())
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(fd, sluice::FileAccess::read_only),
+                                   buffer_.data(), buffer_.size(), 0});
+        if (!submitted.has_value())
             return false;
+        request = std::move(submitted).value();
         wait_threadpool_gate_paused(gate);
         return true;
     }
 
     void release() {
+        released_ = true;
         backend->set_worker_outcome_pre_terminal_pause_gate(nullptr);
         resume_threadpool_gate(gate);
         wait_threadpool_gate_exited(gate);
     }
 
+    bool released_ = false;
     std::vector<std::byte> buffer_;
 };
 
-bool submit_zero_op(AsyncIoContext& ctx, Completion<std::size_t>& c) {
+// The public Request binding forbids nonterminal release, and a paused
+// worker never publishes: a body abandoning in-flight work on a failure path
+// must unblock its gated reads, drive every held request to publication, and
+// release the bindings before the enclosing scope destroys the request
+// storage. Declared after everything it tracks, so it is destroyed first.
+struct RequestPublicationDrain {
+    AsyncIoContext& ctx;
+    std::vector<GatedWorkerRead*> gates;
+    std::vector<Request<std::size_t>*> held;
+    explicit RequestPublicationDrain(AsyncIoContext& c) : ctx(c) {}
+    void track_gate(GatedWorkerRead& g) { gates.push_back(&g); }
+    void track(Request<std::size_t>& r) { held.push_back(&r); }
+    void track(std::vector<Request<std::size_t>>& rs) {
+        for (auto& r : rs)
+            held.push_back(&r);
+    }
+    ~RequestPublicationDrain() {
+        for (GatedWorkerRead* g : gates)
+            if (!g->released_)
+                g->release();
+        for (Request<std::size_t>* r : held) {
+            while (r->valid() && !r->ready())
+                (void)ctx.poll();
+            r->discard();
+        }
+    }
+};
+
+Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
     std::vector<std::byte> buffer(4, std::byte{0});
-    return ctx
-        .submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), sluice::FileAccess::read_only),
-                            buffer.data(), 0, 0},
-                     c)
-        .has_value();
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), sluice::FileAccess::read_only),
+                               buffer.data(), 0, 0});
+    if (!submitted.has_value())
+        return {};
+    return std::move(submitted).value();
 }
 
 using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
@@ -188,8 +224,10 @@ bool r1_signal_before_wait_is_serviced_without_parking() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
 
-    Completion<std::size_t> c;
-    if (!submit_zero_op(ctx, c))
+    auto c = submit_zero_op(ctx);
+    RequestPublicationDrain drain{ctx};
+    drain.track(c);
+    if (!c.valid())
         return false;
     if (!notification_fd_readable(interest.fd))
         return false;
@@ -223,8 +261,12 @@ bool r2_signal_between_token_and_ack_is_revalidation_caught() {
     wait_gate_paused(gate);
     ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
 
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    auto zero = submit_zero_op(ctx);
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
+    drain.track(zero);
+    if (!zero.valid())
         return false;
     resume_gate(gate);
     driver.join();
@@ -234,9 +276,9 @@ bool r2_signal_between_token_and_ack_is_revalidation_caught() {
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    zero.reset();
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    zero.discard();
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R3 (the "empty pass, signal after the final check" shape): a signal landing
@@ -261,8 +303,12 @@ bool r3_signal_after_ack_wakes_poll_before_next_snapshot() {
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    auto zero = submit_zero_op(ctx);
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
+    drain.track(zero);
+    if (!zero.valid())
         return false;
     resume_gate(gate);
     driver.join();
@@ -272,9 +318,9 @@ bool r3_signal_after_ack_wakes_poll_before_next_snapshot() {
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    zero.reset();
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    zero.discard();
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R4/R5: a signal raised by a worker completion while the owner sits between
@@ -284,6 +330,9 @@ bool r4_worker_completion_signal_before_final_recheck_is_caught() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -302,8 +351,8 @@ bool r4_worker_completion_signal_before_final_recheck_is_caught() {
     driver.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
-    const bool ok = is_progress(result, 1) && prepark.load() == 0 && read.completion.ready();
-    read.completion.reset();
+    const bool ok = is_progress(result, 1) && prepark.load() == 0 && read.request.ready();
+    read.request.discard();
     return ok;
 }
 
@@ -327,8 +376,12 @@ bool r5_postdrain_signal_readiness_persists_into_poll() {
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    auto zero = submit_zero_op(ctx);
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
+    drain.track(zero);
+    if (!zero.valid())
         return false;
     const bool readable_while_paused = notification_fd_readable(interest.fd);
     resume_gate(gate);
@@ -340,9 +393,9 @@ bool r5_postdrain_signal_readiness_persists_into_poll() {
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    zero.reset();
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    zero.discard();
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R8 / the especially dangerous empty-poll shape: the pass is empty, the stale
@@ -368,8 +421,12 @@ bool r8_empty_pass_signal_immediately_before_poll_entry() {
 
     const int nfd = interest.fd;
     const bool drained_before_signal = !notification_fd_readable(nfd);
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    auto zero = submit_zero_op(ctx);
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
+    drain.track(zero);
+    if (!zero.valid())
         return false;
     const bool readable_after_signal = notification_fd_readable(nfd);
     resume_gate(gate);
@@ -381,9 +438,9 @@ bool r8_empty_pass_signal_immediately_before_poll_entry() {
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    zero.reset();
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    zero.discard();
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R9: the signal fires while the owner is already blocked inside poll(2); the
@@ -392,6 +449,9 @@ bool r9_signal_while_blocked_in_poll_wakes_owner() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -407,8 +467,8 @@ bool r9_signal_while_blocked_in_poll_wakes_owner() {
     driver.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
-    const bool ok = is_progress(result, 1) && prepark.load() == 1 && read.completion.ready();
-    read.completion.reset();
+    const bool ok = is_progress(result, 1) && prepark.load() == 1 && read.request.ready();
+    read.request.discard();
     return ok;
 }
 
@@ -432,9 +492,14 @@ bool r10_multiple_signals_coalesce_into_one_readiness() {
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
     constexpr int kCoalesced = 8;
-    std::vector<Completion<std::size_t>> zeros(kCoalesced);
+    std::vector<Request<std::size_t>> zeros(kCoalesced);
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
+    drain.track(zeros);
     for (int i = 0; i < kCoalesced; ++i) {
-        if (!submit_zero_op(ctx, zeros[static_cast<std::size_t>(i)]))
+        zeros[static_cast<std::size_t>(i)] = submit_zero_op(ctx);
+        if (!zeros[static_cast<std::size_t>(i)].valid())
             return false;
     }
     resume_gate(gate);
@@ -444,13 +509,13 @@ bool r10_multiple_signals_coalesce_into_one_readiness() {
     bool ok = is_progress(result, static_cast<std::size_t>(kCoalesced)) && prepark.load() == 1;
     for (auto& z : zeros) {
         ok = ok && z.ready();
-        z.reset();
+        z.discard();
     }
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R11: a wake with zero public completions does not fabricate a result; the
@@ -459,6 +524,9 @@ bool r11_spurious_wake_with_zero_completions_is_harmless() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -473,13 +541,13 @@ bool r11_spurious_wake_with_zero_completions_is_harmless() {
     resume_gate(gate);
     driver.join();
 
-    const bool no_fabrication = is_control(result) && !read.completion.ready();
+    const bool no_fabrication = is_control(result) && !read.request.ready();
 
     read.release();
     ctx.acknowledge_progress_control();
     const auto second = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    const bool ok = no_fabrication && is_progress(second, 1) && read.completion.ready();
-    read.completion.reset();
+    const bool ok = no_fabrication && is_progress(second, 1) && read.request.ready();
+    read.request.discard();
     return ok;
 }
 
@@ -490,8 +558,8 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     HostInterest interest(ctx);
 
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    auto zero = submit_zero_op(ctx);
+    if (!zero.valid())
         return false;
     // The settling pass runs on this thread's driving attachment, which is
     // released before the parked driver thread attaches as the next driver.
@@ -501,13 +569,16 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
         DriverClaim owner{ctx};
         const auto drained = ctx.poll_progress();
         settled_zero = drained.has_value() && drained.value().completed == 1 && zero.ready();
-        zero.reset();
+        zero.discard();
         stale_readable = notification_fd_readable(interest.fd);
     }
     if (!settled_zero || !stale_readable)
         return false;
 
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -525,8 +596,8 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = reached && stale_drained_at_park && is_progress(result, 1) &&
-                    read.completion.ready();
-    read.completion.reset();
+                    read.request.ready();
+    read.request.discard();
     return ok;
 }
 
@@ -536,6 +607,9 @@ bool r12_control_wake_racing_park_boundary() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -548,7 +622,7 @@ bool r12_control_wake_racing_park_boundary() {
     ctx.interrupt_progress_waiters();
     resume_gate(pre_gate);
     driver1.join();
-    const bool pre_revalidate = is_control(first) && !read.completion.ready();
+    const bool pre_revalidate = is_control(first) && !read.request.ready();
 
     // Retire the first control so the second round races a fresh park; an
     // unacknowledged pending control would end the next wait at its entry
@@ -565,12 +639,12 @@ bool r12_control_wake_racing_park_boundary() {
     resume_gate(park_gate);
     driver2.join();
 
-    const bool ok = pre_revalidate && is_control(second) && !read.completion.ready();
+    const bool ok = pre_revalidate && is_control(second) && !read.request.ready();
     read.release();
     ctx.acknowledge_progress_control();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R13: terminal+published work whose public
@@ -582,6 +656,9 @@ bool r13_delayed_reclaim_obligation_is_serviced_without_new_io() {
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -630,8 +707,8 @@ bool r13_delayed_reclaim_obligation_is_serviced_without_new_io() {
 
     read.release();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // R15: with the progress epoch saturated, a fresh signal cannot move the
@@ -643,6 +720,9 @@ bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     HostInterest interest(ctx);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -667,8 +747,8 @@ bool r15_saturated_signal_between_pass_and_revalidation_is_not_drained() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = is_progress(result, 1) && prepark.load() == 0 &&
-                    read.completion.ready() && ctx.progress_exhausted_for_test();
-    read.completion.reset();
+                    read.request.ready() && ctx.progress_exhausted_for_test();
+    read.request.discard();
     return ok;
 }
 
@@ -680,6 +760,9 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     HostInterest interest(ctx);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -715,13 +798,13 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = readable && is_control(result) && prepark.load() == 0 &&
-                    !read.completion.ready();
+                    !read.request.ready();
 
     read.release();
     ctx.acknowledge_progress_control();
     const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // Once the outer control freshness domain is spent (saturated epoch and
@@ -733,6 +816,9 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     HostInterest interest(ctx);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -756,7 +842,7 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
             ctx.set_progress_prepark_counter_for_test(nullptr);
             if (!is_control(r) || prepark.load() != 0)
                 return false;
-            if (read.completion.ready())
+            if (read.request.ready())
                 return false;
         }
         return true;
@@ -770,8 +856,8 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
         if (is_progress(final_r, 1))
             break;
     }
-    return ok && is_progress(final_r, 1) && read.completion.ready() &&
-           (read.completion.reset(), true);
+    return ok && is_progress(final_r, 1) && read.request.ready() &&
+           (read.request.discard(), true);
 }
 
 // Token exhaustion: saturation, not wrap. The observed token can never alias a
@@ -784,8 +870,10 @@ bool token_exhaustion_saturates_without_alias_and_closes_admission() {
     constexpr std::uint64_t kMax = std::numeric_limits<std::uint64_t>::max();
     ctx.set_progress_epoch_for_test(kMax);
 
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    auto zero = submit_zero_op(ctx);
+    RequestPublicationDrain drain{ctx};
+    drain.track(zero);
+    if (!zero.valid())
         return false;
 
     const auto token = ctx.progress_token_for_test();
@@ -801,16 +889,14 @@ bool token_exhaustion_saturates_without_alias_and_closes_admission() {
         return false;
 
     std::vector<std::byte> buffer(8, std::byte{0});
-    Completion<std::size_t> rejected_slot;
     const auto rejected =
         ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), sluice::FileAccess::read_only),
-                               buffer.data(), buffer.size(), 0},
-                        rejected_slot);
+                               buffer.data(), buffer.size(), 0});
     if (rejected.has_value() || rejected.error().code != IoError::Code::invalid_state)
         return false;
 
     const auto after = ctx.progress_token_for_test();
-    zero.reset();
+    zero.discard();
     return after.progress == kMax;
 }
 
@@ -821,6 +907,9 @@ bool owner_parked_at_saturated_epoch_wakes_and_reparks() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -844,9 +933,9 @@ bool owner_parked_at_saturated_epoch_wakes_and_reparks() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const auto token = ctx.progress_token_for_test();
-    const bool ok = is_progress(result, 1) && read.completion.ready() &&
+    const bool ok = is_progress(result, 1) && read.request.ready() &&
                     token.progress == kMax && ctx.progress_exhausted_for_test();
-    read.completion.reset();
+    read.request.discard();
     return ok;
 }
 
@@ -857,6 +946,9 @@ bool saturated_notification_still_wakes_parked_owner() {
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);
     HostInterest interest(ctx);
     GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
     if (!read.arm(ctx, raw))
         return false;
 
@@ -883,8 +975,8 @@ bool saturated_notification_still_wakes_parked_owner() {
 
     const bool ok =
         readable_after_saturated_signal && is_progress(result, 1) && prepark.load() == 1 &&
-        read.completion.ready();
-    read.completion.reset();
+        read.request.ready();
+    read.request.discard();
     return ok;
 }
 
@@ -896,9 +988,12 @@ bool coalesced_prearmed_signals_are_all_discoverable_in_one_pass() {
     HostInterest interest(ctx);
 
     constexpr int kCoalesced = 8;
-    std::vector<Completion<std::size_t>> zeros(kCoalesced);
+    std::vector<Request<std::size_t>> zeros(kCoalesced);
+    RequestPublicationDrain drain{ctx};
+    drain.track(zeros);
     for (int i = 0; i < kCoalesced; ++i) {
-        if (!submit_zero_op(ctx, zeros[static_cast<std::size_t>(i)]))
+        zeros[static_cast<std::size_t>(i)] = submit_zero_op(ctx);
+        if (!zeros[static_cast<std::size_t>(i)].valid())
             return false;
     }
 
@@ -910,7 +1005,7 @@ bool coalesced_prearmed_signals_are_all_discoverable_in_one_pass() {
     bool all_ready = is_progress(r, static_cast<std::size_t>(kCoalesced)) && prepark.load() == 0;
     for (auto& z : zeros) {
         all_ready = all_ready && z.ready();
-        z.reset();
+        z.discard();
     }
     ctx.acknowledge_progress_notification();
     return all_ready && !notification_fd_readable(interest.fd);
@@ -926,13 +1021,13 @@ bool f1_publication_pass_is_entry_bounded() {
     auto ctx = make_pool_context(8, 1, &raw);
     HostInterest interest(ctx);
 
-    Completion<std::size_t> a;
     std::vector<std::byte> a_buf(32, std::byte{0});
     const int a_fd = temp_file_fd(std::string(64, 'x'));
     if (a_fd < 0)
         return false;
+    Completion<std::size_t> a;
     if (!ctx.submit_read(ReadOp{NativeFileRef(a_fd, sluice::FileAccess::read_only),
-                                 a_buf.data(), a_buf.size(), 0},
+                                a_buf.data(), a_buf.size(), 0},
                          a)
              .has_value())
         return false;
@@ -940,6 +1035,9 @@ bool f1_publication_pass_is_entry_bounded() {
         return false;
 
     GatedWorkerRead gated;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(gated);
+    drain.track(gated.request);
     if (!gated.arm(ctx, raw))
         return false;
 
@@ -975,12 +1073,12 @@ bool f1_publication_pass_is_entry_bounded() {
 
     const auto second = ctx.poll_progress();
     const bool second_ok = second.has_value() && second.value().completed == 1 &&
-                           gated.completion.ready() &&
+                           gated.request.ready() &&
                            !second.value().immediate_work_remains &&
                            !second.value().accepted_work_remains &&
                            !second.value().health_failed;
 
-    gated.completion.reset();
+    gated.request.discard();
     return second_ok;
 }
 
@@ -1001,17 +1099,19 @@ bool record_handoff_survives_submit_racing_owner_sweep() {
     ThreadPoolBackend::PreAcceptCommitPauseGate gate;
     raw->set_pre_accept_commit_pause_gate(&gate);
 
-    Completion<std::size_t> zero;
+    Request<std::size_t> zero;
+    RequestPublicationDrain drain{ctx};
+    drain.track(zero);
     std::vector<std::byte> buffer(4, std::byte{0});
     std::atomic<bool> submit_ok{false};
     std::thread submitter([&] {
-        submit_ok.store(
+        auto submitted =
             ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()),
-                                                sluice::FileAccess::read_only),
-                                   buffer.data(), 0, 0},
-                            zero)
-                .has_value(),
-            std::memory_order_release);
+                                                 sluice::FileAccess::read_only),
+                                   buffer.data(), 0, 0});
+        if (submitted.has_value())
+            zero = std::move(submitted).value();
+        submit_ok.store(submitted.has_value(), std::memory_order_release);
     });
     wait_threadpool_gate_paused(gate);
 
@@ -1032,10 +1132,13 @@ bool record_handoff_survives_submit_racing_owner_sweep() {
     submitter.join();
     const std::size_t settle = raw->poll();
 
-    const bool result_ok = zero.ready() && zero.result().has_value() && zero.result().value() == 0;
+    const auto zero_observation = zero.try_result();
+    const bool result_ok = zero.ready() && zero_observation.readiness == RequestReadiness::ready &&
+                           zero_observation.result.has_value() &&
+                           zero_observation.result.value() == 0;
     const bool ok = window_clean && delivered == 1 && settle == 0 && result_ok &&
                     submit_ok.load(std::memory_order_acquire);
-    zero.reset();
+    zero.discard();
     return ok;
 }
 
