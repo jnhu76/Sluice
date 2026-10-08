@@ -8,7 +8,10 @@ carries it.
 The tier-1 half of the M-R disposition is PR #468 (merged `9d1b5cc0`) plus the
 residual migration in PR #471; the isolation half is PR #469 (merged
 `667e17f8`), corrected by #471. No single PR declares the family gate closed by
-itself. Final master SHA at the time of writing: `7f934e0f`.
+itself. SHA fields: `verified_code_sha = 7f934e0f` (the head the evidence batch
+verified), `closeout_merge_sha = ffb5afa8` (the merge of this closeout's PR
+#470); the projection revision below carries its own merge SHA in the #458
+follow-up.
 
 ## Headline
 
@@ -16,13 +19,24 @@ itself. Final master SHA at the time of writing: `7f934e0f`.
 in this window; the other five families are blocked on human authority
 decisions that the Decision Packet asked for and that nobody has answered (D2,
 D3a, D3b, D4; M-A3 additionally needs the package decision D-13, which the
-packet's four questions did not cover — the addendum on #458 now asks it). `F2/F3/F4_PRODUCTION_RETIREMENT = NOT_EXECUTED`;
+packet's four questions did not cover — the addendum on #458 now asks it; and
+M-A2 needs D-12 once D3a/D3b resolve the vectored dependency — a further
+addendum now records that conditional question so M-A2 cannot be silently
+skipped). `F2/F3/F4_PRODUCTION_RETIREMENT = NOT_EXECUTED`;
 `F1_HISTORICAL_BASELINE = IMMUTABLE` (both frozen profiles reproduce, manifests
-untouched); `M_FAMILY_DISPOSITIONS = COMPLETE` (all seven families carry a
-disposition; six have a downstream owner and an exit condition, M-A4 is closed
-with no owner because no action is owed); `M_REQUIRED_EVIDENCE = PASS`;
+untouched); `M_FAMILY_DISPOSITIONS = COMPLETE` as a classification (all seven
+families carry a disposition; six have a downstream owner and an exit
+condition, M-A4 is closed with no owner because no action is owed) — it does
+not assert the decisions are done, which is tracked separately as
+`M_DECISIONS_COMPLETE = NO`; `M_REQUIRED_EVIDENCE = PASS`, scoped as
+`M_EXECUTED_SCOPE_EVIDENCE = PASS` (this window's executed scope only, not a
+conformance verdict for undecided families);
 `M_CONSUMER_MIGRATION_OR_ISOLATION = VERIFIED` for M-R after the Wave-5 review
-found and PR #471 migrated the last two un-dispositioned consumers.
+found and PR #471 migrated the last two un-dispositioned consumers — and now
+recomputable per consumer: every one of the 75 census M-R records has an
+explicit final disposition in
+[`m-r-consumer-disposition-final.json`](m-r-consumer-disposition-final.json),
+checked mechanically by `scripts/verify_mr_disposition.py` in CI.
 
 ## Family dispositions
 
@@ -37,7 +51,11 @@ found and PR #471 migrated the last two un-dispositioned consumers.
 | M-A4 | none (isolated by F1) | CLOSED_NO_ACTION | none | — |
 
 Decisions still owed: the Decision Packet on #458 (comment 6055397430) plus the
-D-13 addendum on the same issue.
+D-13 addendum and the conditional D-12 addendum on the same issue.
+
+The M-R family's downstream owner is F2 (the Completion carrier retirement);
+the twelve tier-2 units carry their own owners — T2-01 F3, T2-08 F2+F3, T2-10
+F4, T2-11 F2 — as recorded per item in the tier-2 record.
 
 ## What M actually delivered
 
@@ -71,6 +89,24 @@ D-13 addendum on the same issue.
    sub-assertion (T2-09). And the compat cell bound inside a submitting call is
    observable across threads before the submitter hands anything back, so two
    cross-thread host-loop oracles keep the compat cell (T2-12).
+6. **Per-consumer final-state projection.** All 75 census M-R records now carry
+   an explicit disposition (MIGRATED / ALREADY_CANONICAL /
+   INCLUDE_HYGIENE_COMPLETED / POLICY_ISOLATED / COMPAT_TEST_RETAINED /
+   NOT_A_CONSUMER / DOWNSTREAM_MECHANISM_RETAINED) with subscope splits for the
+   compound rows, in
+   [`m-r-consumer-disposition-final.json`](m-r-consumer-disposition-final.json);
+   `scripts/verify_mr_disposition.py` recomputes it against the census and the
+   tier-2 record (coverage, exclusivity, field discipline, unit-exact
+   bidirectional census_rows membership) and runs in CI as the
+   `mr-disposition-guard` workflow together with its in-repo corruption
+   discriminators (`scripts/test_verify_mr_disposition.py`, encoding both #472
+   re-review counterexamples). The five genuine tier-1 retypings are
+   c-x01-024/025/027/028/029; c-x01-020 was already canonical at M0 and the
+   five c-x06 zero-symbol include deletions (`7e8601c6`) are hygiene, not
+   migration. The #459 Option A provenance is re-anchored there and in the
+   tier-2 record: the standing authority is #458 §3.1/§6/§7; Option A was the
+   execution-scope packaging of it, and the directive sentence its ruling
+   comment cited is no longer cited as authority.
 
 ## Review history
 
@@ -93,7 +129,42 @@ i.e. the migration did not change what the wait observed; the oracle was left
 untouched because relaxing it under load would weaken what it proves. A
 separate pre-existing hang (`backend_conformance_e1_threadpool_test` under load
 inside `pre_execution_cancel_wins_with_known_zero_effect`) is reproducible on
-master's own binary and is not attributable to this phase.
+master's own binary and is not attributable to this phase; it is recorded as an
+**open harness issue (H-1, owner F5/harness)** together with the load
+sensitivity above (H-2) — the green re-run of the affected CI job does not
+retire either.
+
+A third, post-merge review covered `e23cc62d..ffb5afa8` and returned
+`REQUEST_REVISIONS` with two P1s — the #459 Option A ruling's
+authorization-source paragraph leaned on the Execution Lead directive's
+conditional sentence instead of the standing #458 §3.1/§6 authority, and no
+independently recomputable M0-census-to-final-state projection existed for the
+75 M-R records — plus five P2s (the single `final_master_sha` field, the breadth
+of the global PASS fields, D-12 missing from the packet, a summary line that
+assigned every tier-2 exit condition to F2, and the CI-hang framing). This
+revision implements the reviewer's minimal fix path: existing-authorization
+traceability instead of a new ruling, the disposition overlay plus its
+mechanical validator (item 6 above), the sha-field split, the scope-limiting
+goal-state fields, the conditional D-12 addendum and the tier-2 owner
+correction. No production path was touched; narrow re-review of this delta is
+pending.
+
+The narrow re-review of that revision (round 1) closed P1-01 — the
+existing-authorization traceability over #458 §3.1/§6/§7 was accepted — but
+returned `REQUEST_REVISIONS` on the projection itself: the overlay counted
+non-migration actions as migration/isolation (c-x01-020's subject was already
+canonical at M0; the five c-x06 zero-symbol include deletions are hygiene, not
+consumer migration), and the validator's tier-2 cross-check accepted both a
+consumer id appended to the wrong unit's census_rows and an unknown id silently
+reclassified as a blocker row. The round-2 revision adds the
+`ALREADY_CANONICAL` and `INCLUDE_HYGIENE_COMPLETED` dispositions (the five
+genuine tier-1 retypings are c-x01-024/025/027/028/029), reduces T2-10's
+census rows to c-x01-037/038, makes the validator unit-exact with a closed
+B-01/B-05 whitelist, and encodes both reviewer counterexamples plus further
+corruption discriminators as the in-repo suite
+`scripts/test_verify_mr_disposition.py`, which the `mr-disposition-guard`
+workflow runs alongside the positive check. Narrow re-review of this round-2
+delta is pending.
 
 A second, fresh independent review (Wave 5) attacked this closeout itself and
 returned `REQUEST_REVISIONS`: two P1s — the two un-dispositioned consumers
@@ -122,6 +193,7 @@ notes, applied); the verdict and its scope are recorded in the JSON
 | B-02 fault injection mutant | oracle killed the mutant | PR #468 body |
 | Four apps, both profiles | build/link + smoke, byte-identical copy | PR #468 body |
 | Pinned stress after the T2-12 carve-out | 0 failures / 30 runs | PR #468 body, T2-12 evidence |
+| M-R disposition overlay (75 census rows, 82 subscopes) + validator | total, exclusive, unit-exactly consistent; 16 in-repo discriminator cases (both re-review counterexamples encoded) green in CI | `docs/review/m-r-consumer-disposition-final.json`, `scripts/verify_mr_disposition.py`, `scripts/test_verify_mr_disposition.py`, CI `mr-disposition-guard` |
 
 Earlier logs from the #468/#469 rounds (`/tmp/m-ev-*.log`,
 `/tmp/f1-check-*.json`) are retained in the tier-2 record's per-item evidence
@@ -143,9 +215,9 @@ obligations were met.
 
 ## What would close Phase M
 
-1. The rulings D2, D3a, D3b and D4 from the Decision Packet plus the D-13
-   package decision from its addendum, then the F3/F4 execution arms they
-   authorize.
+1. The rulings D2, D3a, D3b and D4 from the Decision Packet, plus the D-13
+   package decision and the conditional D-12 workload-admittance question from
+   their addenda, then the F3/F4 execution arms they authorize.
 2. M-R's PRs (#468, #469, #471) merged after independent review, with the
    family gate row backfilled on #458 (done; see the #458 comment).
 3. The Wave-5 fresh independent review verdict on this closeout (recorded in

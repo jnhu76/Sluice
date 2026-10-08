@@ -11,13 +11,24 @@ isolated consumer and what the closing arm owes.
 
 ## Authority
 
-- #459 M-R RULING Option A (comment 6055510469): tier-1 = reachable context-face
-  test consumers retyped to the six `submit_*/Request<T>` spellings,
-  `attach_observer` tests exempted, five zero-symbol includes deleted, B-02
-  wired; tier-2 = X-16 explicit policy isolation pending F3; Batch retyping
-  rides the F2 B-01 re-freeze batch; `identity_of` fallback stays dormant.
-- #458 §3.1/§6/§7 (adopted M1 decomposition) and #402 gate arm
-  `RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED`.
+- #458 §3.1 migrationStrategy + §6 X-16 ruling + §7 child-issue charter
+  (adopted M1 decomposition, R2/R3-reviewed) is the standing authority:
+  tier-1 migrates the reachable context-face test consumers onto the six
+  `submit_*/Request<T>` spellings with the `attach_observer` three-test
+  exemption (§3.1 blockers 5) and the five zero-symbol include deletions,
+  wires B-02, defers Batch to the F2 B-01 re-freeze batch (blockers 6) and
+  keeps the `identity_of` fallback dormant (blockers 2); tier-2 = X-16
+  explicit policy isolation pending F3 (§6).
+- #459 M-R RULING Option A (comment 6055510469) is the execution-scope
+  selection record that packages that standing authority, not an independent
+  human ruling: Option B contradicted §6 clause 2 and §3.1 blockers 6, and
+  Option C required unadopted faces, so Option A was the only packaging
+  consistent with #458. Its authorization-source paragraph cited the
+  Execution Lead directive's conditional sentence plus the #458 orchestration
+  comment (6055084231, which disclaims ruling status); that sentence is
+  prioritized execution advice and is no longer cited as authority (provenance
+  correction recorded on #459 and in the projection artifact below).
+- #402 gate arm `RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED`.
 - root MIG-02: caller-owned `Completion` is Compatibility only; no M window
   authorizes retirement.
 
@@ -25,20 +36,40 @@ No prohibition was crossed: no Completion deletion, no F2/F3/F4 contraction, no
 multi-worker→single-owner conversion, no unadopted canon, no ADR-0003 adoption,
 no F1 manifest edit.
 
+## Final consumer-state projection
+
+Every one of the 75 census M-R records now has an explicit final disposition in
+[`m-r-consumer-disposition-final.json`](m-r-consumer-disposition-final.json)
+(MIGRATED / ALREADY_CANONICAL / INCLUDE_HYGIENE_COMPLETED / POLICY_ISOLATED /
+COMPAT_TEST_RETAINED / NOT_A_CONSUMER / DOWNSTREAM_MECHANISM_RETAINED, with
+subscope splits for the compound rows). `scripts/verify_mr_disposition.py`
+recomputes the projection against this record and the census (coverage,
+exclusivity, field discipline, unit-exact bidirectional census_rows membership,
+closed blocker-row whitelist) and runs in CI as the `mr-disposition-guard`
+workflow together with its in-repo corruption discriminators
+(`scripts/test_verify_mr_disposition.py`, which encodes both #472 re-review
+counterexamples). The PR #471 residual pair is recorded there as census rows of
+the M-F and aux families, so the M-R delivery claim is recomputable end to end.
+Round 2 of the #472 review corrected six records: c-x01-020's subject was
+already canonical at M0 (ALREADY_CANONICAL; only its T2-05 forced-virtual
+subscope stays isolated), and the five zero-symbol include rows c-x06-004..008
+are INCLUDE_HYGIENE_COMPLETED (deletion commit `7e8601c6`), so the five genuine
+tier-1 retypings are c-x01-024/025/027/028/029.
+
 ## Isolated items
 
 | ID | Isolated unit | Census rows | Owner | Exit condition |
 |----|---------------|-------------|-------|----------------|
-| T2-01 | X-16 await/waiter runtime surface | c-x16-001..010, 015..019, c-x01-034/035, c-x01-040 | F3 | An F3 arm closes the node (re-typed await over `Request<T>` or runtime retirement) + waiter/shutdown/file oracles re-proven + B-04 host decision |
+| T2-01 | X-16 await/waiter runtime surface | c-x16-001..010, 015..019, c-x01-034/035, c-x01-040, c-x04-008, c-x05-001/002/010 | F3 | An F3 arm closes the node (re-typed await over `Request<T>` or runtime retirement) + waiter/shutdown/file oracles re-proven + B-04 host decision |
 | T2-02 | Core-cutover publication/observer oracles | c-x01-023, c-x01-026, c-x14-005 | F2 | Publication-seam contraction with an equivalent adopted-boundary oracle keeping every mutant kill |
 | T2-03 | Shutdown settlement oracle on caller-held carriers | c-x01-022 | F2 | F2 contraction of the observer registration/cancel hinge with the shutdown oracles re-proven |
 | T2-04 | RequestHandle identity + release-path oracle | c-x01-019, c-x02-002/003, B-05 | F2 | D-17 decided + identity oracle proving the core path suffices |
 | T2-05 | Compat-spelling pins and the forced backend seam | c-x01-014/015, c-x01-020, c-x01-030, c-x01-039 | F2 | `AsyncBackend` seam contraction with the admission oracle re-derived and the E1 conformance matrix re-run |
-| T2-06 | `Batch::Slot` value carriers | c-x01-005, c-x01-006 | F2 | Batch re-typing with the B-01 same-slice re-freeze |
+| T2-06 | `Batch::Slot` value carriers | c-x01-005, c-x01-006, c-x01-024 (batch subscope) | F2 | Batch re-typing with the B-01 same-slice re-freeze |
 | T2-07 | `identity_of` arena-field fallback (dormant) | c-x02-002..006, B-05 | F2 | F2 identity contraction |
 | T2-08 | App task carriers and await chains | c-x01-001..004, c-x16-011..014 | F2 + F3 | F2/F3 arm closure + app consumption suites + COPY-B/TAIL obligations |
 | T2-09 | F1 publication-epilogue compat sub-spelling | c-x01-025, c-x01-028 | F2 | Adopted-face oracle for the mid-epilogue boundary |
-| T2-10 | File-surface test carriers | c-x01-037/038, c-x06-004..008 | F4 | F4 File contraction with semantic oracles re-run |
+| T2-10 | File-surface test carriers | c-x01-037/038 | F4 | F4 File contraction with semantic oracles re-run |
 | T2-11 | Installed-package consumer probes under the F1 freeze | c-x01-901, B-01 | F2 | Contraction slice re-freezing both manifests together with the probes |
 | T2-12 | Cross-thread submission-observation carve-outs | c-x01-024 | F2 | An adopted cross-thread observation spelling, or explicit re-shaping of the two oracles with the §24 acceptance shape re-proved |
 
