@@ -109,15 +109,13 @@ bool submit_sync_data_rejects_closed_reference_before_backend() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<void> c;
-    auto r = ctx.submit_sync_data(SyncDataOp{file}, c);
-    if (r.has_value())
+    auto submitted = ctx.submit_sync_data(SyncDataOp{file});
+    if (submitted.has_value())
         return false;
-    if (r.error().code != IoError::Code::invalid_state)
+    if (submitted.error().code != IoError::Code::invalid_state)
         return false;
-    if (!c.idle())
-        return false;
-    return counts->sync_data_entries == 0 && counts->sync_all_entries == 0;
+    return ctx.outstanding() == 0 && counts->sync_data_entries == 0 &&
+           counts->sync_all_entries == 0;
 }
 
 bool submit_sync_all_rejects_closed_reference_before_backend() {
@@ -127,15 +125,13 @@ bool submit_sync_all_rejects_closed_reference_before_backend() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<void> c;
-    auto r = ctx.submit_sync_all(SyncAllOp{file}, c);
-    if (r.has_value())
+    auto submitted = ctx.submit_sync_all(SyncAllOp{file});
+    if (submitted.has_value())
         return false;
-    if (r.error().code != IoError::Code::invalid_state)
+    if (submitted.error().code != IoError::Code::invalid_state)
         return false;
-    if (!c.idle())
-        return false;
-    return counts->sync_data_entries == 0 && counts->sync_all_entries == 0;
+    return ctx.outstanding() == 0 && counts->sync_data_entries == 0 &&
+           counts->sync_all_entries == 0;
 }
 
 bool submit_sync_data_request_rejects_closed_reference_before_backend() {
