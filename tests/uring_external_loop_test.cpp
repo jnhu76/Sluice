@@ -237,13 +237,41 @@ bool external_poll_loop_uring_w03() {
     std::vector<std::byte> r2buf(64, std::byte{0});
     std::vector<std::byte> r3buf(64, std::byte{0});
     std::vector<std::byte> wbuf(32, std::byte{'b'});
-    Completion<std::size_t> r1, r2, r3, w;
+    Request<std::size_t> r1, r2, r3, w;
+    // The public Request binding forbids nonterminal release: failure exits
+    // drain their in-flight reads to publication before the bindings go.
+    struct RequestPublicationDrain {
+        AsyncIoContext& ctx;
+        Request<std::size_t>* held[4] = {};
+        explicit RequestPublicationDrain(AsyncIoContext& c) : ctx(c) {}
+        void track(Request<std::size_t>& r) {
+            for (Request<std::size_t>*& slot : held)
+                if (slot == nullptr) {
+                    slot = &r;
+                    return;
+                }
+        }
+        ~RequestPublicationDrain() {
+            for (Request<std::size_t>* r : held) {
+                if (r == nullptr)
+                    continue;
+                while (r->valid() && !r->ready())
+                    (void)ctx.poll();
+                r->discard();
+            }
+        }
+    } drain{ctx};
+    drain.track(r1);
+    drain.track(r2);
+    drain.track(r3);
+    drain.track(w);
 
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r1buf.data(),
-                                r1buf.size(), 0},
-                         r1)
-             .has_value())
+    auto r1_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r1buf.data(),
+                               r1buf.size(), 0});
+    if (!r1_submitted.has_value())
         return false;
+    r1 = std::move(r1_submitted).value();
     std::size_t phase_a = host.drive_submission();
     const auto first_wake = host.wait_and_service(std::chrono::milliseconds{5000});
     if (!first_wake)
@@ -252,7 +280,7 @@ bool external_poll_loop_uring_w03() {
     phase_a += host.acknowledge_and_drive();
     if (phase_a != 1 || !r1.ready())
         return false;
-    r1.reset();
+    r1.discard();
     // A servicing pass consumes the kernel completion silently — the wake
     // was the kernel's own eventfd write at CQE publication — so the fd is
     // already quiet and one settling round delivers nothing.
@@ -283,21 +311,24 @@ bool external_poll_loop_uring_w03() {
     if (fd_readable(host.nfd()))
         return false;
 
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r2buf.data(),
-                                r2buf.size(), 16},
-                         r2)
-             .has_value())
+    auto r2_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r2buf.data(),
+                               r2buf.size(), 16});
+    if (!r2_submitted.has_value())
         return false;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r3buf.data(),
-                                r3buf.size(), 64},
-                         r3)
-             .has_value())
+    r2 = std::move(r2_submitted).value();
+    auto r3_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r3buf.data(),
+                               r3buf.size(), 64});
+    if (!r3_submitted.has_value())
         return false;
-    if (!ctx.submit_write(WriteOp{NativeFileRef(sink, FileAccess::read_write), wbuf.data(),
-                                  wbuf.size(), 0},
-                          w)
-             .has_value())
+    r3 = std::move(r3_submitted).value();
+    auto w_submitted =
+        ctx.submit_write(WriteOp{NativeFileRef(sink, FileAccess::read_write), wbuf.data(),
+                                 wbuf.size(), 0});
+    if (!w_submitted.has_value())
         return false;
+    w = std::move(w_submitted).value();
     std::size_t batch = host.drive_submission();
 
     int settled_without_wake = 0;
@@ -333,9 +364,9 @@ bool external_poll_loop_uring_w03() {
         return false;
 
     const bool settled = r2.ready() && r3.ready() && w.ready();
-    r2.reset();
-    r3.reset();
-    w.reset();
+    r2.discard();
+    r3.discard();
+    w.discard();
     ::close(source);
     ::close(sink);
     // Shutdown order: all accepted work settled, only then does the host
@@ -366,17 +397,30 @@ bool kernel_completions_delivered_without_stranding() {
 
     constexpr int kCoalesced = 4;
     std::vector<std::vector<std::byte>> bufs(kCoalesced);
-    std::vector<Completion<std::size_t>> completions(kCoalesced);
+    std::vector<Request<std::size_t>> completions(kCoalesced);
+    struct RequestPublicationDrain {
+        AsyncIoContext& ctx;
+        std::vector<Request<std::size_t>>& held;
+        explicit RequestPublicationDrain(AsyncIoContext& c, std::vector<Request<std::size_t>>& rs)
+            : ctx(c), held(rs) {}
+        ~RequestPublicationDrain() {
+            for (auto& r : held) {
+                while (r.valid() && !r.ready())
+                    (void)ctx.poll();
+                r.discard();
+            }
+        }
+    } drain{ctx, completions};
     for (int i = 0; i < kCoalesced; ++i) {
         bufs[static_cast<std::size_t>(i)].assign(64, std::byte{0});
-        if (!ctx
-                 .submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only),
-                                     bufs[static_cast<std::size_t>(i)].data(),
-                                     bufs[static_cast<std::size_t>(i)].size(),
-                                     static_cast<std::uint64_t>(i) * 32},
-                              completions[static_cast<std::size_t>(i)])
-                 .has_value())
+        auto submitted = ctx.submit_read(
+            ReadOp{NativeFileRef(source, FileAccess::read_only),
+                   bufs[static_cast<std::size_t>(i)].data(),
+                   bufs[static_cast<std::size_t>(i)].size(),
+                   static_cast<std::uint64_t>(i) * 32});
+        if (!submitted.has_value())
             return false;
+        completions[static_cast<std::size_t>(i)] = std::move(submitted).value();
     }
     std::size_t delivered = host.drive_submission();
 
@@ -397,7 +441,7 @@ bool kernel_completions_delivered_without_stranding() {
     bool ok = !fd_readable(host.nfd());
     for (auto& c : completions) {
         ok = ok && c.ready();
-        c.reset();
+        c.discard();
     }
     ::close(source);
     host.stop_and_detach();
@@ -413,13 +457,12 @@ bool external_host_sees_userspace_publication_wake() {
     ExternalLoopHost host(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> zero;
-    if (!ctx
-             .submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
-                                 buffer.data(), 0, 0},
-                          zero)
-             .has_value())
+    auto zero_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               buffer.data(), 0, 0});
+    if (!zero_submitted.has_value())
         return false;
+    auto zero = std::move(zero_submitted).value();
     if (!fd_readable(host.nfd()))
         return false;
     if (host.drive_submission() != 1)
@@ -428,7 +471,7 @@ bool external_host_sees_userspace_publication_wake() {
         return false;
     if (host.acknowledge_and_drive() != 0)
         return false;
-    zero.reset();
+    zero.discard();
     const bool quiet = !fd_readable(host.nfd());
     host.stop_and_detach();
     return quiet;
@@ -450,12 +493,24 @@ bool saturation_with_real_kernel_completion_preserves_wake() {
     if (source < 0)
         return false;
     std::vector<std::byte> buf(32, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), buf.data(),
-                                buf.size(), 0},
-                         c)
-             .has_value())
+    struct RequestPublicationDrain {
+        AsyncIoContext& ctx;
+        Request<std::size_t>& held;
+        explicit RequestPublicationDrain(AsyncIoContext& c, Request<std::size_t>& r)
+            : ctx(c), held(r) {}
+        ~RequestPublicationDrain() {
+            while (held.valid() && !held.ready())
+                (void)ctx.poll();
+            held.discard();
+        }
+    };
+    auto c_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), buf.data(),
+                               buf.size(), 0});
+    if (!c_submitted.has_value())
         return false;
+    auto c = std::move(c_submitted).value();
+    RequestPublicationDrain drain{ctx, c};
     std::size_t delivered = host.drive_submission();
 
     int rounds = 0;
@@ -469,7 +524,7 @@ bool saturation_with_real_kernel_completion_preserves_wake() {
     }
     if (delivered != 1 || !c.ready())
         return false;
-    c.reset();
+    c.discard();
     ::close(source);
 
     if (host.acknowledge_and_drive() != 0)
@@ -519,20 +574,20 @@ bool external_retryable_transport_does_not_strand() {
     if (source < 0)
         return false;
     std::vector<std::byte> buf(32, std::byte{0});
-    Completion<std::size_t> c;
+    Request<std::size_t> c;
 
     // Retires the accepted request on defect exits so teardown stays clean;
     // on the success path the completion is already ready and this no-ops.
     struct RetireOnExit {
         AsyncIoContext& ctx;
-        Completion<std::size_t>& completion;
+        Request<std::size_t>& completion;
         int fd;
         ~RetireOnExit() {
-            for (int i = 0; i < 4000 && !completion.ready(); ++i) {
+            for (int i = 0; i < 4000 && completion.valid() && !completion.ready(); ++i) {
                 (void)ctx.poll_progress();
                 std::this_thread::sleep_for(std::chrono::microseconds(200));
             }
-            completion.reset();
+            completion.discard();
             ::close(fd);
         }
     } retire_on_exit{ctx, c, source};
@@ -541,11 +596,12 @@ bool external_retryable_transport_does_not_strand() {
     // the retained transport signals the context fd; the post-submission
     // drive (attempt 2) fails again, so the host must already hold the
     // schedule before it ever waits.
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), buf.data(),
-                                buf.size(), 0},
-                         c)
-             .has_value())
+    auto c_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), buf.data(),
+                               buf.size(), 0});
+    if (!c_submitted.has_value())
         return false;
+    c = std::move(c_submitted).value();
     if (host.drive_submission() != 0)
         return false;
     if (!host.retry_scheduled())
