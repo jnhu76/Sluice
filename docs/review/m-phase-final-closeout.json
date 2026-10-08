@@ -1,9 +1,9 @@
 {
   "artifact": "m-phase-final-closeout",
   "phase": "M",
-  "generated_utc": "2026-10-08T18:30:00+00:00",
+  "generated_utc": "2026-10-08T12:05:00+00:00",
   "base_sha": "e23cc62d",
-  "final_master_sha": "667e17f8",
+  "final_master_sha": "MASTER_AFTER_471",
   "authority_order_applied": [
     "root v1-r3 (docs/explicit-io-v1-final-decision.md)",
     "adopted ADRs (ADR-0001/0002 rationale; ADR-0003 PROPOSED, not adopted)",
@@ -16,10 +16,10 @@
   ],
   "goal_states": {
     "PHASE_M": "NO (blocked on human authority decisions; M-R is the only family closable in this window)",
-    "M_FAMILY_DISPOSITIONS": "COMPLETE (all 7 families have a disposition, an owner and an exit condition)",
-    "M_CONSUMER_MIGRATION_OR_ISOLATION": "VERIFIED for M-R (tier-1 migrated + tier-2 isolated with authority); NOT APPLICABLE/blocked for the remaining families",
-    "M_REQUIRED_EVIDENCE": "PASS (evidence batch below; B-02 closed, B-03 closed on this host, B-01 reproduced)",
-    "M_FINAL_INDEPENDENT_REVIEW": "APPROVE on both tier PRs (review rounds: REQUEST_REVISIONS -> fixes -> APPROVE; tier-2 delta APPROVE); Wave-5 fresh review of this closeout pending",
+    "M_FAMILY_DISPOSITIONS": "COMPLETE (all seven families carry a disposition; six have a downstream owner and an exit condition, M-A4 is closed with no owner because no action is owed)",
+    "M_CONSUMER_MIGRATION_OR_ISOLATION": "VERIFIED for M-R (tier-1 migrated including the residual pair found by the Wave-5 review and delivered by PR #471; tier-2 isolated with authority and corrected scopes); NOT APPLICABLE/blocked for the remaining families",
+    "M_REQUIRED_EVIDENCE": "PASS (evidence batch below; B-02 closed, B-03 closed on this host, B-01 reproduced at the final head)",
+    "M_FINAL_INDEPENDENT_REVIEW": "tier PRs: APPROVE on each (relayed via author PR comments; the repository holds no GitHub review objects). Wave-5 fresh review of this closeout: REQUEST_REVISIONS (two P1s plus accuracy findings) -> fixed by PR #471 and this revision -> re-review verdict pending",
     "F2_F3_F4_PRODUCTION_RETIREMENT": "NOT_EXECUTED",
     "F1_HISTORICAL_BASELINE": "IMMUTABLE"
   },
@@ -28,19 +28,22 @@
       "id": "M-R",
       "gate": "RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED",
       "status": "PASS (merged)",
-      "disposition": "tier-1 migrated (six test files onto the adopted Request<T> spellings + include cleanup + B-02 wiring, PR #468 merged 9d1b5cc0) and tier-2 isolated by authority (twelve units in the tier-2 record, PR #469 merged 667e17f8)",
+      "disposition": "tier-1 migrated (the reachable context-face consumers onto the adopted Request<T> spellings, include cleanup, B-02 wiring in PR #468 merged 9d1b5cc0; the residual pair c-x01-015/016 in PR #471) and tier-2 isolated by authority (twelve units in the tier-2 record, PR #469 merged 667e17f8, scopes corrected by #471)",
       "replacement_adopted": "PASS",
       "downstream_owner": "F2",
       "delivered_by": [
         "PR #468 merged 9d1b5cc0",
-        "PR #469 merged 667e17f8"
+        "PR #469 merged 667e17f8",
+        "PR #471 residual tier-1 migration (head 1032317e, merged SHA in tier_prs)"
       ],
       "evidence": [
-        "both frozen F1 profiles reproduce at the tier-1 head with all gates PASS",
-        "full suites: noliburing release 50/50, noliburing debug 50/50, liburing release 64/64, ASan+UBSan 50/50 and 7/7 migrated suites",
+        "both frozen F1 profiles reproduce with all gates PASS at the final head",
+        "full suites at 1032317e: noliburing release 50/50, noliburing debug 50/50, liburing release 64/64, migrated suites clean under ASan+UBSan in both profiles",
         "B-02 mutant kill for the directory-fsync EINTR oracle",
+        "eight named uring cutover mutation builds re-run at 1032317e, all killed; baselines 21/21 (uring) and 16/16 (threadpool)",
         "independent review round with two P1 fixes (cross-thread carve-out, drain declaration order) and pinned-stress evidence",
-        "independent review APPROVE on both PRs (tier-1 after a REQUEST_REVISIONS round with two P1 fixes)"
+        "Wave-5 review found two un-dispositioned consumers; PR #471 migrated them and corrected the isolation record",
+        "independent review APPROVE on each PR (relayed through author PR comments; no GitHub review objects)"
       ],
       "blockers": [],
       "exit_condition": "n/a for the M window; F2 owns the carrier retirement that consumes this evidence"
@@ -112,16 +115,18 @@
       "id": "M-A3",
       "gate": "PACKAGE_DECISION_RECORDED",
       "status": "BLOCKED_AUTHORITY_DECISION",
-      "disposition": "TEST_ONLY double surface stays installed under the F1 freeze; relocate-vs-internalize落点未裁 (F0 D-13 recorded, not decided)",
+      "disposition": "TEST_ONLY double surface stays installed under the F1 freeze; the relocate-vs-internalize package landing is recorded (F0 D-13, KEEP/TEST_ONLY, HIGH confidence) but not decided",
       "replacement_adopted": "PARTIAL",
       "downstream_owner": "F4",
       "evidence": [
         "F0 D-13 (HIGH confidence KEEP, TEST_ONLY)",
-        "F1 frozen manifests list both test-double headers (79-header set unchanged)"
+        "F1 frozen manifests list both test-double headers (79-header set unchanged)",
+        "#458 SS3.6 (blocker 1 is the package landing decision; dependsOn M-F)"
       ],
       "blockers": [
-        "D-13 package decision; L-11 recorded defect stays unfixed by policy",
-        "any change triggers the B-01 same-slice re-freeze"
+        "D-13 package decision (the packet's four questions did not cover it; an addendum on #458 asks it)",
+        "M-F dependency (D-13 rides the M-F ruling per #458 SS5)",
+        "any change triggers the B-01 same-slice re-freeze; the L-11 recorded defect stays unfixed by policy"
       ],
       "exit_condition": "package decision taken; then F4 executes the move/internalize with a re-freeze"
     },
@@ -133,7 +138,7 @@
       "replacement_adopted": "PASS",
       "downstream_owner": "none",
       "evidence": [
-        "both F1 frozen profiles reproduced this session; NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED PASS in both"
+        "both F1 frozen profiles reproduced; NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED PASS in both"
       ],
       "blockers": [],
       "exit_condition": "n/a; any installed-header set change re-triggers B-01"
@@ -141,34 +146,34 @@
   ],
   "evidence_batch": {
     "noliburing_release": {
-      "command": "xmake f -m release --liburing=n -y; xmake -y; xmake test -v",
+      "command": "xmake f -m release --liburing=n -y; xmake test -v",
       "result": "50/50 targets pass",
-      "log": "/tmp/m-ev-noliburing-release-test.log"
+      "log": "/tmp/m-residual-noliburing-release.log"
     },
     "noliburing_debug": {
-      "command": "xmake f -m debug -y; xmake test -v",
+      "command": "xmake f -m debug --liburing=n -y; xmake test -v",
       "result": "50/50 pass",
-      "log": "/tmp/m-ev-noliburing-debug-test.log"
+      "log": "/tmp/m-residual-noliburing-debug.log"
     },
     "liburing_release": {
       "command": "xmake f -m release --liburing=y --cflags/-cxxflags/-ldflags=/tmp/f1-deps/uring-prefix; LD_LIBRARY_PATH=/tmp/f1-deps/uring-prefix/lib xmake test -v",
       "result": "64/64 pass (real io_uring suites included)",
-      "log": "/tmp/m-ev-liburing-release-test.log"
+      "log": "/tmp/m-residual-liburing-release.log"
     },
     "sanitizers": {
-      "command": "xmake f -m debug --sanitizers=asan,ubsan; xmake test -v (noliburing) + per-suite runs (liburing)",
-      "result": "50/50 noliburing; 7/7 migrated suites liburing",
-      "log": "/tmp/m-ev-asan-test.log"
+      "command": "xmake f -m debug --cxxflags/-ldflags=-fsanitize=address,undefined; per-suite runs of the migrated suites in both profiles",
+      "result": "clean; the two migrated suites pass in both profiles under ASan+UBSan",
+      "log": "/tmp/m-residual-asan-<suite>.log"
     },
     "f1_frozen_noliburing": {
-      "command": "python3 scripts/verify_f1_package.py --check-frozen docs/review/f1-package-manifest-noliburing.json --manifest-out /tmp/f1-check-noliburing.json --archive-baseline-out /tmp/f1-check-baseline-noliburing.json",
-      "result": "all gates PASS; frozen manifest reproduced",
-      "log": "/tmp/f1-check-noliburing.json"
+      "command": "python3 scripts/verify_f1_package.py --check-frozen docs/review/f1-package-manifest-noliburing.json --manifest-out /tmp/m-residual-f1-noliburing.json --archive-baseline-out /tmp/m-residual-f1-noliburing-base.json",
+      "result": "all gates PASS; frozen manifest reproduced at head 1032317e",
+      "log": "/tmp/m-residual-f1-noliburing.json"
     },
     "f1_frozen_liburing": {
       "command": "same with --liburing --uring-prefix /tmp/f1-deps/uring-prefix (liburing 2.9)",
-      "result": "all gates PASS; P2 uring runtime consumer probe PASS",
-      "log": "/tmp/f1-check-liburing.json"
+      "result": "all gates PASS; P2 uring runtime consumer probe PASS; reproduced at head 1032317e",
+      "log": "/tmp/m-residual-f1-liburing.json"
     },
     "comment_authority": {
       "command": "python3 scripts/test_check_cpp_comment_authority.py; python3 scripts/check_cpp_comment_authority.py .",
@@ -177,6 +182,11 @@
     "f1_provenance_selftests": {
       "command": "python3 scripts/test_verify_f1_frozen_provenance.py",
       "result": "10 tests OK"
+    },
+    "mutation_builds": {
+      "command": "build and run the eight named uring cutover mutation targets (xmake/tests.lua; executed manually, never as regular tests)",
+      "result": "all eight killed at head 1032317e: seven by named FAIL lines, publish_before_retire by the protocol-unreachable invariant guard; baselines uring 21/21, threadpool 16/16",
+      "log": "/tmp/m-residual/uring_cutover_mut_*.log"
     },
     "fault_injection_b02": {
       "command": "mutant: drop retry_on_eintr around directory_fsync; xmake b app_copy_dir_fsync_test; xmake run app_copy_dir_fsync_test",
@@ -188,15 +198,16 @@
     },
     "review_rounds": {
       "tier1_first": "REQUEST_REVISIONS (2 P1, 3 P2/P3) at 888ccf2e",
-      "tier1_rerereview": "APPROVE on the delta 89827e50 + 7f5b113b",
-      "tier2_delta": "APPROVE (T2-12 mechanism, pinned numbers, no gate-closing stretch)",
-      "ci": "run 37761311720 green (all five checks) at the reviewed head"
+      "tier1_rereview": "APPROVE on the delta 89827e50 + 7f5b113b (author-relayed)",
+      "tier2_delta": "APPROVE (T2-12 mechanism, pinned numbers, no gate-closing stretch; author-relayed)",
+      "ci": "run 37761311720 green in all four CI jobs (release, debug, F1 self-tests, comment guard; the fifth check-run status is the legacy CodeRabbit status) at the reviewed head",
+      "wave5_closeout": "REQUEST_REVISIONS on this closeout (two P1 un-dispositioned consumers plus accuracy findings); fixed by PR #471 and this revision; re-review verdict recorded in goal_states.M_FINAL_INDEPENDENT_REVIEW"
     }
   },
   "blockers": {
     "B-01": {
       "state": "CLOSED_FOR_THIS_SLICE",
-      "note": "no src/include change; both frozen profiles reproduce at the tier-1 head"
+      "note": "no src/include change; both frozen profiles reproduce at the final head (1032317e)"
     },
     "B-02": {
       "state": "CLOSED",
@@ -247,6 +258,12 @@
       "family": "M-A1",
       "packet": "#458 comment 6055397430",
       "question": "BlockingIoPool PROD-03 admittance P1/P2/P3"
+    },
+    {
+      "id": "D-13",
+      "family": "M-A3",
+      "packet": "#458 addendum comment (posted with this closeout)",
+      "question": "test-double package landing: keep installed / relocate / internalize (F0 D-13 recorded KEEP/TEST_ONLY; any change re-triggers the B-01 re-freeze and rides the M-F ruling)"
     }
   ],
   "prohibitions_check": {
@@ -257,13 +274,14 @@
     "no_unapproved_canonical_vectored_io": "held (no canon introduced)",
     "no_zero_consumer_inference_of_safety": "held (isolation items each name owner/necessity/exit)",
     "no_frozen_manifest_edit": "held (manifests untouched; reproduction proves it)",
-    "no_test_count_or_green_CI_as_semantic_evidence": "held (mutant kill + boundary finding + oracle preservation recorded)",
+    "no_test_count_or_green_CI_as_semantic_evidence": "held (mutant kills + boundary finding + oracle preservation recorded)",
     "no_owner_less_policy_isolated": "held (tier-2 record supplies the eight fields per item)",
-    "no_premature_phase_m_closed": "held (PHASE_M = NO; four human decisions pending)"
+    "no_premature_phase_m_closed": "held (PHASE_M = NO; five human decisions pending)"
   },
   "m_phase_files": "docs/review/m-phase-final-closeout.md",
   "tier_prs": {
     "tier1": "#468 merged 9d1b5cc0",
-    "tier2": "#469 merged 667e17f8"
+    "tier2": "#469 merged 667e17f8",
+    "residual": "#471 (head 1032317e, merged SHA PENDING_471)"
   }
 }
