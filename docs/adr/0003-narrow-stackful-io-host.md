@@ -1,6 +1,6 @@
 # ADR-0003: Narrow Stackful File-I/O Host (v1 optional profile, D2)
 
-- **Status**: PROPOSED (Issue #399, D2 slice)
+- **Status**: PROPOSED (Issue #399, D2 slice; #460 Option B corrective candidate; not adopted)
 - **Parent requirements**: PROD-02 (optional single-owner stackful adapter), PROD-03,
   ARCH-01/ARCH-02, INV-01 (host completed-return row), HOST-01, HOST-02, HOST-03,
   OBS-01/OBS-04, PROG-01/PROG-02/PROG-04, CANCEL-01/CANCEL-02, THREAD-01/THREAD-02,
@@ -11,7 +11,7 @@
   supported cleanup paths") and HOST-01 ("names/representation belong in a derived
   ADR"). It creates no new public semantic beyond the root.
 
-## 1. Decision: SUPPORT_W04
+## 1. Decision: narrow host design, conditional support declaration
 
 The D2-0 gate examined whether a conforming host can be retained without general
 task-runtime semantics, a second progress authority, Request ownership changes,
@@ -26,12 +26,39 @@ conditions are absent because every contract the host needs is already frozen:
 - the host-neutral fiber substrate (`Fiber` + `fiber_ctx`), which has no IoContext
   dependency and carries ASan/TSan fiber annotations.
 
-Therefore v1 ships the optional stackful host as a **supported** profile passing
-W-04, implemented as a new narrow component. The legacy
-`ApplicationRuntime`/`Scheduler`/`Group`/`Future`/`WaitPolicy` stack is not the
-supported host and is dispositioned in §8.
+The proposed design is the optional, caller-driven, single-owner
+`StackfulIoHost`/`IoTaskContext` component. While this ADR is PROPOSED it is
+only a design candidate; independently reviewed, formally adopted ADR text
+grants **host design authority**, not an automatic supported-profile claim.
 
-## 2. Supported build profile and single-owner model
+**DESIGN_ADOPTED is not OPTIONAL_SUPPORTED.** A later supported declaration
+requires independent D2 implementation/human-review closure, W-04 H1–H6
+across ThreadPool and real-kernel io_uring, and B-03 end-to-end liburing
+evidence for the D2/W-04 host profile, including the applicable stop,
+failure, settlement, fiber lifetime and ASan/TSan obligations. M-R's
+liburing evidence does not automatically discharge host-specific W-04
+obligations. Until that separate evidence gate passes, this optional
+profile remains candidate/experimental/deferred (root MIG-03); no
+release/product/ledger claim may call it supported. At adoption the
+unresolved gates and their owners must be recorded explicitly.
+
+```text
+HOST_DESIGN_AUTHORITY_ADOPTED != D2_IMPLEMENTATION_VERIFIED
+                              != OPTIONAL_SUPPORTED_DECLARED
+                              != M_H_CONSUMER_MIGRATION_COMPLETE
+                              != F3_RETIREMENT_AUTHORIZED
+```
+
+The legacy `ApplicationRuntime`/`Scheduler`/`Group`/`Future`/`WaitPolicy`
+stack retains its current consumers under root MIG-02. No physical
+retirement, multi-worker-to-single-owner behavior change, or app CLI
+change is authorized by design adoption. Any amendment affecting
+caller-visible ownership, cancellation, blocking, accepted workloads or
+supported platforms must go through the root (ADR-01). The decision
+sequence and outstanding evidence are recorded in #460 Option B
+(v2 + v2.1 and the affirmative authority ruling).
+
+## 2. Optional build profile and single-owner model (support conditional)
 
 - The host is `sluice::async::StackfulIoHost` over an application-owned
   `AsyncIoContext`. It exists only in `sluice_async`; nothing in
@@ -209,25 +236,29 @@ delegated-driver mode, borrowed-owner mode, or `RequestScope` semantics change
 is introduced. This resolves the D2 composition question as permitted by the
 root without amendment.
 
-## 8. Legacy runtime disposition (survival audit)
+## 8. Legacy runtime disposition (proposed design; survival audit)
 
-| Mechanism | v1 disposition after this slice |
+| Mechanism | Intended disposition (not a physical retirement authorization) |
 |---|---|
 | `Fiber`, `fiber_ctx` | RETAINED as the shared stackful substrate (also used by the legacy scheduler) |
-| `StackfulIoHost` / `IoTaskContext` (new) | SUPPORTED optional host (this ADR) |
+| `StackfulIoHost` / `IoTaskContext` (new) | DESIGN_CANDIDATE while this ADR is PROPOSED; DESIGN_ADOPTED only after formal ADR adoption; OPTIONAL_SUPPORTED only after §1's separate D2/W-04/B-03 gate |
 | `ApplicationRuntime` / `RuntimeBuilder` / `RuntimeTaskContext` | COMPATIBILITY_ONLY: still compiles and serves existing apps/tests; no v1 support claim; retirement with #402 after consumer migration |
-| `Scheduler` (multi-worker run, work stealing, primitive-suite methods, timer/select machinery, WaitRecord registry) | COMPATIBILITY_ONLY, same boundary; the supported host uses none of it |
-| `Group` (thread-per-task fallback, unbounded admission), `Future`, `WaitPolicy`/`EventedWaitPolicy` | COMPATIBILITY_ONLY; forbidden patterns for the supported host; retirement with #402 |
+| `Scheduler` (multi-worker run, work stealing, primitive-suite methods, timer/select machinery, WaitRecord registry) | COMPATIBILITY_ONLY, same boundary; the narrow host design uses none of it |
+| `Group` (thread-per-task fallback, unbounded admission), `Future`, `WaitPolicy`/`EventedWaitPolicy` | COMPATIBILITY_ONLY; forbidden patterns for the narrow host design; retirement with #402 |
 | public `Event`/`Semaphore`/`Mutex`/`Condition`/`RwLock`/`Queue`/`select` | unchanged code, outside v1 (HOST-01); classified for #402 |
-| `await_take`/`await_drain`/`await_read_*`/`await_write_exact` (Completion-based) | COMPATIBILITY_ONLY (D1 classification); the supported forms are the `IoTaskContext` helpers |
+| `await_take`/`await_drain`/`await_read_*`/`await_write_exact` (Completion-based) | COMPATIBILITY_ONLY (D1 classification); the narrow-host forms are the `IoTaskContext` helpers (subject to §1's support gate) |
 
 Nothing is deleted in this slice: existing consumers (four apps, the
 `run_task_to_result` test family, `runtime_waiter_observer_test`) keep
-compiling unchanged. Physical retirement is #402's consumer-audit work; this
-ADR records that the legacy stack carries no v1 host authority once the narrow
-host lands.
+compiling unchanged. Physical retirement is #402's consumer-audit work,
+which requires separate migration/isolation and evidence. The future
+disposition here does not declare that M-H consumers have migrated.
+COPY-B and TAIL require per-consumer feasibility/behavior decisions as
+recorded in #460 v2 §2–§3; `--workers` and other CLI contracts may not
+silently change. U-01/U-08 installed-header policy is independent and
+remains with its F5/package owner.
 
-## 9. Explicitly rejected for the supported host
+## 9. Explicitly rejected for the narrow host (candidate or supported)
 
 General async runtime semantics; multi-worker execution (the host is
 single-driver); the public runtime-aware synchronization suite; transparent
@@ -240,7 +271,7 @@ recoverable poison handling during host driving
 (health failure during `run()` fails fast — the documented boundary until #401
 owns a recoverable form, same as D1).
 
-On the supported conforming driver path, `run()` returns after all spawned
+On a conforming narrow-host driver path, `run()` returns after all spawned
 tasks retire (§2); that is the promised structured exit. The exit repeats a
 zero-duration wait while its passes keep reaping completions: the wait path
 may reap a completion in the pass that follows a control wake and return
@@ -267,7 +298,7 @@ domain.
 
 ## 10. Blocking operation boundary and the composition conveniences
 
-`File::open`, explicit close and `resize` are **outside the supported task
+`File::open`, explicit close and `resize` are **outside the narrow-host task
 region**: the host offers no task-facing form of them and documents that they
 must be performed by the application on the host thread outside `run()` or
 before/after task execution (W-04 second arm). The task surface is the four
@@ -277,7 +308,8 @@ admitted request operations plus the two composition conveniences below.
 SEM-01 adjudication: the root's operation-matrix row for
 `read_exact` / `write_all` composition requires them as "direct and supported
 host conveniences" while deferring any new compound low-level request. Since
-D2-0 ships the host as supported, the conveniences are required host surface,
+the host is only declared supported after §1's independent gate, the
+conveniences are required whenever the narrow host is declared supported,
 not optional. They are implemented exactly as that row's basis prescribes —
 safe repeated primitive use under SEM-05 — as `IoTaskContext::read_exact` /
 `IoTaskContext::write_all`:
