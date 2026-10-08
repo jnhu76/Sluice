@@ -8,7 +8,7 @@ carries it.
 The tier-1 half of the M-R disposition is PR #468 (merged `9d1b5cc0`) plus the
 residual migration in PR #471; the isolation half is PR #469 (merged
 `667e17f8`), corrected by #471. No single PR declares the family gate closed by
-itself. Final master SHA at the time of writing: `MASTER_AFTER_471`.
+itself. Final master SHA at the time of writing: `7f934e0f`.
 
 ## Headline
 

@@ -3,7 +3,7 @@
   "phase": "M",
   "generated_utc": "2026-10-08T12:05:00+00:00",
   "base_sha": "e23cc62d",
-  "final_master_sha": "MASTER_AFTER_471",
+  "final_master_sha": "7f934e0f",
   "authority_order_applied": [
     "root v1-r3 (docs/explicit-io-v1-final-decision.md)",
     "adopted ADRs (ADR-0001/0002 rationale; ADR-0003 PROPOSED, not adopted)",
@@ -282,6 +282,6 @@
   "tier_prs": {
     "tier1": "#468 merged 9d1b5cc0",
     "tier2": "#469 merged 667e17f8",
-    "residual": "#471 (head 1032317e, merged SHA PENDING_471)"
+    "residual": "#471 merged 7f934e0f (head dad773c2)"
   }
 }

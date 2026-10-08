@@ -2,7 +2,7 @@
 
 Machine-readable source of record: [`m-r-tier2-isolation-record.json`](m-r-tier2-isolation-record.json).
 The tier-1 half of the M-R disposition is PR #468 (merged as `9d1b5cc0`) plus
-the residual migration in PR #471 (head `1032317e`); this record supplies the
+the residual migration in PR #471 (head `dad773c2`); this record supplies the
 isolation half. Neither half declares the family gate closed by itself.
 This file is a summary; it does not create a contract. The M consumer inventory
 itself stays in [`m-consumer-edges.json`](m-consumer-edges.json) (scan snapshot at
@@ -73,7 +73,7 @@ the app smoke runs, and the B-02 directory-fsync oracle for OB-2.
 | Pinned stress, cross-thread carve-out (0/30; 2-3/25 before) | `taskset -c 0` loops on `threadpool_external_loop_test` |
 | CI release job that caught the regression (PR #468) | `gh run view 37758034238 --job 113247343965` |
 | Tier-1 delivery | PR #468 (merged `9d1b5cc0`, reviewed head `7f5b113b`) |
-| Residual tier-1 delivery | PR #471 (head `1032317e`) |
+| Residual tier-1 delivery | PR #471 (head `dad773c2`, merged `7f934e0f`) |
 
 Earlier evidence logs from the #467/#468 rounds (`/tmp/m-ev-*.log`,
 `/tmp/f1-check-*.json`) are retained in the JSON record's per-item evidence

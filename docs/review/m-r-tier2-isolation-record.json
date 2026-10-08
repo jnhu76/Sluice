@@ -2,7 +2,7 @@
   "record": "m-r-tier2-isolation-record",
   "generated_utc": "2026-10-08T11:27:00+00:00",
   "base_sha": "e23cc62d",
-  "verified_head": "1032317e",
+  "verified_head": "dad773c2",
   "authority": [
     "#459 M-R RULING Option A (comment 6055510469): tier-1 = reachable context-face test consumers retyped to the six submit_*/Request<T> spellings, attach_observer tests exempted, 5 zero-symbol includes deleted, B-02 wired; tier-2 = X-16 explicit policy-isolated pending F3; Batch retyping rides the F2 B-01 re-freeze batch; identity_of fallback dormant (B-05/D-17 -> F2).",
     "#458 SS3.1/SS6/SS7 (adopted M1 decomposition, family authority): tier-1 executable surface named, tier-2 = X-16 policy isolation.",
@@ -352,7 +352,8 @@
   },
   "residual_migration": {
     "pull_request": "#471",
-    "head": "1032317e",
+    "head": "dad773c2",
+    "merge_commit": "7f934e0f",
     "scope": "The last two tier-1-eligible AsyncIoContext consumers (c-x01-015 tests/file_access_precedence_test.cpp, c-x01-016 tests/progress_source_ownership_test.cpp), found by the Wave-5 independent review of the closeout; the compat _request pins and the forced backend virtuals move into T2-05.",
     "evidence": [
       "/tmp/m-residual-noliburing-release.log (50/50), /tmp/m-residual-noliburing-debug.log (50/50), /tmp/m-residual-liburing-release.log (64/64)",
