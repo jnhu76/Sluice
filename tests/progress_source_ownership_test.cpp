@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -95,6 +96,30 @@ std::string make_temp_file(const std::string& content) {
     return path;
 }
 
+// The parked waits run on a dedicated driver thread; claiming the driving
+// authority there releases it at thread exit so the calling thread may settle
+// the same context afterwards.
+struct DriverClaim {
+    std::optional<ProgressOwner> owner;
+    explicit DriverClaim(AsyncIoContext& ctx) {
+        if (auto claimed = ctx.claim_progress_owner(); claimed.has_value())
+            owner = std::move(claimed).value();
+    }
+};
+
+// The adopted binding fail-fasts when it is released before its publication is
+// visible, so every path that accepted a request must drive the epilogue to
+// completion before the test returns.
+struct RequestSettlement {
+    AsyncIoContext& ctx;
+    Request<std::size_t>& request;
+    ~RequestSettlement() {
+        for (int i = 0; i < 200000 && request.valid() && !request.ready(); ++i)
+            (void)ctx.poll();
+        request.discard();
+    }
+};
+
 bool context_owns_one_progress_source() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     AsyncIoContext ctx(std::move(backend));
@@ -106,10 +131,13 @@ bool context_owns_one_progress_source() {
         return false;
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only), buffer.data(), 0, 0}, c)
-             .has_value())
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               buffer.data(), 0, 0});
+    if (!submitted.has_value())
         return false;
+    Request<std::size_t> request = std::move(submitted).value();
+    RequestSettlement settlement{ctx, request};
 
     // The zero-op publication is a physical progress signal routed through the
     // backend capability into the context notification fd.
@@ -126,12 +154,12 @@ bool context_owns_one_progress_source() {
 
     const auto one = ctx.wait_one(std::chrono::milliseconds{2000});
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
-    if (!one.has_value() || one.value().kind != WaitKind::progress || one.value().completed != 1)
-        return false;
-    const bool ready = c.ready();
-    c.reset();
+    const bool delivered =
+        one.has_value() && one.value().kind == WaitKind::progress && one.value().completed == 1;
+    const bool ready = request.ready();
+    request.discard();
     ctx.detach_progress_host();
-    return ready;
+    return delivered && ready;
 }
 
 bool non_progress_backend_stays_out_of_the_wait_protocol() {
@@ -205,12 +233,14 @@ bool move_construction_preserves_progress_responsibility() {
         return false;
 
     std::vector<std::byte> buffer(16, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(file.value()), buffer.data(), buffer.size(), 0}, c)
-             .has_value())
+    auto submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(file.value()), buffer.data(), buffer.size(), 0});
+    if (!submitted.has_value())
         return false;
+    Request<std::size_t> request = std::move(submitted).value();
 
     AsyncIoContext moved(std::move(ctx));
+    RequestSettlement settlement{moved, request};
 
     std::atomic<int> prepark{0};
     moved.set_progress_prepark_counter_for_test(&prepark);
@@ -220,6 +250,7 @@ bool move_construction_preserves_progress_responsibility() {
     std::size_t driven = 0;
     {
         std::thread driver([&] {
+            DriverClaim owner{moved};
             auto r = moved.wait_one(std::chrono::milliseconds{5000});
             if (r.has_value() && r.value().kind == WaitKind::progress) {
                 woke = true;
@@ -234,7 +265,6 @@ bool move_construction_preserves_progress_responsibility() {
             raw->set_worker_claimed_pause_gate(nullptr);
             gate.resume.store(true, std::memory_order_release);
             gate.resume.notify_all();
-            c.reset();
             return false;
         }
         raw->set_worker_claimed_pause_gate(nullptr);
@@ -244,9 +274,9 @@ bool move_construction_preserves_progress_responsibility() {
     }
     moved.set_progress_prepark_counter_for_test(nullptr);
 
-    const bool ok = woke && driven == 1 && c.ready() &&
+    const bool ok = woke && driven == 1 && request.ready() &&
                     notification_fd_readable(moved.progress_notification_fd());
-    c.reset();
+    request.discard();
     moved.detach_progress_host();
     return ok;
 }
@@ -256,15 +286,18 @@ bool move_assignment_preserves_progress_responsibility() {
     AsyncIoContext ctx(std::move(backend));
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only), buffer.data(), 0, 0}, c)
-             .has_value())
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               buffer.data(), 0, 0});
+    if (!submitted.has_value())
         return false;
+    Request<std::size_t> request = std::move(submitted).value();
 
     AsyncIoContext target(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
     const int previous_fd = target.progress_notification_fd();
     target.detach_progress_host();
     target = std::move(ctx);
+    RequestSettlement settlement{target, request};
 
     if (ctx.progress_notification_fd() != -1)
         return false;
@@ -282,8 +315,8 @@ bool move_assignment_preserves_progress_responsibility() {
     const auto one = target.wait_one(std::chrono::milliseconds{2000});
     if (!one.has_value() || one.value().kind != WaitKind::progress || one.value().completed != 1)
         return false;
-    const bool ready = c.ready();
-    c.reset();
+    const bool ready = request.ready();
+    request.discard();
     target.detach_progress_host();
     return ready;
 }
@@ -471,11 +504,9 @@ bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
     }
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
     const auto submit =
         ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
-                               buffer.data(), 0, 0},
-                        c);
+                               buffer.data(), 0, 0});
     return !submit.has_value() && submit.error().code == IoError::Code::invalid_state;
 }
 
@@ -521,21 +552,24 @@ bool uring_zero_op_signals_context_notification() {
         return false;
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only), buffer.data(), 0, 0}, c)
-             .has_value())
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               buffer.data(), 0, 0});
+    if (!submitted.has_value())
         return false;
+    Request<std::size_t> request = std::move(submitted).value();
+    RequestSettlement settlement{ctx, request};
     if (!notification_fd_readable(ctx.progress_notification_fd()))
         return false;
     ctx.acknowledge_progress_notification();
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto one = ctx.wait_one(std::chrono::milliseconds{2000});
-    if (!one.has_value() || one.value().kind != WaitKind::progress || one.value().completed != 1)
-        return false;
-    const bool ready = c.ready();
-    c.reset();
+    const bool delivered =
+        one.has_value() && one.value().kind == WaitKind::progress && one.value().completed == 1;
+    const bool ready = request.ready();
+    request.discard();
     ctx.detach_progress_host();
-    return ready;
+    return delivered && ready;
 #else
     return true;
 #endif
@@ -557,17 +591,19 @@ bool uring_completion_wakes_parked_driver() {
     AsyncIoContext ctx(std::move(backend));
 
     std::vector<std::byte> buffer(16, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(file.value()), buffer.data(), buffer.size(), 0}, c)
-             .has_value())
+    auto submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(file.value()), buffer.data(), buffer.size(), 0});
+    if (!submitted.has_value())
         return false;
+    Request<std::size_t> request = std::move(submitted).value();
+    RequestSettlement settlement{ctx, request};
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto r = ctx.wait_one(std::chrono::milliseconds{5000});
     if (!r.has_value() || r.value().kind != WaitKind::progress || r.value().completed != 1)
         return false;
-    const bool ready = c.ready();
-    c.reset();
+    const bool ready = request.ready();
+    request.discard();
     return ready;
 #else
     return true;

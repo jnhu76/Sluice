@@ -506,13 +506,10 @@ bool submit_read_rejects_closed_empty_reference_before_backend() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<std::size_t> c;
-    auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0}, c);
+    auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
         return false;
-    if (!c.idle())
-        return false;
-    return counts->read_entries == 0 && counts->write_entries == 0;
+    return ctx.outstanding() == 0 && counts->read_entries == 0 && counts->write_entries == 0;
 }
 
 bool submit_write_rejects_closed_empty_reference_before_backend() {
@@ -528,13 +525,10 @@ bool submit_write_rejects_closed_empty_reference_before_backend() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<std::size_t> c;
-    auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0}, c);
+    auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
         return false;
-    if (!c.idle())
-        return false;
-    return counts->read_entries == 0 && counts->write_entries == 0;
+    return ctx.outstanding() == 0 && counts->read_entries == 0 && counts->write_entries == 0;
 }
 
 bool submit_read_rejects_illegal_access_with_empty_buffer_before_backend() {
@@ -548,9 +542,8 @@ bool submit_read_rejects_illegal_access_with_empty_buffer_before_backend() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<std::size_t> c;
-    auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0}, c);
-    const bool admission_ok = reports_invalid_argument(r) && c.idle();
+    auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0});
+    const bool admission_ok = reports_invalid_argument(r) && ctx.outstanding() == 0;
     const bool closed_after = file.close().has_value();
     return admission_ok && closed_after && counts->read_entries == 0 &&
            counts->write_entries == 0;
@@ -567,9 +560,8 @@ bool submit_write_rejects_illegal_access_with_empty_buffer_before_backend() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<std::size_t> c;
-    auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0}, c);
-    const bool admission_ok = reports_invalid_argument(r) && c.idle();
+    auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0});
+    const bool admission_ok = reports_invalid_argument(r) && ctx.outstanding() == 0;
     const bool closed_after = file.close().has_value();
     return admission_ok && closed_after && counts->read_entries == 0 &&
            counts->write_entries == 0;
@@ -588,13 +580,10 @@ bool submit_read_rejects_closed_illegal_access_as_invalid_state() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<std::size_t> c;
-    auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0}, c);
+    auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
         return false;
-    if (!c.idle())
-        return false;
-    return counts->read_entries == 0 && counts->write_entries == 0;
+    return ctx.outstanding() == 0 && counts->read_entries == 0 && counts->write_entries == 0;
 }
 
 bool submit_write_rejects_closed_illegal_access_as_invalid_state() {
@@ -610,13 +599,10 @@ bool submit_write_rejects_closed_illegal_access_as_invalid_state() {
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<std::size_t> c;
-    auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0}, c);
+    auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
         return false;
-    if (!c.idle())
-        return false;
-    return counts->read_entries == 0 && counts->write_entries == 0;
+    return ctx.outstanding() == 0 && counts->read_entries == 0 && counts->write_entries == 0;
 }
 
 bool submit_read_rejects_illegal_access_before_offset_validation() {
@@ -631,9 +617,8 @@ bool submit_read_rejects_illegal_access_before_offset_validation() {
     AsyncIoContext ctx(std::move(backend));
 
     std::byte dst{std::byte{0}};
-    Completion<std::size_t> c;
-    auto r = ctx.submit_read(ReadOp{file, &dst, 1, unrepresentable_offset}, c);
-    const bool admission_ok = reports_invalid_argument(r) && c.idle();
+    auto r = ctx.submit_read(ReadOp{file, &dst, 1, unrepresentable_offset});
+    const bool admission_ok = reports_invalid_argument(r) && ctx.outstanding() == 0;
     const bool closed_after = file.close().has_value();
     return admission_ok && closed_after && counts->read_entries == 0 &&
            counts->write_entries == 0;
@@ -651,9 +636,8 @@ bool submit_write_rejects_illegal_access_before_offset_validation() {
     AsyncIoContext ctx(std::move(backend));
 
     const std::byte src{std::byte{0}};
-    Completion<std::size_t> c;
-    auto r = ctx.submit_write(WriteOp{file, &src, 1, unrepresentable_offset}, c);
-    const bool admission_ok = reports_invalid_argument(r) && c.idle();
+    auto r = ctx.submit_write(WriteOp{file, &src, 1, unrepresentable_offset});
+    const bool admission_ok = reports_invalid_argument(r) && ctx.outstanding() == 0;
     const bool closed_after = file.close().has_value();
     return admission_ok && closed_after && counts->read_entries == 0 &&
            counts->write_entries == 0;
@@ -754,15 +738,16 @@ bool submit_zero_length_read_completes_zero_despite_unrepresentable_offset() {
     AsyncIoContext ctx(std::move(backend));
 
     std::byte scratch{std::byte{0}};
-    Completion<std::size_t> c;
-    auto sr = ctx.submit_read(ReadOp{file, &scratch, 0, unrepresentable_offset}, c);
+    auto sr = ctx.submit_read(ReadOp{file, &scratch, 0, unrepresentable_offset});
     if (!sr.has_value())
         return false;
+    Request<std::size_t> request = std::move(sr).value();
     do {
         (void)ctx.poll();
-    } while (!c.ready());
-    auto rr = c.result();
-    const bool ok = rr.has_value() && rr.value() == 0;
+    } while (!request.ready());
+    auto rr = request.take_result();
+    const bool ok = rr.readiness == RequestReadiness::ready && rr.result.has_value() &&
+                    rr.result.value() == 0;
     return file.close().has_value() && ok;
 }
 
@@ -777,15 +762,16 @@ bool submit_zero_length_write_completes_zero_despite_unrepresentable_offset() {
     AsyncIoContext ctx(std::move(backend));
 
     const std::byte scratch{std::byte{0}};
-    Completion<std::size_t> c;
-    auto sr = ctx.submit_write(WriteOp{file, &scratch, 0, unrepresentable_offset}, c);
+    auto sr = ctx.submit_write(WriteOp{file, &scratch, 0, unrepresentable_offset});
     if (!sr.has_value())
         return false;
+    Request<std::size_t> request = std::move(sr).value();
     do {
         (void)ctx.poll();
-    } while (!c.ready());
-    auto rr = c.result();
-    const bool ok = rr.has_value() && rr.value() == 0;
+    } while (!request.ready());
+    auto rr = request.take_result();
+    const bool ok = rr.readiness == RequestReadiness::ready && rr.result.has_value() &&
+                    rr.result.value() == 0;
     return file.close().has_value() && ok;
 }
 
@@ -800,16 +786,16 @@ bool submit_read_with_unrepresentable_offset_rejected_at_admission() {
     AsyncIoContext ctx(std::move(backend));
 
     std::byte dst{std::byte{0}};
-    Completion<std::size_t> c;
-    auto sr = ctx.submit_read(ReadOp{file, &dst, 1, unrepresentable_offset}, c);
+    auto sr = ctx.submit_read(ReadOp{file, &dst, 1, unrepresentable_offset});
     if (sr.has_value()) {
-        while (!c.ready())
+        Request<std::size_t> request = std::move(sr).value();
+        while (!request.ready())
             (void)ctx.poll();
-        (void)c.result();
-        c.reset();
+        (void)request.take_result();
         return false;
     }
-    const bool rejected = sr.error().code == IoError::Code::invalid_argument && c.idle();
+    const bool rejected = sr.error().code == IoError::Code::invalid_argument &&
+                          ctx.outstanding() == 0;
     return file.close().has_value() && rejected;
 }
 
@@ -824,16 +810,16 @@ bool submit_write_with_unrepresentable_offset_rejected_at_admission() {
     AsyncIoContext ctx(std::move(backend));
 
     const std::byte src{std::byte{0}};
-    Completion<std::size_t> c;
-    auto sr = ctx.submit_write(WriteOp{file, &src, 1, unrepresentable_offset}, c);
+    auto sr = ctx.submit_write(WriteOp{file, &src, 1, unrepresentable_offset});
     if (sr.has_value()) {
-        while (!c.ready())
+        Request<std::size_t> request = std::move(sr).value();
+        while (!request.ready())
             (void)ctx.poll();
-        (void)c.result();
-        c.reset();
+        (void)request.take_result();
         return false;
     }
-    const bool rejected = sr.error().code == IoError::Code::invalid_argument && c.idle();
+    const bool rejected = sr.error().code == IoError::Code::invalid_argument &&
+                          ctx.outstanding() == 0;
     return file.close().has_value() && rejected;
 }
 
