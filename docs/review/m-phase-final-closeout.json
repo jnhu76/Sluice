@@ -312,6 +312,6 @@
     "tier1": "#468 merged 9d1b5cc0",
     "tier2": "#469 merged 667e17f8",
     "residual": "#471 merged 7f934e0f (head dad773c2)",
-    "projection": "__OVERLAY_PR__ (overlay + validator + provenance revision)"
+    "projection": "#472 (overlay + validator + provenance revision)"
   }
 }

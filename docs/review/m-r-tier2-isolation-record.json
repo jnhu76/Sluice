@@ -375,7 +375,7 @@
     ]
   },
   "disposition_projection_revision": {
-    "pull_request": "__OVERLAY_PR__",
+    "pull_request": "#472",
     "generated_utc": "2026-10-08T14:36:07Z",
     "scope": "post-merge review of the closeout (e23cc62d..ffb5afa8) returned REQUEST_REVISIONS with two P1s: the #459 Option A authorization-source paragraph and the absence of an independently recomputable final consumer-state projection. This revision corrects the provenance chain (authority array above; per-item isolation_authority re-anchored to #458 SS3.1/SS6) and adds the projection artifact m-r-consumer-disposition-final.json with its mechanical validator scripts/verify_mr_disposition.py (CI: the mr-disposition-guard workflow).",
     "census_rows_extensions": {
