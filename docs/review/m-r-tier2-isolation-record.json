@@ -91,7 +91,7 @@
       "isolation_authority": "#459 Option A explicit exemption + census role 'subject is shutdown settlement with outstanding caller Completions - carrier lifetime is load-bearing'",
       "reason": "The oracle's subject is the shutdown settlement of outstanding caller-held carriers (observer episode retirement, admission-closed attach refusal, reserve-window race). Its assertions read carrier state (ready/idle/result) and the observer registration status, which the adopted Request face does not express until the F2 observer/publication contraction.",
       "surviving_behavior": "All shutdown lifecycle scenarios (drain, admission close, observer episode settle, reserve-window loss, uring variant) keep their outcomes; the suite passes in both profiles and under sanitizers.",
-      "exact_scope": "tests/shutdown_lifecycle_test.cpp Completion locals (:625,:667,:668,:714) and the attach_observer/close_admission/reserve-window scenarios",
+      "exact_scope": "tests/shutdown_lifecycle_test.cpp Completion locals (:624,:666,:667,:713) and the attach_observer/close_admission/reserve-window scenarios",
       "owner": "F2",
       "downstream_gating_effect": "F2's observer/publication contraction must re-derive this oracle; no M claim treats the shutdown carrier path as migrated.",
       "exit_condition": "F2 contraction of the observer registration/cancel_observer(Completion&) hinge (X-16 c-x16-008) with the shutdown oracles re-proven.",
@@ -136,7 +136,7 @@
       "isolation_authority": "#459 Option A (tier-1 covers reachable submit_*/Request<T> consumers; the compat spellings themselves stay until F2) + census role 'Completion only via forced virtual overrides - transport'",
       "reason": "The remaining compat uses in these files are the spellings themselves, not reachable consumers: the four submit_read_request/submit_write_request rejection pins in file_access_precedence_test, the fake backends that must implement the AsyncBackend pure virtuals taking Completion<T>* (the seam is the F2 retirement object), and the E1 conformance oracle whose subject is the submission/publication contract spelled over the compat carrier. Retyping these would delete the pin rather than migrate a consumer. The plain-spelling consumers of file_access_precedence_test and progress_source_ownership_test were retyped by #471.",
       "surviving_behavior": "The compat _request spelling keeps its refusal-without-backend-entry semantics and caller-cell idle guarantee; the fake backend overrides keep compiling against the unchanged seam; the E1 conformance matrix keeps judging the compat spellings.",
-      "exact_scope": "tests/async_sync_admission_test.cpp (:35-72 CountingBackend overrides, :143-175 the two _request tests), tests/request_scope_test.cpp (fake backend overrides :803-815), tests/file_access_precedence_test.cpp (the four _request rejection pins :646-745 and the CountingBackend overrides), tests/stackful_host_test.cpp (fake backend overrides :701-721), tests/backend_conformance_e1_test.cpp (Completion<std::size_t> at :519)",
+      "exact_scope": "tests/async_sync_admission_test.cpp (:22-84 CountingBackend overrides, :137-171 the two _request tests), tests/request_scope_test.cpp (fake backend overrides :802-826), tests/file_access_precedence_test.cpp (the four _request rejection pins :646-728 and the CountingBackend overrides), tests/progress_source_ownership_test.cpp (the three fake backends' forced virtuals :175-198, :360-383, :424-447 and the completion.hpp include at :2), tests/stackful_host_test.cpp (fake backend overrides :701-721), tests/backend_conformance_e1_test.cpp (Completion<std::size_t> at :519)",
       "owner": "F2",
       "downstream_gating_effect": "F2's seam contraction owns deleting these pins together with the seam; M keeps them as the compat contract's executable evidence.",
       "exit_condition": "F2 AsyncBackend seam contraction (submit_*(op, Completion<T>*) removal) with the admission accounting oracle re-derived and the E1 conformance matrix re-run against the re-typed surface.",
@@ -356,9 +356,13 @@
     "scope": "The last two tier-1-eligible AsyncIoContext consumers (c-x01-015 tests/file_access_precedence_test.cpp, c-x01-016 tests/progress_source_ownership_test.cpp), found by the Wave-5 independent review of the closeout; the compat _request pins and the forced backend virtuals move into T2-05.",
     "evidence": [
       "/tmp/m-residual-noliburing-release.log (50/50), /tmp/m-residual-noliburing-debug.log (50/50), /tmp/m-residual-liburing-release.log (64/64)",
-      "/tmp/m-residual-asan-file_access_precedence_test.log, /tmp/m-residual-asan-progress_source_ownership_test.log and the -liburing- variants (clean under ASan+UBSan in both profiles)",
+      "/tmp/m-residual-asan-file_access_precedence_test.log, /tmp/m-residual-asan-progress_source_ownership_test.log, /tmp/m-residual-asan-liburing-file_access_precedence_test.log, /tmp/m-residual-asan-liburing-progress_source_ownership_test.log and /tmp/m-residual-asan-liburing-progress_source_ownership_uring_test.log (clean under ASan+UBSan in both profiles, including the 13-test uring variant)",
       "/tmp/m-residual-f1-noliburing.json + /tmp/m-residual-f1-liburing.json (both frozen manifests reproduce at 1032317e, all gates PASS)",
       "release repeat runs, 30x each suite: 0 failures"
+    ],
+    "notes": [
+      "The five unconditional discard sites after a ready() observation fail-fast (SIGABRT) if the request were genuinely unsettled, where the old cell reset returned a clean FAIL: a diagnosability change of the adopted contract, not an oracle weakening.",
+      "The noliburing full-suite runs are intermittently red in untouched tests (threadpool_progress_race_test r4_worker_completion_signal_before_final_recheck_is_caught, 1/20 standalone; backend_conformance_e1_threadpool_test hanging in wait_gate_paused under the parallel xmake test); both files are byte-identical to base (667e17f8) and the behaviours reproduce on master."
     ]
   }
 }
