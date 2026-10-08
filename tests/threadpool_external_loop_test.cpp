@@ -1,5 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/batch.hpp>
+#include <sluice/async/completion.hpp>
 #include <sluice/async/op_helpers.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/result.hpp>
@@ -133,6 +134,18 @@ bool fd_readable(int fd) {
 }
 
 bool host_readable_sleep(AsyncIoContext& ctx, std::chrono::milliseconds budget);
+
+// Two cross-thread submission shapes observe carrier readiness before the
+// submitter hands the Request back; the adopted binding cannot express that
+// (its wake can be consumed before the handoff), so those sub-oracles keep the
+// compat cell.
+bool submit_zero_op_into(AsyncIoContext& ctx, Completion<std::size_t>& c) {
+    std::vector<std::byte> buffer(4, std::byte{0});
+    return ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                                  buffer.data(), 0, 0},
+                           c)
+        .has_value();
+}
 
 Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -310,8 +323,7 @@ bool external_poll_loop_threadpool_w03() {
         return false;
     w = std::move(w_submitted).value();
 
-    Request<std::size_t> late;
-    drain.track(late);
+    Completion<std::size_t> late;
     std::thread helper([&] {
         // Submit from application-observed state, not from the notification
         // fd: the host and this helper must not compete for the shared
@@ -321,7 +333,7 @@ bool external_poll_loop_threadpool_w03() {
                 break;
             std::this_thread::yield();
         }
-        late = submit_zero_op(ctx);
+        (void)submit_zero_op_into(ctx, late);
     });
     struct JoinOnExit {
         std::thread& t;
@@ -364,7 +376,7 @@ bool external_poll_loop_threadpool_w03() {
     r2.discard();
     r3.discard();
     w.discard();
-    late.discard();
+    late.reset();
     // Shutdown order: all accepted work settled, only then does the host
     // retire its registration and release the retained state. A retired
     // registration is gone (a second detach has nothing to retire), but the
@@ -531,14 +543,11 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
         return false;
 
     std::atomic<bool> acked{false};
-    Request<std::size_t> racing;
-    RequestPublicationDrain racing_drain{
-        [&host] { (void)host.acknowledge_and_drive(); }};
-    racing_drain.track(racing);
+    Completion<std::size_t> racing;
     std::thread signaler([&] {
         while (!acked.load(std::memory_order_acquire))
             std::this_thread::yield();
-        racing = submit_zero_op(ctx);
+        (void)submit_zero_op_into(ctx, racing);
     });
 
     // Acknowledge stale readiness (nothing pending here, so this is the
@@ -576,7 +585,7 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     }
 
     const bool ok = settled && racing.ready() && wakes <= 2;
-    racing.discard();
+    racing.reset();
     host.stop_and_detach();
     return ok;
 }
