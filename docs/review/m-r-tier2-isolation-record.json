@@ -1,0 +1,345 @@
+{
+  "record": "m-r-tier2-isolation-record",
+  "generated_utc": "2026-10-08T18:45:00+00:00",
+  "base_sha": "e23cc62d",
+  "verified_head": "7f5b113b",
+  "authority": [
+    "#459 M-R RULING Option A (comment 6055510469): tier-1 = reachable context-face test consumers retyped to the six submit_*/Request<T> spellings, attach_observer tests exempted, 5 zero-symbol includes deleted, B-02 wired; tier-2 = X-16 explicit policy-isolated pending F3; Batch retyping rides the F2 B-01 re-freeze batch; identity_of fallback dormant (B-05/D-17 -> F2).",
+    "#458 SS3.1/SS6/SS7 (adopted M1 decomposition, family authority): tier-1 executable surface named, tier-2 = X-16 policy isolation.",
+    "#402 M gate arm RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED: this record supplies the isolation half of the M-R disposition; the migration half is the tier-1 PR, and neither half declares the family gate closed by itself.",
+    "root MIG-02: caller-owned Completion = Compatibility only; no M window authorizes retiring it."
+  ],
+  "prohibitions_observed": [
+    "no completion deletion",
+    "no F2/F3/F4 contraction",
+    "no multi-worker->single-owner conversion",
+    "no unadopted canonical vectored I/O",
+    "no ADR-0003 adoption",
+    "no F1 frozen manifest edit"
+  ],
+  "items": [
+    {
+      "id": "T2-01",
+      "title": "X-16 await/waiter runtime surface",
+      "census_rows": [
+        "c-x16-001",
+        "c-x16-002",
+        "c-x16-003",
+        "c-x16-004",
+        "c-x16-005",
+        "c-x16-006",
+        "c-x16-007",
+        "c-x16-008",
+        "c-x16-009",
+        "c-x16-010",
+        "c-x16-015",
+        "c-x16-016",
+        "c-x16-017",
+        "c-x16-018",
+        "c-x16-019",
+        "c-x01-040"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A (tier-2 = X-16 explicit policy-isolated pending F3) + #402 gate arm RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED",
+      "reason": "The scheduler await/waiter face (await_completion_*, cancel_waiter, WaitRecord{const void* completion}, RuntimeTaskContext awaits, await_op_helpers, File await conveniences) has no adopted Request-typed spelling. Migrating it inside M would either introduce an unadopted runtime API (forbidden by #458 SS6/SS7 and the M prohibition on unadopted mechanisms) or require F3's runtime retirement, whose host decision is undecided (B-04: StackfulIoHost is ADR-0003 PROPOSED / D2 IMPLEMENTED_UNVERIFIED), and would force a multi-worker->single-owner conversion (forbidden in M).",
+      "surviving_behavior": "Every await/park/wake/cancel path keeps its current semantics: the waiter-observer protocol (tests/runtime_waiter_observer_test.cpp), the shutdown settlement oracles (tests/shutdown_lifecycle_test.cpp), the File await conveniences and all four app task bodies keep passing unchanged under both profiles and under ASan+UBSan.",
+      "exact_scope": "include/sluice/async/scheduler.hpp (await_completion_size/void, cancel_waiter x2, WaitRecord), src/async/scheduler_park_wake.cpp, include/sluice/async/application_runtime.hpp (RuntimeTaskContext awaits), src/async/application_runtime.cpp, include/sluice/async/fiber.hpp (CompletionWaitOutcome), include/sluice/async/await_op_helpers.hpp + src/async/await_op_helpers.cpp, include/sluice/async/file.hpp + src/async/file.cpp await_* conveniences, tests/runtime_waiter_observer_test.cpp, tests/explicit_file_ref_test.cpp, tests/file_read_test.cpp, tests/file_write_test.cpp, tests/uring_backend_smoke_test.cpp (ctx.await_completion transport)",
+      "owner": "F3",
+      "downstream_gating_effect": "No M consumer-migration claim asserts the runtime await face moved onto the adopted binding. F2's X-01 carrier retirement must not assume this face relocated; F3's node closure is a prerequisite for any retirement that removes await_completion(Completion&).",
+      "exit_condition": "Whichever F3 arm closes this node (re-typed await over Request<T>, or runtime-machinery retirement) AND the waiter-observer + shutdown + file-semantics oracles are re-proven against that arm, AND the B-04 host replacement decision is made through the root/ADR process.",
+      "evidence": [
+        "docs/review/m-consumer-edges.json X-16 rows (owner F3)",
+        "/tmp/m-ev-noliburing-release-test.log (50/50)",
+        "/tmp/m-ev-noliburing-debug-test.log (50/50)",
+        "/tmp/m-ev-liburing-release-test.log (64/64)",
+        "/tmp/m-ev-asan-test.log (50/50 asan+ubsan)"
+      ]
+    },
+    {
+      "id": "T2-02",
+      "title": "Core-cutover publication/observer oracles",
+      "census_rows": [
+        "c-x01-023",
+        "c-x01-026",
+        "c-x14-005"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A explicit exemption (attach_observer three tests keep the mixed spelling and the OBS delivery oracle) + census row role 'Completion carriers are the observed subject'",
+      "reason": "These oracles observe core slot phases and the publication epilogue, and the OBS delivery episode; the compat carrier's readiness flip at record.publish is itself one of the observed facts (the #466 finding: mid-epilogue visibility exists only on the compat face, the Request face observes only at complete_publication). Retyping the carriers inside M would silently move the observed boundary and could weaken the oracle.",
+      "surviving_behavior": "All 16 threadpool core-cutover tests and all 21 uring core-cutover tests pass unchanged, including the mutant kills for publication routing, deferred delivery, borrow retention and slot reuse.",
+      "exact_scope": "tests/threadpool_core_cutover_test.cpp (Completion locals :106,:135,:140,:148,:183,:230,:275,:311,:361,:405,:450,:471,:504,:528,:576,:617,:678,:731,:778,:789,:816; attach_observer at :621,:623,:653,:693,:742), tests/uring_core_cutover_test.cpp (Completion locals :232,:258,:263 and following; src/async/uring_test_seams.hpp hooks are the transport)",
+      "owner": "F2",
+      "downstream_gating_effect": "F2's publication-carrier retirement slice must re-derive these oracles over the canonical binding before any carrier contraction; assertion weakening is forbidden.",
+      "exit_condition": "F2 publication-seam contraction with an equivalent adopted-boundary oracle (observed at complete_publication or its replacement) that keeps every current mutant kill.",
+      "evidence": [
+        "#466 commit series on m/mr-tier1-exec",
+        "/tmp/m-ev-liburing-release-test.log (21 uring cutover + 16 threadpool cutover passed)",
+        "docs/review/m-consumer-edges.json rows c-x01-023/c-x01-026"
+      ]
+    },
+    {
+      "id": "T2-03",
+      "title": "Shutdown settlement oracle on caller-held carriers",
+      "census_rows": [
+        "c-x01-022"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A explicit exemption + census role 'subject is shutdown settlement with outstanding caller Completions - carrier lifetime is load-bearing'",
+      "reason": "The oracle's subject is the shutdown settlement of outstanding caller-held carriers (observer episode retirement, admission-closed attach refusal, reserve-window race). Its assertions read carrier state (ready/idle/result) and the observer registration status, which the adopted Request face does not express until the F2 observer/publication contraction.",
+      "surviving_behavior": "All shutdown lifecycle scenarios (drain, admission close, observer episode settle, reserve-window loss, uring variant) keep their outcomes; the suite passes in both profiles and under sanitizers.",
+      "exact_scope": "tests/shutdown_lifecycle_test.cpp Completion locals (:625,:667,:668,:714) and the attach_observer/close_admission/reserve-window scenarios",
+      "owner": "F2",
+      "downstream_gating_effect": "F2's observer/publication contraction must re-derive this oracle; no M claim treats the shutdown carrier path as migrated.",
+      "exit_condition": "F2 contraction of the observer registration/cancel_observer(Completion&) hinge (X-16 c-x16-008) with the shutdown oracles re-proven.",
+      "evidence": [
+        "/tmp/m-ev-noliburing-release-test.log",
+        "/tmp/m-ev-liburing-release-test.log (shutdown_lifecycle_test + shutdown_lifecycle_uring_test passed)"
+      ]
+    },
+    {
+      "id": "T2-04",
+      "title": "RequestHandle identity resolution and release-path oracle",
+      "census_rows": [
+        "c-x01-019",
+        "c-x02-002",
+        "c-x02-003",
+        "B-05"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A (identity_of fallback dormant; RequestHandle final spelling undecided per B-05/D-17, F2-owned) + #458 SS6",
+      "reason": "The file's subject is the compat RequestHandle identity provenance and the release path over a caller-owned carrier (submit_read_request + request_state + accepted_live reclamation). The RequestHandle final spelling is explicitly undecided (D-17) and the M rules forbid adjudicating it.",
+      "surviving_behavior": "Identity provenance, foreign-context rejection, empty-handle resolution, move-survival and released-identity non-resolution all keep their current outcomes; the fake backend overrides still observe the seam.",
+      "exact_scope": "tests/request_core_ownership_test.cpp (:2 completion.hpp include, :249-251 submit_read_request carrier, :354-357/:486-500 handle resolution, fake backend overrides :353-368)",
+      "owner": "F2",
+      "downstream_gating_effect": "The arena-field fallback removal and any RequestHandle re-spelling stay gated on F2's D-17 decision plus an identity oracle proving the core path suffices.",
+      "exit_condition": "F2 identity contraction (D-17 decided) with the ownership/release oracle re-derived over the canonical binding.",
+      "evidence": [
+        "docs/review/m-consumer-edges.json rows c-x01-019/c-x02-002/c-x02-003",
+        "/tmp/m-ev-*-test.log (request_core_ownership_test + uring variant passed in every profile)"
+      ]
+    },
+    {
+      "id": "T2-05",
+      "title": "Compat-spelling pins and the forced backend seam",
+      "census_rows": [
+        "c-x01-020",
+        "c-x01-030"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A (tier-1 covers reachable submit_*/Request<T> consumers; the compat spellings themselves stay until F2) + census role 'Completion only via forced virtual overrides - transport'",
+      "reason": "Two async_sync_admission tests exist to pin the submit_sync_data_request/submit_sync_all_request compat spelling, and both files' fake backends must implement the AsyncBackend pure virtuals that take Completion<T>* (the seam itself is the F2 retirement object). Retyping these would delete the compat pin rather than migrate a consumer.",
+      "surviving_behavior": "The compat _request spelling keeps its refusal-without-backend-entry semantics and caller-cell idle guarantee; the fake backend overrides keep compiling against the unchanged seam.",
+      "exact_scope": "tests/async_sync_admission_test.cpp (:35-72 CountingBackend overrides, :143-175 the two _request tests), tests/request_scope_test.cpp (fake backend overrides :803-815)",
+      "owner": "F2",
+      "downstream_gating_effect": "F2's seam contraction owns deleting these pins together with the seam; M keeps them as the compat contract's executable evidence.",
+      "exit_condition": "F2 AsyncBackend seam contraction (submit_*(op, Completion<T>*) removal) with the admission accounting oracle re-derived.",
+      "evidence": [
+        "/tmp/m-ev-noliburing-release-test.log",
+        "/tmp/m-ev-liburing-release-test.log (async_sync_admission_test, request_scope_test + uring variants passed)"
+      ]
+    },
+    {
+      "id": "T2-06",
+      "title": "Batch::Slot value carriers",
+      "census_rows": [
+        "c-x01-005",
+        "c-x01-006"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A ('Batch retyping rides the F2 B-01 re-freeze batch')",
+      "reason": "Batch::Slot holds Completion members by value (batch.hpp:56-68) and src/async/batch.cpp submits into them. Retyping Batch changes an installed header, which triggers the B-01 same-slice re-freeze of the F1 manifests - explicitly assigned to the F2 window, not M.",
+      "surviving_behavior": "Batch await/next/pending_count semantics and the batch health-failure oracle keep their outcomes (tests/threadpool_external_loop_test.cpp batch_await_stops_on_health_failure passed after the tier-1 retyping of its non-Batch carriers).",
+      "exact_scope": "include/sluice/async/batch.hpp (Slot::size_c/void_c), src/async/batch.cpp submit calls, consumers of Batch::Slot in tests",
+      "owner": "F2",
+      "downstream_gating_effect": "Any Batch retyping requires the F2 same-slice re-freeze (B-01); until then Batch keeps the compat carriers and the frozen package baseline stays truthful.",
+      "exit_condition": "F2 re-typing Batch over Request<T> together with the manifest re-freeze and the batch oracles re-run.",
+      "evidence": [
+        "docs/review/m-consumer-edges.json rows c-x01-005/c-x01-006",
+        "/tmp/m-ev-*-test.log (batch oracles passed; 79-header gate unchanged)"
+      ]
+    },
+    {
+      "id": "T2-07",
+      "title": "identity_of arena-field fallback (dormant)",
+      "census_rows": [
+        "c-x02-002",
+        "c-x02-003",
+        "c-x02-004",
+        "c-x02-005",
+        "c-x02-006"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "B-05 (owner F2) + #459 Option A ('identity_of fallback dormant, not touched')",
+      "reason": "The fallback is compiled but unreachable today (nothing installs arena bindings). B-05 records that its removal requires an identity oracle proving the core path suffices and the RequestHandle final spelling decided - both F2-owned.",
+      "surviving_behavior": "attach_observer/cancel_observer(Completion&) identity conversion and the submit_transaction binding install path behave exactly as before; observer contract oracles pass in both profiles.",
+      "exact_scope": "src/async/request_handle.cpp (:8-46 fallback), src/async/async_io_context.cpp (identity_of call sites), include/sluice/async/detail/submit_transaction.hpp, include/sluice/async/detail/request_slot.hpp",
+      "owner": "F2",
+      "downstream_gating_effect": "No M claim depends on removing the fallback; F2 owns the removal with its identity oracle.",
+      "exit_condition": "F2 identity contraction with the RequestHandle spelling decided and key-equivalence proven.",
+      "evidence": [
+        "docs/review/m-consumer-edges.json B-05",
+        "/tmp/m-ev-*-test.log (observer/publisher oracles passed unchanged)"
+      ]
+    },
+    {
+      "id": "T2-08",
+      "title": "App task carriers and await chains",
+      "census_rows": [
+        "c-x01-001",
+        "c-x01-002",
+        "c-x01-003",
+        "c-x01-004",
+        "c-x16-011",
+        "c-x16-012",
+        "c-x16-013",
+        "c-x16-014"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A + #458 SS6 (F2 typing window) + B-04 (host replacement undecided, F3)",
+      "reason": "All four app task bodies carry per-slot Completion state and compose the await conveniences. Any app retyping requires either the F2 typing window or the F3 await arm, and the replacement host (StackfulIoHost) is not adopted authority (ADR-0003 PROPOSED); a multi-worker->single-owner conversion is forbidden in M.",
+      "surviving_behavior": "The copy pipeline (Version B: bounded reusable buffers, pipeline depth, worker count), hash streaming, grep chunk scan and tail backward scan produce identical results; all four app consumption suites and the app smoke runs pass in both profiles.",
+      "exact_scope": "apps/sluice-copy/copy_task.cpp (:37-38 carriers, :55 sync carrier, CALL sites :65,:76,:87,:127,:274-305), apps/sluice-hash/hash_task.cpp (:43), apps/sluice-grep/grep_task.cpp (:45), apps/sluice-tail/tail_task.cpp (:112,:126,:139,:205,:233)",
+      "owner": "F2 (typing window) with F3 (await arm)",
+      "downstream_gating_effect": "The M family does not claim the app carriers migrated; F2's carrier retirement and F3's await closure each owe the app consumption suites plus the COPY-B/TAIL behaviour obligations below.",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites, the COPY-B pipeline behaviour and the TAIL scan behaviour re-proven in both profiles.",
+      "evidence": [
+        "/tmp/m-ev-*-test.log (app_copy/app_hash/app_grep/app_tail consumption suites passed in all profiles)",
+        "app smoke: sluice-copy --sync all byte-identical output, sluice-hash/grep/tail rc=0 in both profiles"
+      ]
+    },
+    {
+      "id": "T2-09",
+      "title": "F1 publication-epilogue compat sub-spelling",
+      "census_rows": [
+        "c-x01-025",
+        "c-x01-028"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#466 finding (recorded in the tier-1 commit series) + #459 boundary clause ('no F2 contraction authorized in M')",
+      "reason": "Both F1 publication oracles (f1_publication_pass_is_entry_bounded in the threadpool and uring progress-race suites) assert the mid-epilogue visibility of the cancelled entry, which exists only on the compat face (readiness flips at record.publish); the Request face observes only at complete_publication. The rest of each file is retyped to the adopted face; only this sub-assertion keeps the compat spelling.",
+      "surviving_behavior": "The F1 oracles keep their exact mutant kills (pass entry-boundedness, remaining-immediate-work reporting) and pass in both profiles; the surrounding consumers run on the adopted Request face.",
+      "exact_scope": "tests/threadpool_progress_race_test.cpp f1 test (Completion<std::size_t> a + .reset()), tests/uring_progress_race_test.cpp f1 test (local CompatPipeRead with Completion + cancel(Completion&)), plus R13's submit_read_request/request_key_for_test spelling in the threadpool file",
+      "owner": "F2",
+      "downstream_gating_effect": "F2's publication-seam contraction must either express the same boundary on the adopted face or retire the compat flip; assertion weakening is forbidden.",
+      "exit_condition": "F2 seam contraction with an adopted-face oracle for the mid-epilogue boundary.",
+      "evidence": [
+        "#466 commits 2219ecd6 / b89ad980 (finding recorded in the commit message)",
+        "/tmp/m-ev-liburing-release-test.log (21+21 progress-race oracles passed)"
+      ]
+    },
+    {
+      "id": "T2-10",
+      "title": "File-surface test carriers",
+      "census_rows": [
+        "c-x01-037",
+        "c-x01-038",
+        "c-x06-006",
+        "c-x06-008"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#459 Option A (F4-owned File surface untouched in M) + F4 conformance order",
+      "reason": "These carries ride the canonical File surface, which F4 owns (sluice/file.hpp contraction); retyping them now would create F4 work inside the M window and pre-empt F4's own oracle decisions.",
+      "surviving_behavior": "Semantic path probes and the semantic reference-case suite keep their outcomes. The two zero-symbol <sluice/file.hpp> includes named by c-x06-006/c-x06-008 were deleted by the tier-1 slice (#468, commit 7e8601c6) and are listed here only as their census provenance; the live carriers named in exact_scope are what remains isolated.",
+      "exact_scope": "tests/semantic_path_probes.hpp (:98,:108,:117,:129), tests/semantic_reference_case_test.cpp (:114,:119), tests/semantic_range_test.cpp (real FileReader consumer, F4)",
+      "owner": "F4",
+      "downstream_gating_effect": "F4's contraction slice owes these carriers; no M claim covers them.",
+      "exit_condition": "F4 File contraction with the semantic reference oracles re-run.",
+      "evidence": [
+        "/tmp/m-ev-*-test.log (semantic_* suites passed)",
+        "#466 commit 7e8601c6 (include deletions)"
+      ]
+    },
+    {
+      "id": "T2-11",
+      "title": "Installed-package consumer probes under the F1 freeze",
+      "census_rows": [
+        "c-x01-901",
+        "c-x16-015",
+        "B-01"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "B-01 (any installed-header content change requires the same-slice re-freeze) + #459 Option A",
+      "reason": "tests/package/consumers/contract_observer.cpp consumes the Completion-spelled observer face from the installed package, and the F1 manifests freeze that consumer set; retyping it would require a manifest re-freeze that belongs to the F2/F3/F4 contraction windows.",
+      "surviving_behavior": "The clean-room consumer probes keep passing against the installed package in both frozen profiles (verify_f1_package.py --check-frozen reproduced with all gates PASS at the current head).",
+      "exact_scope": "tests/package/consumers/contract_observer.cpp (:76,:96,:132,:166,:192), the P1/P2 consumer set in scripts/verify_f1_package.py, tests/package/consumers/w01_direct.cpp etc.",
+      "owner": "F2 (with the harness owner for re-freeze)",
+      "downstream_gating_effect": "Any change to these consumers must ship with the same-slice re-freeze; M keeps them frozen and reproducing.",
+      "exit_condition": "F2 contraction slice that re-freezes both manifests and updates the consumer probes together.",
+      "evidence": [
+        "/tmp/f1-check-noliburing.json (FROZEN_MANIFEST_REPRODUCED, all gates PASS at 888ccf2e)",
+        "/tmp/f1-check-liburing.json (same, P2 profile)"
+      ]
+    },
+    {
+      "id": "T2-12",
+      "title": "Cross-thread submission-observation carve-outs",
+      "census_rows": [
+        "c-x01-024"
+      ],
+      "isolation_state": "POLICY_ISOLATED",
+      "isolation_authority": "#466 finding (CI-caught regression, reproduced under CPU pinning) + the #459 boundary clause (no oracle re-shaping inside M)",
+      "reason": "Two sub-oracles submit from a helper thread and observe that submission's readiness from the host loop. That visibility is a compat-carrier property: the caller-owned cell is bound inside the submitting call, so the observing thread can see readiness, and the acceptance wake can be consumed, before the submitter hands anything back. The adopted responsibility travels with the returned Request, so the same loop shape can lose the wake and park to its watchdog. Retrying the migration at these two sites would mean re-shaping a §24 acceptance-shape oracle (an application-level handoff wait), which a test-only migration slice must not do silently.",
+      "surviving_behavior": "Both host-loop oracles keep their mutant kills (obligation discovery, bounded wakes, quiescence at an idle fd) and pass under CPU pinning and on the CI runner; every other consumer in the same file runs on the adopted Request face.",
+      "exact_scope": "tests/threadpool_external_loop_test.cpp: external_poll_loop_threadpool_w03 (`late`, submitted by the helper thread) and host_acknowledgement_racing_new_signal_never_strands (`racing`, submitted by the signaler thread), plus the compat helper submit_zero_op_into and the restored completion.hpp include",
+      "owner": "F2",
+      "downstream_gating_effect": "F2's carrier retirement must either publish an adopted cross-thread observation spelling or re-shape these two oracles explicitly and re-prove the acceptance shape; no M claim treats them as migrated.",
+      "exit_condition": "F2 carrier retirement with the two oracles re-derived over an adopted handoff spelling (or explicitly re-shaped, with the §24 acceptance-shape claim re-proved).",
+      "evidence": [
+        "pinned stress before the carve-out: the migrated spelling hard-aborted on the pinned host (one batch 25/25, retry 5/5) and produced the clean FAIL host_acknowledgement_racing_new_signal_never_strands under gdb; at unrestricted CPU counts the rate was lower (2-3 failures / 25 runs)",
+        "pinned stress after the carve-out: 0 failures (author 0/30; reviewer 0/10 at 89827e50 plus 0/20 at 7f5b113b)",
+        "master A/B: e23cc62d passes pinned (author 20/20, reviewer 10/10)",
+        "PR #468 CI release job named this test before the fix; CI run 37761311720 green after it"
+      ]
+    }
+  ],
+  "copy_b_tail_obligations": [
+    {
+      "id": "OB-1",
+      "subject": "COPY-B bounded reusable-buffer pipeline behaviour",
+      "obligation": "While the copy app's carriers stay isolated, the Version B pipeline must keep its observable behaviour: bounded buffer reuse, the configured pipeline depth and worker count, short-write handling and the reported counters (read_ops/write_ops/short_writes).",
+      "evidence": [
+        "tests/app_copy_consumption_test.cpp (10 scenarios) passed in every profile",
+        "app smoke: sluice-copy --sync all copied 37 bytes with byte-identical output in both profiles"
+      ],
+      "gating": "F2/F3 hands that retype the copy task owe this obligation again."
+    },
+    {
+      "id": "OB-2",
+      "subject": "Atomic output durability behaviour",
+      "obligation": "temp-file-in-destination + rename + directory fsync, with EINTR retried through the shared POSIX retry authority and a real error reported as a durability failure at stage dir_sync (exit 2 in the CLI).",
+      "evidence": [
+        "tests/app_copy_dir_fsync_test.cpp (4 scenarios; B-02 seam wired) passed in both profiles",
+        "mutant check: removing retry_on_eintr kills directory_fsync_eintr_is_retried_to_success"
+      ],
+      "gating": "The F4 X-13 posix_retry move owes this oracle unchanged."
+    },
+    {
+      "id": "OB-3",
+      "subject": "TAIL backward-scan behaviour",
+      "obligation": "tail -n semantics (last N lines, 0 = none, single-byte and window reads over the await chain) must stay identical while its await consumers remain isolated.",
+      "evidence": [
+        "tests/app_tail_consumption_test.cpp (5 scenarios) passed in every profile",
+        "app smoke: sluice-tail -n 1 returned the last line in both profiles"
+      ],
+      "gating": "F3's await arm owes this obligation again."
+    }
+  ],
+  "evidence_log": {
+    "noliburing_release": "/tmp/m-ev-noliburing-release-test.log (50/50 targets)",
+    "noliburing_debug": "/tmp/m-ev-noliburing-debug-test.log (50/50)",
+    "liburing_release_2_9_prefix": "/tmp/m-ev-liburing-release-test.log (64/64, LD_LIBRARY_PATH=/tmp/f1-deps/uring-prefix/lib)",
+    "asan_ubsan_noliburing": "/tmp/m-ev-asan-test.log (50/50)",
+    "asan_ubsan_liburing_migrated_suites": "7/7 suites pass",
+    "f1_frozen_noliburing": "/tmp/f1-check-noliburing.json (all gates PASS, reproduced at 888ccf2e)",
+    "f1_frozen_liburing": "/tmp/f1-check-liburing.json (all gates PASS, reproduced at 888ccf2e)",
+    "comment_authority": "scripts/test_check_cpp_comment_authority.py OK + scripts/check_cpp_comment_authority.py exit 0",
+    "f1_provenance_selftests": "scripts/test_verify_f1_frozen_provenance.py 10 tests OK",
+    "pinned_stress": "taskset -c 0 loops: threadpool_external_loop_test 0/30 after the carve-out (2-3/25 at the retyped spelling; master 20/20)",
+    "ci": "PR #468 Linux release job caught the cross-thread regression; the fix commit re-runs it",
+    "tier1_merge": "PR #468 merged as 9d1b5cc0 after independent review APPROVE (re-review of the delta), CI run 37761311720 green"
+  },
+  "merged_tier1": {
+    "pull_request": "#468",
+    "merge_commit": "9d1b5cc0"
+  }
+}
