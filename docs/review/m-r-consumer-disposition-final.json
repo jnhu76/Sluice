@@ -1,0 +1,921 @@
+{
+  "artifact": "m-r-consumer-disposition-final",
+  "generated_utc": "2026-10-08T14:36:07Z",
+  "census_source": "docs/review/m-consumer-edges.json (BASE_SHA c782099f, M0 snapshot; left unchanged)",
+  "tier2_source": "docs/review/m-r-tier2-isolation-record.json (as revised by this PR)",
+  "authority_provenance": {
+    "standing_authority": "#458 SS3.1 migrationStrategy + SS6 X-16 ruling + SS7 child-issue charter (adopted M1 decomposition, R2/R3-reviewed): tier-1 migrates the reachable context-face test consumers onto the six submit_*/Request<T> spellings with the attach_observer three-test exemption (SS3.1 blockers 5) and the five zero-symbol include deletions, wires B-02, defers Batch to the F2 B-01 re-freeze batch (blockers 6), keeps the identity_of fallback dormant (blockers 2); tier-2 = X-16 explicit policy isolation pending F3 (SS6).",
+    "option_a_role": "#459 comment 6055510469 packages that standing authority as the execution sequence Option A. Every action executed in #468/#469/#471 maps to an SS3.1/SS6 clause; Option B contradicted SS6 clause 2 and SS3.1 blockers 6, and Option C required unadopted faces, so Option A was the only packaging consistent with standing authority. Its selection was authority-neutral execution sequencing, not a new human ruling.",
+    "corrected_misattribution": "The #459 ruling comment's authorization-source paragraph cited the Execution Lead directive's conditional sentence together with the #458 orchestration comment (6055084231, which disclaims ruling status) as the authorization source. That sentence is prioritized execution advice from the repo owner, not a recorded authority ruling, and is no longer cited as authority.",
+    "ratification_status": "No GitHub artifact records the human authority owner explicitly ratifying the Option A record itself. The M-R claims in this overlay do not depend on that ratification: they stand on #458 SS3.1/SS6. An explicit confirmation comment on #459 by the authority owner would upgrade the chain to direct ratification (requested; optional, non-blocking)."
+  },
+  "dispositions": [
+    {
+      "consumer_id": "c-x01-001",
+      "census_path": "apps/sluice-copy/copy_task.cpp",
+      "subscope": "per-slot result carriers in the copy task body",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x01-002",
+      "census_path": "apps/sluice-hash/hash_task.cpp",
+      "subscope": "per-file read carrier in the hash task body",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x01-003",
+      "census_path": "apps/sluice-grep/grep_task.cpp",
+      "subscope": "per-file read carrier in the grep task body",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x01-004",
+      "census_path": "apps/sluice-tail/tail_task.cpp",
+      "subscope": "read carriers in the tail task body",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x01-005",
+      "census_path": "include/sluice/async/batch.hpp",
+      "subscope": "Batch::Slot value carriers (batch.hpp)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-06",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 Batch re-typing over Request<T> together with the B-01 same-slice manifest re-freeze and the batch oracles re-run (T2-06 exit)"
+    },
+    {
+      "consumer_id": "c-x01-006",
+      "census_path": "src/async/batch.cpp",
+      "subscope": "batch.cpp compat Completion& submissions",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-06",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 Batch re-typing over Request<T> together with the B-01 same-slice manifest re-freeze and the batch oracles re-run (T2-06 exit)"
+    },
+    {
+      "consumer_id": "c-x01-007",
+      "census_path": "include/sluice/async/async_io_context.hpp",
+      "subscope": "AsyncIoContext compat submission/cancel spellings (hub)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 X-01 carrier retirement: drop the Completion& overloads / Completion* seam (#458 SS3.1)"
+    },
+    {
+      "consumer_id": "c-x01-008",
+      "census_path": "include/sluice/async/op_helpers.hpp",
+      "subscope": "op_helpers.hpp one-step busy-poll helpers over the compat spelling",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 replaces the busy-poll helpers per root MIG-02 (:928)"
+    },
+    {
+      "consumer_id": "c-x01-009",
+      "census_path": "src/async/op_helpers.cpp",
+      "subscope": "op_helpers.cpp busy-poll producer into Completion locals",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 replaces the busy-poll helpers per root MIG-02 (:928)"
+    },
+    {
+      "consumer_id": "c-x01-010",
+      "census_path": "include/sluice/async/threadpool_backend.hpp",
+      "subscope": "threadpool backend vtable/cancel/test-key Completion spellings",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 AsyncBackend seam contraction (the same seam T2-05's exit names)"
+    },
+    {
+      "consumer_id": "c-x01-011",
+      "census_path": "src/async/threadpool_backend.cpp",
+      "subscope": "threadpool backend accept-path core-bind and publish into caller Completions",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 AsyncBackend seam contraction (the same seam T2-05's exit names)"
+    },
+    {
+      "consumer_id": "c-x01-012",
+      "census_path": "include/sluice/async/uring_backend.hpp",
+      "subscope": "uring backend vtable/cancel Completion spellings",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 AsyncBackend seam contraction (the same seam T2-05's exit names)"
+    },
+    {
+      "consumer_id": "c-x01-013",
+      "census_path": "src/async/uring_backend.cpp",
+      "subscope": "uring backend reap-path publish into caller Completions (stub + real)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 AsyncBackend seam contraction (the same seam T2-05's exit names)"
+    },
+    {
+      "consumer_id": "c-x01-019",
+      "census_path": "tests/request_core_ownership_test.cpp",
+      "subscope": "RequestHandle identity/release-path oracle carrier (submit_read_request)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-04",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with D-17 decided and the ownership/release oracle re-derived (T2-04 exit)"
+    },
+    {
+      "consumer_id": "c-x01-020",
+      "census_path": "tests/request_scope_test.cpp",
+      "subscope": "plain-spelling consumers retyped by tier-1",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 tier-1 retyping (merge 9d1b5cc0)"
+    },
+    {
+      "consumer_id": "c-x01-020",
+      "census_path": "tests/request_scope_test.cpp",
+      "subscope": "fake backend forced virtual overrides (:802-826) implementing the compat seam",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-05",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 AsyncBackend seam contraction (submit_*(op, Completion<T>*) removal) with the admission oracle re-derived and the E1 matrix re-run (T2-05 exit)"
+    },
+    {
+      "consumer_id": "c-x01-022",
+      "census_path": "tests/shutdown_lifecycle_test.cpp",
+      "subscope": "shutdown settlement oracle on caller-held carriers",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-03",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 observer registration/cancel hinge contraction with the shutdown oracles re-proven (T2-03 exit)"
+    },
+    {
+      "consumer_id": "c-x01-023",
+      "census_path": "tests/threadpool_core_cutover_test.cpp",
+      "subscope": "threadpool core-cutover publication oracle",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-02",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 publication-seam contraction with an equivalent adopted-boundary oracle keeping every mutant kill (T2-02 exit)"
+    },
+    {
+      "consumer_id": "c-x01-024",
+      "census_path": "tests/threadpool_external_loop_test.cpp",
+      "subscope": "plain-spelling consumers retyped by tier-1",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 tier-1 retyping (merge 9d1b5cc0)"
+    },
+    {
+      "consumer_id": "c-x01-024",
+      "census_path": "tests/threadpool_external_loop_test.cpp",
+      "subscope": "cross-thread submission-observation sub-oracles + submit_zero_op_into compat helper",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-12",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 carrier retirement with the two oracles re-derived over an adopted cross-thread handoff spelling, or explicitly re-shaped with the SS24 acceptance-shape claim re-proved (T2-12 exit)"
+    },
+    {
+      "consumer_id": "c-x01-024",
+      "census_path": "tests/threadpool_external_loop_test.cpp",
+      "subscope": "Batch-consumer scenarios reaching Batch::Slot compat carriers",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-06",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 Batch re-typing over Request<T> together with the B-01 same-slice manifest re-freeze and the batch oracles re-run (T2-06 exit)"
+    },
+    {
+      "consumer_id": "c-x01-025",
+      "census_path": "tests/threadpool_progress_race_test.cpp",
+      "subscope": "plain-spelling consumers retyped by tier-1",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 tier-1 retyping (merge 9d1b5cc0)"
+    },
+    {
+      "consumer_id": "c-x01-025",
+      "census_path": "tests/threadpool_progress_race_test.cpp",
+      "subscope": "F1 mid-epilogue visibility sub-assertion + R13 submit_read_request spelling",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-09",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 seam contraction with an adopted-face oracle for the mid-epilogue boundary (T2-09 exit)"
+    },
+    {
+      "consumer_id": "c-x01-026",
+      "census_path": "tests/uring_core_cutover_test.cpp",
+      "subscope": "uring core-cutover publication oracle",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-02",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 publication-seam contraction with an equivalent adopted-boundary oracle keeping every mutant kill (T2-02 exit)"
+    },
+    {
+      "consumer_id": "c-x01-027",
+      "census_path": "tests/uring_external_loop_test.cpp",
+      "subscope": "uring external-loop coalescing oracle consumers",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 tier-1 retyping (merge 9d1b5cc0)"
+    },
+    {
+      "consumer_id": "c-x01-028",
+      "census_path": "tests/uring_progress_race_test.cpp",
+      "subscope": "plain-spelling consumers retyped by tier-1",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 tier-1 retyping (merge 9d1b5cc0)"
+    },
+    {
+      "consumer_id": "c-x01-028",
+      "census_path": "tests/uring_progress_race_test.cpp",
+      "subscope": "F1 mid-epilogue CompatPipeRead sub-assertion + cancel(Completion&)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-09",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 seam contraction with an adopted-face oracle for the mid-epilogue boundary (T2-09 exit)"
+    },
+    {
+      "consumer_id": "c-x01-029",
+      "census_path": "tests/uring_registration_lifecycle_test.cpp",
+      "subscope": "uring registered-buffer lifecycle oracle consumers",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 tier-1 retyping (merge 9d1b5cc0)"
+    },
+    {
+      "consumer_id": "c-x01-030",
+      "census_path": "tests/async_sync_admission_test.cpp",
+      "subscope": "sync-admission _request rejection tests + forced backend overrides",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-05",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 AsyncBackend seam contraction (submit_*(op, Completion<T>*) removal) with the admission oracle re-derived and the E1 matrix re-run (T2-05 exit)"
+    },
+    {
+      "consumer_id": "c-x01-037",
+      "census_path": "tests/semantic_path_probes.hpp",
+      "subscope": "semantic path probe carriers (shared header)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-10",
+      "downstream_owner": "F4",
+      "exit_condition": "F4 File contraction with the semantic reference oracles re-run (T2-10 exit)"
+    },
+    {
+      "consumer_id": "c-x01-038",
+      "census_path": "tests/semantic_reference_case_test.cpp",
+      "subscope": "semantic reference-case carriers (holding vs noop)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-10",
+      "downstream_owner": "F4",
+      "exit_condition": "F4 File contraction with the semantic reference oracles re-run (T2-10 exit)"
+    },
+    {
+      "consumer_id": "c-x01-040",
+      "census_path": "tests/uring_backend_smoke_test.cpp",
+      "subscope": "uring backend smoke ctx.await_completion transport",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)"
+    },
+    {
+      "consumer_id": "c-x01-901",
+      "census_path": "tests/package/consumers/contract_observer.cpp",
+      "subscope": "installed-package contract_observer compat observer probe",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-11",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 contraction slice re-freezing both manifests together with the consumer probes (T2-11 exit)"
+    },
+    {
+      "consumer_id": "c-x02-001",
+      "census_path": "include/sluice/async/completion.hpp",
+      "subscope": "compat release-path arena binding as fallback release owner (R-07)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 arena/release substrate contraction (X-02); rides the same slice as T2-07's identity contraction"
+    },
+    {
+      "consumer_id": "c-x02-002",
+      "census_path": "src/async/request_handle.cpp",
+      "subscope": "identity_of dormant arena fallback (no arena binding installed)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-07",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with the RequestHandle spelling decided and key-equivalence proven (T2-07 exit)"
+    },
+    {
+      "consumer_id": "c-x02-002",
+      "census_path": "src/async/request_handle.cpp",
+      "subscope": "identity resolution reachable through the ownership oracle's compat carrier",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-04",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with D-17 decided and the ownership/release oracle re-derived (T2-04 exit)"
+    },
+    {
+      "consumer_id": "c-x02-003",
+      "census_path": "src/async/async_io_context.cpp",
+      "subscope": "identity_of dormant-fallback call sites (no arena binding installed)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-07",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with the RequestHandle spelling decided and key-equivalence proven (T2-07 exit)"
+    },
+    {
+      "consumer_id": "c-x02-003",
+      "census_path": "src/async/async_io_context.cpp",
+      "subscope": "identity_of call sites reachable through the ownership oracle's compat carrier",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-04",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with D-17 decided and the ownership/release oracle re-derived (T2-04 exit)"
+    },
+    {
+      "consumer_id": "c-x02-004",
+      "census_path": "include/sluice/async/async_io_context.hpp",
+      "subscope": "zero-caller RequestArena backend-facing helper",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-07",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with the RequestHandle spelling decided and key-equivalence proven (T2-07 exit)"
+    },
+    {
+      "consumer_id": "c-x02-005",
+      "census_path": "include/sluice/async/detail/submit_transaction.hpp",
+      "subscope": "submit_transaction legacy arena install path (zero consumers)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-07",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with the RequestHandle spelling decided and key-equivalence proven (T2-07 exit)"
+    },
+    {
+      "consumer_id": "c-x02-006",
+      "census_path": "include/sluice/async/detail/request_slot.hpp",
+      "subscope": "request_slot arena scan/publication substrate",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-07",
+      "downstream_owner": "F2",
+      "exit_condition": "F2 identity contraction with the RequestHandle spelling decided and key-equivalence proven (T2-07 exit)"
+    },
+    {
+      "consumer_id": "c-x04-001",
+      "census_path": "include/sluice/async/application_runtime.hpp",
+      "subscope": "runtime direct scheduler.hpp complete-type include",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x04-002",
+      "census_path": "include/sluice/async/application_runtime.hpp",
+      "subscope": "driver wake handle embedded by value in the public runtime class",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x04-003",
+      "census_path": "src/async/application_runtime.cpp",
+      "subscope": "runtime wait/cancel delegation to Scheduler methods",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x04-008",
+      "census_path": "tests/runtime_waiter_observer_test.cpp",
+      "subscope": "runtime waiter/observer publication oracle (ApplicationRuntime seam)",
+      "original_state": "COMPAT_TEST_RETAINED",
+      "final_disposition": "COMPAT_TEST_RETAINED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)"
+    },
+    {
+      "consumer_id": "c-x04-009",
+      "census_path": "include/sluice/async/task_result.hpp",
+      "subscope": "task_result blocking lifecycle entry anchoring the helper->runtime order",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x05-001",
+      "census_path": "include/sluice/async/await_op_helpers.hpp",
+      "subscope": "await_op_helpers installed-header helper family",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)"
+    },
+    {
+      "consumer_id": "c-x05-002",
+      "census_path": "src/async/await_op_helpers.cpp",
+      "subscope": "await_op_helpers runtime wait-path implementation",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)"
+    },
+    {
+      "consumer_id": "c-x05-010",
+      "census_path": "tests/runtime_waiter_observer_test.cpp",
+      "subscope": "runtime wait machinery oracle (helper is incidental transport)",
+      "original_state": "COMPAT_TEST_RETAINED",
+      "final_disposition": "COMPAT_TEST_RETAINED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)"
+    },
+    {
+      "consumer_id": "c-x06-004",
+      "census_path": "tests/public_request_test.cpp",
+      "subscope": "zero-symbol <sluice/file.hpp> include in public_request_test",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 commit 7e8601c6 (zero-symbol include deletion)",
+      "note": "T2-10 lists this id as the deletion's census provenance; no live consumer remains"
+    },
+    {
+      "consumer_id": "c-x06-005",
+      "census_path": "tests/public_request_release_violation_test.cpp",
+      "subscope": "zero-symbol <sluice/file.hpp> include in public_request_release_violation_test",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "MIGRATED",
+      "evidence_commit": "PR #468 commit 7e8601c6 (zero-symbol include deletion)",
+      "note": "T2-10 lists this id as the deletion's census provenance; no live consumer remains"
+    },
+    {
+      "consumer_id": "c-x06-006",
+      "census_path": "tests/request_core_ownership_test.cpp",
+      "subscope": "canonical File consumer in request_core_ownership_test",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-10",
+      "downstream_owner": "F4",
+      "exit_condition": "F4 File contraction with the semantic reference oracles re-run (T2-10 exit)"
+    },
+    {
+      "consumer_id": "c-x06-007",
+      "census_path": "tests/request_scope_test.cpp",
+      "subscope": "canonical File consumer in request_scope_test",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-10",
+      "downstream_owner": "F4",
+      "exit_condition": "F4 File contraction with the semantic reference oracles re-run (T2-10 exit)",
+      "note": "added to T2-10 census_rows by the overlay revision (the unit's file-surface scope already covered it)"
+    },
+    {
+      "consumer_id": "c-x06-008",
+      "census_path": "tests/shutdown_lifecycle_test.cpp",
+      "subscope": "canonical File consumer in shutdown_lifecycle_test",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-10",
+      "downstream_owner": "F4",
+      "exit_condition": "F4 File contraction with the semantic reference oracles re-run (T2-10 exit)"
+    },
+    {
+      "consumer_id": "c-x10-001",
+      "census_path": "README.md",
+      "subscope": "README retained-baseline framing of the compat public face",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "rewritten in the same F2 batch that retires the Completion face (DOC_CLAIM obligation, #458 SS3.1 migrationStrategy; qualified framing is gate-compliant meanwhile)"
+    },
+    {
+      "consumer_id": "c-x10-002",
+      "census_path": "README.zh-CN.md",
+      "subscope": "README.zh-CN mirror of the retained-baseline framing",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "rewritten together with README.md in the F2 retirement batch (bilingual pair moves in one batch)"
+    },
+    {
+      "consumer_id": "c-x11-001",
+      "census_path": "formal/tla/RequestCore.tla",
+      "subscope": "RequestCore.tla B1-1 lifecycle model correspondence",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "B-06 formal correspondence re-mapping in the F2 slice that moves the release substrate"
+    },
+    {
+      "consumer_id": "c-x11-002",
+      "census_path": "formal/tla/ObserverCore.tla",
+      "subscope": "ObserverCore.tla C1-H observer delivery model correspondence",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "B-06 re-mapping; the ObserverCore<->RuntimeTaskContext waiter-path correspondence rides the F3 slice that moves that face (#458 SS6 clause 4)"
+    },
+    {
+      "consumer_id": "c-x11-901",
+      "census_path": "formal/tla/RequestCore.tla",
+      "subscope": "RETAINED model release action mapped onto the compat release flavor",
+      "original_state": "COMPAT_TEST_RETAINED",
+      "final_disposition": "COMPAT_TEST_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "B-06 re-mapping when F2 moves the release substrate"
+    },
+    {
+      "consumer_id": "c-x15-001",
+      "census_path": "include/sluice/async/scheduler.hpp",
+      "subscope": "Scheduler ready-routing sink implementation",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x15-002",
+      "census_path": "src/async/scheduler.cpp",
+      "subscope": "runtime workers claim the canonical progress owner during run",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x15-003",
+      "census_path": "src/async/scheduler_test_access.hpp",
+      "subscope": "scheduler_test_access test transport (INTERNAL_TESTING only)",
+      "original_state": "COMPAT_TEST_RETAINED",
+      "final_disposition": "COMPAT_TEST_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "no M action owed; re-evaluated by the F3 arm that disposes the scheduler test surface"
+    },
+    {
+      "consumer_id": "c-x16-008",
+      "census_path": "src/async/async_io_context.cpp",
+      "subscope": "await registration Completion->identity conversion hinge (identity_of)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)",
+      "note": "T2-03's exit names this same hinge for the observer registration/cancel contraction"
+    },
+    {
+      "consumer_id": "c-x16-011",
+      "census_path": "apps/sluice-copy/copy_task.cpp",
+      "subscope": "copy pipeline worker-fiber parks on read/write/sync carriers",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x16-012",
+      "census_path": "apps/sluice-hash/hash_task.cpp",
+      "subscope": "hash scan-loop fiber parks per chunk",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x16-013",
+      "census_path": "apps/sluice-grep/grep_task.cpp",
+      "subscope": "grep chunk-loop fiber parks",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x16-014",
+      "census_path": "apps/sluice-tail/tail_task.cpp",
+      "subscope": "tail backward-scan fiber parks on single-byte/window reads",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-08",
+      "downstream_owner": "F2+F3",
+      "exit_condition": "F2/F3 arm closure with the app consumption suites and the COPY-B/TAIL behaviour obligations re-proven (T2-08 exit)"
+    },
+    {
+      "consumer_id": "c-x16-019",
+      "census_path": "tests/uring_backend_smoke_test.cpp",
+      "subscope": "uring smoke await-machinery transport",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "POLICY_ISOLATED",
+      "isolation_unit": "T2-01",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 arm closes the await/waiter node with the waiter/shutdown/file oracles re-proven and the B-04 host decision made (T2-01 exit)"
+    },
+    {
+      "consumer_id": "c-x17-001",
+      "census_path": "include/sluice/async/group.hpp",
+      "subscope": "group.hpp inline Fiber complete-type construction",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-002",
+      "census_path": "include/sluice/async/group.hpp",
+      "subscope": "Group evented path drives fibers through the Scheduler lifecycle",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-003",
+      "census_path": "include/sluice/async/async_mutex.hpp",
+      "subscope": "async_mutex Fiber vocabulary naming",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-004",
+      "census_path": "include/sluice/async/async_rwlock.hpp",
+      "subscope": "async_rwlock exposure-only Fiber include",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-005",
+      "census_path": "include/sluice/async/wait_node.hpp",
+      "subscope": "wait_node forward-declared Fiber pointer naming",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-006",
+      "census_path": "include/sluice/async/detail/select_port.hpp",
+      "subscope": "select_port suspending-fiber pointer recording",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-007",
+      "census_path": "include/sluice/async/condition.hpp",
+      "subscope": "condition.hpp dormant installed wait vocabulary (no in-repo consumer)",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition; the external-use risk rides the U-01/U-08 installed-surface policy (#458 SS3.2 blockers 2)"
+    },
+    {
+      "consumer_id": "c-x17-008",
+      "census_path": "src/async/application_runtime.cpp",
+      "subscope": "ApplicationRuntime as the only production Group consumer",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x17-009",
+      "census_path": "src/async/scheduler_mutex.cpp + src/async/scheduler_rwlock.cpp",
+      "subscope": "scheduler_mutex/rwlock machinery behind the Async vocabulary",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-x18-004",
+      "census_path": "apps/sluice-copy/README.md",
+      "subscope": "sluice-copy README Completion lifecycle discipline claim",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F2",
+      "exit_condition": "rewritten with F2's Completion contraction (doc obligation + semantic touchstone)"
+    },
+    {
+      "consumer_id": "c-new01-001",
+      "census_path": "include/sluice/async/evented_wait_policy.hpp",
+      "subscope": "evented_wait_policy installed-header scheduler exposure",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-new01-002",
+      "census_path": "src/async/group.cpp",
+      "subscope": "group.cpp evented constructor binding to the scheduler wake surface",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-new02-001",
+      "census_path": "src/async/fail_fast.cpp",
+      "subscope": "fail_fast.cpp fiber_ctx arch-support coupling",
+      "original_state": "UNMIGRATED",
+      "final_disposition": "DOWNSTREAM_MECHANISM_RETAINED",
+      "downstream_owner": "F3",
+      "exit_condition": "F3 runtime disposition after the B-04/D2 host ruling (#458 SS3.2/SS6)"
+    },
+    {
+      "consumer_id": "c-new02-902",
+      "census_path": "tests/package/consumers/w01_direct.cpp",
+      "subscope": "w01_direct arena firewall probe",
+      "original_state": "NOT_A_CONSUMER",
+      "final_disposition": "NOT_A_CONSUMER",
+      "note": "consumes no compat result surface; freeze-tracked by the T2-11 installed-probe set"
+    }
+  ],
+  "cross_family": {
+    "t2_census_rows_outside_mr": [
+      {
+        "reference": "c-x16-001",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-002",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-003",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-004",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-005",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-006",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-007",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-009",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x16-010",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x16-015",
+        "isolation_unit": "T2-01",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "c-x16-016",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x16-017",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x16-018",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x01-034",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x01-035",
+        "isolation_unit": "T2-01",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x14-005",
+        "isolation_unit": "T2-02",
+        "census_family": "aux"
+      },
+      {
+        "reference": "B-05",
+        "isolation_unit": "T2-04",
+        "census_family": "blocker-row (not a consumer id)"
+      },
+      {
+        "reference": "c-x01-014",
+        "isolation_unit": "T2-05",
+        "census_family": "aux"
+      },
+      {
+        "reference": "c-x01-015",
+        "isolation_unit": "T2-05",
+        "census_family": "M-F"
+      },
+      {
+        "reference": "c-x01-039",
+        "isolation_unit": "T2-05",
+        "census_family": "M-H"
+      },
+      {
+        "reference": "B-01",
+        "isolation_unit": "T2-11",
+        "census_family": "blocker-row (not a consumer id)"
+      }
+    ],
+    "executions_outside_mr_family": [
+      {
+        "consumer_id": "c-x01-015",
+        "census_family": "M-F",
+        "action": "plain-spelling submissions retyped onto the adopted face by PR #471 (merge 7f934e0f); the four _request rejection pins and the CountingBackend overrides stay compat evidence under T2-05"
+      },
+      {
+        "consumer_id": "c-x01-016",
+        "census_family": "aux",
+        "action": "plain-spelling submissions retyped onto the adopted face by PR #471 (merge 7f934e0f); the three fake backends' forced virtuals and the completion.hpp include stay under T2-05"
+      }
+    ],
+    "note": "The closeout's M-R delivery narrative cites PR #471's residual pair; mechanically they are census rows of the M-F and aux families, recorded here so the claim is recomputable."
+  },
+  "counts": {
+    "mr_census_rows": 75,
+    "consumer_ids_dispositioned": 75,
+    "subscope_entries": 82,
+    "by_disposition": {
+      "COMPAT_TEST_RETAINED": 4,
+      "DOWNSTREAM_MECHANISM_RETAINED": 31,
+      "MIGRATED": 8,
+      "NOT_A_CONSUMER": 1,
+      "POLICY_ISOLATED": 38
+    }
+  }
+}

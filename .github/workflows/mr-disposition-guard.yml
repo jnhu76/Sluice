@@ -1,0 +1,40 @@
+name: M-R disposition guard
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "docs/review/m-consumer-edges.json"
+      - "docs/review/m-r-*.json"
+      - "scripts/verify_mr_disposition.py"
+      - ".github/workflows/mr-disposition-guard.yml"
+  push:
+    branches:
+      - master
+    paths:
+      - "docs/review/m-consumer-edges.json"
+      - "docs/review/m-r-*.json"
+      - "scripts/verify_mr_disposition.py"
+      - ".github/workflows/mr-disposition-guard.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-disposition-overlay:
+    name: M-R consumer disposition overlay consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Verify census/overlay/tier-2 consistency
+        run: python3 scripts/verify_mr_disposition.py

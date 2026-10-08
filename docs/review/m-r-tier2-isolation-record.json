@@ -4,8 +4,8 @@
   "base_sha": "e23cc62d",
   "verified_head": "dad773c2",
   "authority": [
-    "#459 M-R RULING Option A (comment 6055510469): tier-1 = reachable context-face test consumers retyped to the six submit_*/Request<T> spellings, attach_observer tests exempted, 5 zero-symbol includes deleted, B-02 wired; tier-2 = X-16 explicit policy-isolated pending F3; Batch retyping rides the F2 B-01 re-freeze batch; identity_of fallback dormant (B-05/D-17 -> F2).",
-    "#458 SS3.1/SS6/SS7 (adopted M1 decomposition, family authority): tier-1 executable surface named, tier-2 = X-16 policy isolation.",
+    "#458 SS3.1 migrationStrategy + SS6 X-16 ruling + SS7 child-issue charter (adopted M1 decomposition, R2/R3-reviewed; the standing authority): tier-1 migrates the reachable context-face test consumers onto the six submit_*/Request<T> spellings with the attach_observer three-test exemption (SS3.1 blockers 5) and the five zero-symbol include deletions, wires B-02, defers Batch to the F2 B-01 re-freeze batch (blockers 6) and keeps the identity_of fallback dormant (blockers 2); tier-2 = X-16 explicit policy isolation pending F3 (SS6).",
+    "#459 M-R RULING Option A (comment 6055510469) is the execution-scope selection record that packages that standing authority, not an independent human ruling: Option B contradicted SS6 clause 2 and SS3.1 blockers 6, and Option C required unadopted faces, so Option A was the only packaging consistent with #458. The comment's authorization-source paragraph cited the Execution Lead directive's conditional sentence plus the #458 orchestration comment (6055084231, which disclaims ruling status); that sentence is prioritized execution advice and is no longer cited as authority (provenance correction recorded on #459 and in m-r-consumer-disposition-final.json).",
     "#402 M gate arm RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED: this record supplies the isolation half of the M-R disposition; the migration half is the tier-1 PR, and neither half declares the family gate closed by itself.",
     "root MIG-02: caller-owned Completion = Compatibility only; no M window authorizes retiring it."
   ],
@@ -39,10 +39,14 @@
         "c-x16-019",
         "c-x01-034",
         "c-x01-035",
-        "c-x01-040"
+        "c-x01-040",
+        "c-x04-008",
+        "c-x05-001",
+        "c-x05-002",
+        "c-x05-010"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A (tier-2 = X-16 explicit policy-isolated pending F3) + #402 gate arm RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED",
+      "isolation_authority": "#458 SS3.1 blockers 1 + SS6 clauses 1/3 (runtime face keeps compat in M; the arm choice is F3's) + #402 gate arm RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED; recorded by #459 Option A",
       "reason": "The scheduler await/waiter face (await_completion_*, cancel_waiter, WaitRecord{const void* completion}, RuntimeTaskContext awaits, await_op_helpers, File await conveniences) has no adopted Request-typed spelling. Migrating it inside M would either introduce an unadopted runtime API (forbidden by #458 SS6/SS7 and the M prohibition on unadopted mechanisms) or require F3's runtime retirement, whose host decision is undecided (B-04: StackfulIoHost is ADR-0003 PROPOSED / D2 IMPLEMENTED_UNVERIFIED), and would force a multi-worker->single-owner conversion (forbidden in M).",
       "surviving_behavior": "Every await/park/wake/cancel path keeps its current semantics: the waiter-observer protocol (tests/runtime_waiter_observer_test.cpp), the shutdown settlement oracles (tests/shutdown_lifecycle_test.cpp), the File await conveniences and all four app task bodies keep passing unchanged under both profiles and under ASan+UBSan.",
       "exact_scope": "include/sluice/async/scheduler.hpp (await_completion_size/void, cancel_waiter x2, WaitRecord), src/async/scheduler_park_wake.cpp, include/sluice/async/application_runtime.hpp (RuntimeTaskContext awaits), src/async/application_runtime.cpp, include/sluice/async/fiber.hpp (CompletionWaitOutcome), include/sluice/async/await_op_helpers.hpp + src/async/await_op_helpers.cpp, include/sluice/async/file.hpp + src/async/file.cpp await_* conveniences, tests/runtime_waiter_observer_test.cpp, tests/explicit_file_ref_test.cpp, tests/file_read_test.cpp, tests/file_write_test.cpp, tests/file_sync_data_test.cpp, tests/file_sync_all_test.cpp, tests/uring_backend_smoke_test.cpp (ctx.await_completion transport)",
@@ -66,7 +70,7 @@
         "c-x14-005"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A explicit exemption (attach_observer three tests keep the mixed spelling and the OBS delivery oracle) + census row role 'Completion carriers are the observed subject'",
+      "isolation_authority": "#458 SS3.1 blockers 5 (attach_observer three-test exemption; the OBS delivery oracle keeps the mixed spelling) + census row role 'Completion carriers are the observed subject'; recorded by #459 Option A",
       "reason": "These oracles observe core slot phases and the publication epilogue, and the OBS delivery episode; the compat carrier's readiness flip at record.publish is itself one of the observed facts (the #466 finding: mid-epilogue visibility exists only on the compat face, the Request face observes only at complete_publication). Retyping the carriers inside M would silently move the observed boundary and could weaken the oracle.",
       "surviving_behavior": "All 16 threadpool core-cutover oracles and all 21 uring core-cutover oracles pass unchanged in both profiles; the eight named uring mutation builds are each still killed (seven by their named failing assertions, one by the backend's protocol-unreachable invariant guard).",
       "exact_scope": "tests/threadpool_core_cutover_test.cpp (Completion locals :106,:135,:140,:148,:183,:230,:275,:311,:361,:405,:450,:471,:504,:528,:576,:617,:678,:731,:778,:789,:816; attach_observer at :621,:623,:653,:693,:742), tests/uring_core_cutover_test.cpp (Completion locals :232,:258,:263 and following; src/async/uring_test_seams.hpp hooks are the transport)",
@@ -88,7 +92,7 @@
         "c-x01-022"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A explicit exemption + census role 'subject is shutdown settlement with outstanding caller Completions - carrier lifetime is load-bearing'",
+      "isolation_authority": "#458 SS3.1 blockers 5 (observer-oracle exemption) + census role 'subject is shutdown settlement with outstanding caller Completions - carrier lifetime is load-bearing'; recorded by #459 Option A",
       "reason": "The oracle's subject is the shutdown settlement of outstanding caller-held carriers (observer episode retirement, admission-closed attach refusal, reserve-window race). Its assertions read carrier state (ready/idle/result) and the observer registration status, which the adopted Request face does not express until the F2 observer/publication contraction.",
       "surviving_behavior": "All shutdown lifecycle scenarios (drain, admission close, observer episode settle, reserve-window loss, uring variant) keep their outcomes; the suite passes in both profiles and under sanitizers.",
       "exact_scope": "tests/shutdown_lifecycle_test.cpp Completion locals (:624,:666,:667,:713) and the attach_observer/close_admission/reserve-window scenarios",
@@ -110,7 +114,7 @@
         "B-05"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A (identity_of fallback dormant; RequestHandle final spelling undecided per B-05/D-17, F2-owned) + #458 SS6",
+      "isolation_authority": "#458 SS3.1 blockers 2 (identity_of fallback dormant; RequestHandle final spelling undecided per B-05/D-17, F2-owned) + SS6; recorded by #459 Option A",
       "reason": "The file's subject is the compat RequestHandle identity provenance and the release path over a caller-owned carrier (submit_read_request + request_state + accepted_live reclamation). The RequestHandle final spelling is explicitly undecided (D-17) and the M rules forbid adjudicating it.",
       "surviving_behavior": "Identity provenance, foreign-context rejection, empty-handle resolution, move-survival and released-identity non-resolution all keep their current outcomes; the fake backend overrides still observe the seam.",
       "exact_scope": "tests/request_core_ownership_test.cpp (:2 completion.hpp include, :249-251 submit_read_request carrier, :354-357/:486-500 handle resolution, fake backend overrides :353-368)",
@@ -133,7 +137,7 @@
         "c-x01-039"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A (tier-1 covers reachable submit_*/Request<T> consumers; the compat spellings themselves stay until F2) + census role 'Completion only via forced virtual overrides - transport'",
+      "isolation_authority": "#458 SS3.1 migrationStrategy tier-1 boundary (reachable consumers only; the compat spellings themselves and the forced seam stay until F2) + census role 'Completion only via forced virtual overrides - transport'; recorded by #459 Option A",
       "reason": "The remaining compat uses in these files are the spellings themselves, not reachable consumers: the four submit_read_request/submit_write_request rejection pins in file_access_precedence_test, the fake backends that must implement the AsyncBackend pure virtuals taking Completion<T>* (the seam is the F2 retirement object), and the E1 conformance oracle whose subject is the submission/publication contract spelled over the compat carrier. Retyping these would delete the pin rather than migrate a consumer. The plain-spelling consumers of file_access_precedence_test and progress_source_ownership_test were retyped by #471.",
       "surviving_behavior": "The compat _request spelling keeps its refusal-without-backend-entry semantics and caller-cell idle guarantee; the fake backend overrides keep compiling against the unchanged seam; the E1 conformance matrix keeps judging the compat spellings.",
       "exact_scope": "tests/async_sync_admission_test.cpp (:22-84 CountingBackend overrides, :137-171 the two _request tests), tests/request_scope_test.cpp (fake backend overrides :802-826), tests/file_access_precedence_test.cpp (the four _request rejection pins :646-728 and the CountingBackend overrides), tests/progress_source_ownership_test.cpp (the three fake backends' forced virtuals :175-198, :360-383, :424-447 and the completion.hpp include at :2), tests/stackful_host_test.cpp (fake backend overrides :701-721), tests/backend_conformance_e1_test.cpp (Completion<std::size_t> at :519)",
@@ -151,10 +155,11 @@
       "title": "Batch::Slot value carriers",
       "census_rows": [
         "c-x01-005",
-        "c-x01-006"
+        "c-x01-006",
+        "c-x01-024"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A ('Batch retyping rides the F2 B-01 re-freeze batch')",
+      "isolation_authority": "#458 SS3.1 blockers 6 + SS6 clause 2 ('Batch retyping rides the F2 B-01 re-freeze batch'); recorded by #459 Option A",
       "reason": "Batch::Slot holds Completion members by value (batch.hpp:56-68) and src/async/batch.cpp submits into them. Retyping Batch changes an installed header, which triggers the B-01 same-slice re-freeze of the F1 manifests - explicitly assigned to the F2 window, not M.",
       "surviving_behavior": "Batch await/next/pending_count semantics and the batch health-failure oracle keep their outcomes (tests/threadpool_external_loop_test.cpp batch_await_stops_on_health_failure passed after the tier-1 retyping of its non-Batch carriers).",
       "exact_scope": "include/sluice/async/batch.hpp (Slot::size_c/void_c), src/async/batch.cpp submit calls, consumers of Batch::Slot in tests",
@@ -177,7 +182,7 @@
         "c-x02-006"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "B-05 (owner F2) + #459 Option A ('identity_of fallback dormant, not touched')",
+      "isolation_authority": "B-05 (owner F2) + #458 SS3.1 blockers 2 (identity_of fallback dormant, not touched); recorded by #459 Option A",
       "reason": "The fallback is compiled but unreachable today (nothing installs arena bindings). B-05 records that its removal requires an identity oracle proving the core path suffices and the RequestHandle final spelling decided - both F2-owned.",
       "surviving_behavior": "attach_observer/cancel_observer(Completion&) identity conversion and the submit_transaction binding install path behave exactly as before; observer contract oracles pass in both profiles.",
       "exact_scope": "src/async/request_handle.cpp (:8-46 fallback), src/async/async_io_context.cpp (identity_of call sites), include/sluice/async/detail/submit_transaction.hpp, include/sluice/async/detail/request_slot.hpp",
@@ -203,7 +208,7 @@
         "c-x16-014"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A + #458 SS6 (F2 typing window) + B-04 (host replacement undecided, F3)",
+      "isolation_authority": "#458 SS3.1 blockers 1 + SS6 clauses 1/2 (runtime tier explicitly isolated pending F3; F2 typing window) + B-04 (host replacement undecided, F3); recorded by #459 Option A",
       "reason": "All four app task bodies carry per-slot Completion state and compose the await conveniences. Any app retyping requires either the F2 typing window or the F3 await arm, and the replacement host (StackfulIoHost) is not adopted authority (ADR-0003 PROPOSED); a multi-worker->single-owner conversion is forbidden in M.",
       "surviving_behavior": "The copy pipeline (Version B: bounded reusable buffers, pipeline depth, worker count), hash streaming, grep chunk scan and tail backward scan produce identical results; all four app consumption suites and the app smoke runs pass in both profiles.",
       "exact_scope": "apps/sluice-copy/copy_task.cpp (:37-38 carriers, :55 sync carrier, CALL sites :65,:76,:87,:127,:274-305), apps/sluice-hash/hash_task.cpp (:43), apps/sluice-grep/grep_task.cpp (:45), apps/sluice-tail/tail_task.cpp (:112,:126,:139,:205,:233)",
@@ -223,7 +228,7 @@
         "c-x01-028"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#466 finding (recorded in the tier-1 commit series) + #459 boundary clause ('no F2 contraction authorized in M')",
+      "isolation_authority": "#466 finding (recorded in the tier-1 commit series) + #458 SS6 clause 2 boundary (context-level tier only; no oracle re-shaping inside M); recorded by #459 Option A",
       "reason": "Both F1 publication oracles (f1_publication_pass_is_entry_bounded in the threadpool and uring progress-race suites) assert the mid-epilogue visibility of the cancelled entry, which exists only on the compat face (readiness flips at record.publish); the Request face observes only at complete_publication. The rest of each file is retyped to the adopted face; only this sub-assertion keeps the compat spelling.",
       "surviving_behavior": "The F1 oracles keep their exact mutant kills (pass entry-boundedness, remaining-immediate-work reporting) and pass in both profiles; the surrounding consumers run on the adopted Request face.",
       "exact_scope": "tests/threadpool_progress_race_test.cpp f1 test (Completion<std::size_t> a + .reset()), tests/uring_progress_race_test.cpp f1 test (local CompatPipeRead with Completion + cancel(Completion&)), plus R13's submit_read_request/request_key_for_test spelling in the threadpool file",
@@ -244,10 +249,11 @@
         "c-x06-004",
         "c-x06-005",
         "c-x06-006",
+        "c-x06-007",
         "c-x06-008"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#459 Option A (F4-owned File surface untouched in M) + F4 conformance order",
+      "isolation_authority": "#458 SS3.3/SS7 (the M-F family owns the File surface; the F4 execution arm) + F4 conformance order; recorded by #459 Option A",
       "reason": "These carries ride the canonical File surface, which F4 owns (sluice/file.hpp contraction); retyping them now would create F4 work inside the M window and pre-empt F4's own oracle decisions.",
       "surviving_behavior": "Semantic path probes and the semantic reference-case suite keep their outcomes. The five zero-symbol <sluice/file.hpp> includes named by c-x06-004..008 were deleted by the tier-1 slice (#468, commit 7e8601c6); rows c-x06-004/005 (public_request_test, public_request_release_violation_test) are listed here only as that deletion's census provenance because no live compat consumer remains in those files. The live carriers named in exact_scope are what remains isolated.",
       "exact_scope": "tests/semantic_path_probes.hpp (:98,:108,:117,:129), tests/semantic_reference_case_test.cpp (:114,:119), tests/semantic_range_test.cpp (real FileReader consumer, F4)",
@@ -267,7 +273,7 @@
         "B-01"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "B-01 (any installed-header content change requires the same-slice re-freeze) + #459 Option A",
+      "isolation_authority": "B-01 (any installed-header content change requires the same-slice re-freeze; #458 SS3.1 exposureCounts R2) recorded by #459 Option A",
       "reason": "tests/package/consumers/contract_observer.cpp consumes the Completion-spelled observer face from the installed package, and the F1 manifests freeze that consumer set; retyping it would require a manifest re-freeze that belongs to the F2/F3/F4 contraction windows.",
       "surviving_behavior": "The clean-room consumer probes keep passing against the installed package in both frozen profiles (verify_f1_package.py --check-frozen reproduced with all gates PASS at the current head).",
       "exact_scope": "tests/package/consumers/contract_observer.cpp (:76,:96,:132,:166,:192), the P1/P2 consumer set in scripts/verify_f1_package.py, tests/package/consumers/w01_direct.cpp etc.",
@@ -287,7 +293,7 @@
         "c-x01-024"
       ],
       "isolation_state": "POLICY_ISOLATED",
-      "isolation_authority": "#466 finding (CI-caught regression, reproduced under CPU pinning) + the #459 boundary clause (no oracle re-shaping inside M)",
+      "isolation_authority": "#466 finding (CI-caught regression, reproduced under CPU pinning) + #458 SS6 clause 2 boundary (no oracle re-shaping inside M); recorded by #459 Option A",
       "reason": "Two sub-oracles submit from a helper thread and observe that submission's readiness from the host loop. That visibility is a compat-carrier property: the caller-owned cell is bound inside the submitting call, so the observing thread can see readiness, and the acceptance wake can be consumed, before the submitter hands anything back. The adopted responsibility travels with the returned Request, so the same loop shape can lose the wake and park to its watchdog. Retrying the migration at these two sites would mean re-shaping a §24 acceptance-shape oracle (an application-level handoff wait), which a test-only migration slice must not do silently.",
       "surviving_behavior": "Both host-loop oracles keep their mutant kills (obligation discovery, bounded wakes, quiescence at an idle fd) and pass under CPU pinning and on the CI runner; every other consumer in the same file runs on the adopted Request face.",
       "exact_scope": "tests/threadpool_external_loop_test.cpp: external_poll_loop_threadpool_w03 (`late`, submitted by the helper thread) and host_acknowledgement_racing_new_signal_never_strands (`racing`, submitted by the signaler thread), plus the compat helper submit_zero_op_into and the restored completion.hpp include",
@@ -367,5 +373,17 @@
       "The five unconditional discard sites after a ready() observation fail-fast (SIGABRT) if the request were genuinely unsettled, where the old cell reset returned a clean FAIL: a diagnosability change of the adopted contract, not an oracle weakening.",
       "The noliburing full-suite runs are intermittently red in untouched tests (threadpool_progress_race_test r4_worker_completion_signal_before_final_recheck_is_caught, 1/20 standalone; backend_conformance_e1_threadpool_test hanging in wait_gate_paused under the parallel xmake test); both files are byte-identical to base (667e17f8) and the behaviours reproduce on master."
     ]
+  },
+  "disposition_projection_revision": {
+    "pull_request": "__OVERLAY_PR__",
+    "generated_utc": "2026-10-08T14:36:07Z",
+    "scope": "post-merge review of the closeout (e23cc62d..ffb5afa8) returned REQUEST_REVISIONS with two P1s: the #459 Option A authorization-source paragraph and the absence of an independently recomputable final consumer-state projection. This revision corrects the provenance chain (authority array above; per-item isolation_authority re-anchored to #458 SS3.1/SS6) and adds the projection artifact m-r-consumer-disposition-final.json with its mechanical validator scripts/verify_mr_disposition.py (CI: the mr-disposition-guard workflow).",
+    "census_rows_extensions": {
+      "T2-01": ["c-x04-008", "c-x05-001", "c-x05-002", "c-x05-010"],
+      "T2-06": ["c-x01-024"],
+      "T2-10": ["c-x06-007"]
+    },
+    "extension_rationale": "six M-R census rows whose files the units' exact_scope already named but whose ids census_rows omitted; with the extension every M-R row is either dispositioned in the overlay without a unit or a member of exactly the units that carry it (validator-checked, both directions)",
+    "validator_result": "75/75 M-R census rows dispositioned over 82 subscope entries; 0 unexplained records; 0 subscopes counted both migrated and isolated; 21 cross-family census_rows references reported"
   }
 }
