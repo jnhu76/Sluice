@@ -1,5 +1,4 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -100,15 +99,26 @@ bool attachment_registers_kernel_notification_once() {
         ::lseek(fd, 0, SEEK_SET);
 
         std::vector<std::byte> buffer(32, std::byte{0});
-        Completion<std::size_t> c;
-        if (!ctx
-                 .submit_read(ReadOp{NativeFileRef(fd, sluice::FileAccess::read_only),
-                                     buffer.data(), buffer.size(), 0},
-                              c)
-                 .has_value()) {
+        Request<std::size_t> c;
+        auto read_submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(fd, sluice::FileAccess::read_only),
+                                   buffer.data(), buffer.size(), 0});
+        if (!read_submitted.has_value()) {
             ::close(fd);
             return false;
         }
+        c = std::move(read_submitted).value();
+        // The public binding forbids nonterminal release: a defect exit drains
+        // the in-flight read to publication before the binding goes.
+        struct RequestPublicationDrain {
+            AsyncIoContext& ctx;
+            Request<std::size_t>& request;
+            ~RequestPublicationDrain() {
+                for (int i = 0; i < 200000 && request.valid() && !request.ready(); ++i)
+                    (void)ctx.poll();
+                request.discard();
+            }
+        } drain{ctx, c};
         // Dispatching accepted work is the driver's obligation; run the
         // submission pass, then the registered eventfd must carry the kernel
         // completion to the context fd. The submitting pass can also be the
@@ -130,7 +140,7 @@ bool attachment_registers_kernel_notification_once() {
                 : 0;
         if (!woken || !waited.has_value() || driven + waited_completed != 1 || !c.ready())
             return false;
-        c.reset();
+        c.discard();
         ctx.detach_progress_host();
     }
     // Teardown order: unregister runs once while the ring still exists, before

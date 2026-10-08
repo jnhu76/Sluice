@@ -135,13 +135,76 @@ bool fd_readable(int fd) {
 
 bool host_readable_sleep(AsyncIoContext& ctx, std::chrono::milliseconds budget);
 
-bool submit_zero_op(AsyncIoContext& ctx, Completion<std::size_t>& c) {
+// Two cross-thread submission shapes observe carrier readiness before the
+// submitter hands the Request back; the adopted binding cannot express that
+// (its wake can be consumed before the handoff), so those sub-oracles keep the
+// compat cell.
+bool submit_zero_op_into(AsyncIoContext& ctx, Completion<std::size_t>& c) {
     std::vector<std::byte> buffer(4, std::byte{0});
     return ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
                                   buffer.data(), 0, 0},
                            c)
         .has_value();
 }
+
+Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               buffer.data(), 0, 0});
+    if (!submitted.has_value())
+        return {};
+    return std::move(submitted).value();
+}
+
+// The public Request binding fail-fasts on a nonterminal release, so a
+// test-local binding that may still be in flight is drained to publication
+// before it is released. Driving goes through the test's own progress-owner
+// path (a pass from a foreign thread is rejected) and is bounded: an
+// unpublishable binding reaches discard() as a contract violation instead of
+// hanging the test.
+template <class Drive> struct RequestPublicationDrain {
+    explicit RequestPublicationDrain(Drive drive) : drive_(drive) {}
+
+    void track(Request<std::size_t>& request) { held_.push_back(&request); }
+    void track(std::vector<Request<std::size_t>>& requests) {
+        for (Request<std::size_t>& request : requests)
+            held_.push_back(&request);
+    }
+    void release_owner_before_draining(std::optional<ProgressOwner>* owner) { owner_ = owner; }
+
+    ~RequestPublicationDrain() {
+        if (owner_ != nullptr)
+            owner_->reset();
+        for (Request<std::size_t>* request : held_) {
+            for (int i = 0; i < kDrainAttempts && request->valid() && !request->ready(); ++i)
+                drive_();
+            request->discard();
+        }
+    }
+
+  private:
+    static constexpr int kDrainAttempts = 200000;
+    Drive drive_;
+    std::optional<ProgressOwner>* owner_ = nullptr;
+    std::vector<Request<std::size_t>*> held_;
+};
+
+// Releases a paused worker gate at scope exit so a drain in a later-declared
+// guard can reach publication; the explicit release mid-test is idempotent
+// with this one.
+struct WorkerGateReleaseOnExit {
+    ThreadPoolBackend* backend = nullptr;
+    ThreadPoolBackend::WorkerClaimedPauseGate* gate = nullptr;
+    ~WorkerGateReleaseOnExit() {
+        if (backend != nullptr)
+            backend->set_worker_claimed_pause_gate(nullptr);
+        if (gate != nullptr) {
+            gate->resume.store(true, std::memory_order_release);
+            gate->resume.notify_all();
+        }
+    }
+};
 
 // Each violating scenario runs in its own forked child, freshly constructed
 // after the fork, so the parent never holds a violating object and the
@@ -184,13 +247,22 @@ bool external_poll_loop_threadpool_w03() {
     std::vector<std::byte> r2buf(64, std::byte{0});
     std::vector<std::byte> r3buf(64, std::byte{0});
     std::vector<std::byte> wbuf(32, std::byte{'b'});
-    Completion<std::size_t> r1, r2, r3, w;
+    Request<std::size_t> r1, r2, r3, w;
+    Request<std::size_t> z1, z2, z3;
+    RequestPublicationDrain drain{[&host] { (void)host.acknowledge_and_drive(); }};
+    drain.track(r1);
+    drain.track(r2);
+    drain.track(r3);
+    drain.track(w);
+    drain.track(z1);
+    drain.track(z2);
+    drain.track(z3);
 
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r1buf.data(),
-                                r1buf.size(), 0},
-                         r1)
-             .has_value())
+    auto r1_submitted = ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only),
+                                               r1buf.data(), r1buf.size(), 0});
+    if (!r1_submitted.has_value())
         return false;
+    r1 = std::move(r1_submitted).value();
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     const std::size_t phase_a = host.acknowledge_and_drive();
@@ -221,8 +293,10 @@ bool external_poll_loop_threadpool_w03() {
     if (fd_readable(host.nfd()))
         return false;
 
-    Completion<std::size_t> z1, z2, z3;
-    if (!submit_zero_op(ctx, z1) || !submit_zero_op(ctx, z2) || !submit_zero_op(ctx, z3))
+    z1 = submit_zero_op(ctx);
+    z2 = submit_zero_op(ctx);
+    z3 = submit_zero_op(ctx);
+    if (!z1.valid() || !z2.valid() || !z3.valid())
         return false;
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
@@ -230,25 +304,25 @@ bool external_poll_loop_threadpool_w03() {
         return false;
     if (!z1.ready() || !z2.ready() || !z3.ready())
         return false;
-    z1.reset();
-    z2.reset();
-    z3.reset();
+    z1.discard();
+    z2.discard();
+    z3.discard();
 
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r2buf.data(),
-                                r2buf.size(), 16},
-                         r2)
-             .has_value())
+    auto r2_submitted = ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only),
+                                               r2buf.data(), r2buf.size(), 16});
+    if (!r2_submitted.has_value())
         return false;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only), r3buf.data(),
-                                r3buf.size(), 64},
-                         r3)
-             .has_value())
+    r2 = std::move(r2_submitted).value();
+    auto r3_submitted = ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only),
+                                               r3buf.data(), r3buf.size(), 64});
+    if (!r3_submitted.has_value())
         return false;
-    if (!ctx.submit_write(WriteOp{NativeFileRef(sink, FileAccess::read_write), wbuf.data(),
-                                  wbuf.size(), 0},
-                          w)
-             .has_value())
+    r3 = std::move(r3_submitted).value();
+    auto w_submitted = ctx.submit_write(
+        WriteOp{NativeFileRef(sink, FileAccess::read_write), wbuf.data(), wbuf.size(), 0});
+    if (!w_submitted.has_value())
         return false;
+    w = std::move(w_submitted).value();
 
     Completion<std::size_t> late;
     std::thread helper([&] {
@@ -260,7 +334,7 @@ bool external_poll_loop_threadpool_w03() {
                 break;
             std::this_thread::yield();
         }
-        (void)submit_zero_op(ctx, late);
+        (void)submit_zero_op_into(ctx, late);
     });
     struct JoinOnExit {
         std::thread& t;
@@ -299,10 +373,10 @@ bool external_poll_loop_threadpool_w03() {
         return false;
 
     const bool settled = r1.ready() && r2.ready() && r3.ready() && w.ready() && late.ready();
-    r1.reset();
-    r2.reset();
-    r3.reset();
-    w.reset();
+    r1.discard();
+    r2.discard();
+    r3.discard();
+    w.discard();
     late.reset();
     // Shutdown order: all accepted work settled, only then does the host
     // retire its registration and release the retained state. A retired
@@ -327,21 +401,28 @@ bool coalesced_signals_delivered_through_one_wake() {
     if (!host.pinned())
         return false;
 
-    Completion<std::size_t> warm;
-    if (!submit_zero_op(ctx, warm))
+    Request<std::size_t> warm = submit_zero_op(ctx);
+    RequestPublicationDrain warm_drain{
+        [&host] { (void)host.acknowledge_and_drive(); }};
+    warm_drain.track(warm);
+    if (!warm.valid())
         return false;
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 1)
         return false;
-    warm.reset();
+    warm.discard();
     if (fd_readable(host.nfd()))
         return false;
 
     constexpr int kCoalesced = 5;
-    std::vector<Completion<std::size_t>> zeros(kCoalesced);
-    for (int i = 0; i < kCoalesced; ++i) {
-        if (!submit_zero_op(ctx, zeros[static_cast<std::size_t>(i)]))
+    std::vector<Request<std::size_t>> zeros(kCoalesced);
+    RequestPublicationDrain zeros_drain{
+        [&host] { (void)host.acknowledge_and_drive(); }};
+    zeros_drain.track(zeros);
+    for (Request<std::size_t>& zero : zeros) {
+        zero = submit_zero_op(ctx);
+        if (!zero.valid())
             return false;
     }
 
@@ -353,7 +434,7 @@ bool coalesced_signals_delivered_through_one_wake() {
     bool ok = !fd_readable(host.nfd());
     for (auto& z : zeros) {
         ok = ok && z.ready();
-        z.reset();
+        z.discard();
     }
     host.stop_and_detach();
     return ok;
@@ -384,18 +465,20 @@ bool spurious_wake_is_harmless_and_completions_survive() {
 
     std::vector<std::byte> buf(32, std::byte{0});
     const int fd = temp_file_fd(std::string(64, 'c'));
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only), buf.data(), buf.size(), 0},
-                         c)
-             .has_value())
+    auto c_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(fd, FileAccess::read_only), buf.data(), buf.size(), 0});
+    if (!c_submitted.has_value())
         return false;
+    Request<std::size_t> c = std::move(c_submitted).value();
+    RequestPublicationDrain drain{[&host] { (void)host.acknowledge_and_drive(); }};
+    drain.track(c);
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 1)
         return false;
 
     const bool ok = c.ready();
-    c.reset();
+    c.discard();
     host.stop_and_detach();
     return ok;
 }
@@ -413,8 +496,10 @@ bool saturated_notification_preserves_wake() {
     if (!fd_readable(host.nfd()))
         return false;
 
-    Completion<std::size_t> zero;
-    if (!submit_zero_op(ctx, zero))
+    Request<std::size_t> zero = submit_zero_op(ctx);
+    RequestPublicationDrain drain{[&host] { (void)host.acknowledge_and_drive(); }};
+    drain.track(zero);
+    if (!zero.valid())
         return false;
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
@@ -422,7 +507,7 @@ bool saturated_notification_preserves_wake() {
         return false;
     if (!zero.ready())
         return false;
-    zero.reset();
+    zero.discard();
 
     if (fd_readable(host.nfd()))
         return false;
@@ -445,14 +530,16 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     if (!host.pinned())
         return false;
 
-    Completion<std::size_t> warm;
-    if (!submit_zero_op(ctx, warm))
+    Request<std::size_t> warm = submit_zero_op(ctx);
+    RequestPublicationDrain drain{[&host] { (void)host.acknowledge_and_drive(); }};
+    drain.track(warm);
+    if (!warm.valid())
         return false;
     if (!host.wait_readable(std::chrono::milliseconds{5000}))
         return false;
     if (host.acknowledge_and_drive() != 1)
         return false;
-    warm.reset();
+    warm.discard();
     if (fd_readable(host.nfd()))
         return false;
 
@@ -461,7 +548,7 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     std::thread signaler([&] {
         while (!acked.load(std::memory_order_acquire))
             std::this_thread::yield();
-        (void)submit_zero_op(ctx, racing);
+        (void)submit_zero_op_into(ctx, racing);
     });
 
     // Acknowledge stale readiness (nothing pending here, so this is the
@@ -516,16 +603,20 @@ bool host_stop_settle_detach_retires_registration() {
         return false;
 
     std::vector<std::byte> buf(32, std::byte{0});
-    Completion<std::size_t> a, b;
-    if (!submit_zero_op(ctx, a) || !submit_zero_op(ctx, b))
+    Request<std::size_t> a = submit_zero_op(ctx);
+    Request<std::size_t> b = submit_zero_op(ctx);
+    RequestPublicationDrain drain{[&host] { (void)host.acknowledge_and_drive(); }};
+    drain.track(a);
+    drain.track(b);
+    if (!a.valid() || !b.valid())
         return false;
     while (!a.ready() || !b.ready()) {
         if (!host.wait_readable(std::chrono::milliseconds{5000}))
             return false;
         host.acknowledge_and_drive();
     }
-    a.reset();
-    b.reset();
+    a.discard();
+    b.discard();
     // Discharge the delayed control/reclaim obligations of the settled
     // zero-op requests before retiring the registration.
     for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
@@ -627,6 +718,10 @@ bool pinned_context_rejects_foreign_drivers() {
     if (ctx.claim_progress_owner().has_value())
         return false;
 
+    Request<std::size_t> foreign_completion;
+    RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
+    drain.track(foreign_completion);
+    drain.release_owner_before_draining(&owner);
     std::atomic<bool> foreign_drive_rejected{false};
     std::atomic<bool> foreign_wait_rejected{false};
     std::atomic<bool> foreign_submit_accepted{false};
@@ -639,12 +734,10 @@ bool pinned_context_rejects_foreign_drivers() {
         foreign_wait_rejected.store(!wr.has_value() &&
                                         wr.error().code == sluice::IoError::Code::invalid_state,
                                     std::memory_order_release);
-        Completion<std::size_t> c;
-        foreign_submit_accepted.store(submit_zero_op(ctx, c), std::memory_order_release);
-        if (foreign_submit_accepted.load(std::memory_order_acquire)) {
-            // Submission stays legal, but the submitter is not the driver: it
-            // must not consume or reset the completion while the owner drives.
-        }
+        // Submission stays legal, but the submitter is not the driver: it
+        // must not consume the request while the owner drives.
+        foreign_completion = submit_zero_op(ctx);
+        foreign_submit_accepted.store(foreign_completion.valid(), std::memory_order_release);
     });
     foreign.join();
 
@@ -695,11 +788,15 @@ bool deadline_expiry_does_not_cancel_or_settle() {
 
     const int fd = temp_file_fd(std::string(64, 'd'));
     std::vector<std::byte> buf(32, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only), buf.data(), buf.size(), 0},
-                         c)
-             .has_value())
+    auto c_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(fd, FileAccess::read_only), buf.data(), buf.size(), 0});
+    if (!c_submitted.has_value())
         return false;
+    Request<std::size_t> c = std::move(c_submitted).value();
+    RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
+    drain.track(c);
+    drain.release_owner_before_draining(&owner);
+    WorkerGateReleaseOnExit gate_release{raw, &gate};
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     const auto first = ctx.wait_one(std::chrono::milliseconds{100});
@@ -719,7 +816,7 @@ bool deadline_expiry_does_not_cancel_or_settle() {
         second.value().completed != 1)
         return false;
     const bool ready = c.ready();
-    c.reset();
+    c.discard();
     return ready;
 }
 
@@ -863,12 +960,14 @@ bool batch_await_stops_on_health_failure() {
     const int fd = temp_file_fd(std::string(64, 'h'));
     std::vector<std::byte> held_buf(32, std::byte{0});
     std::vector<std::byte> batch_buf(32, std::byte{0});
-    Completion<std::size_t> held;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only), held_buf.data(),
-                                held_buf.size(), 0},
-                         held)
-             .has_value())
+    auto held_submitted = ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only),
+                                                 held_buf.data(), held_buf.size(), 0});
+    if (!held_submitted.has_value())
         return false;
+    Request<std::size_t> held = std::move(held_submitted).value();
+    RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
+    drain.track(held);
+    WorkerGateReleaseOnExit gate_release{raw, &gate};
     while (!gate.paused.load(std::memory_order_acquire))
         std::this_thread::yield();
 
@@ -901,7 +1000,7 @@ bool batch_await_stops_on_health_failure() {
     while (batch.next().has_value()) {
     }
 
-    held.reset();
+    held.discard();
     return surfaced_as_error && retired && harvested.has_value() && harvested.value() == 1 &&
            batch.pending_count() == 0;
 }
@@ -918,11 +1017,14 @@ bool competing_concurrent_drives_cannot_both_succeed() {
 
     const int fd = temp_file_fd(std::string(64, 'e'));
     std::vector<std::byte> buf(32, std::byte{0});
-    Completion<std::size_t> c;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only), buf.data(), buf.size(), 0},
-                         c)
-             .has_value())
+    auto c_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(fd, FileAccess::read_only), buf.data(), buf.size(), 0});
+    if (!c_submitted.has_value())
         return false;
+    Request<std::size_t> c = std::move(c_submitted).value();
+    RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
+    drain.track(c);
+    WorkerGateReleaseOnExit gate_release{raw, &gate};
 
     // Thread A holds the drive domain inside a blocked wait_one; thread B's
     // wait_one and poll_progress must both be rejected.
@@ -949,7 +1051,7 @@ bool competing_concurrent_drives_cannot_both_succeed() {
 
     const bool ok = b_rejected && a_result.has_value() &&
                     a_result->kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress;
-    c.reset();
+    c.discard();
     return ok;
 }
 
@@ -984,14 +1086,17 @@ bool nested_drive_from_delivery_hook_is_rejected() {
     } probe(ctx);
     ctx.set_ready_sink(&probe);
 
-    Completion<std::size_t> c;
-    if (!submit_zero_op(ctx, c))
+    Request<std::size_t> c = submit_zero_op(ctx);
+    RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
+    drain.track(c);
+    drain.release_owner_before_draining(&owner);
+    if (!c.valid())
         return false;
     const auto pass = ctx.poll_progress();
     ctx.set_ready_sink(nullptr);
 
     const bool ok = pass.has_value() && pass.value().completed == 1 && probe.nested_rejected();
-    c.reset();
+    c.discard();
     owner.reset();
     return ok;
 }
@@ -1008,6 +1113,9 @@ bool first_drive_attaches_a_fixed_owner() {
     if (!self_pass.has_value())
         return false;
 
+    Request<std::size_t> foreign_completion;
+    RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
+    drain.track(foreign_completion);
     std::atomic<bool> foreign_drive_rejected{false};
     std::atomic<bool> foreign_wait_rejected{false};
     std::atomic<bool> foreign_submit_accepted{false};
@@ -1020,9 +1128,8 @@ bool first_drive_attaches_a_fixed_owner() {
         foreign_wait_rejected.store(!wr.has_value() &&
                                         wr.error().code == sluice::IoError::Code::invalid_state,
                                     std::memory_order_release);
-        Completion<std::size_t> c;
-        foreign_submit_accepted.store(submit_zero_op(ctx, c), std::memory_order_release);
-        c.reset();
+        foreign_completion = submit_zero_op(ctx);
+        foreign_submit_accepted.store(foreign_completion.valid(), std::memory_order_release);
     });
     foreign.join();
 

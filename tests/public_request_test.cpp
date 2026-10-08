@@ -1,9 +1,7 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
-#include <sluice/file.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 

@@ -85,7 +85,7 @@ bool wait_counter_reaches(const std::atomic<int>& v, int expected) {
 struct BlockedPipeRead {
     int r = -1;
     int w = -1;
-    Completion<std::size_t> completion;
+    Request<std::size_t> request;
     std::vector<std::byte> buffer;
 
     bool arm(AsyncIoContext& ctx, std::size_t bytes) {
@@ -95,11 +95,13 @@ struct BlockedPipeRead {
         r = fds[0];
         w = fds[1];
         buffer.assign(bytes, std::byte{0});
-        return ctx
-            .submit_read(ReadOp{NativeFileRef(r, sluice::FileAccess::read_only), buffer.data(),
-                                buffer.size(), 0},
-                         completion)
-            .has_value();
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(r, sluice::FileAccess::read_only), buffer.data(),
+                                   buffer.size(), 0});
+        if (!submitted.has_value())
+            return false;
+        request = std::move(submitted).value();
+        return true;
     }
 
     void release_bytes(std::size_t n) {
@@ -115,6 +117,35 @@ struct BlockedPipeRead {
             ::close(w);
         r = -1;
         w = -1;
+    }
+};
+
+// The public Request binding forbids nonterminal release, and a pipe-blocked
+// read never publishes until its pipe is written: a body abandoning in-flight
+// work on a failure path must unblock its tracked reads, drive every held
+// request to publication, and release the bindings before the enclosing scope
+// destroys the request storage. Declared after everything it tracks, so it is
+// destroyed first.
+struct RequestPublicationDrain {
+    AsyncIoContext& ctx;
+    std::vector<BlockedPipeRead*> pipes;
+    std::vector<Request<std::size_t>*> held;
+    explicit RequestPublicationDrain(AsyncIoContext& c) : ctx(c) {}
+    void track_pipe(BlockedPipeRead& p) { pipes.push_back(&p); }
+    void track(std::vector<BlockedPipeRead>& ps) {
+        for (auto& p : ps)
+            pipes.push_back(&p);
+    }
+    void track(Request<std::size_t>& r) { held.push_back(&r); }
+    static constexpr int kDrainAttempts = 200000;
+    ~RequestPublicationDrain() {
+        for (BlockedPipeRead* p : pipes)
+            p->release_bytes(1);
+        for (Request<std::size_t>* r : held) {
+            for (int i = 0; i < kDrainAttempts && r->valid() && !r->ready(); ++i)
+                (void)ctx.poll();
+            r->discard();
+        }
     }
 };
 
@@ -175,6 +206,9 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -197,8 +231,8 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = is_progress(driver.value, 1) && prepark.load() == 1 &&
-                    driver.elapsed_ms < 1000 && read.completion.ready();
-    read.completion.reset();
+                    driver.elapsed_ms < 1000 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -212,6 +246,9 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -234,15 +271,15 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
     resume_gate(gate);
     if (!wait_counter_reaches(prepark, 2))
         return false;
-    const bool no_fabrication = !read.completion.ready();
+    const bool no_fabrication = !read.request.ready();
 
     read.release_bytes(1);
     owner.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = no_fabrication && is_progress(result, 1) &&
-                    prepark.load() == 2 && read.completion.ready();
-    read.completion.reset();
+                    prepark.load() == 2 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -255,6 +292,9 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -276,8 +316,8 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = is_progress(result, 1) && prepark.load() == 1 &&
-                    read.completion.ready();
-    read.completion.reset();
+                    read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -290,6 +330,9 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
     auto backend = std::make_unique<UringAsyncBackend>();
     AsyncIoContext ctx(std::move(backend));
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -306,8 +349,8 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = is_progress(driver.value, 1) &&
-                    driver.elapsed_ms < 1000 && prepark.load() == 1 && read.completion.ready();
-    read.completion.reset();
+                    driver.elapsed_ms < 1000 && prepark.load() == 1 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -322,6 +365,8 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
     HostInterest interest(ctx);
     constexpr int kCoalesced = 4;
     std::vector<BlockedPipeRead> reads(kCoalesced);
+    RequestPublicationDrain drain{ctx};
+    drain.track(reads);
     for (auto& r : reads) {
         if (!r.arm(ctx, 4))
             return false;
@@ -349,8 +394,8 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
     bool ok = is_progress(result, static_cast<std::size_t>(kCoalesced)) &&
               prepark.load() == 1;
     for (auto& r : reads) {
-        ok = ok && r.completion.ready();
-        r.completion.reset();
+        ok = ok && r.request.ready();
+        r.request.discard();
         r.close_pipe();
     }
     return ok;
@@ -364,6 +409,9 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -381,15 +429,15 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
         return false;
     if (!wait_counter_reaches(prepark, 2))
         return false;
-    const bool no_fabrication = !read.completion.ready();
+    const bool no_fabrication = !read.request.ready();
 
     read.release_bytes(1);
     owner.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = no_fabrication && is_progress(result, 1) &&
-                    prepark.load() == 2 && read.completion.ready();
-    read.completion.reset();
+                    prepark.load() == 2 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -403,6 +451,9 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -428,11 +479,11 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     // observation); the sticky control is not erased by that reap and the
     // next wait observes it instead of parking.
     const bool progress_first = is_progress(result, 1) && prepark.load() == 0 &&
-                                read.completion.ready();
-    read.completion.reset();
+                                read.request.ready();
+    read.request.discard();
     const auto observed = wait_one_value(ctx, std::chrono::milliseconds{8000});
     const bool ok = progress_first && is_control(observed);
-    read.completion.reset();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -446,6 +497,9 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -471,11 +525,11 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
     // fabricating an extra completion; the sticky control survives the reap
     // and the next wait observes it instead of parking.
     const bool progress_first = is_progress(result, 1) && prepark.load() == 1 &&
-                                read.completion.ready();
-    read.completion.reset();
+                                read.request.ready();
+    read.request.discard();
     const auto observed = wait_one_value(ctx, std::chrono::milliseconds{8000});
     const bool ok = progress_first && is_control(observed);
-    read.completion.reset();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -489,6 +543,9 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -511,8 +568,8 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = is_progress(driver.value, 1) && prepark.load() == 1 &&
-                    driver.elapsed_ms < 1000 && read.completion.ready();
-    read.completion.reset();
+                    driver.elapsed_ms < 1000 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -525,6 +582,9 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -549,8 +609,8 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = drained_before_release && is_progress(result, 1) &&
-                    prepark.load() == 2 && read.completion.ready();
-    read.completion.reset();
+                    prepark.load() == 2 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -562,6 +622,9 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
     auto backend = std::make_unique<UringAsyncBackend>();
     AsyncIoContext ctx(std::move(backend));
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -585,8 +648,8 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = is_progress(result, 1) && prepark.load() == 1 &&
-                    read.completion.ready();
-    read.completion.reset();
+                    read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -600,6 +663,8 @@ bool k13_cq_overflow_completions_are_not_stranded() {
     HostInterest interest(ctx);
     constexpr int kOverflowed = 3;
     std::vector<BlockedPipeRead> reads(kOverflowed);
+    RequestPublicationDrain drain{ctx};
+    drain.track(reads);
     for (auto& r : reads) {
         if (!r.arm(ctx, 4))
             return false;
@@ -632,8 +697,8 @@ bool k13_cq_overflow_completions_are_not_stranded() {
 
     bool all_ready = true;
     for (auto& r : reads) {
-        all_ready = all_ready && r.completion.ready();
-        r.completion.reset();
+        all_ready = all_ready && r.request.ready();
+        r.request.discard();
         r.close_pipe();
     }
     return all_ready && delivered == kOverflowed;
@@ -662,6 +727,9 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     AsyncIoContext ctx(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -692,8 +760,8 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
     const bool ok = peer_rejected && is_progress(driver.value, 1) &&
-                    driver.elapsed_ms < 1000 && read.completion.ready();
-    read.completion.reset();
+                    driver.elapsed_ms < 1000 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -713,6 +781,8 @@ bool poison_transition_wakes_parked_owner() {
     AsyncIoContext ctx(std::move(backend));
 
     std::vector<BlockedPipeRead> blocked(2);
+    RequestPublicationDrain drain{ctx};
+    drain.track(blocked);
     for (auto& r : blocked) {
         if (!r.arm(ctx, 4))
             return false;
@@ -726,22 +796,23 @@ bool poison_transition_wakes_parked_owner() {
     if (!wait_counter_reaches(prepark, 1))
         return false;
 
-    Completion<std::size_t> poisoned;
     std::vector<std::byte> sink(4, std::byte{0});
     state.fail_next.store(true, std::memory_order_release);
-    const bool poisoned_accepted =
+    auto poisoned_submitted =
         ctx.submit_read(ReadOp{NativeFileRef(blocked[0].r, sluice::FileAccess::read_only),
-                               sink.data(), sink.size(), 0},
-                        poisoned)
-            .has_value();
+                               sink.data(), sink.size(), 0});
+    const bool poisoned_accepted = poisoned_submitted.has_value();
+    auto poisoned = poisoned_submitted.has_value() ? std::move(poisoned_submitted).value()
+                                                   : Request<std::size_t>{};
 
     owner.join();
     ctx.set_progress_prepark_counter_for_test(nullptr);
 
+    const auto poisoned_observation = poisoned.try_result();
     const bool poisoned_failed_with_backend_error =
-        poisoned.ready() && !poisoned.result().has_value() &&
-        poisoned.result().error().code == IoError::Code::backend_error;
-    poisoned.reset();
+        poisoned.ready() && !poisoned_observation.result.has_value() &&
+        poisoned_observation.result.error().code == IoError::Code::backend_error;
+    poisoned.discard();
 
     const bool ok = poisoned_accepted && poisoned_failed_with_backend_error &&
                     is_progress(driver.value, 1) &&
@@ -753,12 +824,12 @@ bool poison_transition_wakes_parked_owner() {
         r.release_bytes(1);
     bool all_retired = true;
     for (auto& r : blocked) {
-        for (int i = 0; i < 2000 && !r.completion.ready(); ++i) {
+        for (int i = 0; i < 2000 && !r.request.ready(); ++i) {
             (void)ctx.poll_progress();
             std::this_thread::sleep_for(std::chrono::microseconds(200));
         }
-        all_retired = all_retired && r.completion.ready();
-        r.completion.reset();
+        all_retired = all_retired && r.request.ready();
+        r.request.discard();
         r.close_pipe();
     }
     return ok && all_retired;
@@ -796,6 +867,9 @@ bool u2_k15_retryable_submit_failure_does_not_strand_owner() {
     // submit is the first transport attempt.
     state.fail.store(true, std::memory_order_release);
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -813,8 +887,8 @@ bool u2_k15_retryable_submit_failure_does_not_strand_owner() {
 
     const bool ok = state.calls.load(std::memory_order_relaxed) >= 2 &&
                     is_progress(driver.value, 1) &&
-                    driver.elapsed_ms < 1000 && read.completion.ready();
-    read.completion.reset();
+                    driver.elapsed_ms < 1000 && read.request.ready();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -847,6 +921,11 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
     wait_gate_paused(gate);
 
     BlockedPipeRead second;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(first);
+    drain.track(first.request);
+    drain.track_pipe(second);
+    drain.track(second.request);
     if (!second.arm(ctx, 4))
         return false;
     const bool peer_acceptance_entered_kernel = backend_ptr->sq_ready_for_test() == 0;
@@ -857,19 +936,19 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
     resume_gate(gate);
     owner.join();
 
-    bool all_ready = first.completion.ready() && second.completion.ready();
+    bool all_ready = first.request.ready() && second.request.ready();
     for (int i = 0; i < 2000 && !all_ready; ++i) {
         (void)ctx.poll_progress();
         std::this_thread::sleep_for(std::chrono::microseconds(200));
-        all_ready = first.completion.ready() && second.completion.ready();
+        all_ready = first.request.ready() && second.request.ready();
     }
     const bool ok = peer_acceptance_entered_kernel &&
                     driver.value.has_value() &&
                     driver.value->kind == WaitKind::progress && driver.value->completed >= 1 &&
                     driver.elapsed_ms < 1000 && all_ready;
-    first.completion.reset();
+    first.request.discard();
     first.close_pipe();
-    second.completion.reset();
+    second.request.discard();
     second.close_pipe();
     return ok;
 }
@@ -903,6 +982,8 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     AsyncIoContext ctx(std::move(backend));
 
     std::vector<BlockedPipeRead> reads(3);
+    RequestPublicationDrain drain{ctx};
+    drain.track(reads);
     for (auto& r : reads) {
         if (!r.arm(ctx, 4))
             return false;
@@ -953,30 +1034,29 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     const std::string one_byte(1, 'p');
     const ssize_t probe_wrote = ::write(probe_fds[1], one_byte.data(), 1);
     (void)probe_wrote;
-    Completion<std::size_t> probe;
-    const bool health_visible =
-        !ctx.submit_read(
-                 ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
-                        sink.size(), 0},
-                 probe)
-             .has_value();
+    auto probe_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
+               sink.size(), 0});
+    const bool health_visible = !probe_submitted.has_value();
+    Request<std::size_t> probe =
+        probe_submitted.has_value() ? std::move(probe_submitted).value() : Request<std::size_t>{};
     for (int i = 0; !health_visible && i < 20000 && !probe.ready(); ++i) {
         (void)ctx.poll_progress();
         std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
-    probe.reset();
+    probe.discard();
     ::close(probe_fds[0]);
     ::close(probe_fds[1]);
 
     state.fail.store(false, std::memory_order_release);
     bool all_retired = true;
     for (auto& r : reads) {
-        for (int i = 0; i < 20000 && !r.completion.ready(); ++i) {
+        for (int i = 0; i < 20000 && !r.request.ready(); ++i) {
             (void)ctx.poll_progress();
             std::this_thread::sleep_for(std::chrono::microseconds{200});
         }
-        all_retired = all_retired && r.completion.ready();
-        r.completion.reset();
+        all_retired = all_retired && r.request.ready();
+        r.request.discard();
         r.close_pipe();
     }
     return first_wait_ok && health_visible && all_retired;
@@ -1000,6 +1080,8 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     AsyncIoContext ctx(std::move(backend));
 
     std::vector<BlockedPipeRead> reads(4);
+    RequestPublicationDrain drain{ctx};
+    drain.track(reads);
     for (auto& r : reads) {
         if (!r.arm(ctx, 4))
             return false;
@@ -1030,7 +1112,7 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     // exists for it, so its completion stays not-ready. The mutant that
     // settles routes by visible-ring absence publishes a fabricated unknown
     // terminal for it here and releases the borrow.
-    const bool inflight_pending = !reads[3].completion.ready();
+    const bool inflight_pending = !reads[3].request.ready();
 
     // The poisoned backend must reject new submissions outright.
     std::vector<std::byte> sink(4, std::byte{0});
@@ -1040,18 +1122,17 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     const std::string one_byte(1, 'p');
     const ssize_t probe_wrote = ::write(probe_fds[1], one_byte.data(), 1);
     (void)probe_wrote;
-    Completion<std::size_t> probe;
-    const bool health_visible =
-        !ctx.submit_read(
-                 ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
-                        sink.size(), 0},
-                 probe)
-             .has_value();
+    auto probe_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
+               sink.size(), 0});
+    const bool health_visible = !probe_submitted.has_value();
+    Request<std::size_t> probe =
+        probe_submitted.has_value() ? std::move(probe_submitted).value() : Request<std::size_t>{};
     for (int i = 0; !health_visible && i < 20000 && !probe.ready(); ++i) {
         (void)ctx.poll_progress();
         std::this_thread::sleep_for(std::chrono::microseconds{200});
     }
-    probe.reset();
+    probe.discard();
     ::close(probe_fds[0]);
     ::close(probe_fds[1]);
 
@@ -1064,16 +1145,18 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     reads[3].release_bytes(4);
     bool all_retired = true;
     for (auto& r : reads) {
-        for (int i = 0; i < 20000 && !r.completion.ready(); ++i) {
+        for (int i = 0; i < 20000 && !r.request.ready(); ++i) {
             (void)ctx.poll_progress();
             std::this_thread::sleep_for(std::chrono::microseconds{200});
         }
-        all_retired = all_retired && r.completion.ready();
+        all_retired = all_retired && r.request.ready();
     }
-    const auto fourth = reads[3].completion.result();
-    const bool real_outcome = fourth.has_value() && fourth.value() == 4;
+    const auto fourth_observation = reads[3].request.try_result();
+    const bool real_outcome = fourth_observation.readiness == RequestReadiness::ready &&
+                              fourth_observation.result.has_value() &&
+                              fourth_observation.result.value() == 4;
     for (auto& r : reads) {
-        r.completion.reset();
+        r.request.discard();
         r.close_pipe();
     }
     return pass_ok && inflight_pending && health_visible && all_retired && real_outcome;
@@ -1084,6 +1167,9 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
 // (here a won-before-execution cancel of an undispatched entry, held
 // undispatched by a retryable submit failure saturating the SQ) stays for the
 // next pass and is reported as remaining immediate work.
+// Kept on the compat spellings: the mid-epilogue readiness of the cancelled
+// entry is an oracle fact the public Request face cannot express (publication
+// visibility commits only at complete_publication).
 bool f1_publication_pass_is_entry_bounded() {
     EagainSubmitState state;
     state.fail.store(true, std::memory_order_release);
@@ -1095,9 +1181,43 @@ bool f1_publication_pass_is_entry_bounded() {
     AsyncIoContext ctx(std::move(raw_backend));
     HostInterest interest(ctx);
 
-    BlockedPipeRead a;
-    BlockedPipeRead b;
-    BlockedPipeRead c;
+    struct CompatPipeRead {
+        int r = -1;
+        int w = -1;
+        Completion<std::size_t> completion;
+        std::vector<std::byte> buffer;
+
+        bool arm(AsyncIoContext& ctx, std::size_t bytes) {
+            int fds[2];
+            if (::pipe(fds) != 0)
+                return false;
+            r = fds[0];
+            w = fds[1];
+            buffer.assign(bytes, std::byte{0});
+            return ctx
+                .submit_read(ReadOp{NativeFileRef(r, sluice::FileAccess::read_only),
+                                    buffer.data(), buffer.size(), 0},
+                             completion)
+                .has_value();
+        }
+        void release_bytes(std::size_t n) {
+            const std::string payload(static_cast<std::size_t>(n), 'p');
+            const ssize_t wrote = ::write(w, payload.data(), payload.size());
+            (void)wrote;
+        }
+        void close_pipe() {
+            if (r >= 0)
+                ::close(r);
+            if (w >= 0)
+                ::close(w);
+            r = -1;
+            w = -1;
+        }
+    };
+
+    CompatPipeRead a;
+    CompatPipeRead b;
+    CompatPipeRead c;
     if (!a.arm(ctx, 4) || !b.arm(ctx, 4) || !c.arm(ctx, 4))
         return false;
 
@@ -1174,6 +1294,9 @@ bool f2_backend_poison_reaches_owner_health_verdict() {
     HostInterest interest(ctx);
 
     BlockedPipeRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(read);
+    drain.track(read.request);
     if (!read.arm(ctx, 4))
         return false;
 
@@ -1195,10 +1318,10 @@ bool f2_backend_poison_reaches_owner_health_verdict() {
     owner2.join();
 
     const bool ok = is_progress(first.value, 1) && first.elapsed_ms < 1000 &&
-                    read.completion.ready() && pass_ok &&
+                    read.request.ready() && pass_ok &&
                     second.value.has_value() &&
                     second.value->kind == WaitKind::health_failure && second.elapsed_ms < 1000;
-    read.completion.reset();
+    read.request.discard();
     read.close_pipe();
     return ok;
 }
@@ -1235,17 +1358,19 @@ bool record_handoff_survives_submit_racing_owner_sweep() {
     UringAsyncBackend::PreAcceptCommitPauseGate gate;
     raw->set_pre_accept_commit_pause_gate(&gate);
 
-    Completion<std::size_t> zero;
+    Request<std::size_t> zero;
+    RequestPublicationDrain drain{ctx};
+    drain.track(zero);
     std::vector<std::byte> buffer(4, std::byte{0});
     std::atomic<bool> submit_ok{false};
     std::thread submitter([&] {
-        submit_ok.store(
+        auto submitted =
             ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()),
-                                                sluice::FileAccess::read_only),
-                                   buffer.data(), 0, 0},
-                            zero)
-                .has_value(),
-            std::memory_order_release);
+                                                 sluice::FileAccess::read_only),
+                                   buffer.data(), 0, 0});
+        if (submitted.has_value())
+            zero = std::move(submitted).value();
+        submit_ok.store(submitted.has_value(), std::memory_order_release);
     });
     wait_backend_gate_paused(gate);
 
@@ -1266,10 +1391,13 @@ bool record_handoff_survives_submit_racing_owner_sweep() {
     submitter.join();
     const std::size_t settle = raw->poll();
 
-    const bool result_ok = zero.ready() && zero.result().has_value() && zero.result().value() == 0;
+    const auto zero_observation = zero.try_result();
+    const bool result_ok = zero.ready() && zero_observation.readiness == RequestReadiness::ready &&
+                           zero_observation.result.has_value() &&
+                           zero_observation.result.value() == 0;
     const bool ok = window_clean && delivered == 1 && settle == 0 && result_ok &&
                     submit_ok.load(std::memory_order_acquire);
-    zero.reset();
+    zero.discard();
     return ok;
 }
 }
