@@ -173,6 +173,26 @@ do
     end
 end
 
+-- Directory-fsync fault-injection oracle for the atomic output path: this is
+-- the only target defining SLUICE_COPY_INTERNAL_TESTING, which arms the
+-- DirFsyncScript seam at directory_fsync (apps/sluice-copy/safe_output.cpp)
+-- for the EINTR-retry and terminal-error evidence.
+do
+    local dir = R .. "apps/sluice-copy"
+    if os.isfile(dir .. "/safe_output_test_seams.hpp") then
+        target("app_copy_dir_fsync_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", dir)
+            add_defines("SLUICE_COPY_INTERNAL_TESTING")
+            add_files(R .. "tests/app_copy_dir_fsync_test.cpp", dir .. "/copy_task.cpp",
+                      dir .. "/file_domain.cpp", dir .. "/safe_output.cpp")
+            add_tests("app_copy_dir_fsync_test")
+    end
+end
+
 -- RequestCore substrate tests: each target compiles the substrate TU directly
 -- and links only sluice_core, so the protocol suite never links the async
 -- runtime, backends or liburing. The protocol/publication targets enable the
