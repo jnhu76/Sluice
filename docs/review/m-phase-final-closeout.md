@@ -90,14 +90,20 @@ F4, T2-11 F2 — as recorded per item in the tier-2 record.
    observable across threads before the submitter hands anything back, so two
    cross-thread host-loop oracles keep the compat cell (T2-12).
 6. **Per-consumer final-state projection.** All 75 census M-R records now carry
-   an explicit disposition (MIGRATED / POLICY_ISOLATED / COMPAT_TEST_RETAINED /
+   an explicit disposition (MIGRATED / ALREADY_CANONICAL /
+   INCLUDE_HYGIENE_COMPLETED / POLICY_ISOLATED / COMPAT_TEST_RETAINED /
    NOT_A_CONSUMER / DOWNSTREAM_MECHANISM_RETAINED) with subscope splits for the
    compound rows, in
    [`m-r-consumer-disposition-final.json`](m-r-consumer-disposition-final.json);
    `scripts/verify_mr_disposition.py` recomputes it against the census and the
-   tier-2 record (coverage, exclusivity, field discipline, bidirectional
-   census_rows membership) and runs in CI as the `mr-disposition-guard`
-   workflow. The #459 Option A provenance is re-anchored there and in the
+   tier-2 record (coverage, exclusivity, field discipline, unit-exact
+   bidirectional census_rows membership) and runs in CI as the
+   `mr-disposition-guard` workflow together with its in-repo corruption
+   discriminators (`scripts/test_verify_mr_disposition.py`, encoding both #472
+   re-review counterexamples). The five genuine tier-1 retypings are
+   c-x01-024/025/027/028/029; c-x01-020 was already canonical at M0 and the
+   five c-x06 zero-symbol include deletions (`7e8601c6`) are hygiene, not
+   migration. The #459 Option A provenance is re-anchored there and in the
    tier-2 record: the standing authority is #458 §3.1/§6/§7; Option A was the
    execution-scope packaging of it, and the directive sentence its ruling
    comment cited is no longer cited as authority.
@@ -143,6 +149,23 @@ goal-state fields, the conditional D-12 addendum and the tier-2 owner
 correction. No production path was touched; narrow re-review of this delta is
 pending.
 
+The narrow re-review of that revision (round 1) closed P1-01 — the
+existing-authorization traceability over #458 §3.1/§6/§7 was accepted — but
+returned `REQUEST_REVISIONS` on the projection itself: the overlay counted
+non-migration actions as migration/isolation (c-x01-020's subject was already
+canonical at M0; the five c-x06 zero-symbol include deletions are hygiene, not
+consumer migration), and the validator's tier-2 cross-check accepted both a
+consumer id appended to the wrong unit's census_rows and an unknown id silently
+reclassified as a blocker row. The round-2 revision adds the
+`ALREADY_CANONICAL` and `INCLUDE_HYGIENE_COMPLETED` dispositions (the five
+genuine tier-1 retypings are c-x01-024/025/027/028/029), reduces T2-10's
+census rows to c-x01-037/038, makes the validator unit-exact with a closed
+B-01/B-05 whitelist, and encodes both reviewer counterexamples plus further
+corruption discriminators as the in-repo suite
+`scripts/test_verify_mr_disposition.py`, which the `mr-disposition-guard`
+workflow runs alongside the positive check. Narrow re-review of this round-2
+delta is pending.
+
 A second, fresh independent review (Wave 5) attacked this closeout itself and
 returned `REQUEST_REVISIONS`: two P1s — the two un-dispositioned consumers
 above, which made the `M_CONSUMER_MIGRATION_OR_ISOLATION` claim untrue for
@@ -170,7 +193,7 @@ notes, applied); the verdict and its scope are recorded in the JSON
 | B-02 fault injection mutant | oracle killed the mutant | PR #468 body |
 | Four apps, both profiles | build/link + smoke, byte-identical copy | PR #468 body |
 | Pinned stress after the T2-12 carve-out | 0 failures / 30 runs | PR #468 body, T2-12 evidence |
-| M-R disposition overlay (75 census rows, 82 subscopes) + validator | total, exclusive, bidirectionally consistent; negative-tested (8 corruption modes all caught) | `docs/review/m-r-consumer-disposition-final.json`, `scripts/verify_mr_disposition.py`, CI `mr-disposition-guard` |
+| M-R disposition overlay (75 census rows, 82 subscopes) + validator | total, exclusive, unit-exactly consistent; 16 in-repo discriminator cases (both re-review counterexamples encoded) green in CI | `docs/review/m-r-consumer-disposition-final.json`, `scripts/verify_mr_disposition.py`, `scripts/test_verify_mr_disposition.py`, CI `mr-disposition-guard` |
 
 Earlier logs from the #468/#469 rounds (`/tmp/m-ev-*.log`,
 `/tmp/f1-check-*.json`) are retained in the tier-2 record's per-item evidence

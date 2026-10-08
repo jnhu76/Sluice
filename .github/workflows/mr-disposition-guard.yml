@@ -8,6 +8,7 @@ on:
       - "docs/review/m-consumer-edges.json"
       - "docs/review/m-r-*.json"
       - "scripts/verify_mr_disposition.py"
+      - "scripts/test_verify_mr_disposition.py"
       - ".github/workflows/mr-disposition-guard.yml"
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - "docs/review/m-consumer-edges.json"
       - "docs/review/m-r-*.json"
       - "scripts/verify_mr_disposition.py"
+      - "scripts/test_verify_mr_disposition.py"
       - ".github/workflows/mr-disposition-guard.yml"
 
 concurrency:
@@ -35,6 +37,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      - name: Corruption discriminators (validator negative tests)
+        run: python3 scripts/test_verify_mr_disposition.py
 
       - name: Verify census/overlay/tier-2 consistency
         run: python3 scripts/verify_mr_disposition.py

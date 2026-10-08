@@ -245,17 +245,12 @@
       "title": "File-surface test carriers",
       "census_rows": [
         "c-x01-037",
-        "c-x01-038",
-        "c-x06-004",
-        "c-x06-005",
-        "c-x06-006",
-        "c-x06-007",
-        "c-x06-008"
+        "c-x01-038"
       ],
       "isolation_state": "POLICY_ISOLATED",
       "isolation_authority": "#458 SS3.3/SS7 (the M-F family owns the File surface; the F4 execution arm) + F4 conformance order; recorded by #459 Option A",
-      "reason": "These carries ride the canonical File surface, which F4 owns (sluice/file.hpp contraction); retyping them now would create F4 work inside the M window and pre-empt F4's own oracle decisions.",
-      "surviving_behavior": "Semantic path probes and the semantic reference-case suite keep their outcomes. The five zero-symbol <sluice/file.hpp> includes named by c-x06-004..008 were deleted by the tier-1 slice (#468, commit 7e8601c6); rows c-x06-004/005 (public_request_test, public_request_release_violation_test) are listed here only as that deletion's census provenance because no live compat consumer remains in those files. The live carriers named in exact_scope are what remains isolated.",
+      "reason": "These carriers ride the canonical File surface, which F4 owns (sluice/file.hpp contraction); retyping them now would create F4 work inside the M window and pre-empt F4's own oracle decisions.",
+      "surviving_behavior": "Semantic path probes and the semantic reference-case suite keep their outcomes. The five zero-symbol <sluice/file.hpp> includes named by c-x06-004..008 were hygiene deletions in the tier-1 slice (#468, commit 7e8601c6); round 2 removed those ids from this unit's census_rows — they carry no live compat consumer and are projected in the overlay as INCLUDE_HYGIENE_COMPLETED, not as File-surface isolation.",
       "exact_scope": "tests/semantic_path_probes.hpp (:98,:108,:117,:129), tests/semantic_reference_case_test.cpp (:114,:119), tests/semantic_range_test.cpp (real FileReader consumer, F4)",
       "owner": "F4",
       "downstream_gating_effect": "F4's contraction slice owes these carriers; no M claim covers them.",
@@ -379,11 +374,28 @@
     "generated_utc": "2026-10-08T14:36:07Z",
     "scope": "post-merge review of the closeout (e23cc62d..ffb5afa8) returned REQUEST_REVISIONS with two P1s: the #459 Option A authorization-source paragraph and the absence of an independently recomputable final consumer-state projection. This revision corrects the provenance chain (authority array above; per-item isolation_authority re-anchored to #458 SS3.1/SS6) and adds the projection artifact m-r-consumer-disposition-final.json with its mechanical validator scripts/verify_mr_disposition.py (CI: the mr-disposition-guard workflow).",
     "census_rows_extensions": {
-      "T2-01": ["c-x04-008", "c-x05-001", "c-x05-002", "c-x05-010"],
-      "T2-06": ["c-x01-024"],
-      "T2-10": ["c-x06-007"]
+      "T2-01": [
+        "c-x04-008",
+        "c-x05-001",
+        "c-x05-002",
+        "c-x05-010"
+      ],
+      "T2-06": [
+        "c-x01-024"
+      ],
+      "T2-10": [
+        "c-x06-007"
+      ]
     },
     "extension_rationale": "six M-R census rows whose files the units' exact_scope already named but whose ids census_rows omitted; with the extension every M-R row is either dispositioned in the overlay without a unit or a member of exactly the units that carry it (validator-checked, both directions)",
-    "validator_result": "75/75 M-R census rows dispositioned over 82 subscope entries; 0 unexplained records; 0 subscopes counted both migrated and isolated; 21 cross-family census_rows references reported"
+    "validator_result": "75/75 M-R census rows dispositioned over 82 subscope entries (round 2: MIGRATED 5, POLICY_ISOLATED 35, INCLUDE_HYGIENE_COMPLETED 5, ALREADY_CANONICAL 1, COMPAT_TEST_RETAINED 4, DOWNSTREAM_MECHANISM_RETAINED 31, NOT_A_CONSUMER 1); 0 unexplained records; 0 subscopes counted both migrated and isolated; unit references verified unit-exact in both directions; 21 cross-family census_rows references reported",
+    "round2": {
+      "date": "2026-10-08",
+      "trigger": "narrow re-review of #472 (REQUEST_REVISIONS): the round-1 overlay counted non-migration actions as migration/isolation, and the validator accepted wrong-unit and unknown-id census_rows references",
+      "reclassification": "c-x01-020 MIGRATED -> ALREADY_CANONICAL (census semantic_role already names the canonical Request/RequestScope subject; #468 touched the file only via the c-x06-007 include deletion; the T2-05 forced-virtual subscope is unchanged); c-x06-004..008 -> INCLUDE_HYGIENE_COMPLETED (census replacement field: \"delete the #include line; no semantic migration needed\"; deletion commit 7e8601c6)",
+      "t2_10_correction": "T2-10 census_rows reduced to c-x01-037/038; the c-x06-004..008 ids were the deletion's census provenance, not isolated File consumers — superseding the round-1 extension that added c-x06-007",
+      "validator_precision": "tier-2 census_rows references must resolve to an overlay entry borne by exactly that unit (counterexample A: c-x01-001 appended to T2-04 fails against its true unit T2-08); references resolving to no census record fail unless whitelisted (B-01/B-05 only; counterexample B: c-fake-999 fails)",
+      "negative_tests": "scripts/test_verify_mr_disposition.py: both reviewer counterexamples plus corruption discriminators, run by the mr-disposition-guard workflow alongside the positive check"
+    }
   }
 }

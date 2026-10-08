@@ -40,13 +40,21 @@ no F1 manifest edit.
 
 Every one of the 75 census M-R records now has an explicit final disposition in
 [`m-r-consumer-disposition-final.json`](m-r-consumer-disposition-final.json)
-(MIGRATED / POLICY_ISOLATED / COMPAT_TEST_RETAINED / NOT_A_CONSUMER /
-DOWNSTREAM_MECHANISM_RETAINED, with subscope splits for the compound rows).
-`scripts/verify_mr_disposition.py` recomputes the projection against this
-record and the census (coverage, exclusivity, field discipline, bidirectional
-census_rows membership) and runs in CI as the `mr-disposition-guard` workflow.
-The PR #471 residual pair is recorded there as census rows of the M-F and aux
-families, so the M-R delivery claim is recomputable end to end.
+(MIGRATED / ALREADY_CANONICAL / INCLUDE_HYGIENE_COMPLETED / POLICY_ISOLATED /
+COMPAT_TEST_RETAINED / NOT_A_CONSUMER / DOWNSTREAM_MECHANISM_RETAINED, with
+subscope splits for the compound rows). `scripts/verify_mr_disposition.py`
+recomputes the projection against this record and the census (coverage,
+exclusivity, field discipline, unit-exact bidirectional census_rows membership,
+closed blocker-row whitelist) and runs in CI as the `mr-disposition-guard`
+workflow together with its in-repo corruption discriminators
+(`scripts/test_verify_mr_disposition.py`, which encodes both #472 re-review
+counterexamples). The PR #471 residual pair is recorded there as census rows of
+the M-F and aux families, so the M-R delivery claim is recomputable end to end.
+Round 2 of the #472 review corrected six records: c-x01-020's subject was
+already canonical at M0 (ALREADY_CANONICAL; only its T2-05 forced-virtual
+subscope stays isolated), and the five zero-symbol include rows c-x06-004..008
+are INCLUDE_HYGIENE_COMPLETED (deletion commit `7e8601c6`), so the five genuine
+tier-1 retypings are c-x01-024/025/027/028/029.
 
 ## Isolated items
 
@@ -61,7 +69,7 @@ families, so the M-R delivery claim is recomputable end to end.
 | T2-07 | `identity_of` arena-field fallback (dormant) | c-x02-002..006, B-05 | F2 | F2 identity contraction |
 | T2-08 | App task carriers and await chains | c-x01-001..004, c-x16-011..014 | F2 + F3 | F2/F3 arm closure + app consumption suites + COPY-B/TAIL obligations |
 | T2-09 | F1 publication-epilogue compat sub-spelling | c-x01-025, c-x01-028 | F2 | Adopted-face oracle for the mid-epilogue boundary |
-| T2-10 | File-surface test carriers | c-x01-037/038, c-x06-004..008 | F4 | F4 File contraction with semantic oracles re-run |
+| T2-10 | File-surface test carriers | c-x01-037/038 | F4 | F4 File contraction with semantic oracles re-run |
 | T2-11 | Installed-package consumer probes under the F1 freeze | c-x01-901, B-01 | F2 | Contraction slice re-freezing both manifests together with the probes |
 | T2-12 | Cross-thread submission-observation carve-outs | c-x01-024 | F2 | An adopted cross-thread observation spelling, or explicit re-shaping of the two oracles with the §24 acceptance shape re-proved |
 
