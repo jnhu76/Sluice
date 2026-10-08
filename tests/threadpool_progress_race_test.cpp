@@ -163,12 +163,13 @@ struct RequestPublicationDrain {
         for (auto& r : rs)
             held.push_back(&r);
     }
+    static constexpr int kDrainAttempts = 200000;
     ~RequestPublicationDrain() {
         for (GatedWorkerRead* g : gates)
             if (!g->released_)
                 g->release();
         for (Request<std::size_t>* r : held) {
-            while (r->valid() && !r->ready())
+            for (int i = 0; i < kDrainAttempts && r->valid() && !r->ready(); ++i)
                 (void)ctx.poll();
             r->discard();
         }

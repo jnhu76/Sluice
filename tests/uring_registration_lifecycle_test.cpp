@@ -114,7 +114,7 @@ bool attachment_registers_kernel_notification_once() {
             AsyncIoContext& ctx;
             Request<std::size_t>& request;
             ~RequestPublicationDrain() {
-                while (request.valid() && !request.ready())
+                for (int i = 0; i < 200000 && request.valid() && !request.ready(); ++i)
                     (void)ctx.poll();
                 request.discard();
             }

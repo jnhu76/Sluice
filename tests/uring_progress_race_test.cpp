@@ -137,11 +137,12 @@ struct RequestPublicationDrain {
             pipes.push_back(&p);
     }
     void track(Request<std::size_t>& r) { held.push_back(&r); }
+    static constexpr int kDrainAttempts = 200000;
     ~RequestPublicationDrain() {
         for (BlockedPipeRead* p : pipes)
             p->release_bytes(1);
         for (Request<std::size_t>* r : held) {
-            while (r->valid() && !r->ready())
+            for (int i = 0; i < kDrainAttempts && r->valid() && !r->ready(); ++i)
                 (void)ctx.poll();
             r->discard();
         }
@@ -1033,12 +1034,12 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     const std::string one_byte(1, 'p');
     const ssize_t probe_wrote = ::write(probe_fds[1], one_byte.data(), 1);
     (void)probe_wrote;
-    Request<std::size_t> probe;
-    const bool health_visible =
-        !ctx.submit_read(
-                 ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
-                        sink.size(), 0})
-             .has_value();
+    auto probe_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
+               sink.size(), 0});
+    const bool health_visible = !probe_submitted.has_value();
+    Request<std::size_t> probe =
+        probe_submitted.has_value() ? std::move(probe_submitted).value() : Request<std::size_t>{};
     for (int i = 0; !health_visible && i < 20000 && !probe.ready(); ++i) {
         (void)ctx.poll_progress();
         std::this_thread::sleep_for(std::chrono::microseconds(200));
@@ -1121,12 +1122,12 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     const std::string one_byte(1, 'p');
     const ssize_t probe_wrote = ::write(probe_fds[1], one_byte.data(), 1);
     (void)probe_wrote;
-    Request<std::size_t> probe;
-    const bool health_visible =
-        !ctx.submit_read(
-                 ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
-                        sink.size(), 0})
-             .has_value();
+    auto probe_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(probe_fds[0], sluice::FileAccess::read_only), sink.data(),
+               sink.size(), 0});
+    const bool health_visible = !probe_submitted.has_value();
+    Request<std::size_t> probe =
+        probe_submitted.has_value() ? std::move(probe_submitted).value() : Request<std::size_t>{};
     for (int i = 0; !health_visible && i < 20000 && !probe.ready(); ++i) {
         (void)ctx.poll_progress();
         std::this_thread::sleep_for(std::chrono::microseconds{200});
@@ -1166,12 +1167,9 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
 // (here a won-before-execution cancel of an undispatched entry, held
 // undispatched by a retryable submit failure saturating the SQ) stays for the
 // next pass and is reported as remaining immediate work.
-// Kept on the compat spellings: cancel(Completion&) and the mid-epilogue
-// visibility of the cancelled entry are oracle facts the public Request face
-// cannot express (publication visibility commits only at complete_publication).
-// Kept on the compat spellings: cancel(Completion&) and the mid-epilogue
-// visibility of the cancelled entry are oracle facts the public Request face
-// cannot express (publication visibility commits only at complete_publication).
+// Kept on the compat spellings: the mid-epilogue readiness of the cancelled
+// entry is an oracle fact the public Request face cannot express (publication
+// visibility commits only at complete_publication).
 bool f1_publication_pass_is_entry_bounded() {
     EagainSubmitState state;
     state.fail.store(true, std::memory_order_release);

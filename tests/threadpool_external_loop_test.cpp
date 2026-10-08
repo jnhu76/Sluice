@@ -248,11 +248,15 @@ bool external_poll_loop_threadpool_w03() {
     std::vector<std::byte> r3buf(64, std::byte{0});
     std::vector<std::byte> wbuf(32, std::byte{'b'});
     Request<std::size_t> r1, r2, r3, w;
+    Request<std::size_t> z1, z2, z3;
     RequestPublicationDrain drain{[&host] { (void)host.acknowledge_and_drive(); }};
     drain.track(r1);
     drain.track(r2);
     drain.track(r3);
     drain.track(w);
+    drain.track(z1);
+    drain.track(z2);
+    drain.track(z3);
 
     auto r1_submitted = ctx.submit_read(ReadOp{NativeFileRef(source, FileAccess::read_only),
                                                r1buf.data(), r1buf.size(), 0});
@@ -289,12 +293,9 @@ bool external_poll_loop_threadpool_w03() {
     if (fd_readable(host.nfd()))
         return false;
 
-    Request<std::size_t> z1 = submit_zero_op(ctx);
-    Request<std::size_t> z2 = submit_zero_op(ctx);
-    Request<std::size_t> z3 = submit_zero_op(ctx);
-    drain.track(z1);
-    drain.track(z2);
-    drain.track(z3);
+    z1 = submit_zero_op(ctx);
+    z2 = submit_zero_op(ctx);
+    z3 = submit_zero_op(ctx);
     if (!z1.valid() || !z2.valid() || !z3.valid())
         return false;
     if (!host.wait_readable(std::chrono::milliseconds{5000}))

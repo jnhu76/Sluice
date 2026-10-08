@@ -254,7 +254,7 @@ bool external_poll_loop_uring_w03() {
             for (Request<std::size_t>* r : held) {
                 if (r == nullptr)
                     continue;
-                while (r->valid() && !r->ready())
+                for (int i = 0; i < 200000 && r->valid() && !r->ready(); ++i)
                     (void)ctx.poll();
                 r->discard();
             }
@@ -404,7 +404,7 @@ bool kernel_completions_delivered_without_stranding() {
             : ctx(c), held(rs) {}
         ~RequestPublicationDrain() {
             for (auto& r : held) {
-                while (r.valid() && !r.ready())
+                for (int i = 0; i < 200000 && r.valid() && !r.ready(); ++i)
                     (void)ctx.poll();
                 r.discard();
             }
@@ -498,7 +498,7 @@ bool saturation_with_real_kernel_completion_preserves_wake() {
         explicit RequestPublicationDrain(AsyncIoContext& c, Request<std::size_t>& r)
             : ctx(c), held(r) {}
         ~RequestPublicationDrain() {
-            while (held.valid() && !held.ready())
+            for (int i = 0; i < 200000 && held.valid() && !held.ready(); ++i)
                 (void)ctx.poll();
             held.discard();
         }
