@@ -1,5 +1,4 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/result.hpp>
 
