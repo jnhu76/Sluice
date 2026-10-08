@@ -241,13 +241,15 @@
       "census_rows": [
         "c-x01-037",
         "c-x01-038",
+        "c-x06-004",
+        "c-x06-005",
         "c-x06-006",
         "c-x06-008"
       ],
       "isolation_state": "POLICY_ISOLATED",
       "isolation_authority": "#459 Option A (F4-owned File surface untouched in M) + F4 conformance order",
       "reason": "These carries ride the canonical File surface, which F4 owns (sluice/file.hpp contraction); retyping them now would create F4 work inside the M window and pre-empt F4's own oracle decisions.",
-      "surviving_behavior": "Semantic path probes and the semantic reference-case suite keep their outcomes. The two zero-symbol <sluice/file.hpp> includes named by c-x06-006/c-x06-008 were deleted by the tier-1 slice (#468, commit 7e8601c6) and are listed here only as their census provenance; the live carriers named in exact_scope are what remains isolated.",
+      "surviving_behavior": "Semantic path probes and the semantic reference-case suite keep their outcomes. The five zero-symbol <sluice/file.hpp> includes named by c-x06-004..008 were deleted by the tier-1 slice (#468, commit 7e8601c6); rows c-x06-004/005 (public_request_test, public_request_release_violation_test) are listed here only as that deletion's census provenance because no live compat consumer remains in those files. The live carriers named in exact_scope are what remains isolated.",
       "exact_scope": "tests/semantic_path_probes.hpp (:98,:108,:117,:129), tests/semantic_reference_case_test.cpp (:114,:119), tests/semantic_range_test.cpp (real FileReader consumer, F4)",
       "owner": "F4",
       "downstream_gating_effect": "F4's contraction slice owes these carriers; no M claim covers them.",

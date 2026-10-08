@@ -38,7 +38,7 @@ no F1 manifest edit.
 | T2-07 | `identity_of` arena-field fallback (dormant) | c-x02-002..006, B-05 | F2 | F2 identity contraction |
 | T2-08 | App task carriers and await chains | c-x01-001..004, c-x16-011..014 | F2 + F3 | F2/F3 arm closure + app consumption suites + COPY-B/TAIL obligations |
 | T2-09 | F1 publication-epilogue compat sub-spelling | c-x01-025, c-x01-028 | F2 | Adopted-face oracle for the mid-epilogue boundary |
-| T2-10 | File-surface test carriers | c-x01-037/038, c-x06-006/008 | F4 | F4 File contraction with semantic oracles re-run |
+| T2-10 | File-surface test carriers | c-x01-037/038, c-x06-004..008 | F4 | F4 File contraction with semantic oracles re-run |
 | T2-11 | Installed-package consumer probes under the F1 freeze | c-x01-901, B-01 | F2 | Contraction slice re-freezing both manifests together with the probes |
 | T2-12 | Cross-thread submission-observation carve-outs | c-x01-024 | F2 | An adopted cross-thread observation spelling, or explicit re-shaping of the two oracles with the §24 acceptance shape re-proved |
 

@@ -19,7 +19,7 @@
     "M_FAMILY_DISPOSITIONS": "COMPLETE (all seven families carry a disposition; six have a downstream owner and an exit condition, M-A4 is closed with no owner because no action is owed)",
     "M_CONSUMER_MIGRATION_OR_ISOLATION": "VERIFIED for M-R (tier-1 migrated including the residual pair found by the Wave-5 review and delivered by PR #471; tier-2 isolated with authority and corrected scopes); NOT APPLICABLE/blocked for the remaining families",
     "M_REQUIRED_EVIDENCE": "PASS (evidence batch below; B-02 closed, B-03 closed on this host, B-01 reproduced at the final head)",
-    "M_FINAL_INDEPENDENT_REVIEW": "tier PRs: APPROVE on each (relayed via author PR comments; the repository holds no GitHub review objects). Wave-5 fresh review of this closeout: REQUEST_REVISIONS (two P1s plus accuracy findings) -> fixed by PR #471 and this revision -> re-review verdict pending",
+    "M_FINAL_INDEPENDENT_REVIEW": "tier PRs: APPROVE on each (relayed via author PR comments; the repository holds no GitHub review objects). Wave-5 fresh review of this closeout: REQUEST_REVISIONS (two P1s plus accuracy findings) -> fixed by PR #471 and this revision -> narrow re-review APPROVE at head 4d09d3b5 with no blocking items (five non-blocking accuracy notes applied).",
     "F2_F3_F4_PRODUCTION_RETIREMENT": "NOT_EXECUTED",
     "F1_HISTORICAL_BASELINE": "IMMUTABLE"
   },
@@ -34,7 +34,7 @@
       "delivered_by": [
         "PR #468 merged 9d1b5cc0",
         "PR #469 merged 667e17f8",
-        "PR #471 residual tier-1 migration (head 1032317e, merged SHA in tier_prs)"
+        "PR #471 residual tier-1 migration (code head 1032317e, PR head dad773c2, merged 7f934e0f)"
       ],
       "evidence": [
         "both frozen F1 profiles reproduce with all gates PASS at the final head",
@@ -167,13 +167,13 @@
     },
     "f1_frozen_noliburing": {
       "command": "python3 scripts/verify_f1_package.py --check-frozen docs/review/f1-package-manifest-noliburing.json --manifest-out /tmp/m-residual-f1-noliburing.json --archive-baseline-out /tmp/m-residual-f1-noliburing-base.json",
-      "result": "all gates PASS; frozen manifest reproduced at head 1032317e",
-      "log": "/tmp/m-residual-f1-noliburing.json"
+      "result": "all gates PASS; frozen manifest reproduced at head 1032317e (gate log below)",
+      "log": "/tmp/m-residual-f1-noliburing-gates.log (manifest output /tmp/m-residual-f1-noliburing.json)"
     },
     "f1_frozen_liburing": {
       "command": "same with --liburing --uring-prefix /tmp/f1-deps/uring-prefix (liburing 2.9)",
-      "result": "all gates PASS; P2 uring runtime consumer probe PASS; reproduced at head 1032317e",
-      "log": "/tmp/m-residual-f1-liburing.json"
+      "result": "all gates PASS; P2 uring runtime consumer probe PASS; reproduced at head 1032317e (gate log below)",
+      "log": "/tmp/m-residual-f1-liburing-gates.log (manifest output /tmp/m-residual-f1-liburing.json)"
     },
     "comment_authority": {
       "command": "python3 scripts/test_check_cpp_comment_authority.py; python3 scripts/check_cpp_comment_authority.py .",
@@ -201,7 +201,7 @@
       "tier1_rereview": "APPROVE on the delta 89827e50 + 7f5b113b (author-relayed)",
       "tier2_delta": "APPROVE (T2-12 mechanism, pinned numbers, no gate-closing stretch; author-relayed)",
       "ci": "run 37761311720 green in all four CI jobs (release, debug, F1 self-tests, comment guard; the fifth check-run status is the legacy CodeRabbit status) at the reviewed head",
-      "wave5_closeout": "REQUEST_REVISIONS on this closeout (two P1 un-dispositioned consumers plus accuracy findings); fixed by PR #471 and this revision; re-review verdict recorded in goal_states.M_FINAL_INDEPENDENT_REVIEW"
+      "wave5_closeout": "REQUEST_REVISIONS on this closeout (two P1 un-dispositioned consumers plus accuracy findings); fixed by PR #471 and this revision; narrow re-review APPROVE at head 4d09d3b5, no blocking items, five non-blocking accuracy notes applied"
     }
   },
   "blockers": {

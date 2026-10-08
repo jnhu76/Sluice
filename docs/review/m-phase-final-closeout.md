@@ -13,10 +13,10 @@ itself. Final master SHA at the time of writing: `7f934e0f`.
 ## Headline
 
 **PHASE_M = NO** — Phase M is not closed. One family (M-R) reached its gate arm
-in this window; the other six families are blocked on human authority decisions
-that the Decision Packet asked for and that nobody has answered (D2, D3a, D3b,
-D4; M-A3 additionally needs the package decision D-13, which the packet's four
-questions did not cover — an addendum on #458 adds it). `F2/F3/F4_PRODUCTION_RETIREMENT = NOT_EXECUTED`;
+in this window; the other five families are blocked on human authority
+decisions that the Decision Packet asked for and that nobody has answered (D2,
+D3a, D3b, D4; M-A3 additionally needs the package decision D-13, which the
+packet's four questions did not cover — the addendum on #458 now asks it). `F2/F3/F4_PRODUCTION_RETIREMENT = NOT_EXECUTED`;
 `F1_HISTORICAL_BASELINE = IMMUTABLE` (both frozen profiles reproduce, manifests
 untouched); `M_FAMILY_DISPOSITIONS = COMPLETE` (all seven families carry a
 disposition; six have a downstream owner and an exit condition, M-A4 is closed
@@ -103,8 +103,10 @@ un-dispositioned census rows, the packet/D-13 mapping, T2-11's misattributed
 row, T2-02's unbacked mutant-kill wording, stale evidence citations, the
 mislabeled UTC timestamps, and the check-run count). The P1s and the
 record-scoped findings are fixed by PR #471; the remaining findings are fixed
-in this revision. The re-review verdict on this revised closeout is recorded in
-the JSON `goal_states.M_FINAL_INDEPENDENT_REVIEW`.
+in this revision. The narrow re-review of the revised closeout returned
+`APPROVE` at head `4d09d3b5` with no blocking items (five non-blocking accuracy
+notes, applied); the verdict and its scope are recorded in the JSON
+`goal_states.M_FINAL_INDEPENDENT_REVIEW`.
 
 ## Evidence
 
@@ -114,7 +116,7 @@ the JSON `goal_states.M_FINAL_INDEPENDENT_REVIEW`.
 | noliburing debug, full suite | 50/50 pass | `/tmp/m-residual-noliburing-debug.log` |
 | liburing release (liburing 2.9 prefix), full suite | 64/64 pass | `/tmp/m-residual-liburing-release.log` |
 | ASan+UBSan, migrated suites, both profiles | clean | `/tmp/m-residual-asan-<suite>.log` |
-| F1 frozen reproduction, both profiles | all gates PASS at `1032317e` | `/tmp/m-residual-f1-noliburing.json`, `/tmp/m-residual-f1-liburing.json` |
+| F1 frozen reproduction, both profiles | all gates PASS | `/tmp/m-residual-f1-noliburing-gates.log`, `/tmp/m-residual-f1-liburing-gates.log` (manifest outputs `/tmp/m-residual-f1-*.json`) |
 | Comment-authority guard + F1 provenance self-tests | OK / 10 tests OK | — |
 | uring cutover mutation builds (8 named) | all killed; baseline 21/21 | `/tmp/m-residual/uring_cutover_mut_*.log` |
 | B-02 fault injection mutant | oracle killed the mutant | PR #468 body |
