@@ -1,8 +1,8 @@
 {
   "record": "m-r-tier2-isolation-record",
-  "generated_utc": "2026-10-08T18:45:00+00:00",
+  "generated_utc": "2026-10-08T11:27:00+00:00",
   "base_sha": "e23cc62d",
-  "verified_head": "7f5b113b",
+  "verified_head": "1032317e",
   "authority": [
     "#459 M-R RULING Option A (comment 6055510469): tier-1 = reachable context-face test consumers retyped to the six submit_*/Request<T> spellings, attach_observer tests exempted, 5 zero-symbol includes deleted, B-02 wired; tier-2 = X-16 explicit policy-isolated pending F3; Batch retyping rides the F2 B-01 re-freeze batch; identity_of fallback dormant (B-05/D-17 -> F2).",
     "#458 SS3.1/SS6/SS7 (adopted M1 decomposition, family authority): tier-1 executable surface named, tier-2 = X-16 policy isolation.",
@@ -37,13 +37,15 @@
         "c-x16-017",
         "c-x16-018",
         "c-x16-019",
+        "c-x01-034",
+        "c-x01-035",
         "c-x01-040"
       ],
       "isolation_state": "POLICY_ISOLATED",
       "isolation_authority": "#459 Option A (tier-2 = X-16 explicit policy-isolated pending F3) + #402 gate arm RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED",
       "reason": "The scheduler await/waiter face (await_completion_*, cancel_waiter, WaitRecord{const void* completion}, RuntimeTaskContext awaits, await_op_helpers, File await conveniences) has no adopted Request-typed spelling. Migrating it inside M would either introduce an unadopted runtime API (forbidden by #458 SS6/SS7 and the M prohibition on unadopted mechanisms) or require F3's runtime retirement, whose host decision is undecided (B-04: StackfulIoHost is ADR-0003 PROPOSED / D2 IMPLEMENTED_UNVERIFIED), and would force a multi-worker->single-owner conversion (forbidden in M).",
       "surviving_behavior": "Every await/park/wake/cancel path keeps its current semantics: the waiter-observer protocol (tests/runtime_waiter_observer_test.cpp), the shutdown settlement oracles (tests/shutdown_lifecycle_test.cpp), the File await conveniences and all four app task bodies keep passing unchanged under both profiles and under ASan+UBSan.",
-      "exact_scope": "include/sluice/async/scheduler.hpp (await_completion_size/void, cancel_waiter x2, WaitRecord), src/async/scheduler_park_wake.cpp, include/sluice/async/application_runtime.hpp (RuntimeTaskContext awaits), src/async/application_runtime.cpp, include/sluice/async/fiber.hpp (CompletionWaitOutcome), include/sluice/async/await_op_helpers.hpp + src/async/await_op_helpers.cpp, include/sluice/async/file.hpp + src/async/file.cpp await_* conveniences, tests/runtime_waiter_observer_test.cpp, tests/explicit_file_ref_test.cpp, tests/file_read_test.cpp, tests/file_write_test.cpp, tests/uring_backend_smoke_test.cpp (ctx.await_completion transport)",
+      "exact_scope": "include/sluice/async/scheduler.hpp (await_completion_size/void, cancel_waiter x2, WaitRecord), src/async/scheduler_park_wake.cpp, include/sluice/async/application_runtime.hpp (RuntimeTaskContext awaits), src/async/application_runtime.cpp, include/sluice/async/fiber.hpp (CompletionWaitOutcome), include/sluice/async/await_op_helpers.hpp + src/async/await_op_helpers.cpp, include/sluice/async/file.hpp + src/async/file.cpp await_* conveniences, tests/runtime_waiter_observer_test.cpp, tests/explicit_file_ref_test.cpp, tests/file_read_test.cpp, tests/file_write_test.cpp, tests/file_sync_data_test.cpp, tests/file_sync_all_test.cpp, tests/uring_backend_smoke_test.cpp (ctx.await_completion transport)",
       "owner": "F3",
       "downstream_gating_effect": "No M consumer-migration claim asserts the runtime await face moved onto the adopted binding. F2's X-01 carrier retirement must not assume this face relocated; F3's node closure is a prerequisite for any retirement that removes await_completion(Completion&).",
       "exit_condition": "Whichever F3 arm closes this node (re-typed await over Request<T>, or runtime-machinery retirement) AND the waiter-observer + shutdown + file-semantics oracles are re-proven against that arm, AND the B-04 host replacement decision is made through the root/ADR process.",
@@ -66,7 +68,7 @@
       "isolation_state": "POLICY_ISOLATED",
       "isolation_authority": "#459 Option A explicit exemption (attach_observer three tests keep the mixed spelling and the OBS delivery oracle) + census row role 'Completion carriers are the observed subject'",
       "reason": "These oracles observe core slot phases and the publication epilogue, and the OBS delivery episode; the compat carrier's readiness flip at record.publish is itself one of the observed facts (the #466 finding: mid-epilogue visibility exists only on the compat face, the Request face observes only at complete_publication). Retyping the carriers inside M would silently move the observed boundary and could weaken the oracle.",
-      "surviving_behavior": "All 16 threadpool core-cutover tests and all 21 uring core-cutover tests pass unchanged, including the mutant kills for publication routing, deferred delivery, borrow retention and slot reuse.",
+      "surviving_behavior": "All 16 threadpool core-cutover oracles and all 21 uring core-cutover oracles pass unchanged in both profiles; the eight named uring mutation builds are each still killed (seven by their named failing assertions, one by the backend's protocol-unreachable invariant guard).",
       "exact_scope": "tests/threadpool_core_cutover_test.cpp (Completion locals :106,:135,:140,:148,:183,:230,:275,:311,:361,:405,:450,:471,:504,:528,:576,:617,:678,:731,:778,:789,:816; attach_observer at :621,:623,:653,:693,:742), tests/uring_core_cutover_test.cpp (Completion locals :232,:258,:263 and following; src/async/uring_test_seams.hpp hooks are the transport)",
       "owner": "F2",
       "downstream_gating_effect": "F2's publication-carrier retirement slice must re-derive these oracles over the canonical binding before any carrier contraction; assertion weakening is forbidden.",
@@ -74,6 +76,8 @@
       "evidence": [
         "#466 commit series on m/mr-tier1-exec",
         "/tmp/m-ev-liburing-release-test.log (21 uring cutover + 16 threadpool cutover passed)",
+        "/tmp/m-residual-liburing-release.log (21/21 + 16/16 re-run at 1032317e)",
+        "mutation builds re-run at 1032317e: uring_cutover_mut_{cookie_reuse,cancel_cqe_terminal,publish_before_retire,drop_outcome,remove_control_pin,reclaim_before_control,strand_poison,zero_op_dispatch} all non-zero exit with the named FAIL lines in /tmp/m-residual/uring_cutover_mut_*.log (publish_before_retire is killed by the protocol-unreachable invariant guard)",
         "docs/review/m-consumer-edges.json rows c-x01-023/c-x01-026"
       ]
     },
@@ -122,20 +126,24 @@
       "id": "T2-05",
       "title": "Compat-spelling pins and the forced backend seam",
       "census_rows": [
+        "c-x01-014",
+        "c-x01-015",
         "c-x01-020",
-        "c-x01-030"
+        "c-x01-030",
+        "c-x01-039"
       ],
       "isolation_state": "POLICY_ISOLATED",
       "isolation_authority": "#459 Option A (tier-1 covers reachable submit_*/Request<T> consumers; the compat spellings themselves stay until F2) + census role 'Completion only via forced virtual overrides - transport'",
-      "reason": "Two async_sync_admission tests exist to pin the submit_sync_data_request/submit_sync_all_request compat spelling, and both files' fake backends must implement the AsyncBackend pure virtuals that take Completion<T>* (the seam itself is the F2 retirement object). Retyping these would delete the compat pin rather than migrate a consumer.",
-      "surviving_behavior": "The compat _request spelling keeps its refusal-without-backend-entry semantics and caller-cell idle guarantee; the fake backend overrides keep compiling against the unchanged seam.",
-      "exact_scope": "tests/async_sync_admission_test.cpp (:35-72 CountingBackend overrides, :143-175 the two _request tests), tests/request_scope_test.cpp (fake backend overrides :803-815)",
+      "reason": "The remaining compat uses in these files are the spellings themselves, not reachable consumers: the four submit_read_request/submit_write_request rejection pins in file_access_precedence_test, the fake backends that must implement the AsyncBackend pure virtuals taking Completion<T>* (the seam is the F2 retirement object), and the E1 conformance oracle whose subject is the submission/publication contract spelled over the compat carrier. Retyping these would delete the pin rather than migrate a consumer. The plain-spelling consumers of file_access_precedence_test and progress_source_ownership_test were retyped by #471.",
+      "surviving_behavior": "The compat _request spelling keeps its refusal-without-backend-entry semantics and caller-cell idle guarantee; the fake backend overrides keep compiling against the unchanged seam; the E1 conformance matrix keeps judging the compat spellings.",
+      "exact_scope": "tests/async_sync_admission_test.cpp (:35-72 CountingBackend overrides, :143-175 the two _request tests), tests/request_scope_test.cpp (fake backend overrides :803-815), tests/file_access_precedence_test.cpp (the four _request rejection pins :646-745 and the CountingBackend overrides), tests/stackful_host_test.cpp (fake backend overrides :701-721), tests/backend_conformance_e1_test.cpp (Completion<std::size_t> at :519)",
       "owner": "F2",
       "downstream_gating_effect": "F2's seam contraction owns deleting these pins together with the seam; M keeps them as the compat contract's executable evidence.",
-      "exit_condition": "F2 AsyncBackend seam contraction (submit_*(op, Completion<T>*) removal) with the admission accounting oracle re-derived.",
+      "exit_condition": "F2 AsyncBackend seam contraction (submit_*(op, Completion<T>*) removal) with the admission accounting oracle re-derived and the E1 conformance matrix re-run against the re-typed surface.",
       "evidence": [
         "/tmp/m-ev-noliburing-release-test.log",
-        "/tmp/m-ev-liburing-release-test.log (async_sync_admission_test, request_scope_test + uring variants passed)"
+        "/tmp/m-ev-liburing-release-test.log (async_sync_admission_test, request_scope_test, file_access_precedence_test, stackful_host_test, backend_conformance_e1_test + uring variants passed)",
+        "/tmp/m-residual-noliburing-release.log, /tmp/m-residual-liburing-release.log (same suites re-run at 1032317e)"
       ]
     },
     {
@@ -254,7 +262,6 @@
       "title": "Installed-package consumer probes under the F1 freeze",
       "census_rows": [
         "c-x01-901",
-        "c-x16-015",
         "B-01"
       ],
       "isolation_state": "POLICY_ISOLATED",
@@ -262,12 +269,13 @@
       "reason": "tests/package/consumers/contract_observer.cpp consumes the Completion-spelled observer face from the installed package, and the F1 manifests freeze that consumer set; retyping it would require a manifest re-freeze that belongs to the F2/F3/F4 contraction windows.",
       "surviving_behavior": "The clean-room consumer probes keep passing against the installed package in both frozen profiles (verify_f1_package.py --check-frozen reproduced with all gates PASS at the current head).",
       "exact_scope": "tests/package/consumers/contract_observer.cpp (:76,:96,:132,:166,:192), the P1/P2 consumer set in scripts/verify_f1_package.py, tests/package/consumers/w01_direct.cpp etc.",
-      "owner": "F2 (with the harness owner for re-freeze)",
-      "downstream_gating_effect": "Any change to these consumers must ship with the same-slice re-freeze; M keeps them frozen and reproducing.",
+      "owner": "F2",
+      "downstream_gating_effect": "Any change to these consumers must ship with the same-slice re-freeze; the M harness owner does not survive the family gate, so the re-freeze condition transfers to F2's contraction slice. M keeps them frozen and reproducing.",
       "exit_condition": "F2 contraction slice that re-freezes both manifests and updates the consumer probes together.",
       "evidence": [
         "/tmp/f1-check-noliburing.json (FROZEN_MANIFEST_REPRODUCED, all gates PASS at 888ccf2e)",
-        "/tmp/f1-check-liburing.json (same, P2 profile)"
+        "/tmp/f1-check-liburing.json (same, P2 profile)",
+        "/tmp/m-residual-f1-noliburing.json, /tmp/m-residual-f1-liburing.json (same, reproduced at 1032317e)"
       ]
     },
     {
@@ -341,5 +349,16 @@
   "merged_tier1": {
     "pull_request": "#468",
     "merge_commit": "9d1b5cc0"
+  },
+  "residual_migration": {
+    "pull_request": "#471",
+    "head": "1032317e",
+    "scope": "The last two tier-1-eligible AsyncIoContext consumers (c-x01-015 tests/file_access_precedence_test.cpp, c-x01-016 tests/progress_source_ownership_test.cpp), found by the Wave-5 independent review of the closeout; the compat _request pins and the forced backend virtuals move into T2-05.",
+    "evidence": [
+      "/tmp/m-residual-noliburing-release.log (50/50), /tmp/m-residual-noliburing-debug.log (50/50), /tmp/m-residual-liburing-release.log (64/64)",
+      "/tmp/m-residual-asan-file_access_precedence_test.log, /tmp/m-residual-asan-progress_source_ownership_test.log and the -liburing- variants (clean under ASan+UBSan in both profiles)",
+      "/tmp/m-residual-f1-noliburing.json + /tmp/m-residual-f1-liburing.json (both frozen manifests reproduce at 1032317e, all gates PASS)",
+      "release repeat runs, 30x each suite: 0 failures"
+    ]
   }
 }
