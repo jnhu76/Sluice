@@ -261,7 +261,22 @@ class TailChild {
         } while (r < 0 && errno == EINTR);
     }
 
-    bool alive() { return ::waitpid(pid_, nullptr, WNOHANG) == 0; }
+    // Non-consuming liveness probe: if the child already exited, its status
+    // is captured here so wait_exit can still classify the outcome.
+    bool alive() {
+        if (early_exit_)
+            return false;
+        int status = 0;
+        const pid_t r = ::waitpid(pid_, &status, WNOHANG);
+        if (r == pid_) {
+            saved_status_ = status;
+            early_exit_ = true;
+            reaped_ = true;
+            drain_output_eof();
+            return false;
+        }
+        return r == 0;
+    }
 
     bool stayed_alive_for(std::chrono::steady_clock::duration window) {
         const auto deadline = std::chrono::steady_clock::now() + window;
@@ -275,6 +290,11 @@ class TailChild {
     }
 
     ChildOutcome wait_exit(std::chrono::steady_clock::duration timeout) {
+        if (early_exit_) {
+            ChildOutcome o = classify(saved_status_);
+            drain_output_eof();
+            return o;
+        }
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         for (;;) {
             int status = 0;
@@ -282,14 +302,7 @@ class TailChild {
             if (r == pid_) {
                 reaped_ = true;
                 drain_output_eof();
-                ChildOutcome o;
-                if (WIFEXITED(status)) {
-                    o.kind = ChildOutcome::Kind::exited;
-                    o.code = WEXITSTATUS(status);
-                } else if (WIFSIGNALED(status)) {
-                    o.kind = ChildOutcome::Kind::signaled;
-                    o.code = WTERMSIG(status);
-                }
+                ChildOutcome o = classify(status);
                 exited_ = true;
                 return o;
             }
@@ -335,6 +348,18 @@ class TailChild {
     pid_t pid() const { return pid_; }
 
   private:
+    static ChildOutcome classify(int status) {
+        ChildOutcome o;
+        if (WIFEXITED(status)) {
+            o.kind = ChildOutcome::Kind::exited;
+            o.code = WEXITSTATUS(status);
+        } else if (WIFSIGNALED(status)) {
+            o.kind = ChildOutcome::Kind::signaled;
+            o.code = WTERMSIG(status);
+        }
+        return o;
+    }
+
     static bool pump_fd(int fd, std::string& into, std::chrono::steady_clock::time_point deadline) {
         if (fd < 0)
             return false;
@@ -422,7 +447,9 @@ class TailChild {
     std::string out_;
     std::string evt_buf_;
     std::size_t scanned_ = 0;
+    int saved_status_ = 0;
     bool reaped_ = false;
+    bool early_exit_ = false;
     bool exited_ = false;
 };
 
