@@ -610,23 +610,21 @@ bool append_delivery_and_partial_withholding() {
 
     check_msg(f.append("ap-one\n"), "partial: append one");
     check_msg(run.sink.wait_line("ap-one", kEventDeadline), "partial: ap-one delivered");
-    // Consume the ap-one read's own records; idle cycles also probe, so the
-    // fragment read is anchored by its offset, not by log position alone.
-    tail_probe::Record one_pre, one_exit;
-    if (!wait_for_record("partial: ap-one read entered", tail_probe::Record::Kind::pre, -1,
-                         nullptr, kEventDeadline, cursor, one_pre) ||
-        !wait_for_record("partial: ap-one read completed", tail_probe::Record::Kind::exit, -1,
-                         nullptr, kEventDeadline, cursor, one_exit)) {
+    // Idle cycles also probe (ret 0 at the new EOF), so each content read is
+    // anchored by its unique nonzero return, never by log position.
+    tail_probe::Record one_exit;
+    if (!wait_for_record("partial: ap-one read completed", tail_probe::Record::Kind::exit, -1,
+                         [](const tail_probe::Record& r) { return r.ret == 7; }, kEventDeadline,
+                         cursor, one_exit)) {
         tail_probe::disarm();
         return false;
     }
-    check_msg(one_exit.ret == 7, "partial: ap-one read returned 7 bytes");
 
     check_msg(f.append("par"), "partial: append fragment");
-    tail_probe::Record pre_rec;
-    if (!wait_for_record("partial: fragment physically read", tail_probe::Record::Kind::pre, -1,
-                         [](const tail_probe::Record& r) { return r.offset == 7; },
-                         kEventDeadline, cursor, pre_rec)) {
+    tail_probe::Record par_exit;
+    if (!wait_for_record("partial: fragment physically read", tail_probe::Record::Kind::exit, -1,
+                         [](const tail_probe::Record& r) { return r.ret == 3; }, kEventDeadline,
+                         cursor, par_exit)) {
         tail_probe::disarm();
         return false;
     }
