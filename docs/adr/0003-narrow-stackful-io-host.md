@@ -1,6 +1,20 @@
 # ADR-0003: Narrow Stackful File-I/O Host (v1 optional profile, D2)
 
-- **Status**: PROPOSED (Issue #399, D2 slice; #460 Option B corrective candidate; not adopted)
+- **Status**: ADOPTED — DESIGN_AUTHORITY_ONLY (Issue #399, D2 slice; #460 Option B
+  conditional adoption; design authority only, not a supported-profile claim)
+- **Adoption type**: DESIGN_AUTHORITY_ONLY
+- **Decision**: Option B — conditional adoption (#460 ruling comment 6064019791)
+- **Authority approval**: #460 comment
+  [6074713780](https://github.com/jnhu76/Sluice/issues/460#issuecomment-6074713780)
+  (owner-directed delegated publication, disclosed in that comment)
+- **Technical review**: #460 comment
+  [6065645621](https://github.com/jnhu76/Sluice/issues/460#issuecomment-6065645621)
+  (independent fresh-agent design review, APPROVE_DESIGN_ADOPTION)
+- **Reviewed master SHA**: `f9fae3544deed6a7f1a1d0c51472f4828bcb3a32`
+- **Reviewed ADR blob**: `a52f402931d34de0475e841716e4d87087b11e8c`
+- **Remaining obligations**: D2 implementation verification, W-04 H1–H6
+  (both backends), B-03 real-kernel liburing, ASan/TSan evidence, M-H
+  consumer disposition (#474), U-01/U-08 package policy (#475)
 - **Parent requirements**: PROD-02 (optional single-owner stackful adapter), PROD-03,
   ARCH-01/ARCH-02, INV-01 (host completed-return row), HOST-01, HOST-02, HOST-03,
   OBS-01/OBS-04, PROG-01/PROG-02/PROG-04, CANCEL-01/CANCEL-02, THREAD-01/THREAD-02,
@@ -26,10 +40,9 @@ conditions are absent because every contract the host needs is already frozen:
 - the host-neutral fiber substrate (`Fiber` + `fiber_ctx`), which has no IoContext
   dependency and carries ASan/TSan fiber annotations.
 
-The proposed design is the optional, caller-driven, single-owner
-`StackfulIoHost`/`IoTaskContext` component. While this ADR is PROPOSED it is
-only a design candidate; independently reviewed, formally adopted ADR text
-grants **host design authority**, not an automatic supported-profile claim.
+The adopted design is the optional, caller-driven, single-owner
+`StackfulIoHost`/`IoTaskContext` component. Formally adopted ADR text grants
+**host design authority**, not an automatic supported-profile claim.
 
 **DESIGN_ADOPTED is not OPTIONAL_SUPPORTED.** A later supported declaration
 requires independent D2 implementation/human-review closure, W-04 H1–H6
@@ -236,12 +249,12 @@ delegated-driver mode, borrowed-owner mode, or `RequestScope` semantics change
 is introduced. This resolves the D2 composition question as permitted by the
 root without amendment.
 
-## 8. Legacy runtime disposition (proposed design; survival audit)
+## 8. Legacy runtime disposition (adopted design; survival audit)
 
 | Mechanism | Intended disposition (not a physical retirement authorization) |
 |---|---|
 | `Fiber`, `fiber_ctx` | RETAINED as the shared stackful substrate (also used by the legacy scheduler) |
-| `StackfulIoHost` / `IoTaskContext` (new) | DESIGN_CANDIDATE while this ADR is PROPOSED; DESIGN_ADOPTED only after formal ADR adoption; OPTIONAL_SUPPORTED only after §1's separate D2/W-04/B-03 gate |
+| `StackfulIoHost` / `IoTaskContext` (new) | DESIGN_ADOPTED (design authority only, per the header's Option B adoption record); OPTIONAL_SUPPORTED only after §1's separate D2/W-04/B-03 gate |
 | `ApplicationRuntime` / `RuntimeBuilder` / `RuntimeTaskContext` | COMPATIBILITY_ONLY: still compiles and serves existing apps/tests; no v1 support claim; retirement with #402 after consumer migration |
 | `Scheduler` (multi-worker run, work stealing, primitive-suite methods, timer/select machinery, WaitRecord registry) | COMPATIBILITY_ONLY, same boundary; the narrow host design uses none of it |
 | `Group` (thread-per-task fallback, unbounded admission), `Future`, `WaitPolicy`/`EventedWaitPolicy` | COMPATIBILITY_ONLY; forbidden patterns for the narrow host design; retirement with #402 |
