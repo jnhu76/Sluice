@@ -173,6 +173,26 @@ do
     end
 end
 
+-- e1 (#474) COPY-B pipelined-copy contract oracles: the scripted-backend suite
+-- driving run_pipelined_copy_with_backend through controlled submission,
+-- completion, and failure ordering (read-ahead window, write ordering, short
+-- I/O, error selection, settlement and bounded reuse). Test-only; compiles the
+-- production copy_task.cpp unmodified, exactly like the consumption target.
+do
+    local dir = R .. "apps/sluice-copy"
+    if os.isfile(dir .. "/copy_task.cpp") and os.isfile(R .. "tests/app_copy_pipeline_oracle_test.cpp") and
+       os.isfile(R .. "tests/support/pipelined_copy_oracle_support.hpp") then
+        target("app_copy_pipeline_oracle_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", dir, R .. "tests")
+            add_files(R .. "tests/app_copy_pipeline_oracle_test.cpp", dir .. "/copy_task.cpp")
+            add_tests("app_copy_pipeline_oracle_test")
+    end
+end
+
 -- Directory-fsync fault-injection oracle for the atomic output path: this is
 -- the only target defining SLUICE_COPY_INTERNAL_TESTING, which arms the
 -- DirFsyncScript seam at directory_fsync (apps/sluice-copy/safe_output.cpp)
