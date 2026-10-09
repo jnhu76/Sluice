@@ -13,7 +13,14 @@
 // delivery), mirroring ThreadPoolBackend's worker/publication split. The
 // accept-time overlap check against every borrow still live (accepted through
 // release_execution) turns premature task-side buffer reuse into a
-// deterministic violation record instead of a data race. Execution is claimed
+// deterministic violation record instead of a data race; overlap is decided
+// on integer address intervals because the slot buffers come from distinct
+// allocations, where relational pointer comparison has no defined order.
+// peak_borrow_live(kind) is the high-water count of ops inside that same
+// backend-physical borrow window (accept .. release_execution) and is the
+// metric backing the at-most-one-in-flight-write oracle; public-binding
+// outstanding (accept .. publication delivery) is a longer, distinct interval
+// and is deliberately not what that oracle measures. Execution is claimed
 // at submit (as the uring transport does), so a core cancel of an accepted op
 // resolves physical_interruption_unsupported; the won_before_execution
 // publication branch is defensive and unexercised by these scenarios.
@@ -51,6 +58,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <cstdint>
 #include <cstring>
 #include <deque>
 #include <map>
@@ -101,6 +109,15 @@ inline void check_msg(bool ok, const std::string& what) {
 
 inline std::byte seed_byte(std::uint64_t offset) {
     return std::byte{static_cast<unsigned char>((offset * 131 + 7) & 0xFF)};
+}
+
+// Callers skip null/empty borrows, so both intervals are non-empty. uintptr_t
+// holds the object's address on the supported targets (Linux x86_64).
+inline bool address_intervals_overlap(const std::byte* a, std::size_t a_len,
+                                      const std::byte* b, std::size_t b_len) {
+    const std::uintptr_t a_lo = reinterpret_cast<std::uintptr_t>(a);
+    const std::uintptr_t b_lo = reinterpret_cast<std::uintptr_t>(b);
+    return a_lo < b_lo + b_len && b_lo < a_lo + a_len;
 }
 
 inline detail::OperationKind kind_of(detail::RequestOp op) {
@@ -158,6 +175,7 @@ struct ScriptedShared {
     std::uint64_t next_submit_id = 0;
     std::size_t accepted_count[6] = {};
     std::size_t peak_live[6] = {};
+    std::size_t peak_borrow_live[6] = {};
 
     bool borrow_overlap_violation = false;
     std::string protocol_violation;
@@ -183,10 +201,29 @@ struct ScriptedShared {
         return n;
     }
 
+    static bool borrow_is_live(const Record& r) {
+        return r.stage == Record::Stage::accepted ||
+               (r.stage == Record::Stage::staged && !r.borrow_released);
+    }
+
+    std::size_t borrow_live_count_locked(detail::OperationKind k) const {
+        std::size_t n = 0;
+        for (const auto& [slot, r] : records)
+            if (r.kind == k && borrow_is_live(r))
+                ++n;
+        return n;
+    }
+
     void recompute_peak_locked(detail::OperationKind k) {
         const std::size_t live = live_count_locked(k);
         if (live > peak_live[kind_index(k)])
             peak_live[kind_index(k)] = live;
+    }
+
+    void recompute_borrow_peak_locked(detail::OperationKind k) {
+        const std::size_t live = borrow_live_count_locked(k);
+        if (live > peak_borrow_live[kind_index(k)])
+            peak_borrow_live[kind_index(k)] = live;
     }
 };
 
@@ -288,8 +325,10 @@ class ScriptedBackend final : public AsyncBackend {
                 std::lock_guard<std::mutex> lk(shared_->mtx);
                 auto it = shared_->records.find(key.slot.value);
                 if (it != shared_->records.end() &&
-                    it->second.key.generation.value == key.generation.value)
+                    it->second.key.generation.value == key.generation.value) {
                     it->second.borrow_released = true;
+                    shared_->recompute_borrow_peak_locked(it->second.kind);
+                }
                 shared_->publication_queue.push_back(key);
             }
             progress_port_.signal();
@@ -318,8 +357,10 @@ class ScriptedBackend final : public AsyncBackend {
             std::lock_guard<std::mutex> lk(shared_->mtx);
             auto it = shared_->records.find(key.slot.value);
             if (it != shared_->records.end() &&
-                it->second.key.generation.value == key.generation.value)
+                it->second.key.generation.value == key.generation.value) {
                 it->second.borrow_released = true;
+                shared_->recompute_borrow_peak_locked(it->second.kind);
+            }
         }
         {
             std::lock_guard<std::mutex> lk(shared_->mtx);
@@ -502,16 +543,10 @@ class ScriptedBackend final : public AsyncBackend {
         {
             std::lock_guard<std::mutex> lk(shared_->mtx);
             for (const auto& [slot, r] : shared_->records) {
-                const bool borrow_live = r.stage == ScriptedShared::Record::Stage::accepted ||
-                                         (r.stage == ScriptedShared::Record::Stage::staged &&
-                                          !r.borrow_released);
-                if (!borrow_live || r.len == 0 || length == 0)
+                if (!ScriptedShared::borrow_is_live(r) || r.len == 0 || length == 0 ||
+                    r.buffer == nullptr || buffer == nullptr)
                     continue;
-                const std::byte* a_lo = r.buffer;
-                const std::byte* a_hi = r.buffer + r.len;
-                const std::byte* b_lo = buffer;
-                const std::byte* b_hi = buffer + length;
-                if (a_lo < b_hi && b_lo < a_hi)
+                if (address_intervals_overlap(r.buffer, r.len, buffer, length))
                     shared_->borrow_overlap_violation = true;
             }
             ScriptedShared::Record& rec = shared_->records[h.slot.value];
@@ -526,6 +561,7 @@ class ScriptedBackend final : public AsyncBackend {
             rec.stage = ScriptedShared::Record::Stage::accepted;
             ++shared_->accepted_count[ScriptedShared::kind_index(kind)];
             shared_->recompute_peak_locked(kind);
+            shared_->recompute_borrow_peak_locked(kind);
         }
         shared_->cv.notify_all();
     }
@@ -754,6 +790,15 @@ class ScriptedController {
     std::size_t peak_live(detail::OperationKind kind) const {
         std::lock_guard<std::mutex> lk(shared_->mtx);
         return shared_->peak_live[kind_index(kind)];
+    }
+
+    // High-water count of ops of `kind` simultaneously inside the
+    // backend-physical borrow window (accept .. release_execution). Distinct
+    // from peak_live (accept .. publication) and from completable_count
+    // (accepted only): a staged-but-unreleased op still holds its borrow.
+    std::size_t peak_borrow_live(detail::OperationKind kind) const {
+        std::lock_guard<std::mutex> lk(shared_->mtx);
+        return shared_->peak_borrow_live[kind_index(kind)];
     }
 
     bool shadow_matches(std::uint64_t total) const {

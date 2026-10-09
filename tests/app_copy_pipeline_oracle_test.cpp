@@ -6,11 +6,16 @@
 #include "copy_task.hpp"
 #include "support/pipelined_copy_oracle_support.hpp"
 
+#include <sluice/async/await_op_helpers.hpp>
+#include <sluice/async/task_result.hpp>
+
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -146,11 +151,117 @@ bool out_of_order_read_in_order_write() {
     check(std::set<std::uint64_t>(write_order.begin(), write_order.end()).size() ==
               write_order.size(),
           "ooo write offsets distinct");
+    check(sc.ctrl->peak_borrow_live(detail::OperationKind::write) == 1,
+          "ooo at most one borrow-live write at any time (accepted..release_execution)");
     check(sc.copy_result->value().bytes_copied == TOTAL, "ooo byte count");
     check(sc.ctrl->shadow_matches(TOTAL), "ooo content pattern");
     check(sc.ctrl->pending_empty(), "ooo pending empty");
     return all_writes_observed && ascending && write_order.size() == 4 &&
-           sc.copy_result.has_value() && sc.copy_result->has_value();
+           sc.copy_result.has_value() && sc.copy_result->has_value() &&
+           sc.ctrl->peak_borrow_live(detail::OperationKind::write) == 1;
+}
+
+// The copy loop structurally never holds two read_done slots (one read is
+// awaited per outer round and the write loop drains it), so the
+// at-most-one-borrow-live-write oracle cannot observe its predicate trip
+// through the copy path itself. This validates the metric on the public
+// request path: two disjoint write borrows alive simultaneously must read as
+// peak 2 without raising the overlap flag.
+bool borrow_live_write_peak_selftest() {
+    constexpr std::size_t B = 16;
+    const TempFile dst("/tmp/sluice_copy_oracle_dst_XXXXXX");
+    if (dst.path.empty())
+        return false;
+    FileOpen write_mode;
+    write_mode.access = FileAccess::write_only;
+    auto dst_open = File::open(dst.path, write_mode);
+    if (!dst_open.has_value())
+        return false;
+    File dst_file = std::move(dst_open).value();
+    const NativeFileRef dst_ref{dst_file};
+
+    std::array<std::byte, B * 2> payload{};
+    for (std::size_t i = 0; i < payload.size(); ++i)
+        payload[i] = seed_byte(static_cast<std::uint64_t>(i));
+
+    struct TwoWriteTask {
+        NativeFileRef dst;
+        const std::byte* first = nullptr;
+        const std::byte* second = nullptr;
+        void operator()(RuntimeTaskContext& ctx,
+                        TaskResultSlot<Result<std::size_t>>& slot) const {
+            Completion<std::size_t> first_c;
+            Completion<std::size_t> second_c;
+            auto a = ctx.submit_write(WriteOp{dst, first, B, 0}, first_c);
+            if (!a.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(a.error()));
+                return;
+            }
+            auto b = ctx.submit_write(WriteOp{dst, second, B, B}, second_c);
+            if (!b.has_value()) {
+                auto da = await_drain(ctx, first_c);
+                slot.publish(sluice::make_unexpected<std::size_t>(
+                    da.has_value() ? b.error() : da.error()));
+                return;
+            }
+            auto ra = await_take(ctx, first_c);
+            if (!ra.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(ra.error()));
+                return;
+            }
+            auto rb = await_take(ctx, second_c);
+            if (!rb.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(rb.error()));
+                return;
+            }
+            slot.publish(Result<std::size_t>{ra.value() + rb.value()});
+        }
+    };
+
+    auto shared = std::make_shared<ScriptedShared>();
+    ScriptedController ctrl(shared);
+    std::optional<Result<std::size_t>> result;
+    std::atomic<bool> done{false};
+    std::thread runner([&]() {
+        result = run_task_to_result<std::size_t>(
+            1, std::make_unique<ScriptedBackend>(shared, 8),
+            TwoWriteTask{dst_ref, payload.data(), payload.data() + B});
+        done.store(true, std::memory_order_release);
+    });
+
+    check(ctrl.wait_completable(detail::OperationKind::write, 2),
+          "peak-selftest two writes accepted concurrently");
+    check(ctrl.peak_borrow_live(detail::OperationKind::write) == 2,
+          "peak-selftest metric observes two simultaneous borrow-live writes");
+    check(!ctrl.borrow_overlap_violation(), "peak-selftest disjoint borrows never overlap");
+
+    for (const ScriptedOpView& op : ctrl.completable_ops())
+        check(ctrl.complete_bytes(op.submit_id, op.len), "peak-selftest write staged");
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (!done.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (!done.load(std::memory_order_acquire)) {
+        std::fprintf(stderr, "\n[watchdog] peak-selftest task did not publish\n%s",
+                     ctrl.diagnostics().c_str());
+        for (const std::string& f : g_failures)
+            std::fprintf(stderr, "[watchdog]   failure: %s\n", f.c_str());
+        std::fflush(stderr);
+        std::abort();
+    }
+    runner.join();
+
+    check(result.has_value() && result->has_value(), "peak-selftest task succeeds");
+    if (result.has_value() && result->has_value())
+        check(result->value() == B * 2, "peak-selftest byte count");
+    check(ctrl.peak_borrow_live(detail::OperationKind::write) == 2,
+          "peak-selftest peak remains two after settlement");
+    check(ctrl.pending_empty(), "peak-selftest pending empty");
+    check(!ctrl.borrow_overlap_violation(), "peak-selftest no borrow overlap");
+    return result.has_value() && result->has_value() &&
+           ctrl.peak_borrow_live(detail::OperationKind::write) == 2 &&
+           !ctrl.borrow_overlap_violation();
 }
 
 bool short_read_retry_same_slot() {
@@ -729,6 +840,7 @@ int main() {
         {"depth1_single_outstanding_read", depth1_single_outstanding_read},
         {"depth4_full_read_window", depth4_full_read_window},
         {"out_of_order_read_in_order_write", out_of_order_read_in_order_write},
+        {"borrow_live_write_peak_selftest", borrow_live_write_peak_selftest},
         {"short_read_retry_same_slot", short_read_retry_same_slot},
         {"partial_write_advance", partial_write_advance},
         {"zero_progress_write_is_error", zero_progress_write_is_error},
