@@ -54,7 +54,6 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <csignal>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -559,6 +558,7 @@ class ScriptedBackend final : public AsyncBackend {
             rec.completion = completion;
             rec.publish = publish_fn;
             rec.stage = ScriptedShared::Record::Stage::accepted;
+            rec.borrow_released = false;
             ++shared_->accepted_count[ScriptedShared::kind_index(kind)];
             shared_->recompute_peak_locked(kind);
             shared_->recompute_borrow_peak_locked(kind);
@@ -677,6 +677,30 @@ class ScriptedController {
             return false;
         apply_byte_effect(kind, buffer, offset, n);
         return stage_on_backend(key, sluice::detail::IoOutcome::success(n));
+    }
+
+    // complete_bytes split in two: hold_staged moves an accepted op into
+    // staged without offering the terminal, leaving its borrow live; a held op
+    // that is never released stalls its scenario until the watchdog fires.
+    std::optional<ScriptedOpView> hold_staged(std::uint64_t submit_id) {
+        detail::RequestKey key{};
+        detail::OperationKind kind = detail::OperationKind::read;
+        std::byte* buffer = nullptr;
+        std::uint64_t offset = 0;
+        if (!mark_staged(submit_id, key, kind, buffer, offset))
+            return std::nullopt;
+        held_[submit_id] = HeldStaged{key, kind, buffer, offset};
+        return ScriptedOpView{submit_id, kind, offset, 0, nullptr, buffer};
+    }
+
+    bool release_held(std::uint64_t submit_id, std::size_t n) {
+        const auto it = held_.find(submit_id);
+        if (it == held_.end())
+            return false;
+        apply_byte_effect(it->second.kind, it->second.buffer, it->second.offset, n);
+        const bool ok = stage_on_backend(it->second.key, sluice::detail::IoOutcome::success(n));
+        held_.erase(it);
+        return ok;
     }
 
     bool complete_eof(std::uint64_t submit_id) { return complete_bytes(submit_id, 0); }
@@ -801,6 +825,11 @@ class ScriptedController {
         return shared_->peak_borrow_live[kind_index(kind)];
     }
 
+    std::size_t borrow_live_count(detail::OperationKind kind) const {
+        std::lock_guard<std::mutex> lk(shared_->mtx);
+        return shared_->borrow_live_count_locked(kind);
+    }
+
     bool shadow_matches(std::uint64_t total) const {
         std::lock_guard<std::mutex> lk(shared_->mtx);
         if (shared_->shadow.size() != total)
@@ -831,6 +860,14 @@ class ScriptedController {
     static std::size_t kind_index(detail::OperationKind k) {
         return static_cast<std::size_t>(k);
     }
+
+    struct HeldStaged {
+        detail::RequestKey key{};
+        detail::OperationKind kind = detail::OperationKind::read;
+        std::byte* buffer = nullptr;
+        std::uint64_t offset = 0;
+    };
+    std::map<std::uint64_t, HeldStaged> held_;
 
     bool mark_staged(std::uint64_t submit_id, detail::RequestKey& key,
                      detail::OperationKind& kind, std::byte*& buffer, std::uint64_t& offset) {

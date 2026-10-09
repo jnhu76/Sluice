@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -164,9 +165,12 @@ bool out_of_order_read_in_order_write() {
 // The copy loop structurally never holds two read_done slots (one read is
 // awaited per outer round and the write loop drains it), so the
 // at-most-one-borrow-live-write oracle cannot observe its predicate trip
-// through the copy path itself. This validates the metric on the public
+// through the copy path itself. Phase 1 validates the metric on the public
 // request path: two disjoint write borrows alive simultaneously must read as
-// peak 2 without raising the overlap flag.
+// peak 2 without raising the overlap flag. Phase 2 drives a single-slot
+// backend so the second write reuses the first write's slot record, then
+// holds it staged-but-unreleased: the borrow must stay counted as live in
+// exactly that window (a stale per-slot release flag would silently drop it).
 bool borrow_live_write_peak_selftest() {
     constexpr std::size_t B = 16;
     const TempFile dst("/tmp/sluice_copy_oracle_dst_XXXXXX");
@@ -259,9 +263,90 @@ bool borrow_live_write_peak_selftest() {
           "peak-selftest peak remains two after settlement");
     check(ctrl.pending_empty(), "peak-selftest pending empty");
     check(!ctrl.borrow_overlap_violation(), "peak-selftest no borrow overlap");
-    return result.has_value() && result->has_value() &&
-           ctrl.peak_borrow_live(detail::OperationKind::write) == 2 &&
-           !ctrl.borrow_overlap_violation();
+    check(ctrl.protocol_violation().empty(), "peak-selftest no protocol violation");
+    const bool phase1_ok = result.has_value() && result->has_value() &&
+                           ctrl.peak_borrow_live(detail::OperationKind::write) == 2 &&
+                           !ctrl.borrow_overlap_violation() &&
+                           ctrl.protocol_violation().empty();
+
+    struct SlotReuseWriteTask {
+        NativeFileRef dst;
+        const std::byte* data = nullptr;
+        void operator()(RuntimeTaskContext& ctx,
+                        TaskResultSlot<Result<std::size_t>>& slot) const {
+            Completion<std::size_t> first_c;
+            auto a = ctx.submit_write(WriteOp{dst, data, B, 0}, first_c);
+            if (!a.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(a.error()));
+                return;
+            }
+            auto ra = await_take(ctx, first_c);
+            if (!ra.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(ra.error()));
+                return;
+            }
+            Completion<std::size_t> second_c;
+            auto b = ctx.submit_write(WriteOp{dst, data + B, B, B}, second_c);
+            if (!b.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(b.error()));
+                return;
+            }
+            auto rb = await_take(ctx, second_c);
+            if (!rb.has_value()) {
+                slot.publish(sluice::make_unexpected<std::size_t>(rb.error()));
+                return;
+            }
+            slot.publish(Result<std::size_t>{ra.value() + rb.value()});
+        }
+    };
+
+    auto shared2 = std::make_shared<ScriptedShared>();
+    ScriptedController ctrl2(shared2);
+    std::optional<Result<std::size_t>> result2;
+    std::atomic<bool> done2{false};
+    std::thread runner2([&]() {
+        result2 = run_task_to_result<std::size_t>(
+            1, std::make_unique<ScriptedBackend>(shared2, 1),
+            SlotReuseWriteTask{dst_ref, payload.data()});
+        done2.store(true, std::memory_order_release);
+    });
+
+    const std::uint64_t first = ctrl2.wait_completable_at(detail::OperationKind::write, 0);
+    check(first != 0, "slot-reuse first write accepted");
+    check(ctrl2.complete_bytes(first, B), "slot-reuse first write settles");
+    const std::uint64_t second = ctrl2.wait_completable_at(detail::OperationKind::write, B);
+    check(second != 0, "slot-reuse second write accepted on the recycled slot");
+    const auto held = ctrl2.hold_staged(second);
+    check(held.has_value(), "slot-reuse second write held staged");
+    check(ctrl2.borrow_live_count(detail::OperationKind::write) == 1,
+          "slot-reuse staged-unreleased write stays borrow-live");
+    check(!ctrl2.borrow_overlap_violation(), "slot-reuse no borrow overlap");
+    check(ctrl2.release_held(second, B), "slot-reuse held write released");
+
+    const auto deadline2 = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (!done2.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline2)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    if (!done2.load(std::memory_order_acquire)) {
+        std::fprintf(stderr, "\n[watchdog] slot-reuse task did not publish\n%s",
+                     ctrl2.diagnostics().c_str());
+        for (const std::string& f : g_failures)
+            std::fprintf(stderr, "[watchdog]   failure: %s\n", f.c_str());
+        std::fflush(stderr);
+        std::abort();
+    }
+    runner2.join();
+
+    check(result2.has_value() && result2->has_value(), "slot-reuse task succeeds");
+    if (result2.has_value() && result2->has_value())
+        check(result2->value() == B * 2, "slot-reuse byte count");
+    check(ctrl2.peak_borrow_live(detail::OperationKind::write) == 1,
+          "slot-reuse serialized writes never exceed one borrow-live write");
+    check(ctrl2.pending_empty(), "slot-reuse pending empty");
+    check(ctrl2.protocol_violation().empty(), "slot-reuse no protocol violation");
+    return phase1_ok && result2.has_value() && result2->has_value() &&
+           ctrl2.peak_borrow_live(detail::OperationKind::write) == 1 &&
+           ctrl2.protocol_violation().empty();
 }
 
 bool short_read_retry_same_slot() {
@@ -863,9 +948,11 @@ int main() {
 
     const char* filter = std::getenv("SLUICE_ORACLE_FILTER");
     int failed = 0;
+    int ran = 0;
     for (const NamedTest& t : tests) {
         if (filter != nullptr && std::strcmp(filter, t.name) != 0)
             continue;
+        ++ran;
         const int failures_before = g_checks_failed;
         if (!t.fn() || g_checks_failed != failures_before) {
             std::fprintf(stderr, "CASE FAIL: %s\n", t.name);
@@ -875,8 +962,7 @@ int main() {
         }
     }
     if (failed == 0) {
-        std::printf("all %zu app copy pipeline oracle tests passed\n",
-                    sizeof(tests) / sizeof(tests[0]));
+        std::printf("all %d app copy pipeline oracle tests passed\n", ran);
         return 0;
     }
     return 1;
