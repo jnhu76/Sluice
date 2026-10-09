@@ -25,7 +25,12 @@ static ino_t shim_ino;
 static int shim_evt_fd = -1;
 static int shim_cmd_fd = -1;
 static long shim_hold_from = -1;
+/* Backend workers may run concurrently in principle; the counter must not
+ * race even though current scenarios keep one op in flight. */
 static long shim_seq;
+static long shim_next_seq(void) {
+    return __atomic_add_fetch(&shim_seq, 1, __ATOMIC_RELAXED);
+}
 static int shim_ready;
 
 static void shim_init(void) {
@@ -91,7 +96,7 @@ ssize_t pread(int fd, void* buf, size_t count, off_t offset) {
     if (!shim_is_target(fd))
         return (ssize_t)syscall(SYS_pread64, fd, buf, count, offset);
 
-    long seq = ++shim_seq;
+    long seq = shim_next_seq();
     char ev[128];
     snprintf(ev, sizeof ev, "PRE %ld %ld %zu\n", seq, (long)offset, count);
     shim_send(ev);
