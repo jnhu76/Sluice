@@ -500,8 +500,6 @@ bool pending_read_settles_before_retire() {
     struct stat st {};
     if (::stat(f.path.c_str(), &st) != 0)
         deadline_abort("stat failed");
-    // Hold target preads from seq 2 on: seq 1 is the initial EOF probe, seq 2
-    // is the read carrying the appended line.
     tail_probe::arm(st.st_dev, st.st_ino, 1);
 
     EngineRun run(f, follow_options(0));
