@@ -179,11 +179,12 @@ bool hash_files_continues_after_read_error_in_all_invocation_paths() {
         if (path.empty())
             return false;
         auto opened = File::open(path);
+        auto closed = File::open(path);
         ::unlink(path.c_str());
-        if (!opened.has_value())
+        if (!opened.has_value() || !closed.has_value() || !closed.value().close().has_value())
             return false;
         std::vector<HashInput> inputs;
-        inputs.push_back(HashInput{"closed", File{}});
+        inputs.push_back(HashInput{"closed", std::move(closed).value()});
         inputs.push_back(HashInput{path, std::move(opened).value()});
         auto results = path_kind == 2
                            ? sluice_hash::hash_files_with_backend(
