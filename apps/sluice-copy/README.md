@@ -42,10 +42,14 @@ sluice-copy [options] <source> <destination>
   --sync none|data|all     durability policy applied after copy (default none)
   --no-atomic              direct destination write (old Version A/B output);
                            default is the Version C temp+rename safe path
+  --atomic                 explicitly select the default Version C safe path
   --help                   show this help
 ```
 
-Defaults: 1 MiB buffer, depth 1, 1 worker, sync=none.
+Defaults: 1 MiB buffer, depth 1, 1 worker, sync=none, atomic on. `--no-atomic` and
+`--atomic` both exist; the last one on the command line wins. This block is the
+full accepted option set — `--atomic` is accepted but is not listed by the
+program's own `--help` output.
 
 ### Resource limits
 
@@ -61,9 +65,21 @@ and the TOTAL pipeline allocation is the primary constraint:
 | `kMaxPipelineDepth`      | 64     | number of pipeline slots                     |
 | `kMaxPipelineBytes`      | 512 MiB | total `buffer_size * pipeline_depth` budget |
 
-Values beyond a limit are a usage error (exit 1) on the CLI and
-`invalid_state` from the public entry points, checked before any allocation.
-This is a reference copy app, not an arbitrary thread/allocator factory.
+Values beyond a limit are rejected **before any allocation**, but the exit code
+depends on which limit and which layer rejects it (measured on the current
+tree, see "Rejections" below):
+
+| rejected value                     | rejected by        | CLI result        |
+| ---------------------------------- | ------------------ | ----------------- |
+| `--workers` > 64                   | CLI parser         | usage error, exit 1 |
+| any of the three flags = 0         | CLI parser         | usage error, exit 1 |
+| `--buffer-size` > 64 MiB           | engine validation  | `invalid_state`, exit 2 |
+| `--pipeline-depth` > 64            | engine validation  | `invalid_state`, exit 2 |
+| `buffer_size * pipeline_depth` > 512 MiB | engine validation | `invalid_state`, exit 2 |
+
+The three engine-rejected rows print `copy failed: invalid_state` on stderr, not
+the usage text. `--buffer-size 8388608 --pipeline-depth 64` (exactly 512 MiB) is
+accepted. This is a reference copy app, not an arbitrary thread/allocator factory.
 
 ### Input domain: regular files only
 
@@ -99,18 +115,28 @@ entry. The two modes' symlink semantics are intentionally different.
 | code | meaning        |
 | ---- | -------------- |
 | 0    | success        |
-| 1    | usage error    |
-| 2    | I/O error      |
+| 1    | usage error, and the `source == destination` rejection |
+| 2    | I/O error, engine validation failure (`invalid_state`), failed commit |
 | 3    | canceled       |
+
+Exit 1 is produced by the CLI parser and by the same-file rejection; the latter
+prints `source and destination refer to the same file` rather than the usage
+text. All other failures exit 2, except cancellation, which exits 3 — not
+reachable from this CLI today, since nothing requests a stop, so the row is
+contract-of-record rather than observed behaviour.
 
 ## Rejections
 
 The CLI rejects: missing/extra operands, zero buffer size, zero pipeline
 depth, invalid worker count, unknown sync policy, source==destination,
-non-regular sources/destinations, and any value beyond the resource limits
+non-regular sources/destinations, and worker counts beyond the resource limits
 above. Integer parsing is strict: negative numbers, signs, trailing junk
 (`123abc`, `1MiB`), and values that overflow `size_t` are usage errors — no
 silent narrowing or truncation.
+
+The CLI parser does **not** range-check `--buffer-size` or `--pipeline-depth`;
+those limits are enforced by `run_pipelined_copy*`, so an over-cap value
+surfaces as exit 2 with `copy failed: invalid_state` rather than a usage error.
 
 ## Algorithm
 
@@ -250,8 +276,7 @@ ownership, xattrs, or other metadata beyond the permission bits.
 
 - `ApplicationRuntime` lifecycle is usable from a real program;
 - a Runtime task can submit async I/O **and cooperatively await** it via
-  `RuntimeTaskContext::await_completion` (see
-  `docs/history/implementation-plans/m1-runtime-io-await-race.md`);
+  `RuntimeTaskContext::await_completion`;
 - positional async read/write with partial-I/O handling works end-to-end on a
   real filesystem through `ThreadPoolBackend`;
 - a bounded, reusable-buffer pipeline with multiple outstanding reads and an
@@ -271,31 +296,65 @@ ownership, xattrs, or other metadata beyond the permission bits.
 
 ## Test targets
 
-The Version B test family (all in the default `xmake test` group):
+Three registered targets run under `xmake test` (group `test`), and therefore
+under CI's `xmake test -v` in both the debug and release profiles:
 
-- `scripted_backend_test` — the deterministic test backend itself
-  (cancel idempotency, staged accounting, controller lifetime);
-- `sluice_copy_pipeline_contract_test` — pipeline contracts against the
-  scripted backend (read-ahead, write order, short reads/writes, drains,
-  bounded memory across multiple slot-reuse rounds, allocation failure,
-  bounded-failure watchdog);
-- `sluice_copy_pipeline_integration_test` — real files + ThreadPoolBackend
-  (exact destination size, multi-round reuse, multi-worker, sync policies,
-  real concurrency probe). The buffer-size matrix derives each case size
-  from buffer/depth and the slot-reuse rounds (a few hundred ops in the
-  default group); `SLUICE_PIPELINE_BUFSTRESS_N=<n>` re-opts a run into the
-  explicit large workload (`100003` in the Version B nightly gate), and
-  honors only a fully-valid positive integer — anything else falls back to
-  the small matrix size;
-- `sluice_copy_pipeline_stress_test` — deterministic randomized matrix
-  (`--seed` / `--iterations`);
-- `sluice_copy_integration_test` / `sluice_copy_fault_test` — Version A
-  integration and fault injection;
-- `sluice_copy_cli_parse_test` / `sluice_copy_file_domain_test` — CLI parsing
-  and the regular-file input domain;
-- `sluice_copy_safe_output_test` — Version C safe output: input domain, temp
-  placement + permission preservation, commit/discard cleanup, rename-failure
-  path, fault-injected and real-backend atomic flows;
-- hardening `python3 scripts/hardening.py --version-b` — the Version B
-  nightly gate (Debug soak rounds, required TSan and ASan+UBSan target sets,
-  final Debug).
+- `app_copy_consumption_test` (10 cases) — engine/domain entry points against the
+  real `ThreadPoolBackend`: a Version A path round-trip through
+  `open_copy_files` + `run_pipelined_copy`, outcome move semantics, the
+  `src_open` / `src_not_regular` / `dst_open` / `same_file` rejections, the
+  atomic round-trip through `open_atomic_copy` + `commit_atomic_copy` (including
+  "no temp file left behind"), and `discard_atomic_copy` cleanup.
+- `app_copy_pipeline_oracle_test` (21 cases) — the Version B pipeline against a
+  scripted backend, driving controlled submission/completion/failure ordering.
+  Covers the depth-1 single outstanding read, the full depth-4 read window,
+  out-of-order read completion with in-order writes, short-read retry in the same
+  slot, partial and zero-progress writes, read/write error settlement of
+  read-ahead, primary-error selection, settlement of already-accepted work on
+  submit failure and capacity refusal, EOF draining without post-EOF writes,
+  sync-after-all-writes, bounded multi-round slot reuse, and slot
+  non-recycling before its write completes. Also covers synchronous rejection of
+  invalid arguments (`depth 0`, `buffer 0`, `workers 0`, null backend, each cap
+  + 1, the 512 MiB product limit, and size_t overflow). Three of the 21 cases
+  (`borrow_live_write_peak_selftest`, `watchdog_selftest_child`,
+  `watchdog_selftest_bounded`) are harness self-checks, not pipeline behavior.
+- `app_copy_dir_fsync_test` (4 cases) — the atomic commit's directory-fsync
+  EINTR retry through the `SLUICE_COPY_INTERNAL_TESTING` `DirFsyncScript` seam:
+  one interruption retried to success, repeated interruptions all retried, a
+  real error after an interruption reported verbatim (stage `dir_sync`,
+  destination already replaced), and a terminal error not retried.
+
+Not covered by any of these targets: the CLI itself is never exercised as a
+subprocess — `parse_args` and the CLI exit codes above are **not** under test.
+There is no automated test for a symlink destination, for the
+`--no-atomic` `O_NOFOLLOW` rejection, or for `--sync data|all` end-to-end
+against the real filesystem.
+
+There is no mutation matrix in CI, and no nightly gate. When the Version B
+pipeline was made an oracle (`app_copy_pipeline_oracle_test`), five mutations of
+`copy_task.cpp` were injected by hand as a one-off discriminating check —
+serialize reads, scramble write order, skip the post-failure drain, reuse a slot
+buffer prematurely, and treat a short read as a full read. Each was detected by
+this suite; that was a manual measurement, not something `xmake test` repeats.
+Two limits of this evidence: a mutation kill shows the suite discriminates those
+five defects, not that the pipeline is verified in general, and the
+waiter-level error-precedence question (whether a waiter-failure result can
+reach the task before the primary error) is source-confirmed but not reachable
+through the public single-task API, so it is deliberately **not** frozen as
+contract — it still needs a product decision, and the oracle asserts only the
+reachable arm (drained op results never override the primary error).
+
+## Known documentation gaps
+
+Earlier revisions of this README listed a `sluice_copy_*` test family
+(`scripted_backend_test`, `sluice_copy_pipeline_contract_test`,
+`sluice_copy_pipeline_integration_test`, `sluice_copy_pipeline_stress_test`,
+`sluice_copy_integration_test`, `sluice_copy_fault_test`,
+`sluice_copy_cli_parse_test`, `sluice_copy_file_domain_test`,
+`sluice_copy_safe_output_test`) and a `scripts/hardening.py --version-b` nightly
+gate. Those test sources were removed in `5f62b55b` and the script does not exist
+in this tree, so none of them is a current guarantee. The engine limit checks
+(`copy_task.cpp`), the slot-reuse and ordering contracts, and the
+directory-fsync retry were re-derived by the three targets above; CLI parsing,
+the regular-file input domain at the CLI layer, and fault injection into the
+pipeline are **not** currently re-covered.

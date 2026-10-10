@@ -66,16 +66,46 @@ read chunk (positional async read, one reusable buffer)
    -> reuse the buffer
 ```
 
-Cross-buffer correctness: a line (and any pattern occurrence inside it) may
-straddle any chunk boundary; the carry assembles it before matching, so the
-result is independent of buffer size (proved by the chunk-invariance tests).
+Cross-buffer correctness is the design intent: a line (and any pattern occurrence
+inside it) may straddle any chunk boundary, and the carry is meant to assemble it
+before matching so that the result does not depend on buffer size. The
+chunk-invariance sweeps that demonstrated this were removed in `5f62b55b` and
+have **no current equivalent** — the surviving test target uses a single buffer
+size and contains no boundary-straddling case. Read this as the design, not as a
+currently verified property (see "What is not covered").
 
 ## Output ordering (deterministic)
 
 Files are scanned sequentially in CLI order; lines are emitted in ascending
-line order within a file. No parallel-scan output interleaving. With more
-than one input file each match is prefixed `path:`; `-n` adds `line:`. Matches
+line order within a file. No parallel-scan output interleaving. Matches
 (stdout) are never mixed with diagnostics (stderr).
+
+The per-match prefix depends on two independent switches, and the observed
+behaviour is **not** uniform. Measured on the current tree with `hello` in
+`g1.txt`/`g2.txt`:
+
+```text
+one file,  no -n   ->  hello one                 (no prefix)
+one file,  -n      ->  1:hello one               (line number only)
+two files, -n      ->  g1.txt:1:hello one        (path, line number)
+two files, no -n   ->  g1.txthello one           (path only, NO separator)
+```
+
+The multi-file without `-n` row is a divergence, not a design decision: the path
+is written and then the line is written immediately after it, so the two run
+together (`g1.txthello one`). GNU grep emits `g1.txt:hello one`, and the earlier
+revision of this README documented a `path:` prefix. Source:
+`apps/sluice-grep/main.cpp` writes the path under `if (prefix_name)` and emits
+the `':'` only under `if (prefix_name && args.line_numbers)`, so the single-file
+and `-n` shapes are correct while the multi-file without-`-n` shape is not.
+
+This is a **DOC_IMPL divergence with an open product decision**. Which shape is
+authoritative — the documented `path:` prefix, or the current concatenated
+output — has not been decided, so the README records the real behaviour instead
+of restating the old claim. The production writer was deliberately not changed
+in this documentation pass. Consumers that need machine-readable multi-file
+output should pass `-n` (whose `path:line:` shape is unambiguous) or parse the
+current shape with the known absence of a separator.
 
 ## Resource limits & memory bound
 
@@ -92,6 +122,24 @@ memory ~= buffer_size + max_line_bytes (line carry) + the match being emitted
 
 independent of file sizes and match count (matches stream out, they are not
 accumulated).
+
+The usage text advertises `4 KiB..64 MiB` for `--buffer-size` and `<= 64 MiB` for
+`--max-line-bytes`, but the parser only rejects `0`, non-numeric values and
+`size_t` overflow; the range is enforced afterwards by `grep_files`, which marks
+every input `invalid_state`. Because this app's usage exit code is 2, the
+observable difference is only the message, not the code — an over-cap value
+prints the generic `read error` line instead of the usage block:
+
+```text
+--buffer-size 4095       -> exit 2, "g1.txt: read error"
+--buffer-size 67108865   -> exit 2, "g1.txt: read error"
+--max-line-bytes 0       -> exit 2, usage block
+--max-line-bytes 67108865 -> exit 2, "g1.txt: read error"
+--workers 65             -> exit 2, usage block
+```
+
+`--workers` and the zero checks are the only range checks the parser performs.
+Whether the range should move into the parser is an open product decision.
 
 ## Error semantics & exit codes
 
@@ -133,12 +181,32 @@ in V1 (run-to-completion workload); cancellation surfaces as an error (exit
 
 ## Tests
 
-- `sluice_grep_matcher_test` — chunk-invariance sweeps (cross-buffer lines
-  and split patterns), final line without newline, empty file/pattern, empty
-  lines, long-line dropping with exact numbering (terminated and
-  unterminated);
-- `sluice_grep_cli_parse_test` — strict parsing, caps, usage errors exit 2,
-  newline-pattern rejection, empty-pattern acceptance, `-` as operand;
-- `sluice_grep_integration_test` — real files + real backend: multi-file
-  deterministic ordering, 1500-line cross-chunk scanning, boundary cases,
-  bad-fd isolation.
+One registered target runs under `xmake test` (group `test`), and therefore under
+CI's `xmake test -v` in both the debug and release profiles:
+
+- `app_grep_consumption_test` (4 cases) — the `grep_files` engine over the
+  canonical `File` resource and a real `ThreadPoolBackend`: per-line matching
+  with match count, lines-scanned count, 1-based line numbers and the path handed
+  to the sink; result order and sink order across two input files; a dropped
+  over-cap line reported via `dropped_long_lines` while the following lines still
+  match; and a per-file error (with an empty sink) for an already-closed input.
+
+## What is not covered
+
+- the cross-chunk / chunk-boundary invariance sweeps (a line and a pattern split
+  across buffer boundaries) that `tests/sluice_grep_matcher_test.cpp` performed —
+  removed in `5f62b55b`; the current target uses a single buffer size (4096) and
+  no boundary-straddling case;
+- CLI parsing: `parse_args`, the newline-pattern rejection, the `-` operand, and
+  the usage block are **not** exercised as a subprocess;
+- the multi-file `path:` prefix shape, and therefore the divergence documented
+  above;
+- final-line-without-newline, empty-pattern and empty-file behaviour, though the
+  streaming design and the manual CLI checks above are consistent with the
+  documented semantics;
+- cancellation (matches already streamed, error surfaced as exit 2).
+
+An earlier README listed `sluice_grep_matcher_test`, `sluice_grep_cli_parse_test`
+and `sluice_grep_integration_test`; together with
+`sluice_grep_matcher_differential_test` and `sluice_grep_fault_test` all five
+sources were removed in `5f62b55b`. They are historical references only.
