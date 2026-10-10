@@ -1,6 +1,6 @@
 # #402 F3/W-04 conditional exit gate — applied before/after decision record
 
-> **Status: APPLIED 2026-10-10 to the live #402 issue body**, per owner-directed Clean Minimal V1 decision [#458 comment 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). The following is an exact **Before edit → Applied after edit** log of #402's F3 Evidence/Exit Gate. Root v1-r4/F0 exclusion in this PR remains PROPOSED until independently reviewed/merged; this phase-gate alignment does not assert supported W-04 or D2 implementation verification.
+> **Status: APPLIED 2026-10-10 to the live #402 issue body**, per owner-directed Clean Minimal V1 decision [#458 comment 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). The following is an exact **Before edit → Applied after edit** log of #402's F3 Evidence/Exit Gate. Root v1-r4/F0 exclusion is now adopted via PR #488 at `d4973100a31dccaa098cf4227f84e6c9c0afdee7`; this phase-gate alignment does not assert supported W-04 or D2 implementation verification.
 
 Root PROD-02/W-04/MIG-03 already defined the narrow supported host as optional. **Before edit**, #402 mistakenly made support unconditional, potentially forcing a W-04 product just to migrate HASH/GREP/COPY/TAIL.
 
@@ -47,4 +47,4 @@ W04_SUPPORTED_HOST_PROFILE = PASS_IF_SHIPPED_AS_SUPPORTED | N/A_WITH_NEGATIVE_PA
 - No override of adopted #475 A/B/C installed-header hold/keep policy without its specific reconsideration conditions.
 - No F3 family gate PASS merely because the host is deferred; other gate arms and consumer oracles still matter.
 
-**After owner-directed #402 alignment:** independently review root/F0 v1-r4 candidate and exact #402 issue-body text against PROD-02/ADR-0003; update #458 per-app exit ownership and final Phase M md/JSON before closing M. Do not flip a gate solely because the wording changed.
+**Post-adoption:** #488 exact-head independent review approved the root/F0 amendment and exact #402 issue-body text against PROD-02/ADR-0003. The final Phase M adoption md/JSON and #458 record carry per-app exit ownership and the remaining final-review/merge/closure receipt. Do not flip a gate solely because the wording changed.

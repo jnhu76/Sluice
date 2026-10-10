@@ -1,6 +1,6 @@
 # Sluice v1 Conformance Ledger
 
-**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r4 (takes effect only when the GOV-04 root revision in this PR is merged).
+**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r4, adopted via [PR #488](https://github.com/jnhu76/Sluice/pull/488) at `d4973100a31dccaa098cf4227f84e6c9c0afdee7`.
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 
@@ -15,7 +15,37 @@ them is v1 evidence; future protocol and liveness closures must record their
 evidence in the map's closure format. No row below changes status because an
 old proof exists.
 
-**Phase M / package evidence boundary (updated 2026-10-11):** #458 owner-directed Clean Minimal V1 target is recorded in merged PR #487; final family-gate status projection remains separate. **F-W2-1 has been completed** by [PR #490](https://github.com/jnhu76/Sluice/pull/490), merge `c6f5af66753f71786f928385bd0e6a7c8694a0c4`, #489 CLOSED. Its **versioned** two-profile freeze/reproduction proved `F1_B_PROVENANCE_VERIFIED=PASS` for the new manifests at reviewed head `7f5eed6a`, with production baseline `0773a99e`; historic `a34d96c6`-pinned manifests remain valid *only for their dated baseline* and unchanged. The build fix is Linux GNU ar `-D` in `xmake/libraries.lua`, **not** an `src/include` code or v1 installed-surface contraction. This scoped F1 evidence does **not** imply Phase M family retirement PASS, W-04 OPTIONAL_SUPPORTED, wider runtime/io_uring conformance or `RELEASE_READY`. PR #488's normative candidate does not itself change install/exported API.
+**Phase M / package evidence boundary (updated 2026-10-11):** #458 owner-directed Clean Minimal V1 target is recorded in merged PR #487; final family-gate status projection remains separate. **F-W2-1 has been completed** by [PR #490](https://github.com/jnhu76/Sluice/pull/490), merge `c6f5af66753f71786f928385bd0e6a7c8694a0c4`, #489 CLOSED. Its **versioned** two-profile freeze/reproduction proved `F1_B_PROVENANCE_VERIFIED=PASS` for the new manifests at reviewed head `7f5eed6a`, with production baseline `0773a99e`; historic `a34d96c6`-pinned manifests remain valid *only for their dated baseline* and unchanged. The build fix is Linux GNU ar `-D` in `xmake/libraries.lua`, **not** an `src/include` code or v1 installed-surface contraction. This scoped F1 evidence does **not** imply Phase M family retirement PASS, W-04 OPTIONAL_SUPPORTED, wider runtime/io_uring conformance or `RELEASE_READY`. PR #488's adopted amendment does not itself change install/exported API.
+
+## Phase M terminal decision/consumer projection — 2026-10-11
+
+Current record: [final adoption md](../review/m-phase-final-adoption-20261011.md) and
+[JSON](../review/m-phase-final-adoption-20261011.json), audited at root-adoption
+master `d4973100a31dccaa098cf4227f84e6c9c0afdee7`. Earlier final-closeout/wave-2
+packets remain dated snapshots. The current owner task authorizes reviewed merge
+and issue closure; the final PR/#458 carry the exact-head independent review and
+post-merge closure receipt. This section records M decisions and responsibility,
+not implementation conformance for F2–F5.
+
+| Family | M decision/consumer gate | Remaining owner and exit |
+|---|---|---|
+| M-R | PASS: 75/75 rows, 82 subscopes; tier-1 migrated, tier-2 isolated | F2 and exact T2 F3/F4/harness owners; Completion/RequestHandle/Batch and shared seams |
+| M-H | DECIDED: D-H1..5; ADR-0003 DESIGN_AUTHORITY_ONLY; exact consumer re-ownership | F3 #474/#402; app parity, T2-08/OB-1..3, runtime; D2 unverified, optional supported NO |
+| M-F | ADOPTED: A3a vectored exclusion + B1 second-authority retirement target | F4 #461/#402; semantic_range, factories/stream closure, shared retry and external risk |
+| M-A1 | ADOPTED: P2 final target; P3 bounded bridge | F4 #462/#402 + F5 risk/package owner; pool headers/TU/archive batch and B-01 |
+| M-A2 | ADOPTED: D-12 negative product admission | F4 #402; Reader::stream_to reverse edge, U-05, helper re-ownership |
+| M-A3 | ADOPTED: D-13 no v1 installed test-double entitlement | F4/F5 #402; active seams/internalization or retirement and package/external gates |
+| M-A4 | CLOSED_NO_ACTION: reuse #463 isolation | F5 #402; final tree disposition, preserve negative install proof |
+
+M scope is `VERIFIED` only for traced decisions, exact census responsibility and
+scoped evidence after the final PR's independent review/merge; no required v1
+implementation row becomes VERIFIED here. Legacy physical retirement rows remain
+NOT_ASSESSED/GAP as individually recorded. #475 A=BOUNDED_HOLD and B/C=KEEP_INSTALLED_COMPAT
+remain effective through their precise triggers. Per-surface human external-risk
+acceptance remains required before physical removal. F2/F3/F4 own independent
+family gates; affected shared seams serialize locally; F5 follows their final
+dispositions. #402's separately tracked F5 optional-W04 shorthand is a downstream
+acceptance correction, not an extra M exit gate. `V1_RELEASE_READY=NO`.
 
 ## Status vocabulary
 
