@@ -45,8 +45,8 @@ struct HashTask {
 
         std::uint64_t offset = 0;
         for (;;) {
-            auto rr = read(offset, std::span<std::byte>(
-                                       reinterpret_cast<std::byte*>(buffer.data()), buffer.size()));
+            auto rr = read(offset, std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                                        buffer.size()));
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;

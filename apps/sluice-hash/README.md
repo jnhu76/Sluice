@@ -146,28 +146,25 @@ V1 — cancellation is reachable through the Runtime lifecycle, not Ctrl-C.
 One registered target runs under `xmake test` (group `test`), and therefore under
 CI's `xmake test -v` in both the debug and release profiles:
 
-- `app_hash_consumption_test` (5 cases) — the `hash_files` engine over the
+- `app_hash_consumption_test` (6 cases) — the `hash_files` engine over the
   canonical `File` resource and direct execution:
   a known digest over a real file (`"abc"` →
   `ba7816bf…20015ad`), multi-chunk streaming of 10000 bytes checked against a
   direct in-process digest, the empty-file digest
   (`e3b0c442…7852b855`), a per-file error for an already-closed input, and input
-  order preservation across two files.
+  order preservation across two files, and continued hashing after a read error
+  on direct, multi-worker and injected-backend paths.
 
 ## What is not covered
 
-The single target above is the whole current test surface for this app. None of
-the following has a current test, and none should be read as guaranteed:
+The consumption suite and subprocess oracle leave these limitations:
 
 - the NIST vector set and chunk-boundary invariance (removed with
   `sluice_hash_sha256_test.cpp` in `5f62b55b`); only the two digests in the
   consumption test are pinned, over a single buffer size (4096);
-- CLI parsing: `parse_args`, the strict-integer rejections, the `--workers` cap,
-  and the CLI's exit-code mapping are **not** exercised as a subprocess;
-- the CLI-level non-regular-input rejection and multi-file order as printed by
-  the binary;
+- the CLI-level non-regular-input rejection is not tested;
 - cancellation (the `canceled` → exit 3 path) has no test at any level;
-- exception allocation failure and cancellation remain untested.
+- exception allocation failure remains untested.
 
 An earlier README listed `sluice_hash_sha256_test`, `sluice_hash_cli_parse_test`,
 `sluice_hash_integration_test` and `sluice_hash_fault_test`; all four sources were
