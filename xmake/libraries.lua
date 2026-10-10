@@ -18,6 +18,16 @@ target("sluice_core")
     add_headerfiles(R .. "include/(sluice/*.hpp)",
                     R .. "include/(sluice/blocking/*.hpp)",
                     R .. "include/(sluice/detail/*.hpp)")
+    -- Reproducible archives (#489): binutils built without
+    -- --enable-deterministic-archives embeds each member's real mtime/uid/gid,
+    -- so identical objects archive to different bytes on those toolchains and
+    -- the F1 frozen archive baselines cannot reproduce. GNU ar's -D modifier
+    -- zeroes that metadata; {force=true} bypasses xmake's flag check, which
+    -- does not know ar modifiers. Scoped to Linux: the Windows/clang-cl
+    -- archiver (lib.exe-style) does not accept -D.
+    if is_plat("linux") then
+        add_arflags("-D", {force = true})
+    end
 
 -- Async runtime library (sluice-CORE-017+). OPT-IN, namespace sluice::async.
 -- Built alongside the core but kept a separate static lib so the blocking
@@ -40,6 +50,9 @@ target("sluice_async")
     -- production now, so they are listed explicitly.
     add_files(R .. "src/async/detail/context_identity.cpp",
               R .. "src/async/detail/request_core.cpp")
+    if is_plat("linux") then
+        add_arflags("-D", {force = true})
+    end
     -- The uring public class definition (include/sluice/async/uring_backend.hpp)
     -- is #if-guarded on SLUICE_HAS_LIBURING, so the macro is part of the
     -- library's public usage requirement: every consumer TU must see the same
