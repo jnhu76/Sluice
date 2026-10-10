@@ -15,7 +15,7 @@ them is v1 evidence; future protocol and liveness closures must record their
 evidence in the map's closure format. No row below changes status because an
 old proof exists.
 
-**Phase M / package evidence boundary (2026-10-10):** #458 owner-directed Clean Minimal V1 target is recorded, but #487 decision projection is still undergoing final delta review; F-W2-1 (#489) dual-profile re-freeze is **NOT DONE** and the old pinned production baseline cannot reproduce current `src/include` HEAD. No `F1_B_PROVENANCE_VERIFIED` PASS, family retirement PASS or `RELEASE_READY` is inferred from this normative proposal. The pre-v1 installed/public artifacts remain physically unchanged in this PR.
+**Phase M / package evidence boundary (updated 2026-10-11):** #458 owner-directed Clean Minimal V1 target is recorded in merged PR #487; final family-gate status projection remains separate. **F-W2-1 has been completed** by [PR #490](https://github.com/jnhu76/Sluice/pull/490), merge `c6f5af66753f71786f928385bd0e6a7c8694a0c4`, #489 CLOSED. Its **versioned** two-profile freeze/reproduction proved `F1_B_PROVENANCE_VERIFIED=PASS` for the new manifests at reviewed head `7f5eed6a`, with production baseline `0773a99e`; historic `a34d96c6`-pinned manifests remain valid *only for their dated baseline* and unchanged. The build fix is Linux GNU ar `-D` in `xmake/libraries.lua`, **not** an `src/include` code or v1 installed-surface contraction. This scoped F1 evidence does **not** imply Phase M family retirement PASS, W-04 OPTIONAL_SUPPORTED, wider runtime/io_uring conformance or `RELEASE_READY`. PR #488's normative candidate does not itself change install/exported API.
 
 ## Status vocabulary
 
