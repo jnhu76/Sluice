@@ -54,7 +54,7 @@ Consequence: today, including canonical async headers **transitively compiles** 
 
 ### 1.5 What source compatibility is actually promised?
 
-**None is promised by any current authority.** GOV-02 assigns normative force only to the root; the root freezes behavior, not C++ names (names are ADR-01-delegated and ADR-0004 explicitly maps `IoContext → AsyncIoContext` "until the F-phase rename"). No document, issue, or ledger row promises that a given header, class name, or signature survives any future commit. The only retention obligations in force are MIG-01/MIG-02 process obligations: replacements and consumer migration precede retirement.
+**No current v1 root/ADR establishes source spelling stability, but a pre-v1 publication DID use a deliberate-deprecation convention.** The historical v0.0.1 API reference calls selected interfaces *stable-ish* and says removal or semantic change should be deliberate across minor work, while its release notes call the version experimental/not SemVer-governed. Read **both** facts: neither creates a permanent v1 API promise; neither permits unannounced deletion of previously exposed names. Document the affected header/symbols, explicitly deliberate the deprecation and migration/no-equivalent path, and have the phase owner resolve scoped external-use risk before physical removal. GOV-02 assigns normative force only to the root; the root freezes behavior, not C++ names (names are ADR-01-delegated and ADR-0004 explicitly maps `IoContext → AsyncIoContext` "until the F-phase rename"). No document, issue, or ledger row promises that a given header, class name, or signature survives any future commit. The only retention obligations in force are MIG-01/MIG-02 process obligations: replacements and consumer migration precede retirement.
 
 ### 1.6 Is any ABI compatibility actually promised?
 
@@ -68,11 +68,13 @@ Both forbidden conclusions are recorded (per #454 §8):
 
 A compatibility surface becomes **retirable** when, per MIG-01 Phase F:
 
-1. its replacement is adopted (ledger evidence, not just merged — `replacement exists ≠ replacement adopted`);
+1. its replacement is adopted (ledger evidence, not just merged — `replacement exists ≠ replacement adopted`), **or**, only for a PROD-03 capability not admitted to required v1 scope, an explicit GOV-04-adopted MIG-02 **negative product/exclusion disposition** documents why no replacement is needed, the affected behavior and the migration/no-equivalent consequence; required W-01–W-03 capabilities cannot use this exception;
 2. every in-tree consumer edge recorded in `f0-consumer-migration-dag.md` has migrated or is explicitly re-owned by a later phase;
 3. the installed-header/build audit (ledger row `NOT_ASSESSED` → assessed) covers the surface;
 4. no formal/docs claim depends on it as current evidence (formal map `NOT_CURRENT_CLOSURE_EVIDENCE` items excepted);
-5. `UNKNOWN_EXTERNAL_USE` has been resolved by an explicit decision of the phase owner (documented acceptance of breakage risk, or a deprecation window) — because no compatibility policy exists, **this decision is a #402 human-review obligation, not an agent default**.
+5. `UNKNOWN_EXTERNAL_USE` has been resolved by an explicit decision of the phase owner (documented **per-surface** acceptance of breakage risk, or a bounded deprecation window) after inspecting historical public descriptions, including v0.0.1 stable-ish/deliberate-deprecation text — **this decision remains a #402 owner-review obligation, not an agent default**. A global v1 minimality preference alone does not resolve any unenumerated U-family exposure.
+
+The exception in (1) changes only the **adoption form** (approved exclusion rather than fictitious replacement) for a non-admitted capability. Conditions (2)–(5), the #402 family gates, #475's adopted A/B/C package policy and every required lifetime/settlement oracle remain in force. An adopted exclusion is `DECIDED_TO_EXCLUDE_FROM_V1`, not `SAFE_TO_UNINSTALL` or `RELEASE_READY`. Any later change of profile/install symbols triggers B-01 versioned package evidence; never rewrite historical F1 manifests.
 
 ### 1.8 Can compatibility adapters own semantic authority?
 
