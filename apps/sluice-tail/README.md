@@ -93,6 +93,16 @@ main blocks SIGINT/SIGTERM BEFORE any thread exists
 A signal-ended follow exits **0** — the documented normal end of `tail -f`
 (GNU convention), not the unified canceled=3 code.
 
+`wait()` internally issues the Runtime's `request_stop()`, `drain()` and
+`join()`. Their return values are **not** propagated: `wait()` reports
+`sluice::Result<TailResult>`, and a drain/join failure has no channel through it.
+No test observes a drain or join return value either — the two oracle suites
+assert only the `TailResult` fields (`stopped_by_cancel`, `lines_emitted`,
+`truncation_detected`, `error`) and the process exit code. Treat "a clean signal
+exit" as evidence that settlement *completed*, not as evidence that a
+settlement *failure* would be reported. Closing that gap needs a public
+settlement-outcome surface, which is a product decision.
+
 ## Resource limits & memory bound
 
 | limit              | value   |
@@ -128,8 +138,10 @@ source); directories/FIFOs are rejected.
   `std::exit`, no runtime internals;
 - bounded backward positional scanning (descending offsets) works through
   the same submit/await surface as forward streaming;
-- idle waiting costs ~0 CPU without any timer API (bounded poll sleep; see
-  findings for the timer gap this exposed).
+- idle waiting costs ~0 CPU without a timer: there is no app-facing readiness or
+  timer API to wait on (a host-level progress-notification fd exists for
+  driving the loop, but it reports scheduler progress, not file readiness or a
+  deadline), so a bounded poll cadence is what an app can use today.
 
 ## Known limitations / intentionally NOT implemented
 
@@ -139,20 +151,83 @@ source); directories/FIFOs are rejected.
   line-for-line content is identical, byte streams are not;
 - multiple files (`tail a b c`) and `-q`/`-v` headers;
 - `+N` start-offset syntax, byte modes (`-c`), PID death watching (`--pid`);
-- inotify/file-event wakeup (bounded polling only — the timer/readiness
-  gap is recorded in the findings document, not worked around in
-  foundation);
-- `--follow` with stdin.
+- inotify/file-event wakeup (bounded polling only — an app-facing file-readiness
+  or timer API does not exist on the current Runtime surface);
+- `--follow` with stdin;
+- the io_uring backend. `TailEngine::start()` builds a `ThreadPoolBackend`
+  unconditionally, so neither this app nor its tests exercise io_uring.
 
 ## Tests
 
-- `sluice_tail_scan_test` — last-N (0/1/N, N > total, no final newline,
-  empty, 200 KiB bounded backward scan, long-line drop + diagnostic);
-  follow (append delivery, clean request_stop termination, truncation
-  detection with an ordering anchor that makes the snapshot race-free;
-  every case leaves a quiescent engine via an RAII guard);
-- `sluice_tail_cli_parse_test` — strict parsing, zero-allowed `-n`,
-  poll/buffer/line caps, usage errors;
-- `sluice_tail_cli_integration_test` — fork/exec the real binary: finite
-  tail output, exit codes, and the SIGINT end-to-end path (append ->
-  delivery -> SIGINT -> exit 0).
+Three registered targets run under `xmake test` (group `test`), and therefore
+under CI's `xmake test -v` in both the debug and release profiles:
+
+- `app_tail_consumption_test` (5 cases) — the `TailEngine` public API over the
+  canonical `File` resource and a real `ThreadPoolBackend`: last-N emission
+  (`lines = 3` of 100), `lines = 0` emitting nothing, `start()` rejecting
+  `workers = 0` with `invalid_state`, a follow stopped by `request_stop()` with
+  `stopped_by_cancel` and no error, and truncation detection after
+  `ftruncate(0)` + rewrite.
+- `app_tail_lifecycle_oracle_test` (6 cases) — the stop / settlement / teardown
+  contracts at the engine layer. It compiles the production `tail_task.cpp`
+  unmodified and interposes `pread` in-process (`extern "C"` ELF symbol
+  interposition, dev/ino-gated, forwarding everything else via `syscall`), so a
+  follow read can be held while a stop is requested. Cases:
+  `idle_follow_stops_bounded` (an idle follower's stop completes within a
+  deadline), `lifecycle_api_states` (`wait()` before `start()` and a second
+  `wait()` are `invalid_state`; `request_stop()` before `start()` is a no-op;
+  `poll_interval_ms = 49` refused), `pending_read_settles_before_retire` (an
+  accepted read must settle before the task retires — `wait()` is asserted not
+  to complete while the read is held, then to complete after release with the
+  held read's byte count observed), `append_delivery_and_partial_withholding`
+  (a complete appended line is delivered; a newline-less fragment is withheld
+  until its newline arrives), `truncate_resets_partial_carry` (truncation
+  produces the `file truncated` diagnostic and discards the partial-line carry),
+  and `descriptor_follow_across_rename` (the open descriptor is followed, not the
+  path: appends to the original inode are delivered, appends to the recreated
+  path are not).
+- `app_tail_cli_oracle_test` (10 cases) — the same lifecycle contracts through the
+  real `sluice-tail` binary, which the suite `fork`/`execve`s from the test
+  binary's own directory (it locates the binary via `/proc/self/exe`). Seven
+  cases are contract tests: `finite_tail_and_cli_exit_codes` (finite output plus
+  the exit-2 and exit-1 paths), `cli_sigint_clean_exit`,
+  `cli_sigterm_clean_exit`, `cli_double_signal_clean_exit`,
+  `cli_pending_sigint` and `cli_pending_sigterm` (a signal delivered while a read
+  is held — the child must stay alive, then exit 0 with the delivered line intact
+  and stderr empty, using the `LD_PRELOAD` shim `tests/support/tail_pread_shim.c`
+  to hold the read and a fifo command channel to release it), and
+  `cli_descriptor_follow_rotation` (the CLI-layer rotation case). Three cases —
+  `harness_watchdog_selftest`, `harness_stderr_capture_selftest`,
+  `harness_split_line_selftest` — are harness self-checks that validate the
+  suite's own watchdog/kill classification, stderr capture and split-line
+  assembly; they are not app behaviour.
+
+## What is not covered
+
+- **No test observes a `drain()` or `join()` return value**, or any propagation
+  of a settlement failure to the caller (see "Cancellation" above). This is an
+  open evidence gap, not a passing guarantee.
+- **No test verifies io_uring backend participation.** Both suites, and the app
+  itself, run the ThreadPool backend only. A green run says nothing about the
+  io_uring profile.
+- `--poll-interval` values other than the 50 ms the suites pass explicitly (the
+  200 ms default is not the value under test), `--max-line-bytes` boundary
+  behaviour, `-n` at the `kMaxLines` cap, and long-line dropping are not
+  exercised.
+- CLI parsing as such: the suites cover the exit-1 and exit-2 paths they need,
+  but there is no dedicated parser test (the removed `sluice_tail_cli_parse_test`
+  covered strict parsing and the poll/buffer/line caps).
+
+Five mutations of the follow path were injected by hand as a one-off
+discriminating measurement when these oracles were introduced — ignore the stop
+token in the follow loop, submit without awaiting, skip the final
+drain/join, keep the partial-line carry across truncation, and follow by path
+instead of by descriptor. Each was detected by this pair of suites, with the
+engine suite and the CLI suite failing different cases. That was a manual check,
+not a mutation matrix that `xmake test` repeats, and a mutation kill bounds what
+the suites discriminate rather than proving the lifecycle correct in general.
+
+An earlier README listed `sluice_tail_scan_test`, `sluice_tail_cli_parse_test`
+and `sluice_tail_cli_integration_test`; all three sources were removed in
+`5f62b55b`. The `docs/applications/file-tools-findings.md` document cited by
+earlier revisions was removed in the same commit.
