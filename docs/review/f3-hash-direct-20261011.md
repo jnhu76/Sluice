@@ -54,6 +54,7 @@ Remote worktrees `/home/jnhu/Source/sluice-f3-hash-14758dcd-{debug,release}-{n,y
 identify the four final runs. Their SHA and clean status are asserted by the
 [recorded runner](f3-hash-evidence-20261011/remote-fixed-matrix.sh).
 Commands, configurations, stdout and exits are in [raw evidence](f3-hash-evidence-20261011/).
+Logs are byte-preserving gzip files; inspect with `gzip -dc FILE.log.gz`.
 
 | Evidence | Result / actual scope |
 |---|---|
