@@ -2778,7 +2778,7 @@
         "family": "aux",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3+F4 / #402",
-        "exit_condition": "B-02 completed: SLUICE_COPY_INTERNAL_TESTING defined by app_copy_consumption_test. On later safe-output/retry changes, reprove OB-2 directory fsync EINTR-to-success and real dir_sync failure with a reachable discriminating seam. No new wiring gate is owed before M closure.",
+        "exit_condition": "B-02 completed: SLUICE_COPY_INTERNAL_TESTING defined by app_copy_dir_fsync_test. On later safe-output/retry changes, reprove OB-2 directory fsync EINTR-to-success and real dir_sync failure with a reachable discriminating seam. No new wiring gate is owed before M closure.",
         "historical_census_semantic_scope": "app 本地故障注入 seam：目录 fsync 失败脚本——当前无任何 target 定义该宏，oracle 不可达",
         "historical_census_requirement": "接线（为某目标定义该宏）并演示注入下 open_atomic_copy 失败路径命中；否则 X-13 迁移的 EINTR 对照证据缺失"
       },
