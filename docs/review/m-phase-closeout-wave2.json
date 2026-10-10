@@ -4,7 +4,7 @@
   "wave": 2,
   "generated_utc": "2026-10-10T10:52:30Z",
   "base_sha": "94b5cfcdace6ee15c75c909dae09665eda2d1a26",
-  "supersedes_nothing": "m-phase-final-closeout.{md,json} (merge ffb5afa8) retained unmodified as the 2026-10-08 snapshot",
+  "supersedes_nothing": "m-phase-final-closeout.{md,json} (introduced at merge ffb5afa8, last revised by the #472 series through b0b0e391) retained untouched by this wave",
   "scope": "remaining-family disposition inputs (M-H/M-F/M-A1), dependency-family records (M-A2/M-A3/M-A4), seven-family gate recompute; docs-only, no production/root/ADR/manifest/ledger change",
   "disposition_inputs": {
     "M-H": {
@@ -95,7 +95,7 @@
     {
       "id": "F-W2-1",
       "severity": "blocker-for-package-claims",
-      "summary": "B-01 same-slice re-freeze owed on master since #481/#484: installed header include/sluice/async/threadpool_backend.hpp (+5) and src/async/threadpool_backend.cpp (+41/-5), src/async/threadpool_test_seams.hpp (+10) drifted from the frozen PRODUCTION_BASELINE_SHA a34d96c6; empirically confirmed: --check-frozen at 94b5cfcd FAILs F1_B_PROVENANCE_VERIFIED with that production diff (all other F1 gates pass)",
+      "summary": "B-01 same-slice re-freeze owed on master since #481/#484: installed header include/sluice/async/threadpool_backend.hpp (+5) and src/async/threadpool_backend.cpp (+36/-5), src/async/threadpool_test_seams.hpp (+10) drifted from the frozen PRODUCTION_BASELINE_SHA a34d96c6; empirically confirmed: --check-frozen at 94b5cfcd FAILs F1_B_PROVENANCE_VERIFIED with that production diff (all other F1 gates pass)",
       "remedies": [
         "owner-authorized re-freeze slice (protocol precedent 6404e07b)",
         "explicit B-01 policy scoping decision recorded at GOV level"

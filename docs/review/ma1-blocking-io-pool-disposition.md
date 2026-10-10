@@ -57,7 +57,7 @@ vs the `RequestCore`/`Completion<T>`/`RequestKey` request world
 | PRESERVED_BEHAVIOR | installed headers, symbols (`make_blocking_io_pool`, `BlockingIoPool::shutdown/pool_stats`, static `current_blocking_io_pool`), archive membership — all unchanged; any external program keeps compiling/linking |
 | EVIDENCE | this record; manifests + archive baselines (unchanged); git history 1918701e → c83a0acd → 5f62b55b |
 | OWNER | F4 (disposition execution), F5 (package alignment) |
-| MAINTENANCE COST | 482 lines (97 header + 160 impl header + 225 src), zero tests since 5f62b55b, zero consumers; cost is frozen-surface carry, not active maintenance risk |
+| MAINTENANCE COST | 479 lines (96 header + 159 impl header + 224 src), zero tests since 5f62b55b, zero consumers; cost is frozen-surface carry, not active maintenance risk |
 | EXIT_TRIGGER (retire) | (i) U-external-use human decision (policy §1.7(5)) lands as breakage-acceptance or deprecation window; then (ii) #402 F4/F5 gates authorize the removal batch: headers 79→77 (fragment exception `_impl` dies with it → re-run the standalone gate over the remaining 77), archive 13→12 objects, B-01 same-slice re-freeze |
 | EXIT_TRIGGER (admit) | a future accepted workload would require the GOV-04 root amendment + boundary record + oracle — none exists |
 | DOWNSTREAM_F_GATE | F4 `SINGLE_CANONICAL_NATIVE_RESOURCE_AUTHORITY` / `RESOURCE_CONSUMERS_MIGRATED_OR_ISOLATED`; F5 package-role consistency |

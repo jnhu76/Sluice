@@ -3,10 +3,11 @@
 - **Status**: EVIDENCE_RECORD — PENDING_OWNER_DECISION on the registered
   decision set (§5). This wave changes no production code, no root text, no
   ADR, no F1 frozen manifest, and no ledger row. It supersedes nothing
-  silently: the 2026-10-08 closeout snapshot
-  ([`m-phase-final-closeout.md`](m-phase-final-closeout.md) /
-  `.json`, merge `ffb5afa8`) is retained unmodified as the original time
-  cross-section; this file is the wave-2 layer above it.
+silently: the 2026-10-08 closeout snapshot
+([`m-phase-final-closeout.md`](m-phase-final-closeout.md) / `.json`,
+introduced at merge `ffb5afa8`, last revised by the #472 projection series
+through `b0b0e391`) is retained untouched by this wave; this file is the
+wave-2 layer above it.
 - **BASE_SHA** (live master at wave start, re-fetched): `94b5cfcd`
 - **Wave-2 branch code face**: identical to `94b5cfcd` for src/include/tests
   (docs-only additions).
@@ -105,7 +106,7 @@ Fields per the Phase-M closeout contract:
 changed **installed production surface** without a same-slice B-01
 re-freeze. Evidence: `git diff a34d96c6..94b5cfcd -- src include` =
 `include/sluice/async/threadpool_backend.hpp` (+5),
-`src/async/threadpool_backend.cpp` (+41/−5),
+`src/async/threadpool_backend.cpp` (+36/−5),
 `src/async/threadpool_test_seams.hpp` (+10). `threadpool_backend.hpp` is one
 of the 79 frozen installed headers (`f1-package-manifest-*.json:74`), and the
 manifests' `PRODUCTION_BASELINE_SHA` remains `a34d96c6` (last manifest
@@ -168,8 +169,9 @@ reproductions as history and this record corrects the standing claim.
    (PROG row, `94b5cfcd`); READMEs (#479) match live behavior; no
    contradiction found. The one standing inconsistency found is F-W2-1
    (documented, not papered over).
-9. Historical preservation: `m-phase-final-closeout.{md,json}` untouched;
-   this wave is a new dated layer with exact SHAs.
+9. Historical preservation: `m-phase-final-closeout.{md,json}` untouched by
+   this wave (their own #472 revision history self-documented in-file); this
+   wave is a new dated layer with exact SHAs.
 
 ## 7. Goal states (wave 2)
 
