@@ -12,6 +12,7 @@
 
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
@@ -86,6 +87,36 @@ std::optional<File> open_temp_file(Tracker& t, const std::string& content) {
         return std::nullopt;
     }
     return std::optional<File>{std::move(opened.value())};
+}
+
+// Readiness waits are bounded by a wall-clock deadline, not an iteration
+// budget: a runnable worker can lose any fixed spin count to CPU contention
+// (the release-job flake, #483). The loop keeps the test's own publication
+// pass as the observation point, yields cooperatively so a runnable worker
+// wins the deadline race under CPU pressure, and reports the observed state
+// when the deadline expires instead of silently ending the budget.
+template <class Ready>
+bool poll_until_ready(AsyncIoContext& ctx, std::chrono::milliseconds budget,
+                      const char* what, Tracker& t, Ready&& ready) {
+    const auto deadline = std::chrono::steady_clock::now() + budget;
+    unsigned long long passes = 0;
+    bool poll_failed = false;
+    while (!ready()) {
+        const auto polled = ctx.poll();
+        ++passes;
+        if (!polled.has_value()) {
+            poll_failed = true;
+        }
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::fprintf(stderr,
+                         "TIMEOUT [%s] %s after %llu poll passes (%sfailed poll: %s)\n",
+                         t.name, what, passes, poll_failed ? "" : "no ",
+                         poll_failed ? "see earlier failures" : "polls healthy");
+            return false;
+        }
+        std::this_thread::yield();
+    }
+    return true;
 }
 
 #if defined(SLUICE_SHUTDOWN_URING)
@@ -277,8 +308,9 @@ bool shutdown_completes_and_retained_results_stay_consumable(Tracker& t) {
     }
     Request<std::size_t> ra = std::move(a).value();
     Request<std::size_t> rb = std::move(b).value();
-    for (int i = 0; i < 20000 && !(ra.ready() && rb.ready()); ++i)
-        (void)ctx.poll();
+    (void)poll_until_ready(ctx, std::chrono::milliseconds(10000),
+                           "both retained reads become ready", t,
+                           [&] { return ra.ready() && rb.ready(); });
     t.check(ra.ready() && rb.ready(), "both results are ready before the shutdown");
 
     const auto closed = ctx.shutdown(ShutdownPolicy::drain);
@@ -632,8 +664,8 @@ bool observer_delivery_episode_settles_at_shutdown(Tracker& t) {
     auto attached = ctx.attach_observer(completion);
     t.check(attached.armed(), "the observer arms before publication");
 
-    for (int i = 0; i < 20000 && !completion.ready(); ++i)
-        (void)ctx.poll();
+    (void)poll_until_ready(ctx, std::chrono::milliseconds(10000), "the observed read publishes",
+                           t, [&] { return completion.ready(); });
     t.check(completion.ready(), "the observed read publishes");
 
     const auto episode = core.observe_slot(detail::SlotIndex{0});
@@ -682,8 +714,9 @@ bool observer_attach_after_admission_close_is_refused(Tracker& t) {
     t.check(refused.status == detail::ObserverRegistration::admission_closed,
             "an observer attach after the admission close is refused");
 
-    for (int i = 0; i < 20000 && !(early.ready() && late.ready()); ++i)
-        (void)ctx.poll();
+    (void)poll_until_ready(ctx, std::chrono::milliseconds(10000),
+                           "both observed candidates become ready", t,
+                           [&] { return early.ready() && late.ready(); });
     const auto closed = ctx.shutdown(ShutdownPolicy::drain);
     t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
             "the shutdown converges with the refused attach");
@@ -779,8 +812,9 @@ bool accepted_before_close_stays_in_the_finite_set(Tracker& t) {
     const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
     t.check(cookie.has_value(), "the accepted request holds a live transport cookie");
     made.backend->inject_cqe_for_test(*cookie, 16);
-    for (int i = 0; i < 20000 && !request.ready(); ++i)
-        (void)ctx.poll();
+    (void)poll_until_ready(ctx, std::chrono::milliseconds(10000),
+                           "the accepted request settles despite the closed admission", t,
+                           [&] { return request.ready(); });
     t.check(request.ready(), "the accepted request settles despite the closed admission");
     const auto closed = ctx.shutdown(ShutdownPolicy::drain);
     t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
@@ -913,8 +947,9 @@ bool dispatch_failure_poison_retires_through_real_failure_terminals(Tracker& t) 
     t.check(injection.fired.load() == 1, "the dispatch failure fired exactly once");
 
     Request<std::size_t> request = std::move(submitted).value();
-    for (int i = 0; i < 20000 && !request.ready(); ++i)
-        (void)ctx.poll();
+    (void)poll_until_ready(ctx, std::chrono::milliseconds(10000),
+                           "the poisoned request converges through its failure terminal", t,
+                           [&] { return request.ready(); });
     auto observed = request.try_result();
     t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value(),
             "the poison converges through a real failure terminal");
@@ -977,8 +1012,9 @@ std::unique_ptr<PoisonedState> poison_with_in_flight_cqe(Tracker& t) {
     state->in_flight = std::move(a).value();
     state->poisoned = std::move(b).value();
 
-    for (int i = 0; i < 20000 && !state->poisoned.ready(); ++i)
-        (void)state->ctx->poll();
+    (void)poll_until_ready(*state->ctx, std::chrono::milliseconds(10000),
+                           "the never-visible request converges through the poison terminal",
+                           t, [&] { return state->poisoned.ready(); });
     auto observed = state->poisoned.try_result();
     t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value(),
             "the never-visible request converges through the poison terminal");
@@ -1054,8 +1090,9 @@ bool consumed_binding_control_pin_retires_without_new_io(Tracker& t) {
     const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
     t.check(cookie.has_value(), "the original operation has a live cookie");
     made.backend->inject_cqe_for_test(*cookie, 32);
-    for (int i = 0; i < 20000 && !request.ready(); ++i)
-        (void)ctx.poll();
+    (void)poll_until_ready(ctx, std::chrono::milliseconds(10000),
+                           "the original outcome wins and is consumed", t,
+                           [&] { return request.ready(); });
     auto consumed = request.take_result();
     t.check(consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
                 consumed.result.value() == 32,
@@ -1089,6 +1126,65 @@ bool consumed_binding_control_pin_retires_without_new_io(Tracker& t) {
     return true;
 }
 #endif  // SLUICE_SHUTDOWN_URING
+
+#if !defined(SLUICE_SHUTDOWN_URING)
+// Negative control for the bounded readiness waits: a completion that is
+// deliberately withheld (the worker parks on its claim before the syscall)
+// must fail by the deadline, never pass on a lucky schedule, and the same
+// wait must accept the completion once it is legitimately released.
+bool withheld_completion_fails_by_deadline_and_late_completion_passes(Tracker& t) {
+    auto file = open_temp_file(t, "shutdown bounded-readiness control payload");
+    if (!file.has_value())
+        return true;
+
+    auto backend = make_backend();
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+
+    Backend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+
+    std::vector<std::byte> buffer(16, std::byte{0});
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+    t.check(submitted.has_value(), "the control read is accepted");
+    if (!submitted.has_value()) {
+        raw->set_worker_claimed_pause_gate(nullptr);
+        return true;
+    }
+    Request<std::size_t> request = std::move(submitted).value();
+
+    while (!gate.paused.load(std::memory_order_acquire))
+        std::this_thread::yield();
+
+    const auto began = std::chrono::steady_clock::now();
+    const bool observed =
+        poll_until_ready(ctx, std::chrono::milliseconds(1500), "the withheld read stays pending",
+                         t, [&] { return request.ready(); });
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - began);
+    t.check(!observed && !request.ready(),
+            "a withheld completion fails by the bounded deadline");
+    t.check(elapsed >= std::chrono::milliseconds(1400),
+            "the failed wait consumed its deadline rather than a spin budget");
+
+    gate.resume.store(true, std::memory_order_release);
+    gate.resume.notify_all();
+    t.check(poll_until_ready(ctx, std::chrono::milliseconds(10000),
+                             "the released read converges", t, [&] { return request.ready(); }),
+            "a delayed but valid completion passes the same bounded wait");
+    auto consumed = request.take_result();
+    t.check(consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
+                consumed.result.value() == 16,
+            "the delayed completion carries its real outcome");
+
+    raw->set_worker_claimed_pause_gate(nullptr);
+    const auto closed = ctx.shutdown(ShutdownPolicy::drain);
+    t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
+            "the control context shuts down cleanly");
+    return true;
+}
+#endif  // !SLUICE_SHUTDOWN_URING
 
 struct NamedTest {
     const char* name;
@@ -1140,6 +1236,8 @@ int main() {
 #if !defined(SLUICE_SHUTDOWN_URING)
         {"zero_op_internal_pin_retires_at_shutdown",
          zero_op_internal_pin_retires_at_shutdown},
+        {"withheld_completion_fails_by_deadline_and_late_completion_passes",
+         withheld_completion_fails_by_deadline_and_late_completion_passes},
 #else
         {"dispatch_failure_poison_retires_through_real_failure_terminals",
          dispatch_failure_poison_retires_through_real_failure_terminals},
