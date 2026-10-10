@@ -95,7 +95,7 @@
     {
       "id": "F-W2-1",
       "severity": "blocker-for-package-claims",
-      "summary": "B-01 same-slice re-freeze owed on master since #481/#484: installed header include/sluice/async/threadpool_backend.hpp (+5) and src/async/threadpool_backend.cpp (+41/-5), src/async/threadpool_test_seams.hpp (+10) drifted from the frozen PRODUCTION_BASELINE_SHA a34d96c6; a --check-frozen provenance reproduction at 94b5cfcd fails the production-diff gate",
+      "summary": "B-01 same-slice re-freeze owed on master since #481/#484: installed header include/sluice/async/threadpool_backend.hpp (+5) and src/async/threadpool_backend.cpp (+41/-5), src/async/threadpool_test_seams.hpp (+10) drifted from the frozen PRODUCTION_BASELINE_SHA a34d96c6; empirically confirmed: --check-frozen at 94b5cfcd FAILs F1_B_PROVENANCE_VERIFIED with that production diff (all other F1 gates pass)",
       "remedies": [
         "owner-authorized re-freeze slice (protocol precedent 6404e07b)",
         "explicit B-01 policy scoping decision recorded at GOV level"
