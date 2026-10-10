@@ -1,6 +1,8 @@
-# #402 F3/W-04 conditional exit gate — proposed issue-body amendment
+# #402 F3/W-04 conditional exit gate — before/after decision record
 
-**Status:** PROPOSED, not adopted. Owner-directed Clean Minimal V1 target: [#458 decision 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). Current root PROD-02 / W-04 / MIG-03 makes narrow sequential host support optional, while [#402](https://github.com/jnhu76/Sluice/issues/402) F3 Exit Gate currently unconditionally says `W04_SUPPORTED_HOST_PROFILE = PASS`. This creates a cycle for reference-app migration to canonical W-01/W-02/W-03.
+> **Current status:** The owner-directed #402 issue-body policy alignment **was applied on 2026-10-10** to its F3 Evidence and Exit Gate lines after comparing the actual root PROD-02/W-04/MIG-03 optionality. The blocks below preserve the precise **before/after** for review; “Current” means *before that issue-body change*. This is **not** adoption of this PR's substantive v1-r4/F0 exclusion amendment, which remains review-pending, nor any W-04 supported PASS. GitHub issue history and [#458 delegated direction](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773) identify the owner-directed provenance.
+
+**Status:** #402 F3 optionality interpretation applied by owner-directed issue edit; substantive root/F0 policy in PR #488 still PROPOSED. Owner-directed Clean Minimal V1 target: [#458 decision 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). Current root PROD-02 / W-04 / MIG-03 makes narrow sequential host support optional, while [#402](https://github.com/jnhu76/Sluice/issues/402) F3 Exit Gate currently unconditionally says `W04_SUPPORTED_HOST_PROFILE = PASS`. This creates a cycle for reference-app migration to canonical W-01/W-02/W-03.
 
 ## Minimal #402 change after review
 
@@ -44,4 +46,4 @@ N/A is **not** a fictitious passing W-04 verification. An optional candidate may
 - No override of adopted #475 A/B/C installed-header hold/keep policy without its specific reconsideration conditions.
 - No F3 family gate PASS merely because the host is deferred; other gate arms and consumer oracles still matter.
 
-On adoption: update #402 F3 evidence and exit code block, #458 app exit ownership records, #474 disposition cross-links and the final Phase M md/JSON projection **in the same governance batch**; review exact diffs against root and ADR-0003 before flipping any gate.
+**After owner-directed #402 alignment:** independently review root/F0 v1-r4 candidate and exact #402 issue-body text against PROD-02/ADR-0003; update #458 per-app exit ownership and final Phase M md/JSON before closing M. Do not flip a gate solely because the wording changed.
