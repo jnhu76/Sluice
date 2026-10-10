@@ -1,6 +1,6 @@
 # Phase M closeout — wave 2 (remaining-family disposition and gate recompute)
 
-- **Status**: EVIDENCE_RECORD — PENDING_OWNER_DECISION on the registered
+> **Owner-directed target selection now exists:** [Clean Minimal V1 decision overlay](m-phase-clean-minimal-v1-owner-direction.md), also [#458 decision 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). This wave-2 packet is preserved as the **pre-decision evidence and candidate snapshot**, *not* the currently selected D-H2/D-H4/D-H5/D-13/D4 or U-03/U-04 target. The selected target is **no legacy burden in the first formal v1**; normative amendments, two-profile re-freeze and final independent review remain outstanding. The 12-row PENDING_OWNER table below is a historical input registry, **not** an indication that no target was selected. No family PASS/release claim is made by this overlay.\n\n- **Status**: EVIDENCE_RECORD — PENDING_OWNER_DECISION on the registered
   decision set (§5). This wave changes no production code, no root text, no
   ADR, no F1 frozen manifest, and no ledger row. It supersedes nothing
 silently: the 2026-10-08 closeout snapshot
