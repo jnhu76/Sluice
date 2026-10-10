@@ -189,11 +189,20 @@ class TailChild {
             std::fprintf(stderr, "FAIL: pipe\n");
             return false;
         }
+        err_fd_ = ::open(err_path_.c_str(), O_RDONLY | O_CREAT | O_TRUNC, 0644);
+        if (err_fd_ < 0) {
+            ::close(out_pipe[0]);
+            ::close(out_pipe[1]);
+            std::fprintf(stderr, "FAIL: stderr capture open: %s\n", std::strerror(errno));
+            return false;
+        }
 
         const pid_t pid = ::fork();
         if (pid < 0) {
             ::close(out_pipe[0]);
             ::close(out_pipe[1]);
+            ::close(err_fd_);
+            err_fd_ = -1;
             std::fprintf(stderr, "FAIL: fork\n");
             return false;
         }
@@ -201,7 +210,9 @@ class TailChild {
             ::close(out_pipe[0]);
             ::dup2(out_pipe[1], STDOUT_FILENO);
             ::close(out_pipe[1]);
-            const int efd = ::open(err_path_.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            // Own open, not a dup2 of err_fd_: a shared file description
+            // would share the offset and make err_text() read from EOF.
+            const int efd = ::open(err_path_.c_str(), O_WRONLY, 0600);
             if (efd < 0)
                 ::_Exit(126);
             ::dup2(efd, STDERR_FILENO);
@@ -215,7 +226,6 @@ class TailChild {
         out_fd_ = out_pipe[0];
         evt_fd_ = ::open(evt_path_.c_str(), O_RDWR);
         cmd_fd_ = ::open(cmd_path_.c_str(), O_RDWR);
-        err_fd_ = ::open(err_path_.c_str(), O_RDONLY);
         return pid_ > 0;
     }
 
@@ -332,7 +342,9 @@ class TailChild {
     std::string err_text() const {
         std::string s;
         if (err_fd_ < 0)
-            return s;
+            return "<stderr-capture-unavailable>";
+        if (::lseek(err_fd_, 0, SEEK_SET) < 0)
+            return "<stderr-capture-unavailable>";
         char buf[4096];
         for (;;) {
             const ssize_t n = ::read(err_fd_, buf, sizeof buf);
@@ -388,14 +400,20 @@ class TailChild {
     }
 
     bool scan_line(const std::string& want) {
-        std::size_t nl;
-        while ((nl = out_.find('\n', scanned_)) != std::string::npos) {
-            const std::size_t begin = scanned_;
-            scanned_ = nl + 1;
-            if (out_.compare(begin, nl - begin, want) == 0)
+        std::size_t begin = scanned_;
+        for (;;) {
+            const std::size_t nl = out_.find('\n', begin);
+            if (nl == std::string::npos)
+                break;
+            if (out_.compare(begin, nl - begin, want) == 0) {
+                scanned_ = nl + 1;
                 return true;
+            }
+            begin = nl + 1;
         }
-        scanned_ = out_.size();
+        // scanned_ stays at the fragment start: the line may only complete
+        // after the next read appends the rest.
+        scanned_ = begin;
         return false;
     }
 
@@ -474,6 +492,7 @@ int parse_event(const std::string& line, const char* prefix, long fields[3]) {
 }
 
 bool finite_tail_and_cli_exit_codes() {
+    const int before = g_checks_failed;
     {
         TempFile f("a\nb\nc\nd\ne\n");
         TailChild child;
@@ -502,7 +521,7 @@ bool finite_tail_and_cli_exit_codes() {
         check_msg(o.kind == ChildOutcome::Kind::exited && o.code == 1,
                   "cli: usage exit 1, got " + o.describe());
     }
-    return g_checks_failed == 0;
+    return g_checks_failed == before;
 }
 
 bool follow_clean_signal_exit(int sig, const std::string& tag) {
@@ -702,6 +721,39 @@ bool harness_watchdog_selftest() {
     return o.kind == ChildOutcome::Kind::watchdog_killed && r < 0 && errno == ECHILD;
 }
 
+// Negative control for the empty-stderr assertions: a child that exits 0
+// while writing stderr must be observable through err_text().
+bool harness_stderr_capture_selftest() {
+    TailChild child;
+    if (!child.spawn("/bin/sh", {"-c", "echo e4-stderr-marker >&2; exit 0"})) {
+        check_msg(false, "selftest-stderr: spawn sh");
+        return false;
+    }
+    const ChildOutcome o = child.wait_exit(kExitDeadline);
+    check_msg(o.kind == ChildOutcome::Kind::exited && o.code == 0,
+              "selftest-stderr: exit 0, got " + o.describe());
+    check_msg(child.err_text().find("e4-stderr-marker") != std::string::npos,
+              "selftest-stderr: stderr captured, got: [" + child.err_text() + "]");
+    return o.kind == ChildOutcome::Kind::exited && o.code == 0 &&
+           child.err_text().find("e4-stderr-marker") != std::string::npos;
+}
+
+bool harness_split_line_selftest() {
+    TailChild child;
+    // The mid-line sleep forces two pipe writes, so the line is only
+    // recognized if the scanner retains the fragment between reads.
+    if (!child.spawn("/bin/sh", {"-c", "printf split-hal; sleep 0.4; echo f-line"})) {
+        check_msg(false, "selftest-split: spawn sh");
+        return false;
+    }
+    const bool got = child.wait_line("split-half-line", kEventDeadline);
+    check_msg(got, "selftest-split: line assembled across read chunks");
+    const ChildOutcome o = child.wait_exit(kExitDeadline);
+    check_msg(o.kind == ChildOutcome::Kind::exited && o.code == 0,
+              "selftest-split: sh exit 0, got " + o.describe());
+    return got && o.kind == ChildOutcome::Kind::exited && o.code == 0;
+}
+
 }  // namespace
 
 int main() {
@@ -711,6 +763,8 @@ int main() {
     };
     const NamedTest tests[] = {
         {"harness_watchdog_selftest", harness_watchdog_selftest},
+        {"harness_stderr_capture_selftest", harness_stderr_capture_selftest},
+        {"harness_split_line_selftest", harness_split_line_selftest},
         {"finite_tail_and_cli_exit_codes", finite_tail_and_cli_exit_codes},
         {"cli_sigint_clean_exit", cli_sigint_clean_exit},
         {"cli_sigterm_clean_exit", cli_sigterm_clean_exit},
