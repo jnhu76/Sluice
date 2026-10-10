@@ -133,9 +133,16 @@ parameter; smallest production change; exit-code contract unchanged and
 already oracle-recorded); (b) move all ranges into the parsers (uniform exit
 1, matches usage text; touches all four CLIs' tested exit-code contract);
 (c) keep everything as-is (divergence documented in READMEs).
-**Recommendation: (a)** — preserves the exit-code contract that e1/e2
-evidence froze, removes the misleading diagnostic. Owner: #474 ruling → F3
-executes.
+**Historical wave-2 recommendation (SUPERSEDED by owner-selected target): (a)** — preserves the exit-code contract that e1/e2
+evidence froze, removes the misleading diagnostic. This paragraph remains as
+pre-decision evidence, **not** the currently chosen D-H2 action.
+
+**Owner-selected D-H2 direction (implementation and revised app contract still pending):**
+Use one app-local configuration validator from CLI and engine; fail invalid
+configuration before file/temp/output side effects. COPY/HASH boundary usage
+becomes exit 1; GREP usage/error stays exit 2 and no-match stays exit 1.
+Keep engine-level typed rejection; add boundary/side-effect oracles and
+update READMEs alongside the later application fix. Owner: #474 app/F3.
 
 ### D-H3 — COPY-B waiter-level error precedence (CONTRACT_DECISION_REQUIRED, carried from e1)
 
