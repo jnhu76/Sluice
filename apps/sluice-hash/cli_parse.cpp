@@ -31,7 +31,7 @@ int usage(const char* prog) {
     std::fprintf(stderr,
                  "usage: %s [options] <file>...\n"
                  "  --buffer-size <bytes>   read buffer (default 1 MiB; %zu..%zu)\n"
-                 "  --workers <count>       runtime workers (default 1; <= %u)\n"
+                 "  --workers <count>       1: direct; 2..%u: runtime (default 1)\n"
                  "  --help                  show this help\n",
                  prog, static_cast<std::size_t>(kMinBufferSize),
                  static_cast<std::size_t>(kMaxBufferSize), static_cast<unsigned>(kMaxWorkers));
@@ -82,6 +82,8 @@ int parse_args(int argc, char** argv, CliArgs& args) {
             args.files.push_back(a);
         }
     }
+    if (!valid_config(args.buffer_size, args.workers))
+        return usage(argv[0]);
     if (args.files.empty())
         return usage(argv[0]);
     return 0;

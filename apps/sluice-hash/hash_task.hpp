@@ -1,7 +1,5 @@
 #pragma once
 
-#include <sluice/async/application_runtime.hpp>
-#include <sluice/async/async_io_context.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -13,11 +11,20 @@
 #include <string>
 #include <vector>
 
+namespace sluice::async {
+class AsyncBackend;
+}
+
 namespace sluice_hash {
 
 constexpr std::size_t kMinBufferSize = 4 * 1024;
 constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
+
+constexpr bool valid_config(std::size_t buffer_size, unsigned workers) noexcept {
+    return buffer_size >= kMinBufferSize && buffer_size <= kMaxBufferSize && workers > 0 &&
+           workers <= kMaxWorkers;
+}
 
 struct HashInput {
     std::string path;
