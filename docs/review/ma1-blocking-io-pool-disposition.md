@@ -1,5 +1,7 @@
 # M-A1 BlockingIoPool disposition (#462, Phase M closeout wave 2)
 
+> **Decision overlay:** [owner-selected Clean Minimal V1](m-phase-clean-minimal-v1-owner-direction.md) chooses **P2 final retirement** for v1 with **P3 compatibility-only isolation solely as the bounded transition**. The P3 proposal below remains dated decision input, not the final release disposition. No immediate header/implementation removal is authorized.
+
 - **Status**: DISPOSITION_INPUT_COMPLETE — PENDING_OWNER_DECISION on the
   PROD-03 admittance ruling (candidate P3 below). No source, header, archive
   member or manifest entry is deleted, added or edited by this record.
