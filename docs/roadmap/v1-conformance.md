@@ -1,6 +1,6 @@
 # Sluice v1 Conformance Ledger
 
-**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r3.
+**Target authority:** [v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md), revision v1-r4 (takes effect only when the GOV-04 root revision in this PR is merged).
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 
@@ -14,6 +14,8 @@ Lean/TLA+ assets are HISTORICAL / ADAPT / RETIRE_FROM_V1_EVIDENCE and none of
 them is v1 evidence; future protocol and liveness closures must record their
 evidence in the map's closure format. No row below changes status because an
 old proof exists.
+
+**Phase M / package evidence boundary (2026-10-10):** #458 owner-directed Clean Minimal V1 target is recorded, but #487 decision projection is still undergoing final delta review; F-W2-1 (#489) dual-profile re-freeze is **NOT DONE** and the old pinned production baseline cannot reproduce current `src/include` HEAD. No `F1_B_PROVENANCE_VERIFIED` PASS, family retirement PASS or `RELEASE_READY` is inferred from this normative proposal. The pre-v1 installed/public artifacts remain physically unchanged in this PR.
 
 ## Status vocabulary
 
@@ -54,6 +56,7 @@ conditional liveness, memory visibility and kernel evidence separately visible.
 | Legacy and compatibility retirement | MIG-02 | NOT_ASSESSED | Consumer audit; replacements usable; old Completion/public surfaces explicitly retired |
 | Windows/macOS, multi-worker host, coroutine adapter | PROD-02 | DEFERRED_OUT_OF_SCOPE | Root amendment before supported-v1 claims |
 | Registered/vectored/direct-I/O/zero-copy extensions | PROD-03, LIFE-03 | DEFERRED_OUT_OF_SCOPE | Workload and root amendment; no inheritance from an existing header |
+| Public generic BlockingIoPool/Task product and unadmitted legacy WAL/stream/test-double product API | PROD-03 | DEFERRED_OUT_OF_SCOPE | Owner-selected negative admission for first formal v1: #458 comment 6099156773, proposed root MIG-02 dispositions in this PR. No in-tree workload currently admits these as supported products; existing installed/compiled compatibility remains physically present until F4/F5 consumer, external-use and package gates pass. **Do not confuse this product-scope verdict with the separate Legacy and compatibility retirement row, still NOT_ASSESSED.** |
 
 NOT_ASSESSED does not imply the baseline has no useful implementation or evidence.
 It prevents partial or older evidence from silently becoming certification of
