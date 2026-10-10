@@ -1,5 +1,7 @@
 # M-H four-app consumer disposition (#474, Phase M closeout wave 2)
 
+> **Decision overlay (subsequent to this evidence snapshot):** [owner-selected Clean Minimal V1](m-phase-clean-minimal-v1-owner-direction.md) chooses **KEEP_REFERENCE_APP_BEHAVIOR / MIGRATE_AWAY_FROM_LEGACY_RUNTIME**, *not* indefinite KEEP of ApplicationRuntime/Scheduler in v1. D-H2 moves to early shared app-local validation; D-H4 uses existing `Result<TailResult>` rather than adding a public settlement type. All observed facts and counterexamples below remain historical evidence; no F3 code migration has yet run.
+
 - **Status**: DISPOSITION_INPUT_COMPLETE — PENDING_OWNER_DECISION on the five
   flagged items (D-H1..D-H5 below). Nothing in this record is adopted by
   itself; it is the decision-ready input the owner ruling turns into the M-H
