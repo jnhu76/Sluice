@@ -133,5 +133,25 @@
     "#458 reset + SS8 family table",
     "ledger/tests",
     "live implementation at 94b5cfcd"
-  ]
+  ],
+  "owner_selected_target_overlay": {
+    "decision_reference": "https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773",
+    "canonical_doc": "docs/review/m-phase-clean-minimal-v1-owner-direction.md",
+    "selected": "CLEAN_MINIMAL_V1_WITH_CONSERVATIVE_FAMILY_MIGRATION",
+    "scope": "Target/disposition selected; this wave-2 JSON is a dated pre-decision packet, not the final adopted normative package.",
+    "overrides_wave2_recommendations": {
+      "D-H2": "EARLY_SHARED_APP_CONFIG_VALIDATION (COPY/HASH usage exit 1; GREP usage/error 2)",
+      "D-H4": "NO_NEW_PUBLIC_TAIL_SETTLEMENT_API; use existing Result<TailResult>",
+      "D-H5": "KEEP_REFERENCE_APP_BEHAVIOR; RETIRE_LEGACY_RUNTIME; W04_NOT_APP_PREREQUISITE",
+      "D-13": "EXCLUDE_TEST_DOUBLES_FROM_V1_INSTALL; internalize only live test seams",
+      "D4": "P2_FINAL_RETIREMENT_WITH_P3_BOUNDED_TRANSITION",
+      "U-03/U-04": "DELIBERATE_PRE_V1_DEPRECATION_AND_SCOPED_RISK_ACCEPTANCE"
+    },
+    "target_selected": true,
+    "normative_amendments_adopted": false,
+    "final_packet_independent_review": "PENDING",
+    "dual_profile_refreeze": "NOT_DONE",
+    "phase_m_close_allowed": false,
+    "f2_f3_f4_f5_physical_retirement_authorized": false
+  }
 }
