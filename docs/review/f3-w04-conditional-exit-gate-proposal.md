@@ -1,43 +1,44 @@
-# #402 F3/W-04 conditional exit gate — before/after decision record
+# #402 F3/W-04 conditional exit gate — applied before/after decision record
 
-> **Current status:** The owner-directed #402 issue-body policy alignment **was applied on 2026-10-10** to its F3 Evidence and Exit Gate lines after comparing the actual root PROD-02/W-04/MIG-03 optionality. The blocks below preserve the precise **before/after** for review; “Current” means *before that issue-body change*. This is **not** adoption of this PR's substantive v1-r4/F0 exclusion amendment, which remains review-pending, nor any W-04 supported PASS. GitHub issue history and [#458 delegated direction](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773) identify the owner-directed provenance.
+> **Status: APPLIED 2026-10-10 to the live #402 issue body**, per owner-directed Clean Minimal V1 decision [#458 comment 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). The following is an exact **Before edit → Applied after edit** log of #402's F3 Evidence/Exit Gate. Root v1-r4/F0 exclusion in this PR remains PROPOSED until independently reviewed/merged; this phase-gate alignment does not assert supported W-04 or D2 implementation verification.
 
-**Status:** #402 F3 optionality interpretation applied by owner-directed issue edit; substantive root/F0 policy in PR #488 still PROPOSED. Owner-directed Clean Minimal V1 target: [#458 decision 6099156773](https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773). Current root PROD-02 / W-04 / MIG-03 makes narrow sequential host support optional, while [#402](https://github.com/jnhu76/Sluice/issues/402) F3 Exit Gate currently unconditionally says `W04_SUPPORTED_HOST_PROFILE = PASS`. This creates a cycle for reference-app migration to canonical W-01/W-02/W-03.
+Root PROD-02/W-04/MIG-03 already defined the narrow supported host as optional. **Before edit**, #402 mistakenly made support unconditional, potentially forcing a W-04 product just to migrate HASH/GREP/COPY/TAIL.
 
-## Minimal #402 change after review
+## Exact F3 evidence change
 
-**Current F3 Evidence line**
+**Before edit:**
+
 ```text
-- supported W-04 HOST-03 full matrix;
+- supported W-04 HOST-03 full matrix；
 ```
 
-**Proposed**
+**Applied after edit (verbatim #402 F3 Evidence line):**
+
 ```text
-- if the narrow W-04 host profile is actually shipped/claimed OPTIONAL_SUPPORTED,
-  its full HOST-03/W-04 verification matrix; otherwise an explicit
-  OPTIONAL_SUPPORTED=NO (deferred/experimental) disposition and negative
-  release-package/support-claim audit;
+- if a narrow W-04 profile is **shipped/claimed OPTIONAL_SUPPORTED**, the supported W-04/HOST-03 full matrix；otherwise explicitly record `OPTIONAL_SUPPORTED=NO` (deferred or experimental) and pass a **negative package/support-claim audit**, without claiming W-04 verification；
 ```
 
-**Current F3 Exit Gate line**
+## Exact F3 Exit Gate change
+
+**Before edit:**
+
 ```text
 W04_SUPPORTED_HOST_PROFILE = PASS
 ```
 
-**Proposed**
+**Applied after edit (verbatim live #402 token):**
+
 ```text
-W04_SUPPORTED_HOST_PROFILE =
-  PASS_IF_SHIPPED_AS_SUPPORTED
-  | N/A_WITH_DEFERRED_OR_EXPERIMENTAL_PROFILE_AND_NEGATIVE_PACKAGE_PROOF
+W04_SUPPORTED_HOST_PROFILE = PASS_IF_SHIPPED_AS_SUPPORTED | N/A_WITH_NEGATIVE_PACKAGE_PROOF
 ```
 
-N/A is **not** a fictitious passing W-04 verification. An optional candidate may be a separately labeled experimental/deferred surface, and cannot be advertised supported without W-04. The F3 `RETAINED_HOST_SUBSTRATE_HAS_NECESSITY_AND_LIFETIME_EVIDENCE` and `HOST_RUNTIME_CONSUMERS_MIGRATED_OR_ISOLATED` gates remain mandatory for their actual retained mechanisms/consumers.
+`N/A_WITH_NEGATIVE_PACKAGE_PROOF` is an *unverified optional-support exclusion with negative package/support-claim evidence*, NOT `W04_SUPPORTED_HOST_PROFILE=PASS`. A candidate/experimental host may have installed supporting headers without becoming a supported product, if its installed closure, documentation and support-claims are consistent. If future v1 shipping claims W-04 supported, it must pass complete W-04/HOST-03 obligations.
 
-**Current per-app #474/#458 exit trigger**: `D2/W-04 implementation verification passes AND F3 host arm exists` as a prerequisite for every app port.
+**Historical per-app #474/#458 exit trigger before owner decision**: `D2/W-04 implementation verification passes AND F3 host arm exists` as a prerequisite for every app port.
 
-**Proposed**: Each app consumer closes upon migration to the explicit W-01/W-02/W-03 mechanism it actually needs, with independently discriminating behavior and every-exit borrow/settlement/stop oracles. HASH/GREP → direct File/blocking; COPY bounded Requests/Scope; TAIL app-owned driver with explicit stop/settlement. W-04 support is independent and cannot become a forced requirement for these apps. Retain separate D2 obligations if W-04 is actually claimed supported.
+**Owner-selected target, tracked for F3 family migration**: Each app consumer closes upon migration to the explicit W-01/W-02/W-03 mechanism it actually needs, with independently discriminating behavior and every-exit borrow/settlement/stop oracles. HASH/GREP → direct File/blocking; COPY bounded Requests/Scope; TAIL app-owned driver with explicit stop/settlement. W-04 support is independent and cannot become a forced requirement for these apps. Retain separate D2 obligations if W-04 is actually claimed supported.
 
-## No changes authorized by this proposal
+## Constraints preserved by the issue-body alignment
 
 - No bypass of W-03 backend/core firewall or full ThreadPool/io_uring required backend conformance.
 - No `OPTIONAL_SUPPORTED` or D2 verification PASS without actual W-04 evidence.
