@@ -104,8 +104,10 @@ authoritative — the documented `path:` prefix, or the current concatenated
 output — has not been decided, so the README records the real behaviour instead
 of restating the old claim. The production writer was deliberately not changed
 in this documentation pass. Consumers that need machine-readable multi-file
-output should pass `-n` (whose `path:line:` shape is unambiguous) or parse the
-current shape with the known absence of a separator.
+output should pass `-n`, whose `path:line:` shape is unambiguous; the
+multi-file without-`-n` output has no separator between path and match, cannot
+be parsed unambiguously, and should not be relied on until a product fix and a
+contract decision settle the shape.
 
 ## Resource limits & memory bound
 
