@@ -1,0 +1,157 @@
+{
+  "artifact": "m-phase-closeout-wave2",
+  "phase": "M",
+  "wave": 2,
+  "generated_utc": "2026-10-10T10:52:30Z",
+  "base_sha": "94b5cfcdace6ee15c75c909dae09665eda2d1a26",
+  "supersedes_nothing": "m-phase-final-closeout.{md,json} (introduced at merge ffb5afa8, last revised by the #472 series through b0b0e391) retained untouched by this wave",
+  "scope": "remaining-family disposition inputs (M-H/M-F/M-A1), dependency-family records (M-A2/M-A3/M-A4), seven-family gate recompute; docs-only, no production/root/ADR/manifest/ledger change",
+  "disposition_inputs": {
+    "M-H": {
+      "carrier_doc": "docs/review/mh-four-app-disposition.md",
+      "per_app_candidate": "KEEP on ApplicationRuntime+ThreadPoolBackend compatibility substrate (ADR-0003 s8 COMPATIBILITY_ONLY)",
+      "decisions_pending": [
+        "D-H1 grep-separator",
+        "D-H2 param-boundary-layering",
+        "D-H3 copy-b-waiter-precedence",
+        "D-H4 tail-settlement-visibility",
+        "D-H5 adopt-KEEP"
+      ]
+    },
+    "M-F": {
+      "carrier_doc": "docs/review/mf-vectored-second-authority-disposition.md",
+      "ruling_A_candidate": "A3 (A3a preferred): vectored not admitted to canonical v1",
+      "ruling_B_candidate": "B1: no second-authority retention obligation; retire with L-01 per MIG-02 after U-03/U-04",
+      "separate": "U-03/U-04 external-use policy routed to F5 human review; not decided here"
+    },
+    "M-A1": {
+      "carrier_doc": "docs/review/ma1-blocking-io-pool-disposition.md",
+      "candidate": "P3: not admitted; COMPATIBILITY_ONLY isolation with sunset; no deletion",
+      "consumers_in_tree": 0,
+      "external_use": "unknown",
+      "c_x10_004_banner_recheck": "performed, banner in place, no edit needed"
+    }
+  },
+  "dependency_families": {
+    "M-A2": {
+      "gate": "PROD-03_ADMITTANCE_DECIDED (bound to M-F)",
+      "status": "BLOCKED_UPSTREAM",
+      "conditional_record": "rides M-F ruling: A3+B1 -> retire with L-01 batch; A1/A2 -> wal workload admission question; A4/B2 -> joint compat sunset",
+      "live_consumers": "intra-legacy only (verified at 94b5cfcd): wal.hpp only by src/wal.cpp; copy_all only via Reader::stream_to (zero callers); Observed* only by src/observed.cpp"
+    },
+    "M-A3": {
+      "gate": "PACKAGE_DECISION_RECORDED",
+      "status": "READY_FOR_OWNER",
+      "candidate": "KEEP installed TEST_ONLY for the v1 window; revisit at F5; alternatives relocate/internalize require B-01 same-slice re-freeze"
+    },
+    "M-A4": {
+      "gate": "none (isolated by F1)",
+      "status": "CLOSED_NO_ACTION",
+      "evidence": "#463 CLOSED; negative-manifest gates passed in both profiles at the F1 baseline"
+    }
+  },
+  "family_gates": {
+    "M-R": {
+      "gate": "RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED",
+      "value": "PASS",
+      "owner": "F2",
+      "note": "unchanged from 2026-10-08 closeout; 75/75 rows, validator in CI"
+    },
+    "M-H": {
+      "gate": "REPLACEMENT_ADOPTED",
+      "value": "PASS (adoption arm; #458 backfilled)",
+      "consumer_disposition_arm": "INPUT_COMPLETE_PENDING_OWNER",
+      "owner": "F3",
+      "d2_w04": "unverified; OPTIONAL_SUPPORTED=NO (ADR-0003 inequality chain)"
+    },
+    "M-F": {
+      "gate": "VECTORED+SECOND-AUTHORITY_DECIDED",
+      "value": "BLOCKED_OWNER_DECISION",
+      "prior": "BLOCKED_AUTHORITY_DECISION",
+      "owner": "F4"
+    },
+    "M-A1": {
+      "gate": "PROD-03_ADMITTANCE_DECIDED",
+      "value": "BLOCKED_OWNER_DECISION",
+      "owner": "F4/F5"
+    },
+    "M-A2": {
+      "gate": "PROD-03_ADMITTANCE_DECIDED (bound)",
+      "value": "BLOCKED_UPSTREAM",
+      "owner": "F4"
+    },
+    "M-A3": {
+      "gate": "PACKAGE_DECISION_RECORDED",
+      "value": "READY_FOR_OWNER",
+      "owner": "F4/F5"
+    },
+    "M-A4": {
+      "gate": "none",
+      "value": "CLOSED_NO_ACTION",
+      "owner": "none"
+    }
+  },
+  "new_findings": [
+    {
+      "id": "F-W2-1",
+      "severity": "blocker-for-package-claims",
+      "summary": "B-01 same-slice re-freeze owed on master since #481/#484: installed header include/sluice/async/threadpool_backend.hpp (+5) and src/async/threadpool_backend.cpp (+36/-5), src/async/threadpool_test_seams.hpp (+10) drifted from the frozen PRODUCTION_BASELINE_SHA a34d96c6; empirically confirmed: --check-frozen at 94b5cfcd FAILs F1_B_PROVENANCE_VERIFIED with that production diff (all other F1 gates pass)",
+      "remedies": [
+        "owner-authorized re-freeze slice (protocol precedent 6404e07b)",
+        "explicit B-01 policy scoping decision recorded at GOV level"
+      ]
+    }
+  ],
+  "pending_owner_decisions": [
+    "D-H1",
+    "D-H2",
+    "D-H3",
+    "D-H4",
+    "D-H5",
+    "D3a",
+    "D3b",
+    "D-12",
+    "D-13",
+    "D4",
+    "U-03/U-04",
+    "F-W2-1"
+  ],
+  "goal_states": {
+    "PHASE_M": "NO",
+    "M_FAMILY_DISPOSITIONS": "COMPLETE",
+    "M_DECISIONS_COMPLETE": "NO",
+    "M_EXECUTED_SCOPE_EVIDENCE": "PASS (docs-only wave; 53/53 noliburing release; Gate-0 CLI re-verification; all anchors at 94b5cfcd)",
+    "F1_HISTORICAL_BASELINE": "REPRODUCIBLE_AT_a34d96c6_ONLY (F-W2-1 re-freeze owed at HEAD)",
+    "F2_F3_F4_PRODUCTION_RETIREMENT": "NOT_EXECUTED",
+    "M_FINAL_INDEPENDENT_REVIEW": "see wave-2 PR record"
+  },
+  "authority_order_applied": [
+    "root v1-r3 (docs/explicit-io-v1-final-decision.md)",
+    "ADR-0003 ADOPTED DESIGN_AUTHORITY_ONLY; ADR-0002 HISTORICAL/SUPERSEDED",
+    "#402 current text",
+    "F0 adopted artifacts; F1 adopted baseline (manifests untouched)",
+    "#458 reset + SS8 family table",
+    "ledger/tests",
+    "live implementation at 94b5cfcd"
+  ],
+  "owner_selected_target_overlay": {
+    "decision_reference": "https://github.com/jnhu76/Sluice/issues/458#issuecomment-6099156773",
+    "canonical_doc": "docs/review/m-phase-clean-minimal-v1-owner-direction.md",
+    "selected": "CLEAN_MINIMAL_V1_WITH_CONSERVATIVE_FAMILY_MIGRATION",
+    "scope": "Target/disposition selected; this wave-2 JSON is a dated pre-decision packet, not the final adopted normative package.",
+    "overrides_wave2_recommendations": {
+      "D-H2": "EARLY_SHARED_APP_CONFIG_VALIDATION (COPY/HASH usage exit 1; GREP usage/error 2)",
+      "D-H4": "NO_NEW_PUBLIC_TAIL_SETTLEMENT_API; use existing Result<TailResult>",
+      "D-H5": "KEEP_REFERENCE_APP_BEHAVIOR; RETIRE_LEGACY_RUNTIME; W04_NOT_APP_PREREQUISITE",
+      "D-13": "EXCLUDE_TEST_DOUBLES_FROM_V1_INSTALL; internalize only live test seams",
+      "D4": "P2_FINAL_RETIREMENT_WITH_P3_BOUNDED_TRANSITION",
+      "U-03/U-04": "DELIBERATE_PRE_V1_DEPRECATION_AND_SCOPED_RISK_ACCEPTANCE"
+    },
+    "target_selected": true,
+    "normative_amendments_adopted": false,
+    "final_packet_independent_review": "PENDING",
+    "dual_profile_refreeze": "NOT_DONE",
+    "phase_m_close_allowed": false,
+    "f2_f3_f4_f5_physical_retirement_authorized": false
+  }
+}
