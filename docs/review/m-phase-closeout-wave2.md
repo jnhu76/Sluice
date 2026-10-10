@@ -109,11 +109,13 @@ re-freeze. Evidence: `git diff a34d96c6..94b5cfcd -- src include` =
 `src/async/threadpool_test_seams.hpp` (+10). `threadpool_backend.hpp` is one
 of the 79 frozen installed headers (`f1-package-manifest-*.json:74`), and the
 manifests' `PRODUCTION_BASELINE_SHA` remains `a34d96c6` (last manifest
-commit `6404e07b`). Per the verifier's own contract ("only src/include drift
-from the pinned baseline fails the provenance gate",
-`scripts/verify_f1_package.py:27-33`), a `--check-frozen` reproduction on
-`94b5cfcd` **fails the provenance gate**; the F1 CI job only self-tests the
-verifier, so nothing red flagged this. The defect fixes themselves were
+commit `6404e07b`). Empirically confirmed this wave by running the verifier:
+`--check-frozen` on `94b5cfcd` reports
+`[FAIL] F1_B_PROVENANCE_VERIFIED (… production diff=['threadpool_backend.hpp',
+'threadpool_backend.cpp', 'threadpool_test_seams.hpp'] …)` — every other F1
+gate passes (all P1 contracts, negatives, clean-room). The F1 CI job only
+self-tests the verifier, so nothing red flagged this. The defect fixes
+themselves were
 owner-authorized (#481/#484 merged after review) — what is missing is the
 package obligation, not the fix.
 
