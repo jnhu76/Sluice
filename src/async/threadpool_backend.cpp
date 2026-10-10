@@ -784,11 +784,13 @@ ThreadPoolBackend::injected_precommit_stage_failure_(SubmitStage stage) noexcept
 #endif
 
 detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
+    bool removed_entry = false;
     detail::PublicCancel disposition;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
 
-        (void)dispatch_.remove_exact(detail::SlotHandle{key.slot, key.generation});
+        removed_entry =
+            dispatch_.remove_exact(detail::SlotHandle{key.slot, key.generation});
         disposition = core_->cancel(key);
         if (disposition == detail::PublicCancel::won_before_execution) {
             if (core_->release_execution(key) !=
@@ -806,6 +808,10 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
     }
     if (disposition == detail::PublicCancel::won_before_execution) {
         tally_canceled();
+        signal_ready_progress();
+    } else if (removed_entry) {
+        // Removing a queued entry of a non-won cancel retires dispatch work
+        // that internal_work_retired() reports to a parked settlement driver.
         signal_ready_progress();
     }
     return disposition;
