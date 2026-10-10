@@ -4,6 +4,20 @@
 - **Baseline**: `989d5c3fa5fa803c05ac87ebfe6c99db9d87564b`, root v1-r3 (see `f0-role-profile-census.md` §0 for provenance; row IDs below reference its §2 census)
 - **Authority order**: root > adopted ADR (ADR-0004 only) > #402 phase policy > ledger/evidence > implementation. This file is a **policy definition for later phases**, not a deletion authorization; every disposition below is `CANDIDATE` until the owning ticket decides.
 
+## Current adoption overlay — 2026-10-11
+
+F0 policy was adopted via #455 at `a34d96c6`; its opening baseline/profile
+measurements and §4 candidate table below are dated inputs, not new HEAD facts.
+ADR-0003 is now ADOPTED DESIGN_AUTHORITY_ONLY via #476. Root v1-r4 and the §1.5/§1.7
+negative-exclusion procedure were adopted via #488 at
+`d4973100a31dccaa098cf4227f84e6c9c0afdee7`. Current terminal dispositions and
+per-consumer exits are in [Phase M final adoption](m-phase-final-adoption-20261011.md):
+D-09/D-10 = A3a/B1, D-11 = P2 with bounded P3 transition, D-12 = unadmitted
+stream-product exclusion, D-13 = no automatic installed TEST_ONLY entitlement.
+The legacy source/build/install bridge remains until each F4/F5 gate. #475's
+A/B/C HOLD/KEEP policies and §1.7(2)–(5) remain effective. No supported W-04,
+per-surface breakage approval or immediate contraction follows from this overlay.
+
 ## 1. Compatibility disposition (`COMPATIBILITY_DISPOSITION_DEFINED`)
 
 ### 1.1 What earns `COMPATIBILITY_ONLY`?
