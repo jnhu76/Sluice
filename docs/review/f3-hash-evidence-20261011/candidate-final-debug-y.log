@@ -1,0 +1,95 @@
++ cd /home/jnhu/Source/sluice-f3-hash-49858941-debug-y
+++ git rev-parse HEAD
++ test 498589416c9854e5fdff9c5f3b70e09c3952d35c = 498589416c9854e5fdff9c5f3b70e09c3952d35c
+++ git status --porcelain
++ test -z ''
++ xmake f -m debug --liburing=y -y
+[0mchecking for platform ... [38;5;2;1mlinux[0m
+[0mchecking for architecture ... [38;5;2;1mx86_64[0m
++ for target in sluice-hash app_hash_consumption_test blocking_file_read_test direct_cursor_position_test direct_w01_consumer_probe
++ xmake build -j4 sluice-hash
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug apps/sluice-hash/main.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug apps/sluice-hash/hash_task.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug apps/sluice-hash/cli_parse.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug apps/sluice-hash/sha256.cpp[0m
+[0m[38;5;2;1m[  6%]:[0m cache compiling.debug src/blocking_file.cpp[0m
+[0m[38;5;2;1m[  7%]:[0m cache compiling.debug src/blocking_io_pool.cpp[0m
+[0m[38;5;2;1m[  9%]:[0m cache compiling.debug src/buffer.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m cache compiling.debug src/copy.cpp[0m
+[0m[38;5;2;1m[ 12%]:[0m cache compiling.debug src/copy_strategy.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m cache compiling.debug src/fault.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m cache compiling.debug src/file.cpp[0m
+[0m[38;5;2;1m[ 16%]:[0m cache compiling.debug src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 18%]:[0m cache compiling.debug src/io_context.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m cache compiling.debug src/observed.cpp[0m
+[0m[38;5;2;1m[ 21%]:[0m cache compiling.debug src/reader.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m cache compiling.debug src/wal.cpp[0m
+[0m[38;5;2;1m[ 24%]:[0m cache compiling.debug src/writer.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m cache compiling.debug src/async/application_runtime.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m cache compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m cache compiling.debug src/async/await_op_helpers.cpp[0m
+[0m[38;5;2;1m[ 30%]:[0m cache compiling.debug src/async/batch.cpp[0m
+[0m[38;5;2;1m[ 31%]:[0m cache compiling.debug src/async/cancel.cpp[0m
+[0m[38;5;2;1m[ 33%]:[0m cache compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 34%]:[0m cache compiling.debug src/async/fiber.cpp[0m
+[0m[38;5;2;1m[ 36%]:[0m cache compiling.debug src/async/fiber_ctx.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m cache compiling.debug src/async/file.cpp[0m
+[0m[38;5;2;1m[ 39%]:[0m cache compiling.debug src/async/group.cpp[0m
+[0m[38;5;2;1m[ 40%]:[0m cache compiling.debug src/async/mutex_test_seam.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m cache compiling.debug src/async/op_helpers.cpp[0m
+[0m[38;5;2;1m[ 43%]:[0m cache compiling.debug src/async/queue_port.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m cache compiling.debug src/async/queue_test_seam.cpp[0m
+[0m[38;5;2;1m[ 46%]:[0m cache compiling.debug src/async/request_handle.cpp[0m
+[0m[38;5;2;1m[ 48%]:[0m cache compiling.debug src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 49%]:[0m cache compiling.debug src/async/scheduler.cpp[0m
+[0m[38;5;2;1m[ 51%]:[0m cache compiling.debug src/async/scheduler_condition.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m cache compiling.debug src/async/scheduler_event.cpp[0m
+[0m[38;5;2;1m[ 54%]:[0m cache compiling.debug src/async/scheduler_fe2_test_seam.cpp[0m
+[0m[38;5;2;1m[ 55%]:[0m cache compiling.debug src/async/scheduler_mutex.cpp[0m
+[0m[38;5;2;1m[ 57%]:[0m cache compiling.debug src/async/scheduler_park_wake.cpp[0m
+[0m[38;5;2;1m[ 58%]:[0m cache compiling.debug src/async/scheduler_queue.cpp[0m
+[0m[38;5;2;1m[ 60%]:[0m cache compiling.debug src/async/scheduler_rwlock.cpp[0m
+[0m[38;5;2;1m[ 61%]:[0m cache compiling.debug src/async/scheduler_semaphore.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m cache compiling.debug src/async/scheduler_timer.cpp[0m
+[0m[38;5;2;1m[ 64%]:[0m cache compiling.debug src/async/select.cpp[0m
+[0m[38;5;2;1m[ 66%]:[0m cache compiling.debug src/async/select_event.cpp[0m
+[0m[38;5;2;1m[ 67%]:[0m cache compiling.debug src/async/select_timer.cpp[0m
+[0m[38;5;2;1m[ 69%]:[0m cache compiling.debug src/async/stackful_io_host.cpp[0m
+[0m[38;5;2;1m[ 70%]:[0m cache compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 72%]:[0m cache compiling.debug src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 73%]:[0m cache compiling.debug src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 75%]:[0m cache compiling.debug src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 76%]:[0m cache compiling.debug src/async/wait_policy.cpp[0m
+[0m[38;5;2;1m[ 78%]:[0m cache compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 79%]:[0m cache compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1marchiving.debug libsluice_core.a[0m
+[0m[38;5;2;1m[ 88%]:[0m [38;5;5;1marchiving.debug libsluice_async.a[0m
+[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1mlinking.debug sluice-hash[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 30.387s[0m
++ for target in sluice-hash app_hash_consumption_test blocking_file_read_test direct_cursor_position_test direct_w01_consumer_probe
++ xmake build -j4 app_hash_consumption_test
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug tests/app_hash_consumption_test.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug apps/sluice-hash/hash_task.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m cache compiling.debug apps/sluice-hash/sha256.cpp[0m
+[0m[1;38;5;1;1merror: [0mtests/app_hash_consumption_test.cpp:186:51: error: no matching function for call to 'sluice::File::File(<brace-enclosed initializer list>)'
+  186 |         inputs.push_back(HashInput{"closed", File{}});
+      |                                                   ^
+  • there are 2 candidates
+In file included from /home/jnhu/Source/sluice-f3-hash-49858941-debug-y/apps/sluice-hash/hash_task.hpp:4,
+                 from tests/app_hash_consumption_test.cpp:1:
+    • candidate 1: 'sluice::File::File(int, sluice::FileAccess)'
+      /home/jnhu/Source/sluice-f3-hash-49858941-debug-y/include/sluice/file_resource.hpp:91:14:
+         91 |     explicit File(int fd, FileAccess access) noexcept : fd_(fd), access_(access) {}
+            |              ^~~~
+      • candidate expects 2 arguments, 0 provided
+    • candidate 2: 'sluice::File::File(sluice::File&&)'
+      /home/jnhu/Source/sluice-f3-hash-49858941-debug-y/include/sluice/file_resource.hpp:77:5:
+         77 |     File(File&& other) noexcept;
+            |     ^~~~
+      • candidate expects 1 argument, 0 provided
+  [38;5;3m> in [1mtests/app_hash_consumption_test.cpp[0m
++ rc=255
++ printf 'MATRIX_EXIT=%s\n' 255
+MATRIX_EXIT=255

@@ -1,0 +1,54 @@
+{
+  "authority": "root v1-r4 PROD-03/MIG-01/MIG-02; adopted M final decisions at 22606ae2",
+  "baseline": "22606ae281faca3acd2d59087f942de2971e4b0d",
+  "candidates": [
+    {
+      "CANDIDATE": "A/F4 BlockingIoPool",
+      "REMOVABLE_AUTHORITY": "general task pool admission/result cell",
+      "REAL_CONSUMERS": "none in tree; external usage unknown",
+      "DEPENDENCY_CUT": "2 installed headers + core TU",
+      "LIFETIME_RISK": "worker/task teardown",
+      "EXTERNAL_RISK_GATE": "#462 deliberate-deprecation/scoped owner risk NOT_DONE",
+      "PACKAGE_IMPACT": "headers/object/factory symbols removal",
+      "MINIMAL_ROLLBACK_UNIT": "headers/TU/build/package together",
+      "REQUIRED_ORACLES": "package negatives; canonical blocking parity",
+      "FIRST_EXECUTABLE_STEP": "obtain scoped external-risk ruling; do not delete"
+    },
+    {
+      "CANDIDATE": "B/F3 HASH default direct (SELECTED)",
+      "REMOVABLE_AUTHORITY": "default-path Runtime task/Completion lifecycle; app header host exposure",
+      "REAL_CONSUMERS": "HASH CLI, consumption suite, injected backend seam",
+      "DEPENDENCY_CUT": "workers=1 direct; workers2..64 and injected stay legacy",
+      "LIFETIME_RISK": "synchronous File/buffer borrow; retained Completion across await unchanged",
+      "EXTERNAL_RISK_GATE": "worker split explicitly approved by human in this task; no installed deletion",
+      "PACKAGE_IMPACT": "libraries/installed SDK unchanged; app-only production changes still audited",
+      "MINIMAL_ROLLBACK_UNIT": "HASH engine/header/CLI/README/oracles",
+      "REQUIRED_ORACLES": "known digests, error isolation/order, early FIFO bound, cloned-thread discriminator, four profiles",
+      "FIRST_EXECUTABLE_STEP": "oracle baseline then shared read loop with blocking::read_at; D-H2 shared predicate"
+    },
+    {
+      "CANDIDATE": "C/F2 Completion/Handle",
+      "REMOVABLE_AUTHORITY": "duplicate caller settlement/result authority",
+      "REAL_CONSUMERS": "apps/runtime/backends/Batch/compat tests",
+      "DEPENDENCY_CUT": "intersects F3 await and backend publication",
+      "LIFETIME_RISK": "publication/terminal/retirement/stale identities/cancel/shutdown",
+      "EXTERNAL_RISK_GATE": "per-surface compatibility decision and #475 retained closure",
+      "PACKAGE_IMPACT": "public header/symbol and core protocol changes",
+      "MINIMAL_ROLLBACK_UNIT": "one API-role seam with consumer/protocol evidence",
+      "REQUIRED_ORACLES": "independent publication/retirement/capacity/cancel/shutdown model and deterministic interleavings",
+      "FIRST_EXECUTABLE_STEP": "choose one role and establish transition-to-C++ mapping"
+    },
+    {
+      "CANDIDATE": "D/F4 legacy File/stream",
+      "REMOVABLE_AUTHORITY": "second native File semantic owner + unadmitted stream families",
+      "REAL_CONSUMERS": "semantic_range; IoContext factories; Reader::stream_to/copy_all; shared retries",
+      "DEPENDENCY_CUT": "resource/factory/stream/helper closure",
+      "LIFETIME_RISK": "open/close/move/error and retained retry helpers",
+      "EXTERNAL_RISK_GATE": "#461 scoped deprecation/external risk remains pending",
+      "PACKAGE_IMPACT": "multiple public headers/core objects/symbols",
+      "MINIMAL_ROLLBACK_UNIT": "audited consumer + factory/resource/package closure",
+      "REQUIRED_ORACLES": "semantic ranges/open/close/move/errors, shared posix_retry and DirFsync",
+      "FIRST_EXECUTABLE_STEP": "consumer/helper re-ownership before removal"
+    }
+  ]
+}

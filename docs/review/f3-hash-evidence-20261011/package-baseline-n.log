@@ -1,0 +1,822 @@
+== F1 package verification — profile P0P1P3-noliburing ==
+prefix=/tmp/sluice-f1-prefix-j01s9nsc consumer_build=/tmp/sluice-f1-consumers-ar4dykyt
++ git merge-base HEAD origin/master
++ git rev-parse HEAD
++ git rev-parse origin/master
++ git status --porcelain
++ git diff --name-only 22606ae281faca3acd2d59087f942de2971e4b0d..HEAD -- src include
++ xmake f -m release -y --liburing=n
+[0mchecking for platform ... [38;5;2;1mlinux[0m
+[0mchecking for architecture ... [38;5;2;1mx86_64[0m
++ xmake -y sluice_core
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/blocking_io_pool.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/buffer.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/copy.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/copy_strategy.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/fault.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/file.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/observed.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/io_context.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/writer.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/reader.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/wal.cpp[0m
+[0m[38;5;2;1m[ 83%]:[0m [38;5;5;1marchiving.release libsluice_core.a[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 5.159s[0m
++ xmake -y sluice_async
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/application_runtime.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/await_op_helpers.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/batch.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/cancel.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/fiber.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/fiber_ctx.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/file.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/group.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/mutex_test_seam.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/op_helpers.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/queue_port.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/queue_test_seam.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/request_handle.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/scheduler.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/scheduler_condition.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/scheduler_event.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/scheduler_fe2_test_seam.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/scheduler_mutex.cpp[0m
+[0m[38;5;2;1m[  3%]:[0m cache compiling.release src/async/scheduler_park_wake.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/async/scheduler_queue.cpp[0m
+[0m[38;5;2;1m[  6%]:[0m cache compiling.release src/async/scheduler_rwlock.cpp[0m
+[0m[38;5;2;1m[  8%]:[0m cache compiling.release src/async/scheduler_semaphore.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m cache compiling.release src/async/scheduler_timer.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m cache compiling.release src/async/select.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m cache compiling.release src/async/select_event.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m cache compiling.release src/async/select_timer.cpp[0m
+[0m[38;5;2;1m[ 16%]:[0m cache compiling.release src/async/stackful_io_host.cpp[0m
+[0m[38;5;2;1m[ 18%]:[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m cache compiling.release src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m cache compiling.release src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m cache compiling.release src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m cache compiling.release src/async/wait_policy.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1marchiving.release libsluice_async.a[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 15.641s[0m
++ xmake install -o /tmp/sluice-f1-prefix-j01s9nsc sluice_core
+installing sluice_core ..
+installing sluice_core to /tmp/sluice-f1-prefix-j01s9nsc ..
+[0m[38;5;2;1minstall ok![0m
++ xmake install -o /tmp/sluice-f1-prefix-j01s9nsc sluice_async
+installing sluice_async ..
+installing sluice_async to /tmp/sluice-f1-prefix-j01s9nsc ..
+[0m[38;5;2;1minstall ok![0m
++ uname -r
++ uname -m
++ stat -f -c %T /home/jnhu/Source/sluice-f3-hash-base-no-20261011
++ stat -f -c %T /tmp/sluice-f1-prefix-j01s9nsc
++ stat -f -c %T /tmp/sluice-f1-consumers-ar4dykyt
+[PASS] F1_B_PROVENANCE_VERIFIED (production baseline 22606ae281fa [merge-base with origin/master], origin/master 22606ae281fa, head 22606ae281fa, production diff=[], worktree_clean=True, non-output dirt=[])
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_application_runtime.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_application_runtime.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_io_context.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_io_context.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_mutex.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_mutex.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_queue.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_queue.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_rwlock.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_async_rwlock.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_await_op_helpers.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_await_op_helpers.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_batch.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_batch.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_cancel.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_cancel.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_completion.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_completion.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_condition.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_condition.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_context_identity.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_context_identity.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_fail_fast.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_fail_fast.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_mutex_test_seam.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_mutex_test_seam.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_observer_protocol.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_observer_protocol.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_progress_source.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_progress_source.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_queue_item.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_queue_item.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_queue_port.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_queue_port.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_queue_test_seam.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_queue_test_seam.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_ready_sink.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_ready_sink.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_reference_ready_sink.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_reference_ready_sink.hpp.o
+In file included from /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_reference_ready_sink.hpp.cpp:1:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_arena.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_arena.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_core.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_core.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_key.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_key.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_slot.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_request_slot.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_select_port.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_select_port.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_select_registration.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_select_registration.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_submit_transaction.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_detail_submit_transaction.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_event.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_event.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_evented_wait_policy.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_evented_wait_policy.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_fiber.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_fiber.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_fiber_ctx.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_fiber_ctx.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_file.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_file.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_future.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_future.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_group.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_group.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_lock_guard.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_lock_guard.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_mutex.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_mutex.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_op_helpers.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_op_helpers.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_request.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_request.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_request_handle.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_request_handle.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_request_scope.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_request_scope.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_scheduler.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_scheduler.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_select.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_select.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_select_fwd.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_select_fwd.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_semaphore.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_semaphore.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_stackful_io_host.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_stackful_io_host.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_task_result.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_task_result.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_thread_annotations.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_thread_annotations.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_threadpool_backend.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_threadpool_backend.hpp.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_threadpool_backend.hpp.cpp:1:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_timer_registration.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_timer_registration.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_uring_backend.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_uring_backend.hpp.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/uring_backend.hpp:5,
+                 from /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_uring_backend.hpp.cpp:1:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_wait_node.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_wait_node.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_wait_policy.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_wait_policy.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_wait_queue.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_async_wait_queue.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_blocking_file.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_blocking_file.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_blocking_io_pool.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_blocking_io_pool.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_buffer.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_buffer.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_buffered_readable.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_buffered_readable.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_copy.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_copy.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_copy_strategy.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_copy_strategy.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_detail_file_semantics.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_detail_file_semantics.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_detail_posix_retry.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_detail_posix_retry.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_detail_uring_submit.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_detail_uring_submit.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_effect.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_effect.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_error.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_error.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_fault.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_fault.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_file.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_file.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_file_resource.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_file_resource.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_io_context.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_io_context.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_iovec.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_iovec.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_limit.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_limit.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_measurement.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_measurement.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_memory_io_context.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_memory_io_context.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_observed.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_observed.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_reader.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_reader.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_result.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_result.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_sync.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_sync.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_wal.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_wal.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_writer.hpp.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/standalone/sluice_writer.hpp.o
+[PASS] F1_E_STANDALONE_HEADER_COMPILES (78/78 direct sole-include compiles; 1 anchored _impl fragments: ['sluice/detail/blocking_io_pool_impl.hpp'])
++ ar t /tmp/sluice-f1-prefix-j01s9nsc/lib/libsluice_async.a
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.application_runtime.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.application_runtime.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.async_io_context.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.async_io_context.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.await_op_helpers.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.await_op_helpers.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.batch.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.batch.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.cancel.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.cancel.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.fail_fast.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.fail_fast.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.fiber.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.fiber.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.fiber_ctx.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.fiber_ctx.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.file.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.file.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.group.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.group.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.mutex_test_seam.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.mutex_test_seam.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.op_helpers.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.op_helpers.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.queue_port.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.queue_port.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.queue_test_seam.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.queue_test_seam.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.request_handle.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.request_handle.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.request_scope.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.request_scope.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_condition.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_condition.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_event.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_event.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_fe2_test_seam.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_fe2_test_seam.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_mutex.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_mutex.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_park_wake.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_park_wake.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_queue.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_queue.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_rwlock.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_rwlock.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_semaphore.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_semaphore.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_timer.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.scheduler_timer.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.select.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.select.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.select_event.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.select_event.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.select_timer.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.select_timer.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.stackful_io_host.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.stackful_io_host.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.threadpool_backend.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.threadpool_backend.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.uring_backend.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.uring_backend.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.uring_completion.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.uring_completion.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.uring_transport.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.uring_transport.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.wait_policy.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.wait_policy.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.context_identity.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.context_identity.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.request_core.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_async.a.request_core.cpp.o
++ ar t /tmp/sluice-f1-prefix-j01s9nsc/lib/libsluice_core.a
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.blocking_file.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.blocking_file.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.blocking_io_pool.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.blocking_io_pool.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.buffer.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.buffer.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.copy.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.copy.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.copy_strategy.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.copy_strategy.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.fault.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.fault.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.file.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.file.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.file_resource.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.file_resource.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.io_context.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.io_context.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.observed.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.observed.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.reader.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.reader.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.wal.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.wal.cpp.o
++ nm --defined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.writer.cpp.o
++ nm --undefined-only /tmp/sluice-f1-consumers-ar4dykyt/archive-baseline/libsluice_core.a.writer.cpp.o
+[PASS] F1_E_ARCHIVE_BASELINE_RECORDED (2 archives, 50 objects, 1316 defined symbols -> /tmp/sluice-f3-hash-evidence-20261011/baseline-archive-n.json)
+[PASS] F1_E_ARCHIVE_MATCHES_PROFILE (async archive io_uring refs=False, UringConfig ctor=False, profile liburing=False)
++ g++ --version
+manifest written: /tmp/sluice-f3-hash-evidence-20261011/baseline-manifest-n.json
+[PASS] F1_B_PACKAGE_PREFIX_READY (79 headers, 2 libs; census 81 minus 2 experimental)
+[PASS] CLEAN_ROOM_CONSUMER_INCLUDES_ANGLE_BRACKET_ONLY []
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w01_direct.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/w01_direct.objs/w01_direct.o
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/w01_direct.objs/w01_direct.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/w01_direct
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/w01_direct
++ /tmp/sluice-f1-consumers-ar4dykyt/w01_direct
+w01_direct: PASS
+[PASS] P0_W01_CORE_ONLY_CLEAN_ROOM compile+link+run against installed prefix; -lsluice_core only
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/w02_pipeline.objs/w02_pipeline.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:5:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:100:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  100 |         file.close();
+      |         ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/request_scope.hpp:3,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:132:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  132 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:189:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  189 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:227:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  227 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:257:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  257 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w02_pipeline.cpp:294:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  294 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/w02_pipeline.objs/w02_pipeline.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/w02_pipeline
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/w02_pipeline
++ /tmp/sluice-f1-consumers-ar4dykyt/w02_pipeline
+w02_pipeline: PASS
+[PASS] P1_w02_pipeline 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_threadpool.objs/w03_external_loop.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp:6:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp: In function ‘int main(int, char**)’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp:190:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  190 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_threadpool.objs/w03_external_loop.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_threadpool
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_threadpool
++ /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_threadpool threadpool
+w03_external_loop(threadpool): PASS
+[PASS] P1_w03_external_loop_threadpool 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_request_lifetime.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_request_lifetime.objs/contract_request_lifetime.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_request_lifetime.cpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_request_lifetime.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_request_lifetime.cpp:145:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  145 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_request_lifetime.objs/contract_request_lifetime.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_request_lifetime
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_request_lifetime
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_request_lifetime
+contract_request_lifetime: PASS
+[PASS] P1_contract_request_lifetime 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_admission.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_admission.objs/contract_admission.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_admission.cpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_admission.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_admission.cpp:166:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  166 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_admission.objs/contract_admission.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_admission
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_admission
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_admission
+contract_admission: PASS
+[PASS] P1_contract_admission 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_cancel_effect.objs/contract_cancel_effect.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp: In function ‘bool {anonymous}::direct_content_is(const std::string&, const std::string&)’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp:54:25: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+   54 |     opened.value().close();
+      |     ~~~~~~~~~~~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp:55:39: warning: comparison of integer expressions of different signedness: ‘const long unsigned int’ and ‘std::ptrdiff_t’ {aka ‘long int’} [-Wsign-compare]
+   55 |     return n.has_value() && n.value() == static_cast<std::ptrdiff_t>(expected.size()) &&
+      |                             ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp:107:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  107 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp:134:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  134 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_cancel_effect.cpp:171:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  171 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_cancel_effect.objs/contract_cancel_effect.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_cancel_effect
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_cancel_effect
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_cancel_effect
+contract_cancel_effect: PASS
+[PASS] P1_contract_cancel_effect 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_observer.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_observer.objs/contract_observer.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_observer.cpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_observer.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_observer.cpp:214:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  214 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_observer.objs/contract_observer.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_observer
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_observer
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_observer
+contract_observer: PASS
+[PASS] P1_contract_observer 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_progress.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_progress.objs/contract_progress.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_progress.cpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_progress.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_progress.cpp:209:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  209 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_progress.objs/contract_progress.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_progress
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_progress
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_progress
+contract_progress: PASS
+[PASS] P1_contract_progress 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_shutdown.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_shutdown.objs/contract_shutdown.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_shutdown.cpp:5:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_shutdown.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_shutdown.cpp:93:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+   93 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_shutdown.objs/contract_shutdown.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_shutdown
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_shutdown
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_shutdown
+contract_shutdown: PASS
+[PASS] P1_contract_shutdown 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_durability.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_durability.objs/contract_durability.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_durability.cpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_durability.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_durability.cpp:90:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+   90 |         file.close();
+      |         ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_durability.cpp:132:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  132 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_durability.objs/contract_durability.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_durability
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_durability
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_durability
+contract_durability: PASS
+[PASS] P1_contract_durability 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_backend_availability.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/contract_backend_availability.objs/contract_backend_availability.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/contract_backend_availability.cpp:6:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/contract_backend_availability.objs/contract_backend_availability.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/contract_backend_availability
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/contract_backend_availability
++ /tmp/sluice-f1-consumers-ar4dykyt/contract_backend_availability
+contract_backend_availability: uring profile absent (abstract shell)
+contract_backend_availability: PASS
+[PASS] P1_contract_backend_availability 
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/w04_stackful_candidate.objs/w04_stackful_candidate.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp:13:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp: In lambda function:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp:110:32: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  110 |             host.value()->spawn([&](IoTaskContext& io) {
+      |             ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+  111 |                 const auto read = io.read_exact(ref, buf, 0);
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  112 |                 if (!read.has_value())
+      |                 ~~~~~~~~~~~~~~~~~~~~~~
+  113 |                     return;
+      |                     ~~~~~~~     
+  114 |                 const auto wrote = io.write_all(ref,
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  115 |                                                 std::span<const std::byte>(
+      |                                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  116 |                                                     reinterpret_cast<const std::byte*>(out.data()),
+      |                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  117 |                                                     out.size()),
+      |                                                     ~~~~~~~~~~~~
+  118 |                                                 0);
+      |                                                 ~~~
+  119 |                 if (!wrote.has_value())
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~
+  120 |                     return;
+      |                     ~~~~~~~     
+  121 |                 const auto synced = io.sync_data(ref);
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  122 |                 task_ok = synced.has_value();
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  123 |             });
+      |             ~~                  
+In file included from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp:12:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/stackful_io_host.hpp:142:18: note: in call to ‘sluice::Result<void> sluice::async::StackfulIoHost::spawn(std::function<void(sluice::async::IoTaskContext&)>)’, declared here
+  142 |     Result<void> spawn(std::function<void(IoTaskContext&)> task);
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/stackful_io_host.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp: In function ‘int main()’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp:147:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  147 |         file.close();
+      |         ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp:172:28: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  172 |         host.value()->spawn([&](IoTaskContext& io) {
+      |         ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+  173 |             (void)io.read_exact(ref, buf, 0);
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  174 |             reached_after_await = true;
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  175 |             throw std::runtime_error("w04 exception probe");
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  176 |         });
+      |         ~~                  
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/stackful_io_host.hpp:142:18: note: in call to ‘sluice::Result<void> sluice::async::StackfulIoHost::spawn(std::function<void(sluice::async::IoTaskContext&)>)’, declared here
+  142 |     Result<void> spawn(std::function<void(IoTaskContext&)> task);
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w04_stackful_candidate.cpp:182:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  182 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/w04_stackful_candidate.objs/w04_stackful_candidate.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/w04_stackful_candidate
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/w04_stackful_candidate
++ /tmp/sluice-f1-consumers-ar4dykyt/w04_stackful_candidate
+[PASS] P1_W04_STRUCTURAL_ARMS_UNAVAILABLE (rc=2: w04_stackful_candidate: structural suspension arms UNAVAILABLE (threadpool backe)
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_uring.objs/w03_external_loop.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp:6:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp: In function ‘int main(int, char**)’:
+/home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/w03_external_loop.cpp:190:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  190 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/detail/file_semantics.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_core.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:5,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/threadpool_backend.hpp:3:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/request_arena.hpp:9,
+                 from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/completion.hpp:4:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_uring.objs/w03_external_loop.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_uring
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_uring
++ /tmp/sluice-f1-consumers-ar4dykyt/w03_external_loop_uring uring
+[PASS] P1_W03_URING_EXPLICIT_UNAVAILABLE (rc=2: w03_uring: UNAVAILABLE (io_uring profile not built into this package))
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/odr_two_tu_a.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu.objs/odr_two_tu_a.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/uring_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/odr_two_tu_a.cpp:7:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/odr_two_tu_b.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu.objs/odr_two_tu_b.o
+In file included from /tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/uring_backend.hpp:5,
+                 from /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/odr_two_tu_b.cpp:6:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp: In member function ‘virtual void sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)’:
+/tmp/sluice-f1-prefix-j01s9nsc/include/sluice/async/detail/reference_ready_sink.hpp:11:30: warning: unused parameter ‘event’ [-Wunused-parameter]
+   11 |     void on_ready(ReadyEvent event) noexcept override {
+      |                   ~~~~~~~~~~~^~~~~
++ g++ -std=c++20 /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu.objs/odr_two_tu_a.o /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu.objs/odr_two_tu_b.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_async -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu
++ ldd /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu
++ /tmp/sluice-f1-consumers-ar4dykyt/odr_two_tu
+[PASS] F1_E_ODR_TWO_TU (same-specialization + UringAsyncBackend layout cross-checked; backend_bytes=48, macro_view=0)
++ g++ -std=c++20 -I/tmp/sluice-f1-prefix-j01s9nsc/include -c /home/jnhu/Source/sluice-f3-hash-base-no-20261011/tests/package/consumers/negative_async_symbols_in_core.cpp -o /tmp/sluice-f1-consumers-ar4dykyt/negative_async_symbols_in_core.o
++ g++ /tmp/sluice-f1-consumers-ar4dykyt/negative_async_symbols_in_core.o -L/tmp/sluice-f1-prefix-j01s9nsc/lib -lsluice_core -o /tmp/sluice-f1-consumers-ar4dykyt/negative.out
+[PASS] NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE link against core-only must fail with undefined async symbols
+[PASS] NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED []
+[PASS] CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY []
+consumer build command log: /tmp/sluice-f1-consumers-ar4dykyt/consumer-build-commands.txt
+
+== F1 gate summary ==
+  PASS  F1_B_PROVENANCE_VERIFIED
+  PASS  F1_E_STANDALONE_HEADER_COMPILES
+  PASS  F1_E_ARCHIVE_BASELINE_RECORDED
+  PASS  F1_E_ARCHIVE_MATCHES_PROFILE
+  PASS  F1_B_PACKAGE_PREFIX_READY
+  PASS  CLEAN_ROOM_CONSUMER_INCLUDES_ANGLE_BRACKET_ONLY
+  PASS  P0_W01_CORE_ONLY_CLEAN_ROOM
+  PASS  P1_w02_pipeline
+  PASS  P1_w03_external_loop_threadpool
+  PASS  P1_contract_request_lifetime
+  PASS  P1_contract_admission
+  PASS  P1_contract_cancel_effect
+  PASS  P1_contract_observer
+  PASS  P1_contract_progress
+  PASS  P1_contract_shutdown
+  PASS  P1_contract_durability
+  PASS  P1_contract_backend_availability
+  PASS  P1_W04_STRUCTURAL_ARMS_UNAVAILABLE
+  PASS  P1_W03_URING_EXPLICIT_UNAVAILABLE
+  PASS  F1_E_ODR_TWO_TU
+  PASS  NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE
+  PASS  NEGATIVE_EXPERIMENTAL_HEADERS_NOT_INSTALLED
+  PASS  CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY
+
+F1 package verification: all gates PASS

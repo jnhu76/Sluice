@@ -1,0 +1,56 @@
+14758dcdbe8072d6cfad45b1f187e61b26fe8bbc
+Linux E5 7.2.9-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Sat Oct  3 19:59:55 UTC 2026 x86_64 GNU/Linux
+NAME="Fedora Linux"
+VERSION="44 (KDE Plasma Desktop Edition)"
+RELEASE_TYPE=stable
+ID=fedora
+VERSION_ID=44
+VERSION_CODENAME=""
+PRETTY_NAME="Fedora Linux 44 (KDE Plasma Desktop Edition)"
+ANSI_COLOR="0;38;2;60;110;180"
+LOGO=fedora-logo-icon
+CPE_NAME="cpe:/o:fedoraproject:fedora:44"
+DEFAULT_HOSTNAME="fedora"
+HOME_URL="https://fedoraproject.org/"
+DOCUMENTATION_URL="https://docs.fedoraproject.org/en-US/fedora/f44/"
+SUPPORT_URL="https://ask.fedoraproject.org/"
+BUG_REPORT_URL="https://bugzilla.redhat.com/"
+REDHAT_BUGZILLA_PRODUCT="Fedora"
+REDHAT_BUGZILLA_PRODUCT_VERSION=44
+REDHAT_SUPPORT_PRODUCT="Fedora"
+REDHAT_SUPPORT_PRODUCT_VERSION=44
+SUPPORT_END=2027-05-19
+VARIANT="KDE Plasma Desktop Edition"
+VARIANT_ID=kde
+c++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+Copyright (C) 2026 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+clang version 22.1.8 (Fedora 22.1.8-4.fc44)
+Target: x86_64-redhat-linux-gnu
+Thread model: posix
+InstalledDir: /usr/bin
+Configuration file: /etc/clang/x86_64-redhat-linux-gnu-clang++.cfg
+[0m[1mxmake v3.0.6+20260117, A cross-platform build utility based on Lua[0m[0m
+[0mCopyright (C) 2015-present Ruki Wang, [4mhttps://xmake.io[0m[0m
+[0m[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m_
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m_[1;38;5;41m_[1;38;5;41m [1;38;5;41m [1;38;5;41m_[1;38;5;41m_[1;38;5;41m_[1;38;5;41m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m_[1;38;5;42m|[1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m\[1;38;5;41m [1;38;5;41m\[1;38;5;41m/[1;38;5;41m [1;38;5;41m/[1;38;5;41m [1;38;5;41m|[1;38;5;42m [1;38;5;42m [1;38;5;42m\[1;38;5;42m/[1;38;5;42m [1;38;5;42m [1;38;5;42m|[1;38;5;42m/[1;38;5;42m [1;38;5;42m_[1;38;5;42m [1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m|[1;38;5;42m/[1;38;5;42m [1;38;5;42m/[1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m\
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m>[1;38;5;41m [1;38;5;41m [1;38;5;41m<[1;38;5;41m [1;38;5;41m [1;38;5;41m|[1;38;5;42m [1;38;5;42m\[1;38;5;42m_[1;38;5;42m_[1;38;5;42m/[1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m/[1;38;5;42m_[1;38;5;42m|[1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m<[1;38;5;42m [1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m/
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m/[1;38;5;41m_[1;38;5;41m/[1;38;5;41m\[1;38;5;41m_[1;38;5;41m\[1;38;5;41m_[1;38;5;41m|[1;38;5;42m_[1;38;5;42m|[1;38;5;42m [1;38;5;42m [1;38;5;42m|[1;38;5;42m_[1;38;5;42m|[1;38;5;42m\[1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m\[1;38;5;42m|[1;38;5;42m_[1;38;5;42m|[1;38;5;42m\[1;38;5;42m_[1;38;5;42m\[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m|
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42mb[1;38;5;42my[1;38;5;42m [1;38;5;42mr[1;38;5;42mu[1;38;5;42mk[1;38;5;42mi[1;38;5;42m,[1;38;5;42m [1;38;5;42mx[1;38;5;42mm[1;38;5;42ma[1;38;5;42mk[1;38;5;42me[1;38;5;42m.[1;38;5;42mi[1;38;5;42mo[0m
+[0m    👉  [1mManual[0m: [4mhttps://xmake.io/guide/quick-start[0m
+    🙏  [1mDonate[0m: [4mhttps://xmake.io/about/sponsor[0m
+[0m
+2.13
+//usr/lib64
+Filesystem     Type  1K-blocks     Used Available Use% Mounted on
+/dev/sda3      btrfs 466138112 39021784 424447944   9% /home
+tmpfs          tmpfs  32838164    25984  32812180   1% /tmp
+0
+GNU ar version 2.46.1-1.fc44
+Copyright (C) 2026 Free Software Foundation, Inc.
+This program is free software; you may redistribute it under the terms of
+the GNU General Public License version 3 or (at your option) any later version.
+This program has absolutely no warranty.

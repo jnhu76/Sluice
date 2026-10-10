@@ -1,0 +1,32 @@
+== F1 package verification — profile P2-liburing ==
+prefix=/tmp/sluice-f1-prefix-j0_uy85k consumer_build=/tmp/sluice-f1-consumers-z0job66i
++ git merge-base HEAD origin/master
++ git rev-parse HEAD
++ git rev-parse origin/master
++ git status --porcelain
++ git diff --name-only 22606ae281faca3acd2d59087f942de2971e4b0d..HEAD -- src include
++ xmake f -m release -y --liburing=y
+[0mchecking for platform ... [38;5;2;1mlinux[0m
+[0mchecking for architecture ... [38;5;2;1mx86_64[0m
++ xmake -y sluice_core
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/blocking_io_pool.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/buffer.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/copy_strategy.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/fault.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/copy.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/io_context.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/file.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/wal.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/reader.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/observed.cpp[0m
+[0m[38;5;2;1m[  5%]:[0m cache compiling.release src/writer.cpp[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[1;38;5;1;1merror: [0m/usr/include/c++/16/cstdlib:83:15: fatal error: stdlib.h: No such file or directory
+   83 | #include_next <stdlib.h>
+      |               ^~~~~~~~~~
+compilation terminated.
+  [38;5;3m> in [1msrc/blocking_file.cpp[0m
+xmake build sluice_core failed

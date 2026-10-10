@@ -1,0 +1,11 @@
+45908 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7eff50e06ce8, parent_tid=0x7eff50e06990, exit_signal=0, stack=0x7eff50606000, stack_size=0x7fff40, tls=0x7eff50e066c0} => {parent_tid=[45909]}, 88) = 45909
+45908 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7eff50605ce8, parent_tid=0x7eff50605990, exit_signal=0, stack=0x7eff4fe05000, stack_size=0x7fff40, tls=0x7eff506056c0} => {parent_tid=[45910]}, 88) = 45910
+45908 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7eff4fe04ce8, parent_tid=0x7eff4fe04990, exit_signal=0, stack=0x7eff4f604000, stack_size=0x7fff40, tls=0x7eff4fe046c0} => {parent_tid=[45911]}, 88) = 45911
+45908 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7eff4f603ce8, parent_tid=0x7eff4f603990, exit_signal=0, stack=0x7eff4ee03000, stack_size=0x7fff40, tls=0x7eff4f6036c0} => {parent_tid=[45912]}, 88) = 45912
+45908 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7eff4ed01ce8, parent_tid=0x7eff4ed01990, exit_signal=0, stack=0x7eff4e501000, stack_size=0x7fff40, tls=0x7eff4ed016c0} => {parent_tid=[45913]}, 88) = 45913
+45913 +++ exited with 0 +++
+45912 +++ exited with 0 +++
+45911 +++ exited with 0 +++
+45910 +++ exited with 0 +++
+45909 +++ exited with 0 +++
+45908 +++ exited with 0 +++
