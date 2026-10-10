@@ -931,7 +931,10 @@ Shutdown skeleton/reference accounting must be designed in Phase B and exercised
 | Group/Future/WaitPolicy | Only bounded structured lifetime required by retained adapter |
 | public dormant synchronization primitives | Outside v1; retain internal substrate only when needed |
 | legacy Reader/Writer/FileReader/FileWriter/IoContext | Not admitted as a second native-file semantic authority; retire from canonical/public v1 after consumer/migration and external-use audit |
-| legacy vectored readv/writev and WAL/copy/buffer/observed stream helpers | Not admitted as v1 product without a new PROD-03 workload/obligation; retire with the audited old stream closure rather than inventing a replacement adapter |\n| public BlockingIoPool/Task pool | General task-runtime product not admitted by PROD-03; bounded compatibility only pending scoped external-use and package retirement |\n| legacy Memory/Fault test doubles | TEST_ONLY if actually used by tests; no automatic v1 installed/public API entitlement; audit/internally re-own or retire with stream closure |\n| experimental public headers | Clearly isolated unsupported experiments or remove from install surface |
+| legacy vectored readv/writev and WAL/copy/buffer/observed stream helpers | Not admitted as v1 product without a new PROD-03 workload/obligation; retire with the audited old stream closure rather than inventing a replacement adapter |
+| public BlockingIoPool/Task pool | General task-runtime product not admitted by PROD-03; bounded compatibility only pending scoped external-use and package retirement |
+| legacy Memory/Fault test doubles | TEST_ONLY if actually used by tests; no automatic v1 installed/public API entitlement; audit/internally re-own or retire with stream closure |
+| experimental public headers | Clearly isolated unsupported experiments or remove from install surface |
 
 ### MIG-02 Negative-scope exclusion boundary
 
