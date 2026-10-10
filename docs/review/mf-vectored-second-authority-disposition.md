@@ -1,5 +1,7 @@
 # M-F vectored + second-authority disposition (#461, Phase M closeout wave 2)
 
+> **Decision overlay:** [owner-selected Clean Minimal V1](m-phase-clean-minimal-v1-owner-direction.md) selects **A3a + B1**, with explicit pre-v1 external-use/deprecation gates before F4 physical retirement. This source-backed document remains the dated evidence; no current-tree deletion, canonical vectored admission or release claim is implied.
+
 - **Status**: DISPOSITION_INPUT_COMPLETE — PENDING_OWNER_DECISION on ruling A
   (vectored five questions) and ruling B (D-09(1) second authority), plus the
   independent U-03/U-04 external-use policy which this record does **not**
