@@ -441,6 +441,7 @@ void ThreadPoolBackend::worker_loop() {
             detail::SlotHandle h{};
             PreparedBlockingOp op{};
             bool have_op = false;
+            bool retired_unclaimed = false;
             {
                 std::unique_lock<std::mutex> lk(work_mtx_);
                 work_cv_.wait(lk, [&] { return stopping_ || !dispatch_.empty(); });
@@ -455,11 +456,23 @@ void ThreadPoolBackend::worker_loop() {
 
                 const detail::RequestKey key{core_->context(), h.slot, h.generation};
                 if (core_->claim_execution(key) != detail::ExecutionClaim::claimed) {
-                    continue;
+                    retired_unclaimed = true;
+                } else {
+                    op = prepared_ops_[h.slot.value];
+                    ++active_workers_;
+                    have_op = true;
                 }
-                op = prepared_ops_[h.slot.value];
-                ++active_workers_;
-                have_op = true;
+            }
+
+            if (retired_unclaimed) {
+                // Dropping the entry retires dispatch work that
+                // internal_work_retired() reports to a parked settlement driver.
+                signal_ready_progress();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+                wait_unclaimed_retirement_pause_();
+#endif
+                continue;
             }
 
             if (have_op) {
@@ -682,6 +695,18 @@ void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
 
 void ThreadPoolBackend::wait_worker_claimed_pause_() noexcept {
     auto* g = worker_claimed_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_unclaimed_retirement_pause_() noexcept {
+    auto* g = unclaimed_retirement_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);
