@@ -502,7 +502,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "per-slot result carriers for the pipelined copy task; submit/await/reset/outstanding()/ready() settle them"
+        "historical_census_semantic_scope": "per-slot result carriers for the pipelined copy task; submit/await/reset/outstanding()/ready() settle them",
+        "historical_census_requirement": "sluice-copy + app_copy_consumption_test build & pass in both profiles with task code re-typed; copy oracle output unchanged"
       },
       {
         "edge": "X-01",
@@ -512,7 +513,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "per-file read carrier cycled through await_read_at in the hash task body"
+        "historical_census_semantic_scope": "per-file read carrier cycled through await_read_at in the hash task body",
+        "historical_census_requirement": "sluice-hash + app_hash_consumption_test build & pass both profiles after re-typing"
       },
       {
         "edge": "X-01",
@@ -522,7 +524,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "per-file read carrier for the chunked grep scan loop"
+        "historical_census_semantic_scope": "per-file read carrier for the chunked grep scan loop",
+        "historical_census_requirement": "sluice-grep + app_grep_consumption_test build & pass both profiles after re-typing"
       },
       {
         "edge": "X-01",
@@ -532,7 +535,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "read carriers for backward tail scan and line-window reads"
+        "historical_census_semantic_scope": "read carriers for backward tail scan and line-window reads",
+        "historical_census_requirement": "sluice-tail + app_tail_consumption_test build & pass both profiles after re-typing"
       },
       {
         "edge": "X-01",
@@ -542,7 +546,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "batch composition stores one Completion per op by value inside Slot"
+        "historical_census_semantic_scope": "batch composition stores one Completion per op by value inside Slot",
+        "historical_census_requirement": "batch consumers (threadpool_external_loop_test) pass with Batch re-typed"
       },
       {
         "edge": "X-01",
@@ -552,7 +557,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "submits each batch op through the compat Completion& spellings (batch.cpp:27-36); awaits via ProgressOwner/wait_one, not Scheduler"
+        "historical_census_semantic_scope": "submits each batch op through the compat Completion& spellings (batch.cpp:27-36); awaits via ProgressOwner/wait_one, not Scheduler",
+        "historical_census_requirement": "batch await_one/next semantics preserved under re-typed submission (external-loop test)"
       },
       {
         "edge": "X-01",
@@ -562,7 +568,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "canonical hub declares the Completion-taking submission/cancel spellings every backend and fake must spell"
+        "historical_census_semantic_scope": "canonical hub declares the Completion-taking submission/cancel spellings every backend and fake must spell",
+        "historical_census_requirement": "hub re-typing keeps RequestHandle-returning spellings and both backend vtables compiling"
       },
       {
         "edge": "X-01",
@@ -572,7 +579,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "direct-includes completion.hpp (:4); one-step busy-poll helpers declared over the compat spelling"
+        "historical_census_semantic_scope": "direct-includes completion.hpp (:4); one-step busy-poll helpers declared over the compat spelling",
+        "historical_census_requirement": "D-15 spin-loop removal record + caller tests after re-typing"
       },
       {
         "edge": "X-01",
@@ -582,7 +590,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "claims progress owner and spins `while(!c.ready()) ctx.poll()` (:18-22) producing into Completion locals (:34,58,95,103)"
+        "historical_census_semantic_scope": "claims progress owner and spins `while(!c.ready()) ctx.poll()` (:18-22) producing into Completion locals (:34,58,95,103)",
+        "historical_census_requirement": "MIG-02 row closure: spin loop removed with equivalent read/write/sync oracle evidence"
       },
       {
         "edge": "X-01",
@@ -592,7 +601,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "threadpool backend spells Completion in its vtable, cancel and test-key accessors (:51-56,67-68,93-94,196-200)"
+        "historical_census_semantic_scope": "threadpool backend spells Completion in its vtable, cancel and test-key accessors (:51-56,67-68,93-94,196-200)",
+        "historical_census_requirement": "threadpool conformance/cutover tests pass after vtable re-typing"
       },
       {
         "edge": "X-01",
@@ -602,7 +612,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "accept path claims and core-binds the caller Completion (:275-293); publish thunks write terminal results into Completion storage (:352,375,402-429)"
+        "historical_census_semantic_scope": "accept path claims and core-binds the caller Completion (:275-293); publish thunks write terminal results into Completion storage (:352,375,402-429)",
+        "historical_census_requirement": "threadpool progress-race + cutover oracles pass after publish path re-owned"
       },
       {
         "edge": "X-01",
@@ -612,7 +623,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "io_uring backend spells Completion in its vtable and cancel surface (:71-76,97-98)"
+        "historical_census_semantic_scope": "io_uring backend spells Completion in its vtable and cancel surface (:71-76,97-98)",
+        "historical_census_requirement": "uring conformance/cutover tests pass after re-typing (liburing profile)"
       },
       {
         "edge": "X-01",
@@ -622,7 +634,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "reap path publishes terminal results into caller Completions in both profiles (stub + real)"
+        "historical_census_semantic_scope": "reap path publishes terminal results into caller Completions in both profiles (stub + real)",
+        "historical_census_requirement": "uring progress-race + registration-lifecycle oracles pass after re-owning publish"
       },
       {
         "edge": "X-01",
@@ -632,7 +645,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "E1 conformance matrix re-run in both profiles against the re-typed surface before retiring compat spellings; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "E1 backend conformance oracle exercises submission/publication incl. compat Completion spellings — semantic subject, not rewriteable transport"
+        "historical_census_semantic_scope": "E1 backend conformance oracle exercises submission/publication incl. compat Completion spellings — semantic subject, not rewriteable transport",
+        "historical_census_requirement": "E1 conformance matrix re-run in both profiles against the re-typed surface before retiring compat spellings"
       },
       {
         "edge": "X-01",
@@ -642,7 +656,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "precedence oracle unchanged once the virtual interface is re-typed; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is File access precedence; Completion appears only where the AsyncBackend virtual interface forces it — transport"
+        "historical_census_semantic_scope": "subject is File access precedence; Completion appears only where the AsyncBackend virtual interface forces it — transport",
+        "historical_census_requirement": "precedence oracle unchanged once the virtual interface is re-typed"
       },
       {
         "edge": "X-01",
@@ -652,7 +667,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "progress-source ownership oracle re-run against re-typed submissions; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is progress-source ownership; local carrier rides the compat submission — mixed subject/transport"
+        "historical_census_semantic_scope": "subject is progress-source ownership; local carrier rides the compat submission — mixed subject/transport",
+        "historical_census_requirement": "progress-source ownership oracle re-run against re-typed submissions"
       },
       {
         "edge": "X-01",
@@ -662,7 +678,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F2 / #402",
         "exit_condition": "include dropped in the same slice that retires the header; test still compiles; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "redundant direct include; no semantic consumption (grep for 'Completion' over the file returns nothing)"
+        "historical_census_semantic_scope": "redundant direct include; no semantic consumption (grep for 'Completion' over the file returns nothing)",
+        "historical_census_requirement": "include dropped in the same slice that retires the header; test still compiles"
       },
       {
         "edge": "X-01",
@@ -672,7 +689,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F2 / #402",
         "exit_condition": "include dropped with the header retirement; Request<T> oracle unchanged; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "redundant direct include; no semantic consumption"
+        "historical_census_semantic_scope": "redundant direct include; no semantic consumption",
+        "historical_census_requirement": "include dropped with the header retirement; Request<T> oracle unchanged"
       },
       {
         "edge": "X-01",
@@ -682,7 +700,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "subject is core ownership incl. public-binding release into a caller Completion — semantic subject for the release path"
+        "historical_census_semantic_scope": "subject is core ownership incl. public-binding release into a caller Completion — semantic subject for the release path",
+        "historical_census_requirement": "ownership/release oracle re-derived over the canonical binding before the carrier retires"
       },
       {
         "edge": "X-01",
@@ -692,7 +711,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "subject is the canonical Request/RequestScope (no-Completion) pattern; Completion only where the virtual interface forces it"
+        "historical_census_semantic_scope": "subject is the canonical Request/RequestScope (no-Completion) pattern; Completion only where the virtual interface forces it",
+        "historical_census_requirement": "scope oracle unchanged after virtual-interface re-typing"
       },
       {
         "edge": "X-01",
@@ -702,7 +722,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "waiter-observer semantics re-proven (register/cancel/wake interleavings) against the replacement await; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "semantic SUBJECT of the waiter-observer await machinery (X-16) — must be migrated as an oracle, not mechanically rewritten"
+        "historical_census_semantic_scope": "semantic SUBJECT of the waiter-observer await machinery (X-16) — must be migrated as an oracle, not mechanically rewritten",
+        "historical_census_requirement": "waiter-observer semantics re-proven (register/cancel/wake interleavings) against the replacement await"
       },
       {
         "edge": "X-01",
@@ -712,7 +733,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "subject is shutdown settlement with outstanding caller Completions — carrier lifetime is load-bearing"
+        "historical_census_semantic_scope": "subject is shutdown settlement with outstanding caller Completions — carrier lifetime is load-bearing",
+        "historical_census_requirement": "shutdown settlement oracle (E-adopted evidence) re-run with re-typed carriers"
       },
       {
         "edge": "X-01",
@@ -722,7 +744,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "B1 core-cutover publication oracle — Completion carriers are the observed subject"
+        "historical_census_semantic_scope": "B1 core-cutover publication oracle — Completion carriers are the observed subject",
+        "historical_census_requirement": "cutover oracle re-run against post-retirement publication path"
       },
       {
         "edge": "X-01",
@@ -732,7 +755,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "external-loop protocol oracle and the sole Batch consumer — subject includes Batch's Completion slots"
+        "historical_census_semantic_scope": "external-loop protocol oracle and the sole Batch consumer — subject includes Batch's Completion slots",
+        "historical_census_requirement": "external-loop + Batch oracle re-run after Batch re-typing"
       },
       {
         "edge": "X-01",
@@ -742,7 +766,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "progress-race interleaving oracle over Completion publication"
+        "historical_census_semantic_scope": "progress-race interleaving oracle over Completion publication",
+        "historical_census_requirement": "race oracle re-run against re-owned publication"
       },
       {
         "edge": "X-01",
@@ -752,7 +777,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "uring B1 cutover publication oracle"
+        "historical_census_semantic_scope": "uring B1 cutover publication oracle",
+        "historical_census_requirement": "liburing-profile cutover oracle re-run after re-typing"
       },
       {
         "edge": "X-01",
@@ -762,7 +788,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "uring external-loop coalescing oracle over Completion carriers"
+        "historical_census_semantic_scope": "uring external-loop coalescing oracle over Completion carriers",
+        "historical_census_requirement": "external-loop oracle re-run (liburing profile)"
       },
       {
         "edge": "X-01",
@@ -772,7 +799,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "uring progress-race interleaving oracle"
+        "historical_census_semantic_scope": "uring progress-race interleaving oracle",
+        "historical_census_requirement": "race oracle re-run (liburing profile)"
       },
       {
         "edge": "X-01",
@@ -782,7 +810,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "registered-buffer lifecycle oracle riding Completion submission"
+        "historical_census_semantic_scope": "registered-buffer lifecycle oracle riding Completion submission",
+        "historical_census_requirement": "registration lifecycle oracle re-run after re-typing"
       },
       {
         "edge": "X-01",
@@ -792,7 +821,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "subject is sync admission accounting; Completion only via forced virtual overrides — transport"
+        "historical_census_semantic_scope": "subject is sync admission accounting; Completion only via forced virtual overrides — transport",
+        "historical_census_requirement": "admission oracle unchanged after virtual-interface re-typing"
       },
       {
         "edge": "X-01",
@@ -802,7 +832,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "file-ref semantics oracle unchanged once helpers re-typed; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is explicit NativeFileRef File semantics; carriers feed await helpers — transport"
+        "historical_census_semantic_scope": "subject is explicit NativeFileRef File semantics; carriers feed await helpers — transport",
+        "historical_census_requirement": "file-ref semantics oracle unchanged once helpers re-typed"
       },
       {
         "edge": "X-01",
@@ -812,7 +843,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "read-semantics oracle unchanged after helper re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is File read semantics; Completion is the await transport carrier"
+        "historical_census_semantic_scope": "subject is File read semantics; Completion is the await transport carrier",
+        "historical_census_requirement": "read-semantics oracle unchanged after helper re-typing"
       },
       {
         "edge": "X-01",
@@ -822,7 +854,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "write-semantics oracle unchanged after helper re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is File write semantics; Completion is await transport"
+        "historical_census_semantic_scope": "subject is File write semantics; Completion is await transport",
+        "historical_census_requirement": "write-semantics oracle unchanged after helper re-typing"
       },
       {
         "edge": "X-01",
@@ -832,7 +865,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "sync_data oracle unchanged after helper re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is sync_data File semantics; Completion is await transport"
+        "historical_census_semantic_scope": "subject is sync_data File semantics; Completion is await transport",
+        "historical_census_requirement": "sync_data oracle unchanged after helper re-typing"
       },
       {
         "edge": "X-01",
@@ -842,7 +876,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "sync_all oracle unchanged after helper re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is sync_all File semantics; Completion is await transport"
+        "historical_census_semantic_scope": "subject is sync_all File semantics; Completion is await transport",
+        "historical_census_requirement": "sync_all oracle unchanged after helper re-typing"
       },
       {
         "edge": "X-01",
@@ -852,7 +887,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "guard re-stated (or retired with justification) when completion.hpp disappears; core link closure unchanged; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "package non-leakage oracle: asserts the core substrate pulls no Completion into a consumer — semantic subject (a guard), not removable transport"
+        "historical_census_semantic_scope": "package non-leakage oracle: asserts the core substrate pulls no Completion into a consumer — semantic subject (a guard), not removable transport",
+        "historical_census_requirement": "guard re-stated (or retired with justification) when completion.hpp disappears; core link closure unchanged"
       },
       {
         "edge": "X-01",
@@ -862,7 +898,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F4 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "shared probe header for semantic reference cases over real Completions — subject"
+        "historical_census_semantic_scope": "shared probe header for semantic reference cases over real Completions — subject",
+        "historical_census_requirement": "reference-case probes re-typed with identical case outcomes"
       },
       {
         "edge": "X-01",
@@ -872,7 +909,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F4 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "documented-behavior reference cases (holding vs noop carriers) — subject; note :23 CompletionState is an unrelated sluice::detail cursor symbol (name coincidence)"
+        "historical_census_semantic_scope": "documented-behavior reference cases (holding vs noop carriers) — subject; note :23 CompletionState is an unrelated sluice::detail cursor symbol (name coincidence)",
+        "historical_census_requirement": "reference-case outcomes preserved under re-typed carriers"
       },
       {
         "edge": "X-01",
@@ -882,7 +920,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "host + mutant matrix unchanged after virtual-interface re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is the Request<T>-typed StackfulIoHost; Completion appears only via forced fake-backend virtuals — transport"
+        "historical_census_semantic_scope": "subject is the Request<T>-typed StackfulIoHost; Completion appears only via forced fake-backend virtuals — transport",
+        "historical_census_requirement": "host + mutant matrix unchanged after virtual-interface re-typing"
       },
       {
         "edge": "X-01",
@@ -892,7 +931,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "backend smoke transport over the compat await spelling"
+        "historical_census_semantic_scope": "backend smoke transport over the compat await spelling",
+        "historical_census_requirement": "smoke re-run after re-typing (liburing profile)"
       },
       {
         "edge": "X-01",
@@ -902,7 +942,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "F1 frozen baselines may not be rewritten in place; migration requires re-freeze at a new location with the re-typed surface; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "F1 clean-room package contract consumer observing Completion-based attach — frozen-baseline retained test; subject is the package contract"
+        "historical_census_semantic_scope": "F1 clean-room package contract consumer observing Completion-based attach — frozen-baseline retained test; subject is the package contract",
+        "historical_census_requirement": "F1 frozen baselines may not be rewritten in place; migration requires re-freeze at a new location with the re-typed surface"
       },
       {
         "edge": "X-01",
@@ -912,7 +953,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "runtime header re-typed with apps+tests compiling (F2/F3 joint); preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "runtime header carries the compat Completion spellings; detailed await-machinery records under X-16"
+        "historical_census_semantic_scope": "runtime header carries the compat Completion spellings; detailed await-machinery records under X-16",
+        "historical_census_requirement": "runtime header re-typed with apps+tests compiling (F2/F3 joint)"
       },
       {
         "edge": "X-01",
@@ -922,7 +964,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "X-16 node closure evidence; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "scheduler header carries the await spelling; detailed records under X-16"
+        "historical_census_semantic_scope": "scheduler header carries the await spelling; detailed records under X-16",
+        "historical_census_requirement": "X-16 node closure evidence"
       },
       {
         "edge": "X-01",
@@ -932,7 +975,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "helper re-typing with all 4 apps + file_* tests compiling and passing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "host await conveniences are Completion-spelled (H-06/07 re-typing obligation)"
+        "historical_census_semantic_scope": "host await conveniences are Completion-spelled (H-06/07 re-typing obligation)",
+        "historical_census_requirement": "helper re-typing with all 4 apps + file_* tests compiling and passing"
       },
       {
         "edge": "X-01",
@@ -942,7 +986,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "file semantics oracles unchanged after re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File-family host conveniences are Completion-spelled"
+        "historical_census_semantic_scope": "File-family host conveniences are Completion-spelled",
+        "historical_census_requirement": "file semantics oracles unchanged after re-typing"
       },
       {
         "edge": "X-01",
@@ -952,7 +997,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Clean-room external package consumer (F1, post-F0-scan) exercising the compat result carrier as the observer-episode settlement cell"
+        "historical_census_semantic_scope": "Clean-room external package consumer (F1, post-F0-scan) exercising the compat result carrier as the observer-episode settlement cell",
+        "historical_census_requirement": "When F2 drops the Completion& observer spellings, this probe must be re-typed and the clean-room suite re-run with a re-frozen manifest (--check-frozen) in the same slice"
       },
       {
         "edge": "X-02",
@@ -962,7 +1008,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "R-07 release path retains the arena binding as fallback release owner when no core binding is installed"
+        "historical_census_semantic_scope": "R-07 release path retains the arena binding as fallback release owner when no core binding is installed",
+        "historical_census_requirement": "release-path oracle (request_core_ownership/public_request tests) over core-only release before dropping the arena branch"
       },
       {
         "edge": "X-02",
@@ -972,7 +1019,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "derives RequestHandle identity from release_arena_/bound_slot_ when no core binding exists (dormant today: nothing installs arena bindings)"
+        "historical_census_semantic_scope": "derives RequestHandle identity from release_arena_/bound_slot_ when no core binding exists (dormant today: nothing installs arena bindings)",
+        "historical_census_requirement": "identity oracle (file_info_identity-style + submit_*_request state queries) proving core path suffices before the fallback is removed"
       },
       {
         "edge": "X-02",
@@ -982,7 +1030,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "every RequestHandle-returning submission and every await-observer attach resolves identity through identity_of — the live consumer of the fallback chain"
+        "historical_census_semantic_scope": "every RequestHandle-returning submission and every await-observer attach resolves identity through identity_of — the live consumer of the fallback chain",
+        "historical_census_requirement": "observer + request-state oracles unchanged when identity resolution is re-owned"
       },
       {
         "edge": "X-02",
@@ -992,7 +1041,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "backend-facing helper whose signature references RequestArena; zero callers on master"
+        "historical_census_semantic_scope": "backend-facing helper whose signature references RequestArena; zero callers on master",
+        "historical_census_requirement": "compile evidence that no TU needs the arena-signature helper before removal"
       },
       {
         "edge": "X-02",
@@ -1002,7 +1052,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "sole remaining code that would install the legacy arena binding on a Completion; ZERO consumers repo-wide (orphan template, never instantiated, not referenced by any TU)"
+        "historical_census_semantic_scope": "sole remaining code that would install the legacy arena binding on a Completion; ZERO consumers repo-wide (orphan template, never instantiated, not referenced by any TU)",
+        "historical_census_requirement": "removal together with RequestArena/request_slot per D-02/D-03; compile+link of all targets after removal"
       },
       {
         "edge": "X-02",
@@ -1012,7 +1063,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "arena slot stores the raw Completion address for publication and identity scan (resolve_completion) — the arena-side layout twin of the edge"
+        "historical_census_semantic_scope": "arena slot stores the raw Completion address for publication and identity scan (resolve_completion) — the arena-side layout twin of the edge",
+        "historical_census_requirement": "slot-layout/cutover tests after the arena retires"
       },
       {
         "edge": "X-02",
@@ -1022,7 +1074,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "guard re-stated or retired with justification in the slice that removes the arena name; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "negative package guard: core substrate must not pull RequestArena into a consumer — name-level consumer, breaks if the type is deleted"
+        "historical_census_semantic_scope": "negative package guard: core substrate must not pull RequestArena into a consumer — name-level consumer, breaks if the type is deleted",
+        "historical_census_requirement": "guard re-stated or retired with justification in the slice that removes the arena name"
       },
       {
         "edge": "X-02",
@@ -1032,7 +1085,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "F1 baseline re-freeze at a new location when the arena name disappears; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "F1 clean-room W-01 package guard: blocking substrate stays free of async arena types — frozen-baseline retained test"
+        "historical_census_semantic_scope": "F1 clean-room W-01 package guard: blocking substrate stays free of async arena types — frozen-baseline retained test",
+        "historical_census_requirement": "F1 baseline re-freeze at a new location when the arena name disappears"
       },
       {
         "edge": "X-02",
@@ -1042,7 +1096,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F2 / #402",
         "exit_condition": "probe re-stated when the arena name is removed; sluice_core-only link closure preserved; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "W-01 core-only consumer probe asserting the direct trace needs no arena types"
+        "historical_census_semantic_scope": "W-01 core-only consumer probe asserting the direct trace needs no arena types",
+        "historical_census_requirement": "probe re-stated when the arena name is removed; sluice_core-only link closure preserved"
       },
       {
         "edge": "X-03",
@@ -1052,7 +1107,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "after F3 boundary fix (opaque/PIMPL slot): installed stackful_io_host.hpp compiles clean-room without fiber.hpp complete type; w04 gates + stackful_host_test suite + all mutants keep their named kills; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "public-header layout embedding of Fiber in the per-task slot; forces Fiber complete type on every TU including this installed header"
+        "historical_census_semantic_scope": "public-header layout embedding of Fiber in the per-task slot; forces Fiber complete type on every TU including this installed header",
+        "historical_census_requirement": "after F3 boundary fix (opaque/PIMPL slot): installed stackful_io_host.hpp compiles clean-room without fiber.hpp complete type; w04 gates + stackful_host_test suite + all mutants keep their named kills"
       },
       {
         "edge": "X-03",
@@ -1062,7 +1118,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "clean-room compile without fiber_ctx layout + ASan/TSan ODR macro-view equivalence for installed-archive consumers; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "host driver coroutine context embedded by value; pulls fiber_ctx sanitizer-conditional layout into ApplicationRuntime-consumer TUs (ODR coupling, manifest note :146)"
+        "historical_census_semantic_scope": "host driver coroutine context embedded by value; pulls fiber_ctx sanitizer-conditional layout into ApplicationRuntime-consumer TUs (ODR coupling, manifest note :146)",
+        "historical_census_requirement": "clean-room compile without fiber_ctx layout + ASan/TSan ODR macro-view equivalence for installed-archive consumers"
       },
       {
         "edge": "X-03",
@@ -1072,7 +1129,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "header spell-out after internalization keeps public API identical (create/spawn/run/request_stop); preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "entry trampoline typed on the fiber_ctx switch record; pointer-only use but declared in the installed header"
+        "historical_census_semantic_scope": "entry trampoline typed on the fiber_ctx switch record; pointer-only use but declared in the installed header",
+        "historical_census_requirement": "header spell-out after internalization keeps public API identical (create/spawn/run/request_stop)"
       },
       {
         "edge": "X-03",
@@ -1082,7 +1140,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "post-internalization installed-header grep: stackful_io_host.hpp no longer includes fiber*.hpp; w04 + stackful_host_test compile unchanged; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "direct include edge exposing fiber*.hpp to every stackful_io_host.hpp consumer (3 live includers: impl TU, seam test, w04 clean-room probe)"
+        "historical_census_semantic_scope": "direct include edge exposing fiber*.hpp to every stackful_io_host.hpp consumer (3 live includers: impl TU, seam test, w04 clean-room probe)",
+        "historical_census_requirement": "post-internalization installed-header grep: stackful_io_host.hpp no longer includes fiber*.hpp; w04 + stackful_host_test compile unchanged"
       },
       {
         "edge": "X-03",
@@ -1092,7 +1151,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "stackful_host_test 13 mutants killed with unchanged exit modes after any fiber_ctx re-spell; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "implementation TU driving the fiber_ctx switch protocol for host task suspension/resume"
+        "historical_census_semantic_scope": "implementation TU driving the fiber_ctx switch protocol for host task suspension/resume",
+        "historical_census_requirement": "stackful_host_test 13 mutants killed with unchanged exit modes after any fiber_ctx re-spell"
       },
       {
         "edge": "X-03",
@@ -1102,7 +1162,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "both F1 gates stay green after the X-03 header re-spell; suspension-shaped arms still uring-only with explicit exit-2 without it; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "clean-room OPTIONAL_CANDIDATE consumer probe recording externally observable host evidence only (no OPTIONAL_SUPPORTED claim); compiled against installed prefix with manifest macro_view"
+        "historical_census_semantic_scope": "clean-room OPTIONAL_CANDIDATE consumer probe recording externally observable host evidence only (no OPTIONAL_SUPPORTED claim); compiled against installed prefix with manifest macro_view",
+        "historical_census_requirement": "both F1 gates stay green after the X-03 header re-spell; suspension-shaped arms still uring-only with explicit exit-2 without it"
       },
       {
         "edge": "X-03",
@@ -1112,7 +1173,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "full suite + named mutant kills re-run green at each F3 host slice boundary; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "semantic oracle for the narrow host (pipeline tracer, failure paths, progress-owner composition, admission); seam-topology binary compiling its own async TU copies under SLUICE_ASYNC_INTERNAL_TESTING; not mechanically rewriteable — it is the host's behavioral evidence, not a transport"
+        "historical_census_semantic_scope": "semantic oracle for the narrow host (pipeline tracer, failure paths, progress-owner composition, admission); seam-topology binary compiling its own async TU copies under SLUICE_ASYNC_INTERNAL_TESTING; not mechanically rewriteable — it is the host's behavioral evidence, not a transport",
+        "historical_census_requirement": "full suite + named mutant kills re-run green at each F3 host slice boundary"
       },
       {
         "edge": "X-04",
@@ -1122,7 +1184,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "runtime owns its scheduler by pointer; complete Scheduler type required via direct scheduler.hpp include"
+        "historical_census_semantic_scope": "runtime owns its scheduler by pointer; complete Scheduler type required via direct scheduler.hpp include",
+        "historical_census_requirement": "post-boundary-fix installed application_runtime.hpp compiles without scheduler.hpp complete type; runtime_waiter_observer_test + apps green"
       },
       {
         "edge": "X-04",
@@ -1132,7 +1195,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "driver wake handle embedded by value in the public runtime class; second public-header layout exposure of the scheduler wake surface"
+        "historical_census_semantic_scope": "driver wake handle embedded by value in the public runtime class; second public-header layout exposure of the scheduler wake surface",
+        "historical_census_requirement": "layout-neutral re-spell validated by shutdown_lifecycle_test + runtime_waiter_observer_test green"
       },
       {
         "edge": "X-04",
@@ -1142,7 +1206,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "runtime driver and RuntimeTaskContext delegate wait/cancel/wake to Scheduler methods"
+        "historical_census_semantic_scope": "runtime driver and RuntimeTaskContext delegate wait/cancel/wake to Scheduler methods",
+        "historical_census_requirement": "runtime waiter/observer + shutdown evidence suites green after any Scheduler surface move"
       },
       {
         "edge": "X-04",
@@ -1152,7 +1217,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app + its consumption test green after any application_runtime.hpp boundary fix (public-header compile only); preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "app task module exposes Scheduler/Fiber complete types transitively; runtime lifecycle entered via task_result.hpp::run_task_to_result (copy_task.cpp:358)"
+        "historical_census_semantic_scope": "app task module exposes Scheduler/Fiber complete types transitively; runtime lifecycle entered via task_result.hpp::run_task_to_result (copy_task.cpp:358)",
+        "historical_census_requirement": "app + its consumption test green after any application_runtime.hpp boundary fix (public-header compile only)"
       },
       {
         "edge": "X-04",
@@ -1162,7 +1228,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app + consumption test green after boundary fix; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "same exposure class; runtime entered via run_task_to_result (grep_task.cpp:151)"
+        "historical_census_semantic_scope": "same exposure class; runtime entered via run_task_to_result (grep_task.cpp:151)",
+        "historical_census_requirement": "app + consumption test green after boundary fix"
       },
       {
         "edge": "X-04",
@@ -1172,7 +1239,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app + consumption test green after boundary fix; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "same exposure class; runtime entered via run_task_to_result (hash_task.cpp:128)"
+        "historical_census_semantic_scope": "same exposure class; runtime entered via run_task_to_result (hash_task.cpp:128)",
+        "historical_census_requirement": "app + consumption test green after boundary fix"
       },
       {
         "edge": "X-04",
@@ -1182,7 +1250,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app + consumption test green after boundary fix; direct-lifecycle path covered; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "only app that drives RuntimeBuilder/ApplicationRuntime directly instead of run_task_to_result"
+        "historical_census_semantic_scope": "only app that drives RuntimeBuilder/ApplicationRuntime directly instead of run_task_to_result",
+        "historical_census_requirement": "app + consumption test green after boundary fix; direct-lifecycle path covered"
       },
       {
         "edge": "X-04",
@@ -1192,7 +1261,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "semantic oracle for runtime waiter/observer publication semantics; uses the ApplicationRuntime seam to reach the live Scheduler — semantic subject is the runtime itself, not a rewriteable transport"
+        "historical_census_semantic_scope": "semantic oracle for runtime waiter/observer publication semantics; uses the ApplicationRuntime seam to reach the live Scheduler — semantic subject is the runtime itself, not a rewriteable transport",
+        "historical_census_requirement": "green under both profiles after any X-04 re-spell; seam surface changes must preserve named discriminators (X-14 obligation)"
       },
       {
         "edge": "X-04",
@@ -1202,7 +1272,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "blocking runtime lifecycle entry used by sluice-copy/grep/hash; anchors the helper→runtime order (X-05/X-09 intersection)"
+        "historical_census_semantic_scope": "blocking runtime lifecycle entry used by sluice-copy/grep/hash; anchors the helper→runtime order (X-05/X-09 intersection)",
+        "historical_census_requirement": "three apps + consumption tests green after runtime boundary fix"
       },
       {
         "edge": "X-05",
@@ -1212,7 +1283,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "helper family cannot outlive the runtime world; every installed-header consumer inherits the full scheduler→fiber transitive closure"
+        "historical_census_semantic_scope": "helper family cannot outlive the runtime world; every installed-header consumer inherits the full scheduler→fiber transitive closure",
+        "historical_census_requirement": "helpers-before-runtime migration order proven by helpers compiling without scheduler/fiber headers at F3 step 1"
       },
       {
         "edge": "X-05",
@@ -1222,7 +1294,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "helper implementation parks on the runtime wait path"
+        "historical_census_semantic_scope": "helper implementation parks on the runtime wait path",
+        "historical_census_requirement": "helper behavior evidence (explicit_file_ref/observer tests) green after wait-path migration"
       },
       {
         "edge": "X-05",
@@ -1232,7 +1305,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "file-family evidence (F4) stays green while its runtime transport is re-spelled; signatures preserved or re-homed per F3/F4 agreement; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File-family await bridge: canonical File semantics delivered through the runtime task context; binds file family to runtime retirement order"
+        "historical_census_semantic_scope": "File-family await bridge: canonical File semantics delivered through the runtime task context; binds file family to runtime retirement order",
+        "historical_census_requirement": "file-family evidence (F4) stays green while its runtime transport is re-spelled; signatures preserved or re-homed per F3/F4 agreement"
       },
       {
         "edge": "X-05",
@@ -1242,7 +1316,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "File semantics oracles (detail/file_semantics.hpp-based tests) green across invocation forms after transport change; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "async File helper implementation delegates to the runtime await primitives"
+        "historical_census_semantic_scope": "async File helper implementation delegates to the runtime await primitives",
+        "historical_census_requirement": "File semantics oracles (detail/file_semantics.hpp-based tests) green across invocation forms after transport change"
       },
       {
         "edge": "X-05",
@@ -1252,7 +1327,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app output equivalence + consumption test green after helper migration; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "heaviest direct await-helper consumer: composition conveniences exercised in a real program"
+        "historical_census_semantic_scope": "heaviest direct await-helper consumer: composition conveniences exercised in a real program",
+        "historical_census_requirement": "app output equivalence + consumption test green after helper migration"
       },
       {
         "edge": "X-05",
@@ -1262,7 +1338,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app green; vestigial include cleanable only with compile evidence of no symbol use; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "await consumption reached through the file.hpp bridge; await_op_helpers include is direct but symbol-unused on this TU"
+        "historical_census_semantic_scope": "await consumption reached through the file.hpp bridge; await_op_helpers include is direct but symbol-unused on this TU",
+        "historical_census_requirement": "app green; vestigial include cleanable only with compile evidence of no symbol use"
       },
       {
         "edge": "X-05",
@@ -1272,7 +1349,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app green; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "same as grep: file.hpp-bridged consumption"
+        "historical_census_semantic_scope": "same as grep: file.hpp-bridged consumption",
+        "historical_census_requirement": "app green"
       },
       {
         "edge": "X-05",
@@ -1282,7 +1360,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app green; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "same as grep/hash: file.hpp-bridged consumption"
+        "historical_census_semantic_scope": "same as grep/hash: file.hpp-bridged consumption",
+        "historical_census_requirement": "app green"
       },
       {
         "edge": "X-05",
@@ -1292,7 +1371,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "same File-ref assertions pass under the post-migration transport; no weakening of assertions; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "runtime await path is the TEST TRANSPORT; semantic subject is File-ref semantics — must be re-transported, not deleted or mirrored, when runtime migrates"
+        "historical_census_semantic_scope": "runtime await path is the TEST TRANSPORT; semantic subject is File-ref semantics — must be re-transported, not deleted or mirrored, when runtime migrates",
+        "historical_census_requirement": "same File-ref assertions pass under the post-migration transport; no weakening of assertions"
       },
       {
         "edge": "X-05",
@@ -1302,7 +1382,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "semantic oracle whose subject is the runtime wait machinery itself; helper is incidental transport"
+        "historical_census_semantic_scope": "semantic oracle whose subject is the runtime wait machinery itself; helper is incidental transport",
+        "historical_census_requirement": "observer/waiter publication discriminators preserved across runtime migration"
       },
       {
         "edge": "X-06",
@@ -1312,7 +1393,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "This is a semantic subject, not transport: any re-base of the legacy leg onto the canonical path (or its retirement) requires ledger re-record of the semantic_range_test oracle row (named at docs/roadmap/v1-conformance.md:119) with range-rejection parity re-shown on the canonical path; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Named ledger oracle leg: legacy positional positioned-I/O must reject out-of-range offsets with invalid_argument, cross-checked against the shared range table (ctor :134/:145, calls :139/:163, oracle probe :113)"
+        "historical_census_semantic_scope": "Named ledger oracle leg: legacy positional positioned-I/O must reject out-of-range offsets with invalid_argument, cross-checked against the shared range table (ctor :134/:145, calls :139/:163, oracle probe :113)",
+        "historical_census_requirement": "This is a semantic subject, not transport: any re-base of the legacy leg onto the canonical path (or its retirement) requires ledger re-record of the semantic_range_test oracle row (named at docs/roadmap/v1-conformance.md:119) with range-rejection parity re-shown on the canonical path"
       },
       {
         "edge": "X-06",
@@ -1321,8 +1403,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "Vectored-capability decision gates L-01 retirement: accepted workload + root amendment per PROD-03 (root :127) and ledger :56, or an explicitly recorded accepted degradation; wal itself has zero downstream consumers (verified live), so no app migration rides on it; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Vectored WAL record append: header+payload+trailer issued as one writev via the only native vectored implementation; declared public at wal.hpp:16"
+        "exit_condition": "A3a/B1 adopted: retire the unadmitted WAL/vectored stream closure deliberately; no canonical vectored replacement/workload is required. Close stream consumers/abstract dependency, U-05 external-risk/deprecation and F4/F5 B-01 before physical removal.",
+        "historical_census_semantic_scope": "Vectored WAL record append: header+payload+trailer issued as one writev via the only native vectored implementation; declared public at wal.hpp:16",
+        "historical_census_requirement": "Vectored-capability decision gates L-01 retirement: accepted workload + root amendment per PROD-03 (root :127) and ledger :56, or an explicitly recorded accepted degradation; wal itself has zero downstream consumers (verified live), so no app migration rides on it"
       },
       {
         "edge": "X-06",
@@ -1332,7 +1415,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "Zero consumers verified (repo-wide grep ObservedReader/ObservedWriter outside observed.hpp/.cpp = 0); sluice_core compile suffices as evidence if the vectored virtuals leave Reader/Writer; re-verify zero-consumer status at removal time; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Measurement decorator preserving vectored-ABI transparency over any inner Reader/Writer; second implementation point of the vectored virtuals"
+        "historical_census_semantic_scope": "Measurement decorator preserving vectored-ABI transparency over any inner Reader/Writer; second implementation point of the vectored virtuals",
+        "historical_census_requirement": "Zero consumers verified (repo-wide grep ObservedReader/ObservedWriter outside observed.hpp/.cpp = 0); sluice_core compile suffices as evidence if the vectored virtuals leave Reader/Writer; re-verify zero-consumer status at removal time"
       },
       {
         "edge": "X-06",
@@ -1342,7 +1426,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Vestigial build coupling: test actually consumes canonical File::open (public_request_test.cpp:82-96) + NativeFileRef from asyncIoContext/file_resource.hpp, not the legacy surface"
+        "historical_census_semantic_scope": "Vestigial build coupling: test actually consumes canonical File::open (public_request_test.cpp:82-96) + NativeFileRef from asyncIoContext/file_resource.hpp, not the legacy surface",
+        "historical_census_requirement": "compile of the affected test targets after include removal; zero-symbol-use grep as recorded here"
       },
       {
         "edge": "X-06",
@@ -1352,7 +1437,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Vestigial build coupling; test uses AsyncIoContext + canonical File only"
+        "historical_census_semantic_scope": "Vestigial build coupling; test uses AsyncIoContext + canonical File only",
+        "historical_census_requirement": "compile of affected targets after removal"
       },
       {
         "edge": "X-06",
@@ -1362,7 +1448,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Vestigial build coupling; consumes canonical File via open_temp_file (request_core_ownership_test.cpp:79)"
+        "historical_census_semantic_scope": "Vestigial build coupling; consumes canonical File via open_temp_file (request_core_ownership_test.cpp:79)",
+        "historical_census_requirement": "compile of affected targets after removal"
       },
       {
         "edge": "X-06",
@@ -1372,7 +1459,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Vestigial build coupling; consumes canonical File via open_temp_file (request_scope_test.cpp:155) and scope.submit_sync_all(NativeFileRef{*file}) (:302)"
+        "historical_census_semantic_scope": "Vestigial build coupling; consumes canonical File via open_temp_file (request_scope_test.cpp:155) and scope.submit_sync_all(NativeFileRef{*file}) (:302)",
+        "historical_census_requirement": "compile of affected targets after removal"
       },
       {
         "edge": "X-06",
@@ -1382,7 +1470,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Vestigial build coupling; named shutdown oracle consumes canonical File (shutdown_lifecycle_test.cpp:77) not the legacy surface"
+        "historical_census_semantic_scope": "Vestigial build coupling; named shutdown oracle consumes canonical File (shutdown_lifecycle_test.cpp:77) not the legacy surface",
+        "historical_census_requirement": "compile of affected targets after removal"
       },
       {
         "edge": "X-07",
@@ -1391,8 +1480,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "X-06 second-authority decision and vectored-capability decision precede factory removal; re-run BlockingIoContext zero-consumer check at removal; installed-surface decision for sluice/io_context.hpp must respect the F1 frozen manifest; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Factory construction of the only file-backed Reader implementation, forwarding SyscallStats/VectorStats hooks and mapping open failure to open_error()"
+        "exit_condition": "A3a/B1 decisions adopted. F4 retires or re-owns BlockingIoContext factory consumers, with semantic/lifetime evidence and U-03/U-04 deliberate deprecation; same-slice B-01 and F5 package closure before removing factory/header/symbols.",
+        "historical_census_semantic_scope": "Factory construction of the only file-backed Reader implementation, forwarding SyscallStats/VectorStats hooks and mapping open failure to open_error()",
+        "historical_census_requirement": "X-06 second-authority decision and vectored-capability decision precede factory removal; re-run BlockingIoContext zero-consumer check at removal; installed-surface decision for sluice/io_context.hpp must respect the F1 frozen manifest"
       },
       {
         "edge": "X-07",
@@ -1401,8 +1491,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "same as c-x07-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Factory construction of the only file-backed Writer implementation incl. SyncStats/SyncableWriter wiring"
+        "exit_condition": "A3a/B1 decisions adopted. F4 retires or re-owns BlockingIoContext factory consumers, with semantic/lifetime evidence and U-03/U-04 deliberate deprecation; same-slice B-01 and F5 package closure before removing factory/header/symbols.",
+        "historical_census_semantic_scope": "Factory construction of the only file-backed Writer implementation incl. SyncStats/SyncableWriter wiring",
+        "historical_census_requirement": "same as c-x07-001"
       },
       {
         "edge": "X-08",
@@ -1412,7 +1503,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后两 profile 重编 sluice-copy + app_copy_consumption_test，引擎类型面不再触 ApplicationRuntime/AsyncIoContext; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "copy 引擎的类型面：任务/管线槽在 runtime 类型上定义"
+        "historical_census_semantic_scope": "copy 引擎的类型面：任务/管线槽在 runtime 类型上定义",
+        "historical_census_requirement": "迁移后两 profile 重编 sluice-copy + app_copy_consumption_test，引擎类型面不再触 ApplicationRuntime/AsyncIoContext"
       },
       {
         "edge": "X-08",
@@ -1422,7 +1514,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 copy 吞吐/正确性对照（app_copy_consumption_test + 两 profile 实拷贝输出一致）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "copy 引擎的执行路径：经 await 助手驱动多 worker runtime"
+        "historical_census_semantic_scope": "copy 引擎的执行路径：经 await 助手驱动多 worker runtime",
+        "historical_census_requirement": "迁移后 copy 吞吐/正确性对照（app_copy_consumption_test + 两 profile 实拷贝输出一致）"
       },
       {
         "edge": "X-08",
@@ -1432,7 +1525,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 grep 引擎编译面仅剩窄宿主类型；app_grep_consumption_test 两 profile 绿; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "grep 引擎类型面挂在 runtime/后端类型上"
+        "historical_census_semantic_scope": "grep 引擎类型面挂在 runtime/后端类型上",
+        "historical_census_requirement": "迁移后 grep 引擎编译面仅剩窄宿主类型；app_grep_consumption_test 两 profile 绿"
       },
       {
         "edge": "X-08",
@@ -1442,7 +1536,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 grep 匹配结果与基线一致（app_grep_consumption_test + 真文件对照）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "grep 读取循环经 legacy await 助手在 canonical File 上执行"
+        "historical_census_semantic_scope": "grep 读取循环经 legacy await 助手在 canonical File 上执行",
+        "historical_census_requirement": "迁移后 grep 匹配结果与基线一致（app_grep_consumption_test + 真文件对照）"
       },
       {
         "edge": "X-08",
@@ -1452,7 +1547,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 hash 引擎编译面不含 runtime 类型；app_hash_consumption_test 两 profile 绿; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "hash 引擎类型面挂在 runtime/后端类型上"
+        "historical_census_semantic_scope": "hash 引擎类型面挂在 runtime/后端类型上",
+        "historical_census_requirement": "迁移后 hash 引擎编译面不含 runtime 类型；app_hash_consumption_test 两 profile 绿"
       },
       {
         "edge": "X-08",
@@ -1462,7 +1558,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 SHA-256 输出与已知向量一致; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "hash 流式读取经 legacy await 助手执行"
+        "historical_census_semantic_scope": "hash 流式读取经 legacy await 助手执行",
+        "historical_census_requirement": "迁移后 SHA-256 输出与已知向量一致"
       },
       {
         "edge": "X-08",
@@ -1472,7 +1569,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 tail 引擎生命周期（start/stop/wait）语义保持；app_tail_consumption_test 绿; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "tail 引擎持有 canonical File 并在 runtime 类型上定义回调"
+        "historical_census_semantic_scope": "tail 引擎持有 canonical File 并在 runtime 类型上定义回调",
+        "historical_census_requirement": "迁移后 tail 引擎生命周期（start/stop/wait）语义保持；app_tail_consumption_test 绿"
       },
       {
         "edge": "X-08",
@@ -1482,7 +1580,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 Ctrl-C 取消 + follow 模式行为对照（SIGTERM/SIGINT 注入测试）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "tail 是唯一直接构造 RuntimeBuilder 的 app；读取/跟随循环经 await 助手"
+        "historical_census_semantic_scope": "tail 是唯一直接构造 RuntimeBuilder 的 app；读取/跟随循环经 await 助手",
+        "historical_census_requirement": "迁移后 Ctrl-C 取消 + follow 模式行为对照（SIGTERM/SIGINT 注入测试）"
       },
       {
         "edge": "X-08",
@@ -1492,7 +1591,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "迁移后 temp+rename 原子输出路径行为不变（app_copy_consumption_test OpenCopyFailure 矩阵）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "CLI 把裸 fd+access 包装成 NativeFileRef 交给 copy 引擎"
+        "historical_census_semantic_scope": "CLI 把裸 fd+access 包装成 NativeFileRef 交给 copy 引擎",
+        "historical_census_requirement": "迁移后 temp+rename 原子输出路径行为不变（app_copy_consumption_test OpenCopyFailure 矩阵）"
       },
       {
         "edge": "X-08",
@@ -1502,7 +1602,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "File 语义迁移不回归：file_open_contract 类 oracle 覆盖 app 用法; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "CLI 打开 canonical File 并移交引擎（legacy/host 边界外的 canonical 资源消费）"
+        "historical_census_semantic_scope": "CLI 打开 canonical File 并移交引擎（legacy/host 边界外的 canonical 资源消费）",
+        "historical_census_requirement": "File 语义迁移不回归：file_open_contract 类 oracle 覆盖 app 用法"
       },
       {
         "edge": "X-08",
@@ -1512,7 +1613,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x08-010; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "CLI 打开 canonical File 并移交引擎"
+        "historical_census_semantic_scope": "CLI 打开 canonical File 并移交引擎",
+        "historical_census_requirement": "同 c-x08-010"
       },
       {
         "edge": "X-08",
@@ -1522,7 +1624,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x08-010; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "CLI 打开 canonical File 并移交引擎"
+        "historical_census_semantic_scope": "CLI 打开 canonical File 并移交引擎",
+        "historical_census_requirement": "同 c-x08-010"
       },
       {
         "edge": "X-09",
@@ -1532,7 +1635,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app 引擎迁出后 Scheduler/Fiber 内部化方可推进；迁移对照 = 两 profile 拷贝行为一致; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "copy 经多 worker runtime 执行（TRANSITIVE_INCLUDE 链经 copy_task.hpp:3 application_runtime.hpp→scheduler.hpp:6→fiber*.hpp）"
+        "historical_census_semantic_scope": "copy 经多 worker runtime 执行（TRANSITIVE_INCLUDE 链经 copy_task.hpp:3 application_runtime.hpp→scheduler.hpp:6→fiber*.hpp）",
+        "historical_census_requirement": "app 引擎迁出后 Scheduler/Fiber 内部化方可推进；迁移对照 = 两 profile 拷贝行为一致"
       },
       {
         "edge": "X-09",
@@ -1542,7 +1646,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "grep 经多 worker runtime 执行"
+        "historical_census_semantic_scope": "grep 经多 worker runtime 执行",
+        "historical_census_requirement": "同 c-x09-001"
       },
       {
         "edge": "X-09",
@@ -1552,7 +1657,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "hash 经多 worker runtime 执行"
+        "historical_census_semantic_scope": "hash 经多 worker runtime 执行",
+        "historical_census_requirement": "同 c-x09-001"
       },
       {
         "edge": "X-09",
@@ -1562,7 +1668,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-001 + 停止/等待生命周期对照; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "tail 直接构造并长持 ApplicationRuntime（follow 模式生命周期）"
+        "historical_census_semantic_scope": "tail 直接构造并长持 ApplicationRuntime（follow 模式生命周期）",
+        "historical_census_requirement": "同 c-x09-001 + 停止/等待生命周期对照"
       },
       {
         "edge": "X-09",
@@ -1572,7 +1679,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 内部化 runtime 前必须先迁移/改写该 oracle 载体；不能机械判为可改写; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File 读取契约 oracle 以多 worker runtime 为执行 transport（非 seam；语义主体是 File 契约，runtime 是载体）"
+        "historical_census_semantic_scope": "File 读取契约 oracle 以多 worker runtime 为执行 transport（非 seam；语义主体是 File 契约，runtime 是载体）",
+        "historical_census_requirement": "F3 内部化 runtime 前必须先迁移/改写该 oracle 载体；不能机械判为可改写"
       },
       {
         "edge": "X-09",
@@ -1582,7 +1690,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File 写契约 oracle，载体同上"
+        "historical_census_semantic_scope": "File 写契约 oracle，载体同上",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-09",
@@ -1592,7 +1701,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File sync_data 契约 oracle，载体同上"
+        "historical_census_semantic_scope": "File sync_data 契约 oracle，载体同上",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-09",
@@ -1602,7 +1712,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File sync_all 契约 oracle，载体同上"
+        "historical_census_semantic_scope": "File sync_all 契约 oracle，载体同上",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-09",
@@ -1612,7 +1723,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "访问优先级 oracle，载体同上"
+        "historical_census_semantic_scope": "访问优先级 oracle，载体同上",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-09",
@@ -1622,7 +1734,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "显式 File 引用 oracle，载体同上"
+        "historical_census_semantic_scope": "显式 File 引用 oracle，载体同上",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-09",
@@ -1632,7 +1745,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "真环烟测以多 worker runtime 为载体（仅 liburing profile 注册）"
+        "historical_census_semantic_scope": "真环烟测以多 worker runtime 为载体（仅 liburing profile 注册）",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-09",
@@ -1642,7 +1756,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x09-005; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "C1-D waiter 适配证据：唯一直接 include application_runtime.hpp 的测试（F0 census '1 test' 即此）"
+        "historical_census_semantic_scope": "C1-D waiter 适配证据：唯一直接 include application_runtime.hpp 的测试（F0 census '1 test' 即此）",
+        "historical_census_requirement": "同 c-x09-005"
       },
       {
         "edge": "X-10",
@@ -1652,7 +1767,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "以『保留基线』框架向读者命名现行 Completion/AsyncIoContext 公开面，声明其存在不等于 v1 目标已达成"
+        "historical_census_semantic_scope": "以『保留基线』框架向读者命名现行 Completion/AsyncIoContext 公开面，声明其存在不等于 v1 目标已达成",
+        "historical_census_requirement": "F2 收缩 Completion 后重跑 retained-baseline 段落 grep，段落必须只命名幸存面且仍带『不等于新目标已实现』限定；README.md:121 的 app 链接同步复核"
       },
       {
         "edge": "X-10",
@@ -1662,7 +1778,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "英文 README 保留基线框架的中文镜像，须与英文版同批迁移避免双语分叉"
+        "historical_census_semantic_scope": "英文 README 保留基线框架的中文镜像，须与英文版同批迁移避免双语分叉",
+        "historical_census_requirement": "与 c-x10-001 同一证据点：两版段落词汇一一对应，同批更新"
       },
       {
         "edge": "X-10",
@@ -1672,7 +1789,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 内化/迁移 Fiber 时复核该句仍与根规范与代码一致（复跑 backend include 检查）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "复述根规范 HOST-01：Scheduler/Fiber 仅是核心之上的可选 host、backend 不路由其 waiter（与代码一致：threadpool/uring backend 无 scheduler/fiber include）"
+        "historical_census_semantic_scope": "复述根规范 HOST-01：Scheduler/Fiber 仅是核心之上的可选 host、backend 不路由其 waiter（与代码一致：threadpool/uring backend 无 scheduler/fiber include）",
+        "historical_census_requirement": "F3 内化/迁移 Fiber 时复核该句仍与根规范与代码一致（复跑 backend include 检查）"
       },
       {
         "edge": "X-10",
@@ -1682,7 +1800,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F4 / #402",
         "exit_condition": "无需迁移；仅当 F4 裁断 BlockingIoPool/MemoryIoContext 处置时复核 banner 仍覆盖其语义段落; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "唯一保留 BlockingIoPool/MemoryIoContext 语义描述的历史文档，banner 已限定其非现行权威"
+        "historical_census_semantic_scope": "唯一保留 BlockingIoPool/MemoryIoContext 语义描述的历史文档，banner 已限定其非现行权威",
+        "historical_census_requirement": "无需迁移；仅当 F4 裁断 BlockingIoPool/MemoryIoContext 处置时复核 banner 仍覆盖其语义段落"
       },
       {
         "edge": "X-10",
@@ -1692,7 +1811,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F5 / #402",
         "exit_condition": "无需迁移；F 阶段归档/退役文件时保持该索引与实际目录一致; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "声明四份现行记录之外 docs/ 下一切为 retained 历史记录或退役保留件——它本身就是现行词汇的所有者而非消费者"
+        "historical_census_semantic_scope": "声明四份现行记录之外 docs/ 下一切为 retained 历史记录或退役保留件——它本身就是现行词汇的所有者而非消费者",
+        "historical_census_requirement": "无需迁移；F 阶段归档/退役文件时保持该索引与实际目录一致"
       },
       {
         "edge": "X-10",
@@ -1702,7 +1822,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "Any F2-F5 header contraction must update/re-freeze these records (and pass verify_f1_package.py --check-frozen against a re-frozen manifest) in the same slice; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Frozen F1 record describing which compat/COMPAT surfaces the shipped package carries; must move when those surfaces move"
+        "historical_census_semantic_scope": "Frozen F1 record describing which compat/COMPAT surfaces the shipped package carries; must move when those surfaces move",
+        "historical_census_requirement": "Any F2-F5 header contraction must update/re-freeze these records (and pass verify_f1_package.py --check-frozen against a re-frozen manifest) in the same slice"
       },
       {
         "edge": "X-11",
@@ -1712,7 +1833,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "B1-1 请求生命周期协议模型，是 request_core 基底的形式化对应物与台账 B1-1/CANCEL 行的引用证据"
+        "historical_census_semantic_scope": "B1-1 请求生命周期协议模型，是 request_core 基底的形式化对应物与台账 B1-1/CANCEL 行的引用证据",
+        "historical_census_requirement": "request_core 表面移动/收缩时按 map §13 标准复验对应表（头两行文件引用 + 符号存在性）并重跑 Stage B1-1"
       },
       {
         "edge": "X-11",
@@ -1722,7 +1844,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "C1-H 观察者投递协议模型（安全底座 + L0-L4），对应 request_core 观察者机制与两 backend 投递边"
+        "historical_census_semantic_scope": "C1-H 观察者投递协议模型（安全底座 + L0-L4），对应 request_core 观察者机制与两 backend 投递边",
+        "historical_census_requirement": "observer_protocol.hpp/request_core.cpp 表面变动时复验对应头并重跑 C1 stage；台账 OBS 行引用它为 VERIFIED 证据"
       },
       {
         "edge": "X-11",
@@ -1732,7 +1855,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 迁移/内化 scheduler_park_wake.cpp 或 scheduler.cpp 时必须同步更新该对应头并重跑 C1 stage——这是 F3 收缩的正式证据义务，不得只改代码; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "活跃模型对 Scheduler 所属文件的唯一正式对应：Host actor 的 C++ 权威落在 fiber 运行时文件（RuntimeTaskContext::await_completion 委派链 application_runtime.cpp:55-65 → scheduler_park_wake.cpp:415）；模型动作本身无 Scheduler 结构（:19-23）"
+        "historical_census_semantic_scope": "活跃模型对 Scheduler 所属文件的唯一正式对应：Host actor 的 C++ 权威落在 fiber 运行时文件（RuntimeTaskContext::await_completion 委派链 application_runtime.cpp:55-65 → scheduler_park_wake.cpp:415）；模型动作本身无 Scheduler 结构（:19-23）",
+        "historical_census_requirement": "F3 迁移/内化 scheduler_park_wake.cpp 或 scheduler.cpp 时必须同步更新该对应头并重跑 C1 stage——这是 F3 收缩的正式证据义务，不得只改代码"
       },
       {
         "edge": "X-11",
@@ -1742,7 +1866,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "progress_source/async_io_context 表面变动即触发『实现已冻结』声明失效，须重冻结或重证明（台账 PROG 行 VERIFIED 依赖它）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "C2-E 冻结的进度/等待协议模型，锚定 #444 production corrective pass 时的实现并声明实现已冻结"
+        "historical_census_semantic_scope": "C2-E 冻结的进度/等待协议模型，锚定 #444 production corrective pass 时的实现并声明实现已冻结",
+        "historical_census_requirement": "progress_source/async_io_context 表面变动即触发『实现已冻结』声明失效，须重冻结或重证明（台账 PROG 行 VERIFIED 依赖它）"
       },
       {
         "edge": "X-11",
@@ -1752,7 +1877,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "async_io_context 关闭脊柱变动时按 E2 记录复验对应表并重跑 E2 stage; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "E2 关闭/引用账目脊柱模型，台账 SHUT 行 VERIFIED 的形式化证据（171-job 回归）"
+        "historical_census_semantic_scope": "E2 关闭/引用账目脊柱模型，台账 SHUT 行 VERIFIED 的形式化证据（171-job 回归）",
+        "historical_census_requirement": "async_io_context 关闭脊柱变动时按 E2 记录复验对应表并重跑 E2 stage"
       },
       {
         "edge": "X-11",
@@ -1762,7 +1888,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "处置由 #391 formal map §4 持有：F3 移动/删除这些 src 文件不产生新证明义务，但 map §4 行的对应目标路径需同步改注；不得将其计数当作活跃对应; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "8 个 disposition 标注模型（ADAPT/HISTORICAL/RETIRE_FROM_V1_EVIDENCE，无 REUSE）对仍存在于 src/async/ 的 fiber 世界源码的历史 census 对应，按 map §13 全部不满足 v1-r3 对应标准"
+        "historical_census_semantic_scope": "8 个 disposition 标注模型（ADAPT/HISTORICAL/RETIRE_FROM_V1_EVIDENCE，无 REUSE）对仍存在于 src/async/ 的 fiber 世界源码的历史 census 对应，按 map §13 全部不满足 v1-r3 对应标准",
+        "historical_census_requirement": "处置由 #391 formal map §4 持有：F3 移动/删除这些 src 文件不产生新证明义务，但 map §4 行的对应目标路径需同步改注；不得将其计数当作活跃对应"
       },
       {
         "edge": "X-11",
@@ -1772,7 +1899,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "模型重基线时 stage 表须同步；其全绿不构成对应关系成立的证据; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "形式资产的执行 transport（run_clean/run_violate/run_live_clean 门），不是语义主体——判定模型对应是否仍成立的是模型头与 §13 标准，脚本只保证可复现执行"
+        "historical_census_semantic_scope": "形式资产的执行 transport（run_clean/run_violate/run_live_clean 门），不是语义主体——判定模型对应是否仍成立的是模型头与 §13 标准，脚本只保证可复现执行",
+        "historical_census_requirement": "模型重基线时 stage 表须同步；其全绿不构成对应关系成立的证据"
       },
       {
         "edge": "X-11",
@@ -1782,7 +1910,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "ProgressSource.tla 或其冻结实现变动时该脚本必须如实复现预期结果或显式 FAIL; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "C2-E ProgressSource 十配置战役的独立复现 transport，锚定台账 PROG 行的 C2-E 记录"
+        "historical_census_semantic_scope": "C2-E ProgressSource 十配置战役的独立复现 transport，锚定台账 PROG 行的 C2-E 记录",
+        "historical_census_requirement": "ProgressSource.tla 或其冻结实现变动时该脚本必须如实复现预期结果或显式 FAIL"
       },
       {
         "edge": "X-11",
@@ -1792,7 +1921,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Active RETAINED model maps its release action onto the Completion release substrate (R-07) — the correspondence X-11 denied"
+        "historical_census_semantic_scope": "Active RETAINED model maps its release action onto the Completion release substrate (R-07) — the correspondence X-11 denied",
+        "historical_census_requirement": "When F2 re-types or removes the Completion release path, the ReleaseBind↔R-07 mapping and the L1 record must be re-mapped to the successor mechanism and re-verified via verify_tla.sh before the correspondence claim survives"
       },
       {
         "edge": "X-11",
@@ -1802,7 +1932,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "When F3 re-homes or retires RuntimeTaskContext, the ObserverCore host-actor correspondence (C1-D) must be re-mapped to the successor adapter and re-verified; otherwise the OBS liveness closure loses its C++ referent; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Active RETAINED observer model's host-side correspondence is the root-DEFERRED runtime-world surface H-08 — an edge no X-01..X-18 row records"
+        "historical_census_semantic_scope": "Active RETAINED observer model's host-side correspondence is the root-DEFERRED runtime-world surface H-08 — an edge no X-01..X-18 row records",
+        "historical_census_requirement": "When F3 re-homes or retires RuntimeTaskContext, the ObserverCore host-actor correspondence (C1-D) must be re-mapped to the successor adapter and re-verified; otherwise the OBS liveness closure loses its C++ referent"
       },
       {
         "edge": "X-12",
@@ -1812,7 +1943,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "任何包规则迁移需保留 public define+public link 与 ODR 判别（sizeof 或 negative probe），F1 式校验写 /tmp/m-*; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "公开 ODR 面：每个 consumer TU 必须与库编译时同一宏视图"
+        "historical_census_semantic_scope": "公开 ODR 面：每个 consumer TU 必须与库编译时同一宏视图",
+        "historical_census_requirement": "任何包规则迁移需保留 public define+public link 与 ODR 判别（sizeof 或 negative probe），F1 式校验写 /tmp/m-*"
       },
       {
         "edge": "X-12",
@@ -1822,7 +1954,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "包规则变更时以 xmake show 复核 define 仍经 dep(sluice_async) 传递; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "宏+链接的唯一配置点；consumer 不得手抄宏"
+        "historical_census_semantic_scope": "宏+链接的唯一配置点；consumer 不得手抄宏",
+        "historical_census_requirement": "包规则变更时以 xmake show 复核 define 仍经 dep(sluice_async) 传递"
       },
       {
         "edge": "X-12",
@@ -1832,7 +1965,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "保持不安装；实验面处置（D-14）未决前不动; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "未安装实验面的第二守卫布局（源码 include 路径可见）"
+        "historical_census_semantic_scope": "未安装实验面的第二守卫布局（源码 include 路径可见）",
+        "historical_census_requirement": "保持不安装；实验面处置（D-14）未决前不动"
       },
       {
         "edge": "X-12",
@@ -1842,7 +1976,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "包规则迁移后两 profile 套件结果对照; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "E1 语义 oracle 的 profile 分支；宏视图差异的可观测测试面"
+        "historical_census_semantic_scope": "E1 语义 oracle 的 profile 分支；宏视图差异的可观测测试面",
+        "historical_census_requirement": "包规则迁移后两 profile 套件结果对照"
       },
       {
         "edge": "X-12",
@@ -1852,7 +1987,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "seam 迁移（X-14）时同步消除该组合 include，随后包规则可收窄; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "公开头在双宏下拉入未安装 src 头——X-12 与 X-14 交点；靠 NEVER-DEFINE 包规则隔离"
+        "historical_census_semantic_scope": "公开头在双宏下拉入未安装 src 头——X-12 与 X-14 交点；靠 NEVER-DEFINE 包规则隔离",
+        "historical_census_requirement": "seam 迁移（X-14）时同步消除该组合 include，随后包规则可收窄"
       },
       {
         "edge": "X-12",
@@ -1862,7 +1998,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "Discriminator binary must keep observing single-layout agreement after any header/profile change; re-frozen manifest + rerun in the same slice; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "First realized clean-room consumer pair proving the SLUICE_HAS_LIBURING ODR contract of X-12"
+        "historical_census_semantic_scope": "First realized clean-room consumer pair proving the SLUICE_HAS_LIBURING ODR contract of X-12",
+        "historical_census_requirement": "Discriminator binary must keep observing single-layout agreement after any header/profile change; re-frozen manifest + rerun in the same slice"
       },
       {
         "edge": "X-12",
@@ -1872,7 +2009,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "same as c-x12-901; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Companion TU of the two-TU ODR agreement proof"
+        "historical_census_semantic_scope": "Companion TU of the two-TU ODR agreement proof",
+        "historical_census_requirement": "same as c-x12-901"
       },
       {
         "edge": "X-12",
@@ -1882,7 +2020,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "Negative probe must keep failing deterministically while the agreement probe passes, under both re-freezes; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Proves the layout difference itself is observable — the negative control for the X-12 ODR rule"
+        "historical_census_semantic_scope": "Proves the layout difference itself is observable — the negative control for the X-12 ODR rule",
+        "historical_census_requirement": "Negative probe must keep failing deterministically while the agreement probe passes, under both re-freezes"
       },
       {
         "edge": "X-13",
@@ -1891,8 +2030,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "迁移后 directory_fsync 的 EINTR 注入 oracle 仍可复现（现无任何 target 定义 SLUICE_COPY_INTERNAL_TESTING，见 NEW-02——对照证据本身先需接线）；包面 diff 不得收缩 F1 manifest; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "原子输出路径的目录 fsync 需要 EINTR 重试——与 core File 语义共享同一物理义务实现"
+        "exit_condition": "B-02 macro wiring completed by #468 and present in xmake/tests.lua. F3/F4 re-own the required shared retry behavior; preserve OB-2 DirFsync EINTR/error oracle and atomic output parity. Install/header contraction requires approved package/external gates and new B-01 evidence, not permanent retention of the old helper path.",
+        "historical_census_semantic_scope": "原子输出路径的目录 fsync 需要 EINTR 重试——与 core File 语义共享同一物理义务实现",
+        "historical_census_requirement": "迁移后 directory_fsync 的 EINTR 注入 oracle 仍可复现（现无任何 target 定义 SLUICE_COPY_INTERNAL_TESTING，见 NEW-02——对照证据本身先需接线）；包面 diff 不得收缩 F1 manifest"
       },
       {
         "edge": "X-13",
@@ -1901,8 +2041,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "posix_retry 搬家时该 include 面同步更新；安装闭包不收缩; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "公开安装头传递暴露 detail/posix_retry——任何 async consumer 传递获得该头"
+        "exit_condition": "Preserve required POSIX retry behavior in canonical threadpool/blocking and COPY DirFsync. F4/F5 may re-own/internalize the helper and contract its old installed path only after include closure, external policy, B-01 dual-profile clean-room and rollback evidence. No unconditional permanent install requirement.",
+        "historical_census_semantic_scope": "公开安装头传递暴露 detail/posix_retry——任何 async consumer 传递获得该头",
+        "historical_census_requirement": "posix_retry 搬家时该 include 面同步更新；安装闭包不收缩"
       },
       {
         "edge": "X-13",
@@ -1912,7 +2053,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "A1 共享 File oracle 全绿为搬家对照; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "canonical File 的共享 POSIX 语义载体（同一 EINTR 义务）"
+        "historical_census_semantic_scope": "canonical File 的共享 POSIX 语义载体（同一 EINTR 义务）",
+        "historical_census_requirement": "A1 共享 File oracle 全绿为搬家对照"
       },
       {
         "edge": "X-13",
@@ -1922,7 +2064,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "同 c-x13-003; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "blocking File 同一共享语义"
+        "historical_census_semantic_scope": "blocking File 同一共享语义",
+        "historical_census_requirement": "同 c-x13-003"
       },
       {
         "edge": "X-13",
@@ -1932,7 +2075,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "同 c-x13-003; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "ThreadPool 后端 native 调用的同一 EINTR 义务"
+        "historical_census_semantic_scope": "ThreadPool 后端 native 调用的同一 EINTR 义务",
+        "historical_census_requirement": "同 c-x13-003"
       },
       {
         "edge": "X-14",
@@ -1942,7 +2086,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "seam 迁移后 C1-D 观察等价性（同一 waiter 交错仍可区分）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "C1-D waiter 适配观察：seam 是确定性观察 transport（park 取证），非语义主体"
+        "historical_census_semantic_scope": "C1-D waiter 适配观察：seam 是确定性观察 transport（park 取证），非语义主体",
+        "historical_census_requirement": "seam 迁移后 C1-D 观察等价性（同一 waiter 交错仍可区分）"
       },
       {
         "edge": "X-14",
@@ -1952,7 +2097,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "seam 内化需提供同等的 native 调用注入点，A1/A2 oracle 全绿; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File close 语义 oracle：native-call seam 为 transport，语义主体是 close/RAII 契约"
+        "historical_census_semantic_scope": "File close 语义 oracle：native-call seam 为 transport，语义主体是 close/RAII 契约",
+        "historical_census_requirement": "seam 内化需提供同等的 native 调用注入点，A1/A2 oracle 全绿"
       },
       {
         "edge": "X-14",
@@ -1962,7 +2108,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-x14-002; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "组合故障路径注入（短读写/EINTR）——seam transport"
+        "historical_census_semantic_scope": "组合故障路径注入（短读写/EINTR）——seam transport",
+        "historical_census_requirement": "同 c-x14-002"
       },
       {
         "edge": "X-14",
@@ -1972,7 +2119,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "13 个 stackful_host_mut_* kill 证据在 seam 迁移后全部复现; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "D2 窄宿主证据：pause gate 为确定性交错 transport"
+        "historical_census_semantic_scope": "D2 窄宿主证据：pause gate 为确定性交错 transport",
+        "historical_census_requirement": "13 个 stackful_host_mut_* kill 证据在 seam 迁移后全部复现"
       },
       {
         "edge": "X-14",
@@ -1982,7 +2130,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "seam 迁移后全部 mutant kill 与真环用例结果对照; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "B1-C uring cutover：确定性 CQE 注入/暂停门为 transport，语义主体是 accept→dispatch→publish 协议"
+        "historical_census_semantic_scope": "B1-C uring cutover：确定性 CQE 注入/暂停门为 transport，语义主体是 accept→dispatch→publish 协议",
+        "historical_census_requirement": "seam 迁移后全部 mutant kill 与真环用例结果对照"
       },
       {
         "edge": "X-14",
@@ -1992,7 +2141,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "seam 内化后守卫区消除、NEVER-DEFINE 规则随之收窄；包面闭包不变; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "安装头内的 seam 守卫区是测试目标需要 src/async include 路径的根本原因（tests.lua:237-238 注释自述）"
+        "historical_census_semantic_scope": "安装头内的 seam 守卫区是测试目标需要 src/async include 路径的根本原因（tests.lua:237-238 注释自述）",
+        "historical_census_requirement": "seam 内化后守卫区消除、NEVER-DEFINE 规则随之收窄；包面闭包不变"
       },
       {
         "edge": "X-14",
@@ -2002,7 +2152,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "任何 seam 内化 slice 需同 slice 迁移声明点并保持两 profile target 矩阵; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "seam 构建拓扑：每个 seam target 自带 src/async TU 副本、从不与生产库同链（seam/生产不同二进制）"
+        "historical_census_semantic_scope": "seam 构建拓扑：每个 seam target 自带 src/async TU 副本、从不与生产库同链（seam/生产不同二进制）",
+        "historical_census_requirement": "任何 seam 内化 slice 需同 slice 迁移声明点并保持两 profile target 矩阵"
       },
       {
         "edge": "X-15",
@@ -2012,7 +2163,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Scheduler's only claim on the progress world: it implements the canonical ready-routing sink and adds no second authority (routing = wait-registry delivery + stale/cancel drops)"
+        "historical_census_semantic_scope": "Scheduler's only claim on the progress world: it implements the canonical ready-routing sink and adds no second authority (routing = wait-registry delivery + stale/cancel drops)",
+        "historical_census_requirement": "when Scheduler retires, whichever driver claims progress owner must re-home or drop this sink with C1/C2 progress evidence green (progress_source_ownership_test both profiles) and ready-sink routing counters unchanged via seam"
       },
       {
         "edge": "X-15",
@@ -2022,7 +2174,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "runtime workers claim the canonical progress owner during run and route backend-ready events into the wait registry"
+        "historical_census_semantic_scope": "runtime workers claim the canonical progress owner during run and route backend-ready events into the wait registry",
+        "historical_census_requirement": "progress-owner composition evidence (progress_source_ownership + stackful host owner-composition) green after any claim-site move"
       },
       {
         "edge": "X-15",
@@ -2032,7 +2185,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "test transport exposing the sink's routing counters under SLUICE_ASYNC_INTERNAL_TESTING only (scheduler.hpp:778-781 conditional include) — evidence seam, not production mechanism"
+        "historical_census_semantic_scope": "test transport exposing the sink's routing counters under SLUICE_ASYNC_INTERNAL_TESTING only (scheduler.hpp:778-781 conditional include) — evidence seam, not production mechanism",
+        "historical_census_requirement": "counters remain observable in seam builds while the sink exists; internalizing the seam requires replacement evidence (X-14 obligation)"
       },
       {
         "edge": "X-16",
@@ -2042,7 +2196,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "waiter observer + shutdown oracles (runtime_waiter_observer_test, shutdown_lifecycle_test) re-proven against whichever arm closes this node; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "scheduler's public Completion-await surface; wait registry keys fibers by request slot and stores the raw Completion address"
+        "historical_census_semantic_scope": "scheduler's public Completion-await surface; wait registry keys fibers by request slot and stores the raw Completion address",
+        "historical_census_requirement": "waiter observer + shutdown oracles (runtime_waiter_observer_test, shutdown_lifecycle_test) re-proven against whichever arm closes this node"
       },
       {
         "edge": "X-16",
@@ -2052,7 +2207,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "park/wake interleaving oracles (waiter observer, deadline/stop mutants) re-run after re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "parks the worker's Fiber on a claimed completion via fiber_ctx::context_switch; cancel path wakes the fiber with CompletionWaitOutcome::canceled"
+        "historical_census_semantic_scope": "parks the worker's Fiber on a claimed completion via fiber_ctx::context_switch; cancel path wakes the fiber with CompletionWaitOutcome::canceled",
+        "historical_census_requirement": "park/wake interleaving oracles (waiter observer, deadline/stop mutants) re-run after re-typing"
       },
       {
         "edge": "X-16",
@@ -2062,7 +2218,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "all 4 app task bodies + runtime tests compile/pass after re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "task-context face of the await machinery handed to RuntimeTaskFn bodies"
+        "historical_census_semantic_scope": "task-context face of the await machinery handed to RuntimeTaskFn bodies",
+        "historical_census_requirement": "all 4 app task bodies + runtime tests compile/pass after re-typing"
       },
       {
         "edge": "X-16",
@@ -2072,7 +2229,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "runtime task-suite pass after re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "forwards task awaits to the Scheduler with a non-idle precondition assert"
+        "historical_census_semantic_scope": "forwards task awaits to the Scheduler with a non-idle precondition assert",
+        "historical_census_requirement": "runtime task-suite pass after re-typing"
       },
       {
         "edge": "X-16",
@@ -2082,7 +2240,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "fiber state machine evidence (scheduler mutants) preserved across the re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Fiber carries the await outcome (pending/completed/canceled) set by the scheduler await/cancel arms"
+        "historical_census_semantic_scope": "Fiber carries the await outcome (pending/completed/canceled) set by the scheduler await/cancel arms",
+        "historical_census_requirement": "fiber state machine evidence (scheduler mutants) preserved across the re-typing"
       },
       {
         "edge": "X-16",
@@ -2092,7 +2251,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "H-06/07 re-typing with apps + file_* oracle suite green in both profiles; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "host await conveniences every app task body composes over"
+        "historical_census_semantic_scope": "host await conveniences every app task body composes over",
+        "historical_census_requirement": "H-06/07 re-typing with apps + file_* oracle suite green in both profiles"
       },
       {
         "edge": "X-16",
@@ -2102,7 +2262,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "helper-level oracle (short-read loops, drain-after-cancel) re-run; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "the await-take/drain/refill loop bodies: await → result → reset"
+        "historical_census_semantic_scope": "the await-take/drain/refill loop bodies: await → result → reset",
+        "historical_census_requirement": "helper-level oracle (short-read loops, drain-after-cancel) re-run"
       },
       {
         "edge": "X-16",
@@ -2112,7 +2273,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "the concrete M-R×M-H hinge: await registration converts a Completion into a core observer key via identity_of (whose fallback leg is X-02)"
+        "historical_census_semantic_scope": "the concrete M-R×M-H hinge: await registration converts a Completion into a core observer key via identity_of (whose fallback leg is X-02)",
+        "historical_census_requirement": "observer registration/cancel interleaving oracle proving key equivalence after the conversion is removed"
       },
       {
         "edge": "X-16",
@@ -2122,7 +2284,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "file semantics oracles (read/write/sync_data/sync_all suites) unchanged after re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "File conveniences deliver semantics through the Completion await machinery"
+        "historical_census_semantic_scope": "File conveniences deliver semantics through the Completion await machinery",
+        "historical_census_requirement": "file semantics oracles (read/write/sync_data/sync_all suites) unchanged after re-typing"
       },
       {
         "edge": "X-16",
@@ -2132,7 +2295,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "file oracle matrix re-run post re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "same-file invocation-form sharing implemented over the host await path"
+        "historical_census_semantic_scope": "same-file invocation-form sharing implemented over the host await path",
+        "historical_census_requirement": "file oracle matrix re-run post re-typing"
       },
       {
         "edge": "X-16",
@@ -2142,7 +2306,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "copy pipeline parks worker fibers on read/write/sync carriers through the await machinery"
+        "historical_census_semantic_scope": "copy pipeline parks worker fibers on read/write/sync carriers through the await machinery",
+        "historical_census_requirement": "copy app + consumption test pass after the await chain re-typing"
       },
       {
         "edge": "X-16",
@@ -2152,7 +2317,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "hash scan loop awaits each chunk through the fiber park"
+        "historical_census_semantic_scope": "hash scan loop awaits each chunk through the fiber park",
+        "historical_census_requirement": "hash app + consumption test pass"
       },
       {
         "edge": "X-16",
@@ -2162,7 +2328,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "grep chunk loop awaits through the fiber park"
+        "historical_census_semantic_scope": "grep chunk loop awaits through the fiber park",
+        "historical_census_requirement": "grep app + consumption test pass"
       },
       {
         "edge": "X-16",
@@ -2172,7 +2339,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2+F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "backward tail scans await single-byte and window reads through the fiber park"
+        "historical_census_semantic_scope": "backward tail scans await single-byte and window reads through the fiber park",
+        "historical_census_requirement": "tail app + consumption test pass"
       },
       {
         "edge": "X-16",
@@ -2182,7 +2350,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "register/cancel/wake interleavings re-proven; any assertion weakening forbidden; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "semantic SUBJECT of the waiter-observer await/cancel protocol — the oracle that must judge the replacement, not a rewriteable transport"
+        "historical_census_semantic_scope": "semantic SUBJECT of the waiter-observer await/cancel protocol — the oracle that must judge the replacement, not a rewriteable transport",
+        "historical_census_requirement": "register/cancel/wake interleavings re-proven; any assertion weakening forbidden"
       },
       {
         "edge": "X-16",
@@ -2192,7 +2361,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "file-ref oracle unchanged; transport migrated in the same slice as the helpers; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "subject is explicit FileRef semantics; direct await/cancel_waiter calls are transport exercising both await arms"
+        "historical_census_semantic_scope": "subject is explicit FileRef semantics; direct await/cancel_waiter calls are transport exercising both await arms",
+        "historical_census_requirement": "file-ref oracle unchanged; transport migrated in the same slice as the helpers"
       },
       {
         "edge": "X-16",
@@ -2202,7 +2372,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "read oracle unchanged post re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "direct await transport inside the read-semantics suite"
+        "historical_census_semantic_scope": "direct await transport inside the read-semantics suite",
+        "historical_census_requirement": "read oracle unchanged post re-typing"
       },
       {
         "edge": "X-16",
@@ -2212,7 +2383,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "write oracle unchanged post re-typing; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "direct await transport inside the write-semantics suite"
+        "historical_census_semantic_scope": "direct await transport inside the write-semantics suite",
+        "historical_census_requirement": "write oracle unchanged post re-typing"
       },
       {
         "edge": "X-16",
@@ -2222,7 +2394,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "uring smoke transport over the await machinery"
+        "historical_census_semantic_scope": "uring smoke transport over the await machinery",
+        "historical_census_requirement": "smoke re-run (liburing profile) post re-typing"
       },
       {
         "edge": "X-17",
@@ -2232,7 +2405,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "complete-type compile edge: the inline evented template constructs and owns Fibers in the installed header, blocking the F3 tail step (fiber*.hpp internalization) until Group retires"
+        "historical_census_semantic_scope": "complete-type compile edge: the inline evented template constructs and owns Fibers in the installed header, blocking the F3 tail step (fiber*.hpp internalization) until Group retires",
+        "historical_census_requirement": "installed-header grep shows zero public headers including fiber.hpp only after Group retirement + async_mutex demotion; F1 closure gates stay green"
       },
       {
         "edge": "X-17",
@@ -2242,7 +2416,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Group evented path drives fibers directly through the Scheduler lifecycle from the header template"
+        "historical_census_semantic_scope": "Group evented path drives fibers directly through the Scheduler lifecycle from the header template",
+        "historical_census_requirement": "evented admission fail-point evidence (application_runtime.cpp:631-632 seam) survives Group rework or retires with it"
       },
       {
         "edge": "X-17",
@@ -2252,7 +2427,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "AsyncMutex vocabulary names Fiber for ownership tracking; the direct include pulls the complete Fiber type into every async_mutex.hpp consumer although only a pointer is stored"
+        "historical_census_semantic_scope": "AsyncMutex vocabulary names Fiber for ownership tracking; the direct include pulls the complete Fiber type into every async_mutex.hpp consumer although only a pointer is stored",
+        "historical_census_requirement": "D-06 demotion: Fiber-naming leaves the installed header; no installed header includes fiber.hpp after F3 tail"
       },
       {
         "edge": "X-17",
@@ -2262,7 +2438,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "exposure-only include: extends the Fiber complete-type surface to all async_rwlock consumers without any type use; candidate for include hygiene, not a semantic consumer"
+        "historical_census_semantic_scope": "exposure-only include: extends the Fiber complete-type surface to all async_rwlock consumers without any type use; candidate for include hygiene, not a semantic consumer",
+        "historical_census_requirement": "removal compiles clean across all scheduler TUs (include-what-you-use evidence), no behavior claim involved"
       },
       {
         "edge": "X-17",
@@ -2272,7 +2449,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "wait vocabulary names Fiber by pointer only (forward-declared) — the Scheduler-node edge F0 already covers; no complete-type need here"
+        "historical_census_semantic_scope": "wait vocabulary names Fiber by pointer only (forward-declared) — the Scheduler-node edge F0 already covers; no complete-type need here",
+        "historical_census_requirement": "pointer vocabulary survives via scheduler-internal spelling after internalization; wait-registry evidence green"
       },
       {
         "edge": "X-17",
@@ -2282,7 +2460,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "select machinery records the suspending fiber by pointer; forward-declared, no complete-type dependency"
+        "historical_census_semantic_scope": "select machinery records the suspending fiber by pointer; forward-declared, no complete-type dependency",
+        "historical_census_requirement": "select semantic tests green after internal re-spell"
       },
       {
         "edge": "X-17",
@@ -2292,7 +2471,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "installed wait vocabulary with no in-repo consumer; its Fiber exposure is external-consumer risk only — demotion candidate under D-06"
+        "historical_census_semantic_scope": "installed wait vocabulary with no in-repo consumer; its Fiber exposure is external-consumer risk only — demotion candidate under D-06",
+        "historical_census_requirement": "package-level: header can only be demoted with F5 manifest evidence after external-consumer policy resolution; no in-repo test would notice"
       },
       {
         "edge": "X-17",
@@ -2302,7 +2482,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "ApplicationRuntime is the ONLY production Group consumer (root group hosts every runtime task); Group retirement precondition for F3 tail"
+        "historical_census_semantic_scope": "ApplicationRuntime is the ONLY production Group consumer (root group hosts every runtime task); Group retirement precondition for F3 tail",
+        "historical_census_requirement": "runtime task admission/retirement evidence green after root_group replacement"
       },
       {
         "edge": "X-17",
@@ -2312,7 +2493,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Scheduler implements the machinery behind the Async vocabulary; the names appear only in diagnostic text — explicitly NOT CALL/type consumers; the async_rwlock.hpp includes on these TUs are likewise symbol-unused direct includes"
+        "historical_census_semantic_scope": "Scheduler implements the machinery behind the Async vocabulary; the names appear only in diagnostic text — explicitly NOT CALL/type consumers; the async_rwlock.hpp includes on these TUs are likewise symbol-unused direct includes",
+        "historical_census_requirement": "none required for the vocabulary itself; include hygiene handled with compile-only evidence under c-x17-004"
       },
       {
         "edge": "X-18",
@@ -2321,8 +2503,9 @@
         "family": "M-H",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
-        "exit_condition": "任何头收缩后复跑 11-include × F1-manifest 交叉检查保持全 INSTALLED；detail/posix_retry.hpp 的归属（detail≠内部，M 铁律）须在 F2/F4 裁断时重审; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "声明该 app 仅用已安装公共头组合出真实程序（app 存在的理由陈述）"
+        "exit_condition": "F3 migrates COPY behavior and DOC_CLAIM with D-H5/T2-08/OB-1/OB-2; document the actual surviving minimal canonical surface. F5 audits its installed/public closure, without requiring all historical eleven legacy includes to remain installed.",
+        "historical_census_semantic_scope": "声明该 app 仅用已安装公共头组合出真实程序（app 存在的理由陈述）",
+        "historical_census_requirement": "任何头收缩后复跑 11-include × F1-manifest 交叉检查保持全 INSTALLED；detail/posix_retry.hpp 的归属（detail≠内部，M 铁律）须在 F2/F4 裁断时重审"
       },
       {
         "edge": "X-18",
@@ -2332,7 +2515,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 迁移后以 app 构建+运行通过为新证据；声明措辞随幸存面更新; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "What-this-app-proves 首条：ApplicationRuntime 生命周期可被真实程序使用——F3 内部运行时收缩时的直接文档义务"
+        "historical_census_semantic_scope": "What-this-app-proves 首条：ApplicationRuntime 生命周期可被真实程序使用——F3 内部运行时收缩时的直接文档义务",
+        "historical_census_requirement": "F3 迁移后以 app 构建+运行通过为新证据；声明措辞随幸存面更新"
       },
       {
         "edge": "X-18",
@@ -2342,7 +2526,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "悬空路径须修复或改为引用现存证据位置；await_completion 表面（application_runtime.cpp:55-65 → scheduler_park_wake.cpp:415）F3 变动时同步更新本条; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "声明 Runtime task 可协作等待自身 I/O（reserve-before-arm 语义），并引用一个不存在的实现计划路径（悬空引用，5f62b55b 删除）"
+        "historical_census_semantic_scope": "声明 Runtime task 可协作等待自身 I/O（reserve-before-arm 语义），并引用一个不存在的实现计划路径（悬空引用，5f62b55b 删除）",
+        "historical_census_requirement": "悬空路径须修复或改为引用现存证据位置；await_completion 表面（application_runtime.cpp:55-65 → scheduler_park_wake.cpp:415）F3 变动时同步更新本条"
       },
       {
         "edge": "X-18",
@@ -2352,7 +2537,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "声明多 outstanding 管线依赖严格 Completion 生命周期纪律——F2 收缩 Completion 时的文档义务与语义试金石"
+        "historical_census_semantic_scope": "声明多 outstanding 管线依赖严格 Completion 生命周期纪律——F2 收缩 Completion 时的文档义务与语义试金石",
+        "historical_census_requirement": "F2 Completion 契约变动后该纪律描述必须对应新契约；app Version B 行为测试保持通过"
       },
       {
         "edge": "X-18",
@@ -2362,7 +2548,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 生命周期迁移与 F2 Completion 契约收缩后复验两条描述；app 退出码表（0/1/3）保持; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "声明批处理负载下 submit→wait→stop/drain/join 生命周期与取消时 in-flight Completion 按生命周期契约消费"
+        "historical_census_semantic_scope": "声明批处理负载下 submit→wait→stop/drain/join 生命周期与取消时 in-flight Completion 按生命周期契约消费",
+        "historical_census_requirement": "F3 生命周期迁移与 F2 Completion 契约收缩后复验两条描述；app 退出码表（0/1/3）保持"
       },
       {
         "edge": "X-18",
@@ -2371,8 +2558,9 @@
         "family": "M-H",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
-        "exit_condition": "同 c-x18-001 的安装集交叉检查 + 任务面变动复核; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "声明有界流式扫描与 copy/hash 同一 submit/await 任务面组合"
+        "exit_condition": "F3 migrates GREP behavior and DOC_CLAIM with D-H1/D-H2/D-H5; document its actual surviving direct canonical surface and CLI changes. F5 audits surviving installed/public includes; no obligation to retain historical legacy include set.",
+        "historical_census_semantic_scope": "声明有界流式扫描与 copy/hash 同一 submit/await 任务面组合",
+        "historical_census_requirement": "同 c-x18-001 的安装集交叉检查 + 任务面变动复核"
       },
       {
         "edge": "X-18",
@@ -2382,7 +2570,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 后 'no private Scheduler access' 必须仍然为真并以 grep+构建证据复验；borrow 契约描述随 F2 更新; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "声明长时负载只用公开生命周期跨线程 start/stop/wait、不触碰私有 Scheduler；in-flight Completion 按 borrow 契约收尾"
+        "historical_census_semantic_scope": "声明长时负载只用公开生命周期跨线程 start/stop/wait、不触碰私有 Scheduler；in-flight Completion 按 borrow 契约收尾",
+        "historical_census_requirement": "F3 后 'no private Scheduler access' 必须仍然为真并以 grep+构建证据复验；borrow 契约描述随 F2 更新"
       },
       {
         "edge": "NEW-01a",
@@ -2392,7 +2581,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "public-header by-value embedding of the scheduler wake handle plus direct Scheduler calls — third installed header (after stackful_io_host.hpp, scheduler.hpp) carrying scheduler-world layout/calls into consumer TUs"
+        "historical_census_semantic_scope": "public-header by-value embedding of the scheduler wake handle plus direct Scheduler calls — third installed header (after stackful_io_host.hpp, scheduler.hpp) carrying scheduler-world layout/calls into consumer TUs",
+        "historical_census_requirement": "header re-spell or demotion validated against F1 installed-manifest closure; group evented-path evidence green"
       },
       {
         "edge": "NEW-01a",
@@ -2402,7 +2592,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Group evented constructor instantiates the policy, binding Group's evented path to the scheduler wake surface"
+        "historical_census_semantic_scope": "Group evented constructor instantiates the policy, binding Group's evented path to the scheduler wake surface",
+        "historical_census_requirement": "retires together with Group; no separate migration evidence beyond X-17 Group retirement"
       },
       {
         "edge": "NEW-01c",
@@ -2412,7 +2603,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "app 引擎迁移 slice 中同步迁移该目标并保持失败矩阵覆盖; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "copy 引擎消费语义 oracle（temp+rename 原子性/失败矩阵）——语义主体"
+        "historical_census_semantic_scope": "copy 引擎消费语义 oracle（temp+rename 原子性/失败矩阵）——语义主体",
+        "historical_census_requirement": "app 引擎迁移 slice 中同步迁移该目标并保持失败矩阵覆盖"
       },
       {
         "edge": "NEW-01c",
@@ -2422,7 +2614,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-new01-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "hash 引擎消费语义 oracle"
+        "historical_census_semantic_scope": "hash 引擎消费语义 oracle",
+        "historical_census_requirement": "同 c-new01-001"
       },
       {
         "edge": "NEW-01c",
@@ -2432,7 +2625,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-new01-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "grep 引擎消费语义 oracle"
+        "historical_census_semantic_scope": "grep 引擎消费语义 oracle",
+        "historical_census_requirement": "同 c-new01-001"
       },
       {
         "edge": "NEW-01c",
@@ -2442,7 +2636,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "同 c-new01-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "tail 引擎消费语义 oracle（start/stop/wait 生命周期）"
+        "historical_census_semantic_scope": "tail 引擎消费语义 oracle（start/stop/wait 生命周期）",
+        "historical_census_requirement": "同 c-new01-001"
       },
       {
         "edge": "NEW-01d",
@@ -2452,7 +2647,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "修复为现存路径或恢复归档件后 grep 'docs/history' 全仓仅剩零命中（或全部指向存在路径）; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "release-note 工作流指引指向不存在的归档文件，误导后续发布流程"
+        "historical_census_semantic_scope": "release-note 工作流指引指向不存在的归档文件，误导后续发布流程",
+        "historical_census_requirement": "修复为现存路径或恢复归档件后 grep 'docs/history' 全仓仅剩零命中（或全部指向存在路径）"
       },
       {
         "edge": "NEW-01d",
@@ -2462,7 +2658,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "同 c-new01-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "断言 v0.1.0 时代记录已带 Historical banner 迁往该路径——目标不存在，断言为假"
+        "historical_census_semantic_scope": "断言 v0.1.0 时代记录已带 Historical banner 迁往该路径——目标不存在，断言为假",
+        "historical_census_requirement": "同 c-new01-001"
       },
       {
         "edge": "NEW-01d",
@@ -2472,7 +2669,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "同 c-new01-001; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "让读者去该路径查 v0.0.1 前的完整记录——目标不存在"
+        "historical_census_semantic_scope": "让读者去该路径查 v0.0.1 前的完整记录——目标不存在",
+        "historical_census_requirement": "同 c-new01-001"
       },
       {
         "edge": "NEW-01d",
@@ -2482,7 +2680,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F3 / #402",
         "exit_condition": "无需迁移；F3 变动 Scheduler 时按历史记录惯例保留原文; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "历史变更记录中对仍存活的 Scheduler 测试 seam 符号的既往修复叙述（符号在 scheduler.hpp:772、seam 实现 scheduler_fe2_test_seam.cpp），非现行契约声明"
+        "historical_census_semantic_scope": "历史变更记录中对仍存活的 Scheduler 测试 seam 符号的既往修复叙述（符号在 scheduler.hpp:772、seam 实现 scheduler_fe2_test_seam.cpp），非现行契约声明",
+        "historical_census_requirement": "无需迁移；F3 变动 Scheduler 时按历史记录惯例保留原文"
       },
       {
         "edge": "NEW-01e",
@@ -2492,7 +2691,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "After the X-03/H-31 boundary fix, w04 must compile with fiber.hpp/fiber_ctx.hpp dropped from its transitive closure; requires re-frozen manifest, a header-closure dump for w04, and --check-frozen reproduction in the same slice; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Clean-room external consumer of the single-owner candidate host; the W-04 evidence consumer the H-30/H-31 package closure actually serves"
+        "historical_census_semantic_scope": "Clean-room external consumer of the single-owner candidate host; the W-04 evidence consumer the H-30/H-31 package closure actually serves",
+        "historical_census_requirement": "After the X-03/H-31 boundary fix, w04 must compile with fiber.hpp/fiber_ctx.hpp dropped from its transitive closure; requires re-frozen manifest, a header-closure dump for w04, and --check-frozen reproduction in the same slice"
       },
       {
         "edge": "NEW-01e",
@@ -2502,7 +2702,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "F3 internalization must re-freeze both manifests and both archive baselines (sha256) via a fresh verify run; --check-frozen must pass against the re-frozen records; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Freezes the host-closure headers (H-30/H-31) into the shipped package contract, including the sanitizer-variant layout propagation warning"
+        "historical_census_semantic_scope": "Freezes the host-closure headers (H-30/H-31) into the shipped package contract, including the sanitizer-variant layout propagation warning",
+        "historical_census_requirement": "F3 internalization must re-freeze both manifests and both archive baselines (sha256) via a fresh verify run; --check-frozen must pass against the re-frozen records"
       },
       {
         "edge": "NEW-01e",
@@ -2512,7 +2713,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3 / #402",
         "exit_condition": "Doc updated in the same slice as the boundary fix; no stale closure claim may survive a re-freeze; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Current non-normative doc asserting which fiber-family headers the package must carry until F3 — rides the X-10/X-18 documentation-migration path"
+        "historical_census_semantic_scope": "Current non-normative doc asserting which fiber-family headers the package must carry until F3 — rides the X-10/X-18 documentation-migration path",
+        "historical_census_requirement": "Doc updated in the same slice as the boundary fix; no stale closure claim may survive a re-freeze"
       },
       {
         "edge": "NEW-02a",
@@ -2522,7 +2724,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F3 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "shared fail-fast TU reads the fiber_ctx arch-support constant to gate evented admission — couples the diagnostic machinery to fiber_ctx's platform surface; retires or re-homes with the evented admission path"
+        "historical_census_semantic_scope": "shared fail-fast TU reads the fiber_ctx arch-support constant to gate evented admission — couples the diagnostic machinery to fiber_ctx's platform surface; retires or re-homes with the evented admission path",
+        "historical_census_requirement": "on fiber_ctx internalization the constant must move with it; compile evidence across every seam target that compiles fail_fast.cpp"
       },
       {
         "edge": "NEW-02b",
@@ -2532,7 +2735,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "R2 correction: 'zero users' is false for copy.hpp as stated - production consumer src/reader.cpp recorded as c-new02-901 (Reader::stream_to delegates to copy_all); zero test/app users verified live. Before L-01 removal either a canonical Reader/Writer adapter over File exists or copy_all is retired through its own consumer/migration audit (MIG-02), cutting the reverse reader.cpp edge in the same slice.; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Public copy API parameterized over Reader/Writer; its only file-backed realization today is FileReader/FileWriter"
+        "historical_census_semantic_scope": "Public copy API parameterized over Reader/Writer; its only file-backed realization today is FileReader/FileWriter",
+        "historical_census_requirement": "R2 correction: 'zero users' is false for copy.hpp as stated - production consumer src/reader.cpp recorded as c-new02-901 (Reader::stream_to delegates to copy_all); zero test/app users verified live. Before L-01 removal either a canonical Reader/Writer adapter over File exists or copy_all is retired through its own consumer/migration audit (MIG-02), cutting the reverse reader.cpp edge in the same slice."
       },
       {
         "edge": "NEW-02b",
@@ -2541,8 +2745,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "Zero users verified live (census L-06's 'tst 1' has drifted to 0 on master — recorded as a live-count correction, not copied); same gating evidence as c-x06-002; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Public vectored-API declaration pinned to a vectored-capable Writer and SyncableWriter durability hook; implementation detail recorded as c-x06-002"
+        "exit_condition": "D-12/A3a/B1 adopted: exclude unadmitted WAL, retire its stream dependency closure with external-risk/deprecation and dual-profile package evidence. Do not orphan still-retained declarations or invent a WAL/vectored replacement.",
+        "historical_census_semantic_scope": "Public vectored-API declaration pinned to a vectored-capable Writer and SyncableWriter durability hook; implementation detail recorded as c-x06-002",
+        "historical_census_requirement": "Zero users verified live (census L-06's 'tst 1' has drifted to 0 on master — recorded as a live-count correction, not copied); same gating evidence as c-x06-002"
       },
       {
         "edge": "NEW-02b",
@@ -2551,8 +2756,9 @@
         "family": "M-F",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
-        "exit_condition": "Zero users verified live; retention-or-retire decision for the IoContext surface must be recorded against the F1 installed-manifest constraint (f1-package-manifest-liburing.json:95,:99); preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Second IoContext implementation proving only the Blocking arm binds the legacy file world; keeps the IoContext surface meaningful independent of L-01"
+        "exit_condition": "D-13/B1 adopted: no v1 installed test-double entitlement. F4/F5 audit and internally re-own only demonstrated active test needs, or retire with the stream family; preserve actual test oracles and deliberate external-risk/B-01 package gates.",
+        "historical_census_semantic_scope": "Second IoContext implementation proving only the Blocking arm binds the legacy file world; keeps the IoContext surface meaningful independent of L-01",
+        "historical_census_requirement": "Zero users verified live; retention-or-retire decision for the IoContext surface must be recorded against the F1 installed-manifest constraint (f1-package-manifest-liburing.json:95,:99)"
       },
       {
         "edge": "NEW-02b",
@@ -2562,7 +2768,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "R2 review-round correction of the U-05/c-new02-001 'copy_all: own TU' half-claim (live grep -rn copy_all src include tests apps -> src/copy.cpp overload family + src/reader.cpp:51,:55 only). Retiring copy.hpp requires cutting this reverse edge and re-typing or retiring Reader::stream_to in the same slice (public sluice_core API change; B-01 re-freeze).; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Production caller of the copy_all composition: Reader::stream_to is a public sluice_core API whose both overloads delegate to copy_all (F0 L-02: Reader embeds the stream_to composition)"
+        "historical_census_semantic_scope": "Production caller of the copy_all composition: Reader::stream_to is a public sluice_core API whose both overloads delegate to copy_all (F0 L-02: Reader embeds the stream_to composition)",
+        "historical_census_requirement": "R2 review-round correction of the U-05/c-new02-001 'copy_all: own TU' half-claim (live grep -rn copy_all src include tests apps -> src/copy.cpp overload family + src/reader.cpp:51,:55 only). Retiring copy.hpp requires cutting this reverse edge and re-typing or retiring Reader::stream_to in the same slice (public sluice_core API change; B-01 re-freeze)."
       },
       {
         "edge": "NEW-02c",
@@ -2571,8 +2778,9 @@
         "family": "aux",
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F3+F4 / #402",
-        "exit_condition": "接线（为某目标定义该宏）并演示注入下 open_atomic_copy 失败路径命中；否则 X-13 迁移的 EINTR 对照证据缺失; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "app 本地故障注入 seam：目录 fsync 失败脚本——当前无任何 target 定义该宏，oracle 不可达"
+        "exit_condition": "B-02 completed: SLUICE_COPY_INTERNAL_TESTING defined by app_copy_consumption_test. On later safe-output/retry changes, reprove OB-2 directory fsync EINTR-to-success and real dir_sync failure with a reachable discriminating seam. No new wiring gate is owed before M closure.",
+        "historical_census_semantic_scope": "app 本地故障注入 seam：目录 fsync 失败脚本——当前无任何 target 定义该宏，oracle 不可达",
+        "historical_census_requirement": "接线（为某目标定义该宏）并演示注入下 open_atomic_copy 失败路径命中；否则 X-13 迁移的 EINTR 对照证据缺失"
       },
       {
         "edge": "NEW-02d",
@@ -2582,7 +2790,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F3 / #402",
         "exit_condition": "F3 迁移 Scheduler/Fiber 或 F2/F4 变动 backend 语义时复核该断言仍为真（复跑 backend include 检查）；与根冲突时以根为准的声明已在位; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "派生教学视图对『backend 与 Scheduler/Fiber 解耦』的现行为断言，今日与代码一致；非规范权威且已声明根优先"
+        "historical_census_semantic_scope": "派生教学视图对『backend 与 Scheduler/Fiber 解耦』的现行为断言，今日与代码一致；非规范权威且已声明根优先",
+        "historical_census_requirement": "F3 迁移 Scheduler/Fiber 或 F2/F4 变动 backend 语义时复核该断言仍为真（复跑 backend include 检查）；与根冲突时以根为准的声明已在位"
       },
       {
         "edge": "NEW-02e",
@@ -2592,7 +2801,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F3 / #402",
         "exit_condition": "Asserts must keep compiling and passing after every F3 boundary change; clean-room suite rerun + manifest re-freeze; a failure means a public header started leaking the runtime world; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Frozen negative-closure contract: the core-only package surface (blocking/file.hpp + file_resource.hpp) must never transitively complete the runtime-family types"
+        "historical_census_semantic_scope": "Frozen negative-closure contract: the core-only package surface (blocking/file.hpp + file_resource.hpp) must never transitively complete the runtime-family types",
+        "historical_census_requirement": "Asserts must keep compiling and passing after every F3 boundary change; clean-room suite rerun + manifest re-freeze; a failure means a public header started leaking the runtime world"
       },
       {
         "edge": "NEW-02e",
@@ -2602,7 +2812,8 @@
         "disposition": "M-R_SUBSCOPE_OVERLAY",
         "owner": "F2 / #402",
         "exit_condition": "Exact subscope disposition/exit in m-r-consumer-disposition-final.json; evidence guard run at adoption baseline.",
-        "semantic_scope": "Same firewall for the arena substrate: no core-surface header may complete detail::RequestArena"
+        "historical_census_semantic_scope": "Same firewall for the arena substrate: no core-surface header may complete detail::RequestArena",
+        "historical_census_requirement": "Assert must keep passing through F2's arena retirement; if the arena is removed the forward declaration/assert must be retired in the same slice with the re-frozen manifest"
       },
       {
         "edge": "NEW-02e",
@@ -2612,7 +2823,8 @@
         "disposition": "NOT_A_CONSUMER",
         "owner": "F3 / #402",
         "exit_condition": "Target must stay green through F2/F3 boundary changes; any new transitive include from the core surface that completes these types fails the build by design; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Pre-existing in-tree twin of the clean-room firewall (lineage for NEW-02); not recorded by any F0 X edge"
+        "historical_census_semantic_scope": "Pre-existing in-tree twin of the clean-room firewall (lineage for NEW-02); not recorded by any F0 X edge",
+        "historical_census_requirement": "Target must stay green through F2/F3 boundary changes; any new transitive include from the core surface that completes these types fails the build by design"
       },
       {
         "edge": "NEW-03",
@@ -2622,7 +2834,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F4 / #402",
         "exit_condition": "F4 retirement of sluice/file.hpp (or any core-header change) must update these globs and re-freeze both package manifests + archive baselines in the same slice; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Declares the installed core header set — makes sluice/file.hpp, io_context.hpp, memory_io_context.hpp and the detail oracles shipped, manifest-frozen artifacts"
+        "historical_census_semantic_scope": "Declares the installed core header set — makes sluice/file.hpp, io_context.hpp, memory_io_context.hpp and the detail oracles shipped, manifest-frozen artifacts",
+        "historical_census_requirement": "F4 retirement of sluice/file.hpp (or any core-header change) must update these globs and re-freeze both package manifests + archive baselines in the same slice"
       },
       {
         "edge": "NEW-03",
@@ -2632,7 +2845,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "F2 (remove completion.hpp/request_arena.hpp) and F3 (internalize fiber*.hpp) must shrink these globs, keep the 79-count gate truthful (update verify_f1_package.py:599), and re-freeze the manifests in the same slice; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Installs the whole async public closure including completion.hpp, detail/request_arena.hpp, fiber.hpp/fiber_ctx.hpp, scheduler.hpp and the zero-includes dormant wrappers — with the standalone-compile gate now consuming each of them"
+        "historical_census_semantic_scope": "Installs the whole async public closure including completion.hpp, detail/request_arena.hpp, fiber.hpp/fiber_ctx.hpp, scheduler.hpp and the zero-includes dormant wrappers — with the standalone-compile gate now consuming each of them",
+        "historical_census_requirement": "F2 (remove completion.hpp/request_arena.hpp) and F3 (internalize fiber*.hpp) must shrink these globs, keep the 79-count gate truthful (update verify_f1_package.py:599), and re-freeze the manifests in the same slice"
       },
       {
         "edge": "NEW-03",
@@ -2642,7 +2856,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "Every migration slice touching the public header set must ship a fresh manifest + archive-baseline sha256 and demonstrate --check-frozen reproduces them at the slice head; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Turns the header set itself into a frozen contract: any add/remove/rename of a public header changes the manifest and breaks --check-frozen until re-frozen"
+        "historical_census_semantic_scope": "Turns the header set itself into a frozen contract: any add/remove/rename of a public header changes the manifest and breaks --check-frozen until re-frozen",
+        "historical_census_requirement": "Every migration slice touching the public header set must ship a fresh manifest + archive-baseline sha256 and demonstrate --check-frozen reproduces them at the slice head"
       },
       {
         "edge": "NEW-03",
@@ -2652,7 +2867,8 @@
         "disposition": "REOWNED_DOWNSTREAM",
         "owner": "F5 / #402",
         "exit_condition": "The link failure must persist after any core/async content change; a successful link would falsify the package split and fail the F1 gates; preserve historical assets; affected #402 family gate, same-slice B-01 if package/production changes, and external decision before removal.",
-        "semantic_scope": "Freezes the sluice_core/sluice_async library split as an installed-package contract (negative probe listed in manifest NEGATIVE_PROBES, verify_f1_package.py:581-585)"
+        "historical_census_semantic_scope": "Freezes the sluice_core/sluice_async library split as an installed-package contract (negative probe listed in manifest NEGATIVE_PROBES, verify_f1_package.py:581-585)",
+        "historical_census_requirement": "The link failure must persist after any core/async content change; a successful link would falsify the package split and fail the F1 gates"
       }
     ],
     "external_surfaces": [
@@ -2721,7 +2937,8 @@
       }
     ],
     "live_audit": "At audit_master_sha, four apps still use legacy Completion/runtime; semantic_range remains sole test constructing FileReader/FileWriter; Reader::stream_to calls copy_all; posix_retry used by canonical blocking_file/threadpool and app safe_output. fault/memory legacy headers have no current test includes; BlockingIoPool callers none. Census is historical 216-row scope, not a claim of complete external usage.",
-    "unowned_consumer_edges": 0
+    "unowned_consumer_edges": 0,
+    "field_scope": "Historical census scope/requirement columns preserve original source statements, including already resolved facts. Current owner/disposition/exit columns are the terminal projection; targeted current exits supersede obsolete replacement/wiring/install assumptions."
   },
   "package_provenance": {
     "f_w2_1": "PASS",
@@ -2756,7 +2973,30 @@
       }
     ],
     "scope": "Recorded freeze/reproduction at #490 exact HEAD, Linux GCC16.2.1/kernel7.2.5/liburing2.13/filesystems in manifests. New audit recomputes committed hashes and verifies zero src/include/xmake delta; does not rerun runtime/package matrix or claim general backend/host/release readiness.",
-    "historical_f1_assets_mutated": "NO"
+    "historical_f1_assets_mutated": "NO",
+    "policy_475_reconfirmation": {
+      "trigger": "T2 fired at #490 versioned B-01 re-freeze; final closeout explicitly re-confirms unchanged adopted policy rather than silently inheriting it.",
+      "policy": "A=BOUNDED_HOLD; B/C=KEEP_INSTALLED_COMPAT; all 15 named headers remain in both new 79-header manifests, supported-v1 NO.",
+      "paths": [
+        "sluice/async/condition.hpp",
+        "sluice/async/semaphore.hpp",
+        "sluice/async/async_queue.hpp",
+        "sluice/async/future.hpp",
+        "sluice/async/wait_policy.hpp",
+        "sluice/async/select.hpp",
+        "sluice/async/select_fwd.hpp",
+        "sluice/async/event.hpp",
+        "sluice/async/wait_queue.hpp",
+        "sluice/async/timer_registration.hpp",
+        "sluice/async/mutex.hpp",
+        "sluice/async/lock_guard.hpp",
+        "sluice/async/detail/queue_item.hpp",
+        "sluice/async/detail/queue_port.hpp",
+        "sluice/async/detail/select_registration.hpp"
+      ],
+      "owner": "@jnhu76 / #402 F5; adopted decision #475 comment6076447269",
+      "exit": "A T1-T4/E1-E5; B Group/EventedWaitPolicy closure; C full 10-includer/wait_queue closure plus phase/B-01 gates; no new risk acceptance or uninstall approval."
+    }
   },
   "downstream_debts": [
     {

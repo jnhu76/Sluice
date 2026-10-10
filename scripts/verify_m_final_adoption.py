@@ -88,7 +88,8 @@ def verify(data, github):
     assert len(actual) == len(data['consumer_closure']['rows']) == len(expected) == 216
     assert actual.keys() == expected.keys()
     for key, row in actual.items():
-        assert row['owner'] and row['exit_condition'] and row['semantic_scope'] == expected[key]['semantic_role']
+        assert row['owner'] and row['exit_condition'] and row['historical_census_semantic_scope'] == expected[key]['semantic_role']
+        assert row['historical_census_requirement'] == expected[key]['required_evidence']
     assert sum(r['family'] == 'M-R' for r in actual.values()) == 75
     assert {r['id'] for r in data['consumer_closure']['external_surfaces']} == {
         'U-01', 'U-02', 'U-03', 'U-04', 'U-05', 'U-06', 'U-07', 'U-08', 'U-POOL'}
