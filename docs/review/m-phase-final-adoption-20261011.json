@@ -3066,7 +3066,7 @@
     "unowned_consumer_edges": 0,
     "authority_conflicts": 0,
     "markdown_json_consistency": "PASS (deterministic full-field rendering, verifier)",
-    "github_issue_ledger_consistency": "PENDING_FINAL_REVIEW_AND_MERGE_RECEIPT",
+    "github_issue_ledger_consistency": "PASS",
     "commands": [
       "python3 scripts/verify_m_final_adoption.py",
       "python3 scripts/verify_mr_disposition.py",
@@ -3100,8 +3100,8 @@
     "PHASE_M_CONSUMER_DISPOSITIONS_COMPLETE": "PASS",
     "PHASE_M_AUTHORITY_READY": "PASS",
     "PHASE_M_EVIDENCE_READY": "PASS_SCOPED",
-    "PHASE_M_INDEPENDENT_REVIEW": "PENDING",
-    "PHASE_M_CLOSE_ALLOWED": "NO_UNTIL_EXACT_HEAD_REVIEW_AND_MERGE",
+    "PHASE_M_INDEPENDENT_REVIEW": "APPROVE",
+    "PHASE_M_CLOSE_ALLOWED": "YES",
     "F2_RETIREMENT_COMPLETE": "NO",
     "F3_RETIREMENT_COMPLETE": "NO",
     "F4_RETIREMENT_COMPLETE": "NO",
@@ -3109,5 +3109,15 @@
     "D2_IMPLEMENTATION_VERIFIED": "NO",
     "W04_OPTIONAL_SUPPORTED": "NO",
     "V1_RELEASE_READY": "NO"
+  },
+  "review_record": {
+    "identity": "Independent read-only reviewer agent; did not implement packet; approval relayed by coordinator, not human/GitHub review object.",
+    "content_reviewed_head": "e12ffb4eaade144c12dbd85ecc12b5b2199cf434",
+    "verdict": "APPROVE",
+    "blocking_findings": 0,
+    "receipt": "https://github.com/jnhu76/Sluice/pull/491#issuecomment-6101969801",
+    "initial_review": "REQUEST_REVISIONS at 7b07b70a26276ce44fa5dea857c47b15c1a7015e: one P2 historical-current exit projection blocker; ten current exits corrected and B-02 actual target verified.",
+    "final_head_binding": "The final status-only HEAD must receive a separate exact-head narrow APPROVE in PR #491 before merge; that external receipt avoids embedding this file own hash.",
+    "close_scope": "YES is Phase M eligibility after required final-head attestation, reviewed merge and post-merge verification. It is not an assertion that the pre-merge issue is already closed. Exact merge SHA and actual CLOSED receipt reside on #458/#491. F2-F5 gates and per-surface human risk approval remain."
   }
 }

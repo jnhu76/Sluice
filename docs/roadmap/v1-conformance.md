@@ -25,7 +25,11 @@ master `d4973100a31dccaa098cf4227f84e6c9c0afdee7`. Earlier final-closeout/wave-2
 packets remain dated snapshots. The current owner task authorizes reviewed merge
 and issue closure; the final PR/#458 carry the exact-head independent review and
 post-merge closure receipt. This section records M decisions and responsibility,
-not implementation conformance for F2–F5.
+not implementation conformance for F2–F5. Content independent review APPROVE at
+`e12ffb4eaade144c12dbd85ecc12b5b2199cf434` is recorded in #491 comment
+6101969801; final status-only HEAD requires exact-head narrow approval before
+merge. Phase M closure eligibility is YES subject to that attestation and
+post-merge verification; actual issue closure is recorded on #458.
 
 | Family | M decision/consumer gate | Remaining owner and exit |
 |---|---|---|
