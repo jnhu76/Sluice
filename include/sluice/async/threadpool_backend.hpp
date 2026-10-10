@@ -101,6 +101,7 @@ class ThreadPoolBackend : public AsyncBackend {
     struct AcceptedPreDispatchPauseGate;
     struct BeforeWorkerDequeuePauseGate;
     struct WorkerClaimedPauseGate;
+    struct WorkerUnclaimedRetirementPauseGate;
     struct WorkerOutcomePreTerminalPauseGate;
     struct PublicationEpiloguePauseGate;
     struct DeliveryClaimedPauseGate;
@@ -113,6 +114,8 @@ class ThreadPoolBackend : public AsyncBackend {
     void set_accepted_pre_dispatch_pause_gate(AcceptedPreDispatchPauseGate* gate) noexcept;
     void set_before_dequeue_pause_gate(BeforeWorkerDequeuePauseGate* gate) noexcept;
     void set_worker_claimed_pause_gate(WorkerClaimedPauseGate* gate) noexcept;
+    void set_worker_unclaimed_retirement_pause_gate(
+        WorkerUnclaimedRetirementPauseGate* gate) noexcept;
     void set_worker_outcome_pre_terminal_pause_gate(
         WorkerOutcomePreTerminalPauseGate* gate) noexcept;
     void set_publication_epilogue_pause_gate(PublicationEpiloguePauseGate* gate) noexcept;
@@ -241,6 +244,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_accepted_pre_dispatch_pause_() noexcept;
     void wait_before_dequeue_pause_() noexcept;
     void wait_worker_claimed_pause_() noexcept;
+    void wait_unclaimed_retirement_pause_() noexcept;
     void wait_worker_outcome_pre_terminal_pause_() noexcept;
     void wait_publication_epilogue_pause_() noexcept;
     void wait_delivery_claimed_pause_() noexcept;
@@ -278,6 +282,7 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<AcceptedPreDispatchPauseGate*> accepted_pre_dispatch_gate_{nullptr};
     std::atomic<BeforeWorkerDequeuePauseGate*> before_dequeue_gate_{nullptr};
     std::atomic<WorkerClaimedPauseGate*> worker_claimed_gate_{nullptr};
+    std::atomic<WorkerUnclaimedRetirementPauseGate*> unclaimed_retirement_gate_{nullptr};
     std::atomic<WorkerOutcomePreTerminalPauseGate*> worker_outcome_pre_terminal_gate_{nullptr};
     std::atomic<PublicationEpiloguePauseGate*> publication_epilogue_gate_{nullptr};
     std::atomic<DeliveryClaimedPauseGate*> delivery_claimed_gate_{nullptr};
