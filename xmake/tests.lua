@@ -158,6 +158,49 @@ do
     end
 end
 
+-- e4 (#474) TAIL lifecycle oracles, engine layer: stop/settlement/teardown
+-- contracts over the public TailEngine API. The target compiles an in-process
+-- pread interposer (ELF symbol interposition, dev/ino-gated) so a follow read
+-- can be held while stop is requested; no production seam is involved.
+do
+    local dir = R .. "apps/sluice-tail"
+    if os.isfile(dir .. "/tail_task.cpp") and os.isfile(R .. "tests/app_tail_lifecycle_oracle_test.cpp") then
+        target("app_tail_lifecycle_oracle_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include", dir)
+            add_files(R .. "tests/app_tail_lifecycle_oracle_test.cpp", dir .. "/tail_task.cpp")
+            add_tests("app_tail_lifecycle_oracle_test", {run_timeout = 120000})
+    end
+end
+
+-- e4 (#474) TAIL lifecycle oracles, CLI layer: the real sluice-tail binary
+-- under SIGINT/SIGTERM and under a held pending read released by the harness.
+-- Depends on the app target so the binary and the LD_PRELOAD interposer
+-- (tests/support/tail_pread_shim.c, loaded only by the spawned child) are
+-- always built next to the test binary.
+do
+    local dir = R .. "apps/sluice-tail"
+    if os.isfile(dir .. "/main.cpp") and os.isfile(R .. "tests/app_tail_cli_oracle_test.cpp") and
+       os.isfile(R .. "tests/support/tail_pread_shim.c") then
+        target("tail_pread_shim")
+            set_kind("shared")
+            set_default(false)
+            set_group("test")
+            add_files(R .. "tests/support/tail_pread_shim.c")
+        target("app_tail_cli_oracle_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async", "sluice-tail", "tail_pread_shim")
+            add_includedirs(R .. "include")
+            add_files(R .. "tests/app_tail_cli_oracle_test.cpp")
+            add_tests("app_tail_cli_oracle_test", {run_timeout = 180000})
+    end
+end
+
 do
     local dir = R .. "apps/sluice-copy"
     if os.isfile(dir .. "/copy_task.cpp") then
