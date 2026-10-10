@@ -1,14 +1,14 @@
 # sluice-hash — bounded streaming file hashing
 
 A Sluice application under `apps/`: hashes files with SHA-256 through
-`ApplicationRuntime` + `ThreadPoolBackend`, using installed/public headers
-only. Unlike `examples/`, this is a real CLI tool.
+`blocking::read_at` by default, using the canonical `File` resource.
+`--workers 2..64` retains the legacy `ApplicationRuntime` + `ThreadPoolBackend`
+bridge. Unlike `examples/`, this is a real CLI tool.
 
 ## Purpose
 
-Proves the "async read -> bounded buffer -> CPU work -> next read" composition
-on a real workload: I/O waits and CPU hashing alternate inside one Runtime
-task with memory bounded by configuration, not input size.
+The default workload alternates direct positional reads and CPU hashing with
+one buffer bounded by configuration, independently of input size.
 
 ## Build & run
 
@@ -23,7 +23,7 @@ xmake run sluice-hash [options] <file>...
 sluice-hash [options] <file>...
 
   --buffer-size <bytes>   read buffer (default 1 MiB; 4 KiB..64 MiB)
-  --workers <count>       runtime workers (default 1; <= 64)
+  --workers <count>       1: direct; 2..64: runtime (default 1)
   --help                  show this help
 ```
 
@@ -52,8 +52,9 @@ dependency surface for one tool.
 
 ## I/O model
 
-One `ApplicationRuntime` for the whole batch; ONE task hashes every file in
-CLI order:
+With `--workers 1`, reads complete directly on the caller thread; no Runtime,
+request domain or backend worker is constructed. With `--workers 2..64`, one
+`ApplicationRuntime` task hashes every file in CLI order:
 
 ```
 for each file (in CLI order):
@@ -67,8 +68,9 @@ for each file (in CLI order):
 
 Files are processed sequentially in V1 (deterministic, no output
 interleaving); short reads simply advance the offset. `--workers` sizes the
-Runtime; the read syscalls run on the ThreadPoolBackend's own bounded worker
-pool.
+legacy Runtime only for counts 2..64; its read syscalls run on the
+ThreadPoolBackend's own bounded worker pool. The value 1 selects direct execution,
+including when supplied explicitly. No worker count promises parallel files.
 
 ## Resource limits & memory bound
 
@@ -82,38 +84,13 @@ pool.
 memory ~= 1 x buffer_size + O(1) hasher state
 ```
 
-independent of file count and file sizes. The limits are enforced twice, and the
-two layers disagree about the exit code:
-
-| rejected value                  | rejected by       | CLI result                        |
-| ------------------------------- | ----------------- | --------------------------------- |
-| `--buffer-size 0`               | CLI parser        | usage error, exit 1               |
-| `--buffer-size` non-numeric or `size_t` overflow | CLI parser | usage error, exit 1 |
-| `--workers` = 0 or > 64         | CLI parser        | usage error, exit 1               |
-| `--buffer-size` < 4 KiB or > 64 MiB | engine validation | per-file `invalid_state`, exit 2 |
-
-Both layers check before any allocation or Runtime build, but only the
-`--workers` bound is a CLI usage error. A `--buffer-size` outside
-4 KiB..64 MiB parses successfully and is then rejected by
-`hash_files`/`run_hash_engine`, which marks **every** input with
-`IoError::Code::invalid_state`. The CLI renders that per-file error with its
-generic read-error message, so the user sees
-`sluice-hash: <file>: read error` and exit 2 — the buffer size is not named and
-no read was attempted.
-
-Measured on the current tree:
-
-```text
---buffer-size 4095      -> exit 2, stderr "small.txt: read error"
---buffer-size 4096      -> exit 0, digest printed
---buffer-size 67108864  -> exit 0
---buffer-size 67108865  -> exit 2, stderr "small.txt: read error"
-```
-
-This is a documented divergence between the advertised usage text (`4 KiB..64
-MiB`) and the actual CLI behaviour. The README does not decide which layer should
-own the range: making the range a CLI usage error is a product decision that has
-not been taken, and the parser is intentionally left unchanged.
+independent of file sizes (results and opened inputs still scale with file count).
+The app-local `valid_config` predicate is shared by the CLI and engine. Buffer
+sizes outside 4 KiB..64 MiB and workers outside 1..64 are usage errors (exit 1),
+rejected before opening any input. Engine callers receive per-input
+`invalid_state`. This implements adopted D-H2: the former out-of-range buffer
+behavior (open inputs, then generic read errors and exit 2) changes deliberately.
+Integer syntax and overflow rejection, help exit 0 and valid inputs are retained.
 
 ## Input domain
 
@@ -134,7 +111,8 @@ A read error on one file never stops later files.
 
 ## Cancellation
 
-Cancellation is observed at the cooperative boundaries between read
+The direct path runs synchronously and has no cancellation source. In the
+retained legacy and injected-backend paths, cancellation is observed at the cooperative boundaries between read
 operations (the Runtime task checks the cancel token before each submit).
 When cancellation is requested, the in-flight read still completes (its
 result is consumed per the Completion lifetime contract) and every remaining
@@ -143,8 +121,8 @@ V1 — cancellation is reachable through the Runtime lifecycle, not Ctrl-C.
 
 ## What this application proves about Sluice
 
-- a CPU-bound stage composes cleanly between async positional reads inside
-  one Runtime task (`submit_read` + `await_completion` loop);
+- the default path uses direct File I/O without constructing a task runtime;
+- the explicitly retained compatibility path still composes async reads and CPU work;
 - one reusable buffer serves arbitrarily many files/bytes (memory bound
   independent of input size);
 - multi-file batches keep deterministic CLI-order output with per-file error
@@ -157,7 +135,7 @@ V1 — cancellation is reachable through the Runtime lifecycle, not Ctrl-C.
 - one algorithm only (SHA-256): no MD5/SHA-1/SHA-3/BLAKE, no `--tag`,
   no check mode (`-c`), no binary-mode marker;
 - sequential file processing (no read-ahead across files, no parallel
-  hashing across `--workers`; the flag only sizes the Runtime);
+  hashing across `--workers`; counts 2..64 size the legacy Runtime; 1 selects direct execution);
 - no SIGINT handling (run-to-completion workload);
 - the crypto implementation is app-local on purpose (see above); it is not
   constant-time hardened (a hashing tool is not a secrets-HMAC target) and
@@ -168,29 +146,32 @@ V1 — cancellation is reachable through the Runtime lifecycle, not Ctrl-C.
 One registered target runs under `xmake test` (group `test`), and therefore under
 CI's `xmake test -v` in both the debug and release profiles:
 
-- `app_hash_consumption_test` (5 cases) — the `hash_files` engine over the
-  canonical `File` resource and a real `ThreadPoolBackend`:
+- `app_hash_consumption_test` (6 cases) — the `hash_files` engine over the
+  canonical `File` resource and direct execution:
   a known digest over a real file (`"abc"` →
   `ba7816bf…20015ad`), multi-chunk streaming of 10000 bytes checked against a
   direct in-process digest, the empty-file digest
   (`e3b0c442…7852b855`), a per-file error for an already-closed input, and input
-  order preservation across two files.
+  order preservation across two files, and continued hashing after a read error
+  on direct, multi-worker and injected-backend paths.
 
 ## What is not covered
 
-The single target above is the whole current test surface for this app. None of
-the following has a current test, and none should be read as guaranteed:
+The consumption suite and subprocess oracle leave these limitations:
 
 - the NIST vector set and chunk-boundary invariance (removed with
   `sluice_hash_sha256_test.cpp` in `5f62b55b`); only the two digests in the
   consumption test are pinned, over a single buffer size (4096);
-- CLI parsing: `parse_args`, the strict-integer rejections, the `--workers` cap,
-  and the CLI's exit-code mapping are **not** exercised as a subprocess;
-- the CLI-level non-regular-input rejection and multi-file order as printed by
-  the binary;
+- the CLI-level non-regular-input rejection is not tested;
 - cancellation (the `canceled` → exit 3 path) has no test at any level;
-- the `--buffer-size` range divergence documented above is recorded, not tested.
+- exception allocation failure remains untested.
 
 An earlier README listed `sluice_hash_sha256_test`, `sluice_hash_cli_parse_test`,
 `sluice_hash_integration_test` and `sluice_hash_fault_test`; all four sources were
 removed in `5f62b55b`. They are historical references only.
+
+The subprocess oracle `tests/hash_cli_oracle.py <binary> --early-bounds` covers
+known digests, multi-chunk reads, printed order/error isolation, workers 1/2/64,
+strict integer errors, and invalid bounds with a FIFO that must never be opened.
+Remote clone traces distinguish the default direct path from the retained
+multi-worker path. Runtime source/archive/install retirement remains pending.

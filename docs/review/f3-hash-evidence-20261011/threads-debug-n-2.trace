@@ -1,0 +1,15 @@
+42511 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72f1eefce8, parent_tid=0x7f72f1eef990, exit_signal=0, stack=0x7f72f16ef000, stack_size=0x7fff40, tls=0x7f72f1eef6c0} => {parent_tid=[42512]}, 88) = 42512
+42511 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72f16eece8, parent_tid=0x7f72f16ee990, exit_signal=0, stack=0x7f72f0eee000, stack_size=0x7fff40, tls=0x7f72f16ee6c0} => {parent_tid=[42513]}, 88) = 42513
+42511 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72f0eedce8, parent_tid=0x7f72f0eed990, exit_signal=0, stack=0x7f72f06ed000, stack_size=0x7fff40, tls=0x7f72f0eed6c0} => {parent_tid=[42514]}, 88) = 42514
+42511 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72f06ecce8, parent_tid=0x7f72f06ec990, exit_signal=0, stack=0x7f72efeec000, stack_size=0x7fff40, tls=0x7f72f06ec6c0} => {parent_tid=[42515]}, 88) = 42515
+42511 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72efdeace8, parent_tid=0x7f72efdea990, exit_signal=0, stack=0x7f72ef5ea000, stack_size=0x7fff40, tls=0x7f72efdea6c0} => {parent_tid=[42516]}, 88) = 42516
+42516 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72ef5e9ce8, parent_tid=0x7f72ef5e9990, exit_signal=0, stack=0x7f72eede9000, stack_size=0x7fff40, tls=0x7f72ef5e96c0} => {parent_tid=[42517]}, 88) = 42517
+42516 clone3({flags=CLONE_VM|CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|CLONE_SYSVSEM|CLONE_SETTLS|CLONE_PARENT_SETTID|CLONE_CHILD_CLEARTID, child_tid=0x7f72eede8ce8, parent_tid=0x7f72eede8990, exit_signal=0, stack=0x7f72ee5e8000, stack_size=0x7fff40, tls=0x7f72eede86c0} => {parent_tid=[42518]}, 88) = 42518
+42518 +++ exited with 0 +++
+42517 +++ exited with 0 +++
+42516 +++ exited with 0 +++
+42514 +++ exited with 0 +++
+42513 +++ exited with 0 +++
+42512 +++ exited with 0 +++
+42515 +++ exited with 0 +++
+42511 +++ exited with 0 +++

@@ -2,6 +2,7 @@
 
 #include "sha256.hpp"
 
+#include <sluice/blocking/file.hpp>
 #include <sluice/async/await_op_helpers.hpp>
 #include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
@@ -34,24 +35,18 @@ struct HashTask {
     std::vector<HashInput> inputs;
     std::vector<std::uint8_t> buffer;
 
-    void hash_one(RuntimeTaskContext& ctx, const HashInput& in, std::vector<FileHash>& results) {
+    template <class Read>
+    void hash_one(const HashInput& in, std::vector<FileHash>& results, Read&& read) {
         FileHash out;
         out.path = in.path;
 
         Sha256 hasher;
         std::uint8_t digest[Sha256::kDigestBytes];
-        Completion<std::size_t> rc;
 
         std::uint64_t offset = 0;
         for (;;) {
-            if (ctx.cancel_token().is_requested()) {
-                out.error = IoError{IoError::Code::canceled};
-                break;
-            }
-            auto rr = await_read_at(
-                in.file, ctx, offset,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
-                rc);
+            auto rr = read(offset, std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                                        buffer.size()));
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;
@@ -89,7 +84,13 @@ struct HashTask {
                     results.push_back(std::move(out));
                     continue;
                 }
-                hash_one(ctx, inputs[i], results);
+                Completion<std::size_t> completion;
+                hash_one(inputs[i], results, [&](std::uint64_t offset, std::span<std::byte> dst) {
+                    if (ctx.cancel_token().is_requested())
+                        return sluice::make_unexpected<std::size_t>(
+                            IoError{IoError::Code::canceled});
+                    return await_read_at(inputs[i].file, ctx, offset, dst, completion);
+                });
             }
         } catch (...) {
             auto translated = translate_task_exception<std::vector<FileHash>>();
@@ -107,8 +108,7 @@ struct HashTask {
 
 std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs, std::size_t buffer_size,
                                       unsigned workers, std::unique_ptr<AsyncBackend> backend) {
-    if (buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize || workers == 0 ||
-        workers > kMaxWorkers || !backend) {
+    if (!valid_config(buffer_size, workers) || !backend) {
         std::vector<FileHash> out;
         fail_all(inputs, out, IoError{IoError::Code::invalid_state});
         return out;
@@ -138,8 +138,38 @@ std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs, std::size_t
 
 std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size,
                                  unsigned workers) {
-    return run_hash_engine(std::move(inputs), buffer_size, workers,
-                           std::make_unique<ThreadPoolBackend>());
+    std::vector<FileHash> results;
+    if (!valid_config(buffer_size, workers)) {
+        fail_all(inputs, results, IoError{IoError::Code::invalid_state});
+        return results;
+    }
+    if (workers != 1)
+        return run_hash_engine(std::move(inputs), buffer_size, workers,
+                               std::make_unique<ThreadPoolBackend>());
+    std::vector<std::uint8_t> buffer;
+    try {
+        buffer.assign(buffer_size, 0);
+    } catch (const std::bad_alloc&) {
+        fail_all(inputs, results, IoError{IoError::Code::no_space});
+        return results;
+    }
+    HashTask task{std::move(inputs), std::move(buffer)};
+    results.reserve(task.inputs.size());
+    try {
+        for (const auto& input : task.inputs)
+            task.hash_one(input, results, [&](std::uint64_t offset, std::span<std::byte> dst) {
+                return sluice::blocking::read_at(input.file, offset, dst);
+            });
+    } catch (...) {
+        auto translated = translate_task_exception<std::vector<FileHash>>();
+        for (std::size_t i = results.size(); i < task.inputs.size(); ++i) {
+            FileHash out;
+            out.path = task.inputs[i].path;
+            out.error = translated.error();
+            results.push_back(std::move(out));
+        }
+    }
+    return results;
 }
 
 std::vector<FileHash>
