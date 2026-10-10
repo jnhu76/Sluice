@@ -2,7 +2,7 @@
 
 | Document field | Value |
 |---|---|
-| Revision | v1-r3 |
+| Revision | v1-r4 |
 | Role | Sole normative root for the Sluice v1 convergence target |
 | Canonical source | `jnhu76/Sluice` / `docs/explicit-io-v1-final-decision.md`; adopted repository revision under GOV-05 |
 | Implementation baseline | `c64f005e6e59e791f26a7ab4a594c33954f096dd` |
@@ -906,7 +906,7 @@ The sequence fixes dependency order, not one giant refactor. Verification belong
 | C: host-neutral progress/observation | Remove backend Scheduler vocabulary; persistent progress seam | V06–V07, V10–V12, V23, V25; no-lost-wake and observer model obligations |
 | D: scopes and optional host | Bounded W-02 ownership; exception cleanup; supported W-04 if shipped | V18–V19; unwind/stop paths; task/observer lifetime evidence |
 | E: capability and shutdown closure | Full request matrix, cancel dispositions, poison/retirement, retained results | V13, V20, V22; both backend profiles; W-01/W-02/W-03 and optional W-04 |
-| F: retirement | Remove compatibility/legacy surfaces after replacements and consumer audit | Installed-header/build audit; no second semantic authority; migration examples |
+| F: retirement | Remove compatibility/legacy surfaces after an adopted replacement **or** an adopted negative-scope exclusion for a capability not required by v1, plus the consumer audit | Installed-header/build audit; no second semantic authority; migration examples, deliberate external-use/deprecation decision where applicable |
 | G: measured optimization | Contention, batching, wake amplification, allocation, lookup | Representative workloads; invariant-preserving changes and revalidation of affected cases |
 
 Shutdown skeleton/reference accounting must be designed in Phase B and exercised as each backend is migrated; Phase E completes coverage, it does not authorize postponing safe teardown. Modeling request/observer interactions starts when introduced, even if the full external integration closes in Phase C.
@@ -927,11 +927,20 @@ Shutdown skeleton/reference accounting must be designed in Phase B and exercised
 | ThreadPool / Uring backends | Retain mechanisms; demonstrate shared conformance and reference retirement |
 | busy-poll helpers | Replace with explicit Request/progress/scoped paths |
 | runtime completed-return helpers | Retain only with every-exit settlement guarantees |
-| ApplicationRuntime/Scheduler/Fiber | Optional narrow adapter; single progress owner profile |
+| ApplicationRuntime/Scheduler/Fiber | Legacy multi-worker runtime is not a required v1 product; preserve application behavior through explicit consumer migration, with independent optional narrow host only if its own supported-profile gate passes |
 | Group/Future/WaitPolicy | Only bounded structured lifetime required by retained adapter |
 | public dormant synchronization primitives | Outside v1; retain internal substrate only when needed |
-| legacy Reader/Writer/FileReader/FileWriter/IoContext | Retire from canonical surface after consumer/migration audit |
+| legacy Reader/Writer/FileReader/FileWriter/IoContext | Not admitted as a second native-file semantic authority; retire from canonical/public v1 after consumer/migration and external-use audit |
+| legacy vectored readv/writev and WAL/copy/buffer/observed stream helpers | Not admitted as v1 product without a new PROD-03 workload/obligation; retire with the audited old stream closure rather than inventing a replacement adapter |
+| public BlockingIoPool/Task pool | General task-runtime product not admitted by PROD-03; bounded compatibility only pending scoped external-use and package retirement |
+| legacy Memory/Fault test doubles | TEST_ONLY if actually used by tests; no automatic v1 installed/public API entitlement; audit/internally re-own or retire with stream closure |
 | experimental public headers | Clearly isolated unsupported experiments or remove from install surface |
+
+### MIG-02 Negative-scope exclusion boundary
+
+For a legacy capability **not admitted to the v1 workload/product scope** under PROD-03, a formally adopted negative disposition (identifying the excluded capability, consumer audit, reason and no-equivalent consequence) may serve as the **replacement decision** for MIG-01 Phase F. It does not assert that an implementation replacement exists, does not grant the legacy capability supported status, and cannot waive migration or explicit re-ownership of in-tree consumers, relevant evidence/formal/docs review, installed-header/build closure or the explicit external-use/deprecation risk decision. Any still-required W-01–W-03 capability **must** have its adopted implementation/replacement and cannot use this exception to disappear. Historical pre-v1 published interfaces require deliberate-deprecation disclosure; unknown external use is not zero use. The F0 §1.7 procedure records these conditions.
+
+A Phase M family disposition may thus be decided while physical compatibility code remains as a bounded, non-authoritative migration bridge; it does not grant `SAFE_TO_UNINSTALL`, `SAFE_TO_UNLINK`, `SAFE_TO_DELETE_FROM_TREE` or `RELEASE_READY`. Optional W-04 is supported only if shipped as supported and verified; no application migration is forced to depend on enabling this optional profile.
 
 ## MIG-03 Release gate
 
@@ -995,5 +1004,6 @@ Potential research claims are semantic/backend refinement, host independence, bo
 | v1-r1, PR #389 authority repair | Establish GOV hierarchy and stable IDs; restate File semantics; separate direct/request execution; close Request/observer/progress/shutdown contracts; add scopes, threading and acceptance cases | Normative target amendment, not production migration. Completion compatibility and existing APIs remain until MIG slices replace them. Old conformance statuses are historical; new ledger starts NOT_ASSESSED. |
 | v1-r2, snapshot provenance clarification | Add GOV-05: canonical repository revision, candidate/adopted distinction, portable-copy provenance and UTF-8 integrity | Distribution/governance clarification only. v1-r1 operation, lifetime and execution contracts unchanged; implementation evidence status unchanged. Check source encoding/content, provenance fields and document links. |
 | v1-r3, durability and ownership correction | Correct SEM-06 to cover completed Linux resize/file-size changes with `sync_data` and `sync_all`; clarify IoContext ownership of ProgressSource in ARCH-01; extend VERIFY-04 with V17 resize supersession and V27, referenced by MIG-01 | Strengthens the Linux durability target by removing the bare-resize exclusion. Coverage remains distinct from a snapshot; directory persistence remains outside the contract. The diagram matches ARCH-02/PROG; no ownership transfer or new execution capability. Implementation/evidence status remains unassessed; V27 requires subsequent evidence. |
+| v1-r4, minimal-scope negative admission and Phase M exit (proposed) | PROD-03 / MIG-01 / MIG-02: record non-admission of unneeded general task pool, legacy vectored/stream family and test doubles to the v1 product/install target; clarify adopted negative-scope exclusion as a narrow alternative to an invented replacement for **unrequired** capabilities; separate optional W-04 from app consumer retirement | Deliberate source/install/link breakage expected only in later approved F4/F5 slices; pre-v1 stable-ish/deprecation evidence requires published migration/risk acceptance; no required W-01–W-03 capability, RequestCore authority, real backend requirement or observable settlement/lifetime property removed. Current code and F1 historical snapshots are unchanged; independently review the scope amendment and re-freeze subsequent package cuts. |
 
 Subsequent entries identify specific changed requirement IDs. The full before/after remains in Git; this table records decision impact without turning the specification into an execution diary.
