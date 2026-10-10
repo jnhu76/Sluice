@@ -28,7 +28,7 @@
 
 ## Higher-authority conflicts needing focused PRs
 
-1. **#402 F3 Exit Gate W-04:** it presently demands unconditional `W04_SUPPORTED_HOST_PROFILE=PASS`, conflicting with PROD-02's optional supported host. Gate must be conditioned on *actually shipped as supported*, otherwise `N/A + package isolation proof`. Do not mark deferred host VERIFIED.
+1. **#402 F3 Exit Gate W-04:** at the initial audit it demanded unconditional `W04_SUPPORTED_HOST_PROFILE=PASS`, conflicting with PROD-02's optional supported host. The owner-directed #402 issue-body correction has since been applied: the gate is conditioned on *actually shipped as supported*, otherwise `N/A + package isolation proof`. This does not make a deferred host VERIFIED; inspect #402's history and independently review the change.
 2. **F0 §1.7 replacement requirement:** no admitted workload/no replacement must not force development of a fictitious adapter. A formally adopted **negative product/exclusion disposition** may serve as the narrowly scoped alternative to an adopted replacement, but consumer/docs/package/external obligations remain.
 3. **#458 per-app exit:** do not make D2/W-04 implementation verification a universal prerequisite for HASH/GREP/COPY/TAIL port. Each retains exact workload/behavior/borrow/stop proofs.
 4. **GOV-04 root amendment if necessary:** write explicit non-admission dispositions for vectored, WAL/stream and BlockingIoPool without making any claim of already retired source; revision and §23 log required for substantive changes. The existing root PROD-03 and MIG-02 are not overridden by this decision memo.
