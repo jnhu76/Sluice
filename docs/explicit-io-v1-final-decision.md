@@ -2,7 +2,7 @@
 
 | Document field | Value |
 |---|---|
-| Revision | v1-r4 (proposed pending review/merge; becomes adopted only under GOV-05) |
+| Revision | v1-r4 |
 | Role | Sole normative root for the Sluice v1 convergence target |
 | Canonical source | `jnhu76/Sluice` / `docs/explicit-io-v1-final-decision.md`; adopted repository revision under GOV-05 |
 | Implementation baseline | `c64f005e6e59e791f26a7ab4a594c33954f096dd` |
