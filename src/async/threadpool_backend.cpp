@@ -465,6 +465,9 @@ void ThreadPoolBackend::worker_loop() {
             }
 
             if (retired_unclaimed) {
+                // Dropping the entry retires dispatch work that
+                // internal_work_retired() reports to a parked settlement driver.
+                signal_ready_progress();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
                 wait_unclaimed_retirement_pause_();
