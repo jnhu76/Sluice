@@ -129,5 +129,7 @@ output; no-atomic mode retains the exact 64-byte source prefix. These are actual
 subprocess effects, not a scripted backend prediction. The default CLI backend
 remains ThreadPoolBackend; real-ring execution is separately distinguished by
 the `real_uring_pipeline_content_and_sync` oracle in both liburing profiles.
-Independent final-SHA review remains pending; no merge or physical runtime
-retirement is claimed.
+Final-SHA technical review approved `88eeb0a5`; owner review #5483211887 is
+GitHub COMMENTED with an explicit APPROVE verdict. PR #496 was adopted at
+`3530890b2147db38daa9b5813de002c158343090`. Physical runtime retirement
+remains separately gated.

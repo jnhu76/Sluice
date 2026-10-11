@@ -24,6 +24,7 @@
 #include <future>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -43,8 +44,6 @@ using sluice_tail::TailResult;
 
 constexpr auto kEventDeadline = 10s;
 constexpr auto kSettleDeadline = 10s;
-// Negative windows must outlast several 50 ms poll cycles; a wrong emission
-// happens synchronously in the read iteration, never delayed past them.
 constexpr auto kQuietWindow = 600ms;
 // While a held read is unsettled, wait() must not return within this window
 // (task may not retire; publish happens strictly after the task returns).
@@ -59,7 +58,9 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-void check_msg(bool ok, const std::string& what) { check(ok, what); }
+void check_msg(bool ok, const std::string& what) {
+    check(ok, what);
+}
 
 [[noreturn]] void deadline_abort(const std::string& why) {
     std::fprintf(stderr, "DEADLINE_ABORT: %s\n", why.c_str());
@@ -79,6 +80,7 @@ struct Record {
     std::uint64_t offset = 0;
     std::size_t len = 0;
     long ret = 0;
+    int fd = -1;
 };
 
 namespace {
@@ -98,7 +100,7 @@ bool matches(const Record& r, Record::Kind kind, long seq) {
     return r.kind == kind && (seq < 0 || r.seq == seq);
 }
 
-}  // namespace
+} // namespace
 
 void arm(dev_t dev, ino_t ino, long hold_from_seq) {
     std::lock_guard<std::mutex> lk(g_mtx);
@@ -128,8 +130,7 @@ void disarm() {
 
 std::optional<Record> wait_for(Record::Kind kind, long seq,
                                const std::function<bool(const Record&)>& extra,
-                               std::chrono::steady_clock::duration timeout,
-                               std::size_t& cursor) {
+                               std::chrono::steady_clock::duration timeout, std::size_t& cursor) {
     std::unique_lock<std::mutex> lk(g_mtx);
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     const auto take = [&](std::size_t at) {
@@ -170,7 +171,7 @@ void dump_log(const char* tag) {
     }
 }
 
-}  // namespace tail_probe
+} // namespace tail_probe
 
 extern "C" ssize_t pread(int fd, void* buf, std::size_t count, off_t offset) {
     bool armed = false;
@@ -182,7 +183,7 @@ extern "C" ssize_t pread(int fd, void* buf, std::size_t count, off_t offset) {
         dev = tail_probe::g_dev;
         ino = tail_probe::g_ino;
     }
-    struct stat st {};
+    struct stat st{};
     if (!armed || ::fstat(fd, &st) != 0 || st.st_dev != dev || st.st_ino != ino)
         return static_cast<ssize_t>(::syscall(SYS_pread64, fd, buf, count, offset));
 
@@ -192,20 +193,17 @@ extern "C" ssize_t pread(int fd, void* buf, std::size_t count, off_t offset) {
         std::lock_guard<std::mutex> lk(tail_probe::g_mtx);
         seq = ++tail_probe::g_seq;
         tail_probe::g_log.push_back(
-            {tail_probe::Record::Kind::pre, seq, static_cast<std::uint64_t>(offset), count, 0});
+            {tail_probe::Record::Kind::pre, seq, static_cast<std::uint64_t>(offset), count, 0, fd});
         if (tail_probe::g_armed && tail_probe::g_hold_from >= 0 && seq >= tail_probe::g_hold_from) {
             hold_ticket = tail_probe::g_holds_served;
-            tail_probe::g_log.push_back(
-                {tail_probe::Record::Kind::entered, seq, static_cast<std::uint64_t>(offset),
-                 count, 0});
+            tail_probe::g_log.push_back({tail_probe::Record::Kind::entered, seq,
+                                         static_cast<std::uint64_t>(offset), count, 0, fd});
         }
         tail_probe::g_cv.notify_all();
     }
     if (hold_ticket >= 0) {
         std::unique_lock<std::mutex> lk(tail_probe::g_mtx);
-        tail_probe::g_cv.wait(lk, [&] {
-            return tail_probe::g_release_count > hold_ticket;
-        });
+        tail_probe::g_cv.wait(lk, [&] { return tail_probe::g_release_count > hold_ticket; });
         ++tail_probe::g_holds_served;
     }
     const ssize_t r = static_cast<ssize_t>(::syscall(SYS_pread64, fd, buf, count, offset));
@@ -257,7 +255,8 @@ struct TempFile {
     bool append(const std::string& data) const {
         ssize_t done = 0;
         while (done < static_cast<ssize_t>(data.size())) {
-            const ssize_t n = ::write(append_fd, data.data() + done, data.size() - static_cast<std::size_t>(done));
+            const ssize_t n = ::write(append_fd, data.data() + done,
+                                      data.size() - static_cast<std::size_t>(done));
             if (n < 0) {
                 if (errno == EINTR)
                     continue;
@@ -269,7 +268,7 @@ struct TempFile {
     }
 
     bool truncate_to(std::uint64_t size) const {
-        struct stat st {};
+        struct stat st{};
         if (::stat(path.c_str(), &st) != 0)
             return false;
         return ::truncate(path.c_str(), static_cast<off_t>(size)) == 0;
@@ -348,8 +347,7 @@ struct EngineRun {
         if (!opened.has_value())
             deadline_abort("engine file open failed");
         engine = std::make_unique<TailEngine>(
-            std::move(opened).value(), options,
-            [this](std::string_view l) { sink.on_line(l); },
+            std::move(opened).value(), options, [this](std::string_view l) { sink.on_line(l); },
             [this](std::string_view m) { sink.on_diag(m); });
     }
 };
@@ -414,12 +412,14 @@ bool bounded_stop_and_wait(EngineRun& run, std::chrono::steady_clock::duration t
 
 bool idle_follow_stops_bounded() {
     TempFile f("");
-    struct stat st {};
+    struct stat st{};
     if (::stat(f.path.c_str(), &st) != 0)
         deadline_abort("stat failed");
     tail_probe::arm(st.st_dev, st.st_ino, -1);
 
-    EngineRun run(f, follow_options(0));
+    auto idle_options = follow_options(0);
+    idle_options.poll_interval_ms = 5000;
+    EngineRun run(f, idle_options);
     if (!run.engine->start().has_value()) {
         check_msg(false, "idle: engine start");
         tail_probe::disarm();
@@ -448,8 +448,190 @@ bool idle_follow_stops_bounded() {
     check_msg(!result->error.has_value(), "idle: no error");
     check_msg(result->lines_emitted == 0, "idle: no lines");
     check_msg(run.sink.lines_copy().empty(), "idle: sink empty");
+    check_msg(latency_ms < 1000, "idle: stop wake bypasses 5000 ms poll deadline");
     std::fprintf(stderr, "idle stop latency: %ld ms\n", latency_ms);
     return result->stopped_by_cancel && !result->error.has_value() && result->lines_emitted == 0;
+}
+
+bool concurrent_start_is_single_owner() {
+    TempFile f("a\n");
+    EngineRun run(f, TailOptions{});
+    std::promise<void> launch;
+    auto gate = launch.get_future().share();
+    auto starter = [&] {
+        gate.wait();
+        return run.engine->start();
+    };
+    auto first = std::async(std::launch::async, starter);
+    auto second = std::async(std::launch::async, starter);
+    launch.set_value();
+    auto a = first.get();
+    auto b = second.get();
+    check_msg(a.has_value() != b.has_value(), "start race: exactly one driver accepted");
+    const auto& rejected = a.has_value() ? b : a;
+    check_msg(!rejected.has_value() &&
+                  rejected.error().code == sluice::IoError::Code::invalid_state,
+              "start race: loser is invalid_state");
+    auto out = run.engine->wait();
+    check_msg(out.has_value() && !out.value().error.has_value() && out.value().lines_emitted == 1,
+              "start race: one output, joined owner");
+    return g_checks_failed == 0;
+}
+
+bool callback_self_wait_and_stop() {
+    TempFile f("callback\n");
+    auto opened = sluice::File::open(f.path);
+    if (!opened.has_value())
+        deadline_abort("callback file open failed");
+    TailEngine* engine = nullptr;
+    bool rejected = false;
+    TailEngine run(std::move(opened).value(), follow_options(1), [&](std::string_view line) {
+        auto self_wait = engine->wait();
+        rejected = !self_wait.has_value() &&
+                   self_wait.error().code == sluice::IoError::Code::invalid_state;
+        check_msg(line == "callback", "callback: selected output delivered");
+        engine->request_stop();
+    });
+    engine = &run;
+    check_msg(run.start().has_value(), "callback: start");
+    auto waiter = std::async(std::launch::async, [&] { return run.wait(); });
+    if (waiter.wait_for(kSettleDeadline) != std::future_status::ready)
+        deadline_abort("callback self wait deadlocked");
+    auto out = waiter.get();
+    check_msg(rejected, "callback: self wait rejects without taking the external wait");
+    check_msg(out.has_value() && !out.value().error.has_value() && out.value().stopped_by_cancel &&
+                  out.value().lines_emitted == 1,
+              "callback: external wait sees settled stop");
+    return g_checks_failed == 0;
+}
+
+bool callback_exception_is_task_error() {
+    TempFile f("throw\n");
+    auto opened = sluice::File::open(f.path);
+    if (!opened.has_value())
+        deadline_abort("throw file open failed");
+    TailEngine run(std::move(opened).value(), TailOptions{},
+                   [](std::string_view) { throw std::runtime_error("sink failure"); });
+    check_msg(run.start().has_value(), "throw: start");
+    auto out = run.wait();
+    check_msg(out.has_value() && out.value().error.has_value() &&
+                  out.value().error->code == sluice::IoError::Code::backend_error,
+              "throw: joined task failure is inner TailResult error");
+    auto again = run.wait();
+    check_msg(!again.has_value() && again.error().code == sluice::IoError::Code::invalid_state,
+              "throw: repeated wait is outer lifecycle error");
+    return g_checks_failed == 0;
+}
+
+bool destructor_waits_for_physical_read() {
+    TempFile f("");
+    struct stat st{};
+    if (::stat(f.path.c_str(), &st) != 0)
+        deadline_abort("destructor stat failed");
+    tail_probe::arm(st.st_dev, st.st_ino, 1);
+    EngineRun run(f, follow_options(0));
+    check_msg(run.engine->start().has_value(), "destructor: start");
+    std::size_t cursor = 0;
+    tail_probe::Record entered;
+    if (!wait_for_record("destructor: held read", tail_probe::Record::Kind::entered, 1, nullptr,
+                         kEventDeadline, cursor, entered))
+        deadline_abort("destructor read not held");
+    std::promise<void> destroying;
+    auto began = destroying.get_future();
+    auto teardown = std::async(std::launch::async, [&] {
+        destroying.set_value();
+        run.engine.reset();
+    });
+    began.wait();
+    check_msg(teardown.wait_for(kNoRetireWindow) == std::future_status::timeout,
+              "destructor: cannot retire while syscall borrows buffer");
+    check_msg(::fcntl(entered.fd, F_GETFD) != -1, "destructor: borrowed File remains open");
+    tail_probe::release();
+    if (teardown.wait_for(kSettleDeadline) != std::future_status::ready)
+        deadline_abort("destructor did not join after read release");
+    teardown.get();
+    tail_probe::disarm();
+    check_msg(::fcntl(entered.fd, F_GETFD) == -1 && errno == EBADF,
+              "destructor: File closes after physical read and join");
+    return g_checks_failed == 0;
+}
+
+bool destructor_waits_for_callback_return() {
+    TempFile f("callback\n");
+    auto opened = sluice::File::open(f.path);
+    if (!opened.has_value())
+        deadline_abort("callback teardown file open failed");
+    std::promise<void> entered;
+    auto in_callback = entered.get_future();
+    std::promise<void> release;
+    auto gate = release.get_future().share();
+    bool returned = false;
+    auto engine = std::make_unique<TailEngine>(std::move(opened).value(), follow_options(1),
+                                               [&](std::string_view) {
+                                                   entered.set_value();
+                                                   gate.wait();
+                                                   returned = true;
+                                               });
+    check_msg(engine->start().has_value(), "callback teardown: start");
+    if (in_callback.wait_for(kEventDeadline) != std::future_status::ready)
+        deadline_abort("callback teardown entry deadline");
+    std::promise<void> destroying;
+    auto began = destroying.get_future();
+    auto teardown = std::async(std::launch::async, [&] {
+        destroying.set_value();
+        engine.reset();
+    });
+    began.wait();
+    check_msg(teardown.wait_for(kNoRetireWindow) == std::future_status::timeout,
+              "callback teardown: captures cannot retire during callback");
+    release.set_value();
+    if (teardown.wait_for(kSettleDeadline) != std::future_status::ready)
+        deadline_abort("callback teardown join deadline");
+    teardown.get();
+    check_msg(returned, "callback teardown: callback retired before destructor return");
+    return g_checks_failed == 0;
+}
+
+bool competing_waiters_keep_one_result() {
+    TempFile f("");
+    struct stat st{};
+    if (::stat(f.path.c_str(), &st) != 0)
+        deadline_abort("wait race stat failed");
+    tail_probe::arm(st.st_dev, st.st_ino, 1);
+    EngineRun run(f, follow_options(0));
+    check_msg(run.engine->start().has_value(), "wait race: start");
+    std::size_t cursor = 0;
+    tail_probe::Record entered;
+    if (!wait_for_record("wait race: held read", tail_probe::Record::Kind::entered, 1, nullptr,
+                         kEventDeadline, cursor, entered))
+        deadline_abort("wait race read not held");
+    std::promise<void> launch;
+    auto gate = launch.get_future().share();
+    auto waiter = [&] {
+        gate.wait();
+        return run.engine->wait();
+    };
+    auto first = std::async(std::launch::async, waiter);
+    auto second = std::async(std::launch::async, waiter);
+    launch.set_value();
+    run.engine->request_stop();
+    tail_probe::release();
+    if (first.wait_for(kSettleDeadline) != std::future_status::ready ||
+        second.wait_for(kSettleDeadline) != std::future_status::ready)
+        deadline_abort("wait race failed to settle");
+    auto a = first.get();
+    auto b = second.get();
+    tail_probe::disarm();
+    check_msg(a.has_value() != b.has_value(), "wait race: one consumer result");
+    const auto& rejected = a.has_value() ? b : a;
+    check_msg(!rejected.has_value() &&
+                  rejected.error().code == sluice::IoError::Code::invalid_state,
+              "wait race: loser invalid_state");
+    const auto& accepted = a.has_value() ? a : b;
+    check_msg(accepted.has_value() && accepted.value().stopped_by_cancel &&
+                  !accepted.value().error.has_value(),
+              "wait race: stop settled cleanly");
+    return g_checks_failed == 0;
 }
 
 bool lifecycle_api_states() {
@@ -497,7 +679,7 @@ bool lifecycle_api_states() {
 
 bool pending_read_settles_before_retire() {
     TempFile f("");
-    struct stat st {};
+    struct stat st{};
     if (::stat(f.path.c_str(), &st) != 0)
         deadline_abort("stat failed");
     tail_probe::arm(st.st_dev, st.st_ino, 1);
@@ -527,13 +709,11 @@ bool pending_read_settles_before_retire() {
     }
     check_msg(probe_exit.ret == 0, "pending: first read was the empty-file probe");
 
-    // The task now sleeps one 50 ms slice before re-reading; the append lands
-    // inside that window, so the next held read is the data read.
     check_msg(f.append("held\n"), "pending: append");
 
     tail_probe::Record entered;
-    if (!wait_for_record("pending: worker entered data read", tail_probe::Record::Kind::entered,
-                         2, nullptr, kEventDeadline, cursor, entered)) {
+    if (!wait_for_record("pending: worker entered data read", tail_probe::Record::Kind::entered, 2,
+                         nullptr, kEventDeadline, cursor, entered)) {
         tail_probe::disarm();
         return false;
     }
@@ -580,15 +760,14 @@ bool pending_read_settles_before_retire() {
     check_msg(exit_rec.ret == 5, "pending: data read returned 5 bytes");
 
     const auto lines = run.sink.lines_copy();
-    check_msg(lines.size() == 1 && lines[0] == "held",
-              "pending: held line delivered exactly once");
+    check_msg(lines.size() == 1 && lines[0] == "held", "pending: held line delivered exactly once");
     return result->stopped_by_cancel && !result->error.has_value() && lines.size() == 1 &&
            lines[0] == "held";
 }
 
 bool append_delivery_and_partial_withholding() {
     TempFile f("");
-    struct stat st {};
+    struct stat st{};
     if (::stat(f.path.c_str(), &st) != 0)
         deadline_abort("stat failed");
     tail_probe::arm(st.st_dev, st.st_ino, -1);
@@ -613,18 +792,20 @@ bool append_delivery_and_partial_withholding() {
     // Idle cycles also probe (ret 0 at the new EOF), so each content read is
     // anchored by its unique nonzero return, never by log position.
     tail_probe::Record one_exit;
-    if (!wait_for_record("partial: ap-one read completed", tail_probe::Record::Kind::exit, -1,
-                         [](const tail_probe::Record& r) { return r.ret == 7; }, kEventDeadline,
-                         cursor, one_exit)) {
+    if (!wait_for_record(
+            "partial: ap-one read completed", tail_probe::Record::Kind::exit, -1,
+            [](const tail_probe::Record& r) { return r.ret == 7; }, kEventDeadline, cursor,
+            one_exit)) {
         tail_probe::disarm();
         return false;
     }
 
     check_msg(f.append("par"), "partial: append fragment");
     tail_probe::Record par_exit;
-    if (!wait_for_record("partial: fragment physically read", tail_probe::Record::Kind::exit, -1,
-                         [](const tail_probe::Record& r) { return r.ret == 3; }, kEventDeadline,
-                         cursor, par_exit)) {
+    if (!wait_for_record(
+            "partial: fragment physically read", tail_probe::Record::Kind::exit, -1,
+            [](const tail_probe::Record& r) { return r.ret == 3; }, kEventDeadline, cursor,
+            par_exit)) {
         tail_probe::disarm();
         return false;
     }
@@ -638,7 +819,8 @@ bool append_delivery_and_partial_withholding() {
     long latency_ms = 0;
     const bool waited = bounded_stop_and_wait(run, kSettleDeadline, result, latency_ms);
     tail_probe::disarm();
-    check_msg(waited && result.has_value() && result->stopped_by_cancel && !result->error.has_value(),
+    check_msg(waited && result.has_value() && result->stopped_by_cancel &&
+                  !result->error.has_value(),
               "partial: clean stop after deliveries");
     if (!waited || !result.has_value())
         return false;
@@ -650,7 +832,7 @@ bool append_delivery_and_partial_withholding() {
 
 bool truncate_resets_partial_carry() {
     TempFile f("");
-    struct stat st {};
+    struct stat st{};
     if (::stat(f.path.c_str(), &st) != 0)
         deadline_abort("stat failed");
     tail_probe::arm(st.st_dev, st.st_ino, -1);
@@ -673,9 +855,10 @@ bool truncate_resets_partial_carry() {
     check_msg(f.append("carry"), "truncate: append carry fragment");
     // Idle cycles probe with ret 0; only the carry read completes with 5.
     tail_probe::Record exit_rec;
-    if (!wait_for_record("truncate: carry read completed", tail_probe::Record::Kind::exit, -1,
-                         [](const tail_probe::Record& r) { return r.ret == 5; }, kEventDeadline,
-                         cursor, exit_rec)) {
+    if (!wait_for_record(
+            "truncate: carry read completed", tail_probe::Record::Kind::exit, -1,
+            [](const tail_probe::Record& r) { return r.ret == 5; }, kEventDeadline, cursor,
+            exit_rec)) {
         tail_probe::disarm();
         return false;
     }
@@ -692,7 +875,8 @@ bool truncate_resets_partial_carry() {
     long latency_ms = 0;
     const bool waited = bounded_stop_and_wait(run, kSettleDeadline, result, latency_ms);
     tail_probe::disarm();
-    check_msg(waited && result.has_value() && result->stopped_by_cancel && !result->error.has_value(),
+    check_msg(waited && result.has_value() && result->stopped_by_cancel &&
+                  !result->error.has_value(),
               "truncate: clean stop");
     if (!waited || !result.has_value())
         return false;
@@ -707,7 +891,7 @@ bool truncate_resets_partial_carry() {
 bool descriptor_follow_across_rename() {
     TempFile f("");
     const std::string rotated = f.path + ".rotated";
-    struct stat st {};
+    struct stat st{};
     if (::stat(f.path.c_str(), &st) != 0)
         deadline_abort("stat failed");
     tail_probe::arm(st.st_dev, st.st_ino, -1);
@@ -766,7 +950,8 @@ bool descriptor_follow_across_rename() {
     const bool waited = bounded_stop_and_wait(run, kSettleDeadline, result, latency_ms);
     tail_probe::disarm();
     ::unlink(rotated.c_str());
-    check_msg(waited && result.has_value() && result->stopped_by_cancel && !result->error.has_value(),
+    check_msg(waited && result.has_value() && result->stopped_by_cancel &&
+                  !result->error.has_value(),
               "rotation: clean stop");
     if (!waited || !result.has_value())
         return false;
@@ -777,7 +962,7 @@ bool descriptor_follow_across_rename() {
     return lines.size() == 2 && lines[0] == "rot-a" && lines[1] == "rot-b";
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     struct NamedTest {
@@ -785,6 +970,12 @@ int main() {
         bool (*fn)();
     };
     const NamedTest tests[] = {
+        {"concurrent_start_is_single_owner", concurrent_start_is_single_owner},
+        {"callback_self_wait_and_stop", callback_self_wait_and_stop},
+        {"callback_exception_is_task_error", callback_exception_is_task_error},
+        {"destructor_waits_for_physical_read", destructor_waits_for_physical_read},
+        {"destructor_waits_for_callback_return", destructor_waits_for_callback_return},
+        {"competing_waiters_keep_one_result", competing_waiters_keep_one_result},
         {"idle_follow_stops_bounded", idle_follow_stops_bounded},
         {"lifecycle_api_states", lifecycle_api_states},
         {"pending_read_settles_before_retire", pending_read_settles_before_retire},
@@ -811,7 +1002,6 @@ int main() {
                      sizeof(tests) / sizeof(tests[0]));
         return 1;
     }
-    std::printf("all %zu tail lifecycle oracle cases passed\n",
-                sizeof(tests) / sizeof(tests[0]));
+    std::printf("all %zu tail lifecycle oracle cases passed\n", sizeof(tests) / sizeof(tests[0]));
     return 0;
 }

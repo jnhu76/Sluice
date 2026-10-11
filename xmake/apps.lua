@@ -59,7 +59,7 @@ do
 end
 
 -- sluice-tail: bounded last-N backward scan + follow-mode tailing over
--- ApplicationRuntime + ThreadPoolBackend. The long-lived workload of the
+-- an app-owned direct execution thread. The long-lived workload of the
 -- file-tools track: explicit start/request_stop/wait engine lifecycle, and a
 -- sigwait signal thread in the CLI for clean Ctrl-C cancellation. Public
 -- headers only.
@@ -70,7 +70,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("apps")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(dir .. "/main.cpp", dir .. "/tail_task.cpp",
                       dir .. "/cli_parse.cpp")

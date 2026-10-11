@@ -1,0 +1,3 @@
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<uring_public_consumer_probe>[0m cache compiling.release tests/uring_public_consumer_probe.cpp[0m
+[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1m<uring_public_consumer_probe>[0m [38;5;5;1mlinking.release uring_public_consumer_probe[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.395s[0m

@@ -23,7 +23,7 @@ bool parse_digits(const char* s, std::size_t& out) {
     return true;
 }
 
-}
+} // namespace
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -34,7 +34,7 @@ int usage(const char* prog) {
                  "  --buffer-size <bytes>   scan/read buffer (default 64 KiB; %zu..%zu)\n"
                  "  --max-line-bytes <n>    retained-line cap; longer lines are reported\n"
                  "                          and skipped (default %zu; <= %zu)\n"
-                 "  --workers <count>       runtime workers (default 1; <= %u)\n"
+                 "  --workers <count>       compatibility hint (1..%u; one driver)\n"
                  "  --help                  show this help\n"
                  "\n"
                  "Exit codes: 0 = success (follow ended by signal counts as success),\n"
@@ -128,4 +128,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-}
+} // namespace sluice_tail::cli

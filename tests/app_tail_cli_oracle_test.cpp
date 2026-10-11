@@ -49,7 +49,9 @@ void check(bool ok, const std::string& what) {
     }
 }
 
-void check_msg(bool ok, const std::string& what) { check(ok, what); }
+void check_msg(bool ok, const std::string& what) {
+    check(ok, what);
+}
 
 std::string exe_dir() {
     char buf[4096];
@@ -75,9 +77,8 @@ struct TempFile {
             std::_Exit(97);
         }
         path = tmpl;
-        if (!content.empty() &&
-            ::pwrite(fd, content.data(), content.size(), 0) !=
-                static_cast<ssize_t>(content.size())) {
+        if (!content.empty() && ::pwrite(fd, content.data(), content.size(), 0) !=
+                                    static_cast<ssize_t>(content.size())) {
             std::fprintf(stderr, "DEADLINE_ABORT: temp seed write failed\n");
             std::fflush(stderr);
             std::_Exit(97);
@@ -165,10 +166,10 @@ class TailChild {
             env_store.emplace_back(*e);
         if (with_shim) {
             env_store.emplace_back("LD_PRELOAD=" + exe_dir() + "/libtail_pread_shim.so");
-            env_store.emplace_back("SLUICE_TAIL_SHIM_DEV=" + std::to_string(
-                                       static_cast<unsigned long long>(shim_dev)));
-            env_store.emplace_back("SLUICE_TAIL_SHIM_INO=" + std::to_string(
-                                       static_cast<unsigned long long>(shim_ino)));
+            env_store.emplace_back("SLUICE_TAIL_SHIM_DEV=" +
+                                   std::to_string(static_cast<unsigned long long>(shim_dev)));
+            env_store.emplace_back("SLUICE_TAIL_SHIM_INO=" +
+                                   std::to_string(static_cast<unsigned long long>(shim_ino)));
             env_store.emplace_back("SLUICE_TAIL_SHIM_EVT=" + evt_path_);
             env_store.emplace_back("SLUICE_TAIL_SHIM_CMD=" + cmd_path_);
             env_store.emplace_back("SLUICE_TAIL_SHIM_HOLD_FROM=1");
@@ -325,8 +326,7 @@ class TailChild {
             if (std::chrono::steady_clock::now() >= deadline) {
                 ::kill(pid_, SIGKILL);
                 int status2 = 0;
-                while (::waitpid(pid_, &status2, 0) < 0 && errno == EINTR) {
-                }
+                while (::waitpid(pid_, &status2, 0) < 0 && errno == EINTR) {}
                 reaped_ = true;
                 exited_ = true;
                 drain_output_eof();
@@ -433,8 +433,7 @@ class TailChild {
         if (pid_ > 0 && !reaped_) {
             ::kill(pid_, SIGKILL);
             int status = 0;
-            while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {
-            }
+            while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {}
             reaped_ = true;
         }
         if (out_fd_ >= 0)
@@ -474,7 +473,7 @@ class TailChild {
 // ---------------------------------------------------------------------------
 
 bool file_status_of(const std::string& path, dev_t* dev, ino_t* ino) {
-    struct stat st {};
+    struct stat st{};
     if (::stat(path.c_str(), &st) != 0)
         return false;
     *dev = st.st_dev;
@@ -524,6 +523,41 @@ bool finite_tail_and_cli_exit_codes() {
     return g_checks_failed == before;
 }
 
+bool cli_compat_workers_and_max_poll_stop() {
+    TempFile f("seed\n");
+    const std::string bin = exe_dir() + "/sluice-tail";
+    {
+        TailChild child;
+        check_msg(child.spawn(bin, {"--workers", "64", "-n", "1", f.path}),
+                  "workers: accepted hint");
+        const auto outcome = child.wait_exit(kExitDeadline);
+        check_msg(outcome.kind == ChildOutcome::Kind::exited && outcome.code == 0 &&
+                      child.out() == "seed\n" && child.err_text().empty(),
+                  "workers: single driver preserves output");
+    }
+    for (const auto* bad : {"0", "65"}) {
+        TailChild child;
+        check_msg(child.spawn(bin, {"--workers", bad, "/no/such/file_f3_tail"}),
+                  "workers: invalid hint");
+        const auto outcome = child.wait_exit(kExitDeadline);
+        check_msg(outcome.kind == ChildOutcome::Kind::exited && outcome.code == 1 &&
+                      child.out().empty() && child.err_text().find("usage:") != std::string::npos,
+                  "workers: usage rejection before open");
+    }
+    {
+        TailChild child;
+        check_msg(child.spawn(bin, {"-f", "-n", "1", "--poll-interval", "5000", f.path}),
+                  "max poll: spawn");
+        check_msg(child.wait_line("seed", kEventDeadline), "max poll: initial output");
+        child.send_signal(SIGTERM);
+        const auto outcome = child.wait_exit(1s);
+        check_msg(outcome.kind == ChildOutcome::Kind::exited && outcome.code == 0 &&
+                      child.out() == "seed\n" && child.err_text().empty(),
+                  "max poll: signal stop bypasses 5000 ms deadline");
+    }
+    return g_checks_failed == 0;
+}
+
 bool follow_clean_signal_exit(int sig, const std::string& tag) {
     TempFile f("seed-1\nseed-2\n");
     TailChild child;
@@ -547,9 +581,13 @@ bool follow_clean_signal_exit(int sig, const std::string& tag) {
     return o.kind == ChildOutcome::Kind::exited && o.code == 0;
 }
 
-bool cli_sigint_clean_exit() { return follow_clean_signal_exit(SIGINT, "sigint"); }
+bool cli_sigint_clean_exit() {
+    return follow_clean_signal_exit(SIGINT, "sigint");
+}
 
-bool cli_sigterm_clean_exit() { return follow_clean_signal_exit(SIGTERM, "sigterm"); }
+bool cli_sigterm_clean_exit() {
+    return follow_clean_signal_exit(SIGTERM, "sigterm");
+}
 
 bool cli_double_signal_clean_exit() {
     TempFile f("seed-1\nseed-2\n");
@@ -643,9 +681,13 @@ bool pending_read_settlement_case(int sig, const std::string& tag) {
     return o.kind == ChildOutcome::Kind::exited && o.code == 0 && count == 1;
 }
 
-bool cli_pending_sigint() { return pending_read_settlement_case(SIGINT, "pending-sigint"); }
+bool cli_pending_sigint() {
+    return pending_read_settlement_case(SIGINT, "pending-sigint");
+}
 
-bool cli_pending_sigterm() { return pending_read_settlement_case(SIGTERM, "pending-sigterm"); }
+bool cli_pending_sigterm() {
+    return pending_read_settlement_case(SIGTERM, "pending-sigterm");
+}
 
 bool cli_descriptor_follow_rotation() {
     TempFile f("seed\n");
@@ -754,7 +796,7 @@ bool harness_split_line_selftest() {
     return got && o.kind == ChildOutcome::Kind::exited && o.code == 0;
 }
 
-}  // namespace
+} // namespace
 
 int main() {
     struct NamedTest {
@@ -766,6 +808,7 @@ int main() {
         {"harness_stderr_capture_selftest", harness_stderr_capture_selftest},
         {"harness_split_line_selftest", harness_split_line_selftest},
         {"finite_tail_and_cli_exit_codes", finite_tail_and_cli_exit_codes},
+        {"cli_compat_workers_and_max_poll_stop", cli_compat_workers_and_max_poll_stop},
         {"cli_sigint_clean_exit", cli_sigint_clean_exit},
         {"cli_sigterm_clean_exit", cli_sigterm_clean_exit},
         {"cli_double_signal_clean_exit", cli_double_signal_clean_exit},
@@ -775,7 +818,7 @@ int main() {
     };
 
     const std::string bin = exe_dir() + "/sluice-tail";
-    struct stat st {};
+    struct stat st{};
     if (::stat(bin.c_str(), &st) != 0) {
         std::fprintf(stderr, "FAIL: sluice-tail binary not found next to the test binary (%s)\n",
                      bin.c_str());

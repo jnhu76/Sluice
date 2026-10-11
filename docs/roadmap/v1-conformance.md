@@ -1929,7 +1929,7 @@ SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.
 
 | Slice / owner | Root / app obligations | Status | Exact evidence and remaining gate |
 | --- | --- | --- | --- |
-| F3_COPY_CANONICAL_REQUEST_SCOPE; #474/#402 | REQ-01..06, HANDLE-01, LIFE-01/02, HOST-02/03, PROG-01/02/04, SHUT-01..04; T2-08, OB-1/2, D-H3/5 | VERIFIED for bounded candidate | Production `5c6bc4f9`, final production/test `c94c7770335e4e01e4f1f5876740cb0e792a4f88`; 24 pipeline oracles + consumption + DirFsync in Debug/Release × noliburing/real liburing, Clang22 ASan/UBSan and four controlled TSan cases, six success/two write-failure CLI subprocess scenarios. [Review/evidence receipt](../review/f3-copy-request-scope-20261011.md). Final-SHA independent review and merge pending; no whole-family or installed/archive retirement claim. |
+| F3_COPY_CANONICAL_REQUEST_SCOPE; #474/#402 | REQ-01..06, HANDLE-01, LIFE-01/02, HOST-02/03, PROG-01/02/04, SHUT-01..04; T2-08, OB-1/2, D-H3/5 | VERIFIED for bounded candidate | Production `5c6bc4f9`, final production/test `c94c7770335e4e01e4f1f5876740cb0e792a4f88`; 24 pipeline oracles + consumption + DirFsync in Debug/Release × noliburing/real liburing, Clang22 ASan/UBSan and four controlled TSan cases, six success/two write-failure CLI subprocess scenarios. [Review/evidence receipt](../review/f3-copy-request-scope-20261011.md). Final head `88eeb0a5` independently approved technically; PR #496 adopted at merge `3530890b2147db38daa9b5813de002c158343090`. GitHub owner review #5483211887 is COMMENTED with an explicit APPROVE technical verdict. No whole-family or installed/archive retirement claim. |
 
 COPY production owns canonical RequestScope settlement and context progress;
 ApplicationRuntime, Scheduler task context, TaskResultSlot and per-operation
@@ -1939,3 +1939,18 @@ this D-H5 compatibility decision is explicit in the review receipt. Legacy SDK
 and test-only runtime self-test consumers remain. F3 physical deletion and F5
 installed-header approval are separate gates. W-04 OPTIONAL_SUPPORTED=NO and
 V1_RELEASE_READY=NO remain unchanged.
+
+### F3 Step 4 TAIL app-owned execution candidate (2026-10-11)
+
+VERIFIED at prior final head `64058ca9`; combined integration `f717e170331df8e098634fe60462b7dd256f8d7b` verified in four isolated configurations (72 target executions, four COPY CLI suites); final narrow independent review/adoption pending.
+TAIL uses canonical direct File operations in one application-owned thread with
+condition-variable EOF wake, explicit stop and join before File/buffer destruction.
+Existing Result<TailResult> separates join/wait failure from task failure and
+preserves one-shot wait. No ApplicationRuntime/Scheduler/TaskResultSlot/Completion
+consumer remains in this application's source/object/link closure. Four isolated
+remote configurations and Clang ASan+UBSan/TSan pass; direct TAIL execution does
+not use liburing even in the enabled profile. See [TAIL slice record](../review/f3-tail-owned-driver-20261011.md)
+for exact SHA, controlled borrow/stop evidence, contraction justification and
+external progress assumptions. No installed runtime removal or W-04 support claim.
+
+TAIL `--workers=1..64` is validated but inert compatibility state. #474/#475 F3/F5 owns a deliberate removal/rejection or meaningful-semantics decision before the final F3/F5 release boundary; this migration does not authorize CLI removal.
