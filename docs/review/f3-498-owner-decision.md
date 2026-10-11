@@ -72,3 +72,12 @@ MERGE_AUTHORIZATION = NOT_GIVEN
 
 F0_PER_SURFACE_RISK_DISPOSITION = CONFIRMED_ACCEPT_SCOPED_EXTERNAL_BREAKAGE
 F5_SCOPED_VERSIONED_PACKAGE_CONTRACTION = AUTHORIZED_SUBJECT_TO_FINAL_GATES
+
+## Subsequent merge authorization
+
+The same designated owner explicitly instructed: "按照步骤合并。 我授权。"
+This authorizes sequential #501 and #502 merges after the stated review, CI,
+package and postmerge verification steps. It supersedes the earlier absence of
+merge authorization; it does not waive implementation gates or expand scope.
+#501 merged at f527456b5eaa10a74e872ee1d23b9dd6413f1f1d. #502 remains
+unmerged at record time. See the [v3 package cut](../evidence/f3-498-b01-package-cut-v3/REPRODUCE.md).
