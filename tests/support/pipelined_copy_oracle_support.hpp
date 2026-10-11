@@ -181,6 +181,8 @@ struct ScriptedShared {
     bool closed = false;
 
     std::optional<IoError> fail_next[6];
+    bool throw_next[6] = {};
+    std::size_t cancel_calls = 0;
 
     static int kind_index(detail::OperationKind k) { return static_cast<int>(k); }
 
@@ -309,13 +311,8 @@ class ScriptedBackend final : public AsyncBackend {
     detail::PublicCancel cancel_identity(detail::RequestKey key) override {
         {
             std::lock_guard<std::mutex> lk(shared_->mtx);
-            auto it = shared_->records.find(key.slot.value);
-            if (it != shared_->records.end() &&
-                it->second.key.generation.value == key.generation.value &&
-                it->second.stage == ScriptedShared::Record::Stage::accepted) {
-                it->second.stage = ScriptedShared::Record::Stage::staged;
-                shared_->cv.notify_all();
-            }
+            ++shared_->cancel_calls;
+            shared_->cv.notify_all();
         }
         detail::PublicCancel disposition = core_->cancel(key);
         if (disposition == detail::PublicCancel::won_before_execution) {
@@ -325,6 +322,7 @@ class ScriptedBackend final : public AsyncBackend {
                 auto it = shared_->records.find(key.slot.value);
                 if (it != shared_->records.end() &&
                     it->second.key.generation.value == key.generation.value) {
+                    it->second.stage = ScriptedShared::Record::Stage::staged;
                     it->second.borrow_released = true;
                     shared_->recompute_borrow_peak_locked(it->second.kind);
                 }
@@ -387,8 +385,6 @@ class ScriptedBackend final : public AsyncBackend {
     }
 
     Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) override {
-        if (c == nullptr)
-            return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_argument});
         const auto rejection = sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
             {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset,
              op.len}));
@@ -402,8 +398,6 @@ class ScriptedBackend final : public AsyncBackend {
     }
 
     Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override {
-        if (c == nullptr)
-            return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_argument});
         const auto rejection = sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
             {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset,
              op.len}));
@@ -437,8 +431,6 @@ class ScriptedBackend final : public AsyncBackend {
     template <class Op>
     Result<detail::RequestKey> submit_sync(Op op, Completion<void>* c, detail::OperationKind kind,
                                            detail::RequestOp core_op) {
-        if (c == nullptr)
-            return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_argument});
         const auto rejection = sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
             op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_data));
         if (!rejection.has_value())
@@ -450,6 +442,11 @@ class ScriptedBackend final : public AsyncBackend {
 
     std::optional<IoError> consume_injected_failure(detail::OperationKind kind) {
         std::lock_guard<std::mutex> lk(shared_->mtx);
+        auto& throwing = shared_->throw_next[ScriptedShared::kind_index(kind)];
+        if (throwing) {
+            throwing = false;
+            throw std::runtime_error("injected submit exception after acceptance");
+        }
         auto& armed = shared_->fail_next[ScriptedShared::kind_index(kind)];
         if (!armed.has_value())
             return std::nullopt;
@@ -474,7 +471,7 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(IoError{code});
         }
         const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
-        if (!begin_binding(*c)) {
+        if (c != nullptr && !begin_binding(*c)) {
             (void)core_->rollback(reservation.reservation);
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
         }
@@ -487,8 +484,10 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
         }
         const detail::RequestKey key = accepted.id;
-        install_core_binding(*c, core_, key);
-        commit_binding(*c);
+        if (c != nullptr) {
+            install_core_binding(*c, core_, key);
+            commit_binding(*c);
+        }
         if (core_->claim_execution(key) != detail::ExecutionClaim::claimed) {
             note_protocol_violation("claim_execution denied for accepted submit");
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
@@ -512,7 +511,7 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(IoError{code});
         }
         const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
-        if (!begin_binding(*c)) {
+        if (c != nullptr && !begin_binding(*c)) {
             (void)core_->rollback(reservation.reservation);
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
         }
@@ -524,8 +523,10 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
         }
         const detail::RequestKey key = accepted.id;
-        install_core_binding(*c, core_, key);
-        commit_binding(*c);
+        if (c != nullptr) {
+            install_core_binding(*c, core_, key);
+            commit_binding(*c);
+        }
         if (core_->claim_execution(key) != detail::ExecutionClaim::claimed) {
             note_protocol_violation("claim_execution denied for accepted submit");
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
@@ -580,7 +581,8 @@ class ScriptedBackend final : public AsyncBackend {
                 it->second.key.generation.value == key.generation.value &&
                 it->second.stage == ScriptedShared::Record::Stage::staged) {
                 kind = it->second.kind;
-                it->second.publish(it->second.completion, payload);
+                if (it->second.completion != nullptr)
+                    it->second.publish(it->second.completion, payload);
                 it->second.stage = ScriptedShared::Record::Stage::published;
                 shared_->recompute_peak_locked(kind);
             }
@@ -723,6 +725,16 @@ class ScriptedController {
         if (!mark_staged(submit_id, key, kind, buffer, offset))
             return false;
         return stage_on_backend(key, sluice::detail::IoOutcome::failure(error));
+    }
+
+    void throw_next_submit(detail::OperationKind kind) {
+        std::lock_guard<std::mutex> lk(shared_->mtx);
+        shared_->throw_next[ScriptedShared::kind_index(kind)] = true;
+    }
+
+    bool wait_cancel_attempt() const {
+        std::unique_lock<std::mutex> lk(shared_->mtx);
+        return shared_->cv.wait_for(lk, kWaitFor, [&] { return shared_->cancel_calls != 0; });
     }
 
     void fail_next_submit(detail::OperationKind kind, IoError error) {
