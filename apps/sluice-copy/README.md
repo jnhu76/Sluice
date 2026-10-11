@@ -234,7 +234,7 @@ under CI's `xmake test -v` in both the debug and release profiles:
   `src_open` / `src_not_regular` / `dst_open` / `same_file` rejections, the
   atomic round-trip through `open_atomic_copy` + `commit_atomic_copy` (including
   "no temp file left behind"), and `discard_atomic_copy` cleanup.
-- `app_copy_pipeline_oracle_test` (21 cases) — the Version B pipeline against a
+- `app_copy_pipeline_oracle_test` (24 cases) — the Version B pipeline against a
   scripted backend, driving controlled submission/completion/failure ordering.
   Covers the depth-1 single outstanding read, the full depth-4 read window,
   out-of-order read completion with in-order writes, short-read retry in the same
@@ -242,9 +242,11 @@ under CI's `xmake test -v` in both the debug and release profiles:
   read-ahead, primary-error selection, settlement of already-accepted work on
   submit failure and capacity refusal, EOF draining without post-EOF writes,
   sync-after-all-writes, bounded multi-round slot reuse, and slot
-  non-recycling before its write completes. Also covers synchronous rejection of
+  non-recycling before its write completes, exception cleanup while read-ahead
+  retains a physical borrow, canceled operation settlement, and real io_uring
+  content plus sync when liburing is enabled. Also covers synchronous rejection of
   invalid arguments (`depth 0`, `buffer 0`, `workers 0`, null backend, each cap
-  + 1, the 512 MiB product limit, and size_t overflow). Three of the 21 cases
+  + 1, the 512 MiB product limit, and size_t overflow). Three harness cases
   (`borrow_live_write_peak_selftest`, `watchdog_selftest_child`,
   `watchdog_selftest_bounded`) are harness self-checks, not pipeline behavior.
 - `app_copy_dir_fsync_test` (4 cases) — the atomic commit's directory-fsync
@@ -256,8 +258,8 @@ under CI's `xmake test -v` in both the debug and release profiles:
 Not covered by any of these targets: the CLI itself is never exercised as a
 subprocess — `parse_args` and the CLI exit codes above are **not** under test.
 There is no automated test for a symlink destination, for the
-`--no-atomic` `O_NOFOLLOW` rejection, or for `--sync data|all` end-to-end
-against the real filesystem.
+`--no-atomic` `O_NOFOLLOW` rejection, or CLI `--sync data|all` subprocess behavior. The liburing profile exercises
+engine sync-all against a real ring and filesystem.
 
 There is no mutation matrix in CI, and no nightly gate. When the Version B
 pipeline was made an oracle (`app_copy_pipeline_oracle_test`), five mutations of
@@ -285,5 +287,5 @@ gate. Those test sources were removed in `5f62b55b` and the script does not exis
 in this tree, so none of them is a current guarantee. The engine limit checks
 (`copy_task.cpp`), the slot-reuse and ordering contracts, and the
 directory-fsync retry were re-derived by the three targets above; CLI parsing,
-the regular-file input domain at the CLI layer, and fault injection into the
-pipeline are **not** currently re-covered.
+and the regular-file input domain at the CLI layer are **not** currently
+covered by subprocess tests. Controlled backend fault injection is covered.

@@ -1,0 +1,18 @@
+PROFILE=asanubsan-n CWD=/home/jnhu/Source/Sluice-copy-matrix-asanubsan-n BASELINE=c94c7770335e4e01e4f1f5876740cb0e792a4f88
+2:    __toolchains_linux_x86_64 = {
+6:    builddir = "build-asanubsan-n",
+11:    liburing = false,
+12:    mode = "asanubsan",
+16:    toolchain = "clang"
+00000000004b1c00 T __asan_init
+00000000004e5f00 T __ubsan_handle_type_mismatch_v1
+00000000004e64e0 T __ubsan_handle_type_mismatch_v1_abort
+PROFILE=tsan-n CWD=/home/jnhu/Source/Sluice-copy-matrix-tsan-n BASELINE=c94c7770335e4e01e4f1f5876740cb0e792a4f88
+2:    __toolchains_linux_x86_64 = {
+6:    builddir = "build-tsan-n",
+11:    liburing = false,
+12:    mode = "tsan",
+16:    toolchain = "clang"
+000000000048c460 T __tsan_init
+0000000000428f30 T __ubsan_handle_type_mismatch_v1
+0000000000429510 T __ubsan_handle_type_mismatch_v1_abort

@@ -1,0 +1,14 @@
+BASELINE=c94c7770335e4e01e4f1f5876740cb0e792a4f88 CWD=/home/jnhu/Source/Sluice-copy-matrix-tsan-n UTC=2026-10-11T11:00:15Z
+RUN: SLUICE_ORACLE_FILTER=exception_cleanup_waits_for_held_borrow timeout 60 /home/jnhu/Source/Sluice-copy-matrix-tsan-n/build-tsan-n/linux/x86_64/tsan/app_copy_pipeline_oracle_test
+ok: exception_cleanup_waits_for_held_borrow
+all 1 app copy pipeline oracle tests passed
+RUN: SLUICE_ORACLE_FILTER=canceled_result_settles_held_readahead timeout 60 /home/jnhu/Source/Sluice-copy-matrix-tsan-n/build-tsan-n/linux/x86_64/tsan/app_copy_pipeline_oracle_test
+ok: canceled_result_settles_held_readahead
+all 1 app copy pipeline oracle tests passed
+RUN: SLUICE_ORACLE_FILTER=depth4_full_read_window timeout 60 /home/jnhu/Source/Sluice-copy-matrix-tsan-n/build-tsan-n/linux/x86_64/tsan/app_copy_pipeline_oracle_test
+ok: depth4_full_read_window
+all 1 app copy pipeline oracle tests passed
+RUN: SLUICE_ORACLE_FILTER=drained_results_never_override_primary timeout 60 /home/jnhu/Source/Sluice-copy-matrix-tsan-n/build-tsan-n/linux/x86_64/tsan/app_copy_pipeline_oracle_test
+ok: drained_results_never_override_primary
+all 1 app copy pipeline oracle tests passed
+FINAL PASS tsan-n
