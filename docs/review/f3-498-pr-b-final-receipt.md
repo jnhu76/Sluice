@@ -1,7 +1,12 @@
 # F3 #498 PR B narrow candidate verification receipt
 
 DRAFT_NONADOPTED; IMPLEMENTED_UNVERIFIED pending independent final review.
-Code baseline PR A plus supplements 3f846afa; corrected candidate snapshot
+Final unmerged stack base: PR A d38430cf3ed770e2705c20eefa5c1fcd75bec6d2
+(code3f846afa plus evidence-only final receipt). Rebased B snapshot1df5326b35c837532febd8aff8a2d1bbc5167844
+is byte-identical across production/build/tests/package consumers to the tested
+pre-rebase candidate. [Final rebase mapping](../evidence/f3-498-pr-b-final-matrix/final-rebase-equivalence.json)
+records the exact comparison; no unchanged tests were repeated. Captured original
+provenance remains unchanged. Original corrected candidate snapshot
 41fc1b45dce2723e61a2a2703a035cbd0cc5c382. Narrow branch diff removes only
 src/async/file.cpp and include/sluice/async/file.hpp from production. Source,
 installed header and four out-of-line symbols contract together. This candidate

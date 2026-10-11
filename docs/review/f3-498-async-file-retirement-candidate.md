@@ -2,7 +2,8 @@
 
 Status: DRAFT_NONADOPTED; EXTERNAL_RISK_PENDING; F5_PENDING.
 Original baseline: a9165f0a (PR #499 audit merge). Current unmerged stack base:
-PR A plus supplements3f846afa; corrected candidate code41fc1b45. This paired deletion candidate removes
+PR A final evidence head d38430cf (code3f846afa); tested candidate code41fc1b45
+is unchanged by final evidence-only rebase. See final-rebase-equivalence.json. This paired deletion candidate removes
 src/async/file.cpp and include/sluice/async/file.hpp only. It creates no new
 runtime state, authority, probe, counter or lease. Production authority remains
 File shared validation and RequestCore settlement; Completion, Fiber/fiber_ctx,
