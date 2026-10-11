@@ -1,0 +1,166 @@
+[0m[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua[0m[0m
+[0mCopyright (C) 2015-present Ruki Wang, [4mhttps://xmake.io[0m[0m
+[0m[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m_
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m_[1;38;5;41m_[1;38;5;41m [1;38;5;41m [1;38;5;41m_[1;38;5;41m_[1;38;5;41m_[1;38;5;41m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m_[1;38;5;42m|[1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m\[1;38;5;41m [1;38;5;41m\[1;38;5;41m/[1;38;5;41m [1;38;5;41m/[1;38;5;41m [1;38;5;41m|[1;38;5;42m [1;38;5;42m [1;38;5;42m\[1;38;5;42m/[1;38;5;42m [1;38;5;42m [1;38;5;42m|[1;38;5;42m/[1;38;5;42m [1;38;5;42m_[1;38;5;42m [1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m|[1;38;5;42m/[1;38;5;42m [1;38;5;42m/[1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m\
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m>[1;38;5;41m [1;38;5;41m [1;38;5;41m<[1;38;5;41m [1;38;5;41m [1;38;5;41m|[1;38;5;42m [1;38;5;42m\[1;38;5;42m_[1;38;5;42m_[1;38;5;42m/[1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m/[1;38;5;42m_[1;38;5;42m|[1;38;5;42m [1;38;5;42m|[1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m<[1;38;5;42m [1;38;5;42m [1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m/
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m/[1;38;5;41m_[1;38;5;41m/[1;38;5;41m\[1;38;5;41m_[1;38;5;41m\[1;38;5;41m_[1;38;5;41m|[1;38;5;42m_[1;38;5;42m|[1;38;5;42m [1;38;5;42m [1;38;5;42m|[1;38;5;42m_[1;38;5;42m|[1;38;5;42m\[1;38;5;42m_[1;38;5;42m_[1;38;5;42m [1;38;5;42m\[1;38;5;42m|[1;38;5;42m_[1;38;5;42m|[1;38;5;42m\[1;38;5;42m_[1;38;5;42m\[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m_[1;38;5;42m|
+[1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;41m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42m [1;38;5;42mb[1;38;5;42my[1;38;5;42m [1;38;5;42mr[1;38;5;42mu[1;38;5;42mk[1;38;5;42mi[1;38;5;42m,[1;38;5;42m [1;38;5;42mx[1;38;5;42mm[1;38;5;42ma[1;38;5;42mk[1;38;5;42me[1;38;5;42m.[1;38;5;42mi[1;38;5;42mo[0m
+[0m    👉  [1mManual[0m: [4mhttps://xmake.io/guide/quick-start[0m
+    🙏  [1mDonate[0m: [4mhttps://xmake.io/about/sponsor[0m
+[0m
+[0m  ╔════════════════════════════════════════════════════════════════════════════╗
+  ║ [1;38;5;3mA new version of xmake is available![0m                                       ║
+  ║                                                                            ║
+  ║ To update to the latest version [1mv3.1.1[0m, run "xmake update".                ║
+  ╚════════════════════════════════════════════════════════════════════════════╝
+[0m
+
+[0m[1mUsage: $[0;38;5;6mxmake [task] [options] [target][0m[0m
+
+[0mBuild targets if no given tasks.[0m
+[38;5;2m[0m
+[38;5;2m[0;1mCommon options:[0m
+[38;5;2m    -q, --quiet                  [0m    [0mQuiet operation.[0m[0m
+[38;5;2m    -y, --yes                    [0m    [0mInput yes by default if need user confirm.[0m[0m
+[38;5;2m        --confirm=CONFIRM        [0m    [0mInput the given result if need user confirm.[0m[0m
+[38;5;2m                                 [0m        - yes[0m
+[38;5;2m                                 [0m        - no[0m
+[38;5;2m                                 [0m        - def[0m
+[38;5;2m    -v, --verbose                [0m    [0mPrint lots of verbose information for users.[0m[0m
+[38;5;2m        --root                   [0m    [0mAllow to run xmake as root.[0m[0m
+[38;5;2m    -D, --diagnosis              [0m    [0mPrint lots of diagnosis information (backtrace, check info ..) only for developers.[0m[0m
+[38;5;2m                                 [0m    [0mAnd we can append -v to get more whole information.[0m[0m
+[38;5;2m                                 [0m    [0m    e.g. $ xmake -vD[0m[0m
+[38;5;2m    -h, --help                   [0m    [0mPrint this help message and exit.[0m[0m
+[38;5;2m[0m
+[38;5;2m    -F FILE, --file=FILE         [0m    [0mRead a given xmake.lua file.[0m[0m
+[38;5;2m    -P PROJECT, --project=PROJECT[0m    [0mChange to the given project directory.[0m[0m
+[38;5;2m                                 [0m    [0mSearch priority:[0m[0m
+[38;5;2m                                 [0m    [0m    1. The Given Command Argument[0m[0m
+[38;5;2m                                 [0m    [0m    2. The Envirnoment Variable: XMAKE_PROJECT_DIR[0m[0m
+[38;5;2m                                 [0m    [0m    3. The Current Directory[0m[0m
+[38;5;2m[0m
+[38;5;2m[0;1mCommand options (build):[0m
+[38;5;2m        --version                [0m    [0mPrint the version number and exit.[0m[0m
+[38;5;2m    -b, --build                  [0m    [0mBuild target. This is default building mode and optional.[0m[0m
+[38;5;2m    -r, --rebuild                [0m    [0mRebuild the target.[0m[0m
+[38;5;2m    -a, --all                    [0m    [0mBuild all targets.[0m[0m
+[38;5;2m        --shallow                [0m    [0mOnly re-build the given targets without dependencies.[0m[0m
+[38;5;2m    -g GROUP, --group=GROUP      [0m    [0mBuild all targets of the given group. It support path pattern matching.[0m[0m
+[38;5;2m                                 [0m    [0me.g.[0m[0m
+[38;5;2m                                 [0m    [0m    xmake -g test[0m[0m
+[38;5;2m                                 [0m    [0m    xmake -g test_*[0m[0m
+[38;5;2m                                 [0m    [0m    xmake --group=benchmark/*[0m[0m
+[38;5;2m        --dry-run                [0m    [0mDry run to build target.[0m[0m
+[38;5;2m[0m
+[38;5;2m    -j JOBS, --jobs=JOBS         [0m    [0mSet the number of parallel compilation jobs.[0m[0m (default: [1m22[0m)[0m[0m
+[38;5;2m        --linkjobs=LINKJOBS      [0m    [0mSet the number of parallel link jobs.[0m[0m
+[38;5;2m    -w, --warning                [0m    [0mEnable the warnings output. (deprecated)[0m[0m
+[38;5;2m        --linkonly               [0m    [0mOnly link targets if object files have been compiled.[0m[0m
+[38;5;2m        --files=FILES            [0m    [0mBuild the given source files.[0m[0m
+[38;5;2m                                 [0m    [0me.g. [0m[0m
+[38;5;2m                                 [0m    [0m    - xmake --files=src/main.c[0m[0m
+[38;5;2m                                 [0m    [0m    - xmake --files='src/*.c' [target][0m[0m
+[38;5;2m                                 [0m    [0m    - xmake --files='src/**.c|excluded_file.c'[0m[0m
+[38;5;2m                                 [0m    [0m    - xmake --files='src/main.c:src/test.c'[0m[0m
+[38;5;2m[0m
+[38;5;2m          target                 [0m    [0mThe target name. It will build all default targets if this parameter is not specified.[0m[0m
+[38;5;2m                                 [0m        - app_copy_consumption_test[0m
+[38;5;2m                                 [0m        - app_copy_dir_fsync_test[0m
+[38;5;2m                                 [0m        - app_copy_pipeline_oracle_test[0m
+[38;5;2m                                 [0m        - app_grep_consumption_test[0m
+[38;5;2m                                 [0m        - app_hash_consumption_test[0m
+[38;5;2m                                 [0m        - app_tail_cli_oracle_test[0m
+[38;5;2m                                 [0m        - app_tail_consumption_test[0m
+[38;5;2m                                 [0m        - app_tail_lifecycle_oracle_test[0m
+[38;5;2m                                 [0m        - async_sync_admission_test[0m
+[38;5;2m                                 [0m        - backend_conformance_e1_threadpool_test[0m
+[38;5;2m                                 [0m        - blocking_file_read_test[0m
+[38;5;2m                                 [0m        - blocking_file_sequential_test[0m
+[38;5;2m                                 [0m        - blocking_file_state_test[0m
+[38;5;2m                                 [0m        - blocking_file_sync_all_test[0m
+[38;5;2m                                 [0m        - blocking_file_sync_data_test[0m
+[38;5;2m                                 [0m        - blocking_file_write_test[0m
+[38;5;2m                                 [0m        - direct_composition_fault_test[0m
+[38;5;2m                                 [0m        - direct_composition_test[0m
+[38;5;2m                                 [0m        - direct_cursor_position_test[0m
+[38;5;2m                                 [0m        - direct_w01_consumer_probe[0m
+[38;5;2m                                 [0m        - e1_conformance_mut_cancel_reports_requested[0m
+[38;5;2m                                 [0m        - e1_conformance_mut_write_failure_accounted[0m
+[38;5;2m                                 [0m        - explicit_file_ref_test[0m
+[38;5;2m                                 [0m        - file_access_precedence_test[0m
+[38;5;2m                                 [0m        - file_close_semantics_test[0m
+[38;5;2m                                 [0m        - file_info_identity_test[0m
+[38;5;2m                                 [0m        - file_open_contract_test[0m
+[38;5;2m                                 [0m        - file_read_test[0m
+[38;5;2m                                 [0m        - file_resource_test[0m
+[38;5;2m                                 [0m        - file_sync_all_test[0m
+[38;5;2m                                 [0m        - file_sync_data_test[0m
+[38;5;2m                                 [0m        - file_write_test[0m
+[38;5;2m                                 [0m        - progress_source_mut_close_admission_always_signals[0m
+[38;5;2m                                 [0m        - progress_source_ownership_test[0m
+[38;5;2m                                 [0m        - public_request_mut_consume_keeps_binding[0m
+[38;5;2m                                 [0m        - public_request_mut_discard_accepts_inflight[0m
+[38;5;2m                                 [0m        - public_request_mut_nonterminal_release_detaches[0m
+[38;5;2m                                 [0m        - public_request_mut_observe_consumes[0m
+[38;5;2m                                 [0m        - public_request_mut_observe_ignores_publication[0m
+[38;5;2m                                 [0m        - public_request_mut_release_forgets_binding[0m
+[38;5;2m                                 [0m        - public_request_release_violation_test[0m
+[38;5;2m                                 [0m        - public_request_test[0m
+[38;5;2m                                 [0m        - request_core_consumer_probe[0m
+[38;5;2m                                 [0m        - request_core_mut_attach_ignores_publication[0m
+[38;5;2m                                 [0m        - request_core_mut_attach_treats_terminal_as_published[0m
+[38;5;2m                                 [0m        - request_core_mut_cancel_during_delivery_returns[0m
+[38;5;2m                                 [0m        - request_core_mut_delivery_claim_unbounded[0m
+[38;5;2m                                 [0m        - request_core_mut_publication_skips_queue[0m
+[38;5;2m                                 [0m        - request_core_ownership_test[0m
+[38;5;2m                                 [0m        - request_core_protocol_test[0m
+[38;5;2m                                 [0m        - request_core_publication_test[0m
+[38;5;2m                                 [0m        - request_scope_mut_commit_drops_request[0m
+[38;5;2m                                 [0m        - request_scope_mut_destructor_skips_settle[0m
+[38;5;2m                                 [0m        - request_scope_mut_finish_cancels_cleanup[0m
+[38;5;2m                                 [0m        - request_scope_mut_finish_swallows_error[0m
+[38;5;2m                                 [0m        - request_scope_mut_reserve_after_accept[0m
+[38;5;2m                                 [0m        - request_scope_mut_timeout_releases_slot[0m
+[38;5;2m                                 [0m        - request_scope_test[0m
+[38;5;2m                                 [0m        - runtime_waiter_observer_test[0m
+[38;5;2m                                 [0m        - semantic_durability_reference_test[0m
+[38;5;2m                                 [0m        - semantic_effect_outcome_test[0m
+[38;5;2m                                 [0m        - semantic_errno_mapping_test[0m
+[38;5;2m                                 [0m        - semantic_open_test[0m
+[38;5;2m                                 [0m        - semantic_range_test[0m
+[38;5;2m                                 [0m        - semantic_reference_case_test[0m
+[38;5;2m                                 [0m        - semantic_short_io_reference_test[0m
+[38;5;2m                                 [0m        - semantic_validation_precedence_test[0m
+[38;5;2m                                 [0m        - shutdown_lifecycle_test[0m
+[38;5;2m                                 [0m        - shutdown_mut_m10_prejoin_stale_dispatch_violation[0m
+[38;5;2m                                 [0m        - shutdown_mut_m2_control_pin_caller_violation[0m
+[38;5;2m                                 [0m        - shutdown_mut_m3_destructor_ignores_live_binding[0m
+[38;5;2m                                 [0m        - shutdown_mut_m4_close_requires_consumption[0m
+[38;5;2m                                 [0m        - sluice-copy[0m
+[38;5;2m                                 [0m        - sluice-grep[0m
+[38;5;2m                                 [0m        - sluice-hash[0m
+[38;5;2m                                 [0m        - sluice-tail[0m
+[38;5;2m                                 [0m        - sluice_async[0m
+[38;5;2m                                 [0m        - sluice_core[0m
+[38;5;2m                                 [0m        - stackful_host_mut_await_stop_unsettled[0m
+[38;5;2m                                 [0m        - stackful_host_mut_deadline_cancels[0m
+[38;5;2m                                 [0m        - stackful_host_mut_double_wake[0m
+[38;5;2m                                 [0m        - stackful_host_mut_empty_precheck_bypass[0m
+[38;5;2m                                 [0m        - stackful_host_mut_expired_deadline_spin[0m
+[38;5;2m                                 [0m        - stackful_host_mut_second_owner[0m
+[38;5;2m                                 [0m        - stackful_host_mut_skip_control_ack[0m
+[38;5;2m                                 [0m        - stackful_host_mut_stale_error_retained[0m
+[38;5;2m                                 [0m        - stackful_host_mut_stop_implicit_cancel[0m
+[38;5;2m                                 [0m        - stackful_host_mut_stop_interrupts_control[0m
+[38;5;2m                                 [0m        - stackful_host_mut_stop_returns_unsettled[0m
+[38;5;2m                                 [0m        - stackful_host_mut_task_error_swallowed[0m
+[38;5;2m                                 [0m        - stackful_host_mut_wake_retired[0m
+[38;5;2m                                 [0m        - stackful_host_test[0m
+[38;5;2m                                 [0m        - tail_pread_shim[0m
+[38;5;2m                                 [0m        - threadpool_core_cutover_test[0m
+[38;5;2m                                 [0m        - threadpool_external_loop_test[0m
+[38;5;2m                                 [0m        - threadpool_progress_race_test[0m
+[38;5;2m                                 [0m        - uring_submit_boundary_test[0m
+[0m[1;38;5;1;1merror: [0minvalid argument: sluice-tail[0m

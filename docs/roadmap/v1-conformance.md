@@ -1942,7 +1942,7 @@ V1_RELEASE_READY=NO remain unchanged.
 
 ### F3 Step 4 TAIL app-owned execution candidate (2026-10-11)
 
-VERIFIED at prior final head `64058ca9`; updated integration candidate pending combined verification and narrow independent review/adoption.
+VERIFIED at prior final head `64058ca9`; combined integration `f717e170331df8e098634fe60462b7dd256f8d7b` verified in four isolated configurations (72 target executions, four COPY CLI suites); final narrow independent review/adoption pending.
 TAIL uses canonical direct File operations in one application-owned thread with
 condition-variable EOF wake, explicit stop and join before File/buffer destruction.
 Existing Result<TailResult> separates join/wait failure from task failure and

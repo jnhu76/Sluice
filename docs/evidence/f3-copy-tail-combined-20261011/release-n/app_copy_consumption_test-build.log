@@ -1,0 +1,60 @@
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m cache compiling.release tests/app_copy_consumption_test.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m cache compiling.release apps/sluice-copy/copy_task.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m cache compiling.release apps/sluice-copy/file_domain.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m cache compiling.release apps/sluice-copy/safe_output.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/copy.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/blocking_io_pool.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/buffer.cpp[0m
+[0m[38;5;2;1m[  6%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/copy_strategy.cpp[0m
+[0m[38;5;2;1m[  7%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/fault.cpp[0m
+[0m[38;5;2;1m[  9%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/file.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/io_context.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/observed.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/reader.cpp[0m
+[0m[38;5;2;1m[ 16%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/wal.cpp[0m
+[0m[38;5;2;1m[ 18%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/writer.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/application_runtime.cpp[0m
+[0m[38;5;2;1m[ 21%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/await_op_helpers.cpp[0m
+[0m[38;5;2;1m[ 24%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/batch.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/cancel.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/fiber.cpp[0m
+[0m[38;5;2;1m[ 30%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/fiber_ctx.cpp[0m
+[0m[38;5;2;1m[ 31%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/file.cpp[0m
+[0m[38;5;2;1m[ 33%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/group.cpp[0m
+[0m[38;5;2;1m[ 34%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/mutex_test_seam.cpp[0m
+[0m[38;5;2;1m[ 36%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/op_helpers.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/queue_port.cpp[0m
+[0m[38;5;2;1m[ 39%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/queue_test_seam.cpp[0m
+[0m[38;5;2;1m[ 40%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/request_handle.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 43%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_condition.cpp[0m
+[0m[38;5;2;1m[ 46%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_event.cpp[0m
+[0m[38;5;2;1m[ 48%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_fe2_test_seam.cpp[0m
+[0m[38;5;2;1m[ 49%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_mutex.cpp[0m
+[0m[38;5;2;1m[ 51%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_park_wake.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_queue.cpp[0m
+[0m[38;5;2;1m[ 54%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_rwlock.cpp[0m
+[0m[38;5;2;1m[ 55%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_semaphore.cpp[0m
+[0m[38;5;2;1m[ 57%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/scheduler_timer.cpp[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/select.cpp[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/select_event.cpp[0m
+[0m[38;5;2;1m[ 61%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/select_timer.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/stackful_io_host.cpp[0m
+[0m[38;5;2;1m[ 64%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 66%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 67%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 69%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 70%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/wait_policy.cpp[0m
+[0m[38;5;2;1m[ 72%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 75%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.release libsluice_core.a[0m
+[0m[38;5;2;1m[ 88%]:[0m [38;5;5;1m<sluice_async>[0m [38;5;5;1marchiving.release libsluice_async.a[0m
+[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m [38;5;5;1mlinking.release app_copy_consumption_test[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 10.36s[0m

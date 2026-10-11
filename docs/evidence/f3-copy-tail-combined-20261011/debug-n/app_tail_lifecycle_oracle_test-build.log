@@ -1,0 +1,4 @@
+[0m[38;5;2;1m[  9%]:[0m [38;5;5;1m<app_tail_lifecycle_oracle_test>[0m cache compiling.debug tests/app_tail_lifecycle_oracle_test.cpp[0m
+[0m[38;5;2;1m[  9%]:[0m [38;5;5;1m<app_tail_lifecycle_oracle_test>[0m cache compiling.debug apps/sluice-tail/tail_task.cpp[0m
+[0m[38;5;2;1m[ 85%]:[0m [38;5;5;1m<app_tail_lifecycle_oracle_test>[0m [38;5;5;1mlinking.debug app_tail_lifecycle_oracle_test[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 3.262s[0m

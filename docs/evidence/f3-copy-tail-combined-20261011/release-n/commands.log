@@ -1,0 +1,33 @@
+cwd=/home/jnhu/f3-combined-f717e170-20261011/release-n
+xmake f -P /home/jnhu/f3-combined-f717e170-20261011/release-n -c -m release --liburing=n -o /home/jnhu/f3-combined-f717e170-20261011/release-n/build -y
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 app_copy_consumption_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n app_copy_consumption_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 app_copy_pipeline_oracle_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n app_copy_pipeline_oracle_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 app_copy_dir_fsync_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n app_copy_dir_fsync_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 app_tail_consumption_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n app_tail_consumption_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 app_tail_lifecycle_oracle_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n app_tail_lifecycle_oracle_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 app_tail_cli_oracle_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n app_tail_cli_oracle_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 request_scope_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n request_scope_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 public_request_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n public_request_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 public_request_release_violation_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n public_request_release_violation_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 backend_conformance_e1_threadpool_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n backend_conformance_e1_threadpool_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 shutdown_lifecycle_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n shutdown_lifecycle_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 direct_w01_consumer_probe
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n direct_w01_consumer_probe
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 semantic_short_io_reference_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n semantic_short_io_reference_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 file_close_semantics_test
+timeout 180 xmake run -P /home/jnhu/f3-combined-f717e170-20261011/release-n file_close_semantics_test
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 sluice-copy
+xmake build -P /home/jnhu/f3-combined-f717e170-20261011/release-n -j 8 sluice-tail
+python3 docs/evidence/f3-copy-request-scope/cli_smoke.py /home/jnhu/f3-combined-f717e170-20261011/release-n/build/linux/x86_64/release/sluice-copy

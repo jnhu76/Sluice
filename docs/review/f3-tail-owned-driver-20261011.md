@@ -118,3 +118,9 @@ exit decision before the final release boundary: remove/reject the parameter
 or define meaningful semantics. No CLI removal is authorized here.
 Stop is observed at read/poll boundaries; callbacks for an already parsed batch
 may continue until that batch returns. No per-callback stop bound is promised.
+
+Combined integration at `f717e170331df8e098634fe60462b7dd256f8d7b` passed
+all four isolated configurations: 72 target executions and four COPY CLI
+suites. [Exact raw evidence and reproducer](../evidence/f3-copy-tail-combined-20261011/REPRODUCE.md).
+This receipt update is documentation/evidence only; final narrow independent
+review and merge/adoption remain coordinator gates.
