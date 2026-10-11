@@ -1,6 +1,5 @@
 #pragma once
 
-#include <sluice/async/application_runtime.hpp>
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/error.hpp>

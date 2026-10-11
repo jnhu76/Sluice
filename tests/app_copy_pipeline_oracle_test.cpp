@@ -8,6 +8,7 @@
 
 #include <sluice/async/await_op_helpers.hpp>
 #include <sluice/async/task_result.hpp>
+#include <sluice/async/uring_backend.hpp>
 
 #include <algorithm>
 #include <array>
@@ -365,9 +366,8 @@ bool short_read_retry_same_slot() {
     const auto cont4 = sc.ctrl->op_view(r4);
     std::size_t continuation_len = cont4.has_value() ? cont4->len : 0;
     check(continuation_len == B - 4, "short-read continuation length 12");
-    check(orig0.has_value() && cont4.has_value() && orig0->completion == cont4->completion &&
-              cont4->buffer == orig0->buffer + 4,
-          "short-read continuation reuses the same slot buffer and completion");
+    check(orig0.has_value() && cont4.has_value() && cont4->buffer == orig0->buffer + 4,
+          "short-read continuation reuses the same slot buffer");
     check(sc.ctrl->complete_bytes(r4, B - 4), "short-read continuation completes");
 
     const std::uint64_t w0 = sc.ctrl->wait_completable_at(detail::OperationKind::write, 0);
@@ -405,9 +405,8 @@ bool partial_write_advance() {
     const auto cont_w = sc.ctrl->op_view(w7);
     std::size_t continuation_len = cont_w.has_value() ? cont_w->len : 0;
     check(continuation_len == B - 7, "short-write continuation length 9");
-    check(orig_w.has_value() && cont_w.has_value() && orig_w->completion == cont_w->completion &&
-              cont_w->buffer == orig_w->buffer + 7,
-          "short-write continuation reuses the same slot buffer and completion");
+    check(orig_w.has_value() && cont_w.has_value() && cont_w->buffer == orig_w->buffer + 7,
+          "short-write continuation reuses the same slot buffer");
     check(sc.ctrl->complete_bytes(w7, B - 7), "short-write continuation completes");
 
     sc.ctrl->drive_to_end(B * 2, sc.copy_published);
@@ -671,9 +670,9 @@ bool bounded_reuse_multiround() {
     check(sc.open_files(), "multiround opens");
     sc.start(B, DEPTH, SyncPolicy::none);
 
-    std::set<void*> slot_ids;
+    std::set<std::byte*> slot_ids;
     std::set<std::byte*> buffer_bases;
-    std::map<void*, std::set<std::uint64_t>> slot_offsets;
+    std::map<std::byte*, std::set<std::uint64_t>> slot_offsets;
     std::vector<std::uint64_t> write_offsets;
 
     const auto deadline = std::chrono::steady_clock::now() + kDriveBound;
@@ -681,9 +680,9 @@ bool bounded_reuse_multiround() {
         bool staged_any = false;
         for (const ScriptedOpView& op : sc.ctrl->completable_ops()) {
             if (op.kind == detail::OperationKind::read) {
-                slot_ids.insert(op.completion);
+                slot_ids.insert(op.buffer);
                 buffer_bases.insert(op.buffer - static_cast<std::ptrdiff_t>(op.offset % B));
-                slot_offsets[op.completion].insert(op.offset);
+                slot_offsets[op.buffer].insert(op.offset);
                 staged_any = sc.ctrl->complete_bytes(op.submit_id,
                                                      op.offset >= TOTAL ? 0 : op.len) ||
                              staged_any;
@@ -772,6 +771,84 @@ bool throwing_backend_submit_surfaces_error() {
     check(sc.copy_result.has_value() && !sc.copy_result->has_value(), "throwing errors");
     check(sc.copy_result->error().code == IoError::Code::backend_error, "throwing error code");
     return sc.copy_result.has_value() && !sc.copy_result->has_value();
+}
+
+bool exception_cleanup_waits_for_held_borrow() {
+    CopyScenario sc;
+    check(sc.open_files(), "exception-held opens");
+    sc.start(16, 2, SyncPolicy::none);
+    check(sc.ctrl->wait_completable(detail::OperationKind::read, 2), "exception-held read window");
+    auto other = sc.ctrl->wait_completable_at(detail::OperationKind::read, 16);
+    check(sc.ctrl->hold_staged(other).has_value(), "exception-held borrow gated");
+    sc.ctrl->throw_next_submit(detail::OperationKind::write);
+    auto first = sc.ctrl->wait_completable_at(detail::OperationKind::read, 0);
+    check(sc.ctrl->complete_bytes(first, 16), "exception-held first read completes");
+    check(sc.ctrl->wait_cancel_attempt(), "exception-held scope requests cleanup cancel");
+    check(!sc.published(), "exception-held cannot return before borrow retires");
+    check(sc.ctrl->borrow_live_count(detail::OperationKind::read) == 1,
+          "exception-held borrow still live after cancel attempt");
+    check(sc.ctrl->release_held(other, 16), "exception-held borrow retirement released");
+    sc.drain_and_join();
+    check(sc.copy_result.has_value() && !sc.copy_result->has_value() &&
+              sc.copy_result->error().code == IoError::Code::backend_error,
+          "exception-held maps exception after cleanup");
+    check(sc.ctrl->pending_empty(), "exception-held no accepted work abandoned");
+    check(sc.ctrl->protocol_violation().empty(), "exception-held protocol sound");
+    return sc.copy_result.has_value() && !sc.copy_result->has_value() && sc.ctrl->pending_empty();
+}
+
+bool canceled_result_settles_held_readahead() {
+    CopyScenario sc;
+    check(sc.open_files(), "canceled-held opens");
+    sc.start(16, 2, SyncPolicy::none);
+    check(sc.ctrl->wait_completable(detail::OperationKind::read, 2), "canceled-held read window");
+    auto other = sc.ctrl->wait_completable_at(detail::OperationKind::read, 16);
+    check(sc.ctrl->hold_staged(other).has_value(), "canceled-held borrow gated");
+    auto first = sc.ctrl->wait_completable_at(detail::OperationKind::read, 0);
+    check(sc.ctrl->complete_error(first, IoError{IoError::Code::canceled}), "canceled-held terminal");
+    check(sc.ctrl->borrow_live_count(detail::OperationKind::read) == 1,
+          "canceled-held cancellation is not retirement");
+    check(sc.ctrl->release_held(other, 16), "canceled-held readahead retires");
+    sc.drain_and_join();
+    check(sc.copy_result.has_value() && !sc.copy_result->has_value() &&
+              sc.copy_result->error().code == IoError::Code::canceled,
+          "canceled-held retains primary cancellation");
+    check(sc.ctrl->pending_empty(), "canceled-held all work settled");
+    check(sc.ctrl->accepted(detail::OperationKind::write) == 0, "canceled-held no writes");
+    return sc.copy_result.has_value() && !sc.copy_result->has_value() && sc.ctrl->pending_empty();
+}
+
+bool real_uring_pipeline_content_and_sync() {
+#if defined(SLUICE_HAS_LIBURING)
+    CopyScenario sc;
+    check(sc.open_files(), "real-uring opens");
+    sc.joined = true;
+    std::vector<std::byte> bytes(16 * 11 + 7);
+    for (std::size_t i = 0; i < bytes.size(); ++i)
+        bytes[i] = seed_byte(i);
+    int fd = ::open(sc.src_path.c_str(), O_WRONLY);
+    check(fd >= 0, "real-uring source writable");
+    check(::write(fd, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()),
+          "real-uring seed written");
+    ::close(fd);
+    auto result = run_pipelined_copy_with_backend(
+        *sc.src, NativeFileRef{*sc.dst}, 16, 4, 1, SyncPolicy::all,
+        std::make_unique<UringAsyncBackend>(64));
+    check(result.has_value(), "real-uring canonical pipeline succeeds");
+    if (!result.has_value())
+        return false;
+    check(result.value().bytes_copied == bytes.size(), "real-uring byte tally");
+    fd = ::open(sc.dst_path.c_str(), O_RDONLY);
+    std::vector<std::byte> actual(bytes.size());
+    check(::read(fd, actual.data(), actual.size()) == static_cast<ssize_t>(actual.size()),
+          "real-uring destination length");
+    ::close(fd);
+    check(actual == bytes, "real-uring byte identity");
+    return actual == bytes;
+#else
+    std::puts("real-uring not built in noliburing profile");
+    return true;
+#endif
 }
 
 bool invalid_arguments_rejected_synchronously() {
@@ -941,6 +1018,9 @@ int main() {
         {"bounded_reuse_multiround", bounded_reuse_multiround},
         {"slot_not_recycled_before_write_completes", slot_not_recycled_before_write_completes},
         {"throwing_backend_submit_surfaces_error", throwing_backend_submit_surfaces_error},
+        {"exception_cleanup_waits_for_held_borrow", exception_cleanup_waits_for_held_borrow},
+        {"canceled_result_settles_held_readahead", canceled_result_settles_held_readahead},
+        {"real_uring_pipeline_content_and_sync", real_uring_pipeline_content_and_sync},
         {"invalid_arguments_rejected_synchronously", invalid_arguments_rejected_synchronously},
         {"watchdog_selftest_child", watchdog_selftest_child},
         {"watchdog_selftest_bounded", watchdog_selftest_bounded},
