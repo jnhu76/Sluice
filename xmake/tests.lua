@@ -121,7 +121,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(R .. "tests/app_hash_consumption_test.cpp", dir .. "/hash_task.cpp",
                       dir .. "/sha256.cpp")

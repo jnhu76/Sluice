@@ -1,177 +1,60 @@
 # sluice-hash — bounded streaming file hashing
 
-A Sluice application under `apps/`: hashes files with SHA-256 through
-`blocking::read_at` by default, using the canonical `File` resource.
-`--workers 2..64` retains the legacy `ApplicationRuntime` + `ThreadPoolBackend`
-bridge. Unlike `examples/`, this is a real CLI tool.
-
-## Purpose
-
-The default workload alternates direct positional reads and CPU hashing with
-one buffer bounded by configuration, independently of input size.
-
-## Build & run
+SHA-256 over canonical `File` and `blocking::read_at` on the caller thread.
+Files are processed sequentially in input order with one reusable read buffer.
+The application and its consumption test link only `sluice_core`.
 
 ```sh
 xmake build sluice-hash
-xmake run sluice-hash [options] <file>...
+sluice-hash [--buffer-size <bytes>] <file>...
+sluice-hash --help
 ```
 
-## CLI
+The buffer defaults to 1 MiB and accepts 4096..67108864 bytes. Invalid bounds
+and numeric syntax are usage errors before any input is opened. Inputs must be
+regular files. An open/read failure is reported on stderr; later files continue.
+Each successful file prints `<SHA-256 digest>  <path>` on stdout.
 
-```text
-sluice-hash [options] <file>...
+| Exit | Meaning |
+|---|---|
+| 0 | Every input hashed |
+| 1 | Usage error |
+| 2 | At least one input failed |
+| 3 | Reserved canceled result mapping; no direct cancellation source |
 
-  --buffer-size <bytes>   read buffer (default 1 MiB; 4 KiB..64 MiB)
-  --workers <count>       1: direct; 2..64: runtime (default 1)
-  --help                  show this help
-```
+## Migration from the legacy worker bridge
 
-Examples:
+The owner explicitly approved removal for F3 Step 3 on 2026-10-11. `--workers`
+is removed, including explicit `--workers 1`. When encountered, it reports
+`--workers has been removed; omit it to use direct execution`, prints usage,
+and returns 1 before opening inputs. `--workers=<value>` receives the same
+migration diagnosis; that spelling was already unsupported. The parser retains
+its existing early `--help` return.
 
-```sh
-sluice-hash file.bin
-sluice-hash a.bin b.bin
-sluice-hash --buffer-size 1048576 file.bin
-sluice-hash --workers 4 a b c d
-```
+Replace `sluice-hash --workers 4 a b` with `sluice-hash a b`. The former worker
+setting sized a legacy task runtime and did not promise parallel file hashing.
+There is no deprecation window or substitute worker pool.
 
-Output (stdout): `<digest>  <filename>` per file — the `sha256sum` shape.
-Diagnostics go to stderr only.
+The app-local `hash_files_with_backend` and the workers argument of `hash_files`
+are deliberately removed. In-tree injected callers were test-only. App-header
+consumers must call `hash_files(inputs, buffer_size)` for this direct workload.
+These headers were not installed SDK interfaces; unknown external source use
+is not assumed zero. No injected-backend replacement is provided. Canonical
+ThreadPool/io_uring Request execution remains available in the SDK and is
+verified by its backend conformance suites.
 
-## Algorithm
+## Evidence and limitations
 
-SHA-256, implemented app-locally in `sha256.{hpp,cpp}` as a straight FIPS
-180-4 §6.2 implementation (standard IV, K constants, message schedule,
-compression). It is not a novel hash. Correctness against the NIST test vectors
-(empty message, "abc", 448-bit, 896-bit two-block, one-million-'a') and
-chunk-boundary invariance was covered by `tests/sluice_hash_sha256_test.cpp`,
-which was **removed** in `5f62b55b` and has no current equivalent — see "What is
-not covered" below. Keeping the hash app-local avoids widening the repository's
-dependency surface for one tool.
+`app_hash_consumption_test` retains six direct cases: known digest, multi-buffer
+streaming, empty file, closed-file error, input order, and continuation after a
+read failure. `tests/hash_cli_oracle.py <binary> --early-bounds` checks hashlib
+digests with multiple buffer sizes, output/error isolation, removed workers and
+numeric validation. `tests/app_direct_cli_oracle.py hash <binary>` also uses a
+FIFO to distinguish rejection before open and checks EOF/multiple buffer sizes.
 
-## I/O model
-
-With `--workers 1`, reads complete directly on the caller thread; no Runtime,
-request domain or backend worker is constructed. With `--workers 2..64`, one
-`ApplicationRuntime` task hashes every file in CLI order:
-
-```
-for each file (in CLI order):
-    loop:
-        submit_read(offset, buffer)     # positional async read
-        await_completion                # cooperative wait
-        sha256.update(bytes read)       # CPU work while I/O is idle
-        offset += n                     # any n > 0 is progress; n == 0 = EOF
-    final() -> digest
-```
-
-Files are processed sequentially in V1 (deterministic, no output
-interleaving); short reads simply advance the offset. `--workers` sizes the
-legacy Runtime only for counts 2..64; its read syscalls run on the
-ThreadPoolBackend's own bounded worker pool. The value 1 selects direct execution,
-including when supplied explicitly. No worker count promises parallel files.
-
-## Resource limits & memory bound
-
-| limit             | value   |
-| ----------------- | ------- |
-| `kMinBufferSize`  | 4 KiB   |
-| `kMaxBufferSize`  | 64 MiB  |
-| `kMaxWorkers`     | 64      |
-
-```text
-memory ~= 1 x buffer_size + O(1) hasher state
-```
-
-independent of file sizes (results and opened inputs still scale with file count).
-The app-local `valid_config` predicate is shared by the CLI and engine. Buffer
-sizes outside 4 KiB..64 MiB and workers outside 1..64 are usage errors (exit 1),
-rejected before opening any input. Engine callers receive per-input
-`invalid_state`. This implements adopted D-H2: the former out-of-range buffer
-behavior (open inputs, then generic read errors and exit 2) changes deliberately.
-Integer syntax and overflow rejection, help exit 0 and valid inputs are retained.
-
-## Input domain
-
-Every input must be a **regular file** (positional reads need a seekable,
-finite source). An unreadable or non-regular input is reported to stderr and
-skipped; the remaining files still hash (error isolation).
-
-## Error semantics & exit codes
-
-| code | meaning                                                  |
-| ---- | -------------------------------------------------------- |
-| 0    | every input hashed                                       |
-| 1    | usage error                                              |
-| 2    | at least one input failed (open/read error, non-regular) |
-| 3    | canceled                                                 |
-
-A read error on one file never stops later files.
-
-## Cancellation
-
-The direct path runs synchronously and has no cancellation source. In the
-retained legacy and injected-backend paths, cancellation is observed at the cooperative boundaries between read
-operations (the Runtime task checks the cancel token before each submit).
-When cancellation is requested, the in-flight read still completes (its
-result is consumed per the Completion lifetime contract) and every remaining
-file is marked canceled without further I/O. The CLI has no signal handler in
-V1 — cancellation is reachable through the Runtime lifecycle, not Ctrl-C.
-
-## What this application proves about Sluice
-
-- the default path uses direct File I/O without constructing a task runtime;
-- the explicitly retained compatibility path still composes async reads and CPU work;
-- one reusable buffer serves arbitrarily many files/bytes (memory bound
-  independent of input size);
-- multi-file batches keep deterministic CLI-order output with per-file error
-  isolation;
-- the run-to-completion Runtime lifecycle (submit -> wait for task terminal
-  -> stop/drain/join) works for a batch workload.
-
-## Known limitations / intentionally NOT implemented
-
-- one algorithm only (SHA-256): no MD5/SHA-1/SHA-3/BLAKE, no `--tag`,
-  no check mode (`-c`), no binary-mode marker;
-- sequential file processing (no read-ahead across files, no parallel
-  hashing across `--workers`; counts 2..64 size the legacy Runtime; 1 selects direct execution);
-- no SIGINT handling (run-to-completion workload);
-- the crypto implementation is app-local on purpose (see above); it is not
-  constant-time hardened (a hashing tool is not a secrets-HMAC target) and
-  has no side-channel claims.
-
-## Tests
-
-One registered target runs under `xmake test` (group `test`), and therefore under
-CI's `xmake test -v` in both the debug and release profiles:
-
-- `app_hash_consumption_test` (6 cases) — the `hash_files` engine over the
-  canonical `File` resource and direct execution:
-  a known digest over a real file (`"abc"` →
-  `ba7816bf…20015ad`), multi-chunk streaming of 10000 bytes checked against a
-  direct in-process digest, the empty-file digest
-  (`e3b0c442…7852b855`), a per-file error for an already-closed input, and input
-  order preservation across two files, and continued hashing after a read error
-  on direct, multi-worker and injected-backend paths.
-
-## What is not covered
-
-The consumption suite and subprocess oracle leave these limitations:
-
-- the NIST vector set and chunk-boundary invariance (removed with
-  `sluice_hash_sha256_test.cpp` in `5f62b55b`); only the two digests in the
-  consumption test are pinned, over a single buffer size (4096);
-- the CLI-level non-regular-input rejection is not tested;
-- cancellation (the `canceled` → exit 3 path) has no test at any level;
-- exception allocation failure remains untested.
-
-An earlier README listed `sluice_hash_sha256_test`, `sluice_hash_cli_parse_test`,
-`sluice_hash_integration_test` and `sluice_hash_fault_test`; all four sources were
-removed in `5f62b55b`. They are historical references only.
-
-The subprocess oracle `tests/hash_cli_oracle.py <binary> --early-bounds` covers
-known digests, multi-chunk reads, printed order/error isolation, workers 1/2/64,
-strict integer errors, and invalid bounds with a FIFO that must never be opened.
-Remote clone traces distinguish the default direct path from the retained
-multi-worker path. Runtime source/archive/install retirement remains pending.
+The SHA-256 implementation remains app-local. The historical full NIST vector
+suite was removed in `5f62b55b`; it is not claimed as current evidence. Allocation
+failure is not deterministically injected. There is no signal cancellation,
+read-ahead or parallel file processing. ApplicationRuntime remains in the SDK
+for COPY, TAIL and other retained compatibility consumers; this app exit does
+not complete F3 runtime retirement.
