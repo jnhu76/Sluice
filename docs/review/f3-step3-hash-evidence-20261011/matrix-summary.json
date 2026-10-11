@@ -1,0 +1,62 @@
+[
+  {
+    "profile": "debug-n",
+    "result": "PASS",
+    "logs": [
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/debug-n.log",
+        "sha256": "9f119ba76cf16ad516f2b3927e876bb1b5f2e7fe7bd94aa361904b3a33083ec2"
+      },
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/debug-n-scope-resume.log",
+        "sha256": "df109ba75be6ad984089f083f63489fb76bce29fec5a1a887c970df2e6b60627"
+      }
+    ]
+  },
+  {
+    "profile": "debug-y",
+    "result": "PASS",
+    "logs": [
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/debug-y.log",
+        "sha256": "4c0259e19eb3f501feac58fd13a6c2a80c5f68f9acdb55d092dab1272563b633"
+      },
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/debug-y-scope-resume.log",
+        "sha256": "5cdba2e2c566e7c40a539cd0bb90a184afd025df3efe8b3f9f4b544e38492181"
+      },
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/debug-y-canonical-extra.log",
+        "sha256": "73a40c5b791e862f7b90dd01adf0f67789b03721fcefdec4035699d1d94af3d4"
+      }
+    ]
+  },
+  {
+    "profile": "release-n",
+    "result": "PASS",
+    "logs": [
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/release-n.log",
+        "sha256": "e780a258107abc3eb520d41a955784aca09cdcc616ffc7e7d6a19286e2459548"
+      },
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-e5c016a451b8084599156d376a02de8abf083e53-XM2OqRof/release-n-scope-resume.log",
+        "sha256": "84fd54425a17459bad21b601489aa76aade9f2e16c2420a253ded1211da71bb8"
+      }
+    ]
+  },
+  {
+    "profile": "release-y",
+    "result": "PASS",
+    "logs": [
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-f7be3fad356ec7aa98f0bb5f4f2b6aba4c8615fe-8YpI1zwN/release-y.log",
+        "sha256": "605a5ba7e0552bac42b3fff0fee2ff1a9310ffd1ad4eb3853a8ad9631cd514d1"
+      },
+      {
+        "path": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/hash-f7be3fad356ec7aa98f0bb5f4f2b6aba4c8615fe-8YpI1zwN/release-y-canonical-extra.log",
+        "sha256": "79a8e43780ef98dd5f88813b0738f058eb972c46fb31ed3cfd3461cefdd9a07a"
+      }
+    ]
+  }
+]
