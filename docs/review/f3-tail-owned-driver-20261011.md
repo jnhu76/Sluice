@@ -104,8 +104,10 @@ The receipt in evidence explicitly requires final evidence/docs review; the
 coordinator owns binding that independent review to the final branch SHA.
 Final prior head `64058ca9` received technical APPROVE; owner review #5483212164
 is GitHub COMMENTED with an explicit conditional approval after COPY adoption
-and combined verification. Current integration candidate is pending the four
-combined profiles, narrow independent review and owner merge/adoption gate.
+and combined verification. The four combined profiles and final narrow independent technical APPROVE are
+complete; PR #497 is adopted at merge
+0d365624661b2b6569dd4bfa68fe095f8cd59ece under explicit user owner merge
+authorization. The GitHub review state remains COMMENTED.
 OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
 
 ## Integration and compatibility debt
@@ -122,5 +124,8 @@ may continue until that batch returns. No per-callback stop bound is promised.
 Combined integration at `f717e170331df8e098634fe60462b7dd256f8d7b` passed
 all four isolated configurations: 72 target executions and four COPY CLI
 suites. [Exact raw evidence and reproducer](../evidence/f3-copy-tail-combined-20261011/REPRODUCE.md).
-This receipt update is documentation/evidence only; final narrow independent
-review and merge/adoption remain coordinator gates.
+This receipt update is documentation/evidence only. Final narrow independent
+technical APPROVE and PR #497 adoption at
+0d365624661b2b6569dd4bfa68fe095f8cd59ece close those coordinator gates.
+[Postmerge package audit](f3-runtime-postmerge-audit-20261011.md) records the
+separate physical retirement entry; installed/runtime removal is still gated.

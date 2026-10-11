@@ -1925,7 +1925,7 @@ D-H1/D-H2 and MIG-01 obligations are scoped in [the review receipt](../review/f3
 SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.
 
 
-### F3 COPY canonical RequestScope candidate (2026-10-11)
+### F3 COPY canonical RequestScope adoption (2026-10-11)
 
 | Slice / owner | Root / app obligations | Status | Exact evidence and remaining gate |
 | --- | --- | --- | --- |
@@ -1940,9 +1940,9 @@ and test-only runtime self-test consumers remain. F3 physical deletion and F5
 installed-header approval are separate gates. W-04 OPTIONAL_SUPPORTED=NO and
 V1_RELEASE_READY=NO remain unchanged.
 
-### F3 Step 4 TAIL app-owned execution candidate (2026-10-11)
+### F3 Step 4 TAIL app-owned execution adoption (2026-10-11)
 
-VERIFIED at prior final head `64058ca9`; combined integration `f717e170331df8e098634fe60462b7dd256f8d7b` verified in four isolated configurations (72 target executions, four COPY CLI suites); final narrow independent review/adoption pending.
+VERIFIED at prior final head `64058ca9`; combined integration `f717e170331df8e098634fe60462b7dd256f8d7b` verified in four isolated configurations (72 target executions, four COPY CLI suites); Final narrow independent technical review APPROVE; PR #497 adopted at merge 0d365624661b2b6569dd4bfa68fe095f8cd59ece. GitHub owner review #5483212164 remains COMMENTED with conditional technical approval; explicit user owner merge authorization and the actual merge establish adoption.
 TAIL uses canonical direct File operations in one application-owned thread with
 condition-variable EOF wake, explicit stop and join before File/buffer destruction.
 Existing Result<TailResult> separates join/wait failure from task failure and
@@ -1954,3 +1954,25 @@ for exact SHA, controlled borrow/stop evidence, contraction justification and
 external progress assumptions. No installed runtime removal or W-04 support claim.
 
 TAIL `--workers=1..64` is validated but inert compatibility state. #474/#475 F3/F5 owns a deliberate removal/rejection or meaningful-semantics decision before the final F3/F5 release boundary; this migration does not authorize CLI removal.
+
+
+### F3 Part C postmerge package audit and physical execution entry (2026-10-11)
+
+At exact master 0d365624661b2b6569dd4bfa68fe095f8cd59ece (COPY #496
+merge 3530890b2147db38daa9b5813de002c158343090; TAIL #497 merge above),
+actual isolated Debug liburing=n/y library/app builds and installed consumer
+audits pass. Each retains 50 core+async objects, 37 async archive members and
+79 installed headers. Four unstripped app links and the installed host link
+reach no legacy runtime facade/Scheduler symbols; SDK adapters, task-result
+convenience and nine semantic test TUs remain real consumers. Completion
+canonical backend/context and Fiber/fiber_ctx optional-host obligations remain.
+[Exact audit, classifications and dated package evidence](../review/f3-runtime-postmerge-audit-20261011.md)
+assess the affected installed/build closure without claiming physical retirement.
+[Physical execution entry #498](https://github.com/jnhu76/Sluice/issues/498)
+names five source/eight header candidates, nine test migration/re-ownership
+obligations and the optional first File-wrapper batch. RETIRE_ELIGIBLE=0;
+PHYSICAL_CONTRACTION_AUTHORIZED=NO under F0 §1.7 and pending F5 external risk.
+Current #475 A=BOUNDED_HOLD, B/C=KEEP_INSTALLED_COMPAT remain effective for
+their enumerated surfaces. A new B-01 package cut is a future deletion gate.
+COPY workers retain real backend-worker meaning; TAIL inert validated workers
+remain F3/F5 exit debt. OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
