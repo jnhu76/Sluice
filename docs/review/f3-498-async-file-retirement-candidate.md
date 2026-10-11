@@ -1,5 +1,7 @@
 # F3 #498 PR B: async File wrapper retirement candidate
 
+Current decision update (2026-10-12): [scoped owner decision](f3-498-owner-decision.md) records ACCEPT_SCOPED_EXTERNAL_BREAKAGE and versioned package contraction authorization subject to final gates. Designated-owner confirmation is effective; final implementation gates remain open. No merge or package adoption is recorded. Earlier pending-decision statements below describe the evidence capture before this submission.
+
 Status: DRAFT_NONADOPTED; EXTERNAL_RISK_PENDING; F5_PENDING.
 Original baseline: a9165f0a (PR #499 audit merge). Current unmerged stack base:
 PR A final evidence head d38430cf (code3f846afa); tested candidate code41fc1b45

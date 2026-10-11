@@ -2009,3 +2009,7 @@ clean canonical/host consumers and real-uring/negative link controls. See
 repeatable evidence and limitations. Per-surface UNKNOWN_EXTERNAL_USE remains
 UNKNOWN, EXTERNAL_RISK_PENDING, F5_PENDING; PHYSICAL_CONTRACTION_ADOPTED=NO,
 OPTIONAL_W04_SUPPORTED=NO and V1_RELEASE_READY=NO. Original F1/B01 untouched.
+
+### F3 #498 scoped decision submission — 2026-10-12
+
+[Owner decision record](../review/f3-498-owner-decision.md): human-submitted ACCEPT_SCOPED_EXTERNAL_BREAKAGE for async/file.hpp and exactly await_read_at, await_write_at, await_sync_data and await_sync_all; conditional authorization of the paired versioned package contraction. CONFIRMED_EFFECTIVE after the designated owner explicitly confirmed their role and activation in the execution conversation. No additional bounded deprecation window; external use remains UNKNOWN. Existing package/test captures remain candidate evidence; historical F1/B-01 assets are unchanged. Exact final HEAD review, cumulative CI and explicit merge authorization remain adoption gates. PHYSICAL_CONTRACTION_ADOPTED=NO; F3_FULL_RETIREMENT=NO; OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO. #500 and all excluded surfaces remain independent.

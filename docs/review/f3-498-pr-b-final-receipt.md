@@ -1,5 +1,7 @@
 # F3 #498 PR B narrow candidate verification receipt
 
+Current decision update (2026-10-12): [scoped owner decision](f3-498-owner-decision.md) records ACCEPT_SCOPED_EXTERNAL_BREAKAGE and versioned package contraction authorization subject to final gates. Designated-owner confirmation is effective; final implementation gates remain open. No merge or package adoption is recorded. Earlier pending-decision statements below describe the evidence capture before this submission.
+
 DRAFT_NONADOPTED; IMPLEMENTED_UNVERIFIED pending independent final review.
 Final unmerged stack base: PR A d38430cf3ed770e2705c20eefa5c1fcd75bec6d2
 (code3f846afa plus evidence-only final receipt). Rebased B snapshot1df5326b35c837532febd8aff8a2d1bbc5167844
