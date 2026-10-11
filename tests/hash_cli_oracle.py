@@ -20,13 +20,22 @@ with tempfile.TemporaryDirectory(prefix='sluice-hash-oracle-') as directory:
         path.write_bytes(payload)
     expected = ''.join(f'{hashlib.sha256(data).hexdigest()}  {path}\n'
                        for path, data in zip(paths, payloads))
-    for workers in (1, 2, 64):
-        command = [str(binary), '--buffer-size', '4096', '--workers', str(workers),
+    for size in (4096, 4097, 8192):
+        command = [str(binary), '--buffer-size', str(size),
                    *map(str, paths)]
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         assert (result.returncode, result.stdout, result.stderr) == (0, expected, ''), result
         records.append({'command': command, 'exit': result.returncode,
                         'stdout': result.stdout, 'stderr': result.stderr})
+    for flag in [['--workers', value] for value in ('1', '2', '64', '0', '65', 'bad')] + [['--workers'], ['--workers=1']]:
+        result = subprocess.run([str(binary), *flag, str(paths[0])],
+                                capture_output=True, text=True, timeout=3)
+        assert result.returncode == 1 and result.stdout == ''
+        assert '--workers has been removed; omit it to use direct execution' in result.stderr
+        assert 'usage:' in result.stderr
+        records.append({'case': flag, 'exit': result.returncode, 'stderr': result.stderr})
+    result = subprocess.run([str(binary), '--help'], capture_output=True, text=True, timeout=3)
+    assert result.returncode == 0 and '--workers' not in result.stderr
     missing = root / 'missing'
     result = subprocess.run([str(binary), str(paths[1]), str(missing), str(paths[2])],
                             capture_output=True, text=True, timeout=30)
