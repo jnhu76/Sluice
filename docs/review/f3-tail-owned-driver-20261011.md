@@ -102,5 +102,19 @@ No thread-creation/join failure fault injection or exhaustive OOM proof is claim
 Source review at production SHA: APPROVE, no actionable P1/P2 findings.
 The receipt in evidence explicitly requires final evidence/docs review; the
 coordinator owns binding that independent review to the final branch SHA.
-Status: IMPLEMENTED_UNVERIFIED pending that final gate, merge and adoption.
+Final prior head `64058ca9` received technical APPROVE; owner review #5483212164
+is GitHub COMMENTED with an explicit conditional approval after COPY adoption
+and combined verification. Current integration candidate is pending the four
+combined profiles, narrow independent review and owner merge/adoption gate.
 OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
+
+## Integration and compatibility debt
+
+COPY #496 is adopted at `3530890b2147db38daa9b5813de002c158343090`;
+this integration retains both independent ledger records. COPY workers now
+configures physical ThreadPool backend workers; its migration note remains.
+TAIL workers is currently validated but inert. #474/#475 F3/F5 owns a deliberate
+exit decision before the final release boundary: remove/reject the parameter
+or define meaningful semantics. No CLI removal is authorized here.
+Stop is observed at read/poll boundaries; callbacks for an already parsed batch
+may continue until that batch returns. No per-callback stop bound is promised.
