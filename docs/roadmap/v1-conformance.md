@@ -1992,3 +1992,19 @@ Current #475 A=BOUNDED_HOLD, B/C=KEEP_INSTALLED_COMPAT remain effective for
 their enumerated surfaces. A new B-01 package cut is a future deletion gate.
 COPY workers retain real backend-worker meaning; TAIL inert validated workers
 remain F3/F5 exit debt. OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
+
+### F3 #498 PR B draft paired async File wrapper candidate
+
+IMPLEMENTED_UNVERIFIED pending independent final review; DRAFT_NONADOPTED.
+Snapshot41fc1b45 on PR A plus supplements3f846afa removes only async/file.hpp
+and src/async/file.cpp together. SEM-01/03/04/05/06, ERR, REQ/LIFE/PROG/SHUT/HOST
+observations remain owned by canonical File/Request tests. Debug/Release n/y
+40/40 and52/52 each; Clang22 ASanUBSan13/13; static TSan12/13 with scope link
+unavailable due strong allocation overrides (no oracle weakened). Initial failed
+build rows and exact corrected-input reruns remain visible. Installed candidate
+n/y contracts79→78 headers,50→49 library objects,37→36 async members, with
+clean canonical/host consumers and real-uring/negative link controls. See
+[final receipt](../review/f3-498-pr-b-final-receipt.md) for exact source mapping,
+repeatable evidence and limitations. Per-surface UNKNOWN_EXTERNAL_USE remains
+UNKNOWN, EXTERNAL_RISK_PENDING, F5_PENDING; PHYSICAL_CONTRACTION_ADOPTED=NO,
+OPTIONAL_W04_SUPPORTED=NO and V1_RELEASE_READY=NO. Original F1/B01 untouched.
