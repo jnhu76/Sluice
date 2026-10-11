@@ -197,3 +197,29 @@ supplements include semantic_backend_conformance_test and uring_public_consumer_
 All affected app, COPY/TAIL, core, ThreadPool and real io_uring tests pass.
 The removed app API fails both header compilation and symbol linkage; the
 application builds with core alone before any async archive is built.
+
+## Owner-requested premerge state review (#238)
+
+#238's null-node seam tightening, reordered lock-free publication/exception
+boundary and incorrect call-site census are explicitly reviewed here. App-local
+injection is deliberately removed with owner authorization/source-break disclosure;
+canonical seams are unchanged. Direct read/hash or matcher/sink/count/result order
+is retained; the sink is an observable callback and is not dismissed as invisible
+merely because execution is synchronous. This PR exits only its named app.
+
+The [premerge receipt](f3-step3-grep-evidence-20261011/premerge-state-observation.json)
+observes actual repeated pread64 returns of 17 bytes followed by EOF in all four
+profiles; the same predicate rejects unshimmed traces. Final-output equality alone
+is not claimed as proof that the short-read branch executed.
+
+Two additional engine oracles pass in all four profiles (10 consumption cases):
+(1) over-cap no-LF tail reaches dropping EOF, contributes a scanned but unmatched
+line and preserves the next file; (2) three-file sink failure preserves the completed
+first file, invokes only first/middle sinks, and translates runtime_error, bad_alloc
+and system_error consistently for middle and remaining files. Production inputs
+are unchanged; the original matrix plus this affected test-only rerun is the evidence.
+
+This is coverage of reachable contract states for the changed slice, not exhaustive
+proof of every allocation failure or arbitrary SDK concurrent interleaving. The old
+app runtime accepted/publication/retirement states are unreachable after exit;
+canonical backend/lifetime obligations remain under their existing owners/tests.

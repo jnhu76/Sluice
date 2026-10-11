@@ -250,6 +250,76 @@ bool read_failure_after_output_continues_to_next_file() {
     return true;
 }
 
+bool dropping_tail_eof_preserves_next_file() {
+    std::vector<GrepInput> inputs;
+    for (const auto& content :
+         {std::string("hit\n") + std::string(9000, 'x') + "hit", std::string("hit next\n")}) {
+        const auto path = make_temp_file(content);
+        if (path.empty())
+            return false;
+        auto opened = File::open(path);
+        ::unlink(path.c_str());
+        if (!opened.has_value())
+            return false;
+        inputs.push_back({path, std::move(opened).value()});
+    }
+    std::vector<CollectedMatch> matches;
+    const auto results =
+        sluice_grep::grep_files("hit", std::move(inputs), 4096, 16,
+                                [&](const std::string& p, std::uint64_t n, std::string_view line) {
+                                    matches.push_back({p, n, std::string(line)});
+                                });
+    return results.size() == 2 && !results[0].error && !results[1].error &&
+           results[0].lines_scanned == 2 && results[0].dropped_long_lines &&
+           results[0].match_count == 1 && results[1].lines_scanned == 1 &&
+           !results[1].dropped_long_lines && results[1].match_count == 1 && matches.size() == 2 &&
+           matches[0].line == "hit" && matches[0].line_no == 1 && matches[1].line == "hit next" &&
+           matches[1].line_no == 1 && matches[0].path == results[0].path &&
+           matches[1].path == results[1].path;
+}
+
+bool middle_sink_exception_preserves_completed_file() {
+    for (unsigned failure : {0u, 1u, 2u}) {
+        std::vector<GrepInput> inputs;
+        for (unsigned i = 0; i != 3; ++i) {
+            const auto path = make_temp_file("hit\n");
+            if (path.empty())
+                return false;
+            auto opened = File::open(path);
+            ::unlink(path.c_str());
+            if (!opened.has_value())
+                return false;
+            inputs.push_back({std::to_string(i), std::move(opened).value()});
+        }
+        std::vector<std::string> calls;
+        const auto results = sluice_grep::grep_files(
+            "hit", std::move(inputs), 4096, 16,
+            [&](const std::string& p, std::uint64_t, std::string_view) {
+                calls.push_back(p);
+                if (p != "1")
+                    return;
+                if (failure == 1)
+                    throw std::bad_alloc();
+                if (failure == 2)
+                    throw std::system_error(EACCES, std::generic_category());
+                throw std::runtime_error("sink failure");
+            });
+        const auto expected = failure == 1   ? sluice::IoError::Code::no_space
+                              : failure == 2 ? sluice::IoError::Code::permission_denied
+                                             : sluice::IoError::Code::backend_error;
+        if (results.size() != 3 || results[0].error || results[0].match_count != 1 ||
+            results[0].lines_scanned != 1 || calls != std::vector<std::string>{"0", "1"})
+            return false;
+        for (std::size_t i = 1; i != 3; ++i) {
+            if (results[i].path != std::to_string(i) || !results[i].error ||
+                results[i].error->code != expected ||
+                results[i].error->os_errno != (failure == 2 ? EACCES : 0))
+                return false;
+        }
+    }
+    return true;
+}
+
 bool invalid_config_has_no_sink_effect() {
     struct Config {
         std::size_t buffer;
@@ -320,6 +390,9 @@ int main() {
         bool (*fn)();
     };
     const NamedTest tests[] = {
+        {"dropping_tail_eof_preserves_next_file", dropping_tail_eof_preserves_next_file},
+        {"middle_sink_exception_preserves_completed_file",
+         middle_sink_exception_preserves_completed_file},
         {"chunk_invariance_and_byte_line_oracle", chunk_invariance_and_byte_line_oracle},
         {"read_failure_after_output_continues_to_next_file",
          read_failure_after_output_continues_to_next_file},
