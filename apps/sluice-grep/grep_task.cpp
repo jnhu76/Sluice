@@ -2,6 +2,7 @@
 
 #include "matcher.hpp"
 
+#include <sluice/blocking/file.hpp>
 #include <sluice/async/await_op_helpers.hpp>
 #include <sluice/async/file.hpp>
 #include <sluice/async/task_result.hpp>
@@ -34,7 +35,7 @@ struct GrepTask {
         results.push_back(std::move(r));
     }
 
-    void scan_one(RuntimeTaskContext& ctx, std::size_t idx) {
+    template <class Read> void scan_one(std::size_t idx, Read&& read) {
         const GrepInput& in = inputs[idx];
         GrepFileResult out;
         out.path = in.path;
@@ -42,18 +43,11 @@ struct GrepTask {
         LineMatcher matcher(pattern, max_line_bytes);
         std::vector<MatchEvent> events;
 
-        Completion<std::size_t> rc;
         std::uint64_t offset = 0;
         bool terminal = false;
         while (!terminal) {
-            if (ctx.cancel_token().is_requested()) {
-                out.error = IoError{IoError::Code::canceled};
-                break;
-            }
-            auto rr = await_read_at(
-                in.file, ctx, offset,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
-                rc);
+            auto rr = read(offset, std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()),
+                                                        buffer.size()));
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;
@@ -96,7 +90,13 @@ struct GrepTask {
                     finish_canceled(i);
                     continue;
                 }
-                scan_one(ctx, i);
+                Completion<std::size_t> completion;
+                scan_one(i, [&](std::uint64_t offset, std::span<std::byte> dst) {
+                    if (ctx.cancel_token().is_requested())
+                        return sluice::make_unexpected<std::size_t>(
+                            IoError{IoError::Code::canceled});
+                    return await_read_at(inputs[i].file, ctx, offset, dst, completion);
+                });
             }
         } catch (...) {
             auto translated = translate_task_exception<std::vector<GrepFileResult>>();
@@ -111,11 +111,6 @@ struct GrepTask {
         slot.publish(std::move(results));
     }
 };
-
-bool config_invalid(std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers) {
-    return buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize || max_line_bytes == 0 ||
-           max_line_bytes > kMaxMaxLineBytes || workers == 0 || workers > kMaxWorkers;
-}
 
 std::vector<GrepFileResult> all_error(const std::vector<GrepInput>& inputs, IoError e) {
     std::vector<GrepFileResult> out;
@@ -133,7 +128,7 @@ std::vector<GrepFileResult> run_grep_engine(const std::string& pattern,
                                             std::vector<GrepInput> inputs, std::size_t buffer_size,
                                             std::size_t max_line_bytes, unsigned workers,
                                             MatchSink sink, std::unique_ptr<AsyncBackend> backend) {
-    if (config_invalid(buffer_size, max_line_bytes, workers) || !backend) {
+    if (!valid_config(buffer_size, max_line_bytes, workers) || !backend) {
         return all_error(inputs, IoError{IoError::Code::invalid_state});
     }
 
@@ -159,8 +154,36 @@ std::vector<GrepFileResult> run_grep_engine(const std::string& pattern,
 std::vector<GrepFileResult> grep_files(const std::string& pattern, std::vector<GrepInput> inputs,
                                        std::size_t buffer_size, std::size_t max_line_bytes,
                                        unsigned workers, MatchSink sink) {
-    return run_grep_engine(pattern, std::move(inputs), buffer_size, max_line_bytes, workers,
-                           std::move(sink), std::make_unique<ThreadPoolBackend>());
+    if (!valid_config(buffer_size, max_line_bytes, workers))
+        return all_error(inputs, IoError{IoError::Code::invalid_state});
+    if (workers != 1)
+        return run_grep_engine(pattern, std::move(inputs), buffer_size, max_line_bytes, workers,
+                               std::move(sink), std::make_unique<ThreadPoolBackend>());
+
+    std::vector<std::uint8_t> buffer;
+    try {
+        buffer.assign(buffer_size, 0);
+    } catch (const std::bad_alloc&) {
+        return all_error(inputs, IoError{IoError::Code::no_space});
+    }
+    GrepTask task{pattern,         std::move(inputs), max_line_bytes,
+                  std::move(sink), std::move(buffer), {}};
+    task.results.reserve(task.inputs.size());
+    try {
+        for (std::size_t i = 0; i < task.inputs.size(); ++i)
+            task.scan_one(i, [&](std::uint64_t offset, std::span<std::byte> dst) {
+                return sluice::blocking::read_at(task.inputs[i].file, offset, dst);
+            });
+    } catch (...) {
+        auto translated = translate_task_exception<std::vector<GrepFileResult>>();
+        for (std::size_t i = task.results.size(); i < task.inputs.size(); ++i) {
+            GrepFileResult out;
+            out.path = task.inputs[i].path;
+            out.error = translated.error();
+            task.results.push_back(std::move(out));
+        }
+    }
+    return std::move(task.results);
 }
 
 std::vector<GrepFileResult>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <sluice/async/application_runtime.hpp>
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
@@ -22,6 +21,12 @@ constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kDefaultMaxLineBytes = 1 << 20;
 constexpr std::size_t kMaxMaxLineBytes = 64 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
+
+constexpr bool valid_config(std::size_t buffer_size, std::size_t max_line_bytes,
+                            unsigned workers) noexcept {
+    return buffer_size >= kMinBufferSize && buffer_size <= kMaxBufferSize && max_line_bytes > 0 &&
+           max_line_bytes <= kMaxMaxLineBytes && workers > 0 && workers <= kMaxWorkers;
+}
 
 struct GrepInput {
     std::string path;

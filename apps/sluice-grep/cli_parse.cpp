@@ -36,7 +36,7 @@ int usage(const char* prog) {
                  "  --max-line-bytes <n>    cap for a retained line; longer lines are\n"
                  "                          reported and skipped, not matched (default\n"
                  "                          %zu; <= %zu)\n"
-                 "  --workers <count>       runtime workers (default 1; <= %u)\n"
+                 "  --workers <count>       direct at 1; legacy runtime at 2..%u\n"
                  "  --help                  show this help\n"
                  "\n"
                  "Literal byte-oriented substring search (no regex). Exit codes follow\n"
@@ -57,8 +57,6 @@ bool parse_workers(const char* s, unsigned& out) {
     if (!parse_unsigned_decimal(s, v))
         return false;
     if (v > std::numeric_limits<unsigned>::max())
-        return false;
-    if (v > static_cast<std::size_t>(kMaxWorkers))
         return false;
     out = static_cast<unsigned>(v);
     return true;
@@ -116,7 +114,9 @@ int parse_args(int argc, char** argv, CliArgs& args) {
                      argv[0]);
         return 2;
     }
+    if (!valid_config(args.buffer_size, args.max_line_bytes, args.workers))
+        return usage(argv[0]);
     return 0;
 }
 
-}
+}::cli
