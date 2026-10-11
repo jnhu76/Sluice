@@ -20,4 +20,4 @@ bool parse_size(const char* s, std::size_t& out);
 
 int parse_args(int argc, char** argv, CliArgs& args);
 
-} // namespace sluice_hash::cli
+}

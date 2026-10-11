@@ -22,7 +22,7 @@ const char* errno_msg(int e) {
     return std::strerror(e);
 }
 
-} // namespace
+}
 
 int main(int argc, char** argv) {
     CliArgs args;

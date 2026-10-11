@@ -79,7 +79,7 @@ struct HashScan {
     }
 };
 
-} // namespace
+}
 
 std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size) {
     std::vector<FileHash> results;
@@ -111,4 +111,4 @@ std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buff
     return results;
 }
 
-} // namespace sluice_hash
+}

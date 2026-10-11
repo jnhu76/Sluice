@@ -190,7 +190,7 @@ bool hash_files_continues_after_read_error() {
     return true;
 }
 
-} // namespace
+}
 
 int main() {
     struct NamedTest {
