@@ -445,7 +445,7 @@ class ScriptedBackend final : public AsyncBackend {
         auto& throwing = shared_->throw_next[ScriptedShared::kind_index(kind)];
         if (throwing) {
             throwing = false;
-            throw std::runtime_error("injected submit exception after acceptance");
+            throw std::runtime_error("injected submit exception with prior accepted work");
         }
         auto& armed = shared_->fail_next[ScriptedShared::kind_index(kind)];
         if (!armed.has_value())

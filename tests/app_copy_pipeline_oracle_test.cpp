@@ -822,6 +822,7 @@ bool real_uring_pipeline_content_and_sync() {
 #if defined(SLUICE_HAS_LIBURING)
     CopyScenario sc;
     check(sc.open_files(), "real-uring opens");
+    sc.joined = true;
     std::vector<std::byte> bytes(16 * 11 + 7);
     for (std::size_t i = 0; i < bytes.size(); ++i)
         bytes[i] = seed_byte(i);
