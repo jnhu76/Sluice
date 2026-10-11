@@ -1891,3 +1891,14 @@ that).
 | Requirement mapping | VERIFY-01 build/public-boundary evidence class satisfied by the standalone consumer matrix; V-case/S/L correspondences in `f1-requirement-evidence-matrix.md`; ledger oracles cited per row with their owning-slice records |
 | Known limitations | Layer-A probes cannot deterministically manufacture V04/V05/V15/V17/V21/V22/V24/V13 (kept on their Layer B/C/D evidence; nothing weakened to make them external); V23's stale-wake discriminator stays internal (M11); W-04 H3/H6 discrimination stays with D2; uring D-layer evidence remains the E1/E2 real-kernel records |
 | CI note | The recurring `backend_conformance_e1_threadpool_test` stall (#454 §4.2) did not reproduce during F1's runs; the standing rerun protocol applies unchanged |
+
+## F3 Step 2 — GREP default direct execution (2026-10-11)
+
+| Field | Scoped evidence |
+|---|---|
+| Requirements / adoption | PROD-03, W-01, ARCH-02, INV-01, SEM-02..05, ERR-01, LIFE-01, CANCEL-01/02, VERIFY-01, MIG-01/02; adopted D-H1/D-H2/D-H5; #402/#474 |
+| Implementation | Default workers=1 uses canonical File + blocking::read_at; one shared matcher/scan loop. workers=2..64 and injected AsyncBackend remain explicitly isolated runtime/Completion consumers |
+| Status | VERIFIED for the default execution and D-H1/D-H2 observations in the recorded server scope; no F3 family/runtime-retirement or W-04 PASS |
+| Evidence | [GREP slice record](../review/f3-grep-direct-20261011.md); production head 11dbc1b4386534ec8c1d5f7d3a90df99367f6135: four isolated Debug/Release × noliburing/real-liburing profiles, consumption/direct W-01/primitive/runtime waiter targets and 51 real CLI+trace checks per profile. Supplemental allocation/sink exception oracle at 7a997129f82d55709ccf76b502ad442440bebd15 passed all four profiles with production inputs unchanged |
+| Contraction / package | Default runtime execution removed; legacy completion/await/cancel/backend/scheduler still required for named compatibility consumers. SDK inputs unchanged; limited dual-profile object/symbol/link and installed-header equivalence, no old F1 manifest rewritten |
+| Limitations / next owner | GCC sanitizer unavailable (missing libasan); no exhaustive OOM or new in-flight cancellation proof. #474/#402 own HASH_GREP_COMPAT_EXIT, T2-08 and remaining physical runtime/package contraction |

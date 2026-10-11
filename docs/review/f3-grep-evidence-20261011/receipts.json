@@ -1,0 +1,70 @@
+{
+  "debug-n": {
+    "log_sha256": "235f53d6f08ff6750fcb602ece5d9257957cb4aaf8b1e5510445893e66447473",
+    "traces": {
+      "workers-1.trace": {
+        "sha256": "961a7e69a8221eefd31f40c1c601ea055e2c402dbff15910c7478ef9ba271b77"
+      },
+      "workers-2.trace": {
+        "sha256": "bd842339b09385c1c7944943521543d2c434448e42b4aeb52887ad0e532d9373"
+      },
+      "workers-64.trace": {
+        "sha256": "54ae270a04c7ff1d54e413ead04da384be53db032fd7c415644b05406ebb54a5"
+      },
+      "invalid-fifo.trace": {
+        "sha256": "65434531e95401eaef93a5586e140e15ace3eb493ae56d0946e55956ff38052d"
+      }
+    }
+  },
+  "debug-y": {
+    "log_sha256": "e96b81b078b0e42e5028218439de795943fb144a9107ed5372116abc9eade117",
+    "traces": {
+      "workers-1.trace": {
+        "sha256": "52750abcf819c3c0fb399eeb212f8cb69d845989dc4c9b7ac4afda99f3c7a9ac"
+      },
+      "workers-2.trace": {
+        "sha256": "ff634b62b15d53c92de3cf96e0be601be7c7e873cd562d2952a2f0b62755682c"
+      },
+      "workers-64.trace": {
+        "sha256": "a336f5110d51b791868211eeeee511365b80048bdd148311e3708ae15c24dfb9"
+      },
+      "invalid-fifo.trace": {
+        "sha256": "db1b376e75b918d89365dd2a850581437cae76fe3a20007e569f89919b7e69e6"
+      }
+    }
+  },
+  "release-n": {
+    "log_sha256": "99f606380c2ca4a32f03fdb15756a4e8f8e0d45e56ad4ee861dc07ddfdd9d124",
+    "traces": {
+      "workers-1.trace": {
+        "sha256": "eeee00b12d0ebbd800cc8fa3eecb5c57872a02f3ed29d5276171ae66c54c4b60"
+      },
+      "workers-2.trace": {
+        "sha256": "4dcb4433da69e134ce113bc58a122f8fb8c85f07e87cf0cc907f12af588670e7"
+      },
+      "workers-64.trace": {
+        "sha256": "5b5f7f5f259e65719e55fc619e6565aad2ddd3c6b98c2b8d9907ca764ba25094"
+      },
+      "invalid-fifo.trace": {
+        "sha256": "f8d068ba9a4076742ccd6b7c78e12d558633da444c79ebd573ad1be81990b7f7"
+      }
+    }
+  },
+  "release-y": {
+    "log_sha256": "8136f40e81037153bbd48442d66a7d0816a0852e7d2eb97a100abb3cbcda8545",
+    "traces": {
+      "workers-1.trace": {
+        "sha256": "7cf54aad55bd32f23d34b5f03b6b73157e11338893f983a643310f53236d64bc"
+      },
+      "workers-2.trace": {
+        "sha256": "dc298aecd43d34337175645542f16a5b5326a0f59e7d397c100f0680798b1272"
+      },
+      "workers-64.trace": {
+        "sha256": "27ea14af569d3aba46704f6fa75969d8e03c08de123260a2db740bcbfdd0f73e"
+      },
+      "invalid-fifo.trace": {
+        "sha256": "5723a3f476b2fd71c8753b46acb88b2298aeb4fe886bb5a082ae425b58d851da"
+      }
+    }
+  }
+}

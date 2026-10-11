@@ -1,0 +1,8 @@
+[ 53%]: archiving.asanubsan libsluice_core.a
+[ 88%]: archiving.asanubsan libsluice_async.a
+[ 91%]: linking.asanubsan app_grep_consumption_test
+create ok!
+compile_commands.json updated!
+error: /usr/bin/ld.bfd: cannot find /usr/lib64/libasan.so.8.0.0: No such file or directory
+collect2: error: ld returned 1 exit status
+
