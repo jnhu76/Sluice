@@ -1,0 +1,79 @@
+ISOLATED SOURCE=/home/jnhu/Source/Sluice-f3-498-remaining-isolated-tsan-n PROFILE=tsan-n CCACHE=disabled
+5e1be4232bc59a2e397cc6f6fe0c218beb200917
+[0m[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua[0m[0m
+clang version 22.1.8 (Fedora 22.1.8-4.fc44)
+Target: x86_64-redhat-linux-gnu
+Thread model: posix
+InstalledDir: /usr/bin
+Configuration file: /etc/clang/x86_64-redhat-linux-gnu-clang++.cfg
+CONFIG /home/jnhu/.local/bin/xmake f -y --toolchain=clang -m tsan --liburing=n -o build --ccache=n --ldflags=--target=x86_64-redhat-linux-gnu
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m compiling.tsan tests/app_copy_pipeline_oracle_test.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m compiling.tsan apps/sluice-copy/copy_task.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/blocking_file.cpp[0m
+[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/blocking_io_pool.cpp[0m
+[0m[38;5;2;1m[  6%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/buffer.cpp[0m
+[0m[38;5;2;1m[  7%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/copy.cpp[0m
+[0m[38;5;2;1m[  9%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/copy_strategy.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/fault.cpp[0m
+[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/file.cpp[0m
+[0m[38;5;2;1m[ 14%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/io_context.cpp[0m
+[0m[38;5;2;1m[ 17%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/observed.cpp[0m
+[0m[38;5;2;1m[ 18%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/reader.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/wal.cpp[0m
+[0m[38;5;2;1m[ 21%]:[0m [38;5;5;1m<sluice_core>[0m compiling.tsan src/writer.cpp[0m
+[0m[38;5;2;1m[ 24%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/application_runtime.cpp[0m
+[0m[38;5;2;1m[ 26%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/await_op_helpers.cpp[0m
+[0m[38;5;2;1m[ 26%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/batch.cpp[0m
+[0m[38;5;2;1m[ 29%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/cancel.cpp[0m
+[0m[38;5;2;1m[ 31%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 32%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/fiber.cpp[0m
+[0m[38;5;2;1m[ 34%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/fiber_ctx.cpp[0m
+[0m[38;5;2;1m[ 35%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/file.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/group.cpp[0m
+[0m[38;5;2;1m[ 38%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/mutex_test_seam.cpp[0m
+[0m[38;5;2;1m[ 40%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/op_helpers.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/queue_port.cpp[0m
+[0m[38;5;2;1m[ 43%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/queue_test_seam.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/request_handle.cpp[0m
+[0m[38;5;2;1m[ 46%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 48%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler.cpp[0m
+[0m[38;5;2;1m[ 49%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_condition.cpp[0m
+[0m[38;5;2;1m[ 51%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_event.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_fe2_test_seam.cpp[0m
+[0m[38;5;2;1m[ 54%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_mutex.cpp[0m
+[0m[38;5;2;1m[ 56%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_park_wake.cpp[0m
+[0m[38;5;2;1m[ 57%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_queue.cpp[0m
+[0m[38;5;2;1m[ 59%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_rwlock.cpp[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_semaphore.cpp[0m
+[0m[38;5;2;1m[ 62%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/scheduler_timer.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/select.cpp[0m
+[0m[38;5;2;1m[ 65%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/select_event.cpp[0m
+[0m[38;5;2;1m[ 66%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/select_timer.cpp[0m
+[0m[38;5;2;1m[ 68%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/stackful_io_host.cpp[0m
+[0m[38;5;2;1m[ 70%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 71%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 74%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 76%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/wait_policy.cpp[0m
+[0m[38;5;2;1m[ 77%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<sluice_async>[0m compiling.tsan src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 80%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.tsan libsluice_core.a[0m
+[0m[38;5;2;1m[ 88%]:[0m [38;5;5;1m<sluice_async>[0m [38;5;5;1marchiving.tsan libsluice_async.a[0m
+[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m [38;5;5;1mlinking.tsan app_copy_pipeline_oracle_test[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 27.192s[0m
+000000000048c3b0 T __tsan_init
+0000000000428e80 T __ubsan_handle_type_mismatch_v1
+RUN SLUICE_ORACLE_FILTER=borrow_live_write_peak_selftest /home/jnhu/.local/bin/xmake run app_copy_pipeline_oracle_test
+ok: borrow_live_write_peak_selftest
+all 1 app copy pipeline oracle tests passed
+RUN SLUICE_ORACLE_FILTER=exception_cleanup_waits_for_held_borrow /home/jnhu/.local/bin/xmake run app_copy_pipeline_oracle_test
+ok: exception_cleanup_waits_for_held_borrow
+all 1 app copy pipeline oracle tests passed
+RUN SLUICE_ORACLE_FILTER=canceled_result_settles_held_readahead /home/jnhu/.local/bin/xmake run app_copy_pipeline_oracle_test
+ok: canceled_result_settles_held_readahead
+all 1 app copy pipeline oracle tests passed

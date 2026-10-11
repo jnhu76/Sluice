@@ -81,21 +81,37 @@ case names are an evidence ownership map, not new verification results.
 
 ## Reproduction and captured results
 
-Remote host: `jnhu@192.168.31.75`, Fedora Clang 22.1.8, xmake 3.0.6.
-All git, editing, builds and runs occur in
-`/home/jnhu/Source/Sluice-f3-498-remaining-tests`.
+Remote host: `jnhu@192.168.31.75`, Fedora Clang 22.1.8.
+The final isolated captures use `/home/jnhu/.local/bin/xmake`
+3.0.9+20260621; the original supplementary captures used `/usr/bin/xmake`
+3.0.6+20260117.
+All git, editing, builds and runs occur on that remote host.
+The authoring checkout is `/home/jnhu/Source/Sluice-f3-498-remaining-tests`.
 [Raw logs](../evidence/f3-remaining-test-prep-20261011/) retain the exact
-configuration, build and case output. Each configuration has its own build
-directory; xmake configuration changes are sequential.
+configuration, build and case output. The authoritative `isolated-*.log`
+captures use six different detached source worktrees at exact tested commit
+`5e1be4232bc59a2e397cc6f6fe0c218beb200917`. Each has its own
+source root, `.xmake` configuration and `build/` directory. Compiler caching
+is explicitly disabled with `--ccache=n`; the regular profiles are forced
+rebuilt after that setting. The worktree paths are
+`/home/jnhu/Source/Sluice-f3-498-remaining-isolated-PROFILE`, where PROFILE
+is debug-n, debug-y, release-n, release-y, asanubsan-n or tsan-n.
+
+The older unprefixed profile logs share one source/configuration checkout
+with separate build directories; they are supplementary evidence and do
+not satisfy the isolated-source matrix. The negative controls remain
+supplementary causal evidence for the unchanged test bytes.
 
 Four profiles run the full 24-case COPY pipeline oracle, including the real
 io_uring content/sync case in enabled profiles:
 
 ```sh
-xmake f -y -m debug --liburing=n -o build/remaining-debug-n
-xmake build app_copy_pipeline_oracle_test
-xmake run app_copy_pipeline_oracle_test
-# Repeat for debug/y, release/n, release/y, changing the build directory.
+git worktree add --detach /home/jnhu/Source/Sluice-f3-498-remaining-isolated-debug-n 5e1be4232bc59a2e397cc6f6fe0c218beb200917
+cd /home/jnhu/Source/Sluice-f3-498-remaining-isolated-debug-n
+/home/jnhu/.local/bin/xmake f -y -m debug --liburing=n -o build --ccache=n
+/home/jnhu/.local/bin/xmake build -r -j 4 app_copy_pipeline_oracle_test
+/home/jnhu/.local/bin/xmake run app_copy_pipeline_oracle_test
+# Repeat from a different detached source worktree for every other profile.
 ```
 
 Two temporary support-only negative controls were applied and restored.
@@ -108,8 +124,8 @@ assertion or mutation remains. Existing controlled exception and canceled-result
 settlement cases retain their accepted-held-borrow boundaries.
 
 Sanitizer results and any configuration limitation are recorded in the
-asanubsan-n and tsan-n logs; only actual instrumented execution counts as
-sanitizer evidence. The first generic Clang link fails because xmake's
+isolated-asanubsan-n and isolated-tsan-n logs; only actual instrumented
+execution counts as sanitizer evidence. The first generic Clang link fails because xmake's
 x86_64-unknown-linux-gnu triple selects a runtime directory absent on Fedora.
 The installed runtime is under x86_64-redhat-linux-gnu. The corrective
 configuration explicitly selects that linker target and retains the same
@@ -128,3 +144,14 @@ was disabled to work around the initial toolchain triple mismatch.
 Neither finite cases nor these sanitizers establish unbounded liveness or
 the five retained Scheduler wake/cancellation/teardown obligations. Only the
 pipeline test consumer migration is validated by this slice.
+
+## Exact source provenance
+
+The isolated matrix tests commit
+5e1be4232bc59a2e397cc6f6fe0c218beb200917. The evidence/receipt correction
+commit changes documentation only: include/, src/, apps/, tests/, xmake/ and
+xmake.lua are byte-identical to that tested commit. The Git tree/object IDs
+for those paths, in that order, are captured in
+tested-source-trees.txt. Thus the later documentation head carries the same
+tested C++/test/build inputs; the receipt does not claim that newly captured
+evidence had already existed in the tested commit.

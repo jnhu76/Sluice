@@ -1976,3 +1976,9 @@ Current #475 A=BOUNDED_HOLD, B/C=KEEP_INSTALLED_COMPAT remain effective for
 their enumerated surfaces. A new B-01 package cut is a future deletion gate.
 COPY workers retain real backend-worker meaning; TAIL inert validated workers
 remain F3/F5 exit debt. OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
+
+### F3 #498 remaining pipeline selftest preparation (2026-10-12)
+
+| Slice / owner | Root obligations | Status | Exact evidence and remaining gate |
+| --- | --- | --- | --- |
+| F3_REMAINING_COPY_TEST_PREP; #498 | REQ-01/03/05/06, HANDLE-01/02/03, LIFE-01/02, HOST-02, PROG-01/02 | VERIFIED for test consumer slice | Tested source 5e1be4232bc59a2e397cc6f6fe0c218beb200917. Two legacy write-borrow metric phases now use canonical RequestScope; all assertions retained. Four detached source/config/build worktrees with compiler cache disabled pass 24/24 pipeline cases each; two additional independent Clang22 ASan/UBSan and TSan worktrees pass three controlled cases each with linked sanitizer symbols. Supplemental metric-cap and stale-release negative controls fail the intended assertions, restored selftest passes. [Exact receipt and source provenance](../review/f3-remaining-test-prep-20261012.md), [isolated raw evidence](../evidence/f3-remaining-test-prep-20261011/). No production authority, header or archive changes. All five runtime_waiter_observer_test host cases remain with their exact evidence ownership/dependency map; their facade migration is an unresolved physical-retirement gate. Documentation-only evidence correction preserves all tested source/build tree IDs. No PR C, F5, W-04 or release readiness claim. |
