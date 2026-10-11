@@ -165,7 +165,17 @@ distinct debug-info source paths. Binary NEEDED sets match in both profiles.
 Project include closure adds blocking/file.hpp (40 to 41 library headers);
 legacy transitive closure remains because compatibility still compiles.
 Installed 79 headers match their unchanged source bytes and aggregate digest.
-One compact package-equivalence.json captures these facts and limits. No frozen
+One compact package-equivalence.json captures these facts and limits.
+package_compare.py reproduces both components on the recorded server. Its
+--repo/--evidence/--liburing-baseline/--liburing-candidate arguments allow
+relocation. To recreate the noliburing byte comparison, build the base CLI in
+one isolated comparison worktree with -m debug --liburing=n -o build-baseline,
+copy build-baseline/linux/x86_64/debug to EVIDENCE/baseline-artifacts, switch
+that same comparison worktree to the candidate (keeping the source path
+identical), rebuild, then run package_compare.py --repo WORKTREE --evidence
+EVIDENCE with the separately built liburing baseline/candidate debug directories.
+This preserves debug-info paths for the noliburing byte comparison; the liburing
+component deliberately compares object/symbol/link sets instead of archive bytes. No frozen
 F1 files were rewritten and no SDK/build-input delta triggers a new B-01 freeze.
 
 ## Independent review and remaining scope

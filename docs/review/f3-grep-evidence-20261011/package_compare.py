@@ -1,6 +1,12 @@
-import hashlib,json,pathlib,subprocess
-repo=pathlib.Path("/home/jnhu/Source/Sluice-f3-grep-direct")
-e=pathlib.Path("/home/jnhu/Source/f3-grep-evidence")
+import argparse,hashlib,json,pathlib,subprocess
+parser=argparse.ArgumentParser()
+parser.add_argument('--repo',default='/home/jnhu/Source/Sluice-f3-grep-direct')
+parser.add_argument('--evidence',default='/home/jnhu/Source/f3-grep-evidence')
+parser.add_argument('--liburing-baseline',default='/home/jnhu/Source/sluice-f3-grep-package-base-y/build/linux/x86_64/debug')
+parser.add_argument('--liburing-candidate',default='/home/jnhu/Source/sluice-f3-grep-11dbc1b4386534ec8c1d5f7d3a90df99367f6135-debug-y/build/linux/x86_64/debug')
+args=parser.parse_args()
+repo=pathlib.Path(args.repo)
+e=pathlib.Path(args.evidence)
 base="0d580498e8485d44166dac3e1148efb7adf52770"
 head=subprocess.check_output(["git","rev-parse","HEAD"],cwd=repo,text=True).strip()
 def run(args,cwd=repo):
@@ -52,3 +58,19 @@ record={"base":base,"head":head,"scope":"Debug noliburing identical archive obje
         "installed_headers":len(headers),"installed_header_digest":hashlib.sha256(json.dumps(headers,sort_keys=True).encode()).hexdigest()}
 (e/"package-equivalence.json").write_text(json.dumps(record,indent=2)+"\n")
 print("PACKAGE_EQUIVALENCE PASS", "include closure",len(before),len(after),"headers",len(headers))
+
+base_y=pathlib.Path(args.liburing_baseline)
+candidate_y=pathlib.Path(args.liburing_candidate)
+y={}
+for name in ("libsluice_core.a","libsluice_async.a"):
+    a,b=archive(base_y,name),archive(candidate_y,name)
+    assert a["objects"]==b["objects"],name
+    assert a["defined"]==b["defined"],name
+    y[name]={"object_list_identical":True,"defined_symbol_list_identical":True,
+             "objects":len(a["objects"])}
+assert linkage(base_y)==linkage(candidate_y)
+record["liburing_debug_comparison"]={"libraries":y,"binary_needed_before":linkage(base_y),
+    "binary_needed_after":linkage(candidate_y),
+    "archive_byte_identity":"not asserted across different debug-info source paths"}
+(e/"package-equivalence.json").write_text(json.dumps(record,indent=2)+"\n")
+print("PACKAGE_LIBURING PASS")
