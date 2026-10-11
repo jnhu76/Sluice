@@ -236,6 +236,7 @@ bool write_with_unrepresentable_offset_rejected_at_admission() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<std::size_t> {
+        const std::byte src{std::byte{0}};
         AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =

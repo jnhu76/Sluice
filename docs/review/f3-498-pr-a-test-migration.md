@@ -234,3 +234,9 @@ no assertion, cancellation, scheduling or sanitizer instrumentation changes.
 The corrected scope target is rechecked in the four base profiles and both
 sanitizer configurations; other passing tests need no repeat because their
 source, production library and configuration are unchanged.
+
+The first real-liburing smoke builds at `432dd1e9` also exposed a migration
+compile defect: the one-byte input local `src` from the old write-range lambda
+had not been carried into its canonical replacement. Restoring that same
+constant byte leaves the rejection oracle unchanged. Only the two real-liburing
+smoke consumers need rebuild/re-execution after the correction.
