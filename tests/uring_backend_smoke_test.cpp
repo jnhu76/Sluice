@@ -1,6 +1,5 @@
+#include "canonical_request_test_support.hpp"
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/file.hpp>
-#include <sluice/async/task_result.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -15,7 +14,8 @@
 #include <unistd.h>
 
 #ifndef SLUICE_HAS_LIBURING
-#error "smoke consumer TU must receive SLUICE_HAS_LIBURING through sluice_async's public usage requirement"
+#error                                                                                             \
+    "smoke consumer TU must receive SLUICE_HAS_LIBURING through sluice_async's public usage requirement"
 #endif
 
 namespace {
@@ -48,8 +48,6 @@ FileOpen writable_mode() {
     return mode;
 }
 
-// Honest NOT-RUN: the real backend must exist and the kernel must accept
-// io_uring setup; otherwise every submission result is meaningless.
 bool uring_backend_available() {
     try {
         UringAsyncBackend backend;
@@ -67,22 +65,14 @@ bool read_op_through_canonical_file() {
     ::unlink(path.c_str());
 
     std::vector<std::byte> dst(13);
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            auto sr = ctx.submit_read(ReadOp{file, dst.data(), dst.size(), 0}, c);
-            if (!sr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(wr.error()));
-                return;
-            }
-            slot.publish(c.result());
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     if (!result.has_value())
         return false;
@@ -100,28 +90,25 @@ bool write_op_through_canonical_file() {
     File file = std::move(File::open(path, writable_mode()).value());
     ::unlink(path.c_str());
 
-    const std::byte payload[5] = {std::byte{'w'}, std::byte{'r'}, std::byte{'i'},
-                                  std::byte{'t'}, std::byte{'e'}};
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            auto sr = ctx.submit_write(WriteOp{file, payload, sizeof(payload), 0}, c);
-            if (!sr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(wr.error()));
-                return;
-            }
-            slot.publish(c.result());
-        });
+    const std::byte payload[5] = {std::byte{'w'}, std::byte{'r'}, std::byte{'i'}, std::byte{'t'},
+                                  std::byte{'e'}};
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_write(WriteOp{file, payload, sizeof(payload), 0});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     if (!result.has_value())
         return false;
     if (result.value() != 5)
+        return false;
+    std::byte observed[sizeof(payload)]{};
+    if (::pread(file.native_handle(), observed, sizeof(observed), 0) !=
+            static_cast<ssize_t>(sizeof(observed)) ||
+        std::memcmp(observed, payload, sizeof(payload)) != 0)
         return false;
     return file.close().has_value();
 }
@@ -133,22 +120,14 @@ bool sync_data_op_through_canonical_file() {
     File file = std::move(File::open(path, writable_mode()).value());
     ::unlink(path.c_str());
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto sr = ctx.submit_sync_data(SyncDataOp{file}, c);
-            if (!sr.has_value()) {
-                slot.publish(sr);
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(wr);
-                return;
-            }
-            slot.publish(c.result());
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<void>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     if (!result.has_value())
         return false;
@@ -162,22 +141,14 @@ bool sync_all_op_through_canonical_file() {
     File file = std::move(File::open(path, writable_mode()).value());
     ::unlink(path.c_str());
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto sr = ctx.submit_sync_all(SyncAllOp{file}, c);
-            if (!sr.has_value()) {
-                slot.publish(sr);
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(wr);
-                return;
-            }
-            slot.publish(c.result());
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_sync_all(SyncAllOp{file});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<void>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     if (!result.has_value())
         return false;
@@ -191,24 +162,16 @@ bool zero_length_read_completes_zero_despite_unrepresentable_offset() {
     File file = std::move(File::open(path).value());
     ::unlink(path.c_str());
 
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            std::byte scratch{std::byte{0}};
-            auto sr = ctx.submit_read(
-                ReadOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()}, c);
-            if (!sr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(wr.error()));
-                return;
-            }
-            slot.publish(c.result());
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        std::byte scratch{std::byte{0}};
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted =
+            scope.submit_read(ReadOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     const bool ok = result.has_value() && result.value() == 0;
     return file.close().has_value() && ok;
@@ -221,24 +184,16 @@ bool zero_length_write_completes_zero_despite_unrepresentable_offset() {
     File file = std::move(File::open(path, writable_mode()).value());
     ::unlink(path.c_str());
 
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            const std::byte scratch{std::byte{0}};
-            auto sr = ctx.submit_write(
-                WriteOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()}, c);
-            if (!sr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(wr.error()));
-                return;
-            }
-            slot.publish(c.result());
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        const std::byte scratch{std::byte{0}};
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_write(
+            WriteOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     const bool ok = result.has_value() && result.value() == 0;
     return file.close().has_value() && ok;
@@ -251,30 +206,25 @@ bool read_with_unrepresentable_offset_rejected_at_admission() {
     File file = std::move(File::open(path).value());
     ::unlink(path.c_str());
 
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            std::byte dst{std::byte{0}};
-            auto sr = ctx.submit_read(
-                ReadOp{file, &dst, 1, std::numeric_limits<std::uint64_t>::max()}, c);
-            if (sr.has_value()) {
-                (void)ctx.await_completion(c);
-                c.reset();
-                slot.publish(sluice::make_unexpected<std::size_t>(
-                    sluice::IoError{sluice::IoError::Code::backend_error}));
-                return;
-            }
-            if (!c.idle()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(
-                    sluice::IoError{sluice::IoError::Code::backend_error}));
-                return;
-            }
-            slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        std::byte dst{std::byte{0}};
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted =
+            scope.submit_read(ReadOp{file, &dst, 1, std::numeric_limits<std::uint64_t>::max()});
+        if (admitted.has_value()) {
+            (void)scope.finish();
+            return sluice::make_unexpected<std::size_t>(
+                sluice::IoError{sluice::IoError::Code::backend_error});
+        }
+        if (ctx.outstanding() != 0)
+            return sluice::make_unexpected<std::size_t>(
+                sluice::IoError{sluice::IoError::Code::backend_error});
+        return sluice::make_unexpected<std::size_t>(admitted.error());
+    }();
 
-    const bool ok = !result.has_value() &&
-                    result.error().code == sluice::IoError::Code::invalid_argument;
+    const bool ok =
+        !result.has_value() && result.error().code == sluice::IoError::Code::invalid_argument;
     return file.close().has_value() && ok;
 }
 
@@ -285,34 +235,28 @@ bool write_with_unrepresentable_offset_rejected_at_admission() {
     File file = std::move(File::open(path, writable_mode()).value());
     ::unlink(path.c_str());
 
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<UringAsyncBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            const std::byte src{std::byte{0}};
-            auto sr = ctx.submit_write(
-                WriteOp{file, &src, 1, std::numeric_limits<std::uint64_t>::max()}, c);
-            if (sr.has_value()) {
-                (void)ctx.await_completion(c);
-                c.reset();
-                slot.publish(sluice::make_unexpected<std::size_t>(
-                    sluice::IoError{sluice::IoError::Code::backend_error}));
-                return;
-            }
-            if (!c.idle()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(
-                    sluice::IoError{sluice::IoError::Code::backend_error}));
-                return;
-            }
-            slot.publish(sluice::make_unexpected<std::size_t>(sr.error()));
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted =
+            scope.submit_write(WriteOp{file, &src, 1, std::numeric_limits<std::uint64_t>::max()});
+        if (admitted.has_value()) {
+            (void)scope.finish();
+            return sluice::make_unexpected<std::size_t>(
+                sluice::IoError{sluice::IoError::Code::backend_error});
+        }
+        if (ctx.outstanding() != 0)
+            return sluice::make_unexpected<std::size_t>(
+                sluice::IoError{sluice::IoError::Code::backend_error});
+        return sluice::make_unexpected<std::size_t>(admitted.error());
+    }();
 
-    const bool ok = !result.has_value() &&
-                    result.error().code == sluice::IoError::Code::invalid_argument;
+    const bool ok =
+        !result.has_value() && result.error().code == sluice::IoError::Code::invalid_argument;
     return file.close().has_value() && ok;
 }
 
-}
+} // namespace
 
 int main() {
     if (!uring_backend_available()) {
