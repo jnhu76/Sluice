@@ -1,39 +1,30 @@
 # sluice-grep — bounded streaming literal search
 
-The default single-worker invocation uses canonical File and
-blocking::read_at on the caller thread. It creates no ApplicationRuntime,
-ThreadPoolBackend, Completion, RequestCore or progress owner.
-
-workers=2..64 and grep_files_with_backend remain isolated compatibility
-consumers of ApplicationRuntime, await_read_at and Completion. The worker
-option still controls runtime workers; files are scanned sequentially in
-all invocation forms. Final compatibility retirement belongs to #474/#402.
-
-## Build and run
+Canonical `File` and `blocking::read_at` execute on the caller thread. Files
+are scanned sequentially in operand order. The application and its consumption
+test link only `sluice_core`.
 
 ```sh
 xmake build sluice-grep
-xmake run sluice-grep [options] <pattern> <file>...
+sluice-grep [options] <pattern> <file>...
 ```
 
-Options: -n; --buffer-size (4096..67108864, default 1048576);
---max-line-bytes (1..67108864, default 1048576); --workers (1..64,
-default 1); --help. CLI and engine share an app-local range validator.
-Invalid CLI values are rejected with exit 2 before opening any operand.
+Options: `-n`; `--buffer-size` (4096..67108864, default 1048576);
+`--max-line-bytes` (1..67108864, default 1048576); `--help`.
+CLI and engine share app-local bounds validation. Invalid CLI values return 2
+before opening operands; help returns 0.
 
 ## Matching and output
 
-Literal byte-oriented substring search; no regular expressions or universal
-GNU grep compatibility. LF is the only terminator; CR, NUL and invalid UTF-8
-remain bytes. Empty patterns match every line; empty files have no lines.
-A nonempty final line without LF is searched and emitted. Newline-containing
-CLI patterns are rejected. A line exceeding the retained-line cap is skipped,
+Literal byte-oriented substring search; LF is the only terminator. CR, NUL and
+invalid UTF-8 remain bytes. Empty patterns match every line; empty files have
+no lines. A nonempty final line without LF is searched and emitted. CLI patterns
+containing LF are rejected. A line exceeding the retained-line cap is skipped,
 reported once per affected file, and scanning resumes with correct numbering.
 
-One matcher and scan loop serve both readers, including cross-buffer carry
-and EOF handling. Sink calls stream in file operand order and increasing
-line order. The file prefix is determined by the number of CLI operands,
-including operands that fail to open.
+One matcher and scan loop handle cross-buffer carry and EOF. Sink calls stream
+in operand order and increasing line order. Filename prefixes count all CLI
+operands, including failed opens.
 
 | Operands | -n | Output |
 |---|---|---|
@@ -42,35 +33,49 @@ including operands that fail to open.
 | Multiple | No | file.txt:matched line |
 | Multiple | Yes | file.txt:12:matched line |
 
-Exit codes: 0 = match, 1 = no match, 2 = usage/open/read error. Per-file
-read failures preserve already emitted output and scanning continues to the
-next file. EOF finishing is skipped on read error. Sink exceptions are
-translated through the existing app exception policy; completed earlier
-file results survive, while the interrupted and subsequent files receive
-the translated error. This API exposes no external cancellation handle;
-the retained runtime checks its cancel token between files and reads and
-settles accepted reads before releasing their borrows.
+Exit codes: 0 = match, 1 = no match, 2 = usage/open/read error. Per-file read
+failures preserve already emitted output and scanning continues to later files.
+EOF finishing is skipped on read error. Sink exceptions preserve earlier file
+results; the interrupted and subsequent files receive the translated error:
+`bad_alloc` maps to `no_space`, `system_error` retains native errno and canonical
+mapping, other exceptions map to `backend_error`.
 
-The existing buffer, capped carry and per-chunk event storage remain. Matches
-for a chunk are assembled before sink delivery; no whole-file accumulation
-is introduced. File ownership ends through RAII, preserving the existing
-policy of not reporting destructor close errors.
+The reusable buffer, capped carry and per-chunk event storage remain. No
+whole-file accumulation or external cancellation handle is introduced. File
+ownership ends through RAII with the existing destructor close-error policy.
+
+## Migration from the legacy worker bridge
+
+The owner explicitly approved removal for F3 Step 3 on 2026-10-11. `--workers`
+is removed, including explicit `--workers 1`. When encountered, it reports
+`--workers has been removed; omit it to use direct execution`, prints usage,
+and returns 2 before opening inputs. `--workers=<value>` receives the same
+migration diagnosis; this spelling was already unsupported. The existing early
+`--help` return remains. Replace `sluice-grep --workers 4 hit a b` with
+`sluice-grep hit a b`. There is no deprecation window or substitute worker pool.
+The former worker setting did not promise parallel file scanning.
+
+The app-local `grep_files_with_backend` and workers argument of `grep_files`
+are deliberately removed. In-tree injected callers were test-only. App-header
+consumers must call `grep_files(pattern, inputs, buffer_size, max_line_bytes,
+sink)`. These headers were not installed SDK interfaces; unknown external source
+use is not assumed zero. No injected adapter replaces this API. Canonical
+ThreadPool/io_uring Request execution remains in the SDK.
 
 ## Reproducible evidence
 
-Build and run app_grep_consumption_test plus direct_w01_consumer_probe.
-Run the real CLI oracle with the built binary and an optional trace directory:
+`app_grep_consumption_test` retains eight direct semantic cases: matching,
+order, long-line skip, closed-file errors, independent byte/chunk expectations,
+partial-output/read-failure continuation, config rejection and sink exceptions.
+Run `tests/grep_cli_oracle.py <binary> [trace-directory]` for prefix, byte/CRLF/EOF,
+cap, ordering, error and bound oracles plus direct thread/open traces. Run
+`tests/app_direct_cli_oracle.py grep <binary> [short-read-shim.so]` for removed
+workers, FIFO rejection, multi-buffer output and controlled short reads/EIO.
 
-```sh
-python3 tests/grep_cli_oracle.py /absolute/path/to/sluice-grep /tmp/grep-traces
-```
-
-The CLI oracle includes prefix combinations, bytes/CRLF/EOF, cross-buffer
-matching, long-line skip, ordering, open failures, integer/range failures
-with a FIFO negative control, and process thread/open traces. Consumption
-tests cover direct, workers=2/64 and injected ThreadPool execution, independent
-chunk-boundary expectations, partial output/read failure continuation,
-configuration rejection, canceled submission and sink-exception cleanup.
-The canceled-submission oracle is rejection evidence, not a claim of an
-in-flight cancellation schedule. Runtime cancellation/settlement evidence
-remains with runtime_waiter_observer_test.
+The removed injected canceled-submission test returned `canceled` before
+admission; it did not prove an accepted-request cancellation schedule. Canonical
+admission/cancellation obligations remain with `async_sync_admission_test`,
+`backend_conformance_e1_threadpool_test`, `backend_conformance_e1_uring_test`,
+and the backend core-cutover suites. Runtime waiter/observer tests remain for
+COPY/TAIL and other consumers. This app exit does not retire ApplicationRuntime
+or complete F3.

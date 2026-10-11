@@ -1,9 +1,10 @@
 #include "grep_task.hpp"
 
 #include <sluice/file_resource.hpp>
-#include <sluice/async/threadpool_backend.hpp>
 
 #include <stdexcept>
+#include <system_error>
+#include <cerrno>
 
 #include <cstdio>
 #include <cstring>
@@ -63,8 +64,7 @@ bool grep_files_matches_lines_and_counts() {
     std::vector<GrepInput> inputs;
     inputs.push_back(GrepInput{path, std::move(opened).value()});
 
-    const auto results =
-        sluice_grep::grep_files("alpha", std::move(inputs), 4096, 1 << 20, 1, sink);
+    const auto results = sluice_grep::grep_files("alpha", std::move(inputs), 4096, 1 << 20, sink);
     if (results.size() != 1)
         return false;
     if (results[0].error.has_value())
@@ -108,8 +108,7 @@ bool grep_files_reports_results_in_input_order() {
     inputs.push_back(GrepInput{path_a, std::move(opened_a).value()});
     inputs.push_back(GrepInput{path_b, std::move(opened_b).value()});
 
-    const auto results =
-        sluice_grep::grep_files("alpha", std::move(inputs), 4096, 1 << 20, 1, sink);
+    const auto results = sluice_grep::grep_files("alpha", std::move(inputs), 4096, 1 << 20, sink);
     if (results.size() != 2)
         return false;
     if (results[0].path != path_a || results[1].path != path_b)
@@ -144,7 +143,7 @@ bool grep_files_reports_dropped_long_lines() {
     std::vector<GrepInput> inputs;
     inputs.push_back(GrepInput{path, std::move(opened).value()});
 
-    const auto results = sluice_grep::grep_files("alpha", std::move(inputs), 4096, 16, 1, sink);
+    const auto results = sluice_grep::grep_files("alpha", std::move(inputs), 4096, 16, sink);
     if (results.size() != 1)
         return false;
     if (results[0].error.has_value())
@@ -176,8 +175,7 @@ bool grep_files_reports_error_for_closed_file() {
     std::vector<GrepInput> inputs;
     inputs.push_back(GrepInput{path, std::move(file)});
 
-    const auto results =
-        sluice_grep::grep_files("alpha", std::move(inputs), 4096, 1 << 20, 1, sink);
+    const auto results = sluice_grep::grep_files("alpha", std::move(inputs), 4096, 1 << 20, sink);
     if (results.size() != 1)
         return false;
     if (!results[0].error.has_value())
@@ -185,23 +183,11 @@ bool grep_files_reports_error_for_closed_file() {
     return matches.empty();
 }
 
-std::vector<GrepFileResult> invoke(unsigned kind, const std::string& pattern,
-                                   std::vector<GrepInput> inputs, std::size_t buffer,
-                                   std::size_t cap, MatchSink sink) {
-    if (kind == 3)
-        return sluice_grep::grep_files_with_backend(
-            pattern, std::move(inputs), buffer, cap, 1, std::move(sink),
-            std::make_unique<sluice::async::ThreadPoolBackend>());
-    constexpr unsigned workers[] = {1, 2, 64};
-    return sluice_grep::grep_files(pattern, std::move(inputs), buffer, cap, workers[kind],
-                                   std::move(sink));
-}
-
 bool chunk_invariance_and_byte_line_oracle() {
     const std::string content = "\n" + std::string(4092, 'x') + "alpha\r\n" +
                                 std::string("\0alpha\xff\n", 8) + std::string(9000, 'x') +
                                 "alpha\nalpha tail";
-    for (unsigned kind = 0; kind != 4; ++kind) {
+    {
         for (std::size_t buffer : {4096, 4097, 8192}) {
             const auto path = make_temp_file(content);
             if (path.empty())
@@ -213,11 +199,11 @@ bool chunk_invariance_and_byte_line_oracle() {
             std::vector<GrepInput> inputs;
             inputs.push_back({path, std::move(opened).value()});
             std::vector<CollectedMatch> matches;
-            const auto results =
-                invoke(kind, "alpha", std::move(inputs), buffer, 5000,
-                       [&](const std::string& p, std::uint64_t n, std::string_view line) {
-                           matches.push_back({p, n, std::string(line)});
-                       });
+            const auto results = sluice_grep::grep_files(
+                "alpha", std::move(inputs), buffer, 5000,
+                [&](const std::string& p, std::uint64_t n, std::string_view line) {
+                    matches.push_back({p, n, std::string(line)});
+                });
             if (results.size() != 1 || results[0].error || results[0].match_count != 3 ||
                 results[0].lines_scanned != 5 || !results[0].dropped_long_lines ||
                 matches.size() != 3 || matches[0].line_no != 2 ||
@@ -231,7 +217,7 @@ bool chunk_invariance_and_byte_line_oracle() {
 }
 
 bool read_failure_after_output_continues_to_next_file() {
-    for (unsigned kind = 0; kind != 4; ++kind) {
+    {
         const auto path = make_temp_file("alpha\n" + std::string(8192, 'x') + "\nalpha tail");
         if (path.empty())
             return false;
@@ -246,13 +232,13 @@ bool read_failure_after_output_continues_to_next_file() {
         File* first_file = &inputs[0].file;
         std::vector<CollectedMatch> matches;
         bool closed = false;
-        const auto results =
-            invoke(kind, "alpha", std::move(inputs), 4096, 16384,
-                   [&](const std::string& p, std::uint64_t n, std::string_view line) {
-                       matches.push_back({p, n, std::string(line)});
-                       if (p == "first")
-                           closed = first_file->close().has_value();
-                   });
+        const auto results = sluice_grep::grep_files(
+            "alpha", std::move(inputs), 4096, 16384,
+            [&](const std::string& p, std::uint64_t n, std::string_view line) {
+                matches.push_back({p, n, std::string(line)});
+                if (p == "first")
+                    closed = first_file->close().has_value();
+            });
         if (!closed || results.size() != 2 || !results[0].error ||
             results[0].error->code != sluice::IoError::Code::invalid_state ||
             results[0].match_count != 1 || results[0].lines_scanned != 1 || results[1].error ||
@@ -268,10 +254,8 @@ bool invalid_config_has_no_sink_effect() {
     struct Config {
         std::size_t buffer;
         std::size_t cap;
-        unsigned workers;
     };
-    const Config configs[] = {{4095, 1, 1},        {67108865, 1, 1}, {4096, 0, 1},
-                              {4096, 67108865, 1}, {4096, 1, 0},     {4096, 1, 65}};
+    const Config configs[] = {{4095, 1}, {67108865, 1}, {4096, 0}, {4096, 67108865}};
     for (const auto config : configs) {
         const auto path = make_temp_file("alpha\n");
         if (path.empty())
@@ -284,7 +268,7 @@ bool invalid_config_has_no_sink_effect() {
         inputs.push_back({path, std::move(opened).value()});
         bool called = false;
         auto results = sluice_grep::grep_files(
-            "alpha", std::move(inputs), config.buffer, config.cap, config.workers,
+            "alpha", std::move(inputs), config.buffer, config.cap,
             [&](const std::string&, std::uint64_t, std::string_view) { called = true; });
         if (called || results.size() != 1 || !results[0].error ||
             results[0].error->code != sluice::IoError::Code::invalid_state)
@@ -293,37 +277,9 @@ bool invalid_config_has_no_sink_effect() {
     return true;
 }
 
-class CanceledReadBackend final : public sluice::async::ThreadPoolBackend {
-    sluice::Result<sluice::async::detail::RequestKey>
-    submit_read(sluice::async::ReadOp, sluice::async::Completion<std::size_t>*) override {
-        return sluice::make_unexpected<sluice::async::detail::RequestKey>(
-            sluice::IoError{sluice::IoError::Code::canceled});
-    }
-};
-
-bool injected_canceled_read_has_no_match() {
-    const auto path = make_temp_file("alpha\n");
-    if (path.empty())
-        return false;
-    auto opened = File::open(path);
-    ::unlink(path.c_str());
-    if (!opened.has_value())
-        return false;
-    std::vector<GrepInput> inputs;
-    inputs.push_back({path, std::move(opened).value()});
-    bool called = false;
-    const auto results = sluice_grep::grep_files_with_backend(
-        "alpha", std::move(inputs), 4096, 16384, 1,
-        [&](const std::string&, std::uint64_t, std::string_view) { called = true; },
-        std::make_unique<CanceledReadBackend>());
-    return !called && results.size() == 1 && results[0].error &&
-           results[0].error->code == sluice::IoError::Code::canceled &&
-           results[0].match_count == 0;
-}
-
 bool sink_exceptions_return_translated_errors() {
-    for (unsigned kind = 0; kind != 4; ++kind) {
-        for (bool allocation_failure : {false, true}) {
+    {
+        for (unsigned failure : {0u, 1u, 2u}) {
             const auto path = make_temp_file("alpha\n" + std::string(8192, 'x'));
             if (path.empty())
                 return false;
@@ -334,17 +290,22 @@ bool sink_exceptions_return_translated_errors() {
             std::vector<GrepInput> inputs;
             inputs.push_back({path, std::move(opened).value()});
             bool called = false;
-            auto results = invoke(kind, "alpha", std::move(inputs), 4096, 16384,
+            auto results = sluice_grep::grep_files(
+                "alpha", std::move(inputs), 4096, 16384,
                 [&](const std::string&, std::uint64_t, std::string_view) {
                     called = true;
-                    if (allocation_failure)
+                    if (failure == 1)
                         throw std::bad_alloc();
+                    if (failure == 2)
+                        throw std::system_error(EACCES, std::generic_category());
                     throw std::runtime_error("sink failure");
                 });
-            const auto expected = allocation_failure ? sluice::IoError::Code::no_space
-                                                     : sluice::IoError::Code::backend_error;
+            const auto expected = failure == 1   ? sluice::IoError::Code::no_space
+                                  : failure == 2 ? sluice::IoError::Code::permission_denied
+                                                 : sluice::IoError::Code::backend_error;
             if (!called || results.size() != 1 || !results[0].error ||
-                results[0].error->code != expected)
+                results[0].error->code != expected ||
+                results[0].error->os_errno != (failure == 2 ? EACCES : 0))
                 return false;
         }
     }
@@ -359,7 +320,6 @@ int main() {
         bool (*fn)();
     };
     const NamedTest tests[] = {
-        {"injected_canceled_read_has_no_match", injected_canceled_read_has_no_match},
         {"chunk_invariance_and_byte_line_oracle", chunk_invariance_and_byte_line_oracle},
         {"read_failure_after_output_continues_to_next_file",
          read_failure_after_output_continues_to_next_file},

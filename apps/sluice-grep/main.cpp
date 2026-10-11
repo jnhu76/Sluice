@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     };
 
     auto results = sluice_grep::grep_files(args.pattern, std::move(inputs), args.buffer_size,
-                                           args.max_line_bytes, args.workers, sink);
+                                           args.max_line_bytes, sink);
     std::fflush(stdout);
 
     bool any_error = false;
