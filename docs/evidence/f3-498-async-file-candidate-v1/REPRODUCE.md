@@ -28,19 +28,25 @@ baseline and fail candidate with undefined references. They do not depend on
 including the removed header to manufacture link failure. Exact argv/status
 are in negative-link-results.json; raw diagnostics are in the raw archive.
 
-Fresh reproduction: choose a new base directory; update absolute base/repo
-locations in run.sh, probes.py, finalize.py and extracted capture.py scripts.
-Extract raw-package-evidence.tar.gz to obtain capture.py and inventory.lua;
-place those scripts under the new before/after roots, then run run.sh (two
-profiles, each builds/installs libs and captures actual resolved sources/objects,
-ar/nm, installed header compiler closures, host map/link/run). Run probes.py
-for installed W01/W02/W03-threadpool and header/name controls. For each stage
-and profile run clean-consumers-P/w03_external_loop uring: require 0 for y and
-2 for n, retaining stdout and status. Replay four link probe argv recorded in
-negative-link-results.json against the new prefixes with the same declared
-old signatures (from before header) and volatile address references; require
-success before and undefined-reference failure after. finalize.py produces
-versioned manifests, object-member hashes, exact delta and raw hashes.
+Fresh reproduction uses the committed executable orchestrator (output directory
+must be absent):
+
+```sh
+python3 docs/evidence/f3-498-async-file-candidate-v1/fresh_reproduce.py \
+    --repo /path/to/Sluice --output-dir /fresh/path/to/capture \
+    --before 432dd1e9 --after 9f8c6b3d
+```
+
+It extracts and places capture/inventory scripts, archives the exact supplied
+commits into isolated profile roots, builds/installs libraries, captures actual
+source/object/archive/header/host evidence and runs installed consumers. It
+generates all four old-signature link source controls, captures their raw sources,
+commands and actual statuses, checks undefined-reference diagnostics after
+removal, runs W03 real uring y and explicit unavailable n, independently checks
+EVERY tracked production/build input against each commit, and writes provenance
+and results before finalization. No original uncommitted capture workspace is
+required. Original dated v1 evidence remains immutable; fresh results reside in
+the chosen output directory/results.
 
 Raw captures include complete defined/undefined archive symbols, resolved
 sources and objects, installed inventory, consumer linker maps and symbols,

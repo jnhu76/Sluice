@@ -7,7 +7,7 @@ runtime state, authority, probe, counter or lease. Production authority remains
 File shared validation and RequestCore settlement; Completion, Fiber/fiber_ctx,
 StackfulIoHost and ApplicationRuntime remain physically retained.
 
-Authority: root v1-r4 SEM-01, ERR-01, FILE/POS/DUR, REQ, LIFE, HOST,
+Authority: root v1-r4 SEM-01/03/04/05/06, ERR-01, REQ, LIFE, HOST,
 PROG, SHUT, MIG-01/02, GOV-02; F0 policy §1.7; #498. Workload: canonical
 positional single reads/writes and data/all synchronization, optional narrow
 host closure. #475 exact HOLD/KEEP surfaces do not enumerate async/file.hpp;
