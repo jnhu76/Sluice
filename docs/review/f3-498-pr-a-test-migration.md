@@ -222,3 +222,15 @@ Remote matrix receipts will be recorded separately with the tested code SHA,
 complete configuration, build/run commands, compiler/link instrumentation,
 raw logs, status and limitations. Independent review and merge authorization
 are separate gates; this document does not assert either.
+
+## Clang sanitizer prerequisite correction
+
+The first fresh ASan/UBSan and TSan builds at `432dd1e9` passed twelve
+affected tests, but `request_scope_test` failed compilation under Clang 22
+with `-Werror,-Wunused-variable`: the never-read local
+`std::optional<ScopeTicket<std::size_t>> ticket` in the existing pre-dispatch
+cancel test. Removing that inert declaration is the minimal compile correction;
+no assertion, cancellation, scheduling or sanitizer instrumentation changes.
+The corrected scope target is rechecked in the four base profiles and both
+sanitizer configurations; other passing tests need no repeat because their
+source, production library and configuration are unchanged.
