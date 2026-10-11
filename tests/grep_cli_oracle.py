@@ -4,6 +4,8 @@ import subprocess
 import sys
 import tempfile
 
+from grep_trace_oracle import successful_creations
+
 binary = str(pathlib.Path(sys.argv[1]).resolve())
 trace_dir = pathlib.Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else None
 if trace_dir:
@@ -64,11 +66,13 @@ with tempfile.TemporaryDirectory(prefix="sluice-grep-cli-") as directory:
             result = subprocess.run(["strace", "-f", "-e", "trace=clone,clone3",
                 "-o", str(trace), binary, "--workers", str(workers), "hit", "a"],
                 capture_output=True, timeout=10)
-            calls = [line for line in trace.read_text().splitlines() if "clone" in line]
+            trace_text = trace.read_text()
+            calls = [line for line in trace_text.splitlines() if "clone" in line]
+            created = successful_creations(trace_text)
             checks += 1
-            if result.returncode != 0 or (workers == 1 and calls) or (workers > 1 and not calls):
+            if result.returncode != 0 or (workers == 1 and calls) or (workers > 1 and created == 0):
                 failures.append((["thread trace", str(workers)], str(calls)))
-            print(f"THREAD_TRACE workers={workers} clone_calls={len(calls)}")
+            print(f"THREAD_TRACE workers={workers} clone_trace_lines={len(calls)} successful_creations={created}")
         trace = trace_dir / "invalid-fifo.trace"
         result = subprocess.run(["strace", "-f", "-e", "trace=openat",
             "-o", str(trace), binary, "--buffer-size", "4095", "hit", "fifo", "a"],

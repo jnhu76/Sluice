@@ -125,7 +125,10 @@ Thread evidence: baseline default trace contains clone creation. All four
 candidate workers=1 traces contain no clone/clone3; workers=2 and workers=64
 traces contain successful creation. Logged clone_calls counts clone-bearing
 trace lines, including unfinished/resumed fragments; it is not an exact thread
-cardinality claim. Raw traces are retained. This proves the observed process
+cardinality claim. Raw traces are retained. The review correction adds a
+success-only predicate: completed or resumed clone/clone3 returns must contain
+a positive child PID. Failed attempts and unfinished fragments do not satisfy
+the legacy creation check. Default still requires zero clone-bearing lines. This proves the observed process
 execution distinction instead of relying only on the source branch.
 
 GCC ASan/UBSan attempt: UNVERIFIED/UNAVAILABLE at link, missing
@@ -136,7 +139,11 @@ waiter/observer cases were rerun in each profile; that is scoped compatibility
 evidence, not a full new proof of all cancellation interleavings.
 
 Reproduction: run the committed run-matrix.sh on the server (it creates four
-detached worktrees at the invoking branch HEAD). Logs remain in
+detached worktrees at the invoking branch HEAD). Each invocation allocates fresh
+worktree and evidence roots with mktemp, prints their paths, and retains them;
+it neither reuses nor deletes existing worktrees or overwrites earlier logs.
+Defaults can be relocated with SLUICE_GREP_REPO, SLUICE_GREP_WORKTREE_PARENT
+and SLUICE_GREP_EVIDENCE_ROOT. Logs remain below
 /home/jnhu/Source/f3-grep-evidence. For baseline discriminator, build sluice-grep
 at the base SHA in an isolated worktree, then invoke the candidate's
 tests/grep_cli_oracle.py against that baseline binary. Script timeouts only
@@ -187,3 +194,25 @@ and supplementary-test head receives a separate narrow review before Ready.
 
 No merge authorization. Next step: HASH_GREP_COMPAT_EXIT. W-04 support,
 legacy runtime retirement and F3 family closure remain outstanding.
+
+## Review observations corrected before owner-authorized merge
+
+At the original reviewed head d4f89c26, the same-SHA runner could collide with
+its earlier fixed worktree paths and the trace check accepted any clone-bearing
+line for legacy creation. Regressions first reproduced both: the runner's second
+fixture execution returned 128 for an existing directory; four trace fixtures
+failed because failed/unfinished/non-syscall lines were counted and a resumed
+return was double-counted.
+
+The corrected runner allocates independent roots and preserves earlier receipts
+and worktrees. Its controlled runner test uses actual Git worktrees with inert
+build/CLI fixtures; two runs at one SHA produce eight distinct profile worktrees,
+retain an existing unrelated fixture worktree and sentinel, and keep eight logs.
+That is runner-lifecycle evidence, not a replacement for the real C++ matrix.
+Four trace fixtures independently check rejected attempts, unfinished calls,
+positive completed/resumed returns and unrelated syscalls. The actual CLI
+oracle uses that success-only predicate. Run these focused regressions with
+python3 tests/test_grep_matrix_runner.py and
+python3 tests/test_grep_trace_oracle.py.
+Legacy compatibility/include/link responsibility is unchanged; no family
+contraction or W-04 support is claimed.

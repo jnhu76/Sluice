@@ -1,12 +1,17 @@
 #!/bin/bash
 set -euo pipefail
-repo=/home/jnhu/Source/Sluice-f3-grep-direct
-evidence=/home/jnhu/Source/f3-grep-evidence
+repo=${SLUICE_GREP_REPO:-/home/jnhu/Source/Sluice-f3-grep-direct}
+evidence_parent=${SLUICE_GREP_EVIDENCE_ROOT:-/home/jnhu/Source/f3-grep-evidence}
+worktree_parent=${SLUICE_GREP_WORKTREE_PARENT:-/home/jnhu/Source}
 sha=$(git -C "$repo" rev-parse HEAD)
+mkdir -p "$evidence_parent"
+worktree_root=$(mktemp -d "$worktree_parent/sluice-f3-grep-$sha-XXXXXXXX")
+evidence=$(mktemp -d "$evidence_parent/run-$sha-XXXXXXXX")
+printf 'RUN_SHA=%s\nWORKTREE_ROOT=%s\nEVIDENCE_ROOT=%s\n' "$sha" "$worktree_root" "$evidence"
 for mode in debug release; do
   for ring in n y; do
     profile="$mode-$ring"
-    wt="/home/jnhu/Source/sluice-f3-grep-$sha-$profile"
+    wt="$worktree_root/$profile"
     git -C "$repo" worktree add --detach "$wt" "$sha"
     (
       cd "$wt"
