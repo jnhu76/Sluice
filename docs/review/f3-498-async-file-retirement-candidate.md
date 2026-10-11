@@ -1,7 +1,8 @@
 # F3 #498 PR B: async File wrapper retirement candidate
 
 Status: DRAFT_NONADOPTED; EXTERNAL_RISK_PENDING; F5_PENDING.
-Baseline: a9165f0a (PR #499 audit merge). This paired deletion candidate removes
+Original baseline: a9165f0a (PR #499 audit merge). Current unmerged stack base:
+PR A plus supplements3f846afa; corrected candidate code41fc1b45. This paired deletion candidate removes
 src/async/file.cpp and include/sluice/async/file.hpp only. It creates no new
 runtime state, authority, probe, counter or lease. Production authority remains
 File shared validation and RequestCore settlement; Completion, Fiber/fiber_ctx,
@@ -93,9 +94,11 @@ package; after publication rollback requires an explicit versioned owner cut.
 ## Consumer/evidence ownership and contraction audit
 
 PR A owns migration of six File semantic test TUs and include-only edges in
-async_sync_admission/progress_source_ownership/uring_backend_smoke. Until its
-reviewed commit is incorporated, this standalone candidate intentionally cannot
-build those retained tests. Do not interpret library-only success as their pass.
+async_sync_admission/progress_source_ownership/uring_backend_smoke. PR A and its
+scope/smoke supplements are incorporated in this unmerged stack. Corrected full
+Debug/Release n/y matrix and ASanUBSan pass; static TSan scope has its separately
+recorded allocation-override link limitation. Neither PR A nor this candidate
+has been merged/adopted by this execution. See the final receipt for exact SHAs.
 Semantic precheck/error/composition/durability observations remain obligations;
 old runtime helper call sequences are not the oracle. Formal/docs references
 remain historical or need explicit current ownership mapping before adoption.
@@ -120,14 +123,14 @@ headers, 50→49 library objects, 37→36 async members; W01/W02/W03
 threadpool installed consumers and optional host construction link/run pass;
 W03 real uring passes y, while n reports explicit unavailable (exit 2).
 Removed-header/name syntax controls and each old-symbol link positive/negative
-control distinguish baseline presence from candidate absence. The full affected
-behavior/sanitizer matrix remains pending PR A integration.
+control distinguish baseline presence from candidate absence. The completed affected matrix and corrected-input mapping are in the
+[final receipt](f3-498-pr-b-final-receipt.md); the original dated v1 package
+capture remains immutable.
 Historical F1 verifier freeze provenance is not applicable to a changed package:
 its production-diff-empty gate is intentionally not relabeled PASS or bypassed.
 This new candidate evidence does not overwrite/adopt the old B-01 baseline.
 
-Pending: PR A incorporation; affected debug/release n/y real-backend matrix and
-ASan/UBSan/TSan evidence; independent review; each external-risk owner decision;
+Pending: independent final review; each external-risk owner decision;
 F5 versioned package adoption/publication; explicit merge authorization.
 PHYSICAL_CONTRACTION_ADOPTED=NO; OPTIONAL_W04_SUPPORTED=NO;
 V1_RELEASE_READY=NO.

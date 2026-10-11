@@ -29,9 +29,11 @@ link maps, source generator, command/status records and raw hashes are captured.
 
 The first version was dated master a9165f0a→94507a57. After rebasing the unpushed
 candidate onto reviewed test migration A432dd1e9, this fresh capture measures
-A432dd1e9→B9f8c6b3d directly. Pending supplemental scope/smoke test fixes will
-require their affected target reruns; library and package-consumer inputs are
-unchanged and will receive explicit final input-equivalence mapping.
+A432dd1e9→B9f8c6b3d directly. Supplemental scope/smoke test fixes are incorporated in corrected candidate
+41fc1b45; their affected reruns and static-TSan scope limitation are recorded in
+the final matrix receipt. Library/build/header/package-consumer inputs remain
+byte-identical, as final-input-equivalence.json records. The original v2 exact
+SHAs stay captured provenance rather than being relabeled as a later build.
 
 EXTERNAL_RISK_PENDING; F5_PENDING; DRAFT_NONADOPTED; OPTIONAL_W04_SUPPORTED=NO;
 V1_RELEASE_READY=NO. This package receipt does not claim a full behavior matrix.
