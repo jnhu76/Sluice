@@ -114,7 +114,14 @@ installed prefix and clean consumer directories. Capture actual resolved library
 sources/objects, complete archive ar/nm, installed headers and compiler closures;
 compile/link/run retained canonical and narrow host consumers from installed
 prefix only; negative probes check removed header and each name; record exact
-commands and manifests. Final evidence is produced beside this record.
+commands and manifests. [Candidate evidence](../evidence/f3-498-async-file-candidate-v1/REPRODUCE.md) maps
+before a9165f0a to production after 94507a57. Both profiles measure 79→78
+headers, 50→49 library objects, 37→36 async members; W01/W02/W03
+threadpool installed consumers and optional host construction link/run pass;
+W03 real uring passes y, while n reports explicit unavailable (exit 2).
+Removed-header/name syntax controls and each old-symbol link positive/negative
+control distinguish baseline presence from candidate absence. The full affected
+behavior/sanitizer matrix remains pending PR A integration.
 Historical F1 verifier freeze provenance is not applicable to a changed package:
 its production-diff-empty gate is intentionally not relabeled PASS or bypassed.
 This new candidate evidence does not overwrite/adopt the old B-01 baseline.
