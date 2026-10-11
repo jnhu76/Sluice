@@ -44,8 +44,8 @@ do
     end
 end
 
--- sluice-grep: bounded streaming literal line search over ApplicationRuntime
--- + ThreadPoolBackend. Multi-file target (main + the engine / matcher / CLI
+-- sluice-grep: direct single-worker literal line search; multi-worker and
+-- injected-backend compatibility retains ApplicationRuntime + ThreadPoolBackend. Multi-file target (main + the engine / matcher / CLI
 -- modules also compiled into the app's tests). Public headers only.
 do
     local dir = R .. "apps/sluice-grep"

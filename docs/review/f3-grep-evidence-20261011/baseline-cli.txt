@@ -1,0 +1,9 @@
+FAIL ['--workers', '1', 'hit', 'a', 'b'] (b'ahit one\nbhit two\n', b'a:hit one\nb:hit two\n')
+FAIL ['--workers', '2', 'hit', 'a', 'b'] (b'ahit one\nbhit two\n', b'a:hit one\nb:hit two\n')
+FAIL ['--workers', '64', 'hit', 'a', 'b'] (b'ahit one\nbhit two\n', b'a:hit one\nb:hit two\n')
+FAIL ['hit', 'absent', 'a', 'b'] (b'ahit one\nbhit two\n', b'a:hit one\nb:hit two\n')
+FAIL ['hit', '/tmp/sluice-grep-cli-d_ovplsa', 'a'] (b'ahit one\n', b'a:hit one\n')
+FAIL ['--buffer-size', '4095', 'hit', 'fifo', 'a'] Command '['/home/jnhu/Source/Sluice-f3-grep-direct/build-baseline/linux/x86_64/debug/sluice-grep', '--buffer-size', '4095', 'hit', 'fifo', 'a']' timed out after 3 seconds
+FAIL ['--buffer-size', '67108865', 'hit', 'fifo', 'a'] Command '['/home/jnhu/Source/Sluice-f3-grep-direct/build-baseline/linux/x86_64/debug/sluice-grep', '--buffer-size', '67108865', 'hit', 'fifo', 'a']' timed out after 3 seconds
+FAIL ['--max-line-bytes', '67108865', 'hit', 'fifo', 'a'] Command '['/home/jnhu/Source/Sluice-f3-grep-direct/build-baseline/linux/x86_64/debug/sluice-grep', '--max-line-bytes', '67108865', 'hit', 'fifo', 'a']' timed out after 3 seconds
+CLI_ORACLE checks=47 failures=8
