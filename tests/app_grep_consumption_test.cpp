@@ -321,25 +321,32 @@ bool injected_canceled_read_has_no_match() {
            results[0].match_count == 0;
 }
 
-bool sink_exception_settles_before_return() {
+bool sink_exceptions_return_translated_errors() {
     for (unsigned kind = 0; kind != 4; ++kind) {
-        const auto path = make_temp_file("alpha\n" + std::string(8192, 'x'));
-        if (path.empty())
-            return false;
-        auto opened = File::open(path);
-        ::unlink(path.c_str());
-        if (!opened.has_value())
-            return false;
-        std::vector<GrepInput> inputs;
-        inputs.push_back({path, std::move(opened).value()});
-        bool called = false;
-        auto results = invoke(kind, "alpha", std::move(inputs), 4096, 16384,
-                              [&](const std::string&, std::uint64_t, std::string_view) {
-                                  called = true;
-                                  throw std::runtime_error("sink failure");
-                              });
-        if (!called || results.size() != 1 || !results[0].error)
-            return false;
+        for (bool allocation_failure : {false, true}) {
+            const auto path = make_temp_file("alpha\n" + std::string(8192, 'x'));
+            if (path.empty())
+                return false;
+            auto opened = File::open(path);
+            ::unlink(path.c_str());
+            if (!opened.has_value())
+                return false;
+            std::vector<GrepInput> inputs;
+            inputs.push_back({path, std::move(opened).value()});
+            bool called = false;
+            auto results = invoke(kind, "alpha", std::move(inputs), 4096, 16384,
+                [&](const std::string&, std::uint64_t, std::string_view) {
+                    called = true;
+                    if (allocation_failure)
+                        throw std::bad_alloc();
+                    throw std::runtime_error("sink failure");
+                });
+            const auto expected = allocation_failure ? sluice::IoError::Code::no_space
+                                                     : sluice::IoError::Code::backend_error;
+            if (!called || results.size() != 1 || !results[0].error ||
+                results[0].error->code != expected)
+                return false;
+        }
     }
     return true;
 }
@@ -357,7 +364,7 @@ int main() {
         {"read_failure_after_output_continues_to_next_file",
          read_failure_after_output_continues_to_next_file},
         {"invalid_config_has_no_sink_effect", invalid_config_has_no_sink_effect},
-        {"sink_exception_settles_before_return", sink_exception_settles_before_return},
+        {"sink_exceptions_return_translated_errors", sink_exceptions_return_translated_errors},
         {"grep_files_matches_lines_and_counts", grep_files_matches_lines_and_counts},
         {"grep_files_reports_results_in_input_order", grep_files_reports_results_in_input_order},
         {"grep_files_reports_dropped_long_lines", grep_files_reports_dropped_long_lines},
