@@ -119,4 +119,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-}::cli
+}

@@ -168,8 +168,8 @@ std::vector<GrepFileResult> grep_files(const std::string& pattern, std::vector<G
     }
     GrepTask task{pattern,         std::move(inputs), max_line_bytes,
                   std::move(sink), std::move(buffer), {}};
-    task.results.reserve(task.inputs.size());
     try {
+        task.results.reserve(task.inputs.size());
         for (std::size_t i = 0; i < task.inputs.size(); ++i)
             task.scan_one(i, [&](std::uint64_t offset, std::span<std::byte> dst) {
                 return sluice::blocking::read_at(task.inputs[i].file, offset, dst);
