@@ -70,7 +70,7 @@ std::atomic<std::size_t> g_allocations{0};
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 #endif
 
-void* operator new(std::size_t n) {
+[[gnu::noinline]] void* operator new(std::size_t n) {
     const int saved = errno;
     g_allocations.fetch_add(1, std::memory_order_relaxed);
     errno = saved;
@@ -81,23 +81,23 @@ void* operator new(std::size_t n) {
     return p;
 }
 
-void* operator new[](std::size_t n) {
+[[gnu::noinline]] void* operator new[](std::size_t n) {
     return ::operator new(n);
 }
 
-void operator delete(void* p) noexcept {
+[[gnu::noinline]] void operator delete(void* p) noexcept {
     std::free(p);
 }
 
-void operator delete[](void* p) noexcept {
+[[gnu::noinline]] void operator delete[](void* p) noexcept {
     std::free(p);
 }
 
-void operator delete(void* p, std::size_t) noexcept {
+[[gnu::noinline]] void operator delete(void* p, std::size_t) noexcept {
     ::operator delete(p);
 }
 
-void operator delete[](void* p, std::size_t) noexcept {
+[[gnu::noinline]] void operator delete[](void* p, std::size_t) noexcept {
     ::operator delete[](p);
 }
 
