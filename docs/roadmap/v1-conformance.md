@@ -51,6 +51,24 @@ family gates; affected shared seams serialize locally; F5 follows their final
 dispositions. #402's separately tracked F5 optional-W04 shorthand is a downstream
 acceptance correction, not an extra M exit gate. `V1_RELEASE_READY=NO`.
 
+## F3 HASH default-path migration — 2026-10-11
+
+Scoped `VERIFIED` evidence for the HASH default path at production49858941 /
+fixed-test14758dcd: workers=1 uses canonical blocking File; workers2..64 and
+injected backends retain their explicit legacy bridge under the owner's task
+approval. D-H2 app-local shared validation rejects illegal CLI bounds before
+opening inputs (usage exit1). See [implementation/evidence](../review/f3-hash-direct-20261011.md)
+for exact SHAs, four remote profiles, early-FIFO negative control, three-path
+error isolation, clone traces, current dual-profile SDK comparison and unavailable
+sanitizer runtimes. HASH main/parser header closures each contract34→3.
+
+This is partial F3 execution for #474/#402, not family retirement. SDK headers79,
+core/async archive members13/37 and symbol inventories are unchanged; runtime
+sources/install closure remain because retained consumers still need them.
+`Legacy and compatibility retirement` remains `NOT_ASSESSED`; optional W04
+support and `V1_RELEASE_READY` remain NO. No historical frozen manifest is reused
+as proof of this changed app. Final PR HEAD attestation is recorded on #492.
+
 ## Status vocabulary
 
 | Status | Meaning |

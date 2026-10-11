@@ -2,6 +2,7 @@
 #include "sha256.hpp"
 
 #include <sluice/file_resource.hpp>
+#include <sluice/async/threadpool_backend.hpp>
 
 #include <cstdio>
 #include <cstring>
@@ -172,6 +173,33 @@ bool hash_files_preserves_input_order() {
     return results[0].hex == digest_hex("abc") && results[1].hex == digest_hex("def");
 }
 
+bool hash_files_continues_after_read_error_in_all_invocation_paths() {
+    for (unsigned path_kind = 0; path_kind != 3; ++path_kind) {
+        const std::string path = make_temp_file("abc");
+        if (path.empty())
+            return false;
+        auto opened = File::open(path);
+        auto closed = File::open(path);
+        ::unlink(path.c_str());
+        if (!opened.has_value() || !closed.has_value() || !closed.value().close().has_value())
+            return false;
+        std::vector<HashInput> inputs;
+        inputs.push_back(HashInput{"closed", std::move(closed).value()});
+        inputs.push_back(HashInput{path, std::move(opened).value()});
+        auto results = path_kind == 2
+                           ? sluice_hash::hash_files_with_backend(
+                                 std::move(inputs), 4096, 1,
+                                 std::make_unique<sluice::async::ThreadPoolBackend>())
+                           : sluice_hash::hash_files(std::move(inputs), 4096, path_kind + 1);
+        if (results.size() != 2 || results[0].path != "closed" ||
+            !results[0].error.has_value() || results[1].path != path ||
+            results[1].error.has_value() || results[1].bytes_hashed != 3 ||
+            results[1].hex != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+            return false;
+    }
+    return true;
+}
+
 }
 
 int main() {
@@ -189,6 +217,8 @@ int main() {
         {"hash_files_reports_error_for_closed_file",
          hash_files_reports_error_for_closed_file},
         {"hash_files_preserves_input_order", hash_files_preserves_input_order},
+        {"hash_files_continues_after_read_error_in_all_invocation_paths",
+         hash_files_continues_after_read_error_in_all_invocation_paths},
     };
 
     for (const NamedTest& t : tests) {

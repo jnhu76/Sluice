@@ -28,9 +28,8 @@ do
     end
 end
 
--- sluice-hash: bounded streaming SHA-256 file hashing over ApplicationRuntime
--- + ThreadPoolBackend. Multi-file target (main + the hash engine / SHA-256 /
--- CLI modules also compiled into the app's tests). Public headers only.
+-- sluice-hash: direct single-worker SHA-256; multi-worker compatibility
+-- still links ApplicationRuntime + ThreadPoolBackend.
 do
     local dir = R .. "apps/sluice-hash"
     if os.isfile(dir .. "/main.cpp") then
