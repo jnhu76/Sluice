@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
-import argparse, hashlib, json, pathlib, re, shutil, subprocess, tarfile
+import argparse, hashlib, json, pathlib, re, shlex, shutil, subprocess, tarfile
 ap=argparse.ArgumentParser()
 ap.add_argument("--repo",required=True); ap.add_argument("--output-dir",required=True)
-ap.add_argument("--before",required=True); ap.add_argument("--after",required=True)
+ap.add_argument("--reuse-built-prefixes",action="store_true"); ap.add_argument("--before",required=True); ap.add_argument("--after",required=True)
 a=ap.parse_args(); repo=pathlib.Path(a.repo).resolve(); base=pathlib.Path(a.output_dir).resolve(); assets=pathlib.Path(__file__).parent
-if base.exists(): raise SystemExit("output directory must be fresh and absent")
-base.mkdir(parents=True)
+if base.exists() and not a.reuse_built_prefixes: raise SystemExit("output directory must be fresh and absent")
+if not base.exists() and a.reuse_built_prefixes: raise SystemExit("reuse requires existing captured prefixes")
+base.mkdir(parents=True,exist_ok=a.reuse_built_prefixes)
+clean_env={"PATH":"/usr/bin:/bin","HOME":"/home/jnhu","LANG":"C.UTF-8"}
 def git(*args): return subprocess.check_output(["git","-C",str(repo),*args])
 before=git("rev-parse",a.before).decode().strip(); after=git("rev-parse",a.after).decode().strip()
 with tarfile.open(assets/"raw-package-evidence.tar.gz") as ar:
  for stage in ("before","after"):
-  root=base/stage; (root/"evidence").mkdir(parents=True)
+  root=base/stage; (root/"evidence").mkdir(parents=True,exist_ok=a.reuse_built_prefixes)
   source=ar.extractfile(stage+"/capture.py").read().decode()
   source=re.sub(r"^base=.*$","base=pathlib.Path("+repr(str(root))+")",source,flags=re.M)
   (root/"capture.py").write_text(source)
   (root/"inventory.lua").write_bytes(ar.extractfile(stage+"/inventory.lua").read())
 run=(assets/"run.sh").read_text().replace("/home/jnhu/f3-498-pr-b-prep",str(base)).replace("/home/jnhu/Source/Sluice-f3-498-pr-b",str(repo))
+run=re.sub(r"(?m)^base=.*$", "base="+shlex.quote(str(base)), run)
+run=re.sub(r"(?m)^repo=.*$", "repo="+shlex.quote(str(repo)), run)
 run=re.sub(r"(?m)^  ref=.*$", "  ref="+before, run)
 run=re.sub(r"ref=[a-f0-9]+; fi", "ref="+after+"; fi", run)
 (base/"run.sh").write_text(run)
@@ -23,7 +27,7 @@ for name in ("probes.py","finalize.py"):
  text=(assets/name).read_text().replace("/home/jnhu/Source/Sluice-f3-498-pr-b",str(repo))
  if name=="finalize.py": text=text.replace("out=repo/\"docs/evidence/f3-498-async-file-candidate-v1\"","out=base/\"results\"")
  (base/name).write_text(text)
-subprocess.run(["bash",str(base/"run.sh")],check=True)
+if not a.reuse_built_prefixes: subprocess.run(["bash",str(base/"run.sh")],check=True)
 subprocess.run(["python3",str(base/"probes.py")],check=True)
 provenance={"before_sha":before,"after_sha":after,"capture_source":"fresh git archive exact before/after SHAs","equivalence":[]}
 for stage,sha in (("before",before),("after",after)):
@@ -44,18 +48,18 @@ for stage in ("before","after"):
   for name in ("await_read_at","await_write_at","await_sync_data","await_sync_all"):
    src=clean/(name+"-link.cpp"); src.write_text(header+"\nauto* volatile old_address = &sluice::async::"+name+";\nint main() { return old_address == nullptr; }\n")
    args=["g++","-std=c++20","-I"+str(prefix/"include")]+(["-DSLUICE_HAS_LIBURING"] if p=="y" else [])+[str(src),str(prefix/"lib/libsluice_async.a"),str(prefix/"lib/libsluice_core.a"),"-pthread"]+(["-luring"] if p=="y" else [])+["-o",str(clean/(name+"-link"))]
-   res=subprocess.run(args,cwd=clean,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+   res=subprocess.run(args,cwd=clean,env=clean_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
    (ev/("negative-symbol-link-"+name+"-"+p+".log")).write_text(res.stdout)
    (ev/("negative-symbol-link-"+name+"-"+p+".cpp")).write_bytes(src.read_bytes())
    assert (res.returncode==0)==(stage=="before"),(stage,p,name,res.stdout)
    if stage=="after": assert "undefined reference" in res.stdout,res.stdout
-   row[name]={"command":args,"returncode":res.returncode,"source_sha256":hashlib.sha256(src.read_bytes()).hexdigest(),"result":"PRESENT" if stage=="before" else "ABSENT"}
+   row[name]={"command":args,"environment":clean_env,"returncode":res.returncode,"source_sha256":hashlib.sha256(src.read_bytes()).hexdigest(),"result":"PRESENT" if stage=="before" else "ABSENT"}
   results[stage+"-"+p]=row
   args=[str(clean/"w03_external_loop"),"uring"]
-  res=subprocess.run(args,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+  res=subprocess.run(args,env=clean_env,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
   (ev/("run-w03-uring-"+p+".log")).write_text(res.stdout)
   assert res.returncode==(0 if p=="y" else 2),(stage,p,res.stdout)
-  w03[stage+"-"+p]={"command":args,"returncode":res.returncode,"result":"REAL_URING_PASS" if p=="y" else "EXPLICIT_UNAVAILABLE"}
+  w03[stage+"-"+p]={"command":args,"environment":clean_env,"returncode":res.returncode,"result":"REAL_URING_PASS" if p=="y" else "EXPLICIT_UNAVAILABLE"}
 (base/"negative-link-results.json").write_text(json.dumps(results,indent=2)+"\n")
 (base/"w03-uring-results.json").write_text(json.dumps(w03,indent=2)+"\n")
 subprocess.run(["python3",str(base/"finalize.py")],check=True)

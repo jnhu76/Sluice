@@ -14,7 +14,7 @@ for stage in ("before","after"):
    (ev/(label+"-"+profile+".log")).write_text(p.stdout); commands.append({"argv":list(map(str,args)),"returncode":p.returncode})
    assert (p.returncode==0)==(expect==0),(label,p.stdout)
   for consumer,libs in (("w01_direct",["-lsluice_core"]),("w02_pipeline",["-lsluice_async","-lsluice_core","-pthread"]),("w03_external_loop",["-lsluice_async","-lsluice_core","-pthread"])):
-   source=clean/(consumer+".cpp"); source.write_bytes((repo/"tests/package/consumers"/(consumer+".cpp")).read_bytes()); binary=clean/consumer
+   source=clean/(consumer+".cpp"); source.write_bytes((base/stage/"profiles"/profile/"tests/package/consumers"/(consumer+".cpp")).read_bytes()); binary=clean/consumer
    command(flags+[str(source),"-L"+str(prefix/"lib")]+libs+(["-luring"] if profile=="y" and consumer!="w01_direct" else [])+["-Wl,-Map="+str(ev/(consumer+"-"+profile+".map")),"-o",str(binary)],"link-"+consumer)
    command(["nm","-C",str(binary)],"symbols-"+consumer)
    command([str(binary)]+(["threadpool"] if consumer=="w03_external_loop" else []),"run-"+consumer)

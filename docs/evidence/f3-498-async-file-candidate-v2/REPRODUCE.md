@@ -35,3 +35,12 @@ unchanged and will receive explicit final input-equivalence mapping.
 
 EXTERNAL_RISK_PENDING; F5_PENDING; DRAFT_NONADOPTED; OPTIONAL_W04_SUPPORTED=NO;
 V1_RELEASE_READY=NO. This package receipt does not claim a full behavior matrix.
+
+Consumer-only correction rerun completed FRESH_REPRODUCTION_PASS using the same
+verified library prefixes, with --reuse-built-prefixes appended to the command
+above. W01/W02/W03 sources now come from each exact archived stage/profile tree.
+Old-symbol link probes and real-uring runs use the same explicit clean environment
+as consumer probes: PATH=/usr/bin:/bin, HOME=/home/jnhu, LANG=C.UTF-8, with no
+CPATH/CPLUS_INCLUDE_PATH/LIBRARY_PATH/LD_LIBRARY_PATH inherited. No unchanged
+library build was repeated. The reuse mode independently checks source/build
+archive equivalence and regenerates source controls, command statuses and hashes.
