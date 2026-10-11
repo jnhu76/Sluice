@@ -15,7 +15,9 @@ with tarfile.open(assets/"raw-package-evidence.tar.gz") as ar:
   source=re.sub(r"^base=.*$","base=pathlib.Path("+repr(str(root))+")",source,flags=re.M)
   (root/"capture.py").write_text(source)
   (root/"inventory.lua").write_bytes(ar.extractfile(stage+"/inventory.lua").read())
-run=(assets/"run.sh").read_text().replace("/home/jnhu/f3-498-pr-b-prep",str(base)).replace("/home/jnhu/Source/Sluice-f3-498-pr-b",str(repo)).replace("ref=a9165f0a","ref="+before).replace("ref=94507a57c71704513497ecee3cc01d2bed3b1f24","ref="+after)
+run=(assets/"run.sh").read_text().replace("/home/jnhu/f3-498-pr-b-prep",str(base)).replace("/home/jnhu/Source/Sluice-f3-498-pr-b",str(repo))
+run=re.sub(r"(?m)^  ref=.*$", "  ref="+before, run)
+run=re.sub(r"ref=[a-f0-9]+; fi", "ref="+after+"; fi", run)
 (base/"run.sh").write_text(run)
 for name in ("probes.py","finalize.py"):
  text=(assets/name).read_text().replace("/home/jnhu/Source/Sluice-f3-498-pr-b",str(repo))
