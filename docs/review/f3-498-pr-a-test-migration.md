@@ -240,3 +240,15 @@ compile defect: the one-byte input local `src` from the old write-range lambda
 had not been carried into its canonical replacement. Restoring that same
 constant byte leaves the rejection oracle unchanged. Only the two real-liburing
 smoke consumers need rebuild/re-execution after the correction.
+
+## Final remote receipt
+
+The authoritative [2026-10-12 remote receipt](../evidence/f3-498-pr-a-20261012/REPRODUCE.md)
+and [structured results](../evidence/f3-498-pr-a-20261012/summary.json) test code
+`3f846afa37101546fa151adbd2e19c1b08f04ea0`: four strict fresh-output profiles
+PASS (40 n / 52 y each mode), ASan/UBSan 13/13 PASS, and TSan twelve static
+consumer suites plus the shared-runtime scope suite 25/25 PASS. Exact runtime
+composition and original failures are preserved. Four existing negative
+controls are killed; installed canonical/optional-host probes pass. The package
+remains 50 objects / 37 async members / 79 headers, with zero migrated-consumer
+legacy compiler/link edges. No external-risk adoption or merge is asserted.
