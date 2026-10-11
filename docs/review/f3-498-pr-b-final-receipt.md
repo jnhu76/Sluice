@@ -41,14 +41,22 @@ Reruns use explicit /usr/bin compiler paths and CCACHE_DISABLE=1.
 | Release n | 40/40 target executions PASS |
 | Release real liburing y | 52/52 target executions PASS |
 | Clang22 ASan+UBSan n | 13/13 PASS, including corrected scope |
-| Clang22 static TSan n | 12/13 PASS; scope LINK_UNAVAILABLE |
+| Clang22 static TSan n | 12 target executions PASS; scope static link unavailable |
+| Clang22 shared TSan n, fresh scope configuration | Scope25/25 assertions PASS; all original allocation/lifetime assertions retained |
 
 Static TSan scope compilation succeeds after the inert-variable correction;
 linking fails because Fedora Clang22 tsan_cxx defines strong global new/delete
 and the scope test independently overrides those operators for its allocation
 oracle. Raw linker diagnostics are retained. This is a configuration limitation,
 not a TSan scope pass; no allocation assertion or instrumentation was disabled.
-Any dynamic-runtime supplemental evidence must be separately executed/recorded.
+A distinct fresh worktree at5afa2749 then executed the scope test with the
+installed shared TSan runtime:25/25 assertions PASS. fsanitize=thread remains
+enabled; nm proves instrumented calls and ldd proves libclang_rt.tsan.so loaded
+from the explicit Clang22 rpath. No test code or allocation assertion changed.
+[Shared-scope evidence](../evidence/f3-498-pr-b-final-matrix/shared-tsan-scope.json)
+records exact flags/SHA/runtime/raw hashes. This supplies all13 relevant TSan
+targets across two honest runtime configurations; it does not relabel the failed
+static scope configuration as passing.
 
 [Matrix evidence](../evidence/f3-498-pr-b-final-matrix/summary.json) contains
 initial and rerun SHAs/statuses, effective per-target results and actual compiler

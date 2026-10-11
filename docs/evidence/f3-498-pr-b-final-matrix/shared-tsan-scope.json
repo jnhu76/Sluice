@@ -1,0 +1,30 @@
+{
+  "verification_sha": "5afa2749a7dc928f9df6ff848aa731f5baa95893",
+  "corrected_matrix_source_sha": "41fc1b45dce2723e61a2a2703a035cbd0cc5c382",
+  "production_build_and_test_inputs_byte_identical": true,
+  "configuration": "Clang22 TSan n shared runtime, separate fresh worktree and build-final",
+  "assertions_passed": 25,
+  "assertions_total": 25,
+  "target": "request_scope_test",
+  "result": "PASS",
+  "instrumentation": "fsanitize=thread; __tsan_init and instrumented calls recorded",
+  "runtime": "/usr/lib/clang/22/lib/x86_64-redhat-linux-gnu/libclang_rt.tsan.so",
+  "compiler": "/usr/bin/clang++",
+  "ldflags": "--target=x86_64-redhat-linux-gnu -shared-libsan -Wl,-rpath,/usr/lib/clang/22/lib/x86_64-redhat-linux-gnu",
+  "ccache_disabled": true,
+  "original_static_conflict_retained": true,
+  "raw_sha256": {
+    "build.log": "ec3823a98f806ff0bfc248b5407b0b6db49199850e3cbd6476b7cf60bbd2f803",
+    "config.log": "e74782439d4f5d366ffeda218720cb30e53ea08697a7663b43b7f7a95813d15a",
+    "driver.log": "9ab38f7d65f6d614ad458b9121a5d42af402571c254c2d7c661f856ab225ca30",
+    "instrumentation.txt": "2c18151aff732388a0724cd5e3f2b84db10a16f1c2da3b13c16d0d913463f484",
+    "ldd.txt": "b99b667723891138c526ae17cf6e9e0ffa634025f8b3a8dad68748a585f7033a",
+    "run.log": "40a5b587085562053139aa22a07633a97fde6aa28a256112a0b4c308a0bfc5d8",
+    "run.sh": "d08f769d4ae00074f303993f434f08a51a97f990ab8cd1dd79db5baf59ef0507",
+    "sha.txt": "b0f2f4dcfd1885aa2568cc48d1aa7f99350de67c0faaa3651e52bc9da3919453",
+    "status": "c26de83abdc9496cd1301470918ec39ecca1cf389ef0ae1c6504da1800d1c431",
+    "symbols.txt": "c16a43b9b8b62706fdb22abcf999558a513889306ea4dd0c8c65aa10c95bb872",
+    "toolchain-cache.txt": "81e77bb963063ed994d8edbfb68b4cc02c4ee2c6961cc3525c3c6424551e22ff",
+    "xmake.conf": "cf2e42a92a96dd343ddb103f3be51073af6d6c2b504649837850f4905ac36c7d"
+  }
+}

@@ -97,7 +97,8 @@ PR A owns migration of six File semantic test TUs and include-only edges in
 async_sync_admission/progress_source_ownership/uring_backend_smoke. PR A and its
 scope/smoke supplements are incorporated in this unmerged stack. Corrected full
 Debug/Release n/y matrix and ASanUBSan pass; static TSan scope has its separately
-recorded allocation-override link limitation. Neither PR A nor this candidate
+recorded allocation-override link limitation; a fresh shared-TSan scope
+configuration executes all25 assertions successfully with instrumentation retained. Neither PR A nor this candidate
 has been merged/adopted by this execution. See the final receipt for exact SHAs.
 Semantic precheck/error/composition/durability observations remain obligations;
 old runtime helper call sequences are not the oracle. Formal/docs references
