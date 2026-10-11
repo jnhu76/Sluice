@@ -957,7 +957,6 @@ bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
         std::vector<std::byte> buffer(4, std::byte{0});
-        std::optional<ScopeTicket<std::size_t>> ticket;
         std::thread canceler([&] {
             wait_threadpool_gate_paused(gate);
             const auto paused_slot = core.observe_slot(SlotIndex{0});

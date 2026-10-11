@@ -51,6 +51,22 @@ family gates; affected shared seams serialize locally; F5 follows their final
 dispositions. #402's separately tracked F5 optional-W04 shorthand is a downstream
 acceptance correction, not an extra M exit gate. `V1_RELEASE_READY=NO`.
 
+## F3 #498 canonical test migration — 2026-10-12 candidate
+
+Status: RECORD (implementation candidate, adoption/review pending). Seven
+legacy Runtime/File test TUs migrate their byte/offset, short-I/O, access/error,
+sync, native-provenance, cancellation and settlement observations to canonical
+File + owned RequestScope/Request paths. Two include-only wrapper edges retire.
+[Exact case and oracle mapping](../review/f3-498-pr-a-test-migration.md) records
+old/new ownership, negative controls, preserved controlled interleavings and
+adapter-only observations. No production or installed API is removed; package
+counts remain 50 objects / 37 async members / 79 headers in all four fresh
+remote profiles. [Remote receipt](../evidence/f3-498-pr-a-20261012/REPRODUCE.md)
+records code `3f846afa`, 40/52 targets per n/y profile, ASan/UBSan 13/13 and
+TSan twelve static suites plus shared-runtime scope 25/25; exact runtime
+configuration, original failures and negative controls remain explicit. External-risk/F5 approval and B-01 contraction remain
+separate downstream gates; runtime waiter and COPY test consumers remain.
+
 ## F3 HASH default-path migration — 2026-10-11
 
 Scoped `VERIFIED` evidence for the HASH default path at production49858941 /

@@ -1,5 +1,4 @@
-#include <sluice/async/file.hpp>
-#include <sluice/async/task_result.hpp>
+#include "canonical_request_test_support.hpp"
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -21,8 +20,8 @@ using sluice::File;
 using sluice::FileAccess;
 using sluice::FileOpen;
 using sluice::IoError;
-using sluice::Result;
 using sluice::make_unexpected;
+using sluice::Result;
 
 FileOpen writable_mode() {
     FileOpen mode;
@@ -69,23 +68,23 @@ bool sync_data_after_write_succeeds() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     const std::string src_str = "XYZ";
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<std::size_t> wc;
-            auto wr = await_write_at(file, ctx, 0, as_bytes(src_str), wc);
-            if (!wr.has_value() || wr.value() != 3) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            Completion<void> c;
-            auto sr = await_sync_data(file, ctx, c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(sr);
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto wr_admitted = scope.submit_write(
+            WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
+        if (!wr_admitted.has_value())
+            return sluice::make_unexpected<void>(wr_admitted.error());
+        auto wr = sluice::test::wait_and_take(scope, wr_admitted.value());
+        if (!wr.has_value() || wr.value() != 3) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        auto sr_admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!sr_admitted.has_value())
+            return sluice::make_unexpected<void>(sr_admitted.error());
+        auto sr = sluice::test::wait_and_take(scope, sr_admitted.value());
+        return sr;
+    }();
 
     const bool content_ok = file_content_is(path, "XYZ");
     ::unlink(path.c_str());
@@ -97,23 +96,27 @@ bool sync_data_after_write_succeeds() {
     return file.close().has_value();
 }
 
-bool sync_data_completion_is_reusable() {
+bool sync_data_successive_requests_settle() {
     const std::string path = make_temp_file("abc");
     if (path.empty())
         return false;
     File file = std::move(File::open(path, writable_mode()).value());
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto r1 = await_sync_data(file, ctx, c);
-            if (!r1.has_value() || !c.idle()) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(await_sync_data(file, ctx, c));
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r1_admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!r1_admitted.has_value())
+            return sluice::make_unexpected<void>(r1_admitted.error());
+        auto r1 = sluice::test::wait_and_take(scope, r1_admitted.value());
+        if (!r1.has_value()) {
+            return make_unexpected<void>(IoError{IoError::Code::invalid_state});
+        }
+        auto admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<void>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     ::unlink(path.c_str());
 
@@ -128,17 +131,15 @@ bool sync_data_on_read_only_file_succeeds() {
         return false;
     File file = std::move(File::open(path).value());
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto r = await_sync_data(file, ctx, c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!r_admitted.has_value())
+            return sluice::make_unexpected<void>(r_admitted.error());
+        auto r = sluice::test::wait_and_take(scope, r_admitted.value());
+        return r;
+    }();
 
     const bool content_ok = file_content_is(path, "keep");
     ::unlink(path.c_str());
@@ -158,17 +159,15 @@ bool sync_data_on_write_only_file_succeeds() {
     mode.access = FileAccess::write_only;
     File file = std::move(File::open(path, mode).value());
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto r = await_sync_data(file, ctx, c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!r_admitted.has_value())
+            return sluice::make_unexpected<void>(r_admitted.error());
+        auto r = sluice::test::wait_and_take(scope, r_admitted.value());
+        return r;
+    }();
 
     ::unlink(path.c_str());
 
@@ -187,17 +186,14 @@ bool sync_data_after_close_reports_invalid_state() {
     if (!file.close().has_value())
         return false;
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto r = await_sync_data(file, ctx, c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (r_admitted.has_value() || ctx.outstanding() != 0)
+            return sluice::make_unexpected<void>(IoError{IoError::Code::backend_error});
+        return sluice::make_unexpected<void>(r_admitted.error());
+    }();
 
     if (result.has_value())
         return false;
@@ -211,17 +207,15 @@ bool sync_data_on_device_reports_backend_error() {
     if (!file.is_open())
         return false;
 
-    auto result = run_task_to_result<void>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<void>>& slot) {
-            Completion<void> c;
-            auto r = await_sync_data(file, ctx, c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<void>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<void> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
+        if (!r_admitted.has_value())
+            return sluice::make_unexpected<void>(r_admitted.error());
+        auto r = sluice::test::wait_and_take(scope, r_admitted.value());
+        return r;
+    }();
 
     if (result.has_value())
         return false;
@@ -232,7 +226,7 @@ bool sync_data_on_device_reports_backend_error() {
     return file.close().has_value();
 }
 
-}
+} // namespace
 
 int main() {
     struct NamedTest {
@@ -241,10 +235,11 @@ int main() {
     };
     const NamedTest tests[] = {
         {"sync_data_after_write_succeeds", sync_data_after_write_succeeds},
-        {"sync_data_completion_is_reusable", sync_data_completion_is_reusable},
+        {"sync_data_successive_requests_settle", sync_data_successive_requests_settle},
         {"sync_data_on_read_only_file_succeeds", sync_data_on_read_only_file_succeeds},
         {"sync_data_on_write_only_file_succeeds", sync_data_on_write_only_file_succeeds},
-        {"sync_data_after_close_reports_invalid_state", sync_data_after_close_reports_invalid_state},
+        {"sync_data_after_close_reports_invalid_state",
+         sync_data_after_close_reports_invalid_state},
         {"sync_data_on_device_reports_backend_error", sync_data_on_device_reports_backend_error},
     };
 
