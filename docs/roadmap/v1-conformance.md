@@ -1913,3 +1913,13 @@ that).
 | Evidence | [GREP slice record](../review/f3-grep-direct-20261011.md); production head 11dbc1b4386534ec8c1d5f7d3a90df99367f6135: four isolated Debug/Release × noliburing/real-liburing profiles, consumption/direct W-01/primitive/runtime waiter targets and 51 real CLI+trace checks per profile. Supplemental allocation/sink exception oracle at 7a997129f82d55709ccf76b502ad442440bebd15 passed all four profiles with production inputs unchanged |
 | Contraction / package | Default runtime execution removed; legacy completion/await/cancel/backend/scheduler still required for named compatibility consumers. SDK inputs unchanged; limited dual-profile object/symbol/link and installed-header equivalence, no old F1 manifest rewritten |
 | Limitations / next owner | GCC sanitizer unavailable (missing libasan); no exhaustive OOM or new in-flight cancellation proof. #474/#402 own HASH_GREP_COMPAT_EXIT, T2-08 and remaining physical runtime/package contraction |
+
+### F3 Step 3 GREP legacy exit (2026-10-11 candidate)
+
+VERIFIED for this bounded candidate: app-local runtime engine and injected seam
+removed; app and consumption targets require only sluice_core. Owner approved
+complete --workers removal on 2026-10-11; removed-option errors preserve this
+application's exit contract. Four server configurations, direct semantic/error
+oracles, canonical backends and package equivalence pass. W-01/W-02/W-03,
+D-H1/D-H2 and MIG-01 obligations are scoped in [the review receipt](../review/f3-step3-grep-legacy-exit-20261011.md).
+SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.

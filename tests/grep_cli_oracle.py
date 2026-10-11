@@ -30,8 +30,8 @@ with tempfile.TemporaryDirectory(prefix="sluice-grep-cli-") as directory:
     os.chdir(directory)
     pathlib.Path("a").write_bytes(b"plain\nhit one\n")
     pathlib.Path("b").write_bytes(b"hit two")
-    for workers in (1, 2, 64):
-        options = ["--workers", str(workers)]
+    for size in (4096, 4097, 8192):
+        options = ["--buffer-size", str(size)]
         check([*options, "hit", "a"], 0, b"hit one\n")
         check([*options, "-n", "hit", "a"], 0, b"2:hit one\n")
         check([*options, "hit", "a", "b"], 0, b"a:hit one\nb:hit two\n")
@@ -61,18 +61,12 @@ with tempfile.TemporaryDirectory(prefix="sluice-grep-cli-") as directory:
     check(["hit\n", "a"], 2, b"", True)
     check(["--help"], 0)
     if trace_dir:
-        for workers in (1, 2, 64):
-            trace = trace_dir / f"workers-{workers}.trace"
-            result = subprocess.run(["strace", "-f", "-e", "trace=clone,clone3",
-                "-o", str(trace), binary, "--workers", str(workers), "hit", "a"],
-                capture_output=True, timeout=10)
-            trace_text = trace.read_text()
-            calls = [line for line in trace_text.splitlines() if "clone" in line]
-            created = successful_creations(trace_text)
-            checks += 1
-            if result.returncode != 0 or (workers == 1 and calls) or (workers > 1 and created == 0):
-                failures.append((["thread trace", str(workers)], str(calls)))
-            print(f"THREAD_TRACE workers={workers} clone_trace_lines={len(calls)} successful_creations={created}")
+        trace = trace_dir / "direct.trace"
+        result = subprocess.run(["strace", "-f", "-e", "trace=clone,clone3",
+            "-o", str(trace), binary, "hit", "a"], capture_output=True, timeout=10)
+        checks += 1
+        if result.returncode != 0 or "clone" in trace.read_text():
+            failures.append((["direct thread trace"], trace.read_text()))
         trace = trace_dir / "invalid-fifo.trace"
         result = subprocess.run(["strace", "-f", "-e", "trace=openat",
             "-o", str(trace), binary, "--buffer-size", "4095", "hit", "fifo", "a"],

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <sluice/async/async_io_context.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -8,7 +7,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -20,12 +18,10 @@ constexpr std::size_t kMinBufferSize = 4 * 1024;
 constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kDefaultMaxLineBytes = 1 << 20;
 constexpr std::size_t kMaxMaxLineBytes = 64 * 1024 * 1024;
-constexpr unsigned kMaxWorkers = 64;
 
-constexpr bool valid_config(std::size_t buffer_size, std::size_t max_line_bytes,
-                            unsigned workers) noexcept {
+constexpr bool valid_config(std::size_t buffer_size, std::size_t max_line_bytes) noexcept {
     return buffer_size >= kMinBufferSize && buffer_size <= kMaxBufferSize && max_line_bytes > 0 &&
-           max_line_bytes <= kMaxMaxLineBytes && workers > 0 && workers <= kMaxWorkers;
+           max_line_bytes <= kMaxMaxLineBytes;
 }
 
 struct GrepInput {
@@ -46,11 +42,6 @@ struct GrepFileResult {
 
 std::vector<GrepFileResult> grep_files(const std::string& pattern, std::vector<GrepInput> inputs,
                                        std::size_t buffer_size, std::size_t max_line_bytes,
-                                       unsigned workers, MatchSink sink);
-
-std::vector<GrepFileResult>
-grep_files_with_backend(const std::string& pattern, std::vector<GrepInput> inputs,
-                        std::size_t buffer_size, std::size_t max_line_bytes, unsigned workers,
-                        MatchSink sink, std::unique_ptr<sluice::async::AsyncBackend> backend);
+                                       MatchSink sink);
 
 }

@@ -43,9 +43,7 @@ do
     end
 end
 
--- sluice-grep: direct single-worker literal line search; multi-worker and
--- injected-backend compatibility retains ApplicationRuntime + ThreadPoolBackend. Multi-file target (main + the engine / matcher / CLI
--- modules also compiled into the app's tests). Public headers only.
+-- sluice-grep: direct literal line search over canonical File.
 do
     local dir = R .. "apps/sluice-grep"
     if os.isfile(dir .. "/main.cpp") then
@@ -53,7 +51,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("apps")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(dir .. "/main.cpp", dir .. "/grep_task.cpp",
                       dir .. "/matcher.cpp", dir .. "/cli_parse.cpp")
