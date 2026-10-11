@@ -1923,3 +1923,16 @@ application's exit contract. Four server configurations, direct semantic/error
 oracles, canonical backends and package equivalence pass. W-01/W-02/W-03,
 D-H1/D-H2 and MIG-01 obligations are scoped in [the review receipt](../review/f3-step3-grep-legacy-exit-20261011.md).
 SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.
+
+### F3 Step 4 TAIL app-owned execution candidate (2026-10-11)
+
+IMPLEMENTED_UNVERIFIED pending final independent evidence review/adoption.
+TAIL uses canonical direct File operations in one application-owned thread with
+condition-variable EOF wake, explicit stop and join before File/buffer destruction.
+Existing Result<TailResult> separates join/wait failure from task failure and
+preserves one-shot wait. No ApplicationRuntime/Scheduler/TaskResultSlot/Completion
+consumer remains in this application's source/object/link closure. Four isolated
+remote configurations and Clang ASan+UBSan/TSan pass; direct TAIL execution does
+not use liburing even in the enabled profile. See [TAIL slice record](../review/f3-tail-owned-driver-20261011.md)
+for exact SHA, controlled borrow/stop evidence, contraction justification and
+external progress assumptions. No installed runtime removal or W-04 support claim.

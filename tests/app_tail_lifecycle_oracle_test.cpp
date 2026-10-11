@@ -44,8 +44,6 @@ using sluice_tail::TailResult;
 
 constexpr auto kEventDeadline = 10s;
 constexpr auto kSettleDeadline = 10s;
-// Negative windows must outlast several 50 ms poll cycles; a wrong emission
-// happens synchronously in the read iteration, never delayed past them.
 constexpr auto kQuietWindow = 600ms;
 // While a held read is unsettled, wait() must not return within this window
 // (task may not retire; publish happens strictly after the task returns).
@@ -711,8 +709,6 @@ bool pending_read_settles_before_retire() {
     }
     check_msg(probe_exit.ret == 0, "pending: first read was the empty-file probe");
 
-    // The task now sleeps one 50 ms slice before re-reading; the append lands
-    // inside that window, so the next held read is the data read.
     check_msg(f.append("held\n"), "pending: append");
 
     tail_probe::Record entered;
