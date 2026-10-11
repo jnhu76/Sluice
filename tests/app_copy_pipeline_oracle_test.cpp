@@ -6,8 +6,7 @@
 #include "copy_task.hpp"
 #include "support/pipelined_copy_oracle_support.hpp"
 
-#include <sluice/async/await_op_helpers.hpp>
-#include <sluice/async/task_result.hpp>
+#include <sluice/async/request_scope.hpp>
 #include <sluice/async/uring_backend.hpp>
 
 #include <algorithm>
@@ -189,48 +188,38 @@ bool borrow_live_write_peak_selftest() {
     for (std::size_t i = 0; i < payload.size(); ++i)
         payload[i] = seed_byte(static_cast<std::uint64_t>(i));
 
-    struct TwoWriteTask {
-        NativeFileRef dst;
-        const std::byte* first = nullptr;
-        const std::byte* second = nullptr;
-        void operator()(RuntimeTaskContext& ctx,
-                        TaskResultSlot<Result<std::size_t>>& slot) const {
-            Completion<std::size_t> first_c;
-            Completion<std::size_t> second_c;
-            auto a = ctx.submit_write(WriteOp{dst, first, B, 0}, first_c);
-            if (!a.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(a.error()));
-                return;
-            }
-            auto b = ctx.submit_write(WriteOp{dst, second, B, B}, second_c);
-            if (!b.has_value()) {
-                auto da = await_drain(ctx, first_c);
-                slot.publish(sluice::make_unexpected<std::size_t>(
-                    da.has_value() ? b.error() : da.error()));
-                return;
-            }
-            auto ra = await_take(ctx, first_c);
-            if (!ra.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(ra.error()));
-                return;
-            }
-            auto rb = await_take(ctx, second_c);
-            if (!rb.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(rb.error()));
-                return;
-            }
-            slot.publish(Result<std::size_t>{ra.value() + rb.value()});
-        }
-    };
-
     auto shared = std::make_shared<ScriptedShared>();
     ScriptedController ctrl(shared);
     std::optional<Result<std::size_t>> result;
     std::atomic<bool> done{false};
     std::thread runner([&]() {
-        result = run_task_to_result<std::size_t>(
-            1, std::make_unique<ScriptedBackend>(shared, 8),
-            TwoWriteTask{dst_ref, payload.data(), payload.data() + B});
+        AsyncIoContext ctx(std::make_unique<ScriptedBackend>(shared, 8));
+        RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
+        auto run = [&]() -> Result<std::size_t> {
+            auto first = scope.submit_write(WriteOp{dst_ref, payload.data(), B, 0});
+            if (!first.has_value())
+                return sluice::make_unexpected<std::size_t>(first.error());
+            auto second = scope.submit_write(WriteOp{dst_ref, payload.data() + B, B, B});
+            if (!second.has_value())
+                return sluice::make_unexpected<std::size_t>(second.error());
+            auto first_wait = scope.wait_for(first.value(), std::chrono::nanoseconds::max());
+            if (!first_wait.has_value())
+                return sluice::make_unexpected<std::size_t>(first_wait.error());
+            auto first_result = scope.take(first.value());
+            if (!first_result.result.has_value())
+                return sluice::make_unexpected<std::size_t>(first_result.result.error());
+            auto second_wait = scope.wait_for(second.value(), std::chrono::nanoseconds::max());
+            if (!second_wait.has_value())
+                return sluice::make_unexpected<std::size_t>(second_wait.error());
+            auto second_result = scope.take(second.value());
+            if (!second_result.result.has_value())
+                return sluice::make_unexpected<std::size_t>(second_result.result.error());
+            return first_result.result.value() + second_result.result.value();
+        };
+        auto observed = run();
+        auto settled = scope.finish();
+        result = settled.has_value() ? std::move(observed)
+                                    : sluice::make_unexpected<std::size_t>(settled.error());
         done.store(true, std::memory_order_release);
     });
 
@@ -270,45 +259,34 @@ bool borrow_live_write_peak_selftest() {
                            !ctrl.borrow_overlap_violation() &&
                            ctrl.protocol_violation().empty();
 
-    struct SlotReuseWriteTask {
-        NativeFileRef dst;
-        const std::byte* data = nullptr;
-        void operator()(RuntimeTaskContext& ctx,
-                        TaskResultSlot<Result<std::size_t>>& slot) const {
-            Completion<std::size_t> first_c;
-            auto a = ctx.submit_write(WriteOp{dst, data, B, 0}, first_c);
-            if (!a.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(a.error()));
-                return;
-            }
-            auto ra = await_take(ctx, first_c);
-            if (!ra.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(ra.error()));
-                return;
-            }
-            Completion<std::size_t> second_c;
-            auto b = ctx.submit_write(WriteOp{dst, data + B, B, B}, second_c);
-            if (!b.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(b.error()));
-                return;
-            }
-            auto rb = await_take(ctx, second_c);
-            if (!rb.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(rb.error()));
-                return;
-            }
-            slot.publish(Result<std::size_t>{ra.value() + rb.value()});
-        }
-    };
-
     auto shared2 = std::make_shared<ScriptedShared>();
     ScriptedController ctrl2(shared2);
     std::optional<Result<std::size_t>> result2;
     std::atomic<bool> done2{false};
     std::thread runner2([&]() {
-        result2 = run_task_to_result<std::size_t>(
-            1, std::make_unique<ScriptedBackend>(shared2, 1),
-            SlotReuseWriteTask{dst_ref, payload.data()});
+        AsyncIoContext ctx(std::make_unique<ScriptedBackend>(shared2, 1));
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto run = [&]() -> Result<std::size_t> {
+            std::size_t total = 0;
+            for (std::size_t offset : {std::size_t{0}, B}) {
+                auto submitted = scope.submit_write(
+                    WriteOp{dst_ref, payload.data() + offset, B, offset});
+                if (!submitted.has_value())
+                    return sluice::make_unexpected<std::size_t>(submitted.error());
+                auto waited = scope.wait_for(submitted.value(), std::chrono::nanoseconds::max());
+                if (!waited.has_value())
+                    return sluice::make_unexpected<std::size_t>(waited.error());
+                auto observed = scope.take(submitted.value());
+                if (!observed.result.has_value())
+                    return sluice::make_unexpected<std::size_t>(observed.result.error());
+                total += observed.result.value();
+            }
+            return total;
+        };
+        auto observed = run();
+        auto settled = scope.finish();
+        result2 = settled.has_value() ? std::move(observed)
+                                     : sluice::make_unexpected<std::size_t>(settled.error());
         done2.store(true, std::memory_order_release);
     });
 
