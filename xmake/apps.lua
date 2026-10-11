@@ -28,8 +28,7 @@ do
     end
 end
 
--- sluice-hash: direct single-worker SHA-256; multi-worker compatibility
--- still links ApplicationRuntime + ThreadPoolBackend.
+-- sluice-hash: direct SHA-256 over canonical File.
 do
     local dir = R .. "apps/sluice-hash"
     if os.isfile(dir .. "/main.cpp") then
@@ -37,7 +36,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("apps")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(dir .. "/main.cpp", dir .. "/hash_task.cpp",
                       dir .. "/sha256.cpp", dir .. "/cli_parse.cpp")

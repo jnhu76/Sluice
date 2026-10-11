@@ -65,7 +65,7 @@ int main(int argc, char** argv) {
         inputs.push_back(HashInput{path, std::move(opened).value()});
     }
 
-    auto results = sluice_hash::hash_files(std::move(inputs), args.buffer_size, args.workers);
+    auto results = sluice_hash::hash_files(std::move(inputs), args.buffer_size);
 
     bool any_error = false;
     bool any_canceled = false;

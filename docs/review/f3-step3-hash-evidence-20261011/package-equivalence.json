@@ -1,0 +1,38 @@
+[
+  {
+    "app": "hash",
+    "liburing": "n",
+    "baseline": "c2331d70f9f9deeaa79780aa4cf035d4e7f6fbee",
+    "candidate": "e5c016a451b8084599156d376a02de8abf083e53",
+    "all_package_gates_pass": true,
+    "archives_objects_symbols_bytes_identical": true,
+    "headers_usage_requirements_negative_probes_identical": true,
+    "header_total": 79,
+    "archive_objects": {
+      "lib/libsluice_async.a": 37,
+      "lib/libsluice_core.a": 13
+    },
+    "archive_sha256": {
+      "lib/libsluice_async.a": "82260d7727a6e3cdefb387796fcaf070e8b776ef62075174fa2ff9733aac5204",
+      "lib/libsluice_core.a": "b7a994723bab95b18e676391c45b25b9cd85ca81b8a00d3ee78b686e17fb381e"
+    }
+  },
+  {
+    "app": "hash",
+    "liburing": "y",
+    "baseline": "c2331d70f9f9deeaa79780aa4cf035d4e7f6fbee",
+    "candidate": "e5c016a451b8084599156d376a02de8abf083e53",
+    "all_package_gates_pass": true,
+    "archives_objects_symbols_bytes_identical": true,
+    "headers_usage_requirements_negative_probes_identical": true,
+    "header_total": 79,
+    "archive_objects": {
+      "lib/libsluice_async.a": 37,
+      "lib/libsluice_core.a": 13
+    },
+    "archive_sha256": {
+      "lib/libsluice_async.a": "a443ceb471a157f104a6b289c7401c9e554ba63a0e96e34eec5f486f2e985ca5",
+      "lib/libsluice_core.a": "b7a994723bab95b18e676391c45b25b9cd85ca81b8a00d3ee78b686e17fb381e"
+    }
+  }
+]

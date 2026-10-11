@@ -69,6 +69,17 @@ sources/install closure remain because retained consumers still need them.
 support and `V1_RELEASE_READY` remain NO. No historical frozen manifest is reused
 as proof of this changed app. Final PR HEAD attestation is recorded on #492.
 
+
+### F3 Step 3 HASH legacy exit (2026-10-11 candidate)
+
+VERIFIED for this bounded candidate: app-local runtime engine and injected seam
+removed; app and consumption targets require only sluice_core. Owner approved
+complete --workers removal on 2026-10-11; removed-option errors preserve this
+application's exit contract. Four server configurations, direct semantic/error
+oracles, canonical backends and package equivalence pass. W-01/W-02/W-03,
+D-H1/D-H2 and MIG-01 obligations are scoped in [the review receipt](../review/f3-step3-hash-legacy-exit-20261011.md).
+SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.
+
 ## Status vocabulary
 
 | Status | Meaning |
