@@ -63,14 +63,14 @@ int main() {
 
         AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>(
             ThreadPoolConfig{.request_capacity = 8, .worker_count = 2}));
+        std::vector<std::byte> buf1(4, std::byte{0});
+        std::vector<std::byte> buf2(4, std::byte{0});
         RequestScope scope(ctx, 4, ScopeCleanupPolicy::drain);
 
         auto a = scope.submit_read(
             ReadOp{.file = NativeFileRef{file}, .dst = nullptr, .len = 0, .offset = 0});
         CHECK(a.has_value());
 
-        std::vector<std::byte> buf1(4, std::byte{0});
-        std::vector<std::byte> buf2(4, std::byte{0});
         auto b = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                           .dst = buf1.data(),
                                           .len = buf1.size(),
@@ -115,8 +115,8 @@ int main() {
         AsyncIoContext ctx(
             std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
                                                                   .worker_count = 1}));
-        RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
         std::vector<std::byte> big(64, std::byte{0});
+        RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
         auto r = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                           .dst = big.data(),
                                           .len = big.size(),
@@ -207,8 +207,8 @@ int main() {
                                                                   .worker_count = 1}));
         bool first_settled = false;
         {
-            RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
             std::vector<std::byte> buf(8, std::byte{0});
+            RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
             auto first = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                                   .dst = buf.data(),
                                                   .len = buf.size(),
@@ -240,8 +240,8 @@ int main() {
                                                                   .worker_count = 1}));
         bool threw = false;
         try {
-            RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
             std::vector<std::byte> buf(4, std::byte{0});
+            RequestScope scope(ctx, 2, ScopeCleanupPolicy::cancel_then_drain);
             auto r = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                               .dst = buf.data(),
                                               .len = buf.size(),
