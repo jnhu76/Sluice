@@ -171,3 +171,15 @@ Existing two negative controls and Clang sanitizer results remain scoped to
 the identical COPY test/support/application inputs; the new integration does
 not assert full facade or waiter verification. Final review and cumulative CI
 remain required before Ready; no merge authorization is assumed.
+
+Current integration sanitizer confirmation: Clang22 ASan/UBSan and TSan each
+actually rebuilt/ran borrow_live_write_peak_selftest,
+exception_cleanup_waits_for_held_borrow and canceled_result_settles_held_readahead,
+three controlled cases each, PASS with instrumented argv/runtime symbols.
+The two independent C1 sanitizer source roots have exactly identical include/,
+src/, apps/, COPY test/support, xmake.lua and library inputs to this integration;
+the only xmake/tests.lua delta is the separate waiter target. Thus these are
+new current-integration COPY executions, not old sanitizer evidence renamed.
+Raw current-asanubsan-n/current-tsan-n logs are alongside the fresh normal matrix.
+The two original controlled mutations remain justified by byte-identical
+support and oracle inputs; neither mutation is present in production or tests.
