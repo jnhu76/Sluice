@@ -28,7 +28,7 @@ class IntegrityTests(unittest.TestCase):
                 stderr_sha256=f4.digest(paths[1]),environment={}))
             return n
         positive=cmd()
-        negative=cmd(1,err='undefined reference')
+        negative=cmd(1,err='undefined reference\n'+'\n'.join(s['header']+': No such file' for s in manifest['surfaces']))
         unavailable=cmd(2)
         probe=dict(compile=positive,link=positive,run=positive,compile_status='PASS',link_status='PASS',run_status='PASS')
         trees={tid:dict(sha=sha,tree=sha,input_hashes={},path='/fixture/'+tid) for tid in ('B0','H0','C508','C510','C508510')}
@@ -49,6 +49,9 @@ class IntegrityTests(unittest.TestCase):
                     consumer=dict(compile_link=positive,compile_link_status='PASS',runtime=dict(command=positive,status='PASS'))
                     external=dict(compile_link=positive,compile_link_status='PASS',threadpool=dict(command=positive,status='PASS'),uring=dict(command=unavailable,status='UNAVAILABLE'),no_scheduler_fiber='PASS')
                     self.data['packages'].append(dict(tree_id=tid,profile=profile,mode=mode,prefix=str(self.root/'missing'),source_sha=sha,input_hashes={},counts=counts.copy(),headers=[str(i) for i in range(counts[2])],archives=archives,surfaces=surfaces,retained=probe.copy(),consumers={'w01_direct':consumer.copy(),'w02_pipeline':consumer.copy(),'w03_external_loop':external},retired_symbols=dict(status='PASS',expected_absent=['retired()'],remaining=[]),negative_links={'F4-01':dict(command=negative,status='PASS')}))
+        required='SURFACE_ID HEADER V001_PUBLIC_FACT CURRENT_INSTALLED_FACT CURRENT_IN_TREE_CONSUMER OLD_API_COMPILE OLD_API_LINK OLD_BEHAVIOR_WITNESS CANDIDATE_HEADER_ABSENT CANDIDATE_API_COMPILE_REJECTED CANDIDATE_SYMBOL_ABSENT RETAINED_CANONICAL_WORKLOAD MIGRATION_OR_NO_EQUIVALENT BREAKAGE_CONSEQUENCE PROPOSED_POLICY TECHNICAL_VERDICT'.split()
+        for risk in self.data['risk']:
+            risk.update({k:'fixture' for k in required})
         self.assertEqual(f4.verify(self.data,self.root),[])
 
     def tearDown(self): self.tmp.cleanup()

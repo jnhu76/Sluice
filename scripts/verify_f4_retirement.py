@@ -224,6 +224,7 @@ def verify(data, root):
         require(tree.get('sha') == data.get('inputs', {}).get(tid), f'input/measurement mismatch {tid}')
     require(set(data.get('trees', {})) == {'B0','H0','C508','C510','C508510'}, 'five trees required')
     packages = data.get('packages', [])
+    require({(p.get('tree_id'),p.get('profile'),p.get('mode')) for p in packages} == {(t,p,m) for t in ('B0','C508','C510','C508510') for p in ('no-liburing','real-liburing') for m in ('debug','release')}, 'unique complete matrix')
     require(len(packages) == 16, 'full 4-tree 2-profile Debug/Release matrix required')
     for p in packages:
         key = f"{p['tree_id']}/{p['profile']}/{p['mode']}"
@@ -248,8 +249,9 @@ def verify(data, root):
             if row.get('removed'):
                 cid = row.get('include', -1)
                 c = commands[cid] if isinstance(cid, int) and 0 <= cid < len(commands) else {}
+                diagnostic=(root/c['stderr']).read_text() if c.get('stderr') else ''
                 require(row.get('negative_status') == 'PASS' and row.get('present') is False
-                        and c.get('exit_code') not in (None, 0), f'negative include {key}/{s["id"]}')
+                        and c.get('exit_code') not in (None, 0) and s['header'] in diagnostic and ('No such file' in diagnostic or 'file not found' in diagnostic), f'negative include {key}/{s["id"]}')
             else:
                 require(row.get('present') and (row.get('parent_status') == 'PASS' if s['parent'] else row.get('standalone') == 'PASS'), f'baseline include {key}/{s["id"]}')
                 if s['probe']:
@@ -265,6 +267,9 @@ def verify(data, root):
                 rc = commands[cid]['exit_code'] if 0 <= cid < len(commands) else None
                 require(ur.get('status') == ('PASS' if rc==0 else 'UNAVAILABLE' if rc==2 else 'FAIL'), f'uring unavailable mislabeled {key}')
                 require(row.get('no_scheduler_fiber') == 'PASS', f'W03 dependency {key}')
+        for name,row in p.get('consumers',{}).items():
+            if name.startswith('contract_'):
+                require(row.get('compile_link_status')=='PASS' and passed(row.get('compile_link')) and row.get('runtime',{}).get('status')=='PASS' and passed(row.get('runtime',{}).get('command')), f'contract runtime {key}/{name}')
         audit = p.get('retired_symbols', {})
         if p['tree_id'] != 'B0':
             defined='\n'.join((root/commands[p['archives'][lib]['defined']]['stdout']).read_text() for lib in ('core','async'))
@@ -273,7 +278,9 @@ def verify(data, root):
             for sid, link in p.get('negative_links', {}).items():
                 cid=link['command']
                 require(link['status'] == 'PASS' and commands[cid]['exit_code'] not in (None,0), f'negative link {key}/{sid}')
+    required_risk=('SURFACE_ID HEADER V001_PUBLIC_FACT CURRENT_INSTALLED_FACT CURRENT_IN_TREE_CONSUMER EXTERNAL_USE OLD_API_COMPILE OLD_API_LINK OLD_BEHAVIOR_WITNESS CANDIDATE_HEADER_ABSENT CANDIDATE_API_COMPILE_REJECTED CANDIDATE_SYMBOL_ABSENT RETAINED_CANONICAL_WORKLOAD MIGRATION_OR_NO_EQUIVALENT BREAKAGE_CONSEQUENCE PROPOSED_POLICY TECHNICAL_VERDICT HUMAN_OWNER_VERDICT').split()
     for r in data.get('risk', []):
+        require(all(k in r for k in required_risk), 'missing risk fields')
         require(r.get('EXTERNAL_USE') == 'UNKNOWN', 'external use inference forbidden')
         require(r.get('HUMAN_OWNER_VERDICT') == 'PENDING', 'unsigned approval forbidden')
     require(len(data.get('risk', [])) == 17, '17 risk dispositions required')
