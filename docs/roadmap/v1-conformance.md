@@ -2128,3 +2128,7 @@ review/merge/postmerge recheck; F5 full alignment and F6 remain PENDING.
 Phase M is CLOSED_ADOPTED / TERMINAL (7/7), not a new blocker. F3 #474 has
 its separate TAIL CLI owner decision and app/host closeout gate. Optional W04
 support remains NO and V1_RELEASE_READY remains NO.
+
+## 2026-10-12 scoped final closeout overlay
+
+F4=ADOPTED_SCOPED at actual merged-master de551ed09555b8ad4d118a250baf373062a01d0e; fresh four-profile recheck and independent technical acceptance, #514/#506. F3 app-host candidate #513 has actual four-configuration evidence at613f9205308ecbcc7635f946fe0061f57b862e71; TAIL CLI human decision PENDING, #474 OPEN. W04 optional support NO; F2/F5/F6 PENDING; V1 release ready NO. See docs/evidence/f3-app-host-closeout-20261012.

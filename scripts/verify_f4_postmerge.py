@@ -139,7 +139,7 @@ def seal(root):
             obj=Path(d['commands'][r['baseline_link']]['argv'][2]);lib=Path(d['commands'][r['baseline_link']]['argv'][3])
             r.update(object_file=str(obj.relative_to(root)),baseline_archive=str(lib.relative_to(root)),baseline_archive_sha256=f4.digest(lib))
         for backend,r in p.get('progress_traces',{}).items():r['file']=backend+'.strace'
-    d['seal_note']='Metadata sealing of actual 8999d180 execution; no compilation/runtime repeated or relabeled'
+    d['seal_note']='Metadata sealing; producer_sha identifies the actual execution; no compilation/runtime repeated or relabeled'
     (root/'evidence-sealed.json').write_text(json.dumps(d,indent=2)+'\n')
     return d
 
