@@ -2036,3 +2036,17 @@ or removable production mechanism. [Narrow receipt and DAG](../review/f3-part-c-
 Technical isolated review APPROVE is not formal GitHub APPROVED. Candidate
 test-edge closure does not authorize C2 installed/source removal, F5 adoption,
 supported W-04 or release readiness; no merge authorized.
+
+### F3 Part C facade physical candidate — 2026-10-12
+
+IMPLEMENTED_UNVERIFIED until independent final exact-HEAD review; DRAFT_NONADOPTED.
+PROD-02/03, MIG-01/02, HOST-01: three facade source files and five headers
+physically absent in candidate; canonical, Scheduler/Fiber/host, Completion
+and #475 Future/WaitPolicy retained. B-01 v4 candidate: actual n/y
+49/36/78 -> 46/33/73, retained compiler closure equality and installed probes;
+real ring UNAVAILABLE n, executed y. Four complete server matrices 53/53 n,
+67/67 y; Clang ASan/UBSan and shared TSan six risk targets each PASS.
+[Receipt](../review/f3-part-c-facade-final-receipt-20261012.md);
+[per-surface decision packet](../review/f3-part-c-facade-risk-decision-20261012.md).
+F0/F5 approvals PENDING, no merge authorized, master unchanged 49/36/78.
+No F3_FULL_RETIREMENT, optional W-04 support or V1_RELEASE_READY claim.
