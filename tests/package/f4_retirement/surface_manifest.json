@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "surfaces": [
+    {
+      "id": "F4-01",
+      "header": "sluice/blocking_io_pool.hpp",
+      "group": 508,
+      "types": [
+        "BlockingIoPool",
+        "BlockingIoPoolOptions",
+        "PoolStats",
+        "Task<T>"
+      ],
+      "callables": [
+        "try_submit",
+        "submit",
+        "wait_idle",
+        "shutdown",
+        "worker_count",
+        "queue_depth",
+        "make_blocking_io_pool",
+        "detail::enqueue_job"
+      ],
+      "migration": "general task pool; no v1 equivalent",
+      "probe": "pool",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-02",
+      "header": "sluice/detail/blocking_io_pool_impl.hpp",
+      "group": 508,
+      "types": [
+        "Task<T>::State",
+        "template",
+        "definitions"
+      ],
+      "callables": [
+        "Task<T>::get",
+        "make_bound_job",
+        "try_submit",
+        "submit"
+      ],
+      "migration": "implementation fragment requires public parent; no v1 equivalent",
+      "probe": "pool",
+      "parent": "sluice/blocking_io_pool.hpp",
+      "link_negative": true
+    },
+    {
+      "id": "F4-03",
+      "header": "sluice/buffer.hpp",
+      "group": 510,
+      "types": [
+        "BufferedReader",
+        "BufferedWriter"
+      ],
+      "callables": [
+        "read_some",
+        "consume_buffered",
+        "write_some",
+        "flush"
+      ],
+      "migration": "no v1 stream buffering product",
+      "probe": "buffer",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-04",
+      "header": "sluice/buffered_readable.hpp",
+      "group": 510,
+      "types": [
+        "BufferedReadable"
+      ],
+      "callables": [
+        "peek_buffered",
+        "consume_buffered"
+      ],
+      "migration": "no v1 stream peek/consume equivalent",
+      "probe": "buffered_readable",
+      "parent": null,
+      "link_negative": false
+    },
+    {
+      "id": "F4-05",
+      "header": "sluice/copy.hpp",
+      "group": 510,
+      "types": [
+        "CopyOptions",
+        "CopyDecision"
+      ],
+      "callables": [
+        "copy_all"
+      ],
+      "migration": "application may loop canonical operations; no stream copy adapter",
+      "probe": "copy",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-06",
+      "header": "sluice/copy_strategy.hpp",
+      "group": 510,
+      "types": [
+        "CopyStrategy",
+        "CopyOptions",
+        "CopyDecision"
+      ],
+      "callables": [
+        "to_string"
+      ],
+      "migration": "no v1 copy strategy product",
+      "probe": "strategy",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-07",
+      "header": "sluice/fault.hpp",
+      "group": 510,
+      "types": [
+        "MemoryReader",
+        "MemoryWriter",
+        "FaultPlan",
+        "FaultReader",
+        "FaultWriter"
+      ],
+      "callables": [
+        "read_some",
+        "write_some",
+        "flush"
+      ],
+      "migration": "test doubles unadmitted; no installed replacement",
+      "probe": "fault",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-08",
+      "header": "sluice/file.hpp",
+      "group": 510,
+      "types": [
+        "FileReader",
+        "FileWriter"
+      ],
+      "callables": [
+        "open",
+        "close",
+        "read_some",
+        "read_at",
+        "write_some",
+        "write_at",
+        "read_vec",
+        "write_vec",
+        "sync_data",
+        "sync_all"
+      ],
+      "migration": "file_resource.hpp + blocking/file.hpp partially replace scalar resource I/O; vectored/stream excluded",
+      "probe": "file",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-09",
+      "header": "sluice/io_context.hpp",
+      "group": 510,
+      "types": [
+        "IoContext",
+        "BlockingIoContext",
+        "OpenReaderOptions",
+        "OpenWriterOptions"
+      ],
+      "callables": [
+        "open_reader",
+        "open_writer"
+      ],
+      "migration": "canonical File open plus AsyncIoContext request submission; no stream factory equivalent",
+      "probe": "context",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-10",
+      "header": "sluice/iovec.hpp",
+      "group": 510,
+      "types": [
+        "IoSlice",
+        "ConstIoSlice"
+      ],
+      "callables": [],
+      "migration": "vectored product excluded; no v1 equivalent",
+      "probe": "iovec",
+      "parent": null,
+      "link_negative": false
+    },
+    {
+      "id": "F4-11",
+      "header": "sluice/limit.hpp",
+      "group": 510,
+      "types": [
+        "CopyLimit"
+      ],
+      "callables": [
+        "unlimited",
+        "bytes",
+        "nothing",
+        "kind",
+        "remaining"
+      ],
+      "migration": "no v1 copy limit product",
+      "probe": "limit",
+      "parent": null,
+      "link_negative": false
+    },
+    {
+      "id": "F4-12",
+      "header": "sluice/memory_io_context.hpp",
+      "group": 510,
+      "types": [
+        "MemoryIoContext"
+      ],
+      "callables": [
+        "seed",
+        "open_reader",
+        "open_writer"
+      ],
+      "migration": "test double excluded; no installed equivalent",
+      "probe": "memory",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-13",
+      "header": "sluice/observed.hpp",
+      "group": 510,
+      "types": [
+        "ReaderStats",
+        "WriterStats",
+        "ObservedReader",
+        "ObservedWriter"
+      ],
+      "callables": [
+        "read_some",
+        "read_vec",
+        "write_some",
+        "write_vec",
+        "flush"
+      ],
+      "migration": "no v1 stream observation adapter",
+      "probe": "observed",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-14",
+      "header": "sluice/reader.hpp",
+      "group": 510,
+      "types": [
+        "Reader"
+      ],
+      "callables": [
+        "read_some",
+        "read_exact",
+        "stream_to",
+        "read_vec",
+        "read_vec_all"
+      ],
+      "migration": "canonical scalar reads only; generic stream abstraction excluded",
+      "probe": "reader",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-15",
+      "header": "sluice/sync.hpp",
+      "group": 510,
+      "types": [
+        "SyncableWriter"
+      ],
+      "callables": [
+        "sync_data",
+        "sync_all"
+      ],
+      "migration": "canonical blocking/request file sync partially replaces file durability; generic writer interface excluded",
+      "probe": "sync",
+      "parent": null,
+      "link_negative": false
+    },
+    {
+      "id": "F4-16",
+      "header": "sluice/wal.hpp",
+      "group": 510,
+      "types": [
+        "wal::WalWriter"
+      ],
+      "callables": [
+        "write_record",
+        "write_record_vec",
+        "read_record",
+        "flush",
+        "sync",
+        "written_lsn",
+        "flushed_lsn",
+        "durable_lsn"
+      ],
+      "migration": "no v1 WAL codec or LSN product",
+      "probe": "wal",
+      "parent": null,
+      "link_negative": true
+    },
+    {
+      "id": "F4-17",
+      "header": "sluice/writer.hpp",
+      "group": 510,
+      "types": [
+        "Writer"
+      ],
+      "callables": [
+        "write_some",
+        "write_all",
+        "flush",
+        "write_vec",
+        "write_all_vec"
+      ],
+      "migration": "canonical scalar writes only; generic stream abstraction excluded",
+      "probe": "writer",
+      "parent": null,
+      "link_negative": true
+    }
+  ],
+  "expected": {
+    "B0": [
+      13,
+      33,
+      73
+    ],
+    "C508": [
+      12,
+      33,
+      71
+    ],
+    "C510": [
+      3,
+      33,
+      58
+    ],
+    "C508510": [
+      2,
+      33,
+      56
+    ]
+  }
+}
