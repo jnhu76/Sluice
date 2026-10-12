@@ -25,6 +25,8 @@ accidental survivors.
 **Current issue ownership:** #474 is **OPEN F3 closeout** (including TAIL inert
 `--workers`); adopted M-F and M-A1 ruling carriers #461/#462 are closed after
 handoff to **#505 F4 legacy File/stream** and **#506 F4 BlockingIoPool**.
+Remaining M-A3 D-13 test-double seams and M-A4 experimental final-tree disposition
+remain #402 F4/F5 responsibilities, not tasks silently completed by #505/#506.
 #402 F2/F3/F4/F5/F6, #390 v1 roadmap, and final package/external risk gates
 remain open. `OPTIONAL_W04_SUPPORTED=NO`; if unsupported, W-04 is a conditional
 N/A requiring negative package/support-claim proof, not W-04 PASS.
