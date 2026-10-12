@@ -26,10 +26,11 @@ summary = {}
 def git(*argv):
     return subprocess.check_output(["git", "-C", str(repo), *argv])
 def command(argv, label, directory, expected=0):
-    result = subprocess.run([str(x) for x in argv], cwd=directory, env=environment,
+    workdir = pathlib.Path(argv[argv.index("-P") + 1]) if "-P" in argv else directory
+    result = subprocess.run([str(x) for x in argv], cwd=workdir, env=environment,
                             text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     (directory / (label + ".log")).write_text(result.stdout)
-    commands.append({"argv": [str(x) for x in argv], "cwd": str(directory),
+    commands.append({"argv": [str(x) for x in argv], "cwd": str(workdir),
                      "returncode": result.returncode, "expected": expected})
     if expected == "failure":
         assert result.returncode != 0, label
