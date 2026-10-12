@@ -120,10 +120,6 @@ class AsyncBackend {
     virtual void stop_execution() noexcept {}
     virtual void retire_execution_resources() noexcept {}
 
-    // Whether the backend produces physical progress signals, so a driver can
-    // park productively on the context progress source. Backends that answer
-    // false are not v1 request backends: the context refuses to wait on them,
-    // and ApplicationRuntime rejects them at build time.
     virtual bool signals_physical_progress() const noexcept { return false; }
 
     virtual bool supports_request_identity() const noexcept { return false; }

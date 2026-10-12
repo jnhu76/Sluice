@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/jnhu/f3-part-c/c2-facade-20261012/docs/evidence/f3-part-c-b01-v4-candidate-20261012/reproduce.py", line 79, in <module>
+    assert all((root / p).is_file() for x in resolved.values() for p in x["objects"])
+           ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
