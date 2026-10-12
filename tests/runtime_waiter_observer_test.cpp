@@ -197,6 +197,9 @@ bool completion_wake_rides_the_observer_adapter(Tracker& t) {
 
     driver.join();
     t.check(fiber.state() == FiberState::done, "the fiber finishes before stack retirement");
+    t.check(SchedulerTestAccess::ready_sink_deliveries(sched) == 1 &&
+                SchedulerTestAccess::ready_sink_routed(sched) == 1,
+            "exactly one observer delivery routes the suspended fiber");
     t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
             "no wait record survives driver join");
     return t.failures == 0;
