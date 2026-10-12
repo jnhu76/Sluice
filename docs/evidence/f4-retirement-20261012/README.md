@@ -80,3 +80,11 @@ breakage or select a bounded window, binding the final PR HEAD, digest, exact
 surface set and risk version. No merge, issue closure, F5 completion or v1
 release readiness is claimed. CodeRabbit CLI was unavailable; manual exact
 source/closure review and deterministic verifier self-tests are recorded.
+
+Final candidate revision receipt: `exact-head-9f24b9b9503aee6793d17e22cfb2923062b40e0365be7e0942425d7394978614.tar.gz`,
+SHA256 `9f24b9b9503aee6793d17e22cfb2923062b40e0365be7e0942425d7394978614`. It preserves full commands, exit codes and stdout/stderr
+hashes for final #508 `e642fd7aca270451d5072580eefd693b76ca00ca` and
+#510 `91e810d45ccaa0ee6ef0076a4250dd0e7448dfb5`: only docs additions after
+the measured heads, no production/test/build changes. It also records final
+installed-prefix whitelist self-tests/integrity PASS and original checkout
+HEAD/branch/cleanliness. The main runtime archive digest above is unchanged.
