@@ -26,3 +26,5 @@ migration diagnostics and absence of target opens; absence of leftover temporary
 raw-archives.json binds SHA256/file counts; FILE_INDEX.json binds every archived member.
 TAIL owner decision is still PENDING; PR513 Draft/#474 OPEN. No agent approval or automatic merge.
 F4 adopted scoped/#505/#506 CLOSED; F2/F5/F6 pending, optional W04 unsupported, release NO.
+
+Supplemental instrumentation archive binds18 actual executed test binary SHA256 and nm inventories, app object sanitizer references, and four native compile databases with -fsanitize flags. capture_f3_sanitizer_instrumentation.py reproduces nm collection against preserved builds; no runtime replay is claimed.
