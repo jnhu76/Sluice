@@ -2098,3 +2098,19 @@ All five waiter obligations remain owned/executable, runtime test edges zero.
 Earlier candidate statuses above are dated preparation records superseded for
 this exact slice. Whole F3/F5, optional supported W-04 and release readiness
 remain incomplete; F3_FULL_RETIREMENT=NO, V1_RELEASE_READY=NO.
+
+### F4 installed retirement experiment — 2026-10-12 (candidate)
+
+[#512](https://github.com/jnhu76/Sluice/pull/512) adds versioned 17-interface
+installed-prefix retirement evidence for #508/#510. Root PROD-03,
+W-01–W-03 and MIG-01/02/03 remain the authority; F0 §1.7/1.8 and #475
+remain gates. See [exact library identities and raw evidence](../evidence/f4-retirement-20261012/README.md).
+All four current library trees pass dual-profile Debug/Release installed
+consumers and retirement probes. Combined tree `07c1a3d5c40207e1a519592b9d2e10333674f2ed`
+has core 2 / async 33 / headers 56, measured at
+`ab2cea2784db05be8b05b5a776c757856beb4395`, never represented as merged master.
+Clang ASan+UBSan/TSan pass with the #511 W-02 consumer lifetime correction;
+the original failing consumer diagnostics are retained. External use stays
+UNKNOWN; both scoped human owner approvals are PENDING. This technical
+candidate evidence does not complete F4/F5 or authorize removal/merge/release.
+Historical frozen manifests remain unchanged and W-04 support remains NO.
