@@ -139,12 +139,12 @@ Positive probes (retained canonical interfaces still compile and link):
 |-------|--------|
 | W-01: `#include <sluice/blocking/file.hpp>` + `#include <sluice/file_resource.hpp>` | compile + link OK |
 | W-02: `#include <sluice/async/request_scope.hpp>` + `#include <sluice/async/future.hpp>` | compile + link OK |
-| W-03: `#include <sluice/async/scheduler.hpp>` + `#include <sluice/async/stackful_io_host.hpp>` | compile + link OK |
+| Retained Scheduler/StackfulIoHost header closure (optional-host substrate; **NOT W-03**) | compile + link OK |
 | Host: `#include <sluice/async/stackful_io_host.hpp>` | compile + link OK |
 | Future: `#include <sluice/async/future.hpp>` | compile + link OK |
 | WaitPolicy: `#include <sluice/async/wait_policy.hpp>` | compile + link OK |
 
-Probe commands (release / no-liburing):
+**Scope limit:** The rows above are compile/link surface probes, not full reference-workload executions. In particular, root v1-r4 **W-03 external event loop** requires an application-owned progress owner, a pollable ProgressSource, no Scheduler/Fiber dependency or busy polling, and ThreadPool plus real io_uring coverage. Its complete *installed* external-consumer witness has not been identified in this B-01 receipt; record the exact existing external test/evidence or add a clean-room consumer before claiming the W-03 package obligation closed. W-04 is optional and not claimed supported.\n\nProbe commands (release / no-liburing):
 
 ```bash
 INSTALL=/tmp/b01-evidence/pr-510/install-release-liburing-false
