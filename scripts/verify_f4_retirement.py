@@ -176,12 +176,14 @@ def package(ex, tree, tree_id, profile, mode, manifest):
         c, _, _ = ex.run(['g++', '-std=c++20', '-pthread', f'-I{prefix}/include', *flags,
                          source, f'-L{prefix}/lib', *(['-lsluice_core'] if name == 'w01_direct' else links),
                          '-Wl,-Map=' + str(target) + '.map', '-o', target], cwd=scratch)
-        row = dict(compile_link=c['id'], compile_link_status=status(c))
+        row = dict(compile_link=c['id'], compile_link_status=status(c), source_sha256=digest(source),source_origin=str(consumers/(name+'.cpp')))
         if c['exit_code'] == 0:
             variants = ['threadpool', 'uring'] if name == 'w03_external_loop' else ['']
             for variant in variants:
                 r, out, _ = ex.run([target, *([variant] if variant else [])], cwd=scratch, timeout=90)
                 row[variant or 'runtime'] = dict(command=r['id'], status=status(r, unavailable=name in ('w03_external_loop', 'w04_stackful_candidate')))
+                if name=='w03_external_loop' and variant=='threadpool':
+                    row['non_busy_progress']='PASS' if r['exit_code']==0 else status(r)
             n, nm, _ = ex.run(['nm', '-C', target])
             row['binary_nm'] = n['id']
             if name in ('w01_direct', 'w03_external_loop'):
@@ -211,7 +213,7 @@ def verify(data, root):
                     value = arg[2:] if arg.startswith('-I') else arg.split('=', 1)[-1]
                     if arg in ('-I', '-isystem', '-iquote', '-include'):
                         value = argv[j+1] if j+1 < len(argv) else ''
-                    historical_ids={row.get('standalone') for row in data.get('historical', {}).values()}
+                    historical_ids={row.get(k) for row in data.get('historical', {}).values() for k in ('standalone','parent_include')}
                     require('/worktrees/' not in value or (i in historical_ids and value == data['trees']['H0']['path']+'/include'), f'source include leakage {i}')
             require(all(c.get('environment', {}).get(k) is None for k in SCRUB), f'unscrubbed environment {i}')
     def passed(cid):
@@ -325,6 +327,9 @@ def main():
         historical=args.workspace/'worktrees/historical-v001'
         data['historical']={}
         history_dir=ex.output/'historical'; history_dir.mkdir()
+        for doc in ('README.md','docs/reference/api.md','xmake.lua','xmake/libraries.lua'):
+            path=historical/doc
+            if path.exists(): (history_dir/doc.replace('/','__')).write_bytes(path.read_bytes())
         for s in manifest['surfaces']:
             src=historical/'include'/s['header']
             row=dict(present=src.exists(),source_sha256=digest(src) if src.exists() else None)
@@ -332,7 +337,11 @@ def main():
                 saved=history_dir/(s['id']+'.hpp'); saved.write_bytes(src.read_bytes())
                 unit=history_dir/(s['id']+'.cpp'); unit.write_text(f'#include <{s["header"]}>\n')
                 c,_,_=ex.run(['g++','-std=c++20',f'-I{historical}/include','-fsyntax-only',unit])
-                row.update(standalone=c['id'],standalone_status=status(c))
+                row.update(standalone=c['id'],standalone_status=status(c),public_includes=re.findall(r'#include <(sluice/[^>]+)>',src.read_text()),types=s['types'],callables=s['callables'],description='See verbatim H0 API reference and README; no per-header uniform stability claim; H0 lacks package header installation rules')
+                if s['parent']:
+                    unit.write_text(f'#include <{s["parent"]}>\n#include <{s["header"]}>\n')
+                    parent,_,_=ex.run(['g++','-std=c++20',f'-I{historical}/include','-fsyntax-only',unit])
+                    row.update(parent_include=parent['id'],parent_status=status(parent))
             data['historical'][s['id']]=row
         for tid in ('B0','C508','C510','C508510'):
             tree=args.workspace/'worktrees'/ids[tid][0]
@@ -364,15 +373,33 @@ def main():
                 c,_,err=ex.run(['g++','-pthread',obj,f'-L{p["prefix"]}/lib','-lsluice_core','-o',target])
                 p['negative_links'][s['id']]=dict(command=c['id'],status='PASS' if c['exit_code'] not in (0,None) and 'undefined reference' in err else 'FAIL')
         for s in manifest['surfaces']:
-            data['risk'].append(dict(SURFACE_ID=s['id'],HEADER=s['header'],V001_PUBLIC_FACT=data['historical'][s['id']],
-                                     EXTERNAL_USE='UNKNOWN',MIGRATION_OR_NO_EQUIVALENT=s['migration'],
-                                     BREAKAGE_CONSEQUENCE='source include and named types/callables cease to compile; existing linked legacy consumers may fail to relink',
-                                     PROPOSED_POLICY='ACCEPT_BREAKAGE_NOW',HUMAN_OWNER_VERDICT='PENDING'))
+            old=[p for p in data['packages'] if p['tree_id']=='B0']
+            candidates=[p for p in data['packages'] if p['tree_id'] in (f"C{s['group']}",'C508510')]
+            refs=lambda ps,field: {f"{p['tree_id']}/{p['profile']}/{p['mode']}":p['surfaces'][s['id']].get(field) for p in ps}
+            c, consumers, _=ex.run(['git','-C',args.workspace/'worktrees/baseline','grep','-n','-F',s['header'],'--','include','src','apps','tests'])
+            risk=dict(SURFACE_ID=s['id'],HEADER=s['header'],V001_PUBLIC_FACT=data['historical'][s['id']],
+                      CURRENT_INSTALLED_FACT=refs(old,'present'),CURRENT_IN_TREE_CONSUMER=dict(command=c['id'],matches=consumers),
+                      EXTERNAL_USE='UNKNOWN',OLD_API_COMPILE={k:v.get('compile_status') for k,v in refs(old,'api').items()},
+                      OLD_API_LINK={k:v.get('link_status') for k,v in refs(old,'api').items()},
+                      OLD_BEHAVIOR_WITNESS={k:v.get('run_status') for k,v in refs(old,'api').items()},
+                      CANDIDATE_HEADER_ABSENT={k:not v for k,v in refs(candidates,'present').items()},
+                      CANDIDATE_API_COMPILE_REJECTED=refs(candidates,'negative_status'),
+                      CANDIDATE_SYMBOL_ABSENT='HEADER_ONLY_NO_EXCLUSIVE_CALLABLE_ABI' if not s['link_negative'] else
+                      {f"{p['tree_id']}/{p['profile']}/{p['mode']}":dict(symbol_audit=p['retired_symbols']['status'],link_negative=p['negative_links'][s['id']]['status']) for p in candidates},
+                      RETAINED_CANONICAL_WORKLOAD={f"{p['tree_id']}/{p['profile']}/{p['mode']}":p['consumers'] for p in candidates},
+                      MIGRATION_OR_NO_EQUIVALENT=s['migration'],
+                      BREAKAGE_CONSEQUENCE='source include and named types/callables cease to compile; existing linked legacy consumers may fail to relink',
+                      PROPOSED_POLICY='ACCEPT_BREAKAGE_NOW',TECHNICAL_VERDICT='PENDING_FULL_EVIDENCE_CHECK',HUMAN_OWNER_VERDICT='PENDING')
+            data['risk'].append(risk)
     except Exception as e:
         data['blocked']=str(e)
         print(f'BLOCKED: {e}',file=sys.stderr)
     (ex.output/'evidence.json').write_text(json.dumps(data,indent=2)+'\n')
     errors=verify(data,ex.output)
+    for risk in data['risk']:
+        risk['TECHNICAL_VERDICT']='TECHNICALLY_SAFE_FOR_REQUIRED_V1_SCOPE' if not errors else 'BLOCK_AND_REVISE'
+    (ex.output/'evidence.json').write_text(json.dumps(data,indent=2)+'\n')
+    (ex.output/'REPORT.md').write_text('# F4 technical evidence\n\nStatus: '+('PASS' if not errors else 'FAIL')+'\n\n'+ '\n'.join(f"- {r['SURFACE_ID']} `{r['HEADER']}`: {r['TECHNICAL_VERDICT']}; external use UNKNOWN; human owner PENDING; migration: {r['MIGRATION_OR_NO_EQUIVALENT']}" for r in data['risk'])+'\n\nFull per-interface facts, commands, exit codes and raw log hashes: evidence.json. W-04 support: NO.\n')
     (ex.output/'verification.json').write_text(json.dumps({'errors':errors,'status':'FAIL' if errors else 'PASS'},indent=2)+'\n')
     (ex.output/'REPRODUCE.md').write_text('# F4 experiment\n\n'+shlex.join(sys.argv)+'\n\nIntegrity only: `python3 scripts/verify_f4_retirement.py --verify-evidence '+str(ex.output)+'`\n\n'+ '\n'.join(f"{c['id']}: cwd={c['cwd']} rc={c['exit_code']} `{shlex.join(c['argv'])}`" for c in ex.commands)+'\n')
     print(json.dumps({'output':str(ex.output),'packages':len(data['packages']),'errors':errors},indent=2))
