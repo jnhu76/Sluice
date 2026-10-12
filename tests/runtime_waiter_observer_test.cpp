@@ -1,14 +1,16 @@
-#include <sluice/async/application_runtime.hpp>
-#include <sluice/async/await_op_helpers.hpp>
 #include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/scheduler.hpp>
-#include <sluice/async/task_result.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
+#include <array>
 #include <atomic>
+#include <condition_variable>
+#include <cstdlib>
+#include <future>
+#include <mutex>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
@@ -66,7 +68,8 @@ template <class Gate> void wait_gate_exited(Gate& gate) {
 
 std::size_t wait_registry_live_becomes(Scheduler& sched, std::size_t expected) {
     std::size_t live = expected == 0 ? 1 : 0;
-    for (int i = 0; i < 500000; ++i) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < deadline) {
         live = SchedulerTestAccess::wait_registry_live_count(sched);
         if (live == expected)
             break;
@@ -76,7 +79,8 @@ std::size_t wait_registry_live_becomes(Scheduler& sched, std::size_t expected) {
 }
 
 bool scheduler_worker_parks_in_backend_domain(Scheduler& sched) {
-    for (int i = 0; i < 500000; ++i) {
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < deadline) {
         if (SchedulerTestAccess::worker_park_domain(sched, 0) == WorkerState::ParkDomain::Backend)
             return true;
         std::this_thread::yield();
@@ -139,44 +143,42 @@ bool completion_wake_rides_the_observer_adapter(Tracker& t) {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(1);
-    auto build = builder.build();
-    t.check(build.has_value(), "the runtime builds");
-    if (!build.has_value())
-        return false;
-    std::unique_ptr<ApplicationRuntime> rt = std::move(build.value());
-    t.check(rt->start().has_value(), "the runtime starts");
-    Scheduler& sched = rt->test_scheduler_for_worker_topology();
+    AsyncIoContext io(std::move(backend));
+    Scheduler sched(io);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
 
-    TaskResultSlot<Result<std::size_t>> slot;
+    std::promise<Result<std::size_t>> slot;
     std::vector<std::byte> buffer(19, std::byte{0});
 
-    auto submitted = rt->submit([&](RuntimeTaskContext& ctx) {
+    std::vector<std::byte> stack(256 * 1024);
+    Fiber fiber([&](Fiber&) {
         Completion<std::size_t> c;
-        auto sr = ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 19, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 19, 0}, c);
         if (!sr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(sr.error()));
+            slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = ctx.await_completion(c);
+        auto wr = sched.await_completion_size(c);
         if (!wr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(wr.error()));
+            slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
         auto r = c.result();
         c.reset();
         if (!r.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(r.error()));
+            slot.set_value(make_unexpected<std::size_t>(r.error()));
             return;
         }
-        slot.publish(r.value());
+        slot.set_value(r.value());
     });
-    t.check(submitted.has_value(), "the task is admitted");
+    if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
+        t.check(false, "the fiber stack initializes");
+        return false;
+    }
+    sched.spawn(fiber);
+    std::thread driver([&] { sched.run(1); });
 
     wait_gate_paused(gate);
     t.check(wait_registry_live_becomes(sched, 1) == 1,
@@ -186,21 +188,20 @@ bool completion_wake_rides_the_observer_adapter(Tracker& t) {
     wait_gate_exited(gate);
     raw->set_worker_claimed_pause_gate(nullptr);
 
-    Result<std::size_t> result = slot.wait_and_take();
+    Result<std::size_t> result = slot.get_future().get();
     t.check(result.has_value() && result.value() == 19,
             "the fiber wakes through the observer adapter with the payload");
     t.check(std::memcmp(buffer.data(), "sluice c1d wake payload", 19) == 0,
             "the completion carries the published bytes");
-    t.check(wait_registry_live_becomes(sched, 0) == 0,
-            "the wait record retires with the delivery");
+    t.check(wait_registry_live_becomes(sched, 0) == 0, "the wait record retires with the delivery");
 
-    rt->request_stop();
-    t.check(rt->drain().has_value(), "the runtime drains");
-    // The scheduler is destroyed by join; the last valid observation point
-    // for the registry is after the drain, before the join frees it.
+    driver.join();
+    t.check(fiber.state() == FiberState::done, "the fiber finishes before stack retirement");
+    t.check(SchedulerTestAccess::ready_sink_deliveries(sched) == 1 &&
+                SchedulerTestAccess::ready_sink_routed(sched) == 1,
+            "exactly one observer delivery routes the suspended fiber");
     t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
-            "no wait record survives the runtime");
-    t.check(rt->join().has_value(), "the runtime joins");
+            "no wait record survives driver join");
     return t.failures == 0;
 }
 
@@ -221,58 +222,59 @@ bool observer_cancel_wakes_the_fiber_and_the_operation_still_completes(Tracker& 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(1);
-    auto build = builder.build();
-    t.check(build.has_value(), "the runtime builds");
-    if (!build.has_value())
-        return false;
-    std::unique_ptr<ApplicationRuntime> rt = std::move(build.value());
-    t.check(rt->start().has_value(), "the runtime starts");
-    Scheduler& sched = rt->test_scheduler_for_worker_topology();
+    AsyncIoContext io(std::move(backend));
+    Scheduler sched(io);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
 
-    TaskResultSlot<Result<std::size_t>> slot;
+    std::promise<Result<std::size_t>> slot;
     std::vector<std::byte> buffer(21, std::byte{0});
     std::atomic<bool> await_was_canceled{false};
     std::atomic<Completion<std::size_t>*> pending{nullptr};
 
-    auto submitted = rt->submit([&](RuntimeTaskContext& ctx) {
+    std::vector<std::byte> stack(256 * 1024);
+    Fiber fiber([&](Fiber&) {
         Completion<std::size_t> c;
-        auto sr = ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 21, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 21, 0}, c);
         if (!sr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(sr.error()));
+            slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
         pending.store(&c, std::memory_order_release);
-        auto wr = ctx.await_completion(c);
+        auto wr = sched.await_completion_size(c);
         pending.store(nullptr, std::memory_order_release);
         if (!wr.has_value() && wr.error().code == IoError::Code::canceled) {
             await_was_canceled.store(true, std::memory_order_release);
-            auto drained = await_drain(ctx, c);
+            await_was_canceled.notify_one();
+            auto drained = sched.await_completion_size(c);
             if (!drained.has_value()) {
-                slot.publish(make_unexpected<std::size_t>(drained.error()));
+                slot.set_value(make_unexpected<std::size_t>(drained.error()));
                 return;
             }
-            slot.publish(std::size_t{21});
+            auto result = c.result();
+            c.reset();
+            slot.set_value(std::move(result));
             return;
         }
         if (!wr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(wr.error()));
+            slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
         auto r = c.result();
         c.reset();
         if (!r.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(r.error()));
+            slot.set_value(make_unexpected<std::size_t>(r.error()));
             return;
         }
-        slot.publish(r.value());
+        slot.set_value(r.value());
     });
-    t.check(submitted.has_value(), "the task is admitted");
+    if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
+        t.check(false, "the fiber stack initializes");
+        return false;
+    }
+    sched.spawn(fiber);
+    std::thread driver([&] { sched.run(1); });
 
     wait_gate_paused(gate);
     t.check(wait_registry_live_becomes(sched, 1) == 1,
@@ -280,28 +282,31 @@ bool observer_cancel_wakes_the_fiber_and_the_operation_still_completes(Tracker& 
 
     Completion<std::size_t>* suspended = pending.load(std::memory_order_acquire);
     t.check(suspended != nullptr, "the suspended completion is addressable");
-    auto canceled = suspended != nullptr ? sched.cancel_waiter(*suspended)
-                                         : Result<bool>{false};
+    auto canceled = suspended != nullptr ? sched.cancel_waiter(*suspended) : Result<bool>{false};
     t.check(canceled.has_value() && canceled.value(),
             "cancelling the registered observer wakes the fiber");
+    await_was_canceled.wait(false, std::memory_order_acquire);
+    t.check(io.outstanding() == 1 && !suspended->ready(),
+            "waiter cancellation leaves the accepted borrow pending while physical work is gated");
+    t.check(buffer.front() == std::byte{0}, "the held operation has not written its borrow");
 
     resume_gate(gate);
     wait_gate_exited(gate);
     raw->set_worker_claimed_pause_gate(nullptr);
 
-    Result<std::size_t> result = slot.wait_and_take();
+    Result<std::size_t> result = slot.get_future().get();
     t.check(await_was_canceled.load(std::memory_order_acquire),
             "the canceled await returned the canceled disposition");
     t.check(result.has_value() && result.value() == 21,
             "the operation completed after its observer was canceled");
     t.check(std::memcmp(buffer.data(), "sluice c1d cancel payload", 21) == 0,
             "the completed operation carried the published bytes");
-    t.check(wait_registry_live_becomes(sched, 0) == 0,
-            "no wait record survives the canceled wait");
+    t.check(wait_registry_live_becomes(sched, 0) == 0, "no wait record survives the canceled wait");
 
-    rt->request_stop();
-    t.check(rt->drain().has_value(), "the runtime drains");
-    t.check(rt->join().has_value(), "the runtime joins");
+    driver.join();
+    t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+            "no wait record survives driver join");
+    t.check(io.outstanding() == 0, "accepted operations settle before teardown");
     return t.failures == 0;
 }
 
@@ -319,48 +324,54 @@ bool already_terminal_await_returns_without_suspending(Tracker& t) {
     }
     File file = std::move(file_open.value());
 
-    RuntimeBuilder builder;
-    builder.backend(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
-    builder.workers(1);
-    auto build = builder.build();
-    t.check(build.has_value(), "the runtime builds");
-    if (!build.has_value())
-        return false;
-    std::unique_ptr<ApplicationRuntime> rt = std::move(build.value());
-    t.check(rt->start().has_value(), "the runtime starts");
-    Scheduler& sched = rt->test_scheduler_for_worker_topology();
+    AsyncIoContext io(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
+    Scheduler sched(io);
 
-    TaskResultSlot<Result<std::size_t>> slot;
+    std::promise<Result<std::size_t>> slot;
     std::vector<std::byte> buffer(1, std::byte{0});
 
-    auto submitted = rt->submit([&](RuntimeTaskContext& ctx) {
+    std::vector<std::byte> stack(256 * 1024);
+    Fiber fiber([&](Fiber& current) {
         Completion<std::size_t> c;
-        auto sr = ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 0, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 0, 0}, c);
         if (!sr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(sr.error()));
+            slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = ctx.await_completion(c);
+        t.check(c.ready(), "the zero-length request is terminal before await");
+        const std::array context_before{current.ctx.rsp, current.ctx.rbp, current.ctx.rip};
+        auto wr = sched.await_completion_size(c);
+        t.check(current.state() == FiberState::running, "the already-terminal fiber keeps running");
+        t.check(context_before == std::array{current.ctx.rsp, current.ctx.rbp, current.ctx.rip},
+                "already-terminal await performs no context switch");
+        t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+                "already-terminal await leaves no armed wait record");
         if (!wr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(wr.error()));
+            slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
         auto r = c.result();
         c.reset();
-        slot.publish(r.has_value() ? Result<std::size_t>{r.value()}
-                                   : make_unexpected<std::size_t>(r.error()));
+        slot.set_value(r.has_value() ? Result<std::size_t>{r.value()}
+                                     : make_unexpected<std::size_t>(r.error()));
     });
-    t.check(submitted.has_value(), "the task is admitted");
+    if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
+        t.check(false, "the fiber stack initializes");
+        return false;
+    }
+    sched.spawn(fiber);
+    std::thread driver([&] { sched.run(1); });
 
-    Result<std::size_t> result = slot.wait_and_take();
+    Result<std::size_t> result = slot.get_future().get();
     t.check(result.has_value() && result.value() == 0,
             "an await on a completion published at submit returns through the ready edge");
     t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
             "the already-terminal attach suspended no fiber");
 
-    rt->request_stop();
-    t.check(rt->drain().has_value(), "the runtime drains");
-    t.check(rt->join().has_value(), "the runtime joins");
+    driver.join();
+    t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+            "no wait record survives driver join");
+    t.check(io.outstanding() == 0, "accepted operations settle before teardown");
     return t.failures == 0;
 }
 
@@ -381,85 +392,85 @@ bool wait_record_exhaustion_fails_the_await_before_observer_attachment(Tracker& 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(1);
-    builder.test_wait_capacity(1);
-    auto build = builder.build();
-    t.check(build.has_value(), "the runtime builds");
-    if (!build.has_value())
-        return false;
-    std::unique_ptr<ApplicationRuntime> rt = std::move(build.value());
-    t.check(rt->start().has_value(), "the runtime starts");
-    Scheduler& sched = rt->test_scheduler_for_worker_topology();
-    RequestCore& core = *rt->test_io_context().context_core_for_test();
+    AsyncIoContext io(std::move(backend));
+    Scheduler sched(io, 1);
+    RequestCore& core = *io.context_core_for_test();
     t.check(SchedulerTestAccess::configured_wait_capacity(sched) == 1,
             "the host wait-record pool is bounded to a single record");
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
 
-    TaskResultSlot<Result<std::size_t>> slot_a;
-    TaskResultSlot<Result<std::size_t>> slot_b;
+    std::promise<Result<std::size_t>> slot_a;
+    std::promise<Result<std::size_t>> slot_b;
     std::vector<std::byte> buffer_a(31, std::byte{0});
     std::vector<std::byte> buffer_b(15, std::byte{0});
     std::atomic<bool> await_b_failed_with_no_space{false};
     std::atomic<bool> holder_a_finished{false};
 
-    auto submitted_a = rt->submit([&](RuntimeTaskContext& ctx) {
+    std::vector<std::byte> stack_a(256 * 1024);
+    Fiber fiber_a([&](Fiber&) {
         Completion<std::size_t> c;
-        auto sr = ctx.submit_read(ReadOp{NativeFileRef{file}, buffer_a.data(), 31, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer_a.data(), 31, 0}, c);
         if (!sr.has_value()) {
-            slot_a.publish(make_unexpected<std::size_t>(sr.error()));
+            slot_a.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = ctx.await_completion(c);
+        auto wr = sched.await_completion_size(c);
         if (!wr.has_value()) {
-            slot_a.publish(make_unexpected<std::size_t>(wr.error()));
+            slot_a.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
         auto r = c.result();
         c.reset();
         if (!r.has_value()) {
-            slot_a.publish(make_unexpected<std::size_t>(r.error()));
+            slot_a.set_value(make_unexpected<std::size_t>(r.error()));
             return;
         }
-        slot_a.publish(r.value());
+        slot_a.set_value(r.value());
         holder_a_finished.store(true, std::memory_order_release);
     });
-    t.check(submitted_a.has_value(), "the record-holder task is admitted");
 
-    auto submitted_b = rt->submit([&](RuntimeTaskContext& ctx) {
+    std::vector<std::byte> stack_b(256 * 1024);
+    Fiber fiber_b([&](Fiber&) {
         Completion<std::size_t> c;
-        auto sr = ctx.submit_read(ReadOp{NativeFileRef{file}, buffer_b.data(), 15, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer_b.data(), 15, 0}, c);
         if (!sr.has_value()) {
-            slot_b.publish(make_unexpected<std::size_t>(sr.error()));
+            slot_b.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = ctx.await_completion(c);
+        auto wr = sched.await_completion_size(c);
         if (!wr.has_value() && wr.error().code == IoError::Code::no_space) {
             await_b_failed_with_no_space.store(true, std::memory_order_release);
-            ctx.suspend(holder_a_finished);
-            wr = ctx.await_completion(c);
+            sched.await_ready_flag(holder_a_finished);
+            wr = sched.await_completion_size(c);
         }
         if (!wr.has_value()) {
-            slot_b.publish(make_unexpected<std::size_t>(wr.error()));
+            slot_b.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
         auto r = c.result();
         c.reset();
         if (!r.has_value()) {
-            slot_b.publish(make_unexpected<std::size_t>(r.error()));
+            slot_b.set_value(make_unexpected<std::size_t>(r.error()));
             return;
         }
-        slot_b.publish(r.value());
+        slot_b.set_value(r.value());
     });
-    t.check(submitted_b.has_value(), "the exhausted task is admitted");
+    if (!sched.init_fiber(fiber_a, stack_a.data(), stack_a.size()) ||
+        !sched.init_fiber(fiber_b, stack_b.data(), stack_b.size())) {
+        t.check(false, "both fiber stacks initialize");
+        return false;
+    }
+    sched.spawn(fiber_a);
+    sched.spawn(fiber_b);
+    std::thread driver([&] { sched.run(1); });
 
     wait_gate_paused(gate);
 
     bool failure_observed = false;
-    for (int i = 0; i < 500000; ++i) {
+    const auto failure_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (std::chrono::steady_clock::now() < failure_deadline) {
         if (await_b_failed_with_no_space.load(std::memory_order_acquire)) {
             failure_observed = true;
             break;
@@ -479,13 +490,13 @@ bool wait_record_exhaustion_fails_the_await_before_observer_attachment(Tracker& 
     wait_gate_exited(gate);
     raw->set_worker_claimed_pause_gate(nullptr);
 
-    Result<std::size_t> result_a = slot_a.wait_and_take();
+    Result<std::size_t> result_a = slot_a.get_future().get();
     t.check(result_a.has_value() && result_a.value() == 31,
             "the record holder completes with its payload");
     t.check(std::memcmp(buffer_a.data(), "sluice obs04 exhaustion payload", 31) == 0,
             "the record holder carries the published bytes");
 
-    Result<std::size_t> result_b = slot_b.wait_and_take();
+    Result<std::size_t> result_b = slot_b.get_future().get();
     t.check(result_b.has_value() && result_b.value() == 15,
             "the refused await settles its request through the normal await edge");
     t.check(std::memcmp(buffer_b.data(), "sluice obs04 ex", 15) == 0,
@@ -494,13 +505,13 @@ bool wait_record_exhaustion_fails_the_await_before_observer_attachment(Tracker& 
             "no wait record survives the exhausted await");
 
     const CoreSnapshot settled_snapshot = core.snapshot();
-    t.check(settled_snapshot.free_slots == core.capacity() &&
-                settled_snapshot.accepted_live == 0,
+    t.check(settled_snapshot.free_slots == core.capacity() && settled_snapshot.accepted_live == 0,
             "every slot reclaims with no observer pin after the failure path");
 
-    rt->request_stop();
-    t.check(rt->drain().has_value(), "the runtime drains");
-    t.check(rt->join().has_value(), "the runtime joins");
+    driver.join();
+    t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+            "no wait record survives driver join");
+    t.check(io.outstanding() == 0, "accepted operations settle before teardown");
     return t.failures == 0;
 }
 
@@ -521,50 +532,48 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
 
-    RuntimeBuilder builder;
-    builder.backend(std::move(backend));
-    builder.workers(1);
-    auto build = builder.build();
-    t.check(build.has_value(), "the runtime builds");
-    if (!build.has_value())
-        return false;
-    std::unique_ptr<ApplicationRuntime> rt = std::move(build.value());
-    t.check(rt->start().has_value(), "the runtime starts");
-    Scheduler& sched = rt->test_scheduler_for_worker_topology();
-    RequestCore& core = *rt->test_io_context().context_core_for_test();
+    AsyncIoContext io(std::move(backend));
+    Scheduler sched(io);
+    RequestCore& core = *io.context_core_for_test();
 
     ThreadPoolBackend::WorkerClaimedPauseGate work_gate;
     ThreadPoolBackend::DeliveryClaimedPauseGate delivery_gate;
     raw->set_worker_claimed_pause_gate(&work_gate);
     raw->set_delivery_claimed_pause_gate(&delivery_gate);
 
-    TaskResultSlot<Result<std::size_t>> slot;
+    std::promise<Result<std::size_t>> slot;
     std::vector<std::byte> buffer(34, std::byte{0});
     std::atomic<Completion<std::size_t>*> pending{nullptr};
 
-    auto submitted = rt->submit([&](RuntimeTaskContext& ctx) {
+    std::vector<std::byte> stack(256 * 1024);
+    Fiber fiber([&](Fiber&) {
         Completion<std::size_t> c;
-        auto sr = ctx.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 34, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 34, 0}, c);
         if (!sr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(sr.error()));
+            slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
         pending.store(&c, std::memory_order_release);
-        auto wr = ctx.await_completion(c);
+        auto wr = sched.await_completion_size(c);
         pending.store(nullptr, std::memory_order_release);
         if (!wr.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(wr.error()));
+            slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
         auto r = c.result();
         c.reset();
         if (!r.has_value()) {
-            slot.publish(make_unexpected<std::size_t>(r.error()));
+            slot.set_value(make_unexpected<std::size_t>(r.error()));
             return;
         }
-        slot.publish(r.value());
+        slot.set_value(r.value());
     });
-    t.check(submitted.has_value(), "the task is admitted");
+    if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
+        t.check(false, "the fiber stack initializes");
+        return false;
+    }
+    sched.spawn(fiber);
+    std::thread driver([&] { sched.run(1); });
 
     wait_gate_paused(work_gate);
     t.check(scheduler_worker_parks_in_backend_domain(sched),
@@ -580,6 +589,8 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
 
     Completion<std::size_t>* suspended = pending.load(std::memory_order_acquire);
     t.check(suspended != nullptr, "the suspended completion is addressable");
+    t.check(suspended != nullptr && suspended->ready(),
+            "terminal publication precedes the pinned observer delivery");
 
     std::atomic<int> cancel_outcome{-1};
     std::atomic<bool> cancel_completed{false};
@@ -590,8 +601,6 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
         cancel_completed.store(true, std::memory_order_release);
     });
 
-    // Hang watchdog only: the oracle is that the cancel completed while the
-    // delivery gate is still pinned below.
     const auto cancel_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (!cancel_completed.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < cancel_deadline) {
@@ -620,7 +629,7 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
     raw->set_worker_claimed_pause_gate(nullptr);
     raw->set_delivery_claimed_pause_gate(nullptr);
 
-    Result<std::size_t> result = slot.wait_and_take();
+    Result<std::size_t> result = slot.get_future().get();
     t.check(result.has_value() && result.value() == 34,
             "the wait completes through the normal delivery path");
     t.check(std::memcmp(buffer.data(), "sluice obs04 staged window payload", 34) == 0,
@@ -629,26 +638,36 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
             "no wait record survives the staged delivery");
 
     const CoreSnapshot settled_snapshot = core.snapshot();
-    t.check(settled_snapshot.free_slots == core.capacity() &&
-                settled_snapshot.accepted_live == 0,
+    t.check(settled_snapshot.free_slots == core.capacity() && settled_snapshot.accepted_live == 0,
             "the delivered slot reclaims with no observer pin");
 
-    rt->request_stop();
-    t.check(rt->drain().has_value(), "the runtime drains");
-    t.check(rt->join().has_value(), "the runtime joins");
+    driver.join();
+    t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+            "no wait record survives driver join");
+    t.check(io.outstanding() == 0, "accepted operations settle before teardown");
     return t.failures == 0;
 }
 
-}
+} // namespace
 
 int main() {
+    std::mutex watchdog_mutex;
+    std::condition_variable watchdog_cv;
+    bool finished = false;
+    std::thread watchdog([&] {
+        std::unique_lock lock(watchdog_mutex);
+        if (!watchdog_cv.wait_for(lock, std::chrono::seconds(60), [&] { return finished; })) {
+            std::fprintf(stderr,
+                         "FAIL: Scheduler waiter watchdog: controlled gate or driver stuck\n");
+            std::_Exit(2);
+        }
+    });
     struct NamedTest {
         const char* name;
         bool (*fn)(Tracker&);
     };
     const NamedTest tests[] = {
-        {"completion_wake_rides_the_observer_adapter",
-         completion_wake_rides_the_observer_adapter},
+        {"completion_wake_rides_the_observer_adapter", completion_wake_rides_the_observer_adapter},
         {"observer_cancel_wakes_the_fiber_and_the_operation_still_completes",
          observer_cancel_wakes_the_fiber_and_the_operation_still_completes},
         {"already_terminal_await_returns_without_suspending",
@@ -667,6 +686,12 @@ int main() {
             std::fprintf(stderr, "FAIL: %s\n", test.name);
         }
     }
+    {
+        std::lock_guard lock(watchdog_mutex);
+        finished = true;
+    }
+    watchdog_cv.notify_one();
+    watchdog.join();
     if (failures != 0)
         return 1;
     std::printf("all %zu runtime waiter observer tests passed\n", sizeof(tests) / sizeof(tests[0]));
