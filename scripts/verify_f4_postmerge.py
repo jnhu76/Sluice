@@ -10,6 +10,8 @@ import tarfile
 import sys
 import os
 import tempfile
+import functools
+import subprocess
 import verify_f4_retirement as f4
 
 ARCHIVE_SHA='d4f58f1230caa764c87300ebaf299617edf8adb54c8d0c33cd468f56272efa38'
@@ -17,16 +19,34 @@ CONSUMERS=('w01_direct','w02_pipeline','w03_external_loop','w04_stackful_candida
 REMOVED=('blocking_io_pool','buffer','copy','copy_strategy','fault','file','io_context','observed','reader','wal','writer')
 
 
+@functools.lru_cache(maxsize=1)
+def historical_reference():
+    path=f4.REPO/'docs/evidence/f4-retirement-20261012'/(ARCHIVE_SHA+'.tar.gz')
+    if f4.digest(path)!=ARCHIVE_SHA:raise RuntimeError('historical artifact checksum')
+    with tarfile.open(path,'r:gz') as t:
+        return json.load(t.extractfile('./run-02/evidence.json')), {r['path']:r['sha256'] for r in json.load(t.extractfile('./FILE_INDEX.json'))}
+
+
+def source_names():
+    return ['scripts/verify_f4_postmerge.py','scripts/verify_f4_retirement.py','tests/package/f4_retirement/surface_manifest.json','tests/package/f4_retirement/probes/retained.cpp',*['tests/package/consumers/'+n+'.cpp' for n in CONSUMERS]]
+
+
 def verify(d,root):
     errors=[]
     def need(ok,name):
         if not ok: errors.append(name)
+    old,index=historical_reference()
+    need(d.get('producer_sha')==d['producer_identity']['sha'] and bool(f4.SHA.fullmatch(d.get('producer_sha',''))),'producer identity')
+    need(d.get('historical_control')=={'source_sha':old['trees']['B0']['sha'],'archive_sha256':ARCHIVE_SHA},'historical control identity')
+    need(set(d['sealed_inputs'])==set(source_names()),'complete sealed input set')
     canonical=json.loads(f4.MANIFEST.read_text())['surfaces']
     need(d['manifest']['surfaces']==canonical,'exact 17 manifest')
     need(d['master_execution_sha']==d['master_tested_sha'],'execution SHA')
     need(d['master_tree_sha']==d['identity']['tree'] and d['master_tested_sha']==d['identity']['sha'],'tree/source identity')
     need({r['path'] for r in d['removed_sources']}=={'src/'+n+'.cpp' for n in REMOVED},'exact removed source paths')
     for name,rec in d['sealed_inputs'].items():
+        blob=subprocess.run(['git','-C',str(f4.REPO),'show',d['producer_identity']['sha']+':'+name],capture_output=True)
+        need(blob.returncode==0 and hashlib.sha256(blob.stdout).hexdigest()==rec['sha256'],'committed producer content '+name)
         path=root/rec['file'];need(path.is_file() and f4.digest(path)==rec['sha256'],'sealed input '+name)
     cmds=d['commands']
     def log(cid,stream='stdout'): return (root/cmds[cid][stream]).read_text()
@@ -51,6 +71,10 @@ def verify(d,root):
         need(set(p['consumers'])==required,'required consumer set '+key)
         macro=log(p['macro_view']);need(passed(p['macro_view']) and ('#define SLUICE_HAS_LIBURING ' in macro)==(p['profile']=='real-liburing'),'profile macro '+key)
         undefined=log(p['archives']['async']['undefined']);need(('io_uring' in undefined)==(p['profile']=='real-liburing'),'archive macro backend '+key)
+        need(set(p['consumer_inputs'])==set(CONSUMERS),'complete consumer source set '+key)
+        need({r['path'] for r in p['installed_files']}=={'include/'+h for h in p['headers']}|{'lib/libsluice_core.a','lib/libsluice_async.a'} and len(p['installed_files'])==58,'complete installed inventory '+key)
+        control=next(r for r in old['packages'] if r['tree_id']=='C508510' and r['profile']==p['profile'] and r['mode']==p['mode'])
+        need(p['retired_symbols']['expected_absent']==control['retired_symbols']['expected_absent'],'historical strong symbols '+key)
         for name,rec in p['consumer_inputs'].items():
             need(f4.digest(root/rec['file'])==rec['sha256'] and p['consumers'][name]['source_sha256']==rec['sha256'],'consumer source '+key+'/'+name)
         for rec in p['installed_files']:
@@ -68,7 +92,7 @@ def verify(d,root):
             r=p['surfaces'][s['id']];c=cmds[r['include']];err=log(r['include'],'stderr')
             need(not r['present'] and r['negative_status']=='PASS' and c['exit_code'] not in (0,None) and s['header'] in err and ('No such file' in err or 'file not found' in err),'negative header '+key+'/'+s['id'])
             if s['link_negative']:
-                r=p['negative_links'][s['id']];need(f4.digest(root/r['object_file'])==r['object_sha256'] and f4.digest(root/r['baseline_archive'])==r['baseline_archive_sha256'],'historical relink inputs '+key+'/'+s['id']);need(cmds[r['baseline_link']]['argv'][2]==cmds[r['candidate_link']]['argv'][2]==str(root/r['object_file']),'same relink object '+key+'/'+s['id']);need(any(symbol in log(r['candidate_link'],'stderr') for symbol in p['retired_symbols']['expected_absent']),'specific retired undefined symbol '+key+'/'+s['id']);need(passed(r['baseline_link']) and cmds[r['candidate_link']]['exit_code'] not in (0,None) and 'undefined reference' in log(r['candidate_link'],'stderr'),'ABI relink '+key+'/'+s['id'])
+                r=p['negative_links'][s['id']];need(r['object_sha256']==index[f"run-02/build/B0/{p['profile']}/{p['mode']}/{s['id']}-api.o"] and r['baseline_archive_sha256']==index[f"run-02/install/B0/{p['profile']}/{p['mode']}/lib/libsluice_core.a"],'immutable historical relink inputs '+key+'/'+s['id']);need(f4.digest(root/r['object_file'])==r['object_sha256'] and f4.digest(root/r['baseline_archive'])==r['baseline_archive_sha256'],'historical relink inputs '+key+'/'+s['id']);need(cmds[r['baseline_link']]['argv'][2]==cmds[r['candidate_link']]['argv'][2]==str(root/r['object_file']),'same relink object '+key+'/'+s['id']);need(any(symbol in log(r['candidate_link'],'stderr') for symbol in p['retired_symbols']['expected_absent']),'specific retired undefined symbol '+key+'/'+s['id']);need(passed(r['baseline_link']) and cmds[r['candidate_link']]['exit_code'] not in (0,None) and 'undefined reference' in log(r['candidate_link'],'stderr'),'ABI relink '+key+'/'+s['id'])
         need(p['retired_symbols']['expected_absent']==d['historical_retired_symbols'],'exact retired symbols '+key)
         if p['profile']=='real-liburing' and p['mode']=='debug':
             need(set(p.get('progress_traces',{}))=={'threadpool','uring'},'progress traces')
@@ -94,6 +118,8 @@ def seal(root):
     tree=Path(d.get('source_path',str(f4.REPO.parent/'master-source')))
     sha=subprocess_capture(['git','-C',str(tree),'rev-parse','HEAD'])
     if sha!=d['master_tested_sha']: raise RuntimeError('master source changed')
+    d['producer_sha']=d.get('producer_sha','8999d180872dbc7465b669d7dc8d88958f0b383c')
+    d['producer_identity']={'sha':d['producer_sha']}
     d['identity']={'sha':sha,'tree':subprocess_capture(['git','-C',str(tree),'rev-parse','HEAD^{tree}'])}
     d['sealed_inputs']={}
     snapshot=Path(tempfile.mkdtemp(prefix='executed-inputs-',dir=root))

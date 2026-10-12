@@ -11,6 +11,12 @@ import verify_f4_postmerge as verifier
 base=json.loads((root/'evidence-sealed.json').read_text())
 assert verifier.verify(base,root)==[]
 cases={
+ 'omitted sealed inputs':lambda d:d.update(sealed_inputs={}),
+ 'omitted consumer inputs':lambda d:d['packages'][0].update(consumer_inputs={}),
+ 'omitted installed files':lambda d:d['packages'][0].update(installed_files=[]),
+ 'omitted historical identity':lambda d:d.update(historical_control={}),
+ 'wrong producer SHA':lambda d:d.update(producer_sha='0'*40),
+ 'weakened strong symbols':lambda d:d['packages'][0]['retired_symbols'].update(expected_absent=['fake()']),
  'missing consumers':lambda d:d['packages'][0].update(consumers={}),
  'execution SHA':lambda d:d.update(master_execution_sha='0'*40),
  'tree SHA':lambda d:d.update(master_tree_sha='0'*40),
