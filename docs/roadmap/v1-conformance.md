@@ -4,6 +4,32 @@
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 
+## LIVE STATUS PIN — Phase M closed / F3 scoped retirement adopted (2026-10-12)
+
+[Phase M → F live handoff index](phase-m-f-live-handoff-20261012.md) is the
+current **status-only** index; the detailed, dated M/F candidate sections below
+remain historical evidence and are not rewritten. #458 Phase M is
+**CLOSED/ADOPTED** (seven families, twelve adopted decisions, no unowned census
+edges); [#491](https://github.com/jnhu76/Sluice/pull/491) is its authoritative
+terminal decision packet. This does **not** mean F2/F3/F4/F5/F6 is complete.
+
+At master `432b65cb9df481b99e3a91c2a8d9fba698429a64`, #501/#502/#500/#503/#504
+are merged, #498 is **CLOSED as scoped execution**, and F3's actual master
+B-01 v3/v4 package cuts are adopted: **46 library objects / 33 async archive
+members / 73 installed headers** in both fresh profiles.
+[Actual v4 capture](../evidence/f3-part-c-b01-v4-adopted-20261012/REPRODUCE.md)
+retains historic frozen evidence. #475 Future/WaitPolicy and necessary
+Completion/Scheduler/Fiber/host substrate remain real obligations, not
+accidental survivors.
+
+**Current issue ownership:** #474 is **OPEN F3 closeout** (including TAIL inert
+`--workers`); adopted M-F and M-A1 ruling carriers #461/#462 are closed after
+handoff to **#505 F4 legacy File/stream** and **#506 F4 BlockingIoPool**.
+#402 F2/F3/F4/F5/F6, #390 v1 roadmap, and final package/external risk gates
+remain open. `OPTIONAL_W04_SUPPORTED=NO`; if unsupported, W-04 is a conditional
+N/A requiring negative package/support-claim proof, not W-04 PASS.
+`F3_FULL_CLOSEOUT=PENDING`, `V1_RELEASE_READY=NO`.
+
 This ledger starts a new assessment. Previous architecture CLOSED/CONFORMANT
 labels do not transfer. PR #389 changes documentation only; it does not implement
 RequestCore, new Request APIs, progress integration, or shutdown behavior.
