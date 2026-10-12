@@ -105,7 +105,7 @@ def compile_probe(ex, prefix, scratch, name, code, flags, links):
     return result
 
 
-def package(ex, tree, tree_id, profile, mode, manifest):
+def package(ex, tree, tree_id, profile, mode, manifest, retire_all=False):
     key = f'{tree_id}/{profile}/{mode}'
     scratch = ex.output / 'build' / key
     prefix = ex.output / 'install' / key
@@ -141,7 +141,7 @@ def package(ex, tree, tree_id, profile, mode, manifest):
     result['macro_view'] = macro['id']
     for s in manifest['surfaces']:
         h = s['header']
-        removed = tree_id == 'C508510' or tree_id == f"C{s['group']}"
+        removed = retire_all or tree_id == 'C508510' or tree_id == f"C{s['group']}"
         code = f'#include <{h}>\nint main(){{}}\n'
         src = scratch / (s['id'] + '.cpp')
         src.write_text(code)
