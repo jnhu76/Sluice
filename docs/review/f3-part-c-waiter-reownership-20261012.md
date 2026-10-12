@@ -1,0 +1,29 @@
+# Scheduler waiter oracle re-ownership candidate
+
+Base master cb977a12b951098d65942f4b4020189c7dad1a5e, with independently revertible COPY preparation from PR #500. Root OBS-01..04, REQ-03/05/06, HANDLE-03, LIFE-01, HOST-01 and SHUT-04 remain governing obligations. This slice moves only test execution ownership. No production API, semantic authority, archive or installed header changes.
+
+## Actual execution DAG
+
+All cases construct AsyncIoContext then Scheduler. Each test owns its payload, promise, Fiber and 256-KiB stack until the dedicated single-worker Scheduler::run(1) driver joins. Fibers are initialized and spawned before that driver starts; there is no live admission service, task executor, stop protocol or generalized runtime wrapper.
+
+Scheduler::await_completion_impl reserves a wait record under global_mtx_ **before** context attach_observer. On an armed attach it indexes/arms the record, commits suspension, releases the mutex and switches to the worker context. The worker polls/drives the backend. Physical completion and backend publication precede RequestCore delivery claim/terminal publication; the ready sink queues the delivered record. drain_routed_completion_waits_locked frees the host wait record, retires the core delivery pin, sets the Fiber outcome, routes runnable, then the worker resumes the Fiber. The Fiber consumes/reset its Completion before making done and the final context switch. Driver join precedes any stack or callback capture destruction; Scheduler destruction removes its ready sink before context/backend destruction.
+
+| Case | Controlled partial order and distinguishing observation |
+| --- | --- |
+| Completion wake | accept -> backend worker claim gate; reserve -> attach -> arm -> suspend; test observes one real record -> release physical gate -> delivery -> record retirement -> Fiber resume -> payload/result promise -> driver join with zero records and done Fiber |
+| Observer cancel | claim gate keeps physical work pending; real registered wait -> cancel_waiter detaches observer and frees record -> canceled Fiber resumes; test waits for that resume while physical gate remains held and observes outstanding=1, nonready Completion and untouched buffer -> second await retains the same Completion/borrow -> release physical gate -> normal completion/result/reset -> join |
+| Already terminal | zero-length submit publishes ready inline -> await temporarily reserves record -> attach reports terminal -> reservation returned -> same Fiber context/no context switch, running state and zero live records -> published zero result -> join. “No new wait record” means no armed/live record; existing implementation does reserve/release a pool entry on this edge. |
+| Capacity exhausted | two Fibers queued in order, capacity one; first accept/arm/suspend with work gate held -> second accept -> reserve fails before attach -> no_space, one observer and accepted_live=2 -> second Fiber waits on first-finished flag -> release gate -> first result/retirement -> second awaits/settles accepted work -> free slots=capacity and zero records -> join |
+| Staged delivery cancel | worker parks in backend domain -> work gate released -> delivery claim held at delivery gate -> concurrent cancel returns false while delivering record remains live -> release delivery gate -> terminal publication/routing/retirement -> normal Fiber resume/result/reset -> all core slots reclaimed -> join |
+
+RequestCore owns canonical terminal/observer/slot facts. The backend owns physical work and borrow completion. Completion remains their physical compatibility bridge; Scheduler owns wait-record storage and wake routing; Fiber/fiber_ctx own suspension state and context switching. ApplicationRuntime convenience previously supplied resource construction, task admission and shutdown wrapping, none of which is necessary for these fixed, pre-spawned tests.
+
+## Shared state, lifetime and authority contraction
+
+Backend gates use release/acquire atomic wait/notify; the existing request/wait registries retain their production locks. Test result promises publish payload through standard future synchronization, reject a second publication, and are consumed once. Atomic pending Completion pointers remain valid because cancellation either precedes physical completion or occurs inside the pinned delivery window. The canceled-return handshake is test-only evidence; it introduces no request/cancellation authority. Each accepted Completion remains on its Fiber stack through settlement/reset. The test thread initiates cancellation and releases gates; the Scheduler driver owns progress. Driver join proves callback execution and stack use ended; zero record and outstanding checks precede resource destruction. A suite watchdog exits with a named failure if a gate/driver truly stalls, and does not release gates or make the correctness path progress.
+
+No production authority moves, so no production mechanism is eligible for removal here. Test facade/build edges disappear; request execution refs, delivery pins, Completion, Scheduler records and Fiber stacks remain physical obligations. Five cases remain separately executable obligations of retained Scheduler, with canonical protocol evidence still separately owned by RequestCore. No unowned host obligation is removed.
+
+## Validation status
+
+Initial remote Debug/no-liburing build and all five controlled cases pass. Required isolated four-profile matrix, Clang ASan/UBSan and TSan, related request/borrow/host/app regressions, and independent final-HEAD review are pending. No merge, F5 package adoption, supported W-04, full F3 retirement or release readiness is claimed.

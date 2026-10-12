@@ -858,13 +858,6 @@ if has_config("liburing") then
                          "SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
 end
 
--- C1-D (#430) RuntimeTaskContext waiter-adapter evidence. The scheduler and
--- runtime seams are macro-guarded internal-testing surface, so this target
--- compiles its own copy of the async TUs the runtime needs (the full
--- src/async set plus the core detail TUs) and links neither sluice_async nor
--- the other seam builds: the seam build and the production build never meet
--- in one binary. `src/async` is on the include path for the internal headers
--- the seams include relative to their own directory.
 do
     target("runtime_waiter_observer_test")
         set_kind("binary")
@@ -881,6 +874,9 @@ do
                   R .. "src/async/*.cpp",
                   R .. "src/async/detail/context_identity.cpp",
                   R .. "src/async/detail/request_core.cpp")
+        remove_files(R .. "src/async/application_runtime.cpp",
+                     R .. "src/async/await_op_helpers.cpp",
+                     R .. "src/async/group.cpp")
         add_tests("runtime_waiter_observer_test")
 end
 
