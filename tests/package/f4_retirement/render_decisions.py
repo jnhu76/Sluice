@@ -9,7 +9,10 @@ data=json.loads((args.evidence/'evidence.json').read_text())
 args.output.mkdir(parents=True,exist_ok=True)
 for group in (508,510):
  surfaces=[s for s in data['manifest']['surfaces'] if s['group']==group]
- risks=[r for r in data['risk'] if r['SURFACE_ID'] in {s['id'] for s in surfaces}]
+ risks=[dict(r) for r in data['risk'] if r['SURFACE_ID'] in {s['id'] for s in surfaces}]
+ for risk in risks:
+  risk['RETAINED_CANONICAL_WORKLOAD']={'result':'W01/W02/W03 ThreadPool and real-uring PASS; no-liburing uring UNAVAILABLE; W04 support NO','raw_reference':'run-02/evidence.json packages; command IDs, exit codes and log hashes','consumer_lifetime_fix':'#511; measured library production unchanged'}
+  risk['CURRENT_IN_TREE_CONSUMER']={'command':risk['CURRENT_IN_TREE_CONSUMER']['command'],'raw_reference':'run-02/evidence.json exact git grep stdout; does not imply zero external users'}
  head=data['trees'][f'C{group}']['sha']
  title='BlockingIoPool' if group==508 else 'Legacy File/Reader/Writer/stream'
  lines=[f'# F0 §1.7 owner-review packet — #{group}: {title}', '',

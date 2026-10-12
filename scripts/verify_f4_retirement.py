@@ -214,7 +214,8 @@ def verify(data, root):
                     if arg in ('-I', '-isystem', '-iquote', '-include'):
                         value = argv[j+1] if j+1 < len(argv) else ''
                     historical_ids={row.get(k) for row in data.get('historical', {}).values() for k in ('standalone','parent_include')}
-                    require('/worktrees/' not in value or (i in historical_ids and value == data['trees']['H0']['path']+'/include'), f'source include leakage {i}')
+                    installed_includes={str(Path(p['prefix'])/'include') for p in data.get('packages',[])}
+                    require(value in installed_includes or (i in historical_ids and value == data['trees']['H0']['path']+'/include'), f'source include leakage {i}')
             require(all(c.get('environment', {}).get(k) is None for k in SCRUB), f'unscrubbed environment {i}')
     def passed(cid):
         return isinstance(cid,int) and 0 <= cid < len(commands) and commands[cid]['exit_code']==0

@@ -67,7 +67,7 @@ class IntegrityTests(unittest.TestCase):
         p=self.data['packages'][4];p['surfaces']['F4-01']['include']=0;self.rejects('negative include')
 
     def test_source_include_leak(self):
-        self.data['commands'][0]['argv']=['g++','-I/fixture/worktrees/baseline/include'];self.rejects('source include leakage')
+        self.data['commands'][0]['argv']=['g++','-I/home/jnhu/Source/Sluice/include'];self.rejects('source include leakage')
 
     def test_archive_count_lie(self):
         self.data['packages'][0]['archives']['core']['members'].pop();self.rejects('archive/header counts')
