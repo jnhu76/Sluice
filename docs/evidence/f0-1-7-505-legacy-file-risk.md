@@ -19,23 +19,23 @@ This document adjudicates each of the 15 deleted public installed headers. It do
 | 3 | `sluice/copy.hpp` | Yes | None | None in core. Async runtime has its own pipeline patterns. | Compile + link failure for `copy_all` consumers. | Delete with F0 §1.7 approval. |
 | 4 | `sluice/copy_strategy.hpp` | Yes | None | None. Strategy types retired with copy.hpp. | Compile failure for strategy consumers. | Delete with F0 §1.7 approval. |
 | 5 | `sluice/fault.hpp` | Yes | None | None. Fault injection now uses internal test seams. | Compile failure for fault-model consumers. | Delete with F0 §1.7 approval. |
-| 6 | `sluice/file.hpp` | Yes | None | `sluice/blocking/file.hpp` (W-01 blocking) and `sluice/async/file.hpp` (W-03 async). Not drop-in replacements: signatures move to positional descriptor-based operations. | Compile + link failure; significant migration required. | Delete with F0 §1.7 approval after documenting migration. |
+| 6 | `sluice/file.hpp` | Yes | None | `sluice/file_resource.hpp` plus `sluice/blocking/file.hpp` for W-01 direct operations; for W-02/W-03 use canonical Request/RequestScope and AsyncIoContext with retained backend/progress interfaces. `sluice/async/file.hpp` was already physically removed in #502 and is **not** a migration target. These are not drop-in replacements. | Compile + link failure; significant migration required. | Delete with F0 §1.7 approval after documenting migration. |
 | 7 | `sluice/io_context.hpp` | Yes | None | None. The IoContext/BlockingIoContext split is retired; v1 uses `sluice::File` + backends. | Compile failure for IoContext consumers. | Delete with F0 §1.7 approval. |
 | 8 | `sluice/iovec.hpp` | Yes | None | None. Internal scatter/gather types removed. | Compile failure for direct iovec helpers. | Delete with F0 §1.7 approval. |
 | 9 | `sluice/limit.hpp` | Yes | None | None. Limit types not carried forward. | Compile failure for limit consumers. | Delete with F0 §1.7 approval. |
 | 10 | `sluice/memory_io_context.hpp` | Yes | None | None for production. In-memory deterministic testing now uses internal test seams and the canonical semantic oracle, not a public MemoryIoContext. | Compile failure for in-memory test consumers. | Delete with F0 §1.7 approval. |
 | 11 | `sluice/observed.hpp` | Yes | None | None. Observer pattern retired. | Compile failure for Observed consumers. | Delete with F0 §1.7 approval. |
-| 12 | `sluice/reader.hpp` | Yes | None | `sluice::File` with `read_at` / `read_short_at`. Not a class-for-class replacement. | Compile + link failure for Reader consumers. | Delete with F0 §1.7 approval. |
-| 13 | `sluice/sync.hpp` | Yes | None | Durability moved onto `sluice::File::sync_data` / `sync_all`. | Compile failure for sync helper consumers. | Delete with F0 §1.7 approval. |
+| 12 | `sluice/reader.hpp` | Yes | None | `sluice::File` as resource owner plus `sluice::blocking::read_at` / `read_exact_at` or canonical Request operations; not a class-for-class replacement. | Compile + link failure for Reader consumers. | Delete with F0 §1.7 approval. |
+| 13 | `sluice/sync.hpp` | Yes | None | Durability operations are `sluice::blocking::sync_data(const File&)` / `sync_all(const File&)`, with canonical Request-path equivalents; they are not `File` member functions. | Compile failure for sync helper consumers. | Delete with F0 §1.7 approval. |
 | 14 | `sluice/wal.hpp` | Yes | None | None. WAL record format not carried into v1. | Compile + link failure for WAL consumers. | Delete with F0 §1.7 approval. |
-| 15 | `sluice/writer.hpp` | Yes | None | `sluice::File` with `write_at` / `write_short_at`. Not a class-for-class replacement. | Compile + link failure for Writer consumers. | Delete with F0 §1.7 approval. |
+| 15 | `sluice/writer.hpp` | Yes | None | `sluice::File` as resource owner plus `sluice::blocking::write_at` / `write_all_at` or canonical Request operations; not a class-for-class replacement. | Compile + link failure for Writer consumers. | Delete with F0 §1.7 approval. |
 
 ## Detailed notes on high-impact surfaces
 
 ### `sluice/file.hpp`
 
 - **Historical role**: The legacy native File/Reader/Writer owner. Documented in v0.0.1 README as part of `sluice_core`.
-- **v1 replacement**: `sluice/blocking/file.hpp` provides blocking positional I/O; `sluice/async/file.hpp` provides async operations inside the Scheduler runtime.
+- **v1 replacement**: `sluice/file_resource.hpp` owns the canonical `File` resource, and `sluice/blocking/file.hpp` provides W-01 direct I/O; W-02/W-03 are expressed with Request/RequestScope, AsyncIoContext and its backends/progress. `sluice/async/file.hpp` is retired as of #502 and must not appear in migration instructions.
 - **Migration cost**: High for consumers using the old class hierarchy. The new surface is descriptor-based and positional; it does not expose the same Reader/Writer split.
 - **Risk mitigation**: #505-A migrated the last in-tree consumer (`tests/semantic_range_test.cpp`) to the canonical oracle. External consumers need a documented migration guide.
 
@@ -57,7 +57,7 @@ This document adjudicates each of the 15 deleted public installed headers. It do
 
 ## Summary
 
-All 15 deleted headers were public in v0.0.1 and have no in-tree consumers after #505-A. The canonical v1 surface (`sluice::File`, `sluice/blocking/file.hpp`, `sluice/async/file.hpp`) covers the required W-01/W-02/W-03 file semantics, but it is not a drop-in replacement for most legacy interfaces. F0 §1.7 owner approval is required for each deleted surface.
+All 15 deleted headers were public in v0.0.1 and have no in-tree consumers after #505-A. The canonical v1 surface (`sluice::File`, `sluice/blocking/file.hpp`, `Request`/`RequestScope`, `AsyncIoContext` and retained backend/progress interfaces) addresses required W-01/W-02/W-03 file semantics, but it is not a drop-in replacement for most legacy interfaces. F0 §1.7 owner approval is required for each deleted surface.
 
 | Surface category | Count | Has direct equivalent | Needs migration guide |
 |------------------|-------|----------------------|-----------------------|
