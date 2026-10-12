@@ -2052,3 +2052,21 @@ F0 per-surface ACCEPT/no extra window and F5 scoped package authorization
 CONFIRMED_EFFECTIVE: [owner record](../review/f3-part-c-owner-decision-20261012.md).
 Formal F5 adoption NOT_ADOPTED, no merge authorized, master unchanged 49/36/78.
 No F3_FULL_RETIREMENT, optional W-04 support or V1_RELEASE_READY claim.
+
+### F3 Part C scoped physical adoption and actual master verification — 2026-10-12
+
+VERIFIED for ApplicationRuntime facade retirement only; scoped F5/B-01 v4
+ADOPTED. PROD-02/03, MIG-01/02, HOST-01, OBS-01..04 and retained REQ/LIFE/SHUT:
+#500 merged9572bd25, #503 mergeda04044a6, #504 mergede123d42a after exact final
+technical review, normal CI and explicit sequential owner authorization.
+Actual master e123d42a freshly passes four complete server matrices n53/53 and
+y67/67 in Debug/Release, plus Clang ASan/UBSan and shared TSan six risk targets
+each. Fresh two-profile package/source/object/archive/header/symbol and installed
+positive/negative probes measure master46/33/73; these are actual master products,
+not candidate counts. Completion, canonical requests/context/backends,
+Scheduler/Fiber/host and #475 Future/WaitPolicy/default_wait_policy remain.
+All five waiter obligations remain owned/executable, runtime test edges zero.
+[Adopted scoped cut and immutable raw/provenance evidence](../evidence/f3-part-c-b01-v4-adopted-20261012/REPRODUCE.md).
+Earlier candidate statuses above are dated preparation records superseded for
+this exact slice. Whole F3/F5, optional supported W-04 and release readiness
+remain incomplete; F3_FULL_RETIREMENT=NO, V1_RELEASE_READY=NO.

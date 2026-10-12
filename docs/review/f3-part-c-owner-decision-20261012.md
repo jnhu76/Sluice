@@ -96,3 +96,13 @@ review, CI, dependency or postmerge evidence obligations and without expanding
 the five-surface scope. Existing server code/package evidence remains scoped
 to its exact inputs; final HEAD review and actual master verification remain
 mandatory. Formal package adoption follows those gates, not this text alone.
+
+## Scoped gates completed and adoption overlay
+
+Authorized merges completed in order: #500 at9572bd25, #503 ata04044a6,
+#504 ate123d42a. Actual master postmerge tests/package products, normal master CI
+and source provenance are recorded in the
+[adopted scoped B-01 v4 cut](../evidence/f3-part-c-b01-v4-adopted-20261012/REPRODUCE.md).
+The earlier NOT_ADOPTED/49-36-78 statements are dated premerge state.
+F5_PACKAGE_ADOPTION=ADOPTED_SCOPED_V4; master counts46/33/73.
+Full F3/F5 and V1 release readiness remain incomplete. Scope is unchanged.
