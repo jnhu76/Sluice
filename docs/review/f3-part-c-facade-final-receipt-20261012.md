@@ -61,8 +61,11 @@ No historical F1/B-01 assets are changed. Rollback C2 alone restores paired
 files/facade friend edge; C0/C1 remain usable migrations. Partial approval
 requires KEEP restoration and a new scoped package capture.
 
-Independent final exact-HEAD review is pending. F0 per-surface breakage and F5
-package authorization/adoption are PENDING. #502 covers none of these surfaces.
+Technical production/package/evidence review passed exact 60d18154 with zero
+blockers. The later documentation-only owner record requires final exact-HEAD
+review. [Confirmed owner decision](f3-part-c-owner-decision-20261012.md) accepts
+all five breakages without extra window and authorizes scoped package
+contraction subject to final gates; formal F5 adoption remains NOT_ADOPTED. #502 covers none of these surfaces.
 #475 fifteen retained surfaces and Future/WaitPolicy KEEP are unchanged.
 No merge is authorized. Master-only GitHub CI does not run on stacked bases;
 server matrix is separate evidence. Master remains 49/36/78. Candidate

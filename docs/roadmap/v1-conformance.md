@@ -2048,5 +2048,7 @@ real ring UNAVAILABLE n, executed y. Four complete server matrices 53/53 n,
 67/67 y; Clang ASan/UBSan and shared TSan six risk targets each PASS.
 [Receipt](../review/f3-part-c-facade-final-receipt-20261012.md);
 [per-surface decision packet](../review/f3-part-c-facade-risk-decision-20261012.md).
-F0/F5 approvals PENDING, no merge authorized, master unchanged 49/36/78.
+F0 per-surface ACCEPT/no extra window and F5 scoped package authorization
+CONFIRMED_EFFECTIVE: [owner record](../review/f3-part-c-owner-decision-20261012.md).
+Formal F5 adoption NOT_ADOPTED, no merge authorized, master unchanged 49/36/78.
 No F3_FULL_RETIREMENT, optional W-04 support or V1_RELEASE_READY claim.

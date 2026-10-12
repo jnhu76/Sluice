@@ -1,7 +1,9 @@
 # B-01 v4 facade package candidate — 2026-10-12
 
 ID: F3_PART_C_B01_FACADE_CANDIDATE_V4_20261012.
-DRAFT_NONADOPTED; F0 per-surface human decisions and F5 authorization are pending.
+DRAFT_NONADOPTED; [confirmed owner decision](../../review/f3-part-c-owner-decision-20261012.md)
+accepts all five breakages and authorizes this scoped cut subject to final gates.
+Formal package adoption and merge authorization remain outstanding.
 Original F1 and adopted B-01 v3 assets remain untouched.
 
 Executed on jnhu@192.168.31.75 from /home/jnhu/f3-part-c/c2-facade-20261012:
