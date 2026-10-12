@@ -523,26 +523,16 @@ bool finite_tail_and_cli_exit_codes() {
     return g_checks_failed == before;
 }
 
-bool cli_compat_workers_and_max_poll_stop() {
+bool cli_removed_workers_and_max_poll_stop() {
     TempFile f("seed\n");
     const std::string bin = exe_dir() + "/sluice-tail";
-    {
+    for (const auto* value : {"1", "4", "64", "0", "65", "bad", "184467440737095516160"}) {
         TailChild child;
-        check_msg(child.spawn(bin, {"--workers", "64", "-n", "1", f.path}),
-                  "workers: accepted hint");
-        const auto outcome = child.wait_exit(kExitDeadline);
-        check_msg(outcome.kind == ChildOutcome::Kind::exited && outcome.code == 0 &&
-                      child.out() == "seed\n" && child.err_text().empty(),
-                  "workers: single driver preserves output");
-    }
-    for (const auto* bad : {"0", "65"}) {
-        TailChild child;
-        check_msg(child.spawn(bin, {"--workers", bad, "/no/such/file_f3_tail"}),
-                  "workers: invalid hint");
+        check_msg(child.spawn(bin, {"--workers", value, f.path}), "workers: removed option");
         const auto outcome = child.wait_exit(kExitDeadline);
         check_msg(outcome.kind == ChildOutcome::Kind::exited && outcome.code == 1 &&
-                      child.out().empty() && child.err_text().find("usage:") != std::string::npos,
-                  "workers: usage rejection before open");
+                      child.out().empty() && child.err_text().find("--workers has been removed") != std::string::npos,
+                  "workers: explicit rejection");
     }
     {
         TailChild child;
@@ -808,7 +798,7 @@ int main() {
         {"harness_stderr_capture_selftest", harness_stderr_capture_selftest},
         {"harness_split_line_selftest", harness_split_line_selftest},
         {"finite_tail_and_cli_exit_codes", finite_tail_and_cli_exit_codes},
-        {"cli_compat_workers_and_max_poll_stop", cli_compat_workers_and_max_poll_stop},
+        {"cli_removed_workers_and_max_poll_stop", cli_removed_workers_and_max_poll_stop},
         {"cli_sigint_clean_exit", cli_sigint_clean_exit},
         {"cli_sigterm_clean_exit", cli_sigterm_clean_exit},
         {"cli_double_signal_clean_exit", cli_double_signal_clean_exit},

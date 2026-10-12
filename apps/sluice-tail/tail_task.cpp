@@ -309,7 +309,7 @@ namespace {
 bool options_valid(const TailOptions& o) {
     return o.lines <= kMaxLines && o.buffer_size >= kMinBufferSize &&
            o.buffer_size <= kMaxBufferSize && o.max_line_bytes > 0 &&
-           o.max_line_bytes <= kMaxMaxLineBytes && o.workers > 0 && o.workers <= kMaxWorkers &&
+           o.max_line_bytes <= kMaxMaxLineBytes &&
            o.poll_interval_ms >= kMinPollMs && o.poll_interval_ms <= kMaxPollMs;
 }
 

@@ -19,12 +19,12 @@ xmake run sluice-tail [options] <file>
 --poll-interval <ms>    follow poll cadence (50..5000, default 200)
 --buffer-size <bytes>   scan/read buffer (4 KiB..64 MiB, default 64 KiB)
 --max-line-bytes <n>    retained-line cap (1..64 MiB, default 1 MiB)
---workers <count>       compatibility hint (1..64; one driver)
 --help                  show help
 ```
 
-`--workers` keeps its accepted grammar and validation for existing callers.
-Its value does not create additional execution threads. Exit codes remain 0 for
+`--workers` has been removed. Omit it to use the app-owned driver.
+All spellings and values are rejected with usage exit 1 before file open.
+Existing scripts passing the former compatibility hint must remove it. Exit codes remain 0 for
 success (including signal-ended follow), 1 for usage errors, and 2 for I/O or
 engine failures. The CLI accepts one regular file and rejects directories/FIFOs.
 

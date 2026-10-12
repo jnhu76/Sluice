@@ -133,7 +133,7 @@ int parse_args(int argc, char** argv, CliArgs& args) {
             ++positionals;
         }
     }
-    if (positionals != 2)
+    if (positionals != 2 || !valid_config(args.buffer_size, args.pipeline_depth, args.workers))
         return usage(argv[0]);
     return 0;
 }

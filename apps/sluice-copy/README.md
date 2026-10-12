@@ -220,8 +220,8 @@ ownership, xattrs, or other metadata beyond the permission bits.
 The default app composes canonical request settlement and owned progress with
 bounded read-ahead, ordered short-write retries, and atomic output. It does not
 require ApplicationRuntime, RuntimeTaskContext, TaskResultSlot, Completion, or
-legacy await helpers in its production source. Shared SDK legacy machinery remains
-available for other consumers; this app migration does not establish W-04 support.
+legacy await helpers in its production source. ApplicationRuntime has been retired. Retained Scheduler/Fiber compatibility
+mechanisms do not establish W-04 support.
 
 ## Test targets
 

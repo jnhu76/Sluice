@@ -123,7 +123,7 @@ bool tail_engine_start_rejects_invalid_options() {
         return false;
 
     TailOptions options;
-    options.workers = 0;
+    options.buffer_size = 0;
 
     std::vector<std::string> lines;
     TailEngine engine(std::move(opened).value(), options,

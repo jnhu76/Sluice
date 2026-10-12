@@ -19,7 +19,6 @@ constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kDefaultMaxLineBytes = 1 << 20;
 constexpr std::size_t kMaxMaxLineBytes = 64 * 1024 * 1024;
 constexpr std::size_t kMaxLines = 1000 * 1000 * 1000;
-constexpr unsigned kMaxWorkers = 64;
 constexpr unsigned kMinPollMs = 50;
 constexpr unsigned kMaxPollMs = 5000;
 
@@ -29,7 +28,6 @@ struct TailOptions {
     unsigned poll_interval_ms = 200;
     std::size_t buffer_size = 64 * 1024;
     std::size_t max_line_bytes = kDefaultMaxLineBytes;
-    unsigned workers = 1;
 };
 
 using LineSink = std::function<void(std::string_view line)>;
@@ -63,4 +61,4 @@ class TailEngine {
     std::unique_ptr<Impl> impl_;
 };
 
-}
+} // namespace sluice_tail

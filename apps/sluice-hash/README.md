@@ -55,6 +55,5 @@ FIFO to distinguish rejection before open and checks EOF/multiple buffer sizes.
 The SHA-256 implementation remains app-local. The historical full NIST vector
 suite was removed in `5f62b55b`; it is not claimed as current evidence. Allocation
 failure is not deterministically injected. There is no signal cancellation,
-read-ahead or parallel file processing. ApplicationRuntime remains in the SDK
-for COPY, TAIL and other retained compatibility consumers; this app exit does
-not complete F3 runtime retirement.
+read-ahead or parallel file processing. ApplicationRuntime has been retired. COPY uses canonical RequestScope and TAIL
+uses its app-owned driver; retained Scheduler/Fiber mechanisms remain separate.
