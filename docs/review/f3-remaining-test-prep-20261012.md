@@ -155,3 +155,31 @@ for those paths, in that order, are captured in
 tested-source-trees.txt. Thus the later documentation head carries the same
 tested C++/test/build inputs; the receipt does not claim that newly captured
 evidence had already existed in the tested commit.
+
+## Latest master integration — Part C, 2026-10-12
+
+PR #500 source was integrated with origin/master cb977a12 without rewriting its
+existing commits or touching the previous server worktrees. The test, support
+and application bytes remain identical to the earlier isolated sanitizer and
+mutation evidence. Current production/build inputs differ by the independently
+adopted #501/#502 migration and paired async File removal; therefore four new
+isolated Debug/Release n/y builds and all 24 pipeline cases were actually run,
+not inferred from that earlier matrix. Real ring is unavailable in n and ran
+in y. Compiler cache is disabled. New raw logs and exact per-path provenance:
+[Part C integration evidence](../evidence/f3-part-c-c0-integration-20261012/).
+Existing two negative controls and Clang sanitizer results remain scoped to
+the identical COPY test/support/application inputs; the new integration does
+not assert full facade or waiter verification. Final review and cumulative CI
+remain required before Ready; no merge authorization is assumed.
+
+Current integration sanitizer confirmation: Clang22 ASan/UBSan and TSan each
+actually rebuilt/ran borrow_live_write_peak_selftest,
+exception_cleanup_waits_for_held_borrow and canceled_result_settles_held_readahead,
+three controlled cases each, PASS with instrumented argv/runtime symbols.
+The two independent C1 sanitizer source roots have exactly identical include/,
+src/, apps/, COPY test/support, xmake.lua and library inputs to this integration;
+the only xmake/tests.lua delta is the separate waiter target. Thus these are
+new current-integration COPY executions, not old sanitizer evidence renamed.
+Raw current-asanubsan-n/current-tsan-n logs are alongside the fresh normal matrix.
+The two original controlled mutations remain justified by byte-identical
+support and oracle inputs; neither mutation is present in production or tests.
