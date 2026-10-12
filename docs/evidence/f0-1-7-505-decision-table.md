@@ -7,7 +7,7 @@
 | 3 | `sluice/copy.hpp` | Yes | None | None; implement loop over `sluice::File` | Compile + link failure | ☐ |
 | 4 | `sluice/copy_strategy.hpp` | Yes | None | None | Compile failure | ☐ |
 | 5 | `sluice/fault.hpp` | Yes | None | None | Compile failure | ☐ |
-| 6 | `sluice/file.hpp` | Yes | None | `sluice/blocking/file.hpp` / `sluice/async/file.hpp`; not drop-in | Compile + link failure | ☐ |
+| 6 | `sluice/file.hpp` | Yes | None | `sluice::File` + `sluice/blocking/file.hpp`; W-02/W-03 Request/RequestScope + AsyncIoContext; `async/file.hpp` already retired in #502; not drop-in | Compile + link failure | ☐ |
 | 7 | `sluice/io_context.hpp` | Yes | None | None; use `sluice::File` + backends | Compile failure | ☐ |
 | 8 | `sluice/iovec.hpp` | Yes | None | None | Compile failure | ☐ |
 | 9 | `sluice/limit.hpp` | Yes | None | None | Compile failure | ☐ |
