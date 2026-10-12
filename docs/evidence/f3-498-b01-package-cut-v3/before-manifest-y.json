@@ -1,0 +1,311 @@
+{
+  "id": "F3_498_B01_ASYNC_FILE_CUT_V3_20261012",
+  "status": "FINAL_GATES_PENDING_MERGE",
+  "source_sha": "f527456b5eaa10a74e872ee1d23b9dd6413f1f1d",
+  "profile": "y",
+  "mode": "debug",
+  "summary": {
+    "headers": 79,
+    "library_objects": 50,
+    "async_archive_members": 37,
+    "closure_counts": {
+      "request": 10,
+      "context": 18,
+      "host": 23,
+      "task-result": 35
+    }
+  },
+  "headers": [
+    "sluice/async/application_runtime.hpp",
+    "sluice/async/async_io_context.hpp",
+    "sluice/async/async_mutex.hpp",
+    "sluice/async/async_queue.hpp",
+    "sluice/async/async_rwlock.hpp",
+    "sluice/async/await_op_helpers.hpp",
+    "sluice/async/batch.hpp",
+    "sluice/async/cancel.hpp",
+    "sluice/async/completion.hpp",
+    "sluice/async/condition.hpp",
+    "sluice/async/detail/context_identity.hpp",
+    "sluice/async/detail/fail_fast.hpp",
+    "sluice/async/detail/mutex_test_seam.hpp",
+    "sluice/async/detail/observer_protocol.hpp",
+    "sluice/async/detail/progress_source.hpp",
+    "sluice/async/detail/queue_item.hpp",
+    "sluice/async/detail/queue_port.hpp",
+    "sluice/async/detail/queue_test_seam.hpp",
+    "sluice/async/detail/ready_sink.hpp",
+    "sluice/async/detail/reference_ready_sink.hpp",
+    "sluice/async/detail/request_arena.hpp",
+    "sluice/async/detail/request_core.hpp",
+    "sluice/async/detail/request_key.hpp",
+    "sluice/async/detail/request_slot.hpp",
+    "sluice/async/detail/select_port.hpp",
+    "sluice/async/detail/select_registration.hpp",
+    "sluice/async/detail/submit_transaction.hpp",
+    "sluice/async/event.hpp",
+    "sluice/async/evented_wait_policy.hpp",
+    "sluice/async/fiber.hpp",
+    "sluice/async/fiber_ctx.hpp",
+    "sluice/async/file.hpp",
+    "sluice/async/future.hpp",
+    "sluice/async/group.hpp",
+    "sluice/async/lock_guard.hpp",
+    "sluice/async/mutex.hpp",
+    "sluice/async/op_helpers.hpp",
+    "sluice/async/request.hpp",
+    "sluice/async/request_handle.hpp",
+    "sluice/async/request_scope.hpp",
+    "sluice/async/scheduler.hpp",
+    "sluice/async/select.hpp",
+    "sluice/async/select_fwd.hpp",
+    "sluice/async/semaphore.hpp",
+    "sluice/async/stackful_io_host.hpp",
+    "sluice/async/task_result.hpp",
+    "sluice/async/thread_annotations.hpp",
+    "sluice/async/threadpool_backend.hpp",
+    "sluice/async/timer_registration.hpp",
+    "sluice/async/uring_backend.hpp",
+    "sluice/async/wait_node.hpp",
+    "sluice/async/wait_policy.hpp",
+    "sluice/async/wait_queue.hpp",
+    "sluice/blocking/file.hpp",
+    "sluice/blocking_io_pool.hpp",
+    "sluice/buffer.hpp",
+    "sluice/buffered_readable.hpp",
+    "sluice/copy.hpp",
+    "sluice/copy_strategy.hpp",
+    "sluice/detail/blocking_io_pool_impl.hpp",
+    "sluice/detail/file_semantics.hpp",
+    "sluice/detail/posix_retry.hpp",
+    "sluice/detail/uring_submit.hpp",
+    "sluice/effect.hpp",
+    "sluice/error.hpp",
+    "sluice/fault.hpp",
+    "sluice/file.hpp",
+    "sluice/file_resource.hpp",
+    "sluice/io_context.hpp",
+    "sluice/iovec.hpp",
+    "sluice/limit.hpp",
+    "sluice/measurement.hpp",
+    "sluice/memory_io_context.hpp",
+    "sluice/observed.hpp",
+    "sluice/reader.hpp",
+    "sluice/result.hpp",
+    "sluice/sync.hpp",
+    "sluice/wal.hpp",
+    "sluice/writer.hpp"
+  ],
+  "archives": {
+    "core": {
+      "sha256": "f6cf5c088e65ec007382eb20a98dd54577f5cbb4b8f5a73cff9ece1f2fdaeea3",
+      "members": [
+        {
+          "name": "blocking_file.cpp.o",
+          "sha256": "c532b3ab224a620525d614f02c3ee90bb602d2e52c1cfcd67203b5f2f6062425"
+        },
+        {
+          "name": "blocking_io_pool.cpp.o",
+          "sha256": "65199ce886e34c79fd28f33188d52d40a3dcedde0d86635517f841e4c531cb74"
+        },
+        {
+          "name": "buffer.cpp.o",
+          "sha256": "859e8bd0fa177e08129bd8d0e3001f5d9f3edcdc80c1cc462b9fab0e38eab63a"
+        },
+        {
+          "name": "copy.cpp.o",
+          "sha256": "2ad645435b066db9c9167bbdc3ea7ebde5cce1263d88524f942a6efc86f9d3ec"
+        },
+        {
+          "name": "copy_strategy.cpp.o",
+          "sha256": "8045756b41a31b68e9f4a0e007bf8758a1b2f32ec0133cfcf93784d14cb31059"
+        },
+        {
+          "name": "fault.cpp.o",
+          "sha256": "6a487c3ac1e061d310cddc38d03f69cdfc73ef2a7390cb5efdd9e8e824bdc78a"
+        },
+        {
+          "name": "file.cpp.o",
+          "sha256": "989a3a9c1478c57d0bcfae4e885fd730e9968d3fbecc7250699b18bfbf082c9c"
+        },
+        {
+          "name": "file_resource.cpp.o",
+          "sha256": "90b8442b5a08cbfc9faed1070d41d0b87d567b288b26ba41d2b0a71b2f9647a0"
+        },
+        {
+          "name": "io_context.cpp.o",
+          "sha256": "d2ea187065fcb5d107b5dfc8a048dd3644d49a412635d73c30f7f39f6f9b21fb"
+        },
+        {
+          "name": "observed.cpp.o",
+          "sha256": "1e4f986905d479d8e409dbc4dd316c3622693a451e74d9680bc900b4c8ad9fde"
+        },
+        {
+          "name": "reader.cpp.o",
+          "sha256": "de30c3e5a53546c5b5f69fd5c4f12344591079b9311a2c90bb3a5ef9c9fcbf9b"
+        },
+        {
+          "name": "wal.cpp.o",
+          "sha256": "dba3b7e8ce5fbcffd4dd566dbdfe0cb823960f3c38f36c2114a8e1bd9e48f42b"
+        },
+        {
+          "name": "writer.cpp.o",
+          "sha256": "34675fdab45e474ee43cb5482080fdbf75f35b668324687f3df1fa92609c745c"
+        }
+      ]
+    },
+    "async": {
+      "sha256": "74111b877b28ea2a4db8c17f2a0316ed9112807533d19181e8656c0c1f3c717d",
+      "members": [
+        {
+          "name": "application_runtime.cpp.o",
+          "sha256": "4f8be91e52dab00cf3142392c643d9726eefd5d21a99c03629cb4fe0f0244329"
+        },
+        {
+          "name": "async_io_context.cpp.o",
+          "sha256": "1d9315383b53d5095b4a2b124fdf4c9ac472f7dec10dd3fdbba00c117b6f873f"
+        },
+        {
+          "name": "await_op_helpers.cpp.o",
+          "sha256": "60c4d7bf41bde72e518de632c12a3a6bc4ac5674883672a640dfa547ba91758b"
+        },
+        {
+          "name": "batch.cpp.o",
+          "sha256": "e063b77bcc3f3f3ee10e4eed7c502b29eef649b352ed718fc09cee7256ed5a02"
+        },
+        {
+          "name": "cancel.cpp.o",
+          "sha256": "4a9460471e97bc3471e9408ca8f5e9f2300c95c8fe6def07cd2ebcf61f13d58c"
+        },
+        {
+          "name": "fail_fast.cpp.o",
+          "sha256": "74fe85dd6ed86233ad19647d552ba1abca25652c4ef628ff9f9535fd86720991"
+        },
+        {
+          "name": "fiber.cpp.o",
+          "sha256": "6707385acd2a28d298f03a09e4bc06bc9e32955e15ddb4564289f0148b80b8ff"
+        },
+        {
+          "name": "fiber_ctx.cpp.o",
+          "sha256": "419c0155d81483020acea25cbc7870c045411343fbd2de9165404ae1dbd7db7a"
+        },
+        {
+          "name": "file.cpp.o",
+          "sha256": "cae5360971ae8aa4703ff4c4f49dfcfa2a4d72682b911a50327f795333bde198"
+        },
+        {
+          "name": "group.cpp.o",
+          "sha256": "ed04b96f9d3f166901814d56bc02eb316ca531845107b4d97fabbc9e8d5cd2e7"
+        },
+        {
+          "name": "mutex_test_seam.cpp.o",
+          "sha256": "ea9f1431631d0840022076a72766f2f404dd6b144b218b9c9ddf6a8d040f16d2"
+        },
+        {
+          "name": "op_helpers.cpp.o",
+          "sha256": "9e98f616b60293feb42d70d31170120c35257bc2df6ecb49b11c0941b3104557"
+        },
+        {
+          "name": "queue_port.cpp.o",
+          "sha256": "ad44720d70d4b56e706f0eb3158007a9bab6f6c152e23480a31476acd49d6146"
+        },
+        {
+          "name": "queue_test_seam.cpp.o",
+          "sha256": "a6ad5a242b3bbebd977ed071a1b440a3edfffd8c96faf62710f0a674c51776fc"
+        },
+        {
+          "name": "request_handle.cpp.o",
+          "sha256": "88ddfdba4769a7ff98ea2c0fae57363eb4d40b591395a59e07d86137a141e922"
+        },
+        {
+          "name": "request_scope.cpp.o",
+          "sha256": "f791bbf611f2b602665bf866f87bbc6ec1e1a721adcd4148c2893c93471ec6e1"
+        },
+        {
+          "name": "scheduler.cpp.o",
+          "sha256": "6d0db45759ad851ab08b3fe796d354e3e7a8eba03d46ee67ed9abef9e1536a07"
+        },
+        {
+          "name": "scheduler_condition.cpp.o",
+          "sha256": "f1a37866e3505275d6d2b3944bf07c9cd54fa7ad6a5507bb12462625f5cdd591"
+        },
+        {
+          "name": "scheduler_event.cpp.o",
+          "sha256": "5d67f0f2d408a50b27583360adc1c40da90f808f9a5396489f83d439f19017b0"
+        },
+        {
+          "name": "scheduler_fe2_test_seam.cpp.o",
+          "sha256": "3f811befb0e7887e73759672199ff6e64aa67e20e72a501becdae7d0dc513282"
+        },
+        {
+          "name": "scheduler_mutex.cpp.o",
+          "sha256": "009ca7eb34ad4555032e535d52081883ef082502f8747137727228b74a5017e8"
+        },
+        {
+          "name": "scheduler_park_wake.cpp.o",
+          "sha256": "edc9d782b9e32f2b64164b5eaeea29abf66d30cc69a244d8d4af516e0ab9155b"
+        },
+        {
+          "name": "scheduler_queue.cpp.o",
+          "sha256": "0c0a3d99c76082ad9874c7b3f375494f0763fdd59d0bc4a50c23e50e1a826b5f"
+        },
+        {
+          "name": "scheduler_rwlock.cpp.o",
+          "sha256": "a3c2c4b111e5473e867614bec921157264eb27e3a00e331292b42d663c187657"
+        },
+        {
+          "name": "scheduler_semaphore.cpp.o",
+          "sha256": "dead9c41f92bdb55ccc1284c25b2d7fbd6847021e3704fccbba2dcc5258b213c"
+        },
+        {
+          "name": "scheduler_timer.cpp.o",
+          "sha256": "fcb0cfe4181fc63b25b5dbe95a1a33a0205116afef2fb30ef0a62c2da0a9037b"
+        },
+        {
+          "name": "select.cpp.o",
+          "sha256": "38fe99042b768f64b1f08038ffcebea27bd5370b6986b4e646e82f932c639194"
+        },
+        {
+          "name": "select_event.cpp.o",
+          "sha256": "77e262b8191bf7497ed87851bdd9bf8b24de0c7237ae0f5f6f7a4f17203a442c"
+        },
+        {
+          "name": "select_timer.cpp.o",
+          "sha256": "fdb82ec483cac489d7da3b086b319068f232287074a47a00f3779db9f1c2ff62"
+        },
+        {
+          "name": "stackful_io_host.cpp.o",
+          "sha256": "ee49f19ed161f7306ecbbf72779a37cd938db6ed416b094bbac69b5b128c3a18"
+        },
+        {
+          "name": "threadpool_backend.cpp.o",
+          "sha256": "f6f2eb275df05d68f0d7c5e7dfa79bf9ab68f9618372d24b70033d04b51249fa"
+        },
+        {
+          "name": "uring_backend.cpp.o",
+          "sha256": "1b44b78e98b0f28f1a24d92c1ec55b227c59e83192d9b071dbe340e2fad1c88d"
+        },
+        {
+          "name": "uring_completion.cpp.o",
+          "sha256": "9bfadb59857013da6f7a44df0348727d627921c2d2ddda01e38168e2204b7549"
+        },
+        {
+          "name": "uring_transport.cpp.o",
+          "sha256": "f3594f69b9abb5cc41da5512350d31ec3fc021079545075d7408574183a26c36"
+        },
+        {
+          "name": "wait_policy.cpp.o",
+          "sha256": "a849f947cd04655243e140207ba485603a9cf78917f0a82ce885626c01ed53d8"
+        },
+        {
+          "name": "context_identity.cpp.o",
+          "sha256": "3ed4a556195cd7557957912ee191250800b18627c5976c46bddfe9e8dd4ab4cf"
+        },
+        {
+          "name": "request_core.cpp.o",
+          "sha256": "6082b65159d4ae94f08e145b10b86157013d637d28db04a9dfb3b40582a538bc"
+        }
+      ]
+    }
+  }
+}

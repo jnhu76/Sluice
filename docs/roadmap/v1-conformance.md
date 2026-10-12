@@ -51,6 +51,22 @@ family gates; affected shared seams serialize locally; F5 follows their final
 dispositions. #402's separately tracked F5 optional-W04 shorthand is a downstream
 acceptance correction, not an extra M exit gate. `V1_RELEASE_READY=NO`.
 
+## F3 #498 canonical test migration — 2026-10-12 candidate
+
+Status: RECORD (implementation candidate, adoption/review pending). Seven
+legacy Runtime/File test TUs migrate their byte/offset, short-I/O, access/error,
+sync, native-provenance, cancellation and settlement observations to canonical
+File + owned RequestScope/Request paths. Two include-only wrapper edges retire.
+[Exact case and oracle mapping](../review/f3-498-pr-a-test-migration.md) records
+old/new ownership, negative controls, preserved controlled interleavings and
+adapter-only observations. No production or installed API is removed; package
+counts remain 50 objects / 37 async members / 79 headers in all four fresh
+remote profiles. [Remote receipt](../evidence/f3-498-pr-a-20261012/REPRODUCE.md)
+records code `3f846afa`, 40/52 targets per n/y profile, ASan/UBSan 13/13 and
+TSan twelve static suites plus shared-runtime scope 25/25; exact runtime
+configuration, original failures and negative controls remain explicit. External-risk/F5 approval and B-01 contraction remain
+separate downstream gates; runtime waiter and COPY test consumers remain.
+
 ## F3 HASH default-path migration — 2026-10-11
 
 Scoped `VERIFIED` evidence for the HASH default path at production49858941 /
@@ -1977,6 +1993,30 @@ their enumerated surfaces. A new B-01 package cut is a future deletion gate.
 COPY workers retain real backend-worker meaning; TAIL inert validated workers
 remain F3/F5 exit debt. OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
 
+### F3 #498 PR B draft paired async File wrapper candidate
+
+IMPLEMENTED_UNVERIFIED pending independent final review; DRAFT_NONADOPTED.
+Snapshot41fc1b45 on PR A plus supplements3f846afa removes only async/file.hpp
+and src/async/file.cpp together. SEM-01/03/04/05/06, ERR, REQ/LIFE/PROG/SHUT/HOST
+observations remain owned by canonical File/Request tests. Debug/Release n/y
+40/40 and52/52 each; Clang22 ASanUBSan13/13; static TSan12 targets PASS with scope static link
+unavailable due strong allocation overrides, plus separately executed shared
+TSan scope25/25 assertions PASS (no oracle or instrumentation weakened). Initial failed
+build rows and exact corrected-input reruns remain visible. Installed candidate
+n/y contracts79→78 headers,50→49 library objects,37→36 async members, with
+clean canonical/host consumers and real-uring/negative link controls. See
+[final receipt](../review/f3-498-pr-b-final-receipt.md) for exact source mapping,
+repeatable evidence and limitations. Per-surface UNKNOWN_EXTERNAL_USE remains
+UNKNOWN, EXTERNAL_RISK_PENDING, F5_PENDING; PHYSICAL_CONTRACTION_ADOPTED=NO,
+OPTIONAL_W04_SUPPORTED=NO and V1_RELEASE_READY=NO. Original F1/B01 untouched.
+
+### F3 #498 scoped decision submission — 2026-10-12
+
+[Owner decision record](../review/f3-498-owner-decision.md): human-submitted ACCEPT_SCOPED_EXTERNAL_BREAKAGE for async/file.hpp and exactly await_read_at, await_write_at, await_sync_data and await_sync_all; conditional authorization of the paired versioned package contraction. CONFIRMED_EFFECTIVE after the designated owner explicitly confirmed their role and activation in the execution conversation. No additional bounded deprecation window; external use remains UNKNOWN. Existing package/test captures remain candidate evidence; historical F1/B-01 assets are unchanged. Exact final HEAD review, cumulative CI and explicit merge authorization remain adoption gates. PHYSICAL_CONTRACTION_ADOPTED=NO; F3_FULL_RETIREMENT=NO; OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO. #500 and all excluded surfaces remain independent.
+
+### F3 #498 authorized merge pipeline and B-01 v3 cut — 2026-10-12
+
+The designated owner explicitly authorized sequential #501/#502 merges after the stated gates. #501 merge: f527456b5eaa10a74e872ee1d23b9dd6413f1f1d. #502 cumulative source: ecf7286f1eea8b22739f95b50edfcd94c2dace7b; production deletion remains exactly async/file.cpp and async/file.hpp, with unchanged tests/build inputs relative to the verified candidate. [Versioned B-01 v3 cut](../evidence/f3-498-b01-package-cut-v3/REPRODUCE.md) freshly rebuilds both profiles and records 49 library objects / 36 async archive members / 78 installed headers, clean-room positive/negative probes and package hashes. Historical F1/B-01 assets remain unchanged. Adoption is conditional on final exact-HEAD review, four cumulative CI passes and authorized #502 merge; actual postmerge master measurement remains mandatory. No full F3 retirement, optional W04 support or V1 release readiness.
 ### F3 #498 remaining pipeline selftest preparation (2026-10-12)
 
 | Slice / owner | Root obligations | Status | Exact evidence and remaining gate |
