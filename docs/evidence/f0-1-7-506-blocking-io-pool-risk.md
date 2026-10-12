@@ -14,11 +14,11 @@ This document adjudicates each deleted public surface. It does not approve the d
 
 | Field | Assessment |
 |-------|------------|
-| **Symbol / type summary** | `sluice::BlockingIoPool` — a bounded synchronous I/O worker pool. Public class offering `submit`, `sync_submit`, and scoped worker management. |
+| **Symbol / type summary** | `sluice::BlockingIoPool` — a bounded generic worker task pool. Public class offering `submit`, `try_submit`, `wait_idle`, `shutdown`, worker-count/depth queries and a `Task<T>::get()` result cell; this pool is not a File I/O operation interface. |
 | **v0.0.1 public presence** | Present in tag `v0.0.1` and documented in the v0.0.1 README as part of `sluice_core`. |
 | **Current in-tree consumers** | None after #506. No production, application, test, or template reference remains. |
 | **Canonical equivalent or migration** | No equivalent replacement in v1. The canonical blocking surface is `sluice::blocking::read_at` / `write_at` in `sluice/blocking/file.hpp`, but it is not a drop-in replacement for the pool abstraction. Consumers must migrate to direct per-operation blocking calls or to the async runtime. |
-| **Breakage impact** | Compile-time failure for any external consumer including `<sluice/blocking_io_pool.hpp>`. Link-time failure for any pre-built consumer linking against `blocking_io_pool.cpp.o`. |
+| **Breakage impact** | Compile-time failure for any external consumer including `<sluice/blocking_io_pool.hpp>`. Link-time or binary-compatibility breakage for external consumers of the exported pool constructor, methods, `make_blocking_io_pool`, or `detail::enqueue_job` definitions formerly supplied through `libsluice_core.a`; no callable replacement is guaranteed. |
 | **Recommended disposition** | Accept deletion under F0 §1.7 because (a) the surface is not exercised by v1 canonical workloads W-01/W-02/W-03, (b) no in-tree consumer remains, and (c) the retained `sluice/blocking/file.hpp` surface covers the ordinary-utility blocking I/O use case. |
 | **Owner approval** | ☐ Pending |
 
