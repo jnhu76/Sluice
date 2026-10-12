@@ -370,7 +370,7 @@ class Scheduler {
     }
 
   private:
-    friend     static void set_current_fiber_execution_tag(void* tag) {
+    static void set_current_fiber_execution_tag(void* tag) {
         WorkerState* w = current_worker();
         if (w) {
             if (Fiber* cur = w->current.load(std::memory_order_acquire)) {
