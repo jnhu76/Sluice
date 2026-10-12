@@ -76,7 +76,7 @@ for stage, sha in (("before", sha_before), ("after", sha_after)):
         command([xmake, "lua", "-P", root, inventory, evidence / "resolved.json"], "resolved", evidence)
         resolved = json.loads((evidence / "resolved.json").read_text())
         library_objects = sum(len(x["objects"]) for x in resolved.values())
-        assert all(pathlib.Path(p).is_file() for x in resolved.values() for p in x["objects"])
+        assert all((root / p).is_file() for x in resolved.values() for p in x["objects"])
         installed = sorted(str(p.relative_to(prefix / "include")) for p in (prefix / "include").rglob("*.hpp"))
         (evidence / "installed-headers.txt").write_text("\n".join(installed) + "\n")
         for library in ("core", "async"):
