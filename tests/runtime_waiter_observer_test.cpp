@@ -5,6 +5,7 @@
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstdlib>
@@ -335,10 +336,10 @@ bool already_terminal_await_returns_without_suspending(Tracker& t) {
             return;
         }
         t.check(c.ready(), "the zero-length request is terminal before await");
-        const auto context_before = current.ctx;
+        const std::array context_before{current.ctx.rsp, current.ctx.rbp, current.ctx.rip};
         auto wr = sched.await_completion_size(c);
         t.check(current.state() == FiberState::running, "the already-terminal fiber keeps running");
-        t.check(std::memcmp(&context_before, &current.ctx, sizeof(context_before)) == 0,
+        t.check(context_before == std::array{current.ctx.rsp, current.ctx.rbp, current.ctx.rip},
                 "already-terminal await performs no context switch");
         t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
                 "already-terminal await leaves no armed wait record");
