@@ -83,3 +83,16 @@ MASTER_INSTALLED_HEADERS=78
 F3_FULL_RETIREMENT=NO
 OPTIONAL_W04_SUPPORTED=NO
 V1_RELEASE_READY=NO
+
+## Subsequent explicit sequential merge authorization
+
+On 2026-10-12 the same designated human owner instructed:
+
+> 授权按 #500 → #503 → #504 顺序合并，满足各项门禁后完成 master 复测。
+
+MERGE_AUTHORIZATION=CONFIRMED_SEQUENTIAL_500_503_504_SUBJECT_TO_GATES.
+This supersedes the earlier absence of merge authorization, without waiving
+review, CI, dependency or postmerge evidence obligations and without expanding
+the five-surface scope. Existing server code/package evidence remains scoped
+to its exact inputs; final HEAD review and actual master verification remain
+mandatory. Formal package adoption follows those gates, not this text alone.
