@@ -35,7 +35,6 @@ namespace sluice::async {
 
 class Event;
 class SelectResult;
-class ApplicationRuntime;
 
 namespace detail {
 class SelectGroup;
@@ -371,8 +370,7 @@ class Scheduler {
     }
 
   private:
-    friend class ApplicationRuntime;
-    static void set_current_fiber_execution_tag(void* tag) {
+    friend     static void set_current_fiber_execution_tag(void* tag) {
         WorkerState* w = current_worker();
         if (w) {
             if (Fiber* cur = w->current.load(std::memory_order_acquire)) {
