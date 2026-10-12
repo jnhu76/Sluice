@@ -2114,3 +2114,17 @@ the original failing consumer diagnostics are retained. External use stays
 UNKNOWN; both scoped human owner approvals are PENDING. This technical
 candidate evidence does not complete F4/F5 or authorize removal/merge/release.
 Historical frozen manifests remain unchanged and W-04 support remains NO.
+
+### F4 merged-master closeout package — 2026-10-12 (candidate)
+
+Fresh merged-master `c29523d0c54c7bc85e2d5e7db73887acb991308c` evidence is
+[the scoped postmerge receipt](../evidence/f4-postmerge-master-b01-20261012/REPRODUCE.md),
+separate from the prior experimental combined tree. Four configurations have
+core 2 / async 33 / headers 56, 17 independent retired-interface verdicts,
+11 absent source files, retained installed W01/W02/W03 and actual dual-profile
+Clang ASanUBSan/TSan. The 17-interface Clean Break is already owner-directed;
+external use remains UNKNOWN. The new receipt stays CANDIDATE until its own
+review/merge/postmerge recheck; F5 full alignment and F6 remain PENDING.
+Phase M is CLOSED_ADOPTED / TERMINAL (7/7), not a new blocker. F3 #474 has
+its separate TAIL CLI owner decision and app/host closeout gate. Optional W04
+support remains NO and V1_RELEASE_READY remains NO.
