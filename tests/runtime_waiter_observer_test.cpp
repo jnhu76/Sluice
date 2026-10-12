@@ -586,6 +586,8 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
 
     Completion<std::size_t>* suspended = pending.load(std::memory_order_acquire);
     t.check(suspended != nullptr, "the suspended completion is addressable");
+    t.check(suspended != nullptr && suspended->ready(),
+            "terminal publication precedes the pinned observer delivery");
 
     std::atomic<int> cancel_outcome{-1};
     std::atomic<bool> cancel_completed{false};
