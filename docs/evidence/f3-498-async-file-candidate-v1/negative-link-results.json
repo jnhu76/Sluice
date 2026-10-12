@@ -1,0 +1,266 @@
+{
+  "before-n": {
+    "await_read_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_read_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_read_at-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    },
+    "await_write_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_write_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_write_at-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    },
+    "await_sync_data": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_sync_data-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_sync_data-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    },
+    "await_sync_all": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_sync_all-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-n/await_sync_all-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    }
+  },
+  "before-y": {
+    "await_read_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_read_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_read_at-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    },
+    "await_write_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_write_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_write_at-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    },
+    "await_sync_data": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_sync_data-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_sync_data-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    },
+    "await_sync_all": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/before/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_sync_all-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/before/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/before/clean-consumers-y/await_sync_all-link"
+      ],
+      "returncode": 0,
+      "result": "PRESENT"
+    }
+  },
+  "after-n": {
+    "await_read_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_read_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_read_at-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    },
+    "await_write_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_write_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_write_at-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    },
+    "await_sync_data": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_sync_data-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_sync_data-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    },
+    "await_sync_all": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-n/include",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_sync_all-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-n/lib/libsluice_core.a",
+        "-pthread",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-n/await_sync_all-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    }
+  },
+  "after-y": {
+    "await_read_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_read_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_read_at-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    },
+    "await_write_at": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_write_at-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_write_at-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    },
+    "await_sync_data": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_sync_data-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_sync_data-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    },
+    "await_sync_all": {
+      "command": [
+        "g++",
+        "-std=c++20",
+        "-I/home/jnhu/f3-498-pr-b-prep/after/installed-y/include",
+        "-DSLUICE_HAS_LIBURING",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_sync_all-link.cpp",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_async.a",
+        "/home/jnhu/f3-498-pr-b-prep/after/installed-y/lib/libsluice_core.a",
+        "-pthread",
+        "-luring",
+        "-o",
+        "/home/jnhu/f3-498-pr-b-prep/after/clean-consumers-y/await_sync_all-link"
+      ],
+      "returncode": 1,
+      "result": "ABSENT"
+    }
+  }
+}
