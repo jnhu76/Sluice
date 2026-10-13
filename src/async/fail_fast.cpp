@@ -24,9 +24,6 @@ namespace sluice::async::detail {
     std::terminate();
 }
 
-[[noreturn]] void group_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
 
 [[noreturn]] void async_mutex_lifetime_fail_fast() noexcept {
     std::terminate();

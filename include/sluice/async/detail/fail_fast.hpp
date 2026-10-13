@@ -10,7 +10,6 @@ namespace sluice::async::detail {
 
 [[noreturn]] void select_invariant_fail_fast() noexcept;
 
-[[noreturn]] void group_lifetime_fail_fast() noexcept;
 
 [[noreturn]] void evented_admission_fail_fast() noexcept;
 
