@@ -25,7 +25,12 @@ there, not for whatever the branch happens to point at now.
 | `formal/` | TLA+ gate log and the model-to-C++ correspondence note for the transitions this slice touched |
 | `blocker-w03-stall.md` | **CLOSED blocker**: the F2 head stalled the W-03 external-loop scenario under two-core starvation while the baseline did not; measurement and failing-check record as it stood open at the captured head |
 | `w03-root-cause.md` | The stall's root-cause closure: deterministic handoff-pause reproduction (causal witness, corrected-protocol witness, missing-notification negative), application-handoff classification with the empty production diff, the test-only corrective commits, the three-tree differential stress campaign and the re-run gates at the corrected head |
-| `known-preexisting-gaps.md` | Two gaps the review found that predate this slice (io_uring poison racing the post-accept push; an unguarded `core_` in `retire_delivery`), with their baseline-equivalence checks |
+| `uring-poison-post-accept/` | **CORRECTED** gap §1: the pre-verified poison × post-accept DAG, the deterministic RED strand at the unfixed head, the minimum production correction (post-poison retirement through the failure terminal under `claim_execution` arbitration) and the GREEN receipt |
+| `e1-gate-lifetime/` | **CORRECTED** gap §3: the E1 test's `GateGuard` teardown race — deterministic RED 8/8, the guard-waits-for-exit fix plus gate-before-backend ownership ordering (test-only), GREEN receipt and 12-copy contention recheck |
+| `retire-delivery-moved-from/` | **CORRECTED** gap §2: the moved-from `retire_delivery` dereference classification (no documented precondition, benign-rejection sibling contract, reachable via a held context reference) and the guard + oracle |
+| `formal/rcore-live-reuse.md` | The `rcore-live` reconciliation: INCOMPLETE at this capture, VERIFIED_REUSABLE historical proof via the byte-identical input identity table, F2 formal acceptance ACCEPTED_BY_REUSE |
+| `known-preexisting-gaps.md` | Three gaps the review found that predate this slice; all three corrected at the final head with deterministic receipts |
+| `final-stress/` | The final-head focused differential stress vs the baseline worktree: campaign script, environment, results (240/240) and the per-run logs |
 | `collect-gates.py` | Asserts that every capture names the same head and writes `gates.json`; a capture bound to a different revision fails here instead of being averaged in |
 
 Reproduction, in order:

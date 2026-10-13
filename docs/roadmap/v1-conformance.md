@@ -2190,3 +2190,35 @@ corrected and captured pre-fix heads) and recorded as
 PR516 remains Draft pending the installed-surface owner decision. Full
 record: `docs/evidence/f2-authority-contraction-20261013/w03-root-cause.md`.
 
+
+### 2026-10-13 F2 final corrective round — #402 amendment
+
+Final candidate implementation head
+`093332ba1b40b667763d1202200ee899962454ae` (commits `8689a720` io_uring
+poison × post-accept retirement, `e974988c` E1 pause-gate teardown lifetime,
+`0bcfda01` moved-from `retire_delivery` rejection, `093332ba` rcore-live
+reuse reconciliation). All three `known-preexisting-gaps.md` entries are
+CORRECTED with deterministic RED/GREEN receipts; the E1 fix and the W-03
+closure are test-only, the uring and context fixes are production corrections
+that add no runtime state (authority-contraction audit recorded in the
+execution record). W-03 is CLOSED as an application handoff defect with an
+empty production diff (`POSTFIX_STRESS` 0/80 at `25734314`, re-confirmed 0
+failures in the final focused campaign). Validation re-run at the head and
+bound in `gates.json`: six-profile matrix clean (debug-n 53/53, debug-y
+67/67, release-n 53/53, release-y 67/67, asanubsan-n 18/18, tsan-n 17/18
+with the recorded link exclusion; the one load-contaminated tsan attempt is
+preserved separately, identical binary 10/10 idle, serial re-run clean);
+B-01 v5 dual-profile package capture PASS (56→49 installed headers, 35→32
+objects, 33→30 archive members); installed probes clean with the negative
+control; focused differential stress vs baseline `0ed16588` under
+`taskset -c 0,1` 240/240; GitHub CI `38397035018` all four jobs success.
+TLA status: `CURRENT_RCORE_LIVE_EXECUTION = INCOMPLETE`,
+`HISTORICAL_RCORE_LIVE_PROOF = VERIFIED_REUSABLE`,
+`F2_FORMAL_ACCEPTANCE = ACCEPTED_BY_REUSE` (exact input identity:
+`git diff eb7bf055..HEAD -- formal/tla/ scripts/verify_tla.sh` empty;
+historical E2 attempt 2 all 171 jobs PASS). Status remains CANDIDATE:
+PR516 stays Draft and unmerged pending the owner's explicit scope-bound
+decision on the installed-surface break (seven headers, three objects,
+external use UNKNOWN, no shims). Full record:
+`docs/evidence/f2-authority-contraction-20261013/` (execution record,
+corrective-round section).

@@ -63,6 +63,24 @@ file is authoritative for every capture in this directory.
 10. `test(external-loop): re-assert the wake after a racing acknowledgement` —
     restores R14's second half deterministically.
 11. `docs(evidence): correct the F2 record after independent review`.
+12. The W-03 root-cause closure series (test-only; see `w03-root-cause.md`):
+    deterministic reproducer `359155e6`, application handoff eventfd
+    `b63a532e`, write-result portability fix `25734314`, receipt `9f919ae2`.
+    The production diff is empty — the stall was an application-side handoff
+    defect in the scenario's own loop protocol.
+13. `fix(uring): retire a post-accept push that lands after poison`
+    (`8689a720`) — closes `known-preexisting-gaps.md` §1; see
+    `uring-poison-post-accept/README.md`.
+14. `test(e1): guarantee pause-gate lifetime through teardown` (`e974988c`) —
+    closes `known-preexisting-gaps.md` §3; see `e1-gate-lifetime/README.md`.
+    Test-only: no production file changed.
+15. `fix(context): reject retire_delivery on a moved-from context`
+    (`0bcfda01`) — closes `known-preexisting-gaps.md` §2; see
+    `retire-delivery-moved-from/README.md`.
+16. `docs(evidence): reconcile rcore-live through exact historical inheritance`
+    (`093332ba`) — `formal/rcore-live-reuse.md`; the TLA gate stays
+    `INCOMPLETE: rcore-live` in `gates.json` with the reuse identity recorded
+    separately.
 
 ## Independent review
 
@@ -88,7 +106,9 @@ surface). Outcome:
 - Recorded as pre-existing and not fixed here: the io_uring poison-versus-
   post-accept-push window that can strand an accepted request until the caller
   cancels it (byte-identical at the baseline), and the unguarded `core_` in
-  `retire_delivery`. See `known-preexisting-gaps.md`.
+  `retire_delivery`. See `known-preexisting-gaps.md`. (Superseded at the final
+  head: all recorded gaps are corrected there — see "Corrective round"
+  below.)
 - Confirmed sound by the production review: one settlement authority, no
   surviving second state machine, publication strictly ordered before any public
   observation, reference accounting covering slot reuse, at-most-once observer
@@ -200,16 +220,78 @@ never ran now drains and reports a clean failure instead of aborting in the
 context destructor (that abort signature is pre-existing in this suite and
 appears on the baseline tree as well under the same load).
 
+## Corrective round at the final head — 2026-10-13
+
+Final implementation head `093332ba1b40b667763d1202200ee899962454ae`
+(`gates.json` in this directory). Three corrections, each with its own
+deterministic RED/GREEN receipt, plus the TLA reconciliation:
+
+| Correction | Kind | Receipt |
+|---|---|---|
+| io_uring poison racing the post-accept push (strands an accepted request between accept and queue push when a non-retryable transport failure poisons the backend first) | production: `retire_undispatched_after_poison_locked_` drains the provably kernel-invisible reservation through the failure terminal under `claim_execution` arbitration; exactly-once terminals preserved (a racing pre-dispatch public cancel keeps its own publication) | `uring-poison-post-accept/` |
+| E1 `GateGuard` teardown race (stack gate storage could die while a registered pass still owed its exit acknowledgment) | test-only: the guard waits for `exited==true` and worker-side gates are declared before the backend so they outlive worker join; ownership ordering closes the unsynchronized pointer-load window no protocol can close | `e1-gate-lifetime/` |
+| `retire_delivery` moved-from `core_` dereference | production: benign rejection matching the sibling entry points' moved-from contract | `retire-delivery-moved-from/` |
+| `rcore-live` formal acceptance | evidence: `INCOMPLETE` at this capture, `VERIFIED_REUSABLE` historical proof with byte-identical inputs (`git diff eb7bf055..HEAD -- formal/tla/ scripts/verify_tla.sh` empty) | `formal/rcore-live-reuse.md` |
+
+Authority-contraction audit for the corrective round: no new runtime state,
+flag, counter, token, lease or capability probe was added to any class. The
+only new flag is the function-local `post_poison_push_retired` wake-necessity
+bit in `dispatch_after_accept` (derived: poison fact plus drained queue;
+materialized because a wake owed after the post-poison retirement would
+otherwise be indistinguishable from the poison wake already signalled). No
+existing mechanism became eligible for removal by these corrections; the
+retired dispatch-queue seat is reclaimed through the existing
+`publication_pending_` path.
+
+Final validation re-run at `093332ba`, every capture naming that head:
+
+- Six-profile matrix: debug-n 53/53, debug-y 67/67, release-n 53/53,
+  release-y 67/67, asanubsan-n 18/18, tsan-n 17/18 with the recorded
+  `request_scope_test` link exclusion. One intermittent, preserved not hidden:
+  the first tsan-n pass failed one scenario
+  (`r4_worker_completion_signal_before_final_recheck_is_caught`, no TSan race
+  report) while the B-01 clean-room builds ran concurrently on the same host —
+  the load-contamination hazard this slice's own protocol warns about. The
+  identical matrix binary passed 10/10 on the idle machine and the isolated
+  serial re-run passed; the contaminated capture is preserved as
+  `tsan-n-concurrent-attempt` next to the clean `tsan-n` in the matrix root.
+- B-01 v5 clean-room dual-profile package capture:
+  `F2_B01_V5_CANDIDATE_FRESH_PACKAGE_PASS` for
+  `0ed16588…` → `093332ba…`, both ring profiles; 56 → 49 installed headers,
+  35 → 32 library objects, 33 → 30 `libsluice_async.a` members; persisted in
+  `b01-v5-candidate/`.
+- Installed probes at the same prefixes: 49 headers compile standalone, the
+  cross-translation-unit ODR identity probe links and runs, zero removed
+  headers present after, all seven present in the before-prefix control.
+- Focused differential stress, `taskset -c 0,1`, ten concurrent copies per
+  round, four interleaved rounds per tree, debug + real-liburing, otherwise
+  idle 20-core host: 240/240 runs pass (40/40 per suite per tree for
+  `uring_progress_race_test`, `backend_conformance_e1_threadpool_test`,
+  `threadpool_external_loop_test`; baseline worktree `0ed16588` vs this head).
+  Campaign script, environment, results and per-run logs: `final-stress/`
+  in this directory (`campaign-runs.tgz`).
+- GitHub CI run `38397035018` at `093332ba`: all four jobs success
+  (`ci/head-run.json`).
+- TLA+ gate retained: 170/171 verdicts PASS, `rcore-live` outstanding,
+  recorded as INCOMPLETE; the historical E2 full-gate PASS covers that
+  configuration through the verified reuse identity above. The models do not
+  cover backend transports, so the A-fix needs no model change.
+
 ## Remaining limitations
 
 - Installed public surface break: seven installed headers and three compiled
   objects are retired. The risk/disposition record is prepared; the slice stays
   unmerged while the owner's separate decision on that break is pending.
-- The mutation campaign is unchanged by commit 5: no mutant target compiles the
-  edited test source.
-- The TLA+ gate was run on the tree whose production code and models are
-  identical to the final head; commit 5 changes only a test file. The gate log
-  records the tree it ran on.
-- **Open blocker before merge**: `threadpool_external_loop_test`'s W-03 scenario stalls under two-core starvation on this slice (10/40) and not at baseline (0/40); the failing check is the host's wake wait in the late-completion loop, and the CI debug job flaked on that scenario. See `blocker-w03-stall.md`. The six-profile matrix and every other capture in this directory passed on an unloaded host.
+- The mutation campaign is unchanged by commit 5 and by the corrective round:
+  no mutant target compiles the edited test sources.
+- The TLA+ gate at this capture is `INCOMPLETE: rcore-live`; acceptance for F2
+  is by exact-input reuse of the E2 full-gate proof
+  (`formal/rcore-live-reuse.md`), never recorded as a fresh pass.
+- W-03 is **CLOSED** (application handoff; production diff empty; see
+  `w03-root-cause.md` and `blocker-w03-stall.md`); the focused differential
+  stress at the final head re-confirms 0 failures under the recorded
+  contention schedule.
+- All three pre-existing gaps recorded in `known-preexisting-gaps.md` are
+  CORRECTED at this head with deterministic RED/GREEN receipts.
 - F5 and every phase beyond F2 are not started here. Optional W-04 remains
   unsupported and no F2 obligation depends on it.

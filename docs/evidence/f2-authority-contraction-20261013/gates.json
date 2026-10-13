@@ -1,13 +1,13 @@
 {
-  "head": "25734314f70401472067250e68a1f9227093b7eb",
+  "head": "093332ba1b40b667763d1202200ee899962454ae",
   "baseline_master": "0ed16588b7101f108aa7282074ba3d568f9d34e9",
   "capture_heads": {
-    "matrix": "25734314f70401472067250e68a1f9227093b7eb",
-    "b01-after-n": "25734314f70401472067250e68a1f9227093b7eb",
-    "b01-after-y": "25734314f70401472067250e68a1f9227093b7eb"
+    "matrix": "093332ba1b40b667763d1202200ee899962454ae",
+    "b01-after-n": "093332ba1b40b667763d1202200ee899962454ae",
+    "b01-after-y": "093332ba1b40b667763d1202200ee899962454ae"
   },
   "matrix": {
-    "root": "/home/jnhu/f2-execution/w03-gates-matrix3",
+    "root": "/home/jnhu/f2-execution/final-matrix-20261013",
     "profiles": {
       "debug-n": {
         "mode": "debug",
@@ -19,8 +19,8 @@
         "unavailable": [],
         "mutants_built": 37,
         "results_tsv_sha256": "db52a526b0fac6952c0d26625b48f65609af64094f088231d41a8ba7f3cf6735",
-        "build_log_sha256": "66e1dff0ddf8f55a257e03de81338e0b6f159bdeba210b2bbeee0a0bef467753",
-        "xmake_test_log_sha256": "a99b563e1de19a79448d4899dc4a7f54b14198eed40fa86fba451121a9ae5f92"
+        "build_log_sha256": "0f940f9567df7f599822fcb783bed442bbe67993ea15d99c1d445ab261599b37",
+        "xmake_test_log_sha256": "857405974f13fa5549f1ad8dd9cd039abc0173e2720378b26ea7c6deaf8d0390"
       },
       "debug-y": {
         "mode": "debug",
@@ -32,8 +32,8 @@
         "unavailable": [],
         "mutants_built": 64,
         "results_tsv_sha256": "bf3e74816d43fe1d1f294211bf803eaccce9b5915788536845ec242b812a30c5",
-        "build_log_sha256": "4487de0d9b0636ff677f84bd559cd741f1fffdc8a8f7fbccf5f00ba6b8711f29",
-        "xmake_test_log_sha256": "c8fef65ebaf8e76a3928ae13239ff0ad04806f5988bf74900156d043e929a671"
+        "build_log_sha256": "a5476b6cadc9ab4b2993ddfe85ee51bb96f4e96ec4c795f92ef8a40872d8e0b2",
+        "xmake_test_log_sha256": "8a384b66419343cc72334f304ae11e6c8b3809286bb7a79878ace95e0b9f0c22"
       },
       "release-n": {
         "mode": "release",
@@ -45,8 +45,8 @@
         "unavailable": [],
         "mutants_built": 37,
         "results_tsv_sha256": "db52a526b0fac6952c0d26625b48f65609af64094f088231d41a8ba7f3cf6735",
-        "build_log_sha256": "cb384a8d63cdc4ada6040ac23462d130e3d0b877291a382ac3422d0954216627",
-        "xmake_test_log_sha256": "d12af747bf0cbfb8a104f56dc3a99f0aa54e8969666100d5313d7968d9032ac4"
+        "build_log_sha256": "7a5dc24f3959f6b00cbe3ad72f9aea454696ea297cffca09976fd2fb96d22df7",
+        "xmake_test_log_sha256": "aee62f313cf70b5d3f1641239f42926d854edf13c33fba8a8bfafb316b018cbf"
       },
       "release-y": {
         "mode": "release",
@@ -58,8 +58,8 @@
         "unavailable": [],
         "mutants_built": 64,
         "results_tsv_sha256": "bf3e74816d43fe1d1f294211bf803eaccce9b5915788536845ec242b812a30c5",
-        "build_log_sha256": "1307a7a5faf0a74eb1af94f0cf5898281ff2a3513b2614646629c3d18dcdc4cd",
-        "xmake_test_log_sha256": "295ffa7a3410c029bbc0f341cae9a726cd6f4ea58c0110d1a31c2f9afdba8b8f"
+        "build_log_sha256": "5ad3e67da636b429fcf4de8567e3aec564570cc7bcd9180714b3355589c4cdd4",
+        "xmake_test_log_sha256": "17f078414acfa2ef697a06175123dfdbe433ab7fefb987b50f4de02debda5173"
       },
       "asanubsan-n": {
         "mode": "asanubsan",
@@ -98,9 +98,9 @@
     }
   },
   "package_capture": {
-    "root": "/home/jnhu/Source/Sluice-f2/docs/evidence/f2-authority-contraction-20261013/w03-root-cause/b01-v6",
+    "root": "/home/jnhu/Source/Sluice-f2/docs/evidence/f2-authority-contraction-20261013/b01-v5-candidate",
     "before": "0ed16588b7101f108aa7282074ba3d568f9d34e9",
-    "after": "25734314f70401472067250e68a1f9227093b7eb",
+    "after": "093332ba1b40b667763d1202200ee899962454ae",
     "counts": {
       "before-n": {
         "library_objects": 35,
@@ -124,22 +124,22 @@
       }
     },
     "package_sha256": {
-      "before-n": "e578a4fc2cb181f1eca58f8827423c97ad8d1677209dceb4e082cc1078353958",
-      "before-y": "30e75a2008ba32142dbea467de063eb859a540212331d3e376fc65fe4e0eb3d6",
-      "after-n": "a983bce93f92788bb7b67ca269c0a029544e21ce380b3b439be29bfa41bb863c",
-      "after-y": "4fa7a35cea767a96c03460762c20bba3bac619671f9cb128afc2203109db46da"
+      "before-n": "ec596eadabe60ad83200db24666352b19fa2be7544779694b990b3b60b606e16",
+      "before-y": "aedfa0e9512173e61f686fc38eb734c70d862dacca5ede2235ca75b90475c87a",
+      "after-n": "9ea5f96e39f1e198b651143b921ae407a164bc47fa7e33392236a8aae53693ef",
+      "after-y": "963a66e00d9f8f031b34e755a110b6361faadc8826e8461208cddda792a41c3e"
     },
-    "commands_json_sha256": "3fd9415145544f4cbaadedc3e7f21855d17030f8fcdea75b1d5547d5b192cb66",
-    "raw_manifest_sha256": "fb098a479b2d09f113556826efa73c915e24d3d9f4fe7efdf4a4737e9a09ce1f"
+    "commands_json_sha256": "5a3a5d5f161647d731267153f087accfa10a3f319cc402dbfcbca922d354abd5",
+    "raw_manifest_sha256": "8bf71e34486df667751d1cf61582b192ac8b4c5038a967d5e1719b9e20165153"
   },
   "installed_probes": {
-    "root": "/home/jnhu/Source/Sluice-f2/docs/evidence/f2-authority-contraction-20261013/w03-root-cause/probes",
+    "root": "/home/jnhu/Source/Sluice-f2/docs/evidence/f2-authority-contraction-20261013/installed-probes",
     "installed_headers": 49,
     "standalone_failures": 0,
     "odr_run_exit": 0,
     "removed_headers_present": 0,
     "control": {
-      "prefix": "/home/jnhu/f2-execution/w03-b01-v6/before-installed-n",
+      "prefix": "/home/jnhu/f2-execution/final-b01-20261013/before-installed-n",
       "installed_headers": 56,
       "present_removed_headers": [
         "sluice/async/completion.hpp",
@@ -151,7 +151,7 @@
         "sluice/async/detail/submit_transaction.hpp"
       ]
     },
-    "probes_json_sha256": "c59a6ca4cb677368f5b483395ec8917065357ba357868d4fb06abaf183566251"
+    "probes_json_sha256": "d9c857b4d240d6a57a8cb29c3be68399f80ec68f64366e2590c48df18385b3d0"
   },
   "tla": {
     "verdict": "INCOMPLETE: rcore-live",
@@ -169,10 +169,10 @@
   },
   "ci": [
     {
-      "database_id": 38387419975,
+      "database_id": 38397035018,
       "status": "completed",
       "conclusion": "success",
-      "head_sha": "25734314f70401472067250e68a1f9227093b7eb"
+      "head_sha": "093332ba1b40b667763d1202200ee899962454ae"
     }
   ]
 }
