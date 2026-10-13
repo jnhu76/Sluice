@@ -607,8 +607,33 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
         ok = consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
              consumed.result.value() == 0;
     }
+
+    // The acknowledgement above may have consumed the racing wake. A later
+    // submission must still wake a parked host: with the fd quiescent, a second
+    // host parked in poll(2) can only be released by the next signal, so a
+    // readiness drained by an acknowledgement may not swallow the one after it.
+    for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+    }
+    const bool quiescent_before_signal = !fd_readable(host.nfd());
+    std::atomic<int> parked_rc{-1};
+    std::thread parked([&] {
+        struct pollfd p;
+        p.fd = host.nfd();
+        p.events = POLLIN;
+        p.revents = 0;
+        parked_rc.store(::poll(&p, 1, 5000), std::memory_order_release);
+    });
+    Request<std::size_t> follow = submit_zero_op(ctx);
+    parked.join();
+    const bool woken = parked_rc.load(std::memory_order_acquire) == 1;
+    bool follow_ok = quiescent_before_signal && woken && follow.valid();
+    if (follow_ok) {
+        (void)host.acknowledge_and_drive();
+        follow_ok = follow.ready();
+        follow.discard();
+    }
     host.stop_and_detach();
-    return ok;
+    return ok && follow_ok;
 }
 
 // C2-D stop/settle/detach: the supported host shutdown order is stop
