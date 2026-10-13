@@ -2132,3 +2132,7 @@ support remains NO and V1_RELEASE_READY remains NO.
 ## 2026-10-12 scoped final closeout overlay
 
 F4=ADOPTED_SCOPED at actual merged-master de551ed09555b8ad4d118a250baf373062a01d0e; fresh four-profile recheck and independent technical acceptance, #514/#506. F3 app-host candidate #513 has actual four-configuration evidence at613f9205308ecbcc7635f946fe0061f57b862e71; TAIL CLI human decision PENDING, #474 OPEN. W04 optional support NO; F2/F5/F6 PENDING; V1 release ready NO. See docs/evidence/f3-app-host-closeout-20261012.
+
+## 2026-10-13 F3 actual-master exit receipt
+
+This dated receipt supersedes2026-10-12 candidate-owner-PENDING overlays. Active human CLI approval bound PR513HEAD350e789810f16078d528e572a0b124e71bd6da97; merged/tested masterf4a9723410539025cffa3422c5f6841ef795c755 has fresh four app/package configurations, dual native-Clang sanitizers and four successful CI jobs. See docs/evidence/f3-postmerge-closeout-20261013; independent scoped technical acceptance gates #474 closure. F4 ADOPTED_SCOPED/#505/#506 CLOSED. F3 technical exit has complete evidence; optionalW04support NO, conditional N/A audit. PhaseM CLOSED_ADOPTED, #402 OPEN for F2/F5 then F6 final audit; V1_RELEASE_READY NO. Documentation-only receipt commits do not relabel the actual tested master SHA.
