@@ -1,10 +1,16 @@
 # Known pre-existing gaps disclosed by the F2 review
 
-These are not introduced by this slice and are not fixed here: each is
-byte-identical at the F2 baseline `0ed16588b7101f108aa7282074ba3d568f9d34e9`,
-and fixing one would be a separate protocol change with its own oracle. They are
-recorded so the F2 contraction is not credited with, or blamed for, behaviour it
-did not change, and so the owner sees them before the installed break merges.
+These are not introduced by this slice: each is byte-identical at the F2
+baseline `0ed16588b7101f108aa7282074ba3d568f9d34e9`. Originally recorded so
+the F2 contraction is not credited with, or blamed for, behaviour it did not
+change; §1 and §3 were subsequently fixed by the F2 final corrective round
+(the owner prioritized correcting the real concurrency/lifetime defects over
+carrying them), and §2 by the same round as a residual finding. Each fix has
+its own receipt with deterministic witnesses:
+
+1. **CORRECTED** — `../uring-poison-post-accept/README.md`.
+2. **CORRECTED** — `../retire-delivery-moved-from/README.md`.
+3. **CORRECTED** — `../e1-gate-lifetime/README.md`.
 
 ## 1. io_uring poison racing the post-accept ring push can strand a request
 
@@ -36,7 +42,8 @@ the identical `poisoned_before` / `newly_poisoned` / `unsubmitted_after_dispatch
 structure and the same absence of a post-poison drain. Not introduced by F2.
 The trigger (a non-retryable `io_uring_submit` failure racing a submission) was
 not reproduced with fault injection; the code path is confirmed, the field
-trigger is suspected.
+trigger is suspected. The corrective round later reproduced it deterministically
+with the existing seams and fixed it; see `../uring-poison-post-accept/README.md`.
 
 ## 2. `AsyncIoContext::retire_delivery` has no null-core guard
 
@@ -45,6 +52,10 @@ sibling entry points this slice rewrote (`attach_observer` `:788-796`,
 `cancel_observer` `:802-810`) both check it. Unchanged from baseline and
 reachable only through a moved-from or destroyed context, which is a documented
 caller misuse; recorded so the asymmetry is deliberate rather than accidental.
+The corrective round reclassified it — no documented precondition exists, the
+siblings define the moved-from contract as benign rejection, and a Scheduler
+reference can reach the call — and added the guard with a deterministic
+regression oracle; see `../retire-delivery-moved-from/README.md`.
 
 ## 3. E1 conformance `GateGuard` teardown race flakes under ASan
 
@@ -63,5 +74,7 @@ predates the W-03 closure and is not caused by it. The F2 slice's own
 execution record already notes an ASan stack-use-after-scope defect this
 gate family introduced and fixed once; this residual instance needs the
 guard to wait for `exited` before the gate may die. Found during the W-03
-closure matrix re-run (`w03-root-cause.md`); fixing it belongs to the E1
-test's own slice, not this one.
+closure matrix re-run (`w03-root-cause.md`). The corrective round fixed the
+guard (exit acknowledgment wait) and the gate storage ordering (worker-side
+gates outlive the context), with a deterministic witness and clean ASan
+campaigns; see `../e1-gate-lifetime/README.md`.

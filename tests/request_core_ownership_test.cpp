@@ -185,6 +185,8 @@ bool move_transfers_the_same_core(Tracker& t) {
     RequestCore* moved_core = moved.context_core_for_test();
     CoreCaseCleanup cleanup{moved_core};
     t.check(ctx.context_core_for_test() == nullptr, "the moved-from context holds no second core");
+    t.check(!ctx.retire_delivery(id),
+            "the moved-from context reports nothing retired without a core dereference");
     t.check(moved_core == core, "the moved-to context holds the same core object");
     if (moved_core != core)
         return false;

@@ -816,6 +816,9 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const Reque
 
 bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!core_) {
+        return false;
+    }
     return core_->retire_observer_delivery(key) == detail::ObserverDeliveryRetirement::retired;
 }
 
