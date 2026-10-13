@@ -104,7 +104,10 @@ def run(argv, label, environment=None):
 
 
 toolchain = output / "toolchain.log"
+head_sha = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True,
+                          cwd=str(repo), check=True).stdout.strip()
 with open(toolchain, "w") as handle:
+    handle.write("# worktree head: " + head_sha + "\n")
     for argv in ([XMAKE, "--version"], ["g++", "--version"], ["clang++", "--version"],
                  ["uname", "-r"],
                  ["bash", "-c", "ls /usr/include/liburing.h && ldconfig -p | grep liburing"]):

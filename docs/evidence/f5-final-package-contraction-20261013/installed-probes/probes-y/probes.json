@@ -2,19 +2,20 @@
   "prefix": "/tmp/f5-b01-v6/after-installed-y",
   "installed_headers": 25,
   "liburing": true,
+  "source_sha": "a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c",
   "standalone_failures": [],
   "odr_link": {
     "argv": [
       "/usr/bin/g++",
-      "/tmp/f5-probes-20261013-y/odr-a.o",
-      "/tmp/f5-probes-20261013-y/odr-b.o",
-      "/tmp/f5-probes-20261013-y/odr-main.o",
+      "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/odr-a.o",
+      "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/odr-b.o",
+      "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/odr-main.o",
       "/tmp/f5-b01-v6/after-installed-y/lib/libsluice_async.a",
       "/tmp/f5-b01-v6/after-installed-y/lib/libsluice_core.a",
       "-lpthread",
       "-luring",
       "-o",
-      "/tmp/f5-probes-20261013-y/odr-probe"
+      "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/odr-probe"
     ],
     "exit_code": 0,
     "log": "link-odr.log",
@@ -22,7 +23,7 @@
   },
   "odr_run": {
     "argv": [
-      "/tmp/f5-probes-20261013-y/odr-probe"
+      "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/odr-probe"
     ],
     "exit_code": 0,
     "log": "run-odr.log",
@@ -68,7 +69,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_async_io_context.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_async_io_context.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_async_io_context.hpp.log",
@@ -82,7 +83,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_cancel.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_cancel.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_cancel.hpp.log",
@@ -96,7 +97,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_fail_fast.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_fail_fast.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_fail_fast.hpp.log",
@@ -110,7 +111,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_observer_protocol.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_observer_protocol.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_observer_protocol.hpp.log",
@@ -124,7 +125,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_progress_source.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_progress_source.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_progress_source.hpp.log",
@@ -138,7 +139,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_ready_sink.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_ready_sink.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_ready_sink.hpp.log",
@@ -152,7 +153,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_reference_ready_sink.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_reference_ready_sink.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_reference_ready_sink.hpp.log",
@@ -166,7 +167,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_request_core.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_request_core.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_request_core.hpp.log",
@@ -180,7 +181,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_detail_request_key.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_detail_request_key.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_detail_request_key.hpp.log",
@@ -194,7 +195,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_fiber.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_fiber.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_fiber.hpp.log",
@@ -208,7 +209,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_fiber_ctx.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_fiber_ctx.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_fiber_ctx.hpp.log",
@@ -222,7 +223,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_request.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_request.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_request.hpp.log",
@@ -236,7 +237,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_request_scope.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_request_scope.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_request_scope.hpp.log",
@@ -250,7 +251,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_stackful_io_host.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_stackful_io_host.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_stackful_io_host.hpp.log",
@@ -264,7 +265,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_threadpool_backend.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_threadpool_backend.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_threadpool_backend.hpp.log",
@@ -278,7 +279,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_async_uring_backend.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_async_uring_backend.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_async_uring_backend.hpp.log",
@@ -292,7 +293,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_blocking_file.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_blocking_file.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_blocking_file.hpp.log",
@@ -306,7 +307,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_detail_file_semantics.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_detail_file_semantics.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_detail_file_semantics.hpp.log",
@@ -320,7 +321,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_detail_posix_retry.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_detail_posix_retry.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_detail_posix_retry.hpp.log",
@@ -334,7 +335,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_detail_uring_submit.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_detail_uring_submit.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_detail_uring_submit.hpp.log",
@@ -348,7 +349,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_effect.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_effect.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_effect.hpp.log",
@@ -362,7 +363,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_error.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_error.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_error.hpp.log",
@@ -376,7 +377,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_file_resource.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_file_resource.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_file_resource.hpp.log",
@@ -390,7 +391,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_measurement.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_measurement.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_measurement.hpp.log",
@@ -404,7 +405,7 @@
         "-DSLUICE_HAS_LIBURING",
         "-fsyntax-only",
         "-I/tmp/f5-b01-v6/after-installed-y/include",
-        "/tmp/f5-probes-20261013-y/standalone-include_sluice_result.hpp.cpp"
+        "/home/jnhu/Source/Sluice-f5/docs/evidence/f5-final-package-contraction-20261013/installed-probes/probes-y/standalone-include_sluice_result.hpp.cpp"
       ],
       "exit_code": 0,
       "log": "standalone-include_sluice_result.hpp.log",

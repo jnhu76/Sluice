@@ -2,10 +2,14 @@
 
 Implementation head: `a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c` (branch
 `f5-final-package`). Execution baseline: `14a27a83821a94e6fc5a9684b48fcd296d7de891`
-(F2 final exit master). Every capture below names the implementation head; the
-branch head adds documentation-only commits after it, and no capture is rebound
-to a tree whose compiled inputs differ (`git diff a23a94cd..HEAD -- include/
-src/ apps/ xmake/ xmake.lua tests/` must be empty).
+(F2 final exit master). Capture bindings: the B-01 v6 summary and the installed
+probes name the base and implementation SHAs directly; the matrix records the
+worktree head it ran under in `matrix/toolchain.log` and `matrix/matrix.json`
+(and its content is consistent only with the F5 tree: 66 ring-profile tests and
+no `runtime_waiter_observer_test`). The branch head adds documentation-only
+commits after the implementation head, so no capture is rebound to a tree whose
+compiled inputs differ (`git diff a23a94cd..HEAD -- include/ src/ apps/ xmake/
+xmake.lua tests/` is empty at every documentation-only head referenced here).
 
 Status: **CANDIDATE — the installed-surface break requires the owner's decision
 (`installed-surface-risk-disposition.md`); nothing here is merged or
@@ -98,8 +102,8 @@ Every row names the exact artifact under this directory.
 
 | F5 gate | Evidence |
 |---|---|
-| Six configuration profiles (Debug/Release × no-ring/real-ring, native Clang ASan+UBSan and TSan) | `matrix/run-matrix.py`, `matrix/matrix.json`, `matrix/*.log`, per-profile `xmake.conf` and toolchain cache, `matrix/toolchain.log`. Result: debug-n 52/52, debug-y 66/66, release-n 52/52, release-y 66/66, asanubsan-n 52/52, tsan-n 51/51; `F5_MATRIX_SIX_PROFILES_PASS`. The release-y/debug-y runs drive the real kernel io_uring path (`real_ring=PASS` in the B-01 capture; the same tests run in the matrix profiles) |
-| TSan single unavailability | `matrix/tsan-n-request-scope_test-link-attempt.log`: `request_scope_test` supplies strong `operator new/delete` overrides that collide with the TSan C++ runtime (`multiple definition of 'operator new'`); the same outcome was recorded by the F2/F3 matrices, the source is byte-identical to the base revision (asserted in `run-matrix.py`), and its target configuration is untouched by this slice (`git diff 14a27a83..HEAD -- xmake/tests.lua` contains no change to that target) |
+| Six configuration profiles (Debug/Release × no-ring/real-ring, native Clang ASan+UBSan and TSan) | `matrix/run-matrix.py`, `matrix/matrix.json`, `matrix/*.log`, per-profile `xmake.conf` and toolchain cache, `matrix/toolchain.log`. Result: debug-n 52/52, debug-y 66/66, release-n 52/52, release-y 66/66, asanubsan-n 52/52, tsan-n 51/51; `F5_MATRIX_SIX_PROFILES_PASS`. Real kernel io_uring path: the ring-only tests (`uring_backend_smoke_test`, `uring_progress_race_test`, `uring_registration_lifecycle_test`, `semantic_backend_conformance_test`, `uring_public_consumer_probe`) execute and pass in the `-y` profiles with no `NOT RUN` marker in the logs; the B-01 y capture records `w03_external_loop(uring): PASS` while the n capture records `UNAVAILABLE (io_uring profile not built into this package)`; and `uring_backend.cpp` throws when `io_uring_queue_init` fails, so a passing ring run is a real ring run. (`summary.json`'s `real_ring` field is the ring-labelled profile marker, not itself the measurement.) |
+| TSan single unavailability | `matrix/tsan-n-request_scope_test-link-attempt.log`: `request_scope_test` supplies strong `operator new/delete` overrides that collide with the TSan C++ runtime (`multiple definition of 'operator new'`); the same outcome was recorded by the F2/F3 matrices, the source is byte-identical to the base revision (asserted in `run-matrix.py`), and its target configuration is untouched by this slice (`git diff 14a27a83..HEAD -- xmake/tests.lua` contains no change to that target) |
 | Versioned B-01 v6 clean-room package capture | `b01-v6-candidate/` — `reproduce.py` (Git-archive clean-room sources, own `.xmake`/build dir/prefix per profile, `--ccache=n`, consumers compiled against the installed prefix only), `summary.json`, `commands.json`, `inventory.lua`, `raw-manifest.json`, `raw-package-evidence.tar.gz`, `excluded-artifacts.json`, `toolchain/`. Result: `F5_B01_V6_CANDIDATE_FRESH_PACKAGE_PASS 14a27a83… a23a94cd…`, 32/30/49 → 15/13/25 in both ring profiles |
 | Negative installed-surface probes with positive controls | `raw-package-evidence.tar.gz`: 23 `removed-header-*.log` compile attempts fail with `No such file or directory` in the after prefix and are empty (success) in the before prefix; 10 `old-entry-*.log` consumers compile against before-headers and link against the F5 archive, failing with `undefined reference` naming the removed symbols; before-stage controls show the same probes compiling, linking and (constructor-real probes) running |
 | `PACKAGE_USAGE_REQUIREMENTS_AND_DECLARATIONS_MATCH_ARTIFACTS` | B-01 v6 consumers (W-01/W-02/W-03 + 8 contract families + ODR two-TU consumer) build and run from the installed prefix in both ring profiles with the macro view matching the archive's build; install surface is headers + 2 archives with no other declared artifacts to contradict (`xmake/libraries.lua`); `installed-probes/probes-{n,y}/probes.json` |
@@ -159,3 +163,15 @@ Every row names the exact artifact under this directory.
 - The W-04 host is retained but unsupported; no support claim is made or implied.
 - F6 and v1 release readiness are not claimed; `V1_RELEASE_READY=NO`.
 - The date of every measurement in this directory is 2026-10-13.
+- Residuals recorded by the review round (not blockers, not cleaned silently):
+  the F4 retirement probe text still references removed headers while F4's
+  verifier compiles it against its own F4-era prefix; the retained W-04 host
+  header `fiber.hpp` still declares Scheduler-era members with no retained user
+  (removal is a further per-surface decision on the pending host); the F1-era
+  verifier text still lists `scheduler.hpp` under configuration-dependent
+  headers; and the Lean/TLA models naming retired headers stay HISTORICAL per
+  the formal evidence map. Machine form: `RESIDUALS` in
+  `closure-manifest.json`.
+- Review round: two independent adversarial reviews of head `3aa3b857` (the
+  documentation head whose compiled inputs equal `a23a94cd`); their findings,
+  dispositions and the re-check are recorded in `independent-review.md`.

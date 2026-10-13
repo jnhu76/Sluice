@@ -84,10 +84,11 @@ Installed-surface delta, measured by the B-01 v6 clean-room capture
 | F5-S-SCHED | `sluice/async/scheduler.hpp`, `src/async/scheduler*.cpp` (10 TUs) | the whole legacy multi-worker `Scheduler` runtime (fiber scheduling, park/wake, wait registry, timer pump) | no equivalent by design: the multi-worker runtime is not a v1 product (MIG-02); the OPTIONAL_CANDIDATE `StackfulIoHost` covers the optional single-owner W-04 profile and does not depend on it | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
 | F5-C-PORT | `sluice/async/detail/{queue_item,queue_port}.hpp`, `src/async/queue_port.cpp` | `QueuePort`, `QueueItemFactory` opaque queue substrate | no consumer survives Family A | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
 | F5-D13 | `sluice/async/detail/{mutex_test_seam,queue_test_seam}.hpp`, `src/async/{mutex_test_seam,queue_test_seam,scheduler_fe2_test_seam}.cpp` | test seam hooks and their zero-symbol archive members | test-only infrastructure internalized by removal; the canonical `RequestCore` observation seams remain under `SLUICE_ASYNC_INTERNAL_TESTING` in `detail/request_core.hpp` | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
-| F5-FF | `sluice/async/detail/fail_fast.hpp` | 21 retired `[[noreturn]]` diagnostics (select/scheduler/async-mutex/rwlock/condition/wait-queue/evented families) and `evented_admission_check` | none: they described the removed state machines; the 15 retained diagnostics (context, request, scope, host, threadpool, uring, identity) are unchanged | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
+| F5-FF | `sluice/async/detail/fail_fast.hpp` | 19 retired `[[noreturn]]` diagnostics (select/scheduler/async-mutex/rwlock/condition/wait-queue/evented families) plus `evented_admission_check` and its helper (21 entities) | none: they described the removed state machines; the 15 retained diagnostics (context, request, scope, host, threadpool, uring, identity) are unchanged | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
 | F5-TST | `tests/runtime_waiter_observer_test.cpp` + target | the legacy-runtime waiter/observer seam test | its subject is retired; RequestCore observer protocol coverage lives in `request_core_protocol_test`/`request_core_publication_test`/`public_request_test` | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
 | F5-IDNT | `sluice/async/detail/context_identity.hpp` (de-install only) | installed availability of the library-private substrate header | no API change: the header stays in the tree; no installed header includes it, so no external consumer can lose compilation through the canonical closure | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
 | F5-EXP | `include/sluice/experimental/`, `src/experimental/` | pre-v1 experimental uring IoContext/write-batch (never installed, never built) | canonical `uring_backend.hpp` is the supported surface | ACCEPT_BREAKAGE_NOW (proposed) | PENDING |
+| F5-W04FIB | `sluice/async/fiber.hpp` (retained host closure) | Scheduler-era surface with zero retained users: `friend class Scheduler;`, `CompletionWaitOutcome`, `set_entry`, `cancel_token`, `cancel_state`, `execution_tag`, `completion_wait_outcome` and their setters/members | none needed by the host: `stackful_io_host.cpp` uses Fiber's core entry/resume surface only | RETAIN_WITH_HOST (recorded residual) — removing it is a further per-surface break on the pending W-04 host | PENDING (owner W-04 host disposition) |
 
 No compatibility shim, deprecated alias, forwarding wrapper or substitute
 runtime is added: any of those would keep the retired authority compiled into
@@ -107,6 +108,16 @@ removed headers additionally fail standalone compilation with
 `No such file or directory` in the after prefix, with before-prefix presence
 recorded as the control.
 
+## #475 exit gates E1–E5
+
+| Gate | Defined as | Status in this candidate |
+|---|---|---|
+| E1 | explicit owner decision accepting unknown external use/breakage, or evidence of a completed bounded deprecation window | **PENDING** — this packet is the request; no deprecation window was run for these surfaces (F0 §1.5: unknown use is not zero use) |
+| E2 | exact adopted non-admission / `replacement=N/A` disposition referencing root authority | **SATISFIED (recorded)**: every row above carries its `replacement=N/A` or equivalent form and cites MIG-02/HOST-01 (see the per-surface table's Migration column) |
+| E3 | correct phase sequencing and authorization | **SATISFIED (sequencing) / PENDING (authorization)**: F2→F3→F4 closed before F5; this slice is the F5 candidate and physical removal awaits the owner authorization above |
+| E4 | consumer, build, evidence and claim dependency audit | **SATISFIED (recorded)**: reverse-include audit (`closure-manifest.json`), archive/object/symbol audit, docs/support-claim audit (`w04-negative-support-audit.md`), and the residual register (`closure-manifest.md` §Residuals) |
+| E5 | versioned B-01 dual-profile freeze, clean-room probes, negative controls and rollback evidence | **SATISFIED (recorded)**: B-01 v6 four-configuration capture with before-prefix controls, installed probes both macro views, and the four rollback commits below |
+
 ## Rollback units
 
 Each family is an independently revertible commit on the candidate branch:
@@ -118,12 +129,42 @@ closure), `549bad34` (install-surface + experimental contraction).
 ```ini
 DECISION_TYPE = F5_SCOPE_BOUND_INSTALLED_BREAK
 BASE_MASTER_SHA = 14a27a83821a94e6fc5a9684b48fcd296d7de891
-FAMILY_A_PROPOSED_DISPOSITION = ACCEPT_BREAKAGE_NOW
-FAMILY_B_PROPOSED_DISPOSITION = ACCEPT_BREAKAGE_NOW
-FAMILY_C_PROPOSED_DISPOSITION = ACCEPT_BREAKAGE_NOW
-UNKNOWN_EXTERNAL_USE = UNKNOWN (accepted-breakage risk requested)
-SOURCE_RELINK_BREAKAGE = accepted-breakage risk requested
+CANDIDATE_HEAD = a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c
+
+FAMILY_A_PROPOSED_DISPOSITION = ACCEPT_BREAKAGE_NOW (remove from tree and package)
+FAMILY_B_PROPOSED_DISPOSITION = ACCEPT_BREAKAGE_NOW (remove from tree and package)
+FAMILY_C_PROPOSED_DISPOSITION = ACCEPT_BREAKAGE_NOW (remove the closure with A)
+
+EXACT_HEADERS_TO_REMOVE = 23 installed headers removed from the tree, 1 header
+  de-installed from the package only (list in closure-manifest.json
+  installed_headers.COMPAT_INSTALLED_NONCANONICAL_REMOVE_CANDIDATE plus
+  detail/context_identity.hpp)
+EXACT_OBJECTS_TO_REMOVE = 17 archive members (14 legacy runtime TUs + 3 D-13
+  seam TUs; one object and member each; list in closure-manifest.json
+  archive_members)
+EXACT_SYMBOL_FAMILIES_TO_REMOVE = Scheduler / AsyncMutex / AsyncRwLock /
+  AsyncCondition / Semaphore / AsyncQueue / Future / WaitPolicy /
+  default_wait_policy / Event / SelectResult+select / WaitQueue+WaitNode /
+  TimerRegistration / Mutex+LockGuard / QueuePort+QueueItemFactory / the
+  scheduler/select/condition/wait-queue/evented fail-fast diagnostics (asserted
+  absent from the after archives in b01-v6-candidate/reproduce.py)
+
+UNKNOWN_EXTERNAL_USE = UNKNOWN — accepted-breakage risk requested, not zero
+SOURCE_RELINK_BREAKAGE = accepted-breakage risk requested (source and relink)
 NO_SHIMS = YES
+
+RETAINED_CONSUMER_EVIDENCE = W-01/W-02/W-03 consumers and 8 contract families
+  link and run from the installed prefix in both ring profiles (B-01 v6
+  consumer rows)
+NEGATIVE_PACKAGE_PROBES = 23 removed-header compile negatives + 10 old-entry
+  relink negatives with before-prefix positive controls (raw-package-evidence
+  tar); installed-probes removed-header absence with before-prefix control
+B01_VERSIONED_CAPTURE = v6 (F5_B01_V6_CANDIDATE_FRESH_PACKAGE_PASS,
+  32/30/49 -> 15/13/25 both profiles)
+ROLLBACK_UNIT = f4904d5a (A), f5b4f6e4 (B), 0524114c (C + seams),
+  549bad34 (install surface + experimental), each independently revertible
+INDEPENDENT_TECHNICAL_VERDICT = see independent-review.md (final verdict line)
+
 OWNER_APPROVAL = PENDING
 MERGE_AUTHORIZATION = PENDING
 ```

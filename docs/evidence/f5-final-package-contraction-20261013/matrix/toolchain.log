@@ -1,3 +1,4 @@
+# worktree head: 3aa3b857e9fe19abc7575013cbc28e5b3e186cdf
 $ /home/jnhu/.local/bin/xmake --version
 [0m[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua[0m[0m
 [0mCopyright (C) 2015-present Ruki Wang, [4mhttps://xmake.io[0m[0m

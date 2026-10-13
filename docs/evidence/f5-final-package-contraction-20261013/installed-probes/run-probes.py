@@ -127,6 +127,7 @@ parser.add_argument("--prefix", required=True)
 parser.add_argument("--before-prefix")
 parser.add_argument("--liburing", action="store_true")
 parser.add_argument("--output", required=True)
+parser.add_argument("--source-sha", default=None)
 args = parser.parse_args()
 
 output = pathlib.Path(args.output).resolve()
@@ -184,7 +185,7 @@ if args.before_prefix:
                                            if (before / "include" / h).exists()]}
 
 report = {"prefix": str(prefix), "installed_headers": len(headers),
-          "liburing": bool(args.liburing),
+          "liburing": bool(args.liburing), "source_sha": args.source_sha,
           "standalone_failures": failed_standalone, "odr_link": link, "odr_run": odr_run,
           "present_removed_headers": present_removed, "control_prefix": control,
           "standalone": standalone}
@@ -194,4 +195,4 @@ assert odr_run["exit_code"] == 0, odr_run
 assert not present_removed, present_removed
 print(json.dumps({"prefix": str(prefix), "headers": len(headers),
                   "standalone_failures": 0, "odr": "PASS", "removed_present": 0,
-                  "control": control}))
+                  "source_sha": args.source_sha, "control": control}))
