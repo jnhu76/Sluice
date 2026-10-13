@@ -60,7 +60,11 @@ once the stall interleaving occurs.
 
 - The `Linux debug build + tests` CI job on this branch failed once on exactly
   this scenario (run 38373071332, head `98439970`), aborting in the context
-  destructor before the diagnostic was visible.
+  destructor before the diagnostic was visible. The next run on the branch
+  (`e9e47ce8`) passed all four jobs, and the run for the captured implementation
+  head (`996f434f`) passed as well, so the failure is intermittent — consistent
+  with the load-conditional stall measured above, and the reason this is a
+  blocker rather than a closed item.
 - The locally captured six-profile matrix passed all profiles on an unloaded
   20-core host (`gates.json`), so the stall is load-conditional.
 - Merge is blocked until this is either fixed with a deterministic regression or
