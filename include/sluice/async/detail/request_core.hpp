@@ -157,6 +157,12 @@ struct CoreOccupancy {
     std::size_t observer_registrations = 0;
 };
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+enum class SubmitStage : std::uint8_t { reserve, prepare, commit };
+
+#endif
+
 class RequestCore {
   public:
     enum class SlotPhase : std::uint8_t { free, reserved, accepted, retired };

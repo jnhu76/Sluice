@@ -1,5 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -673,19 +673,14 @@ bool r13_delayed_reclaim_obligation_is_serviced_without_new_io() {
     wait_gate_paused(gate);
     ctx.set_progress_prepark_pause_gate_for_test(nullptr);
 
-    Completion<std::size_t> zero;
-    if (!ctx
-             .submit_read_request(ReadOp{NativeFileRef(::fileno(tmpfile()),
-                                                       sluice::FileAccess::read_only),
-                                         nullptr, 0, 0},
-                                  zero)
-             .has_value())
+    auto zero_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), sluice::FileAccess::read_only),
+                               nullptr, 0, 0});
+    if (!zero_submitted.has_value())
         return false;
-    const auto zero_key = raw->request_key_for_test(zero);
-    if (!zero_key.has_value())
-        return false;
-    const detail::SlotIndex zero_slot = zero_key->slot;
-    zero.reset();
+    Request<std::size_t> zero = std::move(zero_submitted.value());
+    const detail::SlotIndex zero_slot = zero.key_for_test().slot;
+    zero.discard();
 
     detail::RequestCore* core = raw->request_core_for_test();
     const auto obligation = core->observe_slot(zero_slot);
@@ -1026,12 +1021,11 @@ bool f1_publication_pass_is_entry_bounded() {
     const int a_fd = temp_file_fd(std::string(64, 'x'));
     if (a_fd < 0)
         return false;
-    Completion<std::size_t> a;
-    if (!ctx.submit_read(ReadOp{NativeFileRef(a_fd, sluice::FileAccess::read_only),
-                                a_buf.data(), a_buf.size(), 0},
-                         a)
-             .has_value())
+    auto a_submitted = ctx.submit_read(ReadOp{NativeFileRef(a_fd, sluice::FileAccess::read_only),
+                                              a_buf.data(), a_buf.size(), 0});
+    if (!a_submitted.has_value())
         return false;
+    Request<std::size_t> a = std::move(a_submitted.value());
     if (!wait_notification_readable(interest))
         return false;
 
@@ -1053,7 +1047,11 @@ bool f1_publication_pass_is_entry_bounded() {
             first = r.value();
     });
     wait_threadpool_gate_paused(epilogue);
-    const bool a_published_at_pause = a.ready();
+    const auto a_slot_at_pause = raw->request_core_for_test()->observe_slot(detail::SlotIndex{0});
+    const bool a_publishing_at_pause =
+        !a.ready() && a.try_result().readiness == RequestReadiness::pending &&
+        a_slot_at_pause.has_value() && a_slot_at_pause->publication_inflight &&
+        !a_slot_at_pause->published && a_slot_at_pause->binding_live;
 
     const auto token_before_release = ctx.progress_token_for_test();
     gated.release();
@@ -1064,12 +1062,12 @@ bool f1_publication_pass_is_entry_bounded() {
     driver.join();
     raw->set_publication_epilogue_pause_gate(nullptr);
 
-    const bool first_ok = a_published_at_pause && first.has_value() &&
+    const bool first_ok = a_publishing_at_pause && a.ready() && first.has_value() &&
                           first->completed == 1 && first->immediate_work_remains &&
                           !first->health_failed;
     if (!first_ok)
         return false;
-    a.reset();
+    a.discard();
     ::close(a_fd);
 
     const auto second = ctx.poll_progress();

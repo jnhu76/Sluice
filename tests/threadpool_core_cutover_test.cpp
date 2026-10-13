@@ -1,7 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
-#include <sluice/async/request_handle.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -78,8 +77,8 @@ std::optional<File> open_temp_file(Tracker& t, const std::string& content) {
     return std::optional<File>{std::move(opened.value())};
 }
 
-bool resolves_as(const Result<RequestHandleState>& r, RequestHandleState expected) {
-    return r.has_value() && r.value() == expected;
+bool resolves_as(RequestReadiness observed, RequestReadiness expected) {
+    return observed == expected;
 }
 
 template <class Gate> struct GateGuard {
@@ -103,12 +102,10 @@ bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     std::byte buffer{std::byte{0}};
-    Completion<std::size_t> c;
     auto rejected = ctx.submit_read(
-        ReadOp{NativeFileRef(*file), &buffer, 1, kUnrepresentableOffset}, c);
+        ReadOp{NativeFileRef(*file), &buffer, 1, kUnrepresentableOffset});
     t.check(!rejected.has_value() && rejected.error().code == IoError::Code::invalid_argument,
-            "an unrepresentable range is rejected as invalid_argument");
-    t.check(c.idle(), "the rejected submission leaves the completion idle");
+            "an unrepresentable range is rejected as invalid_argument and yields no request");
 
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.public_bindings == 0 &&
@@ -132,22 +129,21 @@ bool range_precedes_capacity_under_saturation(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> first;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, first);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the first request occupies the only slot");
+    std::optional<Request<std::size_t>> first;
+    if (submitted.has_value())
+        first = std::move(submitted.value());
     wait_threadpool_gate_paused(gate);
 
-    Completion<std::size_t> invalid_range;
     auto range_rejected =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, kUnrepresentableOffset},
-                        invalid_range);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, kUnrepresentableOffset});
     t.check(!range_rejected.has_value() &&
                 range_rejected.error().code == IoError::Code::invalid_argument,
             "an invalid range outranks capacity under saturation");
 
-    Completion<std::size_t> valid;
     auto capacity_rejected =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, 0}, valid);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, 0});
     t.check(!capacity_rejected.has_value() &&
                 capacity_rejected.error().code == IoError::Code::would_block,
             "an otherwise valid request reports capacity exhaustion immediately");
@@ -159,9 +155,9 @@ bool range_precedes_capacity_under_saturation(Tracker& t) {
     rearm_threadpool_gate(gate);
     raw->set_worker_claimed_pause_gate(nullptr);
 
-    while (!first.ready())
+    while (!first->ready())
         (void)ctx.poll();
-    first.reset();
+    first->discard();
     return true;
 }
 
@@ -180,10 +176,14 @@ bool accepted_pre_dispatch_work_has_a_core_owner(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    std::optional<Result<void>> submit_result;
+    std::optional<Request<std::size_t>> request;
+    std::optional<IoError> submit_error;
     std::thread submitter([&] {
-        submit_result = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
+        else
+            submit_error = submitted.error();
     });
     wait_threadpool_gate_paused(gate);
 
@@ -201,13 +201,14 @@ bool accepted_pre_dispatch_work_has_a_core_owner(Tracker& t) {
     guard.rearmed = true;
     rearm_threadpool_gate(gate);
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
-    t.check(submit_result.has_value() && submit_result->has_value(),
-            "the submission itself succeeds");
+    t.check(request.has_value() && !submit_error.has_value(), "the submission itself succeeds");
 
-    while (!c.ready())
+    while (!request->ready())
         (void)ctx.poll();
-    t.check(c.result().has_value() && c.result().value() == 4, "the request completes normally");
-    c.reset();
+    const auto observed = request->take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the request completes normally");
     t.check(core.snapshot().accepted_live == 0, "the slot reclaims after release");
     return true;
 }
@@ -227,15 +228,20 @@ bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t)
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
+    std::optional<Request<std::size_t>> request;
     std::thread submitter([&] {
-        (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
     });
     wait_threadpool_gate_paused(gate);
 
-    const auto key = raw->request_key_for_test(c);
-    t.check(key.has_value(), "the completion binding carries the core request key");
-    const PublicCancel disposition = raw->cancel_key_for_test(*key);
+    std::vector<RequestKey> outstanding;
+    core.collect_outstanding(outstanding);
+    t.check(outstanding.size() == 1,
+            "the accepted request holds its core slot while the dispatch handoff is parked");
+    const RequestKey key = outstanding.front();
+    const PublicCancel disposition = raw->cancel_key_for_test(key);
     t.check(disposition == PublicCancel::won_before_execution,
             "cancel wins while dispatch handoff has not completed");
 
@@ -244,15 +250,18 @@ bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t)
     guard.rearmed = true;
     rearm_threadpool_gate(gate);
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+    t.check(request.has_value() && request->id().valid(),
+            "the submission hands the public identity back to the caller");
 
     while (raw->dispatch_size_for_test() != 0)
         std::this_thread::yield();
-    while (!c.ready())
+    while (!request->ready())
         (void)ctx.poll();
-    t.check(!c.result().has_value() && c.result().error().code == IoError::Code::canceled,
+    const auto observed = request->take_result();
+    t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                observed.result.error().code == IoError::Code::canceled,
             "the canceled request converges through its terminal path");
     t.check(raw->syscall_count_for_test() == 0, "no physical syscall ever ran");
-    c.reset();
     t.check(core.snapshot().accepted_live == 0, "the canceled slot reclaims");
     return true;
 }
@@ -272,9 +281,9 @@ bool post_accept_dispatch_failure_is_a_terminal_not_a_rejection(Tracker& t) {
     raw->set_dispatch_failure_injection(&injection);
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the submission is accepted, not rejected");
+    Request<std::size_t> c = std::move(submitted.value());
     t.check(injection.fired.load() == 1, "the injected dispatch failure fired once");
     t.check(raw->syscall_count_for_test() == 0, "no worker ever ran the operation");
     t.check(raw->publication_pending_size_for_test() == 1,
@@ -282,13 +291,14 @@ bool post_accept_dispatch_failure_is_a_terminal_not_a_rejection(Tracker& t) {
 
     (void)ctx.poll();
     t.check(c.ready(), "the terminal is published");
-    t.check(!c.result().has_value() &&
-                c.result().error().code == IoError::Code::backend_error,
+    const auto observed = c.try_result();
+    t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                observed.result.error().code == IoError::Code::backend_error,
             "the post-accept failure surfaces as the request's terminal error");
     const auto slot0 = core.observe_slot(SlotIndex{0});
     t.check(slot0.has_value() && slot0->published && slot0->binding_live,
             "the core published the terminal while the public binding is still live");
-    c.reset();
+    (void)c.take_result();
     t.check(core.snapshot().accepted_live == 0, "the failed slot reclaims after release");
     return true;
 }
@@ -308,11 +318,10 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read_request(
-        ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the request is accepted");
-    const RequestHandle handle = submitted.value();
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId handle = c.id();
     wait_threadpool_gate_paused(gate);
 
     const auto slot0 = core.observe_slot(SlotIndex{0});
@@ -321,12 +330,15 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
             "the worker dequeue claimed execution and the borrow-touching ref is live");
     t.check(!c.ready() && ctx.poll().value_or(0) == 0, "nothing publishes while execution is live");
 
-    ctx.cancel(c);
+    const auto canceled = c.cancel();
+    t.check(canceled.has_value() &&
+                canceled.value() == CancelDisposition::physical_interruption_unsupported,
+            "cancel of a running blocking syscall reports the unsupported physical interruption");
     const auto after_cancel = core.observe_slot(SlotIndex{0});
     t.check(after_cancel.has_value() && after_cancel->cancel_intent &&
                 after_cancel->execution_refs == 1 && !after_cancel->terminal_chosen,
             "cancel of a running blocking syscall records intent without retiring the borrow");
-    t.check(resolves_as(ctx.request_state(handle), RequestHandleState::outstanding),
+    t.check(resolves_as(ctx.lookup(handle), RequestReadiness::pending),
             "the request stays outstanding after the cancel intent");
 
     resume_threadpool_gate(gate);
@@ -337,9 +349,10 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
 
     while (!c.ready())
         (void)ctx.poll();
-    t.check(c.result().has_value() && c.result().value() == 4,
+    const auto observed = c.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
             "the physical outcome wins over the earlier cancel intent");
-    c.reset();
     return true;
 }
 
@@ -358,8 +371,9 @@ bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     wait_threadpool_gate_paused(gate);
 
     t.check(raw->syscall_count_for_test() == 1, "the physical syscall has completed");
@@ -381,14 +395,16 @@ bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
             "terminal selection and ref retirement queue the publication");
     while (!c.ready())
         (void)ctx.poll();
-    t.check(c.result().has_value() && c.result().value() == 4, "the outcome publishes");
-    c.reset();
+    const auto observed = c.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the outcome publishes");
     t.check(core.snapshot().accepted_live == 0, "reclaim follows release");
     return true;
 }
 
-bool release_racing_the_publication_epilogue_reclaims_without_new_io(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b epilogue race\n");
+bool publication_visibility_waits_for_the_epilogue_and_release_reclaims(Tracker& t) {
+    auto file = open_temp_file(t, "sluice b1b epilogue\n");
     if (!file.has_value())
         return false;
 
@@ -402,13 +418,12 @@ bool release_racing_the_publication_epilogue_reclaims_without_new_io(Tracker& t)
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read_request(
-        ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the request is accepted");
-    const RequestHandle handle = submitted.value();
-    const auto key = raw->request_key_for_test(c);
-    t.check(key.has_value(), "the completion binding carries the request key");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId handle = c.id();
+    const RequestKey key = c.key_for_test();
 
     while (raw->publication_pending_size_for_test() == 0)
         std::this_thread::yield();
@@ -421,20 +436,14 @@ bool release_racing_the_publication_epilogue_reclaims_without_new_io(Tracker& t)
     });
     wait_threadpool_gate_paused(gate);
 
-    t.check(c.ready(), "the compatibility result is visible once the ready edge fires");
+    t.check(!c.ready() && c.try_result().readiness == RequestReadiness::pending,
+            "the outcome stays invisible while the publication pin is held");
     const auto inflight = core.observe_slot(SlotIndex{0});
     t.check(inflight.has_value() && inflight->publication_inflight && !inflight->published &&
                 inflight->binding_live,
             "the publisher holds the publication pin between result write and completion");
-
-    c.reset();
-    const auto released = core.observe_slot(SlotIndex{0});
-    t.check(released.has_value() && !released->binding_live && released->publication_inflight &&
-                released->phase == RequestCore::SlotPhase::accepted,
-            "the public release invalidates the binding immediately while the pin holds the slot");
-    t.check(core.lookup(*key) == PublicLookup::not_found,
-            "the public identity is already unresolvable");
-    t.check(core.occupancy().accepted_live == 1, "the slot is pinned, not yet reclaimed");
+    t.check(core.lookup(key) == PublicLookup::outstanding,
+            "the public identity resolves only as outstanding mid-publication");
 
     resume_threadpool_gate(gate);
     publisher.join();
@@ -442,18 +451,25 @@ bool release_racing_the_publication_epilogue_reclaims_without_new_io(Tracker& t)
     rearm_threadpool_gate(gate);
     raw->set_publication_epilogue_pause_gate(nullptr);
 
+    while (!c.ready())
+        (void)ctx.poll();
+    const auto observed = c.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the epilogue publishes the outcome exactly once");
     t.check(core.occupancy().accepted_live == 0,
-            "the final pin retirement reclaims synchronously without unrelated new I/O");
-    t.check(resolves_as(ctx.request_state(handle), RequestHandleState::not_found),
-            "the released identity stays unresolvable after the epilogue completes");
+            "the release reclaims synchronously without unrelated new I/O");
+    t.check(raw->syscall_count_for_test() == syscalls_before + 1,
+            "the whole episode needed exactly the one physical syscall");
+    t.check(resolves_as(ctx.lookup(handle), RequestReadiness::empty),
+            "the released identity stops resolving after the epilogue completes");
 
-    Completion<std::size_t> reused;
-    auto resubmitted = ctx.submit_read_request(
-        ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, reused);
+    auto resubmitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(resubmitted.has_value(), "the reclaimed slot is reusable");
+    Request<std::size_t> reused = std::move(resubmitted.value());
     while (!reused.ready())
         (void)ctx.poll();
-    reused.reset();
+    (void)reused.take_result();
     return true;
 }
 
@@ -468,13 +484,16 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     const std::uint64_t syscalls_before = raw->syscall_count_for_test();
-    Completion<std::size_t> c;
     auto submitted =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset}, c);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset});
     t.check(submitted.has_value(), "the zero-op occupies a slot and is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     t.check(c.ready(), "the zero-op is published at acceptance");
     t.check(raw->syscall_count_for_test() == syscalls_before, "no data syscall is dispatched");
-    t.check(c.result().has_value() && c.result().value() == 0, "the zero-op result is zero bytes");
+    const auto observed = c.try_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 0,
+            "the zero-op result is zero bytes");
     const auto slot0 = core.observe_slot(SlotIndex{0});
     t.check(slot0.has_value() && slot0->published && slot0->binding_live,
             "the core holds the published zero-op");
@@ -484,7 +503,7 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
     t.check(raw->sink_deliveries() == 1, "the owed delivery event fires on the next progress");
     t.check(!raw->event_owed_for_test(0), "the owed event is discharged");
 
-    c.reset();
+    (void)c.take_result();
     t.check(core.snapshot().accepted_live == 0, "the zero-op slot reclaims after release");
     return true;
 }
@@ -501,42 +520,45 @@ bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
 
     const std::uint64_t syscalls_before = raw->syscall_count_for_test();
 
-    Completion<std::size_t> c;
     auto submitted =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset}, c);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset});
     t.check(submitted.has_value(), "the zero-op occupies the only slot and is accepted");
-    t.check(c.ready() && c.result().has_value() && c.result().value() == 0,
+    Request<std::size_t> c = std::move(submitted.value());
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 0,
             "the zero-op is published at acceptance");
-    const auto key = raw->request_key_for_test(c);
-    t.check(key.has_value(), "the completion carries the zero-op request key");
+    const RequestKey key = c.key_for_test();
     const auto published_live = core.observe_slot(SlotIndex{0});
     t.check(published_live.has_value() && published_live->published &&
                 published_live->binding_live && published_live->control_refs == 1,
             "the deferred delivery obligation pins the core slot");
+    t.check(published_live.has_value() && key.slot == SlotIndex{0} &&
+                key.generation == published_live->generation,
+            "the request carries the core identity of its accepted slot");
     t.check(raw->event_owed_for_test(0), "the ready event is owed");
 
-    c.reset();
+    c.discard();
     const auto pinned = core.observe_slot(SlotIndex{0});
     t.check(pinned.has_value() && pinned->phase == RequestCore::SlotPhase::accepted &&
                 pinned->published && !pinned->binding_live && pinned->control_refs == 1,
             "resetting before the poll releases the binding but cannot reclaim the slot");
     t.check(raw->event_owed_for_test(0), "the delivery obligation survives the release");
-    t.check(core.lookup(*key) == PublicLookup::not_found,
+    t.check(core.lookup(key) == PublicLookup::not_found,
             "the released identity stops resolving while the event is still owed");
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> next;
-    auto refused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, next);
+    auto refused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(!refused.has_value() && refused.error().code == IoError::Code::would_block,
             "the pinned slot cannot be reused before the owed event is delivered");
-    t.check(raw->event_owed_for_test(0) && next.idle(),
+    t.check(raw->event_owed_for_test(0),
             "the refused submission leaves the owed record untouched");
 
     const std::size_t events = ctx.poll().value_or(0);
     t.check(events == 1, "the poll delivers exactly the owed event");
     t.check(!raw->event_owed_for_test(0), "the owed event is discharged");
     t.check(raw->sink_deliveries() == 1, "the ready event is delivered exactly once");
-    t.check(raw->sink_last_key() == *key, "the delivered event carries the old request key");
+    t.check(raw->sink_last_key() == key, "the delivered event carries the old request key");
 
     const auto after = core.observe_slot(SlotIndex{0});
     t.check(after.has_value() && after->phase == RequestCore::SlotPhase::free &&
@@ -546,13 +568,15 @@ bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
     t.check(raw->syscall_count_for_test() == syscalls_before,
             "the reclaim needed no unrelated new I/O");
 
-    auto reused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, next);
+    auto reused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(reused.has_value(), "the reclaimed slot serves a new request");
+    Request<std::size_t> next = std::move(reused.value());
     while (!next.ready())
         (void)ctx.poll();
-    t.check(next.result().has_value() && next.result().value() == 4,
+    const auto drained = next.take_result();
+    t.check(drained.readiness == RequestReadiness::ready && drained.result.has_value() &&
+                drained.result.value() == 4,
             "the new request completes normally");
-    next.reset();
     t.check(core.snapshot().accepted_live == 0 && core.snapshot().free_slots == core.capacity(),
             "the context drains fully afterwards");
     return true;
@@ -573,10 +597,14 @@ bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& 
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    std::optional<Result<void>> submit_result;
+    std::optional<Request<std::size_t>> request;
+    std::optional<IoError> submit_error;
     std::thread submitter([&] {
-        submit_result = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
+        else
+            submit_error = submitted.error();
     });
     wait_threadpool_gate_paused(gate);
 
@@ -589,10 +617,9 @@ bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& 
     rearm_threadpool_gate(gate);
     raw->set_pre_accept_commit_pause_gate(nullptr);
 
-    t.check(submit_result.has_value() && !submit_result->has_value() &&
-                submit_result->error().code == IoError::Code::invalid_state,
-            "the close race converts to an admission rejection");
-    t.check(c.idle(), "the rolled-back completion is idle");
+    t.check(!request.has_value() && submit_error.has_value() &&
+                submit_error->code == IoError::Code::invalid_state,
+            "the close race converts to an admission rejection with no request handed out");
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.free_slots == core.capacity(),
             "the reservation rolls back with no residue");
@@ -614,13 +641,16 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
     wait_threadpool_gate_paused(gate);
 
-    const auto attached = ctx.attach_observer(c);
+    const auto attached = ctx.attach_observer(observed_id);
     t.check(attached.armed(), "the observer arms on the outstanding request");
-    t.check(ctx.attach_observer(c).status == sluice::async::detail::ObserverRegistration::duplicate,
+    t.check(ctx.attach_observer(observed_id).status ==
+                sluice::async::detail::ObserverRegistration::duplicate,
             "a second registration on the same request returns the occupied disposition");
     const auto registered_slot = core.observe_slot(SlotIndex{0});
     t.check(registered_slot.has_value() &&
@@ -642,7 +672,7 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
     t.check(pinned_slot.has_value() &&
                 pinned_slot->observer_phase == sluice::async::detail::ObserverPhase::delivering,
             "the publication queued and claimed the delivery before the event");
-    const auto mid_cancel = ctx.cancel_observer(c);
+    const auto mid_cancel = ctx.cancel_observer(observed_id);
     t.check(mid_cancel.in_progress(),
             "cancelling while the delivery is claimed reports in-progress, not retired");
     t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
@@ -650,10 +680,10 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
             "delivery retirement of an unclaimed request reports no live delivery");
 
     t.check(c.ready(), "an attach after publication observes the published result");
-    t.check(ctx.attach_observer(c).status ==
+    t.check(ctx.attach_observer(observed_id).status ==
                 sluice::async::detail::ObserverRegistration::already_terminal,
             "a fresh attach after publication returns the already-terminal disposition");
-    c.reset();
+    (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
             "the slot reclaims once no registration is pinned");
@@ -675,8 +705,10 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
     wait_threadpool_gate_paused(gate);
 
     resume_threadpool_gate(gate);
@@ -690,7 +722,7 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
     t.check(raw->publication_pending_size_for_test() == 1,
             "the terminal is chosen with its publication still pending");
 
-    const auto attached = ctx.attach_observer(c);
+    const auto attached = ctx.attach_observer(observed_id);
     t.check(attached.armed(),
             "attach after terminal choice but before the driven publication arms");
     t.check(!c.ready(), "the publication has not run yet");
@@ -703,7 +735,7 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
                 sluice::async::detail::ObserverPhase::delivering,
             "the delivered registration stays claimed until delivery retirement");
     t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
-    c.reset();
+    (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
             "the slot reclaims after retirement and release");
@@ -728,8 +760,10 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
     ctx.set_progress_prepark_counter_for_test(&prepark);
 
     std::vector<std::byte> buffer(9, std::byte{0});
-    Completion<std::size_t> c;
-    (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 9, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 9, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
     wait_threadpool_gate_paused(gate);
 
     std::thread driver([&] { (void)ctx.wait_one(); });
@@ -739,7 +773,7 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
     t.check(prepark.load(std::memory_order_acquire) >= 1,
             "the progress owner committed its park with nothing to drive");
 
-    const auto attached = ctx.attach_observer(c);
+    const auto attached = ctx.attach_observer(observed_id);
     t.check(attached.armed(),
             "an observer arms while the only progress owner is parked");
 
@@ -758,7 +792,7 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
                 sluice::async::detail::ObserverPhase::delivering,
             "the wake chain queued and claimed the delivery");
     t.check(ctx.retire_delivery(attached.key), "delivery retirement completes the protocol");
-    c.reset();
+    (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
             "the slot reclaims after delivery retirement and release");
@@ -775,29 +809,26 @@ bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> first;
-    auto first_submitted =
-        ctx.submit_read_request(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, first);
+    auto first_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(first_submitted.has_value(), "the first request is accepted");
-    const RequestHandle stale = first_submitted.value();
+    Request<std::size_t> first = std::move(first_submitted.value());
+    const RequestId stale = first.id();
     while (!first.ready())
         (void)ctx.poll();
-    first.reset();
-    t.check(resolves_as(ctx.request_state(stale), RequestHandleState::not_found),
+    (void)first.take_result();
+    t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
             "the released identity stops resolving");
 
-    Completion<std::size_t> second;
-    auto second_submitted =
-        ctx.submit_read_request(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, second);
+    auto second_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(second_submitted.has_value(), "the reclaimed slot serves a new request");
-    t.check(resolves_as(ctx.request_state(stale), RequestHandleState::not_found),
+    Request<std::size_t> second = std::move(second_submitted.value());
+    t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
             "the stale identity does not resolve against the reused slot");
-    t.check(resolves_as(ctx.request_state(second_submitted.value()),
-                        RequestHandleState::outstanding),
+    t.check(resolves_as(ctx.lookup(second.id()), RequestReadiness::pending),
             "the new identity resolves while outstanding");
     while (!second.ready())
         (void)ctx.poll();
-    second.reset();
+    (void)second.take_result();
     t.check(core.snapshot().accepted_live == 0, "both occupancies reclaimed");
     return true;
 }
@@ -813,21 +844,24 @@ bool bounded_workers_execute_the_syscalls_not_the_submitter(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     std::vector<std::vector<std::byte>> buffers;
-    std::vector<Completion<std::size_t>> completions(4);
+    std::vector<Request<std::size_t>> requests;
+    requests.reserve(4);
     for (std::size_t i = 0; i < 4; ++i) {
         buffers.emplace_back(4, std::byte{0});
     }
     for (std::size_t i = 0; i < 4; ++i) {
-        auto submitted = ctx.submit_read(
-            ReadOp{NativeFileRef(*file), buffers[i].data(), 4, 0}, completions[i]);
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(*file), buffers[i].data(), 4, 0});
         t.check(submitted.has_value(), "each submission is accepted without waiting");
+        requests.push_back(std::move(submitted.value()));
     }
     for (std::size_t i = 0; i < 4; ++i) {
-        while (!completions[i].ready())
+        while (!requests[i].ready())
             (void)ctx.poll();
-        t.check(completions[i].result().has_value() && completions[i].result().value() == 4,
+        const auto observed = requests[i].take_result();
+        t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                    observed.result.value() == 4,
                 "each request publishes its own outcome");
-        completions[i].reset();
     }
     t.check(raw->syscall_count_for_test() == 4, "every syscall ran on a worker");
     t.check(raw->workers_spawned_for_test() == 3, "the configured worker bound held");
@@ -856,8 +890,8 @@ int main() {
          claim_chain_and_running_cancel_do_not_release_the_borrow},
         {"last_borrow_access_precedes_final_execution_retirement",
          last_borrow_access_precedes_final_execution_retirement},
-        {"release_racing_the_publication_epilogue_reclaims_without_new_io",
-         release_racing_the_publication_epilogue_reclaims_without_new_io},
+        {"publication_visibility_waits_for_the_epilogue_and_release_reclaims",
+         publication_visibility_waits_for_the_epilogue_and_release_reclaims},
         {"zero_op_publishes_at_acceptance_without_dispatch",
          zero_op_publishes_at_acceptance_without_dispatch},
         {"zero_op_delivery_pins_the_slot_until_the_event_is_delivered",

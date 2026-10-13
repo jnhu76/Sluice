@@ -91,16 +91,6 @@ UringAsyncBackend::live_cookie_for_offset_for_test(std::uint64_t offset) const n
     return std::nullopt;
 }
 
-inline std::optional<detail::RequestKey>
-UringAsyncBackend::request_key_for_test(const Completion<std::size_t>& c) const noexcept {
-    return core_binding(c);
-}
-
-inline std::optional<detail::RequestKey>
-UringAsyncBackend::request_key_for_test(const Completion<void>& c) const noexcept {
-    return core_binding(c);
-}
-
 inline std::size_t UringAsyncBackend::sink_deliveries() const noexcept {
     return sink_.deliveries();
 }

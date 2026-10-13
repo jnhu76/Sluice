@@ -1,8 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/context_identity.hpp>
 #include <sluice/async/detail/request_core.hpp>
-#include <sluice/async/request_handle.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -104,8 +102,8 @@ bool same_core_facts(const CoreSnapshot& a, const CoreSnapshot& b) {
            a.admission_open == b.admission_open && a.health_failed == b.health_failed;
 }
 
-bool resolves_as(const Result<RequestHandleState>& r, RequestHandleState expected) {
-    return r.has_value() && r.value() == expected;
+bool resolves_as(RequestReadiness observed, RequestReadiness expected) {
+    return observed == expected;
 }
 
 bool settle(RequestCore& core, const RequestKey& id) {
@@ -245,34 +243,34 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
     AsyncIoContext foreign(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
 
     std::vector<std::byte> scratch(16);
-    Completion<std::size_t> c;
-    auto submitted = first.submit_read_request(
-        ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0}, c);
+    auto submitted =
+        first.submit_read(ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0});
     t.check(submitted.has_value(), "the request is accepted");
     if (!submitted.has_value())
         return false;
-    const RequestHandle handle = submitted.value();
-    t.check(handle.valid(), "the accepted request exposes a handle");
-    t.check(resolves_as(first.request_state(handle), RequestHandleState::outstanding),
+    Request<std::size_t> request = std::move(submitted.value());
+    const RequestId handle = request.id();
+    t.check(handle.valid(), "the accepted request exposes a copied identity");
+    t.check(resolves_as(first.lookup(handle), RequestReadiness::pending),
             "the owning context resolves its own identity");
-    t.check(resolves_as(foreign.request_state(handle), RequestHandleState::not_found),
+    t.check(resolves_as(foreign.lookup(handle), RequestReadiness::empty),
             "a foreign context rejects that identity");
-    t.check(resolves_as(foreign.request_state(RequestHandle{}), RequestHandleState::not_found),
-            "an empty handle resolves nowhere");
+    t.check(resolves_as(foreign.lookup(RequestId{}), RequestReadiness::empty),
+            "an empty identity resolves nowhere");
 
     AsyncIoContext moved(std::move(first));
     CoreCaseCleanup cleanup{moved.context_core_for_test()};
-    t.check(resolves_as(moved.request_state(handle), RequestHandleState::outstanding),
+    t.check(resolves_as(moved.lookup(handle), RequestReadiness::pending),
             "the identity still resolves after a context move");
 
-    while (!c.ready()) {
+    while (!request.ready()) {
         (void)moved.poll();
     }
-    t.check(c.result().has_value(), "the request completed on the core authority");
-    c.reset();
+    auto consumed = request.take_result();
+    t.check(consumed.result.has_value(), "the request completed on the core authority");
     t.check(moved.context_core_for_test()->occupancy().accepted_live == 0,
             "consuming the result released the core slot");
-    t.check(resolves_as(moved.request_state(handle), RequestHandleState::not_found),
+    t.check(resolves_as(moved.lookup(handle), RequestReadiness::empty),
             "a released identity stops resolving");
     return true;
 }
@@ -350,22 +348,22 @@ class RecordingBackend final : public AsyncBackend {
     bool internal_work_retired() const noexcept override { return true; }
 
   private:
-    Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_read(ReadOp) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_write(WriteOp) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+    Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
-    Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+    Result<detail::RequestKey> submit_size(SizeOp) override {
         return sluice::make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
     detail::PublicCancel cancel_identity(detail::RequestKey) override {
@@ -483,19 +481,19 @@ bool move_assignment_transfers_the_same_core(Tracker& t) {
     if (!file.has_value())
         return false;
     std::vector<std::byte> scratch(8);
-    Completion<std::size_t> c;
-    auto submitted = destination.submit_read_request(
-        ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0}, c);
+    auto submitted =
+        destination.submit_read(ReadOp{NativeFileRef{*file}, scratch.data(), scratch.size(), 0});
     t.check(submitted.has_value(), "the move-assigned destination accepts a request");
     if (!submitted.has_value())
         return false;
-    const RequestHandle handle = submitted.value();
-    while (!c.ready()) {
+    Request<std::size_t> request = std::move(submitted.value());
+    const RequestId handle = request.id();
+    while (!request.ready()) {
         (void)destination.poll();
     }
-    t.check(resolves_as(destination.request_state(handle), RequestHandleState::completion_ready),
+    t.check(resolves_as(destination.lookup(handle), RequestReadiness::ready),
             "the moved-in identity resolves through the move-assigned context");
-    c.reset();
+    request.discard();
     return true;
 }
 

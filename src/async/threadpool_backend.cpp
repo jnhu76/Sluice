@@ -41,7 +41,7 @@ namespace {
 
 }
 
-void ThreadPoolBackend::BoundedHandleRing::push_back(detail::SlotHandle h) noexcept {
+void ThreadPoolBackend::BoundedHandleRing::push_back(detail::RequestReservation h) noexcept {
     if (size_ >= capacity_) {
         threadpool_dispatch_queue_invariant_fail_fast();
     }
@@ -52,7 +52,7 @@ void ThreadPoolBackend::BoundedHandleRing::push_back(detail::SlotHandle h) noexc
     ++size_;
 }
 
-bool ThreadPoolBackend::BoundedHandleRing::pop_front(detail::SlotHandle& out) noexcept {
+bool ThreadPoolBackend::BoundedHandleRing::pop_front(detail::RequestReservation& out) noexcept {
     if (size_ == 0)
         return false;
     out = storage_[head_];
@@ -61,7 +61,7 @@ bool ThreadPoolBackend::BoundedHandleRing::pop_front(detail::SlotHandle& out) no
     return true;
 }
 
-bool ThreadPoolBackend::BoundedHandleRing::remove_exact(detail::SlotHandle h) noexcept {
+bool ThreadPoolBackend::BoundedHandleRing::remove_exact(detail::RequestReservation h) noexcept {
     if (size_ == 0)
         return false;
     for (std::size_t i = 0; i < size_; ++i) {
@@ -163,29 +163,28 @@ Result<void> ThreadPoolBackend::validate_size(SizeOp op) {
         op.file.fd < 0, op.file.access, sluice::detail::FileOperation::file_info));
 }
 
-Result<detail::RequestKey> ThreadPoolBackend::submit_read(ReadOp op, Completion<std::size_t>* c) {
-    return submit_request(op, c, detail::OperationKind::read, detail::RequestOp::read);
+Result<detail::RequestKey> ThreadPoolBackend::submit_read(ReadOp op) {
+    return submit_request(op, detail::OperationKind::read, detail::RequestOp::read);
 }
 
-Result<detail::RequestKey> ThreadPoolBackend::submit_write(WriteOp op, Completion<std::size_t>* c) {
-    return submit_request(op, c, detail::OperationKind::write, detail::RequestOp::write);
+Result<detail::RequestKey> ThreadPoolBackend::submit_write(WriteOp op) {
+    return submit_request(op, detail::OperationKind::write, detail::RequestOp::write);
 }
 
-Result<detail::RequestKey> ThreadPoolBackend::submit_sync_data(SyncDataOp op, Completion<void>* c) {
-    return submit_request(op, c, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
+Result<detail::RequestKey> ThreadPoolBackend::submit_sync_data(SyncDataOp op) {
+    return submit_request(op, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
 }
 
-Result<detail::RequestKey> ThreadPoolBackend::submit_sync_all(SyncAllOp op, Completion<void>* c) {
-    return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
+Result<detail::RequestKey> ThreadPoolBackend::submit_sync_all(SyncAllOp op) {
+    return submit_request(op, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
-Result<detail::RequestKey> ThreadPoolBackend::submit_file_info(FileInfoOp op,
-                                                               Completion<FileInfo>* c) {
-    return submit_request(op, c, detail::OperationKind::file_info, detail::RequestOp::file_info);
+Result<detail::RequestKey> ThreadPoolBackend::submit_file_info(FileInfoOp op) {
+    return submit_request(op, detail::OperationKind::file_info, detail::RequestOp::file_info);
 }
 
-Result<detail::RequestKey> ThreadPoolBackend::submit_size(SizeOp op, Completion<FileSize>* c) {
-    return submit_request(op, c, detail::OperationKind::size, detail::RequestOp::size);
+Result<detail::RequestKey> ThreadPoolBackend::submit_size(SizeOp op) {
+    return submit_request(op, detail::OperationKind::size, detail::RequestOp::size);
 }
 
 template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) noexcept {
@@ -204,9 +203,8 @@ template <class Op> Result<void> ThreadPoolBackend::validate_op(const Op& op) no
     }
 }
 
-template <class Op, class Comp>
-Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
-                                                             detail::OperationKind kind,
+template <class Op>
+Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::OperationKind kind,
                                                              detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -229,7 +227,7 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
                                        : IoError::Code::would_block;
         return make_unexpected<detail::RequestKey>(IoError{code});
     }
-    const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
+    const detail::RequestReservation h{reservation.reservation.slot, reservation.reservation.generation};
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -254,9 +252,6 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
         DeliveryRecord& record = delivery_[h.slot.value];
-        record.completion = c;
-        record.publish = c != nullptr ? publish_thunk<Comp>()
-                                      : &ThreadPoolBackend::publish_request_ready;
         record.kind = kind;
         record.event_owed = false;
         record.owed_key = {};
@@ -272,25 +267,12 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
     wait_pre_accept_commit_pause_();
 #endif
 
-    if (c != nullptr && !begin_binding(*c)) {
-        (void)core_->rollback(reservation.reservation);
-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
-    }
-
     const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
     const detail::BorrowFacts borrow{op.file.fd, buffer_of(op), length};
     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
     if (!accepted.ok()) {
-        if (c != nullptr) {
-            rollback_binding_before_accept(*c);
-        }
         (void)core_->rollback(reservation.reservation);
         return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
-    }
-
-    if (c != nullptr) {
-        install_core_binding(*c, core_, accepted.id);
-        commit_binding(*c);
     }
 
     if (descriptor.zero_op) {
@@ -305,7 +287,7 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, Comp* c,
     return accepted.id;
 }
 
-void ThreadPoolBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
+void ThreadPoolBackend::dispatch_after_accept(detail::RequestReservation h) noexcept {
     bool injected_dispatch_failure = false;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
@@ -340,7 +322,7 @@ void ThreadPoolBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
     }
 }
 
-void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept {
+void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::RequestReservation h) noexcept {
     if (!core_->acquire_control(id)) {
         detail::threadpool_core_handoff_fail_fast();
     }
@@ -348,20 +330,19 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Sl
     if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
         detail::threadpool_core_handoff_fail_fast();
     }
-    DeliveryRecord& record = delivery_[h.slot.value];
-    record.publish(record.completion, payload);
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
         detail::threadpool_core_handoff_fail_fast();
     }
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
+        DeliveryRecord& record = delivery_[h.slot.value];
         record.event_owed = true;
         record.owed_key = id;
     }
     signal_ready_progress();
 }
 
-void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
+void ThreadPoolBackend::publish_one(detail::RequestReservation h) {
     const detail::RequestKey key{core_->context(), h.slot, h.generation};
     detail::PublicationPayload payload;
     if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
@@ -372,7 +353,6 @@ void ThreadPoolBackend::publish_one(detail::SlotHandle h) {
     // complete_publication the slot may be reclaimed and re-initialized
     // concurrently, so no record field may be read past that point.
     const detail::OperationKind kind = record.kind;
-    record.publish(record.completion, payload);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_publication_epilogue_pause_();
@@ -392,53 +372,10 @@ void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationK
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
 }
 
-void ThreadPoolBackend::publish_size_ready(void* completion,
-                                           const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<std::size_t> result = outcome.succeeded
-                                     ? Result<std::size_t>{static_cast<std::size_t>(
-                                           outcome.effect.confirmed_bytes)}
-                                     : make_unexpected<std::size_t>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion), std::move(result));
-}
-
-void ThreadPoolBackend::publish_void_ready(void* completion,
-                                           const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<void> result = outcome.succeeded
-                              ? Result<void>{}
-                              : make_unexpected<void>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
-}
-
-void ThreadPoolBackend::publish_file_info_ready(void* completion,
-                                                const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<FileInfo> result = outcome.succeeded
-                                  ? Result<FileInfo>{payload.metadata}
-                                  : make_unexpected<FileInfo>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<FileInfo>*>(completion), std::move(result));
-}
-
-void ThreadPoolBackend::publish_size_value_ready(
-    void* completion, const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<FileSize> result = outcome.succeeded
-                                  ? Result<FileSize>{FileSize{payload.metadata.size}}
-                                  : make_unexpected<FileSize>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<FileSize>*>(completion), std::move(result));
-}
-
-void ThreadPoolBackend::publish_request_ready(void* completion,
-                                              const detail::PublicationPayload& payload) noexcept {
-    (void)completion;
-    (void)payload;
-}
-
 void ThreadPoolBackend::worker_loop() {
     try {
         for (;;) {
-            detail::SlotHandle h{};
+            detail::RequestReservation h{};
             PreparedBlockingOp op{};
             bool have_op = false;
             bool retired_unclaimed = false;
@@ -598,7 +535,7 @@ AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
     // during this pass are the next pass's immediate work, reported honestly
     // below, never absorbed into this invocation.
     for (std::size_t n = 0; n < pass_bound; ++n) {
-        detail::SlotHandle h{};
+        detail::RequestReservation h{};
         bool have = false;
         {
             std::lock_guard<std::mutex> lk(work_mtx_);
@@ -790,14 +727,14 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
         std::lock_guard<std::mutex> lk(work_mtx_);
 
         removed_entry =
-            dispatch_.remove_exact(detail::SlotHandle{key.slot, key.generation});
+            dispatch_.remove_exact(detail::RequestReservation{key.slot, key.generation});
         disposition = core_->cancel(key);
         if (disposition == detail::PublicCancel::won_before_execution) {
             if (core_->release_execution(key) !=
                 detail::ExecutionRelease::borrow_touch_fully_retired) {
                 detail::threadpool_core_handoff_fail_fast();
             }
-            publication_pending_.push_back(detail::SlotHandle{key.slot, key.generation});
+            publication_pending_.push_back(detail::RequestReservation{key.slot, key.generation});
         } else if (disposition == detail::PublicCancel::requested) {
 #if defined(SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED)
             disposition = detail::PublicCancel::requested;
@@ -817,20 +754,6 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
     return disposition;
 }
 
-void ThreadPoolBackend::cancel(Completion<std::size_t>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value())
-        return;
-    (void)cancel_key(*key);
-}
-
-void ThreadPoolBackend::cancel(Completion<void>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value())
-        return;
-    (void)cancel_key(*key);
-}
-
 detail::PublicCancel ThreadPoolBackend::cancel_identity(detail::RequestKey key) {
     return cancel_key(key);
 }
@@ -847,24 +770,6 @@ std::size_t ThreadPoolBackend::dispatch_occupancy() const {
 std::size_t ThreadPoolBackend::active_workers() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return active_workers_;
-}
-
-Result<RequestHandleState> ThreadPoolBackend::resolve_identity_state(
-    std::uint64_t ctx, std::uint32_t slot, std::uint64_t gen) const {
-    if (core_ == nullptr) {
-        return RequestHandleState::not_found;
-    }
-    const detail::RequestKey key{detail::ContextIdentity{ctx}, detail::SlotIndex{slot},
-                                 detail::Generation{gen}};
-    switch (core_->lookup(key)) {
-    case detail::PublicLookup::outstanding:
-        return RequestHandleState::outstanding;
-    case detail::PublicLookup::published:
-        return RequestHandleState::completion_ready;
-    case detail::PublicLookup::not_found:
-        return RequestHandleState::not_found;
-    }
-    return RequestHandleState::not_found;
 }
 
 void ThreadPoolBackend::close_admission() {

@@ -332,7 +332,6 @@ do
                 R .. "tests/request_core_ownership_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -375,7 +374,6 @@ do
                 R .. "tests/progress_source_ownership_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -426,7 +424,6 @@ do
             add_files(test_source,
                       R .. "src/async/async_io_context.cpp",
                       R .. "src/async/threadpool_backend.cpp",
-                      R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -461,7 +458,6 @@ if has_config("liburing") then
                       R .. "src/async/uring_transport.cpp",
                       R .. "src/async/uring_completion.cpp",
                       R .. "src/async/uring_backend.cpp",
-                      R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -517,7 +513,6 @@ do
                 test_source,
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -591,7 +586,6 @@ do
                 R .. "tests/shutdown_lifecycle_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -665,7 +659,6 @@ do
                 R .. "tests/backend_conformance_e1_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -734,7 +727,6 @@ do
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/request_scope.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -796,7 +788,6 @@ do
         add_files(R .. "tests/threadpool_core_cutover_test.cpp",
                   R .. "src/async/async_io_context.cpp",
                   R .. "src/async/threadpool_backend.cpp",
-                  R .. "src/async/request_handle.cpp",
                   R .. "src/async/fail_fast.cpp",
                   R .. "src/async/detail/context_identity.cpp",
                   R .. "src/async/detail/request_core.cpp")
@@ -825,7 +816,6 @@ if has_config("liburing") then
                       R .. "src/async/uring_transport.cpp",
                       R .. "src/async/uring_completion.cpp",
                       R .. "src/async/uring_backend.cpp",
-                      R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -872,9 +862,6 @@ do
                   R .. "src/async/*.cpp",
                   R .. "src/async/detail/context_identity.cpp",
                   R .. "src/async/detail/request_core.cpp")
-        remove_files(R .. "src/async/application_runtime.cpp",
-                     R .. "src/async/await_op_helpers.cpp",
-                     R .. "src/async/group.cpp")
         add_tests("runtime_waiter_observer_test")
 end
 

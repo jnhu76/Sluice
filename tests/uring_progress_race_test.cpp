@@ -1,5 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -1181,10 +1181,10 @@ bool f1_publication_pass_is_entry_bounded() {
     AsyncIoContext ctx(std::move(raw_backend));
     HostInterest interest(ctx);
 
-    struct CompatPipeRead {
+    struct PipeRead {
         int r = -1;
         int w = -1;
-        Completion<std::size_t> completion;
+        Request<std::size_t> request;
         std::vector<std::byte> buffer;
 
         bool arm(AsyncIoContext& ctx, std::size_t bytes) {
@@ -1194,11 +1194,13 @@ bool f1_publication_pass_is_entry_bounded() {
             r = fds[0];
             w = fds[1];
             buffer.assign(bytes, std::byte{0});
-            return ctx
-                .submit_read(ReadOp{NativeFileRef(r, sluice::FileAccess::read_only),
-                                    buffer.data(), buffer.size(), 0},
-                             completion)
-                .has_value();
+            auto submitted =
+                ctx.submit_read(ReadOp{NativeFileRef(r, sluice::FileAccess::read_only),
+                                        buffer.data(), buffer.size(), 0});
+            if (!submitted.has_value())
+                return false;
+            request = std::move(submitted.value());
+            return true;
         }
         void release_bytes(std::size_t n) {
             const std::string payload(static_cast<std::size_t>(n), 'p');
@@ -1215,9 +1217,9 @@ bool f1_publication_pass_is_entry_bounded() {
         }
     };
 
-    CompatPipeRead a;
-    CompatPipeRead b;
-    CompatPipeRead c;
+    PipeRead a;
+    PipeRead b;
+    PipeRead c;
     if (!a.arm(ctx, 4) || !b.arm(ctx, 4) || !c.arm(ctx, 4))
         return false;
 
@@ -1226,7 +1228,9 @@ bool f1_publication_pass_is_entry_bounded() {
         if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
             return false;
     }
-    ctx.cancel(c.completion);
+    const auto cancel_c = c.request.cancel();
+    if (!cancel_c.has_value())
+        return false;
 
     UringAsyncBackend::PublicationEpiloguePauseGate epilogue;
     backend_ptr->set_publication_epilogue_pause_gate(&epilogue);
@@ -1241,39 +1245,44 @@ bool f1_publication_pass_is_entry_bounded() {
     while (!epilogue.paused.load(std::memory_order_acquire))
         std::this_thread::yield();
 
-    const bool c_published_at_pause = c.completion.ready();
-    ctx.cancel(b.completion);
+    const bool c_publishing_at_pause =
+        !c.request.ready() && c.request.try_result().readiness == RequestReadiness::pending;
+    const auto cancel_b = b.request.cancel();
+    if (!cancel_b.has_value())
+        return false;
 
     epilogue.resume.store(true, std::memory_order_release);
     epilogue.resume.notify_all();
     driver.join();
     backend_ptr->set_publication_epilogue_pause_gate(nullptr);
 
-    const bool first_ok = c_published_at_pause && first.has_value() &&
+    const bool first_ok = c_publishing_at_pause && first.has_value() &&
                           first.value().completed == 1 &&
                           first->immediate_work_remains && !first->health_failed;
     if (!first_ok)
         return false;
-    c.completion.reset();
+    if (!c.request.ready())
+        return false;
+    c.request.discard();
     c.close_pipe();
 
     const auto second = ctx.poll_progress();
     const bool second_ok = second.has_value() && second.value().completed == 1 &&
-                           b.completion.ready() && !second.value().immediate_work_remains;
+                           b.request.ready() && !second.value().immediate_work_remains;
 
     state.fail.store(false, std::memory_order_release);
     a.release_bytes(1);
     bool a_retired = false;
     for (int i = 0; i < 20000 && !a_retired; ++i) {
         const auto pass = ctx.poll_progress();
-        a_retired = pass.has_value() && a.completion.ready();
+        a_retired = pass.has_value() && a.request.ready();
         if (!a_retired)
             std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
 
-    b.completion.reset();
+    b.request.discard();
     b.close_pipe();
-    a.completion.reset();
+    a.request.discard();
     a.close_pipe();
     return second_ok && a_retired;
 }

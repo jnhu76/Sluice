@@ -107,16 +107,6 @@ inline bool ThreadPoolBackend::event_owed_for_test(std::uint32_t slot) const noe
     return delivery_[slot].event_owed;
 }
 
-inline std::optional<detail::RequestKey>
-ThreadPoolBackend::request_key_for_test(const Completion<std::size_t>& c) const {
-    return core_binding(c);
-}
-
-inline std::optional<detail::RequestKey>
-ThreadPoolBackend::request_key_for_test(const Completion<void>& c) const {
-    return core_binding(c);
-}
-
 inline detail::PublicCancel ThreadPoolBackend::cancel_key_for_test(detail::RequestKey key) {
     return cancel_key(key);
 }

@@ -4,13 +4,13 @@
 // run_pipelined_copy_with_backend API, driven through a scripted backend.
 //
 // Backend model: submit accepts through RequestCore exactly like a v1 request
-// backend (reserve -> begin_binding -> accept(borrow facts) -> core binding ->
-// commit -> claim_execution). Accepted ops stay completable until the test
-// stages an outcome: the fill/commit of the read/write borrow happens BEFORE
-// offer_terminal + release_execution (the borrow is legal to touch exactly in
-// that window), then the publication is queued; the runtime driver's poll()
-// publishes (begin_publication -> publish -> complete_publication -> observer
-// delivery), mirroring ThreadPoolBackend's worker/publication split. The
+// backend (reserve -> accept(borrow facts) -> claim_execution). Accepted ops
+// stay completable until the test stages an outcome: the fill/commit of the
+// read/write borrow happens BEFORE offer_terminal + release_execution (the
+// borrow is legal to touch exactly in that window), then the publication is
+// queued; the runtime driver's poll() publishes (begin_publication ->
+// complete_publication -> observer delivery), mirroring ThreadPoolBackend's
+// worker/publication split. The
 // accept-time overlap check against every borrow still live (accepted through
 // release_execution) turns premature task-side buffer reuse into a
 // deterministic violation record instead of a data race; overlap is decided
@@ -31,7 +31,7 @@
 // contract: with a contract-conforming backend the waiter-failure arms are
 // unreachable through the public single-task API (one task fiber holds at most
 // one live wait, so wait-record exhaustion cannot happen; observer-attach
-// failure on a non-ready completion requires losing a live accepted request;
+// failure on a non-published request requires losing a live accepted request;
 // waiter cancellation requires a runtime control action, and
 // run_task_to_result only requests stop after the task published). The
 // reachable arm IS asserted: op RESULTS of completions drained after a failure
@@ -44,7 +44,6 @@
 #include "copy_task.hpp"
 
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/file_semantics.hpp>
@@ -139,7 +138,6 @@ struct ScriptedOpView {
     detail::OperationKind kind = detail::OperationKind::read;
     std::uint64_t offset = 0;
     std::size_t len = 0;
-    void* completion = nullptr;
     std::byte* buffer = nullptr;
 };
 
@@ -153,8 +151,6 @@ struct ScriptedShared {
         std::byte* buffer = nullptr;
         std::uint64_t offset = 0;
         std::size_t len = 0;
-        void* completion = nullptr;
-        void (*publish)(void*, const detail::PublicationPayload&) noexcept = nullptr;
         enum class Stage { accepted, staged, published } stage = Stage::accepted;
         bool borrow_released = false;
     };
@@ -248,7 +244,6 @@ class ScriptedBackend final : public AsyncBackend {
         shared_->cv.notify_all();
     }
 
-    bool supports_request_identity() const noexcept override { return true; }
     bool signals_physical_progress() const noexcept override { return true; }
 
     std::size_t poll() override { return poll_progress().completed; }
@@ -367,24 +362,7 @@ class ScriptedBackend final : public AsyncBackend {
     }
 
   private:
-    static void publish_size_completion(void* completion,
-                                        const detail::PublicationPayload& payload) noexcept {
-        const sluice::detail::IoOutcome& o = payload.outcome;
-        AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion),
-                              o.succeeded
-                                  ? Result<std::size_t>{static_cast<std::size_t>(
-                                        o.effect.confirmed_bytes)}
-                                  : make_unexpected<std::size_t>(o.error));
-    }
-
-    static void publish_void_completion(void* completion,
-                                        const detail::PublicationPayload& payload) noexcept {
-        const sluice::detail::IoOutcome& o = payload.outcome;
-        AsyncBackend::publish(*static_cast<Completion<void>*>(completion),
-                              o.succeeded ? Result<void>{} : make_unexpected<void>(o.error));
-    }
-
-    Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) override {
+    Result<detail::RequestKey> submit_read(ReadOp op) override {
         const auto rejection = sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
             {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::read, op.offset,
              op.len}));
@@ -393,11 +371,10 @@ class ScriptedBackend final : public AsyncBackend {
         if (auto injected = consume_injected_failure(detail::OperationKind::read))
             return make_unexpected<detail::RequestKey>(*injected);
         return accept_size_op(op.file.fd, static_cast<std::byte*>(op.dst), op.offset, op.len,
-                              detail::RequestOp::read, detail::OperationKind::read, c,
-                              &publish_size_completion);
+                              detail::RequestOp::read, detail::OperationKind::read);
     }
 
-    Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override {
+    Result<detail::RequestKey> submit_write(WriteOp op) override {
         const auto rejection = sluice::detail::accept_or_reject(sluice::detail::precheck_data_op(
             {op.file.fd < 0, op.file.access, sluice::detail::FileOperation::write, op.offset,
              op.len}));
@@ -406,30 +383,27 @@ class ScriptedBackend final : public AsyncBackend {
         if (auto injected = consume_injected_failure(detail::OperationKind::write))
             return make_unexpected<detail::RequestKey>(*injected);
         return accept_size_op(op.file.fd, const_cast<std::byte*>(op.src), op.offset, op.len,
-                              detail::RequestOp::write, detail::OperationKind::write, c,
-                              &publish_size_completion);
+                              detail::RequestOp::write, detail::OperationKind::write);
     }
 
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) override {
-        return submit_sync(op, c, detail::OperationKind::sync_data,
-                           detail::RequestOp::sync_data);
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp op) override {
+        return submit_sync(op, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
     }
 
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) override {
-        return submit_sync(op, c, detail::OperationKind::sync_all,
-                           detail::RequestOp::sync_all);
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp op) override {
+        return submit_sync(op, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
     }
 
-    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<FileInfo>*) override {
+    Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
         return make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
 
-    Result<detail::RequestKey> submit_size(SizeOp, Completion<FileSize>*) override {
+    Result<detail::RequestKey> submit_size(SizeOp) override {
         return make_unexpected<detail::RequestKey>(IoError{IoError::Code::not_supported});
     }
 
     template <class Op>
-    Result<detail::RequestKey> submit_sync(Op op, Completion<void>* c, detail::OperationKind kind,
+    Result<detail::RequestKey> submit_sync(Op op, detail::OperationKind kind,
                                            detail::RequestOp core_op) {
         const auto rejection = sluice::detail::accept_or_reject(sluice::detail::precheck_state_op(
             op.file.fd < 0, op.file.access, sluice::detail::FileOperation::sync_data));
@@ -437,7 +411,7 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(rejection.error());
         if (auto injected = consume_injected_failure(kind))
             return make_unexpected<detail::RequestKey>(*injected);
-        return accept_void_op(op.file.fd, core_op, kind, c, &publish_void_completion);
+        return accept_void_op(op.file.fd, core_op, kind);
     }
 
     std::optional<IoError> consume_injected_failure(detail::OperationKind kind) {
@@ -457,11 +431,7 @@ class ScriptedBackend final : public AsyncBackend {
 
     Result<detail::RequestKey> accept_size_op(int fd, std::byte* buffer, std::uint64_t offset,
                                               std::uint64_t length, detail::RequestOp core_op,
-                                              detail::OperationKind kind,
-                                              Completion<std::size_t>* c,
-                                              void (*publish_fn)(void*,
-                                                                 const detail::PublicationPayload&)
-                                                  noexcept) {
+                                              detail::OperationKind kind) {
         const auto reservation = core_->reserve();
         if (!reservation.ok()) {
             const IoError::Code code =
@@ -470,11 +440,8 @@ class ScriptedBackend final : public AsyncBackend {
                     : IoError::Code::would_block;
             return make_unexpected<detail::RequestKey>(IoError{code});
         }
-        const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
-        if (c != nullptr && !begin_binding(*c)) {
-            (void)core_->rollback(reservation.reservation);
-            return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
-        }
+        const detail::RequestReservation h{reservation.reservation.slot,
+                                           reservation.reservation.generation};
         const detail::RequestDescriptor descriptor{core_op, length == 0 ? 0 : offset, length,
                                                    length == 0};
         const detail::BorrowFacts borrow{fd, buffer, length};
@@ -484,24 +451,16 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
         }
         const detail::RequestKey key = accepted.id;
-        if (c != nullptr) {
-            install_core_binding(*c, core_, key);
-            commit_binding(*c);
-        }
         if (core_->claim_execution(key) != detail::ExecutionClaim::claimed) {
             note_protocol_violation("claim_execution denied for accepted submit");
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
         }
-        record_submit(key, h, kind, fd, buffer, offset, static_cast<std::size_t>(length), c,
-                      publish_fn);
+        record_submit(key, h, kind, fd, buffer, offset, static_cast<std::size_t>(length));
         return key;
     }
 
     Result<detail::RequestKey> accept_void_op(int fd, detail::RequestOp core_op,
-                                              detail::OperationKind kind, Completion<void>* c,
-                                              void (*publish_fn)(void*,
-                                                                 const detail::PublicationPayload&)
-                                                  noexcept) {
+                                              detail::OperationKind kind) {
         const auto reservation = core_->reserve();
         if (!reservation.ok()) {
             const IoError::Code code =
@@ -510,11 +469,8 @@ class ScriptedBackend final : public AsyncBackend {
                     : IoError::Code::would_block;
             return make_unexpected<detail::RequestKey>(IoError{code});
         }
-        const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
-        if (c != nullptr && !begin_binding(*c)) {
-            (void)core_->rollback(reservation.reservation);
-            return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
-        }
+        const detail::RequestReservation h{reservation.reservation.slot,
+                                           reservation.reservation.generation};
         const detail::RequestDescriptor descriptor{core_op, 0, 0, false};
         const detail::BorrowFacts borrow{fd, nullptr, 0};
         const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
@@ -523,22 +479,17 @@ class ScriptedBackend final : public AsyncBackend {
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
         }
         const detail::RequestKey key = accepted.id;
-        if (c != nullptr) {
-            install_core_binding(*c, core_, key);
-            commit_binding(*c);
-        }
         if (core_->claim_execution(key) != detail::ExecutionClaim::claimed) {
             note_protocol_violation("claim_execution denied for accepted submit");
             return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
         }
-        record_submit(key, h, kind, fd, nullptr, 0, 0, c, publish_fn);
+        record_submit(key, h, kind, fd, nullptr, 0, 0);
         return key;
     }
 
-    void record_submit(detail::RequestKey key, detail::SlotHandle h, detail::OperationKind kind,
-                       int fd, std::byte* buffer, std::uint64_t offset, std::size_t length,
-                       void* completion,
-                       void (*publish_fn)(void*, const detail::PublicationPayload&) noexcept) {
+    void record_submit(detail::RequestKey key, detail::RequestReservation h,
+                       detail::OperationKind kind, int fd, std::byte* buffer,
+                       std::uint64_t offset, std::size_t length) {
         (void)fd;
         {
             std::lock_guard<std::mutex> lk(shared_->mtx);
@@ -556,8 +507,6 @@ class ScriptedBackend final : public AsyncBackend {
             rec.buffer = buffer;
             rec.offset = offset;
             rec.len = length;
-            rec.completion = completion;
-            rec.publish = publish_fn;
             rec.stage = ScriptedShared::Record::Stage::accepted;
             rec.borrow_released = false;
             ++shared_->accepted_count[ScriptedShared::kind_index(kind)];
@@ -581,8 +530,6 @@ class ScriptedBackend final : public AsyncBackend {
                 it->second.key.generation.value == key.generation.value &&
                 it->second.stage == ScriptedShared::Record::Stage::staged) {
                 kind = it->second.kind;
-                if (it->second.completion != nullptr)
-                    it->second.publish(it->second.completion, payload);
                 it->second.stage = ScriptedShared::Record::Stage::published;
                 shared_->recompute_peak_locked(kind);
             }
@@ -618,8 +565,7 @@ class ScriptedController {
         for (const auto& [slot, r] : shared_->records) {
             if (r.stage != ScriptedShared::Record::Stage::accepted)
                 continue;
-            out.push_back(
-                ScriptedOpView{r.submit_id, r.kind, r.offset, r.len, r.completion, r.buffer});
+            out.push_back(ScriptedOpView{r.submit_id, r.kind, r.offset, r.len, r.buffer});
         }
         return out;
     }
@@ -635,8 +581,7 @@ class ScriptedController {
         std::lock_guard<std::mutex> lk(shared_->mtx);
         for (const auto& [slot, r] : shared_->records)
             if (r.submit_id == submit_id)
-                return ScriptedOpView{r.submit_id, r.kind, r.offset, r.len, r.completion,
-                                      r.buffer};
+                return ScriptedOpView{r.submit_id, r.kind, r.offset, r.len, r.buffer};
         return std::nullopt;
     }
 
@@ -692,7 +637,7 @@ class ScriptedController {
         if (!mark_staged(submit_id, key, kind, buffer, offset))
             return std::nullopt;
         held_[submit_id] = HeldStaged{key, kind, buffer, offset};
-        return ScriptedOpView{submit_id, kind, offset, 0, nullptr, buffer};
+        return ScriptedOpView{submit_id, kind, offset, 0, buffer};
     }
 
     bool release_held(std::uint64_t submit_id, std::size_t n) {
@@ -924,7 +869,6 @@ class ScriptedController {
 
 class ThrowingBackend final : public AsyncBackend {
   public:
-    bool supports_request_identity() const noexcept override { return true; }
     bool signals_physical_progress() const noexcept override { return true; }
     std::size_t poll() override { return 0; }
     std::size_t outstanding() const noexcept override { return 0; }
@@ -935,22 +879,22 @@ class ThrowingBackend final : public AsyncBackend {
     }
 
   private:
-    Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_read(ReadOp) override {
         throw std::runtime_error("injected submit failure");
     }
-    Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_write(WriteOp) override {
         throw std::runtime_error("injected submit failure");
     }
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
         throw std::runtime_error("injected submit failure");
     }
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
         throw std::runtime_error("injected submit failure");
     }
-    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<FileInfo>*) override {
+    Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
         throw std::runtime_error("injected submit failure");
     }
-    Result<detail::RequestKey> submit_size(SizeOp, Completion<FileSize>*) override {
+    Result<detail::RequestKey> submit_size(SizeOp) override {
         throw std::runtime_error("injected submit failure");
     }
 };

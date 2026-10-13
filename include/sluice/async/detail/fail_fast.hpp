@@ -40,11 +40,6 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void scheduler_wait_registry_nonempty_fail_fast() noexcept;
 
-[[noreturn]] void completion_authority_fail_fast() noexcept;
-
-[[noreturn]] void completion_binding_destruction_fail_fast() noexcept;
-[[noreturn]] void completion_binding_reset_fail_fast() noexcept;
-
 [[noreturn]] void request_nonterminal_release_fail_fast() noexcept;
 
 [[noreturn]] void request_binding_invariant_fail_fast() noexcept;
@@ -58,30 +53,6 @@ bool evented_admission_check() noexcept;
 [[noreturn]] void stackful_host_drive_health_fail_fast() noexcept;
 
 [[noreturn]] void stackful_host_live_task_fail_fast() noexcept;
-
-[[noreturn]] void request_slot_release_invariant_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_enqueue_state_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_destruction_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_missing_binding_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_terminal_state_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_enqueue_stale_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_generation_exhausted_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_slot_index_out_of_range_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_invalid_terminal_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_dispatch_state_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_dispatch_stale_fail_fast() noexcept;
-
-[[noreturn]] void request_arena_ready_ring_invariant_fail_fast() noexcept;
 
 [[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept;
 

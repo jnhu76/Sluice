@@ -40,7 +40,7 @@ std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
 }
 #endif
 
-void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
+void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noexcept {
     bool injected_dispatch_failure = false;
     bool newly_poisoned = false;
     bool unsubmitted_after_dispatch = false;
@@ -74,7 +74,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
             for (;;) {
                 if (dispatch_->empty())
                     break;
-                const detail::SlotHandle front = dispatch_->front();
+                const detail::RequestReservation front = dispatch_->front();
                 if (!dispatch_one_locked(front))
                     break;
             }
@@ -94,7 +94,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
     }
 }
 
-bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
+bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexcept {
     if (fatal_error_.has_value())
         return false;
 
@@ -246,7 +246,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
 }
 
 void UringAsyncBackend::mark_consumed_control_locked_(std::uint64_t cookie,
-                                                      detail::SlotHandle handle) noexcept {
+                                                      detail::RequestReservation handle) noexcept {
     const std::size_t router_index = find_live_router_cookie_(cookie);
     if (router_index == router_.size() ||
         router_[router_index].handle.slot.value != handle.slot.value ||
@@ -314,7 +314,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
     // zero submit count), so it is provably kernel-invisible and Class-A
     // retirement is safe. Operations whose CQEs may still arrive left this
     // ledger during reconciliation and keep their real completion path.
-    detail::SlotHandle local{};
+    detail::RequestReservation local{};
     while (dispatch_->pop_front(local)) {
         const detail::RequestKey key{core_->context(), local.slot, local.generation};
         detail::TerminalCandidate candidate;
@@ -504,7 +504,7 @@ std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
     return next_cookie_++;
 }
 
-std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) const noexcept {
+std::size_t UringAsyncBackend::find_live_router_index_(detail::RequestReservation h) const noexcept {
     for (std::size_t i = 0; i < router_.size(); ++i) {
         const RouterEntry& e = router_[i];
         if (e.in_use && e.handle.slot.value == h.slot.value &&
@@ -547,16 +547,16 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
 
-        (void)dispatch_->remove_exact(detail::SlotHandle{key.slot, key.generation});
+        (void)dispatch_->remove_exact(detail::RequestReservation{key.slot, key.generation});
         disposition = core_->cancel(key);
         if (disposition == detail::PublicCancel::won_before_execution) {
             if (core_->release_execution(key) !=
                 detail::ExecutionRelease::borrow_touch_fully_retired) {
                 detail::uring_core_handoff_fail_fast();
             }
-            publication_pending_->push_back(detail::SlotHandle{key.slot, key.generation});
+            publication_pending_->push_back(detail::RequestReservation{key.slot, key.generation});
         } else if (disposition == detail::PublicCancel::requested) {
-            issue_running_cancel_locked_(detail::SlotHandle{key.slot, key.generation});
+            issue_running_cancel_locked_(detail::RequestReservation{key.slot, key.generation});
         }
     }
     if (disposition == detail::PublicCancel::won_before_execution) {
@@ -578,7 +578,7 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
     return disposition;
 }
 
-void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexcept {
+void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation h) noexcept {
     if (fatal_error_.has_value())
         return;
 

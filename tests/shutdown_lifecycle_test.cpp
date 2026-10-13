@@ -1,5 +1,4 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
@@ -653,20 +652,19 @@ bool observer_delivery_episode_settles_at_shutdown(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     std::vector<std::byte> buffer(16, std::byte{0});
-    Completion<std::size_t> completion;
     auto submitted =
-        ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0},
-                        completion);
+        ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
     if (!submitted.has_value()) {
         t.check(false, "the observed read is accepted");
         return true;
     }
-    auto attached = ctx.attach_observer(completion);
+    Request<std::size_t> observed = std::move(submitted.value());
+    auto attached = ctx.attach_observer(observed.id());
     t.check(attached.armed(), "the observer arms before publication");
 
     (void)poll_until_ready(ctx, std::chrono::milliseconds(10000), "the observed read publishes",
-                           t, [&] { return completion.ready(); });
-    t.check(completion.ready(), "the observed read publishes");
+                           t, [&] { return observed.ready(); });
+    t.check(observed.ready(), "the observed read publishes");
 
     const auto episode = core.observe_slot(detail::SlotIndex{0});
     t.check(episode.has_value() && episode->observer_phase == detail::ObserverPhase::delivering,
@@ -678,7 +676,8 @@ bool observer_delivery_episode_settles_at_shutdown(Tracker& t) {
     const auto settled = core.observe_slot(detail::SlotIndex{0});
     t.check(settled.has_value() && settled->observer_phase == detail::ObserverPhase::retired,
             "the delivery episode is retired after the shutdown");
-    t.check(completion.result().has_value(), "the observed result stays intact");
+    auto consumed = observed.take_result();
+    t.check(consumed.result.has_value(), "the observed result stays intact");
     return true;
 }
 
@@ -695,22 +694,22 @@ bool observer_attach_after_admission_close_is_refused(Tracker& t) {
     AsyncIoContext ctx(std::move(backend));
 
     std::vector<std::byte> buffer(16, std::byte{0});
-    Completion<std::size_t> early;
-    Completion<std::size_t> late;
     auto first =
-        ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0}, early);
+        ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
     auto second = ctx.submit_read(
-        ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 4}, late);
+        ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 4});
     if (!first.has_value() || !second.has_value()) {
         t.check(false, "both observed candidates are accepted");
         return true;
     }
-    t.check(ctx.attach_observer(early).armed(), "the early observer arms");
+    Request<std::size_t> early = std::move(first.value());
+    Request<std::size_t> late = std::move(second.value());
+    t.check(ctx.attach_observer(early.id()).armed(), "the early observer arms");
 
     ctx.close_admission();
     t.check(!ctx.admission_open(), "admission is closed");
 
-    const auto refused = ctx.attach_observer(late);
+    const auto refused = ctx.attach_observer(late.id());
     t.check(refused.status == detail::ObserverRegistration::admission_closed,
             "an observer attach after the admission close is refused");
 
@@ -720,6 +719,8 @@ bool observer_attach_after_admission_close_is_refused(Tracker& t) {
     const auto closed = ctx.shutdown(ShutdownPolicy::drain);
     t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
             "the shutdown converges with the refused attach");
+    early.discard();
+    late.discard();
     return true;
 }
 
@@ -742,12 +743,10 @@ bool close_wins_the_reserve_window(Tracker& t) {
 
     std::vector<std::byte> buffer(16, std::byte{0});
     std::atomic<bool> done{false};
-    std::optional<sluice::Result<void>> outcome;
-    Completion<std::size_t> completion;
+    std::optional<sluice::Result<Request<std::size_t>>> outcome;
     std::thread racer([&] {
         outcome =
-            ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0},
-                            completion);
+            ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
         done.store(true, std::memory_order_release);
     });
 

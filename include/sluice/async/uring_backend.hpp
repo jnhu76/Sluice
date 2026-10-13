@@ -1,17 +1,11 @@
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/uring_submit.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-#include <sluice/async/detail/submit_transaction.hpp>
-#endif
 
 #include <atomic>
 #include <cassert>
@@ -68,24 +62,19 @@ class UringAsyncBackend : public AsyncBackend {
     UringAsyncBackend& operator=(const UringAsyncBackend&) = delete;
 
   private:
-    Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) override;
-    Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override;
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) override;
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) override;
-    Result<detail::RequestKey> submit_file_info(FileInfoOp op, Completion<FileInfo>* c) override;
-    Result<detail::RequestKey> submit_size(SizeOp op, Completion<FileSize>* c) override;
+    Result<detail::RequestKey> submit_read(ReadOp op) override;
+    Result<detail::RequestKey> submit_write(WriteOp op) override;
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp op) override;
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp op) override;
+    Result<detail::RequestKey> submit_file_info(FileInfoOp op) override;
+    Result<detail::RequestKey> submit_size(SizeOp op) override;
 
 #if defined(SLUICE_HAS_LIBURING)
   public:
-    bool supports_request_identity() const noexcept override { return true; }
-
     bool signals_physical_progress() const noexcept override { return have_ring_; }
 
   private:
     AsyncBackend::ProgressPass poll_progress() override;
-
-    Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
-                                                      std::uint64_t gen) const override;
 
     detail::PublicCancel cancel_identity(detail::RequestKey key) override;
 
@@ -93,9 +82,6 @@ class UringAsyncBackend : public AsyncBackend {
 #endif
 
     std::size_t poll() override;
-
-    void cancel(Completion<std::size_t>& c) override;
-    void cancel(Completion<void>& c) override;
 
     std::size_t outstanding() const noexcept override;
 
@@ -128,10 +114,6 @@ class UringAsyncBackend : public AsyncBackend {
     unsigned eventfd_unregistrations_for_test() const noexcept;
 
     void inject_cqe_for_test(std::uint64_t cookie, int res) noexcept;
-    std::optional<detail::RequestKey>
-    request_key_for_test(const Completion<std::size_t>& c) const noexcept;
-    std::optional<detail::RequestKey>
-    request_key_for_test(const Completion<void>& c) const noexcept;
     detail::PublicCancel cancel_key_for_test(detail::RequestKey key) noexcept {
         return cancel_key(key);
     }
@@ -180,7 +162,7 @@ class UringAsyncBackend : public AsyncBackend {
     bool probe_statx_support_() noexcept;
     bool probe_required_opcodes_() noexcept;
     std::size_t reconcile_ledger_with_kernel_locked_() noexcept;
-    void mark_consumed_control_locked_(std::uint64_t cookie, detail::SlotHandle handle) noexcept;
+    void mark_consumed_control_locked_(std::uint64_t cookie, detail::RequestReservation handle) noexcept;
 
     bool progress_port_attached() noexcept override;
 
@@ -190,7 +172,7 @@ class UringAsyncBackend : public AsyncBackend {
         enum class ControlState : std::uint8_t { none, prepared, submitted };
 
         std::uint64_t cookie = 0;
-        detail::SlotHandle handle{};
+        detail::RequestReservation handle{};
         ControlState control_state = ControlState::none;
         // A cancel intent whose control SQE could not be allocated yet; serviced
         // by later progress passes so the intent is never silently discarded.
@@ -205,11 +187,8 @@ class UringAsyncBackend : public AsyncBackend {
     // slot and marks its owed event under the lock, the progress owner
     // consumes under it, and publish_one's reads ride the
     // publication_pending_ queue transitions already taken under it.
-    // Completion/on_ready callbacks never run under the lock.
+    // on_ready callbacks never run under the lock.
     struct DeliveryRecord {
-        void* completion = nullptr;
-        void (*publish)(void* completion,
-                        const detail::PublicationPayload& payload) noexcept = nullptr;
         detail::OperationKind kind = detail::OperationKind::read;
         // event_owed pairs with one core control ref on owed_key: the ref is
         // acquired before this flag is set and released after delivery.
@@ -239,40 +218,17 @@ class UringAsyncBackend : public AsyncBackend {
         }
     }
 
-    template <class Comp> static auto publish_thunk() noexcept {
-        if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
-            return &UringAsyncBackend::publish_size_ready;
-        } else if constexpr (std::is_same_v<Comp, Completion<FileInfo>>) {
-            return &UringAsyncBackend::publish_file_info_ready;
-        } else if constexpr (std::is_same_v<Comp, Completion<FileSize>>) {
-            return &UringAsyncBackend::publish_size_value_ready;
-        } else {
-            return &UringAsyncBackend::publish_void_ready;
-        }
-    }
-
-    template <class Op, class Comp>
-    Result<detail::RequestKey> submit_request(Op op, Comp* c, detail::OperationKind kind,
+    template <class Op>
+    Result<detail::RequestKey> submit_request(Op op, detail::OperationKind kind,
                                               detail::RequestOp core_op);
 
-    static void publish_size_ready(void* completion,
-                                   const detail::PublicationPayload& payload) noexcept;
-    static void publish_void_ready(void* completion,
-                                   const detail::PublicationPayload& payload) noexcept;
-    static void publish_file_info_ready(void* completion,
-                                        const detail::PublicationPayload& payload) noexcept;
-    static void publish_size_value_ready(void* completion,
-                                         const detail::PublicationPayload& payload) noexcept;
-    static void publish_request_ready(void* completion,
-                                      const detail::PublicationPayload& payload) noexcept;
-
-    void dispatch_after_accept(detail::SlotHandle h) noexcept;
-    void publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept;
-    void publish_one(detail::SlotHandle h);
+    void dispatch_after_accept(detail::RequestReservation h) noexcept;
+    void publish_zero_op_inline(detail::RequestKey id, detail::RequestReservation h) noexcept;
+    void publish_one(detail::RequestReservation h);
     void deliver_event(detail::RequestKey key, detail::OperationKind kind);
     detail::PublicCancel cancel_key(detail::RequestKey key) noexcept;
 
-    bool dispatch_one_locked(detail::SlotHandle h) noexcept;
+    bool dispatch_one_locked(detail::RequestReservation h) noexcept;
 
     // Accepted work that has not reached the kernel: undispatched entries or
     // prepared transport the last submit attempt did not consume. Poisoned
@@ -290,16 +246,16 @@ class UringAsyncBackend : public AsyncBackend {
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 
     void finalize_operation_terminal_(RouterEntry& route, std::size_t router_index,
-                                      const detail::TerminalResult& terminal,
+                                      const sluice::detail::IoOutcome& terminal,
                                       const sluice::FileInfo* metadata) noexcept;
 
     std::uint64_t allocate_cookie_() noexcept;
 
-    std::size_t find_live_router_index_(detail::SlotHandle h) const noexcept;
+    std::size_t find_live_router_index_(detail::RequestReservation h) const noexcept;
     std::size_t find_live_router_cookie_(std::uint64_t cookie) const noexcept;
     void retire_router_entry_(std::size_t router_index) noexcept;
 
-    void issue_running_cancel_locked_(detail::SlotHandle h) noexcept;
+    void issue_running_cancel_locked_(detail::RequestReservation h) noexcept;
     void service_pending_controls_locked_() noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

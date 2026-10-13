@@ -75,8 +75,8 @@ inline constexpr bool sticky_intent_retained() noexcept {
 }
 #endif
 
-inline constexpr bool cookie_terminal_is_canceled(const detail::TerminalResult& t) noexcept {
-    return t.stored && t.is_error && terminal_is_kernel_cancel(t.error);
+inline constexpr bool cookie_terminal_is_canceled(const sluice::detail::IoOutcome& t) noexcept {
+    return !t.succeeded && terminal_is_kernel_cancel(t.error);
 }
 
 class UringAsyncBackend::BoundedDispatchQueue {
@@ -85,7 +85,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
     bool empty() const noexcept { return size_ == 0; }
     std::size_t size() const noexcept { return size_; }
 
-    detail::SlotHandle front() const noexcept {
+    detail::RequestReservation front() const noexcept {
         if (size_ == 0) {
             std::fprintf(stderr, "sluice::async::UringAsyncBackend: ring "
                                  "front() on empty queue (invariant violation)\n");
@@ -95,7 +95,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
         return storage_[head_];
     }
 
-    void push_back(detail::SlotHandle h) noexcept {
+    void push_back(detail::RequestReservation h) noexcept {
         if (size_ >= capacity_) {
             std::fprintf(stderr, "sluice::async::UringAsyncBackend: ring overflow "
                                  "(invariant violation)\n");
@@ -105,7 +105,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
         storage_[(head_ + size_) % capacity_] = h;
         ++size_;
     }
-    bool pop_front(detail::SlotHandle& out) noexcept {
+    bool pop_front(detail::RequestReservation& out) noexcept {
         if (size_ == 0)
             return false;
         out = storage_[head_];
@@ -114,7 +114,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
         return true;
     }
 
-    bool remove_exact(detail::SlotHandle h) noexcept {
+    bool remove_exact(detail::RequestReservation h) noexcept {
         for (std::size_t i = 0; i < size_; ++i) {
             std::size_t idx = (head_ + i) % capacity_;
             if (storage_[idx].slot.value == h.slot.value &&
@@ -132,7 +132,7 @@ class UringAsyncBackend::BoundedDispatchQueue {
     }
 
   private:
-    std::vector<detail::SlotHandle> storage_;
+    std::vector<detail::RequestReservation> storage_;
     std::size_t head_ = 0;
     std::size_t size_ = 0;
     std::size_t capacity_;
@@ -147,7 +147,7 @@ class UringAsyncBackend::TransportLedger {
         std::uint32_t physical_position = 0;
         Kind kind = Kind::operation;
         std::uint64_t cookie = 0;
-        detail::SlotHandle handle{};
+        detail::RequestReservation handle{};
         bool class_a_recovery_retired = false;
     };
 
@@ -164,7 +164,7 @@ class UringAsyncBackend::TransportLedger {
     std::size_t size() const noexcept { return size_; }
 
     void append(Kind kind, std::uint32_t physical_position, std::uint64_t cookie,
-                detail::SlotHandle handle) noexcept {
+                detail::RequestReservation handle) noexcept {
         const std::uint32_t expected_physical =
             last_sequence_ == 0
                 ? physical_position

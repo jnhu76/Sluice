@@ -1,5 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -133,17 +134,30 @@ bool fd_readable(int fd) {
 
 bool host_readable_sleep(AsyncIoContext& ctx, std::chrono::milliseconds budget);
 
-// Two cross-thread submission shapes observe carrier readiness before the
-// submitter hands the Request back; the adopted binding cannot express that
-// (its wake can be consumed before the handoff), so those sub-oracles keep the
-// compat cell.
-bool submit_zero_op_into(AsyncIoContext& ctx, Completion<std::size_t>& c) {
-    std::vector<std::byte> buffer(4, std::byte{0});
-    return ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
-                                  buffer.data(), 0, 0},
-                           c)
-        .has_value();
-}
+// Two cross-thread submission shapes submit from a helper thread and observe
+// the handoff afterwards; the transferred binding is published and shared
+// under a mutex, because the Request itself carries no internal synchronization.
+struct SharedRequest {
+    std::optional<Request<std::size_t>> request;
+    std::mutex mtx;
+
+    bool submit_zero_op(AsyncIoContext& ctx) {
+        std::vector<std::byte> buffer(4, std::byte{0});
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                                   buffer.data(), 0, 0});
+        if (!submitted.has_value())
+            return false;
+        std::lock_guard<std::mutex> lk(mtx);
+        request = std::move(submitted.value());
+        return true;
+    }
+
+    bool ready() {
+        std::lock_guard<std::mutex> lk(mtx);
+        return request.has_value() && request->ready();
+    }
+};
 
 Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -322,7 +336,7 @@ bool external_poll_loop_threadpool_w03() {
         return false;
     w = std::move(w_submitted).value();
 
-    Completion<std::size_t> late;
+    SharedRequest late;
     std::thread helper([&] {
         // Submit from application-observed state, not from the notification
         // fd: the host and this helper must not compete for the shared
@@ -332,7 +346,7 @@ bool external_poll_loop_threadpool_w03() {
                 break;
             std::this_thread::yield();
         }
-        (void)submit_zero_op_into(ctx, late);
+        (void)late.submit_zero_op(ctx);
     });
     struct JoinOnExit {
         std::thread& t;
@@ -375,7 +389,10 @@ bool external_poll_loop_threadpool_w03() {
     r2.discard();
     r3.discard();
     w.discard();
-    late.reset();
+    {
+        std::lock_guard<std::mutex> lk(late.mtx);
+        late.request.reset();
+    }
     // Shutdown order: all accepted work settled, only then does the host
     // retire its registration and release the retained state. A retired
     // registration is gone (a second detach has nothing to retire), but the
@@ -542,11 +559,11 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
         return false;
 
     std::atomic<bool> acked{false};
-    Completion<std::size_t> racing;
+    SharedRequest racing;
     std::thread signaler([&] {
         while (!acked.load(std::memory_order_acquire))
             std::this_thread::yield();
-        (void)submit_zero_op_into(ctx, racing);
+        (void)racing.submit_zero_op(ctx);
     });
 
     // Acknowledge stale readiness (nothing pending here, so this is the
@@ -584,7 +601,10 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     }
 
     const bool ok = settled && racing.ready() && wakes <= 2;
-    racing.reset();
+    {
+        std::lock_guard<std::mutex> lk(racing.mtx);
+        racing.request.reset();
+    }
     host.stop_and_detach();
     return ok;
 }
