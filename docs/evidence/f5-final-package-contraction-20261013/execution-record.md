@@ -133,7 +133,7 @@ Every row names the exact artifact under this directory.
    failure was also observed at the baseline `14a27a83` during F5-F in a
    temporary scratch worktree (removed after the check). The F5 matrix
    therefore configures each profile into its own build directory
-   (`matrix/run-matrix.py`), the same isolation F2/F3 used.
+   (`matrix/run-matrix.py`), the same isolation F2/F3 used. Tracked as #520.
 2. **`xmake -a` fails at the head and at the base under Clang.** In the
    `asanubsan` profile, a full `xmake -a` build stops at
    `request_scope.hpp:204: private field 'policy_' is not used
@@ -150,8 +150,8 @@ Every row names the exact artifact under this directory.
    registered-test path is unaffected: `matrix/asanubsan-n.log` reports 52/52,
    and F5's earlier cold sanitizer run compiled the mutation targets in the
    same profile without the error; mutation targets are documented as manually
-   executed, never regular tests.
-3. **`request_scope_test` cannot link under TSan.** Recorded by F2 and F3 as
+   executed, never regular tests. Tracked as #519.
+3. **`request_scope_test` cannot link under TSan.** Tracked as #521. Recorded by F2 and F3 as
    well; see the gate row above for the capture and the byte-identity control.
 
 ## Remaining limitations and owner decisions
