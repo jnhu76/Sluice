@@ -60,7 +60,6 @@ bool evented_admission_check() noexcept;
 
 [[noreturn]] void async_mutex_lifetime_fail_fast() noexcept;
 [[noreturn]] void async_rwlock_lifetime_fail_fast() noexcept;
-[[noreturn]] void async_condition_lifetime_fail_fast() noexcept;
 [[noreturn]] void wait_queue_lifetime_fail_fast() noexcept;
 
 [[noreturn]] void async_rwlock_recursive_write_fail_fast() noexcept;

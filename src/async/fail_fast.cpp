@@ -34,9 +34,6 @@ namespace sluice::async::detail {
 [[noreturn]] void async_rwlock_lifetime_fail_fast() noexcept {
     std::terminate();
 }
-[[noreturn]] void async_condition_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
 [[noreturn]] void wait_queue_lifetime_fail_fast() noexcept {
     std::terminate();
 }
