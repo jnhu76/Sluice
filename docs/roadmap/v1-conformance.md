@@ -2222,3 +2222,24 @@ decision on the installed-surface break (seven headers, three objects,
 external use UNKNOWN, no shims). Full record:
 `docs/evidence/f2-authority-contraction-20261013/` (execution record,
 corrective-round section).
+
+### 2026-10-13 F2 closeout — #402 amendment
+
+The owner issued the explicit scope-bound decision on the installed-surface
+break: **ACCEPT_BREAKAGE_NOW** (recorded in
+`docs/evidence/f2-authority-contraction-20261013/installed-surface-risk-disposition.md`;
+it covers only the reviewed F2 deletion scope of PR #516 and accepts UNKNOWN
+external use), and authorized the merge once the final SHA consistency check,
+the independent technical acceptance and the CI gates were satisfied — all
+three recorded in the evidence directory (consistency: `gates.json` binding at
+`093332ba` with the branch tip and CI heads agreeing; acceptance: the final
+corrective-round review in `independent-review.md`, verdict "none requiring
+change"; CI: `38402996519` success at the decision-record head `acbd1a73`).
+PR #516 was marked Ready and merged as
+`27a5041a17ed02e8a2c9396fedfa34600fb35378` (merge of the unmoved baseline
+`0ed16588` with branch head `acbd1a73`, merged by `jnhu76`). Post-merge
+re-verification at the actual master SHA: the merged tree is byte-identical to
+`acbd1a73`, so every capture bound to `093332ba` applies verbatim, and GitHub
+CI `38403388160` on the merge commit passed all four jobs. **Status: CLOSED**
+— F2 executed and merged. #402 remains OPEN for the remaining phases; F5 is
+the next phase; F6 and v1 release readiness are not claimed.

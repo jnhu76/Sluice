@@ -4,12 +4,17 @@ Slice #402 F2 (Request/Result/Identity authority contraction, clean break).
 Baseline master `0ed16588b7101f108aa7282074ba3d568f9d34e9`. Implementation
 head `093332ba1b40b667763d1202200ee899962454ae`; commits after it in this
 directory are documentation-only. Every capture is bound to the implementation
-head by `gates.json`.
+head by `gates.json`. Merged into master as
+`27a5041a17ed02e8a2c9396fedfa34600fb35378` on 2026-10-13 under the owner's
+ACCEPT_BREAKAGE_NOW decision; the merged tree is byte-identical to the
+decision-record head `acbd1a73c34c9cc569172d2794de558cf65aca54`.
 
 ```ini
 BEGIN_F2_FINAL_CLOSEOUT
-F2_STATUS = CANDIDATE_COMPLETE_DECISION_ACCEPTED_MERGE_AUTHORIZED
+F2_STATUS = CLOSED_MERGED
 IMPLEMENTATION_HEAD = 093332ba1b40b667763d1202200ee899962454ae
+DECISION_RECORD_HEAD = acbd1a73c34c9cc569172d2794de558cf65aca54
+MASTER_MERGE_SHA = 27a5041a17ed02e8a2c9396fedfa34600fb35378
 URING_POISON_RACE = CORRECTED_8689a720_DETERMINISTIC_RED_GREEN
 E1_GATE_LIFETIME_RACE = CORRECTED_e974988c_TEST_ONLY
 RETIRE_DELIVERY_MOVED_FROM = CORRECTED_0bcfda01
@@ -26,10 +31,12 @@ RCORE_LIVE_EXECUTION = INCOMPLETE
 RCORE_LIVE_PROOF = VERIFIED_REUSABLE
 F2_FORMAL_ACCEPTANCE = ACCEPTED_BY_REUSE
 CI_AT_IMPLEMENTATION_HEAD = SUCCESS_38397035018
+CI_AT_DECISION_RECORD_HEAD = SUCCESS_38402996519
+CI_AT_MASTER_MERGE = SUCCESS_38403388160
 INSTALLED_SURFACE_DECISION = ACCEPTED_BREAKAGE_NOW_2026-10-13
-MERGE_AUTHORIZATION = GRANTED_SCOPE_BOUND_TO_PR516
-PR_516 = DRAFT_PENDING_MERGE_UNDER_GRANTED_AUTHORIZATION
-F5 = PENDING
+MERGE_AUTHORIZATION = GRANTED_SCOPE_BOUND_TO_PR516_EXECUTED
+PR_516 = MERGED_AS_27a5041a_BY_jnhu76_2026-10-13
+F5 = NEXT
 F6 = PENDING
 V1_RELEASE_READY = NO
 END_F2_FINAL_CLOSEOUT
@@ -52,5 +59,10 @@ END_F2_FINAL_CLOSEOUT
   PR #516 under the satisfied consistency, acceptance and CI conditions; the
   authorization covers only the reviewed F2 deletion scope. No synthetic
   approval exists anywhere in the slice.
-- #402 stays OPEN; F5/F6 obligations are untouched and handed over as
-  pending. Nothing here claims v1 release readiness.
+- Post-merge re-verification at the actual master SHA: the merge commit's
+  parents are the unmoved baseline `0ed16588` and `acbd1a73`; its tree is
+  byte-identical to `acbd1a73`, so the bound captures and the surface
+  measurements apply verbatim; CI `38403388160` on the merge commit passed
+  all four jobs.
+- #402 stays OPEN; F5 is the next phase and F6 remains pending. Nothing here
+  claims v1 release readiness.
