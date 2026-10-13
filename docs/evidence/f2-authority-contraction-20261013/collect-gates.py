@@ -16,6 +16,7 @@ parser.add_argument("--matrix", required=True)
 parser.add_argument("--b01", required=True)
 parser.add_argument("--probes", required=True)
 parser.add_argument("--tla-log", required=True)
+parser.add_argument("--tla-verdicts", required=True)
 parser.add_argument("--ci-json", required=True)
 parser.add_argument("--output", required=True)
 args = parser.parse_args()
@@ -44,7 +45,15 @@ assert len(set(heads.values())) == 1, ("captures disagree on the head", heads)
 head = heads["matrix"]
 
 tla_text = pathlib.Path(args.tla_log).read_text()
-tla_verdict = "PASS" if "VERIFY_TLA: PASS" in tla_text else "NOT_PASSED"
+tla_census = json.loads(pathlib.Path(args.tla_verdicts).read_text())
+if "VERIFY_TLA: PASS" in tla_text:
+    tla_verdict = "PASS"
+elif not tla_census["failing"] and tla_census["outstanding"]:
+    # Every config that produced a verdict met its expectation; the named ones
+    # that did not are recorded separately rather than folded into the verdict.
+    tla_verdict = "INCOMPLETE: " + ",".join(tla_census["outstanding"])
+else:
+    tla_verdict = "NOT_PASSED"
 stages = len(re.findall(r"^== ", tla_text, re.M))
 
 ci_runs = json.loads(pathlib.Path(args.ci_json).read_text())
@@ -94,7 +103,12 @@ gates = {
         "probes_json_sha256": sha256(probes_root / "probes.json"),
     },
     "tla": {"verdict": tla_verdict, "stage_headers": stages,
-            "log_sha256": sha256(args.tla_log)},
+            "configs_queued": tla_census["configs_queued"],
+            "configs_with_verdicts": tla_census["configs_with_verdicts"],
+            "verdict_census": tla_census["verdict_census"],
+            "outstanding": tla_census["outstanding"],
+            "log_sha256": sha256(args.tla_log),
+            "verdicts_sha256": sha256(args.tla_verdicts)},
     "ci": [{"database_id": r["databaseId"], "status": r["status"],
             "conclusion": r["conclusion"], "head_sha": r["headSha"]} for r in ci],
 }

@@ -64,8 +64,8 @@
       "sluice/result.hpp"
     ],
     "files": {
-      "lib/libsluice_core.a": "e842692cb45ce1b7bd415f7d320c4d45c72bd3d5f651ae501c9f7b08c16e1915",
-      "lib/libsluice_async.a": "54f65cbd9ad04aed86dfdcef75c1667a61c4535abdf326a71ab0ee241f8a0013",
+      "lib/libsluice_core.a": "c78a0393b195ed87c8733355fb665856dba4457fc80322928b7990fa5f12957d",
+      "lib/libsluice_async.a": "ded97df52afcbaf6c17c058a3c597b56c1ba6096b94828f55f61a6027c144bf7",
       "include/sluice/effect.hpp": "51c28afb5a5cebf2f3cb4f4ed3a1e2a5cf46f132cf32ffe3f9cd6ee8d18dd505",
       "include/sluice/error.hpp": "387eeec1cb39de9ea14edbaee24bd16e494375e81482133627ac7532532a5539",
       "include/sluice/file_resource.hpp": "3cd9fc33b891c2221da18fef75ae74bb101c3eec106b42f50e387265006d4e7c",
@@ -123,8 +123,8 @@
       "include/sluice/async/detail/select_registration.hpp": "700de918767413c3761f9b001694191e015a33ac09f341ea69fc4f23344388b3",
       "include/sluice/async/detail/submit_transaction.hpp": "f3f6a80ca6cd5be2ee307c3957a006a6bf5b3b5686d4ef05c6ce3678ff214ebd"
     },
-    "package_path": "/tmp/f2-b01-v5/before-package-n.tar.gz",
-    "package_sha256": "620adf0fd98fb24d207e3ea7b71b599a662cdf56f21425b4d25929ef8a2f02eb",
+    "package_path": "/tmp/f2-b01-final/before-package-n.tar.gz",
+    "package_sha256": "b03c2fa420a63be205ce1ae4d5c8bb658ca9181a3fa8dca30411928a7d8b1f0e",
     "real_ring": "UNAVAILABLE"
   },
   "before-y": {
@@ -192,8 +192,8 @@
       "sluice/result.hpp"
     ],
     "files": {
-      "lib/libsluice_core.a": "8f4e304ad5d9796c7f1d1401aea89d55177de3a7b4e7cead3edb38fa85dfca45",
-      "lib/libsluice_async.a": "a76127232bb8c506692a063a6c34adec5d5228b01ed9fad583286ab5d5f72f7b",
+      "lib/libsluice_core.a": "bcd9e46f84ec6b7cf60291838ed8fcd923c5535dbbd6add82aeaf70d460f1af7",
+      "lib/libsluice_async.a": "d8526fa499534d775fef1ffdf24de8ceb8dd364abcfb13a3924953ecaa94101c",
       "include/sluice/effect.hpp": "51c28afb5a5cebf2f3cb4f4ed3a1e2a5cf46f132cf32ffe3f9cd6ee8d18dd505",
       "include/sluice/error.hpp": "387eeec1cb39de9ea14edbaee24bd16e494375e81482133627ac7532532a5539",
       "include/sluice/file_resource.hpp": "3cd9fc33b891c2221da18fef75ae74bb101c3eec106b42f50e387265006d4e7c",
@@ -251,13 +251,13 @@
       "include/sluice/async/detail/select_registration.hpp": "700de918767413c3761f9b001694191e015a33ac09f341ea69fc4f23344388b3",
       "include/sluice/async/detail/submit_transaction.hpp": "f3f6a80ca6cd5be2ee307c3957a006a6bf5b3b5686d4ef05c6ce3678ff214ebd"
     },
-    "package_path": "/tmp/f2-b01-v5/before-package-y.tar.gz",
-    "package_sha256": "b3f6692433f1c1bf13f87c949d32f09fe2fbfbb882ed7aa2cc02bfbc82157cda",
+    "package_path": "/tmp/f2-b01-final/before-package-y.tar.gz",
+    "package_sha256": "2f13b60b21781fc0cf776d6b46c6e030c0f783e9053048b6d6200927c374231a",
     "real_ring": "PASS"
   },
   "after-n": {
-    "source_sha": "4935f2b170536cb504b8eff5d8f91b682398abcf",
-    "source_archive_sha256": "a353a6ec228c8251b09c5a44f25723197296b9e866b219ad83cb9f5d5708d55b",
+    "source_sha": "996f434fd1517b80d83d0bd432301f7b832aa4f8",
+    "source_archive_sha256": "aa3b323f2133e8f4d3a393f3062e6922ffb32a7dec2db7ebf4f60a33dfd12540",
     "library_objects": 32,
     "async_archive_members": 30,
     "installed_headers": 49,
@@ -313,8 +313,8 @@
       "sluice/result.hpp"
     ],
     "files": {
-      "lib/libsluice_core.a": "9e901a069c68f1e1542a50fe3f9bc8b7417dfa1f9471f639ae92c39376ebd497",
-      "lib/libsluice_async.a": "88255aa96d0a98babc607eb79bc2fe3d865b683532de0fa1250926891d3e7016",
+      "lib/libsluice_core.a": "93c6d9629b64569b18ad7b5f602b50f241593eb231349fb8e60eaff623a1806b",
+      "lib/libsluice_async.a": "e488ea9b556a8e6a7fce13916d48634366533f2460d30360420f0682c6599b16",
       "include/sluice/effect.hpp": "51c28afb5a5cebf2f3cb4f4ed3a1e2a5cf46f132cf32ffe3f9cd6ee8d18dd505",
       "include/sluice/error.hpp": "387eeec1cb39de9ea14edbaee24bd16e494375e81482133627ac7532532a5539",
       "include/sluice/file_resource.hpp": "3cd9fc33b891c2221da18fef75ae74bb101c3eec106b42f50e387265006d4e7c",
@@ -360,18 +360,18 @@
       "include/sluice/async/detail/queue_test_seam.hpp": "69c8a89b552cfbe66a17a71fa2dfe54ae7ff95ea4674f09c1a062a6ea3c7d0b6",
       "include/sluice/async/detail/ready_sink.hpp": "1c29d114a34b8a22808c32477a05ac821b7c8ad152284d2bca1497cdf064f5d8",
       "include/sluice/async/detail/reference_ready_sink.hpp": "2a0d25aaed16d2e1e6ce1e10ad27387bc76148f91f2ea557a0f4daf4b82bb81a",
-      "include/sluice/async/detail/request_core.hpp": "4c3c044be14b95030853743b0118d0f564587f9e0e5c7e7973c9bcf9f167a026",
+      "include/sluice/async/detail/request_core.hpp": "73db64b1dae6636f679c53c8dd9a0bbe5dbc5a013a238b6bfe8372057ea299c4",
       "include/sluice/async/detail/request_key.hpp": "c427e2a494f7666248e6aa89219c49deb6b4fb6ab508824561e715b3e4b867d9",
       "include/sluice/async/detail/select_port.hpp": "248cb7edf66b98a48e57498fd0ad698d7a21786da8a456680abe6d7f681a7099",
       "include/sluice/async/detail/select_registration.hpp": "700de918767413c3761f9b001694191e015a33ac09f341ea69fc4f23344388b3"
     },
-    "package_path": "/tmp/f2-b01-v5/after-package-n.tar.gz",
-    "package_sha256": "dec7797e81740574e7cd65bc0f822dd162436aa73ea664b6d25f062f809a15a2",
+    "package_path": "/tmp/f2-b01-final/after-package-n.tar.gz",
+    "package_sha256": "03492fa96a1b61dcb5f6054dd521475696860a5a9bb30796d911c80fdf83b727",
     "real_ring": "UNAVAILABLE"
   },
   "after-y": {
-    "source_sha": "4935f2b170536cb504b8eff5d8f91b682398abcf",
-    "source_archive_sha256": "a353a6ec228c8251b09c5a44f25723197296b9e866b219ad83cb9f5d5708d55b",
+    "source_sha": "996f434fd1517b80d83d0bd432301f7b832aa4f8",
+    "source_archive_sha256": "aa3b323f2133e8f4d3a393f3062e6922ffb32a7dec2db7ebf4f60a33dfd12540",
     "library_objects": 32,
     "async_archive_members": 30,
     "installed_headers": 49,
@@ -427,8 +427,8 @@
       "sluice/result.hpp"
     ],
     "files": {
-      "lib/libsluice_core.a": "6372c15448110187eea14e5e96409ffd6aa46d1b1d2eaf4df0be1ea11e81bd62",
-      "lib/libsluice_async.a": "fc14265f46e704de0e14aa0d8db893231675e924c3995c0307e24d01fca8fe64",
+      "lib/libsluice_core.a": "6ae3186fb36a4fd74bceff582c8624200b89aac924e647013cf868a206e6fe88",
+      "lib/libsluice_async.a": "49ccbb923f0a3254c89fc9a25f2f0ef015f24e2f39dfa1ae1af078867c5f48cf",
       "include/sluice/effect.hpp": "51c28afb5a5cebf2f3cb4f4ed3a1e2a5cf46f132cf32ffe3f9cd6ee8d18dd505",
       "include/sluice/error.hpp": "387eeec1cb39de9ea14edbaee24bd16e494375e81482133627ac7532532a5539",
       "include/sluice/file_resource.hpp": "3cd9fc33b891c2221da18fef75ae74bb101c3eec106b42f50e387265006d4e7c",
@@ -474,13 +474,13 @@
       "include/sluice/async/detail/queue_test_seam.hpp": "69c8a89b552cfbe66a17a71fa2dfe54ae7ff95ea4674f09c1a062a6ea3c7d0b6",
       "include/sluice/async/detail/ready_sink.hpp": "1c29d114a34b8a22808c32477a05ac821b7c8ad152284d2bca1497cdf064f5d8",
       "include/sluice/async/detail/reference_ready_sink.hpp": "2a0d25aaed16d2e1e6ce1e10ad27387bc76148f91f2ea557a0f4daf4b82bb81a",
-      "include/sluice/async/detail/request_core.hpp": "4c3c044be14b95030853743b0118d0f564587f9e0e5c7e7973c9bcf9f167a026",
+      "include/sluice/async/detail/request_core.hpp": "73db64b1dae6636f679c53c8dd9a0bbe5dbc5a013a238b6bfe8372057ea299c4",
       "include/sluice/async/detail/request_key.hpp": "c427e2a494f7666248e6aa89219c49deb6b4fb6ab508824561e715b3e4b867d9",
       "include/sluice/async/detail/select_port.hpp": "248cb7edf66b98a48e57498fd0ad698d7a21786da8a456680abe6d7f681a7099",
       "include/sluice/async/detail/select_registration.hpp": "700de918767413c3761f9b001694191e015a33ac09f341ea69fc4f23344388b3"
     },
-    "package_path": "/tmp/f2-b01-v5/after-package-y.tar.gz",
-    "package_sha256": "cc283abedc3ec2d57fc1cc5d2a24ceefe92a14b4028df456faa90382d31ad55d",
+    "package_path": "/tmp/f2-b01-final/after-package-y.tar.gz",
+    "package_sha256": "3f906c865e58ff897decb039f794f0cf4ecf9b8972a652a2d8b97cfe91d5dbf7",
     "real_ring": "PASS"
   }
 }

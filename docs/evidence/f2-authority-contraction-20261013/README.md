@@ -20,7 +20,11 @@ there, not for whatever the branch happens to point at now.
 | `installed-probes/` | Per-installed-header standalone compile, cross-translation-unit link and ODR identity probe, and the removed-header negative control measured on the before prefix |
 | `matrix/run-matrix.py` | The six-profile runner (Debug/Release × no-ring/real-ring, native Clang ASan+UBSan and TSan scopes) with its per-profile unavailability rule |
 | `r14-load-attribution/` | Why one migrated scenario was restructured, with the load, quiet-machine and wake-latency measurements that attributed the failure to the test cell rather than the library |
+| `mutants/` | The 64-mutant campaign on three trees (baseline, pre-review F2, head) with the comparison script that asserts kill-set equality, the surviving mutant and the timing-flaky one |
+| `ci/` | GitHub CI runs for this branch, including the head run with its job list |
 | `formal/` | TLA+ gate log and the model-to-C++ correspondence note for the transitions this slice touched |
+| `known-preexisting-gaps.md` | Two gaps the review found that predate this slice (io_uring poison racing the post-accept push; an unguarded `core_` in `retire_delivery`), with their baseline-equivalence checks |
+| `collect-gates.py` | Asserts that every capture names the same head and writes `gates.json`; a capture bound to a different revision fails here instead of being averaged in |
 
 Reproduction, in order:
 

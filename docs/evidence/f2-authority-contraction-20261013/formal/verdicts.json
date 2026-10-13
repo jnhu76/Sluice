@@ -1,0 +1,11 @@
+{
+  "verdict_census": {
+    "PASS": 170
+  },
+  "configs_with_verdicts": 170,
+  "configs_queued": 171,
+  "outstanding": [
+    "rcore-live"
+  ],
+  "failing": {}
+}

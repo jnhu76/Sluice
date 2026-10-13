@@ -36,6 +36,63 @@ file is authoritative for every capture in this directory.
    probe`.
 5. `test(external-loop): settle R14 on the published obligation, not on a wake`
    — see "Load-sensitivity investigation" below.
+6. `test(conformance): scope the ring control tag to the ring profile` — a
+   pre-existing Clang `-Werror` break in the no-liburing branch of
+   `tests/backend_conformance_e1_test.cpp` (the baseline fails identically at
+   the same line), surfaced because the F2 matrix is the first configuration
+   that builds that test under Clang without liburing.
+7. `test(external-loop): keep the waited binding alive across the drain guard`
+   — a stack-use-after-scope that this slice's migration introduced and
+   AddressSanitizer found: the drain guard dereferences the bindings it settles
+   from its destructor, and the migrated scenario declared one of them after the
+   guard. The baseline form held that work in a `Batch`, which owns its storage.
+8. `fix(scheduler): report a settled result after admission closes` — a real
+   behavioural regression of this slice, found by the production review:
+   `await_request` mapped every refused attach other than `already_terminal` to
+   `invalid_state`, but `register_observer` answers `admission_closed` before it
+   looks at the slot, so an already-published request reached the caller as a
+   failure after `close_admission()`. The fallback now asks the canonical
+   readiness, as the pre-F2 await did through `Completion::ready()`. The
+   regression test is deterministic and fails on the pre-fix mapping.
+9. `refactor(core)!: leave one release edge for the public binding` — a second
+   release authority found by review: `release_public_binding` accepted releases
+   during `publication_inflight` (the removed caller-owned `Completion`'s rule)
+   while `discard_public_result` requires strictly published. Retired; the two
+   protocol scenarios that pinned the retired verdicts are re-expressed on the
+   canonical ones and keep their safety content.
+10. `test(external-loop): re-assert the wake after a racing acknowledgement` —
+    restores R14's second half deterministically.
+11. `docs(evidence): correct the F2 record after independent review`.
+
+## Independent review
+
+Two adversarial reviews ran against the slice: one over the production diff
+(hidden second authorities, publication/lifetime assumptions, UAF and
+stale-generation windows, stranded requests, false ordering claims, unjustified
+state) and one over the evidence and test-coverage integrity (lost failure
+modes, weakened assertions, vacuous checks, missing binding, undisclosed
+surface). Outcome:
+
+- Fixed in the slice: the `await_request` regression (commit 8), the duplicate
+  release edge (commit 9), the R14 coverage gap (commits 5 and 10), the
+  ASan-detectable lifetime defect the migration introduced (commit 7), the
+  matrix runner's silent tolerance of a failing `xmake test` and of a shrunken
+  build set, the package harness's vacuous source-path check and missing
+  before-side positive controls, the installed-probe documentation, and the
+  installed-surface list (scheduler/observer `Completion` spellings, `BatchOp`,
+  the 16 retired fail-fast diagnostics, the retired release edge).
+- Corrected in the ledger: `cancel_intent` arbitrates nothing and is read only
+  by the protocol seam; `ThreadPool` has no poison state of its own (only
+  io_uring does); `release_public_binding` is retired and
+  `claim_execution`/`acquire_execution` are classified as protocol-test surface.
+- Recorded as pre-existing and not fixed here: the io_uring poison-versus-
+  post-accept-push window that can strand an accepted request until the caller
+  cancels it (byte-identical at the baseline), and the unguarded `core_` in
+  `retire_delivery`. See `known-preexisting-gaps.md`.
+- Confirmed sound by the production review: one settlement authority, no
+  surviving second state machine, publication strictly ordered before any public
+  observation, reference accounting covering slot reuse, at-most-once observer
+  delivery, and no accepted request lost on the traced backend paths.
 
 ## Requirement mapping (MIG-02 → this slice)
 
@@ -69,6 +126,29 @@ its readiness-mapping layer; the dead `RequestArena`/`RequestSlot`/
 arena/completion fail-fast diagnostics; the delivery-record completion fields and
 the `WaitRecord` completion back-pointer.
 
+## Execution DAG
+
+```
+0ed16588 (baseline master, F3+F4 closed)
+  └─ S1 key-canonical scheduler await and observer attach
+      └─ S2 retire Batch and the busy-poll op helpers
+          └─ S3 remove the caller-owned Completion authority and arena vocabulary
+              └─ package consumer updated to the canonical availability observation
+                  ├─ S4a R14 oracle restored on the published obligation (test-only)
+                  │    └─ S4b ring control tag scoped to the ring profile (test-only)
+                  │        └─ S4c the waited binding outlives the drain guard (test-only, ASan)
+                  ├─ S5 the await refusal fallback consults canonical readiness (production)
+                  │    └─ S6 one release edge for the public binding (production)
+                  │        └─ S7 R14 wake re-assertion restored (test-only)
+                  │            └─ evidence refresh, captures re-run at this head
+                  └─ (S4a..S7 all fold into the single head captured by gates.json)
+```
+
+Each production commit is followed by its own deterministic oracle in the same
+commit: S5 by `already_ready_await_survives_closed_admission`, S6 by the
+canonical verdicts in the two publication scenarios. Every capture in this
+directory names the final head; the re-run was triggered by S5..S7.
+
 ## Validation executed
 
 | Gate | Evidence |
@@ -77,7 +157,7 @@ the `WaitRecord` completion back-pointer.
 | Versioned B-01 v5 clean-room dual-profile package capture | `b01-v5-candidate/` (`reproduce.py`, `persist.py`, `commands.json`, `summary.json`, `raw-package-evidence.tar.gz`, `raw-manifest.json`) |
 | Installed-header standalone compile, link and cross-TU ODR probes | `installed-probes/` (`probes.json`, per-header logs, the negative control on the before prefix) |
 | Named mutation builds | 64 mutant targets, two runs each, compared against the same campaign on the baseline worktree; the kill sets are identical and no mutant target compiles a test source edited by this slice, so the set is invariant by construction |
-| TLA+ gate | `formal/` — full `scripts/verify_tla.sh` run against the pinned v1.7.4 TLC jar (SHA-256 verified) |
+| TLA+ gate | `formal/` — `scripts/verify_tla.sh` run against the pinned v1.7.4 TLC jar (SHA-256 verified). 170 of the 171 TLC configurations finished with `PASS` verdicts and none failed; `rcore-live` was still running when the capture was closed. Its documented cost on this model is ≈18.5 h wall with a ≈40-48 GB heap (see the E1/E2 records in `docs/roadmap/v1-conformance.md`), so the run was capacity-bound rather than verdict-bound. No model file changed in this slice (empty `git diff 0ed16588..HEAD -- formal/`), and the baseline's own full-gate PASS covers that unchanged configuration. The gate is therefore recorded as `INCOMPLETE: rcore-live` in `gates.json`, never as a pass. |
 | GitHub CI | run on the branch head recorded in `gates.json` |
 | W-01/W-02/W-03 installed consumers | B-01 v5 consumer rows: each links and runs from the installed prefix in both ring profiles |
 

@@ -1,0 +1,178 @@
+{
+  "head": "996f434fd1517b80d83d0bd432301f7b832aa4f8",
+  "baseline_master": "0ed16588b7101f108aa7282074ba3d568f9d34e9",
+  "capture_heads": {
+    "matrix": "996f434fd1517b80d83d0bd432301f7b832aa4f8",
+    "b01-after-n": "996f434fd1517b80d83d0bd432301f7b832aa4f8",
+    "b01-after-y": "996f434fd1517b80d83d0bd432301f7b832aa4f8"
+  },
+  "matrix": {
+    "root": "/home/jnhu/f2-execution/final-matrix",
+    "profiles": {
+      "debug-n": {
+        "mode": "debug",
+        "liburing": "n",
+        "toolchain": null,
+        "targets_run": 53,
+        "pass_count": 53,
+        "xmake_test_exit": 0,
+        "unavailable": [],
+        "mutants_built": 37,
+        "results_tsv_sha256": "db52a526b0fac6952c0d26625b48f65609af64094f088231d41a8ba7f3cf6735",
+        "build_log_sha256": "721090667b96d7913cb6abe8e30b7009ef34564eec11209f4e03c2b1b15cc8f8",
+        "xmake_test_log_sha256": "eb5e02bd8cc82a7f70a22c128afd2093e552550c40c0a249a98ffbb9fa0ac057"
+      },
+      "debug-y": {
+        "mode": "debug",
+        "liburing": "y",
+        "toolchain": null,
+        "targets_run": 67,
+        "pass_count": 67,
+        "xmake_test_exit": 0,
+        "unavailable": [],
+        "mutants_built": 64,
+        "results_tsv_sha256": "bf3e74816d43fe1d1f294211bf803eaccce9b5915788536845ec242b812a30c5",
+        "build_log_sha256": "637ac7d506b36bf965c82f75063b6a948a2ac72668e05dfe959e6ca89b384e97",
+        "xmake_test_log_sha256": "ed2da979e89f340130a279670a175243d87fe196e525fe657f7236d8ec0f6608"
+      },
+      "release-n": {
+        "mode": "release",
+        "liburing": "n",
+        "toolchain": null,
+        "targets_run": 53,
+        "pass_count": 53,
+        "xmake_test_exit": 0,
+        "unavailable": [],
+        "mutants_built": 37,
+        "results_tsv_sha256": "db52a526b0fac6952c0d26625b48f65609af64094f088231d41a8ba7f3cf6735",
+        "build_log_sha256": "46a903d57a7f90c52ae64826238b220f7454a8e3dda115140c652bfe505ee8e9",
+        "xmake_test_log_sha256": "e7e288ba7f5eec783d3fd132cfbf42646b36fd8f0bc45be32ae9e7611127acb6"
+      },
+      "release-y": {
+        "mode": "release",
+        "liburing": "y",
+        "toolchain": null,
+        "targets_run": 67,
+        "pass_count": 67,
+        "xmake_test_exit": 0,
+        "unavailable": [],
+        "mutants_built": 64,
+        "results_tsv_sha256": "bf3e74816d43fe1d1f294211bf803eaccce9b5915788536845ec242b812a30c5",
+        "build_log_sha256": "4238612de26c3d26b95adc72c858fde7c84ce9dc1e320fb872c5764cc8f3c295",
+        "xmake_test_log_sha256": "8073323c249ac83071460b50dbc07a5ddad859e8921eab0c14908fe956760fff"
+      },
+      "asanubsan-n": {
+        "mode": "asanubsan",
+        "liburing": "n",
+        "toolchain": "clang",
+        "targets_run": 18,
+        "pass_count": 18,
+        "xmake_test_exit": "not_applicable_scope",
+        "unavailable": [],
+        "mutants_built": 0,
+        "results_tsv_sha256": "4c3864f0bd90b7174d17e186835e9bc695ab92a827385488d8bb87275a90db20",
+        "build_log_sha256": null,
+        "xmake_test_log_sha256": null
+      },
+      "tsan-n": {
+        "mode": "tsan",
+        "liburing": "n",
+        "toolchain": "clang",
+        "targets_run": 18,
+        "pass_count": 17,
+        "xmake_test_exit": "not_applicable_scope",
+        "unavailable": [
+          {
+            "target": "request_scope_test",
+            "status": "LINK_UNAVAILABLE_STRONG_ALLOCATION_OVERRIDES",
+            "requires": [
+              "multiple definition of `operator new"
+            ]
+          }
+        ],
+        "mutants_built": 0,
+        "results_tsv_sha256": "4803c5c4b2082557d462177d04e1595bb2c6be4147f13f204a1b461ed65196b8",
+        "build_log_sha256": null,
+        "xmake_test_log_sha256": null
+      }
+    }
+  },
+  "package_capture": {
+    "root": "/home/jnhu/Source/Sluice-f2/docs/evidence/f2-authority-contraction-20261013/b01-v5-candidate",
+    "before": "0ed16588b7101f108aa7282074ba3d568f9d34e9",
+    "after": "996f434fd1517b80d83d0bd432301f7b832aa4f8",
+    "counts": {
+      "before-n": {
+        "library_objects": 35,
+        "async_archive_members": 33,
+        "installed_headers": 56
+      },
+      "before-y": {
+        "library_objects": 35,
+        "async_archive_members": 33,
+        "installed_headers": 56
+      },
+      "after-n": {
+        "library_objects": 32,
+        "async_archive_members": 30,
+        "installed_headers": 49
+      },
+      "after-y": {
+        "library_objects": 32,
+        "async_archive_members": 30,
+        "installed_headers": 49
+      }
+    },
+    "package_sha256": {
+      "before-n": "b03c2fa420a63be205ce1ae4d5c8bb658ca9181a3fa8dca30411928a7d8b1f0e",
+      "before-y": "2f13b60b21781fc0cf776d6b46c6e030c0f783e9053048b6d6200927c374231a",
+      "after-n": "03492fa96a1b61dcb5f6054dd521475696860a5a9bb30796d911c80fdf83b727",
+      "after-y": "3f906c865e58ff897decb039f794f0cf4ecf9b8972a652a2d8b97cfe91d5dbf7"
+    },
+    "commands_json_sha256": "aee6c42c75cb34ef8bdb273d67aafe1f07e3f141358b30fb3e60e489edf72185",
+    "raw_manifest_sha256": "134eb81f9ef3ac163065bb99ab082223d2aa065ba62ed4644b4a7bd43a2d7ee7"
+  },
+  "installed_probes": {
+    "root": "/home/jnhu/Source/Sluice-f2/docs/evidence/f2-authority-contraction-20261013/installed-probes",
+    "installed_headers": 49,
+    "standalone_failures": 0,
+    "odr_run_exit": 0,
+    "removed_headers_present": 0,
+    "control": {
+      "prefix": "/tmp/f2-b01-final/before-installed-n",
+      "installed_headers": 56,
+      "present_removed_headers": [
+        "sluice/async/completion.hpp",
+        "sluice/async/request_handle.hpp",
+        "sluice/async/batch.hpp",
+        "sluice/async/op_helpers.hpp",
+        "sluice/async/detail/request_arena.hpp",
+        "sluice/async/detail/request_slot.hpp",
+        "sluice/async/detail/submit_transaction.hpp"
+      ]
+    },
+    "probes_json_sha256": "868aa2c4adbe3fffe92f592d4a5dbd9a96bed79511a009eb0fbc16be7946a004"
+  },
+  "tla": {
+    "verdict": "INCOMPLETE: rcore-live",
+    "stage_headers": 221,
+    "configs_queued": 171,
+    "configs_with_verdicts": 170,
+    "verdict_census": {
+      "PASS": 170
+    },
+    "outstanding": [
+      "rcore-live"
+    ],
+    "log_sha256": "5295624fc1d39300396e71e6793caacda9bcf8598a82d004de1c37df94b68af3",
+    "verdicts_sha256": "0d70e3c0ddce474c7b37f71ee3164eb55223d919b406d1ea3842c2878bee3ac5"
+  },
+  "ci": [
+    {
+      "database_id": 38368564885,
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "996f434fd1517b80d83d0bd432301f7b832aa4f8"
+    }
+  ]
+}

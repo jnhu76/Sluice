@@ -2136,3 +2136,24 @@ F4=ADOPTED_SCOPED at actual merged-master de551ed09555b8ad4d118a250baf373062a01d
 ## 2026-10-13 F3 actual-master exit receipt
 
 This dated receipt supersedes2026-10-12 candidate-owner-PENDING overlays. Active human CLI approval bound PR513HEAD350e789810f16078d528e572a0b124e71bd6da97; merged/tested masterf4a9723410539025cffa3422c5f6841ef795c755 has fresh four app/package configurations, dual native-Clang sanitizers and four successful CI jobs. See docs/evidence/f3-postmerge-closeout-20261013; independent scoped technical acceptance gates #474 closure. F4 ADOPTED_SCOPED/#505/#506 CLOSED. F3 technical exit has complete evidence; optionalW04support NO, conditional N/A audit. PhaseM CLOSED_ADOPTED, #402 OPEN for F2/F5 then F6 final audit; V1_RELEASE_READY NO. Documentation-only receipt commits do not relabel the actual tested master SHA.
+
+## 2026-10-13 F2 authority contraction candidate — #402
+
+Candidate slice on branch `f2-clean-authority` (draft PR #516), unmerged: the
+installed/public API break still needs the owner's separate decision. Master and
+the F3/F4 closure records above are unchanged by this section.
+
+| Field | Value |
+|---|---|
+| Slice | #402 F2, Request/Result/Identity authority contraction (clean break) |
+| Baseline | `0ed16588b7101f108aa7282074ba3d568f9d34e9` (F3 and F4 closed) |
+| Head | the branch head recorded in `docs/evidence/f2-authority-contraction-20261013/gates.json` |
+| Requirements | MIG-02 rows for caller-owned `Completion<T>`, `RequestArena`, `RequestHandle` and the busy-poll helpers; MIG-01 slice/gate order; MIG-03 evidence shape; PROD-03 scope; GOV-02 statuses |
+| Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations |
+| Removed | 7 installed headers (`completion.hpp`, `request_handle.hpp`, `batch.hpp`, `op_helpers.hpp`, `detail/request_arena.hpp`, `detail/request_slot.hpp`, `detail/submit_transaction.hpp`), 3 compiled objects (`request_handle.cpp`, `batch.cpp`, `op_helpers.cpp`), the `RequestHandle`/`RequestHandleState` identity mapping, `Batch`/`BatchResult`, the busy-poll helpers, 16 arena/completion fail-fast diagnostics, and `RequestCore::release_public_binding` (a second release edge retired during review) |
+| Canonical after | `RequestCore` owns acceptance/terminal/publication/binding release/reclaim; `submit_*(Op) -> Result<Request<T>>`; backend vtable `submit_*(Op) -> Result<detail::RequestKey>`; `RequestId` + `AsyncIoContext::lookup`; `attach_observer`/`cancel_observer`/`await_request`/`cancel_waiter` on `RequestId` |
+| Evidence | `docs/evidence/f2-authority-contraction-20261013/` — six configuration profiles (Debug/Release x no-ring/real-ring, native Clang ASan+UBSan and TSan scopes), B-01 v5 dual-profile clean-room package capture with negative link probes and retained-consumer rows, installed-header standalone compile plus cross-TU link/ODR probes with a before-prefix control, the 64-mutant campaign against the baseline kill set, the full TLA+ gate, GitHub CI, and the load-attribution record for the one restructured scenario |
+| Retained obligations | publication acquire/release pin, execution (borrow) and control references with their separate retirement edges, observer claim/retire protocol, nonterminal-release fail fast (verified present in the release archive), slot reclamation predicate, notification epoch freshness |
+| Limitations | installed-surface break pending the owner decision (`installed-surface-risk-disposition.md`); optional W-04 remains NO and is not forced by this slice; F5 and F6 not started; the pre-existing io_uring poison-versus-dispatch window recorded by review is unchanged from baseline and remains open |
+| Not claimed | no F2/F3/F4/F5/F6 family completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no `V1_RELEASE_READY` |
+
