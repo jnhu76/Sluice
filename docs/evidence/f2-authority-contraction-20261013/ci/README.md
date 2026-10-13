@@ -18,6 +18,11 @@ cannot stand in.
 | `25734314f704` | success | corrected implementation head (W-03 closure) |
 | `093332ba1b40` | success | final implementation head (corrective round; gates-bound) |
 | `a03551feecbc` | success | final pushed head (documentation-only after the implementation head) |
+| `a26d7c39b96d` | success | candidate closeout tip (documentation-only) |
+| `acbd1a73c34c` | success | owner clean-break decision record (documentation-only) |
+
+On master, run `38403388160` for `27a5041a17ed` — the PR #516 merge commit —
+passed all four jobs; the merged tree is byte-identical to `acbd1a73`.
 
 The workflow is `.github/workflows/ci.yml`: a C++ comment-authority guard, the F1
 frozen-provenance verifier self-tests, and a Linux build-plus-`xmake test` matrix over

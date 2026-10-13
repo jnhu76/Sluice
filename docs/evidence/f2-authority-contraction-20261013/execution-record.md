@@ -4,8 +4,9 @@ Owner slice: #402 F2 (Request/Result/Identity authority contraction, clean
 break). Baseline master: `0ed16588b7101f108aa7282074ba3d568f9d34e9`
 (F3 and F4 closed). Worktree: independent worktree `/home/jnhu/Source/Sluice-f2`
 on branch `f2-clean-authority`. The original `master` worktree was not modified.
-Draft PR: jnhu76/Sluice#516 (unmerged; the installed/public API break still
-needs the owner's separate decision — see `installed-surface-risk-disposition.md`).
+PR: jnhu76/Sluice#516 — merged as
+`27a5041a17ed02e8a2c9396fedfa34600fb35378` on 2026-10-13 under the owner's
+ACCEPT_BREAKAGE_NOW decision (see `installed-surface-risk-disposition.md`).
 
 Implementation head under test is the branch head recorded in
 `docs/evidence/f2-authority-contraction-20261013/gates.json`; the SHA in that
