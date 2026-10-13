@@ -150,8 +150,8 @@ class FakePhysicalDriver {
         return verdict;
     }
 
-    BindingRelease release_public_binding(RequestKey id) {
-        BindingRelease verdict = core_.release_public_binding(id);
+    BindingRelease discard_public_result(RequestKey id) {
+        BindingRelease verdict = core_.discard_public_result(id);
         if (verdict == BindingRelease::released) {
             state_of(id).binding_released = true;
         }
@@ -343,7 +343,7 @@ class FakePhysicalDriver {
             }
             state.published = true;
         }
-        BindingRelease verdict = core_.release_public_binding(id);
+        BindingRelease verdict = core_.discard_public_result(id);
         if (verdict != BindingRelease::released) {
             return false;
         }

@@ -120,7 +120,7 @@ bool settle(RequestCore& core, const RequestKey& id) {
         return false;
     if (core.complete_publication(id) != PublicationCompletion::completed)
         return false;
-    return core.release_public_binding(id) == BindingRelease::released;
+    return core.discard_public_result(id) == BindingRelease::released;
 }
 
 // Destroying a core that still holds live work terminates, which would replace the

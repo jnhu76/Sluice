@@ -128,7 +128,7 @@ bool full_lifecycle_on_the_public_surface() {
     if (core.lookup(accepted.id) != PublicLookup::published) {
         return false;
     }
-    if (core.release_public_binding(accepted.id) != BindingRelease::released) {
+    if (core.discard_public_result(accepted.id) != BindingRelease::released) {
         return false;
     }
     if (core.lookup(accepted.id) != PublicLookup::not_found) {
