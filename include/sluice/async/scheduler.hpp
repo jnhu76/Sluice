@@ -1,7 +1,6 @@
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/queue_port.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
@@ -149,17 +148,10 @@ class Scheduler {
 
     void run_until_idle() { run(1); }
 
-    Result<void> await_completion_size(Completion<std::size_t>& c);
-    Result<void> await_completion_void(Completion<void>& c);
+    Result<void> await_request(const RequestId& id);
     void await_ready_flag(const std::atomic<bool>& ready);
 
-  private:
-    template <class T> Result<void> await_completion_impl(Completion<T>& c);
-
-  public:
-
-    Result<bool> cancel_waiter(Completion<std::size_t>& c);
-    Result<bool> cancel_waiter(Completion<void>& c);
+    Result<bool> cancel_waiter(const RequestId& id);
 
     void await_wait(WaitQueue& q, WaitNode& node);
 
@@ -425,7 +417,6 @@ class Scheduler {
         WaitRecordState state = WaitRecordState::free;
         Fiber* fiber = nullptr;
         WorkerState* owner = nullptr;
-        const void* completion = nullptr;
         WaitRecord* next_delivered = nullptr;
         WaitRecord* next_free = nullptr;
     };
@@ -453,14 +444,12 @@ class Scheduler {
 #endif
     };
 
-    bool drain_routed_completion_waits_locked() SLUICE_REQUIRES(global_mtx_);
-
-    template <class T> Result<bool> cancel_waiter_impl(Completion<T>& c);
+    bool drain_routed_request_waits_locked() SLUICE_REQUIRES(global_mtx_);
 
     WaitRecord* reserve_wait_record_locked() SLUICE_REQUIRES(global_mtx_);
     void release_reserved_wait_record_locked(WaitRecord* record) SLUICE_REQUIRES(global_mtx_);
     void arm_wait_record_locked(WaitRecord* record, Fiber* fiber, WorkerState* owner,
-                                const void* completion, const detail::RequestKey& request_key)
+                                const detail::RequestKey& request_key)
         SLUICE_REQUIRES(global_mtx_);
     std::size_t wait_record_live_count_locked() const SLUICE_REQUIRES(global_mtx_);
 

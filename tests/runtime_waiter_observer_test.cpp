@@ -1,4 +1,3 @@
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/scheduler.hpp>
 #include <sluice/async/threadpool_backend.hpp>
@@ -11,6 +10,7 @@
 #include <cstdlib>
 #include <future>
 #include <mutex>
+#include <optional>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
@@ -18,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <fcntl.h>
@@ -154,24 +155,23 @@ bool completion_wake_rides_the_observer_adapter(Tracker& t) {
 
     std::vector<std::byte> stack(256 * 1024);
     Fiber fiber([&](Fiber&) {
-        Completion<std::size_t> c;
-        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 19, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 19, 0});
         if (!sr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = sched.await_completion_size(c);
+        Request<std::size_t> r = std::move(sr.value());
+        auto wr = sched.await_request(r.id());
         if (!wr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
-        auto r = c.result();
-        c.reset();
-        if (!r.has_value()) {
-            slot.set_value(make_unexpected<std::size_t>(r.error()));
+        auto observation = r.take_result();
+        if (!observation.result.has_value()) {
+            slot.set_value(make_unexpected<std::size_t>(observation.result.error()));
             return;
         }
-        slot.set_value(r.value());
+        slot.set_value(observation.result.value());
     });
     if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
         t.check(false, "the fiber stack initializes");
@@ -231,43 +231,48 @@ bool observer_cancel_wakes_the_fiber_and_the_operation_still_completes(Tracker& 
     std::promise<Result<std::size_t>> slot;
     std::vector<std::byte> buffer(21, std::byte{0});
     std::atomic<bool> await_was_canceled{false};
-    std::atomic<Completion<std::size_t>*> pending{nullptr};
+    std::mutex pending_mtx;
+    std::optional<RequestId> pending_id;
 
     std::vector<std::byte> stack(256 * 1024);
     Fiber fiber([&](Fiber&) {
-        Completion<std::size_t> c;
-        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 21, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 21, 0});
         if (!sr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        pending.store(&c, std::memory_order_release);
-        auto wr = sched.await_completion_size(c);
-        pending.store(nullptr, std::memory_order_release);
+        Request<std::size_t> r = std::move(sr.value());
+        {
+            std::lock_guard<std::mutex> lk(pending_mtx);
+            pending_id = r.id();
+        }
+        auto wr = sched.await_request(r.id());
+        {
+            std::lock_guard<std::mutex> lk(pending_mtx);
+            pending_id.reset();
+        }
         if (!wr.has_value() && wr.error().code == IoError::Code::canceled) {
             await_was_canceled.store(true, std::memory_order_release);
             await_was_canceled.notify_one();
-            auto drained = sched.await_completion_size(c);
+            auto drained = sched.await_request(r.id());
             if (!drained.has_value()) {
                 slot.set_value(make_unexpected<std::size_t>(drained.error()));
                 return;
             }
-            auto result = c.result();
-            c.reset();
-            slot.set_value(std::move(result));
+            auto observation = r.take_result();
+            slot.set_value(std::move(observation.result));
             return;
         }
         if (!wr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
-        auto r = c.result();
-        c.reset();
-        if (!r.has_value()) {
-            slot.set_value(make_unexpected<std::size_t>(r.error()));
+        auto observation = r.take_result();
+        if (!observation.result.has_value()) {
+            slot.set_value(make_unexpected<std::size_t>(observation.result.error()));
             return;
         }
-        slot.set_value(r.value());
+        slot.set_value(observation.result.value());
     });
     if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
         t.check(false, "the fiber stack initializes");
@@ -280,13 +285,17 @@ bool observer_cancel_wakes_the_fiber_and_the_operation_still_completes(Tracker& 
     t.check(wait_registry_live_becomes(sched, 1) == 1,
             "the suspended fiber is registered before cancellation");
 
-    Completion<std::size_t>* suspended = pending.load(std::memory_order_acquire);
-    t.check(suspended != nullptr, "the suspended completion is addressable");
-    auto canceled = suspended != nullptr ? sched.cancel_waiter(*suspended) : Result<bool>{false};
+    RequestId suspended;
+    {
+        std::lock_guard<std::mutex> lk(pending_mtx);
+        suspended = pending_id.value_or(RequestId{});
+    }
+    t.check(suspended.valid(), "the suspended request identity is addressable");
+    auto canceled = suspended.valid() ? sched.cancel_waiter(suspended) : Result<bool>{false};
     t.check(canceled.has_value() && canceled.value(),
             "cancelling the registered observer wakes the fiber");
     await_was_canceled.wait(false, std::memory_order_acquire);
-    t.check(io.outstanding() == 1 && !suspended->ready(),
+    t.check(io.outstanding() == 1 && io.lookup(suspended) != RequestReadiness::ready,
             "waiter cancellation leaves the accepted borrow pending while physical work is gated");
     t.check(buffer.front() == std::byte{0}, "the held operation has not written its borrow");
 
@@ -332,15 +341,15 @@ bool already_terminal_await_returns_without_suspending(Tracker& t) {
 
     std::vector<std::byte> stack(256 * 1024);
     Fiber fiber([&](Fiber& current) {
-        Completion<std::size_t> c;
-        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 0, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 0, 0});
         if (!sr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        t.check(c.ready(), "the zero-length request is terminal before await");
+        Request<std::size_t> r = std::move(sr.value());
+        t.check(r.ready(), "the zero-length request is terminal before await");
         const std::array context_before{current.ctx.rsp, current.ctx.rbp, current.ctx.rip};
-        auto wr = sched.await_completion_size(c);
+        auto wr = sched.await_request(r.id());
         t.check(current.state() == FiberState::running, "the already-terminal fiber keeps running");
         t.check(context_before == std::array{current.ctx.rsp, current.ctx.rbp, current.ctx.rip},
                 "already-terminal await performs no context switch");
@@ -350,10 +359,10 @@ bool already_terminal_await_returns_without_suspending(Tracker& t) {
             slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
-        auto r = c.result();
-        c.reset();
-        slot.set_value(r.has_value() ? Result<std::size_t>{r.value()}
-                                     : make_unexpected<std::size_t>(r.error()));
+        auto observation = r.take_result();
+        slot.set_value(observation.result.has_value()
+                           ? Result<std::size_t>{observation.result.value()}
+                           : make_unexpected<std::size_t>(observation.result.error()));
     });
     if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
         t.check(false, "the fiber stack initializes");
@@ -410,52 +419,50 @@ bool wait_record_exhaustion_fails_the_await_before_observer_attachment(Tracker& 
 
     std::vector<std::byte> stack_a(256 * 1024);
     Fiber fiber_a([&](Fiber&) {
-        Completion<std::size_t> c;
-        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer_a.data(), 31, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer_a.data(), 31, 0});
         if (!sr.has_value()) {
             slot_a.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = sched.await_completion_size(c);
+        Request<std::size_t> r = std::move(sr.value());
+        auto wr = sched.await_request(r.id());
         if (!wr.has_value()) {
             slot_a.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
-        auto r = c.result();
-        c.reset();
-        if (!r.has_value()) {
-            slot_a.set_value(make_unexpected<std::size_t>(r.error()));
+        auto observation = r.take_result();
+        if (!observation.result.has_value()) {
+            slot_a.set_value(make_unexpected<std::size_t>(observation.result.error()));
             return;
         }
-        slot_a.set_value(r.value());
+        slot_a.set_value(observation.result.value());
         holder_a_finished.store(true, std::memory_order_release);
     });
 
     std::vector<std::byte> stack_b(256 * 1024);
     Fiber fiber_b([&](Fiber&) {
-        Completion<std::size_t> c;
-        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer_b.data(), 15, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer_b.data(), 15, 0});
         if (!sr.has_value()) {
             slot_b.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        auto wr = sched.await_completion_size(c);
+        Request<std::size_t> r = std::move(sr.value());
+        auto wr = sched.await_request(r.id());
         if (!wr.has_value() && wr.error().code == IoError::Code::no_space) {
             await_b_failed_with_no_space.store(true, std::memory_order_release);
             sched.await_ready_flag(holder_a_finished);
-            wr = sched.await_completion_size(c);
+            wr = sched.await_request(r.id());
         }
         if (!wr.has_value()) {
             slot_b.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
-        auto r = c.result();
-        c.reset();
-        if (!r.has_value()) {
-            slot_b.set_value(make_unexpected<std::size_t>(r.error()));
+        auto observation = r.take_result();
+        if (!observation.result.has_value()) {
+            slot_b.set_value(make_unexpected<std::size_t>(observation.result.error()));
             return;
         }
-        slot_b.set_value(r.value());
+        slot_b.set_value(observation.result.value());
     });
     if (!sched.init_fiber(fiber_a, stack_a.data(), stack_a.size()) ||
         !sched.init_fiber(fiber_b, stack_b.data(), stack_b.size())) {
@@ -543,30 +550,36 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
 
     std::promise<Result<std::size_t>> slot;
     std::vector<std::byte> buffer(34, std::byte{0});
-    std::atomic<Completion<std::size_t>*> pending{nullptr};
+    std::mutex pending_mtx;
+    std::optional<RequestId> pending_id;
 
     std::vector<std::byte> stack(256 * 1024);
     Fiber fiber([&](Fiber&) {
-        Completion<std::size_t> c;
-        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 34, 0}, c);
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 34, 0});
         if (!sr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(sr.error()));
             return;
         }
-        pending.store(&c, std::memory_order_release);
-        auto wr = sched.await_completion_size(c);
-        pending.store(nullptr, std::memory_order_release);
+        Request<std::size_t> r = std::move(sr.value());
+        {
+            std::lock_guard<std::mutex> lk(pending_mtx);
+            pending_id = r.id();
+        }
+        auto wr = sched.await_request(r.id());
+        {
+            std::lock_guard<std::mutex> lk(pending_mtx);
+            pending_id.reset();
+        }
         if (!wr.has_value()) {
             slot.set_value(make_unexpected<std::size_t>(wr.error()));
             return;
         }
-        auto r = c.result();
-        c.reset();
-        if (!r.has_value()) {
-            slot.set_value(make_unexpected<std::size_t>(r.error()));
+        auto observation = r.take_result();
+        if (!observation.result.has_value()) {
+            slot.set_value(make_unexpected<std::size_t>(observation.result.error()));
             return;
         }
-        slot.set_value(r.value());
+        slot.set_value(observation.result.value());
     });
     if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
         t.check(false, "the fiber stack initializes");
@@ -587,15 +600,19 @@ bool cancel_during_the_staged_delivery_window_completes_normally(Tracker& t) {
     t.check(slots_in_delivering_phase(core) == 1,
             "the observer is claimed for delivery while the record stays registered");
 
-    Completion<std::size_t>* suspended = pending.load(std::memory_order_acquire);
-    t.check(suspended != nullptr, "the suspended completion is addressable");
-    t.check(suspended != nullptr && suspended->ready(),
+    RequestId suspended;
+    {
+        std::lock_guard<std::mutex> lk(pending_mtx);
+        suspended = pending_id.value_or(RequestId{});
+    }
+    t.check(suspended.valid(), "the suspended request identity is addressable");
+    t.check(suspended.valid() && io.lookup(suspended) == RequestReadiness::ready,
             "terminal publication precedes the pinned observer delivery");
 
     std::atomic<int> cancel_outcome{-1};
     std::atomic<bool> cancel_completed{false};
     std::thread canceler([&] {
-        auto canceled = sched.cancel_waiter(*suspended);
+        auto canceled = sched.cancel_waiter(suspended);
         cancel_outcome.store(canceled.has_value() ? (canceled.value() ? 1 : 0) : -1,
                              std::memory_order_release);
         cancel_completed.store(true, std::memory_order_release);

@@ -413,6 +413,8 @@ class AsyncIoContext {
         }
     };
 
+    ObserverAttachment attach_observer(const RequestId& id);
+    ObserverCancelResult cancel_observer(const RequestId& id);
     ObserverAttachment attach_observer(Completion<std::size_t>& c);
     ObserverAttachment attach_observer(Completion<void>& c);
     ObserverCancelResult cancel_observer(Completion<std::size_t>& c);
@@ -470,6 +472,9 @@ class AsyncIoContext {
     // teardown must not discard: an active drive, a claimed owner, or a live
     // external notification interest.
     void fail_fast_if_progress_binding_live_() noexcept;
+
+    template <class T> ObserverAttachment attach_observer_via_binding_(Completion<T>& c);
+    template <class T> ObserverCancelResult cancel_observer_via_binding_(Completion<T>& c);
 
     // Marks the drive domain active for the attached owner thread and reports
     // whether the caller may drive now: rejected while another drive is

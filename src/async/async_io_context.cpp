@@ -962,22 +962,52 @@ void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {
         backend_->attach_ready_sink(sink);
 }
 
-AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<std::size_t>& c) {
+AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(const RequestId& id) {
+    if (!id.valid()) {
+        return {};
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_) {
+    if (!core_) {
         return {};
     }
-    const RequestHandle identity = backend_->identity_of(c);
-    if (!identity.valid()) {
-        return {};
-    }
-    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
-                                 detail::SlotIndex{identity.slot_},
-                                 detail::Generation{identity.generation_}};
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
     return {core_->register_observer(key), key};
+}
+
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const RequestId& id) {
+    if (!id.valid()) {
+        return {};
+    }
+    std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!core_) {
+        return {};
+    }
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
+    return {core_->cancel_observer(key), key};
+}
+
+AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<std::size_t>& c) {
+    return attach_observer_via_binding_(c);
 }
 
 AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<void>& c) {
+    return attach_observer_via_binding_(c);
+}
+
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<std::size_t>& c) {
+    return cancel_observer_via_binding_(c);
+}
+
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<void>& c) {
+    return cancel_observer_via_binding_(c);
+}
+
+template <class T>
+AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer_via_binding_(Completion<T>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
         return {};
@@ -992,7 +1022,8 @@ AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<vo
     return {core_->register_observer(key), key};
 }
 
-AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<std::size_t>& c) {
+template <class T>
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer_via_binding_(Completion<T>& c) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_) {
         return {};
@@ -1007,20 +1038,14 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<
     return {core_->cancel_observer(key), key};
 }
 
-AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<void>& c) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_) {
-        return {};
-    }
-    const RequestHandle identity = backend_->identity_of(c);
-    if (!identity.valid()) {
-        return {};
-    }
-    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
-                                 detail::SlotIndex{identity.slot_},
-                                 detail::Generation{identity.generation_}};
-    return {core_->cancel_observer(key), key};
-}
+template AsyncIoContext::ObserverAttachment
+AsyncIoContext::attach_observer_via_binding_<std::size_t>(Completion<std::size_t>&);
+template AsyncIoContext::ObserverAttachment
+AsyncIoContext::attach_observer_via_binding_<void>(Completion<void>&);
+template AsyncIoContext::ObserverCancelResult
+AsyncIoContext::cancel_observer_via_binding_<std::size_t>(Completion<std::size_t>&);
+template AsyncIoContext::ObserverCancelResult
+AsyncIoContext::cancel_observer_via_binding_<void>(Completion<void>&);
 
 bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
     std::lock_guard<std::mutex> lk(access_mtx_);
