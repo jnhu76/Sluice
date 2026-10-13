@@ -7,7 +7,7 @@ local R = SLUICE_ROOT
 
 -- sluice-copy (M1-A Version A/B + Version C): sequential async positional file
 -- copy and the bounded reusable-buffer pipeline (Version B), both over
--- ApplicationRuntime + ThreadPoolBackend; Version C adds the safe atomic
+-- RequestScope + ThreadPoolBackend; Version C adds the safe atomic
 -- output path (temp file in the destination directory + rename + directory
 -- durability, safe_output.{hpp,cpp}). Multi-file target (main + the
 -- copy_task/safe_output libraries used by both the CLI and the tests, plus

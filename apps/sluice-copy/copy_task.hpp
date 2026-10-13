@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <limits>
 #include <string>
 
 namespace sluice_copy {
@@ -23,6 +24,14 @@ constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kMaxPipelineDepth = 64;
 constexpr std::size_t kMaxPipelineBytes = 512 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
+
+inline bool valid_config(std::size_t buffer_size, std::size_t pipeline_depth, unsigned workers) {
+    return buffer_size != 0 && pipeline_depth != 0 && workers != 0 &&
+           buffer_size <= kMaxBufferSize && pipeline_depth <= kMaxPipelineDepth &&
+           workers <= kMaxWorkers &&
+           buffer_size <= std::numeric_limits<std::size_t>::max() / pipeline_depth &&
+           buffer_size * pipeline_depth <= kMaxPipelineBytes;
+}
 
 struct CopyStats {
     std::uint64_t bytes_copied = 0;
@@ -52,4 +61,4 @@ run_pipelined_copy_with_backend(const sluice::File& src_file,
                                 std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
                                 std::unique_ptr<sluice::async::AsyncBackend> backend);
 
-}
+} // namespace sluice_copy

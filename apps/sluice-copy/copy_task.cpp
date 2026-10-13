@@ -23,14 +23,6 @@ constexpr bool add_would_overflow(std::uint64_t a, std::uint64_t b) noexcept {
     return a > std::numeric_limits<std::uint64_t>::max() - b;
 }
 
-bool valid_config(std::size_t buffer_size, std::size_t pipeline_depth, unsigned workers) {
-    return buffer_size != 0 && pipeline_depth != 0 && workers != 0 &&
-           buffer_size <= kMaxBufferSize && pipeline_depth <= kMaxPipelineDepth &&
-           workers <= kMaxWorkers &&
-           buffer_size <= std::numeric_limits<std::size_t>::max() / pipeline_depth &&
-           buffer_size * pipeline_depth <= kMaxPipelineBytes;
-}
-
 Result<CopyStats> copy_exception() noexcept {
     try {
         throw;
