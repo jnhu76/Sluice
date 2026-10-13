@@ -468,6 +468,12 @@ bool external_poll_loop_threadpool_w03() {
     w = std::move(w_submitted).value();
 
     SharedRequest late;
+    // The late handoff carries its own application-owned wake: the zero-op's
+    // library notification may be consumed before the handle is observable,
+    // so the host monitors the handoff fd alongside the notification fd.
+    if (!host.enable_handoff_notification())
+        return false;
+    late.handoff_fd = host.handoff_fd();
     std::thread helper([&] {
         // Submit from application-observed state, not from the notification
         // fd: the host and this helper must not compete for the shared
@@ -491,8 +497,10 @@ bool external_poll_loop_threadpool_w03() {
     for (;;) {
         if (r2.ready() && r3.ready() && w.ready() && late.ready())
             break;
-        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+        if (host.wait_readable_or_handoff(std::chrono::milliseconds{5000}) ==
+            ExternalLoopHost::WaitSource::none)
             return false;
+        host.drain_handoff_notification();
         const std::size_t delivered = host.acknowledge_and_drive();
         if (delivered == 0) {
             ++settled_without_wake;
@@ -500,6 +508,8 @@ bool external_poll_loop_threadpool_w03() {
                 return false;
         }
     }
+    helper.join();
+    host.close_handoff_notification();
     for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
     }
     if (host.acknowledge_and_drive() != 0)
