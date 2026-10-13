@@ -244,6 +244,21 @@ struct HandoffGate {
     }
 };
 
+// Consumes the write result instead of discarding it: glibc marks write(2)
+// warn_unused_result, and a lost handoff announcement would strand the host.
+bool notify_handoff_fd(int fd) noexcept {
+    const std::uint64_t one = 1;
+    for (;;) {
+        errno = 0;
+        const ssize_t n = ::write(fd, &one, sizeof(one));
+        if (n == static_cast<ssize_t>(sizeof(one)))
+            return true;
+        if (n < 0 && errno == EINTR)
+            continue;
+        return false;
+    }
+}
+
 // Two cross-thread submission shapes submit from a helper thread and observe
 // the handoff afterwards; the transferred binding is published and shared
 // under a mutex, because the Request itself carries no internal synchronization.
@@ -276,10 +291,8 @@ struct SharedRequest {
             std::lock_guard<std::mutex> lk(mtx);
             request = std::move(submitted.value());
         }
-        if (handoff_fd >= 0) {
-            const std::uint64_t one = 1;
-            (void)::write(handoff_fd, &one, sizeof(one));
-        }
+        if (handoff_fd >= 0)
+            return notify_handoff_fd(handoff_fd);
         return true;
     }
 
