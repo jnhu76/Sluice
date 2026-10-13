@@ -536,8 +536,10 @@ bool saturated_notification_preserves_wake() {
 }
 
 // R14: the host acknowledges stale readiness while a new ThreadPool progress
-// signal races it; the obligation is either serviced by the post-ack pass or
-// re-asserts readiness — it can never strand.
+// signal races it. The acknowledgement may consume the incoming wake, so the
+// obligation must be carried by the pass that follows the acknowledgement:
+// one acknowledged drive settles the already-published zero-op and the fd goes
+// quiescent without a second foreign signal.
 bool host_acknowledgement_racing_new_signal_never_strands() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
     AsyncIoContext ctx(std::move(backend));
@@ -559,11 +561,13 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
         return false;
 
     std::atomic<bool> acked{false};
+    std::atomic<bool> submitted{false};
     SharedRequest racing;
     std::thread signaler([&] {
         while (!acked.load(std::memory_order_acquire))
             std::this_thread::yield();
-        (void)racing.submit_zero_op(ctx);
+        if (racing.submit_zero_op(ctx))
+            submitted.store(true, std::memory_order_release);
     });
 
     // Acknowledge stale readiness (nothing pending here, so this is the
@@ -571,39 +575,36 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     acked.store(true, std::memory_order_release);
     ctx.acknowledge_progress_notification();
 
-    int wakes = 0;
-    bool settled = false;
-    while (wakes < 4) {
-        if (!fd_readable(host.nfd())) {
-            if (racing.ready()) {
-                settled = true;
-                break;
-            }
-            struct pollfd p;
-            p.fd = host.nfd();
-            p.events = POLLIN;
-            p.revents = 0;
-            const int rc = ::poll(&p, 1, 2000);
-            if (rc <= 0)
-                break;
-        }
-        ++wakes;
-        if (host.acknowledge_and_drive() > 0 && racing.ready()) {
-            settled = true;
-            break;
-        }
-    }
+    // The obligation, not a wake, is the fact under test: once the submitting
+    // thread has published the zero-op the host must settle it through its own
+    // acknowledged drive, however the two-wake race fell.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (!submitted.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
     signaler.join();
-
-    // Every exit path must leave no delayed zero-op obligation behind: the
-    // drain-wins interleaving can observe the completion before any pass ran.
-    for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+    if (!submitted.load(std::memory_order_acquire)) {
+        // A submitter that never ran is a scheduling failure of this run, not a
+        // protocol outcome; leave no live binding behind so the run reports a
+        // failure instead of aborting in the context destructor.
+        for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+        }
+        {
+            std::lock_guard<std::mutex> lk(racing.mtx);
+            if (racing.request.has_value())
+                racing.request->discard();
+        }
+        host.stop_and_detach();
+        return false;
     }
 
-    const bool ok = settled && racing.ready() && wakes <= 2;
-    {
+    const std::size_t delivered = host.acknowledge_and_drive();
+    bool ok = delivered >= 1 && racing.ready() && !fd_readable(host.nfd());
+    if (ok) {
         std::lock_guard<std::mutex> lk(racing.mtx);
-        racing.request.reset();
+        const auto consumed = racing.request->take_result();
+        ok = consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
+             consumed.result.value() == 0;
     }
     host.stop_and_detach();
     return ok;
