@@ -174,7 +174,8 @@ Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
 // before it is released. Driving goes through the test's own progress-owner
 // path (a pass from a foreign thread is rejected) and is bounded: an
 // unpublishable binding reaches discard() as a contract violation instead of
-// hanging the test.
+// hanging the test. Declared after everything it tracks, so it is destroyed
+// first and never dereferences expired request storage.
 template <class Drive> struct RequestPublicationDrain {
     explicit RequestPublicationDrain(Drive drive) : drive_(drive) {}
 
@@ -984,8 +985,10 @@ bool wait_one_stops_on_health_failure_and_releases_owner() {
     if (!held_submitted.has_value())
         return false;
     Request<std::size_t> held = std::move(held_submitted).value();
+    Request<std::size_t> waited;
     RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
     drain.track(held);
+    drain.track(waited);
     WorkerGateReleaseOnExit gate_release{raw, &gate};
     while (!gate.paused.load(std::memory_order_acquire))
         std::this_thread::yield();
@@ -994,8 +997,7 @@ bool wait_one_stops_on_health_failure_and_releases_owner() {
                                                    waited_buf.data(), waited_buf.size(), 32});
     if (!waited_submitted.has_value())
         return false;
-    Request<std::size_t> waited = std::move(waited_submitted).value();
-    drain.track(waited);
+    waited = std::move(waited_submitted).value();
 
     ctx.set_wait_health_failed_for_test();
     sluice::Result<AsyncIoContext::ProgressWaitOutcome> stopped =
