@@ -1,0 +1,106 @@
+{
+  "GENERATED_FOR": "SLUICE_F5_FINAL_PACKAGE_CONTRACTION",
+  "BASE_MASTER_SHA": "14a27a83821a94e6fc5a9684b48fcd296d7de891",
+  "MEASURED_AT_BASE": {
+    "installed_headers": 49,
+    "core_archive_members": 2,
+    "async_archive_members": 30,
+    "library_tus_compiled": 34,
+    "tree_tus_total": 36,
+    "source_tus_not_in_any_target": ["src/experimental/uring_io_context.cpp", "src/experimental/uring_write_batch.cpp"]
+  },
+  "installed_headers": {
+    "CANONICAL_REQUIRED": [
+      "sluice/async/async_io_context.hpp",
+      "sluice/async/cancel.hpp",
+      "sluice/async/request.hpp",
+      "sluice/async/request_scope.hpp",
+      "sluice/async/threadpool_backend.hpp",
+      "sluice/async/uring_backend.hpp",
+      "sluice/async/detail/fail_fast.hpp",
+      "sluice/async/detail/observer_protocol.hpp",
+      "sluice/async/detail/progress_source.hpp",
+      "sluice/async/detail/ready_sink.hpp",
+      "sluice/async/detail/reference_ready_sink.hpp",
+      "sluice/async/detail/request_core.hpp",
+      "sluice/async/detail/request_key.hpp",
+      "sluice/blocking/file.hpp",
+      "sluice/detail/file_semantics.hpp",
+      "sluice/detail/posix_retry.hpp",
+      "sluice/detail/uring_submit.hpp",
+      "sluice/effect.hpp",
+      "sluice/error.hpp",
+      "sluice/file_resource.hpp",
+      "sluice/measurement.hpp",
+      "sluice/result.hpp"
+    ],
+    "INTERNAL_SUBSTRATE_PRIVATE_TO_LIBRARY_TUS": [
+      "sluice/async/detail/context_identity.hpp"
+    ],
+    "OPTIONAL_CANDIDATE_W04_HOST_CLOSURE": [
+      "sluice/async/stackful_io_host.hpp",
+      "sluice/async/fiber.hpp",
+      "sluice/async/fiber_ctx.hpp"
+    ],
+    "COMPAT_INSTALLED_NONCANONICAL_REMOVE_CANDIDATE": [
+      "sluice/async/async_mutex.hpp",
+      "sluice/async/async_rwlock.hpp",
+      "sluice/async/async_queue.hpp",
+      "sluice/async/condition.hpp",
+      "sluice/async/semaphore.hpp",
+      "sluice/async/future.hpp",
+      "sluice/async/wait_policy.hpp",
+      "sluice/async/wait_node.hpp",
+      "sluice/async/wait_queue.hpp",
+      "sluice/async/thread_annotations.hpp",
+      "sluice/async/timer_registration.hpp",
+      "sluice/async/mutex.hpp",
+      "sluice/async/lock_guard.hpp",
+      "sluice/async/event.hpp",
+      "sluice/async/select.hpp",
+      "sluice/async/select_fwd.hpp",
+      "sluice/async/scheduler.hpp",
+      "sluice/async/detail/queue_item.hpp",
+      "sluice/async/detail/queue_port.hpp",
+      "sluice/async/detail/select_registration.hpp",
+      "sluice/async/detail/select_port.hpp",
+      "sluice/async/detail/mutex_test_seam.hpp",
+      "sluice/async/detail/queue_test_seam.hpp"
+    ]
+  },
+  "archive_members": {
+    "CANONICAL_REQUIRED": [
+      "async_io_context.cpp.o", "cancel.cpp.o", "detail/context_identity.cpp.o",
+      "detail/request_core.cpp.o", "request_scope.cpp.o", "fail_fast.cpp.o",
+      "threadpool_backend.cpp.o", "uring_backend.cpp.o", "uring_completion.cpp.o",
+      "uring_transport.cpp.o"
+    ],
+    "OPTIONAL_CANDIDATE_W04_HOST_CLOSURE": [
+      "fiber.cpp.o", "fiber_ctx.cpp.o", "stackful_io_host.cpp.o"
+    ],
+    "REMOVE_CANDIDATE_LEGACY_SCHEDULER_RUNTIME": [
+      "scheduler.cpp.o", "scheduler_condition.cpp.o", "scheduler_event.cpp.o",
+      "scheduler_mutex.cpp.o", "scheduler_park_wake.cpp.o", "scheduler_queue.cpp.o",
+      "scheduler_rwlock.cpp.o", "scheduler_semaphore.cpp.o", "scheduler_timer.cpp.o",
+      "select.cpp.o", "select_event.cpp.o", "select_timer.cpp.o",
+      "queue_port.cpp.o", "wait_policy.cpp.o"
+    ],
+    "REMOVE_CANDIDATE_TEST_ONLY_ZERO_SYMBOLS_BOTH_PROFILES": [
+      "mutex_test_seam.cpp.o", "queue_test_seam.cpp.o", "scheduler_fe2_test_seam.cpp.o"
+    ]
+  },
+  "family_trigger_assessment": {
+    "FAMILY_A_T1_EXTERNAL_USE_SIGNALS": "none observed in repo issues/PRs through 2026-10-13; UNKNOWN_EXTERNAL_USE remains UNKNOWN, not zero",
+    "FAMILY_A_T2_PACKAGE_MUTATION": "F5 contraction is a B-01 re-freeze event; disposition re-recorded here, not silently carried",
+    "FAMILY_A_T3_PHASE_EVENT": "F2 CLOSED_MERGED, F3 VERIFIED_CLOSED, F4 ADOPTED_SCOPED; four-app retirement complete; scheduler.hpp installed-includer set is no longer blocked by application_runtime.hpp",
+    "FAMILY_A_T4_DEADLINE": "owner external-use decision required before F5 final contraction authorization; delivered as the consolidated decision packet",
+    "FAMILY_B_DEPENDENCY_EXIT": "group.hpp and evented_wait_policy.hpp left the installed closure at F3 part-C (v4 cut, master de551ed0 era); necessary condition for B contraction is met; owner adjudication of remaining KEEP justification is the sufficient condition",
+    "FAMILY_C_CLOSURE": "scheduler.hpp retains in-tree consumers only via tests (runtime_waiter_observer_test) and the legacy sync headers; wait_queue consumers (async_mutex/async_rwlock/condition/semaphore) are all inside the same removal batch; A and C exit together in one separable dependency family",
+    "W04_STACKFUL_HOST": "OPTIONAL_CANDIDATE; uses Fiber/FiberCtx but not Scheduler/select/sync; stays installed with unsupported labeling; W04 = conditional N/A with negative package/support-claim audit"
+  },
+  "profile_dependent_findings": {
+    "noliburing": "uring_completion.cpp.o and uring_transport.cpp.o compile to empty objects (SLUICE_HAS_LIBURING-guarded); uring_backend.cpp.o carries the honest-stub surface (16 defined)",
+    "liburing": "uring_backend.cpp.o 64 / uring_completion.cpp.o 5 / uring_transport.cpp.o 25 defined symbols",
+    "test_seams": "zero defined symbols in both profiles; present in the production archive only because src/async/*.cpp glob matches them (D-13)"
+  }
+}
