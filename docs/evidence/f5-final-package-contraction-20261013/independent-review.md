@@ -110,3 +110,17 @@ headers present).
 The independent technical verdict for the decision packet is therefore
 `NONE_REQUIRING_CHANGE` at the candidate head; the owner's scope decision is
 the remaining gate and is not an engineering blocker.
+
+## Review verification at the final content head `ad81eea8`
+
+Review A re-verified the R9 fix at `ad81eea8789555f4bfec7dabd3683853e7e9fa91`:
+the scoped residual claim is now literally true and exhaustive in substance
+(the only non-evidence in-tree text including a removed header is
+`tests/package/f4_retirement/probes/retained.cpp`), no other over-claim
+survives, and the verdict stands at `none-requiring-change`. Review B's
+`none-requiring-change` verdict at `ba825874` covers the same content; the only
+delta to `ad81eea8` is the residual-scope sentence and this record.
+
+Commits after `ad81eea8` are receipt-only: they add this verification record and
+the ledger receipt text without changing any reviewed content, and the compiled
+inputs remain identical to `a23a94cd` at every one of them.
