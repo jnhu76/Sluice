@@ -1,6 +1,16 @@
 # F2 blocker: W-03 external-loop stall under two-core starvation
 
-Status: **OPEN**. The F2 head stalls `threadpool_external_loop_test`'s
+Status: **CLOSED** at the corrected head — root cause proven with a
+deterministic reproducer and closed by a test-only corrective diff; see
+`w03-root-cause.md`. In brief: the stall is an application-side handoff
+defect in the scenario's own loop protocol — the host parked in poll(2) on
+the context notification fd while the late request handle was still private
+to the submitting thread, and no library wake is owed for an
+application-owned state change. The production diff is empty. The sections
+below are the record as it stood **OPEN** at the captured implementation
+head `996f434f`.
+
+The F2 head stalls `threadpool_external_loop_test`'s
 `external_poll_loop_threadpool_w03` scenario under CPU starvation while the
 baseline does not. This is recorded as a blocker for merge, not as a known
 limitation: the asymmetry is measured, the failing check is identified, and the

@@ -13,6 +13,9 @@ cannot stand in.
 | `3f750e3e2f82` | cancelled | superseded by a newer push |
 | `98439970627c` | failure | the W-03 stall flake (see ../../blocker-w03-stall.md) |
 | `e9e47ce87f5f` | success | documentation-only |
+| `69686d2f4ab6` | failure | the W-03 stall again at CI scale: `threadpool_external_loop_test` exit -1 after 5.16 s, aborting in the context destructor (see ../../w03-root-cause.md) |
+| `b63a532ea6eb` | failure | build-only portability error in the corrective test itself: Ubuntu glibc marks write(2) `warn_unused_result` and the discarded return failed `-Werror`; fixed by `25734314` |
+| `25734314f704` | success | corrected implementation head (W-03 closure) |
 
 The workflow is `.github/workflows/ci.yml`: a C++ comment-authority guard, the F1
 frozen-provenance verifier self-tests, and a Linux build-plus-`xmake test` matrix over

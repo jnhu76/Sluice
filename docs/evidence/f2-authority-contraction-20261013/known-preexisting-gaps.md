@@ -45,3 +45,23 @@ sibling entry points this slice rewrote (`attach_observer` `:788-796`,
 `cancel_observer` `:802-810`) both check it. Unchanged from baseline and
 reachable only through a moved-from or destroyed context, which is a documented
 caller misuse; recorded so the asymmetry is deliberate rather than accidental.
+
+## 3. E1 conformance `GateGuard` teardown race flakes under ASan
+
+`tests/backend_conformance_e1_test.cpp`'s `GateGuard` destructor stores
+`resume` and notifies, but never waits for the paused worker's `exited`
+acknowledgement. A worker that loaded the gate pointer before the scenario's
+`set_worker_unclaimed_retirement_pause_gate(nullptr)` can reach the gate
+object after the scenario returned and the stack gate died — ASan reports a
+`stack-use-after-scope` read inside `ThreadPoolBackend::wait_unclaimed_retirement_pause_`
+(`src/async/threadpool_backend.cpp:652`). Observed intermittently in
+`backend_conformance_e1_threadpool_test`'s
+`public_cancel_removing_last_stale_entry_owes_a_wake` scenario:
+2/12 failures at the corrected head `25734314` and 4/12 at the captured
+pre-fix head `996f434f` (identical binary re-runs, load-conditional), so it
+predates the W-03 closure and is not caused by it. The F2 slice's own
+execution record already notes an ASan stack-use-after-scope defect this
+gate family introduced and fixed once; this residual instance needs the
+guard to wait for `exited` before the gate may die. Found during the W-03
+closure matrix re-run (`w03-root-cause.md`); fixing it belongs to the E1
+test's own slice, not this one.
