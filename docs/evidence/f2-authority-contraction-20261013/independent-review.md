@@ -50,3 +50,83 @@ The production semantics of the contraction: no gate was relaxed, no wait or
 retry added in place of a protocol transition, and no mutant's expected killer
 changed (the campaign's kill set is identical on the baseline, the pre-review
 head and the final head — see `mutants/README.md`).
+
+## Final corrective-round review — 2026-10-13, final head `093332ba`
+
+A third adversarial pass over the corrective round only: the production diff
+`996f434f..093332ba` (three files: `uring_transport.cpp` +57/−12,
+`uring_backend.hpp` +6 private declaration, `async_io_context.cpp` +3 guard),
+the two repaired race DAGs, the new synchronization, the retirement behavior,
+the raw RED/GREEN logs, the negative controls, the package implications and
+the `rcore-live` inheritance identity. Read-only against the committed tree.
+
+### A-fix (io_uring poison × post-accept push) — re-verified claims
+
+- **Late-claim disposal is consistent with the dispatch path**: on a claim it
+  did not win, `dispatch_one_locked` removes the reservation
+  (`dispatch_->remove_exact`) and drops it without a `publication_pending_`
+  entry; `retire_undispatched_after_poison_locked_` does the same via
+  `pop_front` + `continue`. One shape, one obligation.
+- **Kernel-invisibility precondition holds**: `dispatch_one_locked` refuses
+  under `fatal_error_` before any ring access, so a reservation pushed after
+  poison provably never took an SQE and has no ledger entry — the poison
+  path's Class-A recovery cannot have resolved it.
+- **`fatal_error_` is confined to `dispatch_mtx_`**: the poison write sits in
+  a `_locked` function and every access site is under the mutex, so the
+  `poisoned_before` read inside `dispatch_after_accept` is race-free.
+- **Terminal ownership is exclusive**: with no ledger entry, the only other
+  terminal source is a pre-dispatch public cancel, and `claim_execution`
+  arbitrates exactly that race; a `chosen`-then-`borrow_touch_fully_retired`
+  expectation mirrors the injection-failure block in the same function, and
+  any other verdict fails fast rather than fabricating a second terminal.
+- **No stranded wake**: the function-local `post_poison_push_retired` bit
+  extends the wake condition; the raw GREEN log shows the retirement wake
+  published and the in-kernel operation's real outcome delivered.
+
+### B-fix (E1 pause-gate teardown lifetime) — re-verified claims
+
+- A mechanical scan of all 19 backend declarations in the file finds **no
+  worker-side gate** (`WorkerClaimedPauseGate`, `WorkerUnclaimedRetirementPauseGate`,
+  `BeforeWorkerDequeuePauseGate`) declared after its backend. The single
+  post-backend declaration (line 524, `AcceptedPreDispatchPauseGate` in
+  `pre_execution_cancel_wins_with_known_zero_effect`) is submitter-side: its
+  only passers are threads the scenario itself spawns, the fixed `GateGuard`
+  resumes and waits for `exited==true`, the submitter is joined and the gate
+  pointer cleared before the gate's storage dies — no worker can reach it.
+- The guard's exit wait closes the registered-pass window; gate-before-backend
+  ordering closes the unsynchronized pointer-load window, because the context
+  destructor joins the workers while every worker-side gate still lives.
+
+### C3, formal inheritance, evidence binding — re-verified claims
+
+- The moved-from guard matches the sibling entry points' contract and the
+  ownership oracle asserts it; the RED log is a raw SIGSEGV at the unguarded
+  head.
+- `git diff eb7bf055..HEAD -- formal/tla/ scripts/verify_tla.sh` is empty at
+  the final head (re-run for this review); `RequestCore.tla` SHA-256 prefix
+  `ce867f9e` matches the recorded identity table; `gates.json` keeps the
+  verdict `INCOMPLETE: rcore-live` — the reuse acceptance lives in
+  `formal/rcore-live-reuse.md`, never as a pass.
+- `gates.json` asserts the matrix, both B-01 after-stages and the CI run all
+  name `093332ba`; the load-contaminated TSan attempt is preserved next to
+  the clean serial re-run with its attribution evidence (identical binary
+  10/10 idle); the focused differential stress is 240/240 with per-run logs
+  persisted (`final-stress/`).
+- Package implications: the corrective production diff changes no installed
+  header set (49 before and after the round) and no archive member set (30);
+  `uring_transport.cpp.o` and `async_io_context.cpp.o` remain members; the
+  installed probes were re-run against the final prefixes and pass with the
+  negative control.
+
+### Verdict and boundaries
+
+New findings from this pass: **none requiring change**. The three corrections
+close their recorded gaps with the minimum mechanism and no new runtime
+state.
+
+This review is technical acceptance of the corrective round only. It does not
+approve the merge, does not grant `SAFE_TO_UNINSTALL` /
+`SAFE_TO_DELETE_FROM_TREE`, and does not substitute for the human owner's
+explicit scope-bound decision on the installed-surface break
+(`installed-surface-risk-disposition.md`, all rows PENDING). No synthetic
+approval is recorded anywhere in this slice, and PR #516 remains Draft.
