@@ -137,12 +137,24 @@ template <class Gate> void wait_gate_paused(Gate& gate) {
     }
 }
 
+template <class Gate> void wait_gate_exited(Gate& gate) {
+    std::atomic<bool>& exited = gate.exited;
+    bool seen = exited.load(std::memory_order_acquire);
+    while (!seen) {
+        exited.wait(seen, std::memory_order_acquire);
+        seen = exited.load(std::memory_order_acquire);
+    }
+}
+
 template <class Gate> struct GateGuard {
     Gate& gate;
     explicit GateGuard(Gate& g) : gate(g) {}
     ~GateGuard() {
         gate.resume.store(true, std::memory_order_release);
         gate.resume.notify_all();
+        // A registered pass still owes its exit acknowledgment; the gate's
+        // storage may die only after the last pass is observed out.
+        wait_gate_exited(gate);
     }
     GateGuard(const GateGuard&) = delete;
     GateGuard& operator=(const GateGuard&) = delete;
@@ -579,12 +591,12 @@ bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
     std::vector<std::byte> buffer(8, std::byte{0});
 #if !defined(SLUICE_E1_CONFORMANCE_URING)
     {
+        Backend::WorkerClaimedPauseGate gate;
         auto backend = make_backend(4);
         Backend* raw = backend.get();
         AsyncIoContext ctx(std::move(backend));
         RequestCore& core = *ctx.context_core_for_test();
 
-        Backend::WorkerClaimedPauseGate gate;
         raw->set_worker_claimed_pause_gate(&gate);
 
         auto submitted = ctx.submit_read(
@@ -671,13 +683,13 @@ bool success_wins_over_a_recorded_cancel_intent(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::WorkerClaimedPauseGate gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
     std::vector<std::byte> buffer(8, std::byte{0});
-    Backend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
 
     auto submitted =
@@ -725,13 +737,13 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
@@ -805,13 +817,13 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
@@ -926,13 +938,13 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
@@ -1041,13 +1053,13 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
@@ -1181,13 +1193,13 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
@@ -1276,6 +1288,130 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
 
     stale->discard();
     queued->discard();
+    t.check(raw->dispatch_size_for_test() == 0, "no dispatch residue remains");
+    t.check(backend_quiescent(*raw), "the backend holds no physical residue");
+    t.check(core_is_idle(core.snapshot()), "both requests reclaim completely");
+    return true;
+}
+
+bool gate_teardown_retires_registered_passes_before_detach(Tracker& t) {
+    Fixture fix = make_fixture("sluice e1 gate lifetime conformance");
+    if (!fix.ok()) {
+        t.check(false, "fixture created");
+        return false;
+    }
+
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
+    Backend::BeforeWorkerDequeuePauseGate dequeue_gate;
+    auto backend = make_backend(4);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+    raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
+    raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
+
+    std::optional<Request<std::size_t>> first, second;
+    std::vector<std::byte> buffer(8, std::byte{0});
+    const ReadOp op{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0};
+
+    std::thread submitter_one{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            first = std::move(submitted.value());
+    }};
+    wait_gate_paused(dispatch_gate);
+    std::vector<detail::RequestKey> first_outstanding;
+    core.collect_outstanding(first_outstanding);
+    const bool have_first = first_outstanding.size() == 1;
+    t.check(have_first, "the first request is bound while dispatch is parked");
+    if (!have_first) {
+        {
+            GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+        }
+        submitter_one.join();
+        raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+        raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
+        return false;
+    }
+    t.check(raw->cancel_key_for_test(first_outstanding.front()) ==
+                PublicCancel::won_before_execution,
+            "the first pre-dispatch cancel wins");
+    {
+        GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+    }
+    submitter_one.join();
+    dispatch_gate.resume.store(false, std::memory_order_release);
+    std::thread submitter_two{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            second = std::move(submitted.value());
+    }};
+    while (dispatch_gate.exited.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    std::vector<detail::RequestKey> second_outstanding;
+    core.collect_outstanding(second_outstanding);
+    const bool have_second = second_outstanding.size() == 2;
+    t.check(have_second, "the second request is bound while dispatch is parked");
+    if (!have_second) {
+        {
+            GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+        }
+        submitter_two.join();
+        raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+        raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
+        return false;
+    }
+    t.check(raw->cancel_key_for_test(second_outstanding.back()) ==
+                PublicCancel::won_before_execution,
+            "the second pre-dispatch cancel wins");
+    {
+        GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+    }
+    submitter_two.join();
+    raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+
+    while (!first->ready() || !second->ready())
+        (void)ctx.poll();
+
+    // The worker dropped the first stale entry and parks in its retirement
+    // seam with the second stale entry still queued.
+    wait_gate_paused(retirement_gate);
+
+    // Pin the worker between the first retirement pass's exit and the second
+    // entry's dequeue, then re-arm the retirement latch with the worker
+    // provably outside the gate.
+    raw->set_before_dequeue_pause_gate(&dequeue_gate);
+    {
+        GateGuard<Backend::WorkerUnclaimedRetirementPauseGate> guard{retirement_gate};
+    }
+    wait_gate_paused(dequeue_gate);
+    retirement_gate.resume.store(false, std::memory_order_release);
+    dequeue_gate.resume.store(true, std::memory_order_release);
+    dequeue_gate.resume.notify_all();
+
+    // The worker dequeues the second stale entry and registers a fresh pass
+    // on the still-armed retirement gate, parking on the re-armed latch.
+    while (retirement_gate.exited.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    t.check(raw->dispatch_size_for_test() == 0,
+            "the registered pass holds the dequeued entry's retirement");
+
+    // The scenario-family teardown shape: resume through the guard, detach,
+    // and only then may the gate's storage die. A registered pass still
+    // parked on the latch would race that destruction.
+    {
+        GateGuard<Backend::WorkerUnclaimedRetirementPauseGate> guard{retirement_gate};
+    }
+    raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
+    raw->set_before_dequeue_pause_gate(nullptr);
+    const bool no_registered_pass_at_detach =
+        retirement_gate.exited.load(std::memory_order_acquire);
+    t.check(no_registered_pass_at_detach,
+            "gate teardown waits out every registered pass before detach");
+
+    first->discard();
+    second->discard();
     t.check(raw->dispatch_size_for_test() == 0, "no dispatch residue remains");
     t.check(backend_quiescent(*raw), "the backend holds no physical residue");
     t.check(core_is_idle(core.snapshot()), "both requests reclaim completely");
@@ -1957,6 +2093,8 @@ int main() {
          stale_entry_removal_by_reclaimed_identity_and_slot_reuse},
         {"won_cancel_with_queued_entry_signals_exactly_once",
          won_cancel_with_queued_entry_signals_exactly_once},
+        {"gate_teardown_retires_registered_passes_before_detach",
+         gate_teardown_retires_registered_passes_before_detach},
 #else
         {"metadata_identity_agrees_across_backends", metadata_identity_agrees_across_backends},
         {"canceled_metadata_op_reports_the_canceled_terminal",
