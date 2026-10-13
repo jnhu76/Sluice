@@ -2264,8 +2264,10 @@ above are unchanged by this section.
 | Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations; per-surface decisions, the #475 T4/E1 external-use decision and merge authorization PENDING in `installed-surface-risk-disposition.md` |
 | Not claimed | no F5/F6 completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no W-04 support, no `V1_RELEASE_READY`; external use remains UNKNOWN, not zero |
 
-The F5 closure manifest corrects the #402 CURRENT overlay's inventory
-ambiguity: the older `2 core / 33 async / 56 headers` line is the F3/F4
-adoption snapshot; the current inventory after F2 is `2 core / 30 async /
-49 headers`, and this candidate further contracts it to `2 core / 13 async /
-25 headers` (all measured, never inferred).
+The F5 documentation slice corrects the #402 CURRENT overlay in place
+(2026-10-13): the earlier `2 core / 33 async / 56 headers` wording was the F4
+combined experimental tree (`07c1a3d5`, never merged master); the measured
+inventory after F2 is `2 core / 30 async / 49 headers`, and this candidate
+further contracts it to `2 core / 13 async / 25 headers` (all measured, never
+inferred). The overlay now carries the per-tree inventory history and the F5
+candidate state (draft PR #518) with the owner decision PENDING.

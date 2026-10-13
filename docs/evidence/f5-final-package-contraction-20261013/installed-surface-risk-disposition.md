@@ -113,7 +113,7 @@ recorded as the control.
 | Gate | Defined as | Status in this candidate |
 |---|---|---|
 | E1 | explicit owner decision accepting unknown external use/breakage, or evidence of a completed bounded deprecation window | **PENDING** — this packet is the request; no deprecation window was run for these surfaces (F0 §1.5: unknown use is not zero use) |
-| E2 | exact adopted non-admission / `replacement=N/A` disposition referencing root authority | **SATISFIED (recorded)**: every row above carries its `replacement=N/A` or equivalent form and cites MIG-02/HOST-01 (see the per-surface table's Migration column) |
+| E2 | exact adopted non-admission / `replacement=N/A` disposition referencing root authority | **SATISFIED (recorded)**: the A/B/C capability rows carry their `replacement=N/A` or equivalent form and cite MIG-02/HOST-01 (see the per-surface table's Migration column); the internal/test/experimental rows cite their own authority (D-13, M-A4, F1) |
 | E3 | correct phase sequencing and authorization | **SATISFIED (sequencing) / PENDING (authorization)**: F2→F3→F4 closed before F5; this slice is the F5 candidate and physical removal awaits the owner authorization above |
 | E4 | consumer, build, evidence and claim dependency audit | **SATISFIED (recorded)**: reverse-include audit (`closure-manifest.json`), archive/object/symbol audit, docs/support-claim audit (`w04-negative-support-audit.md`), and the residual register (`closure-manifest.md` §Residuals) |
 | E5 | versioned B-01 dual-profile freeze, clean-room probes, negative controls and rollback evidence | **SATISFIED (recorded)**: B-01 v6 four-configuration capture with before-prefix controls, installed probes both macro views, and the four rollback commits below |

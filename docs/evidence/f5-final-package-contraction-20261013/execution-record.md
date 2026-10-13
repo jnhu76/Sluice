@@ -4,8 +4,8 @@ Implementation head: `a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c` (branch
 `f5-final-package`). Execution baseline: `14a27a83821a94e6fc5a9684b48fcd296d7de891`
 (F2 final exit master). Capture bindings: the B-01 v6 summary and the installed
 probes name the base and implementation SHAs directly; the matrix records the
-worktree head it ran under in `matrix/toolchain.log` and `matrix/matrix.json`
-(and its content is consistent only with the F5 tree: 66 ring-profile tests and
+worktree head it ran under in `matrix/toolchain.log` (and its content is
+consistent only with the F5 tree: 66 ring-profile tests and
 no `runtime_waiter_observer_test`). The branch head adds documentation-only
 commits after the implementation head, so no capture is rebound to a tree whose
 compiled inputs differ (`git diff a23a94cd..HEAD -- include/ src/ apps/ xmake/
@@ -70,11 +70,12 @@ verifies per ring profile.
   (`mutex_test_seam`, `queue_test_seam`, `scheduler_fe2_test_seam`).
 - 3 internal headers of the removed runtime retired with it
   (`scheduler_internal.hpp`, `scheduler_test_access.hpp`, `queue_detail.hpp`).
-- `async/detail/fail_fast.hpp`: 21 removed diagnostics (select/scheduler/
-  async-mutex/rwlock/condition/wait-queue/evented families, `evented_admission_check`
-  and the orphaned `group_lifetime_fail_fast`); 15 retained (context, request,
-  scope, host, threadpool, uring, identity) — all rewrite of dead branches; no
-  retained declaration lost a caller.
+- `async/detail/fail_fast.hpp`: 19 removed `[[noreturn]]` diagnostics
+  (select/scheduler/async-mutex/rwlock/condition/wait-queue/evented families,
+  including the orphaned `group_lifetime_fail_fast`) plus `evented_admission_check`
+  and its helper (21 entities); 15 retained (context, request, scope, host,
+  threadpool, uring, identity) — removal of dead branches only; no retained
+  declaration lost a caller.
 - `tests/runtime_waiter_observer_test.cpp` and its target block removed with
   its subject; RequestCore observer coverage remains in the canonical suites.
 

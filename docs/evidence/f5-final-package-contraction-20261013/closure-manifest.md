@@ -25,15 +25,17 @@ complete reverse-include graph over `include/`, `src/`, `tests/`, `apps/`,
 | 21 | canonical core/async closure (see JSON list) | CANONICAL_REQUIRED | W-01/W-02/W-03 public surface; every one reachable from the canonical consumer closure; retained |
 | 1 | `async/detail/context_identity.hpp` | INTERNAL (private to library TUs) | included by no installed header, only `async_io_context.cpp`, `detail/context_identity.cpp`, and the seam-build ownership test; de-install from package, keep in tree |
 | 4 | `cancel.hpp`, `stackful_io_host.hpp`, `fiber.hpp`, `fiber_ctx.hpp` | OPTIONAL_CANDIDATE (W-04 host closure) | host uses Fiber/FiberCtx and `CancelToken`, not Scheduler/select/sync; `cancel.hpp` is included only by the host trio, matching F1's H-30/H-31 classification; stays installed with unsupported labeling (W-04 conditional N/A) |
-| 3 | `condition.hpp`, `semaphore.hpp`, `async_queue.hpp` | COMPAT noncanonical — #475 Family A | zero in-tree consumers (reverse-include empty); outside v1 (HOST-01, MIG-02 dormant row); BOUNDED_HOLD triggers T1–T3 all fired with F5 activation; removal prepared, gated on T4/E1 owner decision |
+| 3 | `condition.hpp`, `semaphore.hpp`, `async_queue.hpp` | COMPAT noncanonical — #475 Family A | zero in-tree consumers (reverse-include empty); outside v1 (HOST-01, MIG-02 dormant row); BOUNDED_HOLD triggers: T2/T3 fired; T1 assessed — no external-use signal observed (UNKNOWN, not zero); removal prepared, gated on T4/E1 owner decision |
 | 2 | `future.hpp`, `wait_policy.hpp` | COMPAT noncanonical — #475 Family B | Group/EventedWaitPolicy dependency exit condition met (headers absent from tree since F3 part-C); `wait_policy.cpp` defines only `default_wait_policy()`; no remaining dependency/consumer beyond F4's historical retained probe; removal prepared, gated on owner adjudication |
 | 10 | #475 Family C (`select`, `select_fwd`, `event`, `wait_queue`, `timer_registration`, `mutex`, `lock_guard`, `detail/queue_item`, `detail/queue_port`, `detail/select_registration`) | COMPAT noncanonical — #475 Family C | sole role was the physical closure of the retained legacy Scheduler; scheduler.hpp's installed-includer set is fully dispositioned inside the same batch (A3 + async_mutex + async_rwlock + event + select + semaphore + async_queue + select_port); wait_queue consumers (async_mutex/async_rwlock/condition/semaphore) all inside the batch; A and C exit together |
 | 8 | `scheduler.hpp`, `async_mutex.hpp`, `async_rwlock.hpp`, `wait_node.hpp`, `thread_annotations.hpp`, `detail/select_port.hpp`, `detail/mutex_test_seam.hpp`, `detail/queue_test_seam.hpp` | COMPAT/INTERNAL legacy substrate | every in-tree consumer is inside the removal batch except the F4 retirement probe text (recorded as residual F5-F4PROBE); canonical archive objects reference none of them (verified by undefined-symbol audit); seams carry zero defined symbols in both profiles (D-13) |
 
 ## Archive member disposition (32 objects)
 
-* 10 canonical async members + 2 core members: retained (W-01/W-02/W-03).
-* 3 host-closure members (`fiber`, `fiber_ctx`, `stackful_io_host`): retained.
+* 9 canonical async members + 2 core members: retained (W-01/W-02/W-03).
+* 4 host-closure members (`cancel`, `fiber`, `fiber_ctx`, `stackful_io_host`): retained;
+  `cancel.cpp.o` is consumed only by the host closure (`CancelToken::request()` is
+  referenced by `stackful_io_host.cpp`), matching the header reclassification.
 * 14 legacy runtime members (9 `scheduler*` — the eight `scheduler_*` TUs plus
   `scheduler.cpp` — 3 `select*`, `queue_port`, `wait_policy`): removal
   candidates, one dependency family.

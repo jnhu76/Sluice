@@ -75,7 +75,6 @@
   "archive_members": {
     "CANONICAL_REQUIRED": [
       "async_io_context.cpp.o",
-      "cancel.cpp.o",
       "detail/context_identity.cpp.o",
       "detail/request_core.cpp.o",
       "request_scope.cpp.o",
@@ -86,6 +85,7 @@
       "uring_transport.cpp.o"
     ],
     "OPTIONAL_CANDIDATE_W04_HOST_CLOSURE": [
+      "cancel.cpp.o",
       "fiber.cpp.o",
       "fiber_ctx.cpp.o",
       "stackful_io_host.cpp.o"

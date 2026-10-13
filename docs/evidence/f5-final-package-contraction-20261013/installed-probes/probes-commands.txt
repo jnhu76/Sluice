@@ -1,3 +1,9 @@
-# F5 installed-prefix probes (run 2026-10-13, worktree f5-final-package at a23a94cd)
-python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run-probes.py --prefix /tmp/f5-b01-v6/after-installed-n --before-prefix /tmp/f5-b01-v6/before-installed-n --output probes-n
-python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run-probes.py --prefix /tmp/f5-b01-v6/after-installed-y --before-prefix /tmp/f5-b01-v6/before-installed-y --liburing --output probes-y
+# F5 installed-prefix probes (run 2026-10-13 against the B-01 v6 prefixes built from
+# a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c; --source-sha records that binding,
+# the prefixes' own archives are hash-verified in b01-v6-candidate/summary.json)
+python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run-probes.py --prefix /tmp/f5-b01-v6/after-installed-n --before-prefix /tmp/f5-b01-v6/before-installed-n --source-sha a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c --output probes-n
+python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run-probes.py --prefix /tmp/f5-b01-v6/after-installed-y --before-prefix /tmp/f5-b01-v6/before-installed-y --liburing --source-sha a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c --output probes-y
+
+# Probe binaries and objects (odr-probe, *.o) are not committed: they stay in the
+# execution tree and are re-derivable by re-running the commands above. The logs and
+# probes.json carry the recorded argv, exit codes and log hashes.

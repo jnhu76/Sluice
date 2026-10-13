@@ -27,7 +27,7 @@ summaries, and were asked to produce counterexamples.
 | A6 | Lean/TLA models still cite retired headers | informational | No action: already HISTORICAL/ADAPT/RETIRE_FROM_V1_EVIDENCE per the formal evidence map; no model file changed (residual `F5-FORMAL`) |
 | B1 | `README.md` listed `independent-review.md` before it existed | blocker | This file exists; the README entry is accurate as of the commit that adds it |
 | B2 | Manifest asserted trigger T1 fired while its own JSON and the disposition record say no external-use signal was observed | major | Reworded: "T1 did NOT fire — no external-use signal observed; UNKNOWN, not zero" |
-| B3 | "Every capture names the implementation head" was false for the matrix and probes | minor | `run-matrix.py` now records the worktree head in `toolchain.log` and `matrix.json`; `run-probes.py` records `source_sha` in `probes.json`; the execution record states the exact binding per capture and re-ran both captures |
+| B3 | "Every capture names the implementation head" was false for the matrix and probes | minor | `run-matrix.py` now records the worktree head in `toolchain.log`; `run-probes.py` records `source_sha` in `probes.json`; the execution record states the exact binding per capture and re-ran both captures |
 | B4 | Base TU counts contradicted the base tree and the B-01 capture | minor | Corrected (32 compiled / 34 in-tree) |
 | B5 | The T4 entry read as delivered | minor | Reworded to `NOT_RESOLVED / DECISION_REQUESTED` with `OWNER_APPROVAL=PENDING` |
 | B6 | Real-ring attribution cited the profile label; the smoke test can skip when the ring is unavailable | minor | Execution record now cites the ring-only tests executing without `NOT RUN` markers, the B-01 `w03_external_loop(uring): PASS` run, and the throw-on-`io_uring_queue_init`-failure property; the label caveat is stated |
@@ -54,3 +54,35 @@ The reviews did not re-run F2/F3/F4 validations and did not reopen their
 findings; every F5 claim above is bound to a capture produced by this slice.
 No production source changed as a result of the review: all dispositions are
 evidence, classification or wording corrections.
+
+## Re-check round at `ce62c05b` and the round-2 dispositions
+
+Both reviewers re-inspected the dispositioned head and re-ran their checks against
+the raw artifacts.
+
+- **Review A re-check: `none-requiring-change` (unchanged)** for production and
+  package correctness; all six initial findings confirmed dispositioned, with
+  three precision defects found in the newly written text (below).
+- **Review B re-check: `blockers-found`** — one requested correction was still
+  missing, plus precision defects; every technical gate, capture and SHA binding
+  verified again, and no capture was shown to be produced by a wrong tree.
+
+Round-2 findings and dispositions (all applied in the round-2 commit):
+
+| # | Finding (re-check) | Severity | Disposition |
+|---|---|---|---|
+| R1 | The Family A table row still read "triggers T1–T3 all fired" while the bullet and JSON said T1 did not fire | blocker | Row reworded to "T2/T3 fired; T1 assessed — no external-use signal observed (UNKNOWN, not zero)" |
+| R2 | Execution record and the review record claimed the matrix head was recorded in `matrix.json` as well as `toolchain.log`; only `toolchain.log` carries it | minor | Both texts now name `matrix/toolchain.log` only |
+| R3 | `probes-commands.txt` did not include the `--source-sha` argument recorded in `probes.json` | minor | Commands updated with the argument and the prefix-hash binding note |
+| R4 | The E2 row claimed every per-surface row cites MIG-02/HOST-01; the internal/test/experimental rows cite D-13/M-A4/F1 | minor | E2 reworded to the A/B/C capability rows |
+| R5 | The execution record still described the fail-fast removal as "21 removed diagnostics (… group_lifetime_fail_fast)" | minor | Aligned with the disposition wording: 19 `[[noreturn]]` diagnostics plus `evented_admission_check` and its helper (21 entities) |
+| R6 | `cancel.cpp.o` stayed in the canonical member list although the header was reclassified to the host closure | minor | Moved to the host-closure members (9 canonical async + 4 host) in the manifest JSON and table, with the `CancelToken::request()` consumer cited |
+| R7 | The probe ELF binaries had been committed under `installed-probes/` | informational | Removed from the repository; the probe commands record that binaries/objects stay in the execution tree |
+| R8 | The matrix PASS banner was not persisted | informational | The capture stdout is persisted as `matrix/matrix-run.log` |
+
+R8 evaluation evidence is illustrative: the reviewer's own recomputation of every
+`log_sha256` in `matrix.json` matched the regenerated logs, the TSan exclusion
+entry and its `multiple definition of 'operator new'` reason are intact, and both
+`probes.json` files re-verify (25 headers, 0 standalone failures, ODR link/run
+exit 0, 0 removed headers present, control prefix 49 headers with all 24 removed
+headers present).
