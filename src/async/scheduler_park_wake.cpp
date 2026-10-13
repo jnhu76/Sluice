@@ -422,7 +422,10 @@ Result<void> Scheduler::await_request(const RequestId& id) {
         const auto attach = ctx_.attach_observer(id);
         if (!attach.armed()) {
             release_reserved_wait_record_locked(rec);
-            if (attach.status == detail::ObserverRegistration::already_terminal) {
+            // What an already-settled request must report here is the canonical
+            // readiness, not a refusal reason: admission may have closed or
+            // another waiter armed after the result became observable.
+            if (ctx_.lookup(id) == RequestReadiness::ready) {
                 return Result<void>{};
             }
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});

@@ -384,6 +384,73 @@ bool already_terminal_await_returns_without_suspending(Tracker& t) {
     return t.failures == 0;
 }
 
+// An await that lands after admission closed must still report a result that is
+// already published: the refusal reason is not the settlement state.
+bool already_ready_await_survives_closed_admission(Tracker& t) {
+    const std::string path = make_temp_file("sluice c1d closed admission payload");
+    if (path.empty()) {
+        t.check(false, "temp file created");
+        return false;
+    }
+    auto file_open = File::open(path, FileOpen{.access = FileAccess::read_write});
+    ::unlink(path.c_str());
+    if (!file_open.has_value()) {
+        t.check(false, "temp file opened");
+        return false;
+    }
+    File file = std::move(file_open.value());
+
+    AsyncIoContext io(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
+    Scheduler sched(io);
+
+    std::promise<Result<std::size_t>> slot;
+    std::vector<std::byte> buffer(1, std::byte{0});
+
+    std::vector<std::byte> stack(256 * 1024);
+    Fiber fiber([&](Fiber& current) {
+        auto sr = io.submit_read(ReadOp{NativeFileRef{file}, buffer.data(), 0, 0});
+        if (!sr.has_value()) {
+            slot.set_value(make_unexpected<std::size_t>(sr.error()));
+            return;
+        }
+        Request<std::size_t> r = std::move(sr.value());
+        t.check(r.ready(), "the zero-length request is published before admission closes");
+        io.close_admission();
+        const std::array context_before{current.ctx.rsp, current.ctx.rbp, current.ctx.rip};
+        auto wr = sched.await_request(r.id());
+        t.check(wr.has_value(), "the await reports the published result after admission closed");
+        t.check(current.state() == FiberState::running, "the settled await keeps the fiber running");
+        t.check(context_before == std::array{current.ctx.rsp, current.ctx.rbp, current.ctx.rip},
+                "the settled await performs no context switch");
+        t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+                "the settled await leaves no armed wait record");
+        if (!wr.has_value()) {
+            slot.set_value(make_unexpected<std::size_t>(wr.error()));
+            return;
+        }
+        auto observation = r.take_result();
+        slot.set_value(observation.result.has_value()
+                           ? Result<std::size_t>{observation.result.value()}
+                           : make_unexpected<std::size_t>(observation.result.error()));
+    });
+    if (!sched.init_fiber(fiber, stack.data(), stack.size())) {
+        t.check(false, "the fiber stack initializes");
+        return false;
+    }
+    sched.spawn(fiber);
+    std::thread driver([&] { sched.run(1); });
+
+    Result<std::size_t> result = slot.get_future().get();
+    t.check(result.has_value() && result.value() == 0,
+            "the published payload survives the closed admission");
+
+    driver.join();
+    t.check(SchedulerTestAccess::wait_registry_live_count(sched) == 0,
+            "no wait record survives driver join");
+    t.check(io.outstanding() == 0, "accepted operations settle before teardown");
+    return t.failures == 0;
+}
+
 bool wait_record_exhaustion_fails_the_await_before_observer_attachment(Tracker& t) {
     const std::string path = make_temp_file("sluice obs04 exhaustion payload");
     if (path.empty()) {
@@ -689,6 +756,8 @@ int main() {
          observer_cancel_wakes_the_fiber_and_the_operation_still_completes},
         {"already_terminal_await_returns_without_suspending",
          already_terminal_await_returns_without_suspending},
+        {"already_ready_await_survives_closed_admission",
+         already_ready_await_survives_closed_admission},
         {"wait_record_exhaustion_fails_the_await_before_observer_attachment",
          wait_record_exhaustion_fails_the_await_before_observer_attachment},
         {"cancel_during_the_staged_delivery_window_completes_normally",
