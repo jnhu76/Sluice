@@ -1,0 +1,1933 @@
+{
+    tool_target_file_info_identity_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_copy_dir_fsync_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_timeout_releases_slot_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_threadpool_external_loop_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_copy_pipeline_oracle_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_progress_source_ownership_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_tail_cli_oracle_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_destructor_skips_settle_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_short_io_reference_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_durability_reference_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_observe_ignores_publication_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_empty_precheck_bypass_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_copy_consumption_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_sluice_core_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-grep_linux_x86_64_cxx"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_cursor_position_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_observe_consumes_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_write_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_delivery_claim_unbounded_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stop_implicit_cancel_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_sync_data_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_release_violation_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-copy_linux_x86_64_cxx"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_close_semantics_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_task_error_swallowed_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-hash_linux_x86_64_ld"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_destructor_skips_settle_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_composition_fault_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_finish_cancels_cleanup_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_release_forgets_binding_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_access_precedence_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_copy_dir_fsync_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_deadline_cancels_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_cancel_during_delivery_returns_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_effect_outcome_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_finish_cancels_cleanup_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_sync_data_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m4_close_requires_consumption_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_read_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_tail_consumption_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_e1_conformance_mut_write_failure_accounted_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_progress_source_ownership_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_sync_data_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_composition_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_await_stop_unsettled_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_consumer_probe_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_cursor_position_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_publication_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_uring_submit_boundary_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_ownership_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_threadpool_progress_race_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_observe_ignores_publication_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_sequential_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_nonterminal_release_detaches_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_lifecycle_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_attach_ignores_publication_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_open_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_resource_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_deadline_cancels_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_delivery_claim_unbounded_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_open_contract_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_consumer_probe_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_sync_all_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_discard_accepts_inflight_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_e1_conformance_mut_write_failure_accounted_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_hash_consumption_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_finish_swallows_error_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_progress_source_mut_close_admission_always_signals_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_commit_drops_request_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stale_error_retained_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_w01_consumer_probe_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_lifecycle_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_e1_conformance_mut_cancel_reports_requested_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_consume_keeps_binding_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_validation_precedence_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_write_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_async_sync_admission_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_threadpool_external_loop_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stop_implicit_cancel_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_expired_deadline_spin_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_state_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_protocol_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_release_violation_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_observe_consumes_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_reference_case_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_publication_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m2_control_pin_caller_violation_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_reserve_after_accept_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_backend_conformance_e1_threadpool_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_cancel_during_delivery_returns_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_ownership_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_attach_treats_terminal_as_published_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stop_returns_unsettled_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_task_error_swallowed_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_publication_skips_queue_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_sluice_async_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_short_io_reference_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stale_error_retained_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_publication_skips_queue_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_commit_drops_request_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_attach_treats_terminal_as_published_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_sequential_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_wake_retired_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_close_semantics_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stop_interrupts_control_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-tail_linux_x86_64_ld"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_info_identity_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_write_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_sluice_async_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_tail_consumption_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_explicit_file_ref_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_protocol_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_core_mut_attach_ignores_publication_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    clang_arch_x86_64_plat_linux = {
+        plat = "linux",
+        llvm_target_triple = "x86_64-redhat-linux-gnu",
+        llvm_resourcedir = "/usr/lib/clang/22",
+        __checked = {
+            name = "clang",
+            program = "/usr/lib64/ccache/clang"
+        },
+        __global = true,
+        arch = "x86_64"
+    },
+    tool_target_sluice_core_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_progress_source_mut_close_admission_always_signals_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_errno_mapping_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_durability_reference_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_double_wake_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m10_prejoin_stale_dispatch_violation_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_double_wake_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_open_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_tail_lifecycle_oracle_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_w01_consumer_probe_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_expired_deadline_spin_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_tail_cli_oracle_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_consume_keeps_binding_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_timeout_releases_slot_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_grep_consumption_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_resource_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_copy_consumption_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_release_forgets_binding_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_composition_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_e1_conformance_mut_cancel_reports_requested_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_read_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_validation_precedence_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_finish_swallows_error_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_reference_case_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_async_sync_admission_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_backend_conformance_e1_threadpool_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_effect_outcome_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_sync_all_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_empty_precheck_bypass_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_copy_pipeline_oracle_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_read_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_grep_consumption_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_direct_composition_fault_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_range_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-tail_linux_x86_64_cxx"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_sync_all_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_skip_control_ack_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m3_destructor_ignores_live_binding_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_hash_consumption_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_second_owner_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_open_contract_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_app_tail_lifecycle_oracle_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_access_precedence_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_threadpool_core_cutover_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_read_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m4_close_requires_consumption_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_state_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_tail_pread_shim_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-copy_linux_x86_64_ld"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-grep_linux_x86_64_ld"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    ["tool_target_sluice-hash_linux_x86_64_cxx"] = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_await_stop_unsettled_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stop_interrupts_control_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_tail_pread_shim_linux_x86_64_cc = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang",
+        toolname = "clang"
+    },
+    tool_target_threadpool_progress_race_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_errno_mapping_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_request_scope_mut_reserve_after_accept_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_semantic_range_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_sync_data_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_threadpool_core_cutover_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m10_prejoin_stale_dispatch_violation_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_skip_control_ack_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_wake_retired_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_stop_returns_unsettled_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_nonterminal_release_detaches_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m3_destructor_ignores_live_binding_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_file_write_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_public_request_mut_discard_accepts_inflight_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_stackful_host_mut_second_owner_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_blocking_file_sync_all_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_explicit_file_ref_test_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_uring_submit_boundary_test_linux_x86_64_ld = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    },
+    tool_target_shutdown_mut_m2_control_pin_caller_violation_linux_x86_64_cxx = {
+        toolchain_info = {
+            plat = "linux",
+            arch = "x86_64",
+            cachekey = "clang_arch_x86_64_plat_linux",
+            name = "clang"
+        },
+        program = "/usr/lib64/ccache/clang++",
+        toolname = "clangxx"
+    }
+}

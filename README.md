@@ -106,10 +106,12 @@ flowchart TB
 
 ## Current implementation and convergence
 
-The retained baseline contains canonical File/blocking operations, caller-owned
-Completion APIs, AsyncIoContext, ThreadPool/io_uring backends and runtime machinery.
-Those existing components do not by themselves satisfy the new target. Migration
-and evidence follow phases A–G in the root and the new conformance ledger.
+The current tree contains the canonical File/blocking operations, the
+Request/AsyncIoContext request core with ThreadPool and io_uring backends,
+RequestScope for W-02, and the optional stackful-host candidate. The legacy
+multi-worker Scheduler runtime and its public synchronization surface are
+retired. Migration and evidence follow phases A–G in the root and the
+conformance ledger.
 
 The previous mission, ADR-0001/0002, visual companion and
 [old conformance roadmap](docs/archive/explicit-file-roadmap/explicit-file-conformance.md) are superseded

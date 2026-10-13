@@ -1,63 +1,9 @@
 #include <sluice/async/detail/fail_fast.hpp>
 
-#include <sluice/async/fiber_ctx.hpp>
-
-#include <atomic>
 #include <cstdio>
 #include <exception>
 
 namespace sluice::async::detail {
-
-[[noreturn]] void async_mutex_lock_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void select_timer_pump_active_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void select_multi_group_event_stage_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void select_invariant_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void group_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void async_mutex_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
-[[noreturn]] void async_rwlock_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
-[[noreturn]] void async_condition_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
-[[noreturn]] void wait_queue_lifetime_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void async_rwlock_recursive_write_fail_fast() noexcept {
-    std::terminate();
-}
-[[noreturn]] void async_rwlock_unlock_write_inactive_fail_fast() noexcept {
-    std::terminate();
-}
-[[noreturn]] void async_rwlock_unlock_write_not_owner_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void scheduler_deferred_publication_stranded_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void evented_admission_fail_fast() noexcept {
-    std::terminate();
-}
 
 [[noreturn]] void async_context_outstanding_fail_fast() noexcept {
     std::fprintf(stderr,
@@ -86,26 +32,6 @@ namespace sluice::async::detail {
 }
 
 [[noreturn]] void context_identity_exhausted_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void scheduler_invalid_runnable_ticket_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void scheduler_invalid_suspend_transition_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void scheduler_missing_fiber_owner_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void scheduler_wait_registry_invariant_fail_fast() noexcept {
-    std::terminate();
-}
-
-[[noreturn]] void scheduler_wait_registry_nonempty_fail_fast() noexcept {
     std::terminate();
 }
 
@@ -184,34 +110,5 @@ namespace sluice::async::detail {
     std::fflush(stderr);
     std::terminate();
 }
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-namespace {
-
-std::atomic<int> g_evented_admission_override{-1};
-}
-
-bool evented_admission_check() noexcept {
-    int ovr = g_evented_admission_override.load(std::memory_order_acquire);
-    if (ovr >= 0)
-        return ovr != 0;
-    return fiber_ctx::supported;
-}
-
-void set_evented_admission_override_impl(bool supported) noexcept {
-    g_evented_admission_override.store(supported ? 1 : 0, std::memory_order_release);
-}
-void clear_evented_admission_override_impl() noexcept {
-    g_evented_admission_override.store(-1, std::memory_order_release);
-}
-bool get_evented_admission_override_impl() noexcept {
-    int ovr = g_evented_admission_override.load(std::memory_order_acquire);
-    return ovr >= 0 ? (ovr != 0) : fiber_ctx::supported;
-}
-#else
-bool evented_admission_check() noexcept {
-    return fiber_ctx::supported;
-}
-#endif
 
 }

@@ -39,9 +39,10 @@ waiter routing。
 
 ## 当前实现与迁移
 
-保留基线已有 canonical File/blocking 操作、caller-owned Completion、AsyncIoContext、
-ThreadPool/io_uring backend 和 runtime。它们的存在不代表新目标已经实现。
-后续迁移按根规范 A–G 阶段推进，在新台账中记录代码位置、配置与验证证据。
+当前代码树包含 canonical File/blocking 操作、Request/AsyncIoContext 请求核心
+（ThreadPool 与 io_uring backend）、W-02 的 RequestScope，以及可选 stackful host
+候选。旧多 worker Scheduler runtime 及其公开同步面已退役。后续迁移按根规范
+A–G 阶段推进，在新台账中记录代码位置、配置与验证证据。
 
 旧 mission、ADR-0001/0002、配套架构图和
 [旧 conformance roadmap](docs/archive/explicit-file-roadmap/explicit-file-conformance.md)
