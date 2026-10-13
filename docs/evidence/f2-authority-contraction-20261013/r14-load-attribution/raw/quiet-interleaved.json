@@ -1,0 +1,46 @@
+{
+  "rounds": [
+    {
+      "label": "f2-r0",
+      "runs": 20,
+      "failures": 0,
+      "fail_seconds": [],
+      "aborted": []
+    },
+    {
+      "label": "baseline-r0",
+      "runs": 20,
+      "failures": 0,
+      "fail_seconds": [],
+      "aborted": []
+    },
+    {
+      "label": "f2-r1",
+      "runs": 20,
+      "failures": 0,
+      "fail_seconds": [],
+      "aborted": []
+    },
+    {
+      "label": "baseline-r1",
+      "runs": 20,
+      "failures": 0,
+      "fail_seconds": [],
+      "aborted": []
+    },
+    {
+      "label": "f2-r2",
+      "runs": 20,
+      "failures": 0,
+      "fail_seconds": [],
+      "aborted": []
+    },
+    {
+      "label": "baseline-r2",
+      "runs": 20,
+      "failures": 0,
+      "fail_seconds": [],
+      "aborted": []
+    }
+  ]
+}

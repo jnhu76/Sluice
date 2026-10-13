@@ -1,0 +1,581 @@
+{
+  "binary": "/home/jnhu/f2-execution/matrix/release-y/build/linux/x86_64/release/threadpool_external_loop_test",
+  "label": "f2-release-y",
+  "instances": 20,
+  "rounds": 3,
+  "runs": 60,
+  "failures": 27,
+  "failed_scenarios": [
+    "host_acknowledgement_racing_new_signal_never_strands"
+  ],
+  "failure_seconds": [
+    2.317,
+    2.325,
+    2.326,
+    2.329,
+    2.331,
+    3.143,
+    3.144,
+    3.167,
+    3.175,
+    3.182,
+    3.192,
+    3.193,
+    3.198,
+    4.046,
+    4.048,
+    5.361,
+    5.365,
+    5.366,
+    5.379,
+    5.385
+  ],
+  "pass_seconds": [
+    2.891,
+    3.144,
+    3.168,
+    3.17,
+    3.174,
+    3.176,
+    3.182,
+    3.187,
+    3.187,
+    3.199,
+    3.2,
+    4.047,
+    4.048,
+    4.048,
+    4.051,
+    4.053,
+    5.367,
+    5.371,
+    5.373,
+    5.376
+  ],
+  "records": [
+    {
+      "round": 0,
+      "instance": 0,
+      "exit_code": 1,
+      "seconds": 2.317,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i0.log"
+    },
+    {
+      "round": 0,
+      "instance": 1,
+      "exit_code": 1,
+      "seconds": 2.329,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i1.log"
+    },
+    {
+      "round": 0,
+      "instance": 2,
+      "exit_code": 1,
+      "seconds": 2.326,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i2.log"
+    },
+    {
+      "round": 0,
+      "instance": 3,
+      "exit_code": 1,
+      "seconds": 2.331,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i3.log"
+    },
+    {
+      "round": 0,
+      "instance": 4,
+      "exit_code": 0,
+      "seconds": 3.144,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i4.log"
+    },
+    {
+      "round": 0,
+      "instance": 5,
+      "exit_code": 1,
+      "seconds": 3.144,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i5.log"
+    },
+    {
+      "round": 0,
+      "instance": 6,
+      "exit_code": 1,
+      "seconds": 3.143,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i6.log"
+    },
+    {
+      "round": 0,
+      "instance": 7,
+      "exit_code": 0,
+      "seconds": 3.2,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i7.log"
+    },
+    {
+      "round": 0,
+      "instance": 8,
+      "exit_code": 0,
+      "seconds": 3.199,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i8.log"
+    },
+    {
+      "round": 0,
+      "instance": 9,
+      "exit_code": 1,
+      "seconds": 3.198,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i9.log"
+    },
+    {
+      "round": 0,
+      "instance": 10,
+      "exit_code": 1,
+      "seconds": 3.193,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i10.log"
+    },
+    {
+      "round": 0,
+      "instance": 11,
+      "exit_code": 1,
+      "seconds": 3.192,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i11.log"
+    },
+    {
+      "round": 0,
+      "instance": 12,
+      "exit_code": 0,
+      "seconds": 3.187,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i12.log"
+    },
+    {
+      "round": 0,
+      "instance": 13,
+      "exit_code": 0,
+      "seconds": 3.187,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i13.log"
+    },
+    {
+      "round": 0,
+      "instance": 14,
+      "exit_code": 1,
+      "seconds": 3.182,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i14.log"
+    },
+    {
+      "round": 0,
+      "instance": 15,
+      "exit_code": 0,
+      "seconds": 3.182,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i15.log"
+    },
+    {
+      "round": 0,
+      "instance": 16,
+      "exit_code": 0,
+      "seconds": 3.176,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i16.log"
+    },
+    {
+      "round": 0,
+      "instance": 17,
+      "exit_code": 1,
+      "seconds": 3.175,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r0-i17.log"
+    },
+    {
+      "round": 0,
+      "instance": 18,
+      "exit_code": 0,
+      "seconds": 3.174,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i18.log"
+    },
+    {
+      "round": 0,
+      "instance": 19,
+      "exit_code": 0,
+      "seconds": 3.17,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r0-i19.log"
+    },
+    {
+      "round": 1,
+      "instance": 0,
+      "exit_code": 0,
+      "seconds": 2.891,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i0.log"
+    },
+    {
+      "round": 1,
+      "instance": 1,
+      "exit_code": -6,
+      "seconds": 5.453,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i1.log"
+    },
+    {
+      "round": 1,
+      "instance": 2,
+      "exit_code": 0,
+      "seconds": 5.452,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i2.log"
+    },
+    {
+      "round": 1,
+      "instance": 3,
+      "exit_code": 0,
+      "seconds": 5.45,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i3.log"
+    },
+    {
+      "round": 1,
+      "instance": 4,
+      "exit_code": 1,
+      "seconds": 5.446,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r1-i4.log"
+    },
+    {
+      "round": 1,
+      "instance": 5,
+      "exit_code": 0,
+      "seconds": 5.445,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i5.log"
+    },
+    {
+      "round": 1,
+      "instance": 6,
+      "exit_code": 0,
+      "seconds": 5.443,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i6.log"
+    },
+    {
+      "round": 1,
+      "instance": 7,
+      "exit_code": 1,
+      "seconds": 5.441,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r1-i7.log"
+    },
+    {
+      "round": 1,
+      "instance": 8,
+      "exit_code": 1,
+      "seconds": 5.437,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r1-i8.log"
+    },
+    {
+      "round": 1,
+      "instance": 9,
+      "exit_code": 0,
+      "seconds": 5.435,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i9.log"
+    },
+    {
+      "round": 1,
+      "instance": 10,
+      "exit_code": 0,
+      "seconds": 5.434,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i10.log"
+    },
+    {
+      "round": 1,
+      "instance": 11,
+      "exit_code": 0,
+      "seconds": 5.433,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i11.log"
+    },
+    {
+      "round": 1,
+      "instance": 12,
+      "exit_code": 1,
+      "seconds": 5.432,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r1-i12.log"
+    },
+    {
+      "round": 1,
+      "instance": 13,
+      "exit_code": 0,
+      "seconds": 5.43,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i13.log"
+    },
+    {
+      "round": 1,
+      "instance": 14,
+      "exit_code": -6,
+      "seconds": 5.457,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i14.log"
+    },
+    {
+      "round": 1,
+      "instance": 15,
+      "exit_code": 0,
+      "seconds": 5.456,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i15.log"
+    },
+    {
+      "round": 1,
+      "instance": 16,
+      "exit_code": 0,
+      "seconds": 5.453,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i16.log"
+    },
+    {
+      "round": 1,
+      "instance": 17,
+      "exit_code": 0,
+      "seconds": 5.453,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i17.log"
+    },
+    {
+      "round": 1,
+      "instance": 18,
+      "exit_code": 0,
+      "seconds": 5.45,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i18.log"
+    },
+    {
+      "round": 1,
+      "instance": 19,
+      "exit_code": -6,
+      "seconds": 5.455,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r1-i19.log"
+    },
+    {
+      "round": 2,
+      "instance": 0,
+      "exit_code": 1,
+      "seconds": 2.325,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i0.log"
+    },
+    {
+      "round": 2,
+      "instance": 1,
+      "exit_code": 0,
+      "seconds": 3.168,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i1.log"
+    },
+    {
+      "round": 2,
+      "instance": 2,
+      "exit_code": 1,
+      "seconds": 3.167,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i2.log"
+    },
+    {
+      "round": 2,
+      "instance": 3,
+      "exit_code": 0,
+      "seconds": 4.053,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i3.log"
+    },
+    {
+      "round": 2,
+      "instance": 4,
+      "exit_code": 0,
+      "seconds": 4.051,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i4.log"
+    },
+    {
+      "round": 2,
+      "instance": 5,
+      "exit_code": 1,
+      "seconds": 4.048,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i5.log"
+    },
+    {
+      "round": 2,
+      "instance": 6,
+      "exit_code": 0,
+      "seconds": 4.047,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i6.log"
+    },
+    {
+      "round": 2,
+      "instance": 7,
+      "exit_code": 1,
+      "seconds": 4.046,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i7.log"
+    },
+    {
+      "round": 2,
+      "instance": 8,
+      "exit_code": 0,
+      "seconds": 4.048,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i8.log"
+    },
+    {
+      "round": 2,
+      "instance": 9,
+      "exit_code": 0,
+      "seconds": 4.048,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i9.log"
+    },
+    {
+      "round": 2,
+      "instance": 10,
+      "exit_code": -6,
+      "seconds": 5.385,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i10.log"
+    },
+    {
+      "round": 2,
+      "instance": 11,
+      "exit_code": 0,
+      "seconds": 5.383,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i11.log"
+    },
+    {
+      "round": 2,
+      "instance": 12,
+      "exit_code": 1,
+      "seconds": 5.379,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i12.log"
+    },
+    {
+      "round": 2,
+      "instance": 13,
+      "exit_code": 0,
+      "seconds": 5.376,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i13.log"
+    },
+    {
+      "round": 2,
+      "instance": 14,
+      "exit_code": 0,
+      "seconds": 5.373,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i14.log"
+    },
+    {
+      "round": 2,
+      "instance": 15,
+      "exit_code": 0,
+      "seconds": 5.371,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i15.log"
+    },
+    {
+      "round": 2,
+      "instance": 16,
+      "exit_code": 0,
+      "seconds": 5.367,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i16.log"
+    },
+    {
+      "round": 2,
+      "instance": 17,
+      "exit_code": 1,
+      "seconds": 5.366,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i17.log"
+    },
+    {
+      "round": 2,
+      "instance": 18,
+      "exit_code": -6,
+      "seconds": 5.365,
+      "failed_scenarios": [],
+      "log": "f2-release-y-r2-i18.log"
+    },
+    {
+      "round": 2,
+      "instance": 19,
+      "exit_code": 1,
+      "seconds": 5.361,
+      "failed_scenarios": [
+        "host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "log": "f2-release-y-r2-i19.log"
+    }
+  ]
+}

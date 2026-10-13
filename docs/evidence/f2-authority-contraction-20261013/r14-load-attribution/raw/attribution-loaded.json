@@ -1,0 +1,79 @@
+{
+  "rounds": [
+    {
+      "label": "bl-completion-cell-r0",
+      "runs": 10,
+      "failures": 0,
+      "scenarios": [],
+      "aborted": 0
+    },
+    {
+      "label": "bl-request-cell-r0",
+      "runs": 10,
+      "failures": 1,
+      "scenarios": [
+        "FAIL: host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "aborted": 0
+    },
+    {
+      "label": "f2-request-cell-r0",
+      "runs": 10,
+      "failures": 1,
+      "scenarios": [
+        "FAIL: host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "aborted": 0
+    },
+    {
+      "label": "bl-completion-cell-r1",
+      "runs": 10,
+      "failures": 0,
+      "scenarios": [],
+      "aborted": 0
+    },
+    {
+      "label": "bl-request-cell-r1",
+      "runs": 10,
+      "failures": 3,
+      "scenarios": [
+        "FAIL: host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "aborted": 0
+    },
+    {
+      "label": "f2-request-cell-r1",
+      "runs": 10,
+      "failures": 4,
+      "scenarios": [
+        "FAIL: host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "aborted": 1
+    },
+    {
+      "label": "bl-completion-cell-r2",
+      "runs": 10,
+      "failures": 0,
+      "scenarios": [],
+      "aborted": 0
+    },
+    {
+      "label": "bl-request-cell-r2",
+      "runs": 10,
+      "failures": 2,
+      "scenarios": [
+        "FAIL: host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "aborted": 0
+    },
+    {
+      "label": "f2-request-cell-r2",
+      "runs": 10,
+      "failures": 1,
+      "scenarios": [
+        "FAIL: host_acknowledgement_racing_new_signal_never_strands"
+      ],
+      "aborted": 0
+    }
+  ]
+}

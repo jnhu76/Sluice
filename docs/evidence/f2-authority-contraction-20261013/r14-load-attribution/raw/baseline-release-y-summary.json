@@ -1,0 +1,516 @@
+{
+  "binary": "/tmp/bl-rel-y/linux/x86_64/release/threadpool_external_loop_test",
+  "label": "baseline-release-y",
+  "instances": 20,
+  "rounds": 3,
+  "runs": 60,
+  "failures": 1,
+  "failed_scenarios": [],
+  "failure_seconds": [
+    0.377
+  ],
+  "pass_seconds": [
+    0.712,
+    2.8,
+    3.201,
+    3.203,
+    3.203,
+    3.206,
+    3.209,
+    3.212,
+    3.213,
+    3.214,
+    3.218,
+    3.219,
+    3.221,
+    3.223,
+    3.224,
+    3.227,
+    3.23,
+    3.234,
+    3.237,
+    3.239
+  ],
+  "records": [
+    {
+      "round": 0,
+      "instance": 0,
+      "exit_code": 0,
+      "seconds": 0.712,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i0.log"
+    },
+    {
+      "round": 0,
+      "instance": 1,
+      "exit_code": 0,
+      "seconds": 3.391,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i1.log"
+    },
+    {
+      "round": 0,
+      "instance": 2,
+      "exit_code": 0,
+      "seconds": 3.39,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i2.log"
+    },
+    {
+      "round": 0,
+      "instance": 3,
+      "exit_code": 0,
+      "seconds": 3.389,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i3.log"
+    },
+    {
+      "round": 0,
+      "instance": 4,
+      "exit_code": 0,
+      "seconds": 3.388,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i4.log"
+    },
+    {
+      "round": 0,
+      "instance": 5,
+      "exit_code": 0,
+      "seconds": 3.385,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i5.log"
+    },
+    {
+      "round": 0,
+      "instance": 6,
+      "exit_code": 0,
+      "seconds": 3.383,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i6.log"
+    },
+    {
+      "round": 0,
+      "instance": 7,
+      "exit_code": 0,
+      "seconds": 3.381,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i7.log"
+    },
+    {
+      "round": 0,
+      "instance": 8,
+      "exit_code": 0,
+      "seconds": 3.379,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i8.log"
+    },
+    {
+      "round": 0,
+      "instance": 9,
+      "exit_code": 0,
+      "seconds": 3.378,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i9.log"
+    },
+    {
+      "round": 0,
+      "instance": 10,
+      "exit_code": 0,
+      "seconds": 3.376,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i10.log"
+    },
+    {
+      "round": 0,
+      "instance": 11,
+      "exit_code": 0,
+      "seconds": 3.374,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i11.log"
+    },
+    {
+      "round": 0,
+      "instance": 12,
+      "exit_code": 0,
+      "seconds": 3.372,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i12.log"
+    },
+    {
+      "round": 0,
+      "instance": 13,
+      "exit_code": 0,
+      "seconds": 3.372,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i13.log"
+    },
+    {
+      "round": 0,
+      "instance": 14,
+      "exit_code": 0,
+      "seconds": 3.371,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i14.log"
+    },
+    {
+      "round": 0,
+      "instance": 15,
+      "exit_code": 0,
+      "seconds": 3.368,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i15.log"
+    },
+    {
+      "round": 0,
+      "instance": 16,
+      "exit_code": 0,
+      "seconds": 3.364,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i16.log"
+    },
+    {
+      "round": 0,
+      "instance": 17,
+      "exit_code": 0,
+      "seconds": 3.362,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i17.log"
+    },
+    {
+      "round": 0,
+      "instance": 18,
+      "exit_code": 0,
+      "seconds": 3.359,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i18.log"
+    },
+    {
+      "round": 0,
+      "instance": 19,
+      "exit_code": 0,
+      "seconds": 3.359,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r0-i19.log"
+    },
+    {
+      "round": 1,
+      "instance": 0,
+      "exit_code": 0,
+      "seconds": 3.244,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i0.log"
+    },
+    {
+      "round": 1,
+      "instance": 1,
+      "exit_code": 0,
+      "seconds": 3.241,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i1.log"
+    },
+    {
+      "round": 1,
+      "instance": 2,
+      "exit_code": 0,
+      "seconds": 3.239,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i2.log"
+    },
+    {
+      "round": 1,
+      "instance": 3,
+      "exit_code": 0,
+      "seconds": 3.237,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i3.log"
+    },
+    {
+      "round": 1,
+      "instance": 4,
+      "exit_code": 0,
+      "seconds": 3.234,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i4.log"
+    },
+    {
+      "round": 1,
+      "instance": 5,
+      "exit_code": 0,
+      "seconds": 3.23,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i5.log"
+    },
+    {
+      "round": 1,
+      "instance": 6,
+      "exit_code": 0,
+      "seconds": 3.227,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i6.log"
+    },
+    {
+      "round": 1,
+      "instance": 7,
+      "exit_code": 0,
+      "seconds": 3.224,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i7.log"
+    },
+    {
+      "round": 1,
+      "instance": 8,
+      "exit_code": 0,
+      "seconds": 3.223,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i8.log"
+    },
+    {
+      "round": 1,
+      "instance": 9,
+      "exit_code": 0,
+      "seconds": 3.221,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i9.log"
+    },
+    {
+      "round": 1,
+      "instance": 10,
+      "exit_code": 0,
+      "seconds": 3.219,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i10.log"
+    },
+    {
+      "round": 1,
+      "instance": 11,
+      "exit_code": 0,
+      "seconds": 3.218,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i11.log"
+    },
+    {
+      "round": 1,
+      "instance": 12,
+      "exit_code": 0,
+      "seconds": 3.214,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i12.log"
+    },
+    {
+      "round": 1,
+      "instance": 13,
+      "exit_code": 0,
+      "seconds": 3.213,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i13.log"
+    },
+    {
+      "round": 1,
+      "instance": 14,
+      "exit_code": 0,
+      "seconds": 3.212,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i14.log"
+    },
+    {
+      "round": 1,
+      "instance": 15,
+      "exit_code": 0,
+      "seconds": 3.209,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i15.log"
+    },
+    {
+      "round": 1,
+      "instance": 16,
+      "exit_code": 0,
+      "seconds": 3.206,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i16.log"
+    },
+    {
+      "round": 1,
+      "instance": 17,
+      "exit_code": 0,
+      "seconds": 3.203,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i17.log"
+    },
+    {
+      "round": 1,
+      "instance": 18,
+      "exit_code": 0,
+      "seconds": 3.203,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i18.log"
+    },
+    {
+      "round": 1,
+      "instance": 19,
+      "exit_code": 0,
+      "seconds": 3.201,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r1-i19.log"
+    },
+    {
+      "round": 2,
+      "instance": 0,
+      "exit_code": -6,
+      "seconds": 0.377,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i0.log"
+    },
+    {
+      "round": 2,
+      "instance": 1,
+      "exit_code": 0,
+      "seconds": 2.8,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i1.log"
+    },
+    {
+      "round": 2,
+      "instance": 2,
+      "exit_code": 0,
+      "seconds": 3.391,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i2.log"
+    },
+    {
+      "round": 2,
+      "instance": 3,
+      "exit_code": 0,
+      "seconds": 3.39,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i3.log"
+    },
+    {
+      "round": 2,
+      "instance": 4,
+      "exit_code": 0,
+      "seconds": 3.385,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i4.log"
+    },
+    {
+      "round": 2,
+      "instance": 5,
+      "exit_code": 0,
+      "seconds": 3.383,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i5.log"
+    },
+    {
+      "round": 2,
+      "instance": 6,
+      "exit_code": 0,
+      "seconds": 3.402,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i6.log"
+    },
+    {
+      "round": 2,
+      "instance": 7,
+      "exit_code": 0,
+      "seconds": 3.4,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i7.log"
+    },
+    {
+      "round": 2,
+      "instance": 8,
+      "exit_code": 0,
+      "seconds": 3.4,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i8.log"
+    },
+    {
+      "round": 2,
+      "instance": 9,
+      "exit_code": 0,
+      "seconds": 3.397,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i9.log"
+    },
+    {
+      "round": 2,
+      "instance": 10,
+      "exit_code": 0,
+      "seconds": 3.394,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i10.log"
+    },
+    {
+      "round": 2,
+      "instance": 11,
+      "exit_code": 0,
+      "seconds": 3.393,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i11.log"
+    },
+    {
+      "round": 2,
+      "instance": 12,
+      "exit_code": 0,
+      "seconds": 3.393,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i12.log"
+    },
+    {
+      "round": 2,
+      "instance": 13,
+      "exit_code": 0,
+      "seconds": 3.386,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i13.log"
+    },
+    {
+      "round": 2,
+      "instance": 14,
+      "exit_code": 0,
+      "seconds": 3.386,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i14.log"
+    },
+    {
+      "round": 2,
+      "instance": 15,
+      "exit_code": 0,
+      "seconds": 3.381,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i15.log"
+    },
+    {
+      "round": 2,
+      "instance": 16,
+      "exit_code": 0,
+      "seconds": 3.381,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i16.log"
+    },
+    {
+      "round": 2,
+      "instance": 17,
+      "exit_code": 0,
+      "seconds": 3.377,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i17.log"
+    },
+    {
+      "round": 2,
+      "instance": 18,
+      "exit_code": 0,
+      "seconds": 3.376,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i18.log"
+    },
+    {
+      "round": 2,
+      "instance": 19,
+      "exit_code": 0,
+      "seconds": 3.374,
+      "failed_scenarios": [],
+      "log": "baseline-release-y-r2-i19.log"
+    }
+  ]
+}
