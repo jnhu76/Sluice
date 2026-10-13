@@ -1,7 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/batch.hpp>
 #include <sluice/async/completion.hpp>
-#include <sluice/async/op_helpers.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -945,11 +943,11 @@ bool injected_health_failure_is_sticky_and_distinguishable() {
     return true;
 }
 
-// A batch wait stops on the sticky health verdict instead of spinning past
+// A bounded wait stops on the sticky health verdict instead of spinning past
 // it: the failure surfaces through the error channel, never as a
-// zero-completion report, and the internally claimed owner is released so
-// the caller's own passes can retire the accepted work.
-bool batch_await_stops_on_health_failure() {
+// zero-completion report, and the wait's claimed owner is released so the
+// caller's own passes can retire the accepted work.
+bool wait_one_stops_on_health_failure_and_releases_owner() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
@@ -959,7 +957,7 @@ bool batch_await_stops_on_health_failure() {
 
     const int fd = temp_file_fd(std::string(64, 'h'));
     std::vector<std::byte> held_buf(32, std::byte{0});
-    std::vector<std::byte> batch_buf(32, std::byte{0});
+    std::vector<std::byte> waited_buf(32, std::byte{0});
     auto held_submitted = ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only),
                                                  held_buf.data(), held_buf.size(), 0});
     if (!held_submitted.has_value())
@@ -971,17 +969,27 @@ bool batch_await_stops_on_health_failure() {
     while (!gate.paused.load(std::memory_order_acquire))
         std::this_thread::yield();
 
-    Batch batch;
-    BatchOp op;
-    op.kind = BatchOp::Kind::read;
-    op.read = ReadOp{NativeFileRef(fd, FileAccess::read_only), batch_buf.data(), batch_buf.size(),
-                     32};
-    batch.add(op);
+    auto waited_submitted = ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only),
+                                                   waited_buf.data(), waited_buf.size(), 32});
+    if (!waited_submitted.has_value())
+        return false;
+    Request<std::size_t> waited = std::move(waited_submitted).value();
+    drain.track(waited);
 
     ctx.set_wait_health_failed_for_test();
-    const auto stopped = batch.await_one(ctx);
+    sluice::Result<AsyncIoContext::ProgressWaitOutcome> stopped =
+        sluice::make_unexpected<AsyncIoContext::ProgressWaitOutcome>(
+            sluice::IoError{sluice::IoError::Code::invalid_state});
+    {
+        auto claimed = ctx.claim_progress_owner();
+        if (claimed.has_value()) {
+            std::optional<ProgressOwner> owner = std::move(claimed).value();
+            stopped = ctx.wait_one();
+        }
+    }
     const bool surfaced_as_error =
-        !stopped.has_value() && stopped.error().code == sluice::IoError::Code::backend_error;
+        stopped.has_value() &&
+        stopped.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::health_failure;
 
     raw->set_worker_claimed_pause_gate(nullptr);
     gate.resume.store(true, std::memory_order_release);
@@ -990,19 +998,15 @@ bool batch_await_stops_on_health_failure() {
     bool retired = false;
     for (int i = 0; i < 2000 && !retired; ++i) {
         (void)ctx.poll();
-        retired = held.ready() && ctx.outstanding() == 0;
+        retired = held.ready() && waited.ready() && ctx.outstanding() == 0;
         if (!retired)
             std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
-    // Harvesting slot readiness is the batch protocol's own step: a call with
-    // nothing outstanding claims nothing and only collects completed slots.
-    const auto harvested = batch.await_one(ctx);
-    while (batch.next().has_value()) {
-    }
+    const auto observation = waited.take_result();
 
     held.discard();
-    return surfaced_as_error && retired && harvested.has_value() && harvested.value() == 1 &&
-           batch.pending_count() == 0;
+    return surfaced_as_error && retired && observation.readiness == RequestReadiness::ready &&
+           observation.result.has_value() && observation.result.value() == 32;
 }
 
 // Driving on an unpinned context is a single domain: a second concurrent
@@ -1157,9 +1161,9 @@ bool first_drive_attaches_a_fixed_owner() {
     return reattached.load();
 }
 
-// Zero-work helpers make no driving demand: an empty read_all/write_all
-// succeeds even while another thread holds the owner claim.
-bool zero_work_helpers_skip_owner_acquisition() {
+// Zero-length operations make no driving demand: they settle at submission
+// and consume without a progress pass, even while the owner claim is held.
+bool zero_length_requests_skip_driving() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     AsyncIoContext ctx(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
@@ -1167,10 +1171,17 @@ bool zero_work_helpers_skip_owner_acquisition() {
         return false;
     std::optional<ProgressOwner> owner = std::move(claimed).value();
 
-    std::vector<std::byte> none;
-    const auto rd = read_all(ctx, NativeFileRef(0, FileAccess::read_only), none, 0);
-    const auto wr = write_all(ctx, NativeFileRef(1, FileAccess::write_only), none, 0);
-    const bool ok = rd.has_value() && rd.value() == 0 && wr.has_value() && wr.value() == 0;
+    auto rd_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(0, FileAccess::read_only), nullptr, 0, 0});
+    auto wr_submitted =
+        ctx.submit_write(WriteOp{NativeFileRef(1, FileAccess::write_only), nullptr, 0, 0});
+    const auto rd =
+        rd_submitted.has_value() ? rd_submitted.value().take_result() : RequestObservation<std::size_t>{};
+    const auto wr =
+        wr_submitted.has_value() ? wr_submitted.value().take_result() : RequestObservation<std::size_t>{};
+    const bool ok = rd.readiness == RequestReadiness::ready && rd.result.has_value() &&
+                    rd.result.value() == 0 && wr.readiness == RequestReadiness::ready &&
+                    wr.result.has_value() && wr.result.value() == 0;
     owner.reset();
     return ok;
 }
@@ -1208,12 +1219,13 @@ int main() {
          acknowledging_observed_control_keeps_a_later_control},
         {"injected_health_failure_is_sticky_and_distinguishable",
          injected_health_failure_is_sticky_and_distinguishable},
-        {"batch_await_stops_on_health_failure", batch_await_stops_on_health_failure},
+        {"wait_one_stops_on_health_failure_and_releases_owner",
+         wait_one_stops_on_health_failure_and_releases_owner},
         {"competing_concurrent_drives_cannot_both_succeed",
          competing_concurrent_drives_cannot_both_succeed},
         {"nested_drive_from_delivery_hook_is_rejected",
          nested_drive_from_delivery_hook_is_rejected},
-        {"zero_work_helpers_skip_owner_acquisition", zero_work_helpers_skip_owner_acquisition},
+        {"zero_length_requests_skip_driving", zero_length_requests_skip_driving},
     };
 
     std::size_t passed = 0;

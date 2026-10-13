@@ -26,8 +26,6 @@ inline std::uint64_t next_reap_seq() noexcept {
 }
 
 template <class T> class Completion {
-    friend class Batch;
-
     friend class AsyncBackend;
 
   public:
@@ -230,7 +228,6 @@ template <class T> struct Completion<T>::Storage {
 };
 
 template <> class Completion<void> {
-    friend class Batch;
     friend class AsyncBackend;
 
   public:
