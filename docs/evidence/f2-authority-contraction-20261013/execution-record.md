@@ -210,5 +210,6 @@ appears on the baseline tree as well under the same load).
 - The TLA+ gate was run on the tree whose production code and models are
   identical to the final head; commit 5 changes only a test file. The gate log
   records the tree it ran on.
+- **Open blocker before merge**: `threadpool_external_loop_test`'s W-03 scenario stalls under two-core starvation on this slice (10/40) and not at baseline (0/40); the failing check is the host's wake wait in the late-completion loop, and the CI debug job flaked on that scenario. See `blocker-w03-stall.md`. The six-profile matrix and every other capture in this directory passed on an unloaded host.
 - F5 and every phase beyond F2 are not started here. Optional W-04 remains
   unsupported and no F2 obligation depends on it.

@@ -23,6 +23,7 @@ there, not for whatever the branch happens to point at now.
 | `mutants/` | The 64-mutant campaign on three trees (baseline, pre-review F2, head) with the comparison script that asserts kill-set equality, the surviving mutant and the timing-flaky one |
 | `ci/` | GitHub CI runs for this branch, including the head run with its job list |
 | `formal/` | TLA+ gate log and the model-to-C++ correspondence note for the transitions this slice touched |
+| `blocker-w03-stall.md` | **OPEN blocker**: the F2 head stalls the W-03 external-loop scenario under two-core starvation while the baseline does not, with the measurement and the identified failing check |
 | `known-preexisting-gaps.md` | Two gaps the review found that predate this slice (io_uring poison racing the post-accept push; an unguarded `core_` in `retire_delivery`), with their baseline-equivalence checks |
 | `collect-gates.py` | Asserts that every capture names the same head and writes `gates.json`; a capture bound to a different revision fails here instead of being averaged in |
 
