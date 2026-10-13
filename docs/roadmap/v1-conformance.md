@@ -2264,6 +2264,8 @@ above are unchanged by this section.
 | Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations; per-surface decisions, the #475 T4/E1 external-use decision and merge authorization PENDING in `installed-surface-risk-disposition.md` |
 | Not claimed | no F5/F6 completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no W-04 support, no `V1_RELEASE_READY`; external use remains UNKNOWN, not zero |
 
+Independent adversarial review: two reviews (production correctness; evidence and honesty) run against the candidate head, with findings dispositioned and re-verified; both final verdicts `none-requiring-change` at `ba825874` (record: `docs/evidence/f5-final-package-contraction-20261013/independent-review.md`).
+
 The F5 documentation slice corrects the #402 CURRENT overlay in place
 (2026-10-13): the earlier `2 core / 33 async / 56 headers` wording was the F4
 combined experimental tree (`07c1a3d5`, never merged master); the measured

@@ -82,8 +82,11 @@ complete reverse-include graph over `include/`, `src/`, `tests/`, `apps/`,
 
 * `F5-F4PROBE`: `tests/package/f4_retirement/probes/retained.cpp` (compiled by
   `scripts/verify_f4_retirement.py` against its own F4-era prefix) is the only
-  in-tree text that still includes removed headers. F4 evidence is frozen; a
-  supersession label or probe update is an F4-owner/F6 hygiene follow-up.
+  in-tree text compiled by a live verifier that still includes removed headers;
+  the other in-tree references are frozen evidence-directory probe texts (the
+  F2/F3 reproduction sources) that are not compiled against the head tree. F4
+  evidence stays frozen; a supersession label or probe update is an
+  F4-owner/F6 hygiene follow-up.
 * `F5-W04FIBER`: the retained host header `fiber.hpp` still declares
   Scheduler-era surface with no retained user (`friend class Scheduler;`,
   `CompletionWaitOutcome`, `set_entry`, `cancel_token`, `cancel_state`,

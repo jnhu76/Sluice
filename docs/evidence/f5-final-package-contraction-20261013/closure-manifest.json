@@ -130,7 +130,7 @@
     "F5-F4PROBE": {
       "where": "tests/package/f4_retirement/probes/retained.cpp + scripts/verify_f4_retirement.py:167",
       "fact": "F4-era probe text includes future.hpp/scheduler.hpp and calls default_wait_policy(); it cannot compile at the F5 head.",
-      "scope": "F4's verifier compiles it against its own F4-era clean-room prefix, so no F5 claim depends on it; it is the only in-tree reference to the retired family outside the removal batch.",
+      "scope": "F4's verifier compiles it against its own F4-era clean-room prefix, so no F5 claim depends on it. It is the only in-tree text compiled by a live verifier that references the retired family outside the removal batch; the other in-tree references are frozen evidence-directory probe texts (F2/F3 reproduction sources) that are not compiled against the head tree.",
       "disposition": "recorded, not rewritten: F4 evidence is frozen. A supersession label or probe update is an F4-owner/F6 tree-hygiene follow-up, not an F5 authorization."
     },
     "F5-W04FIBER": {

@@ -80,9 +80,33 @@ Round-2 findings and dispositions (all applied in the round-2 commit):
 | R7 | The probe ELF binaries had been committed under `installed-probes/` | informational | Removed from the repository; the probe commands record that binaries/objects stay in the execution tree |
 | R8 | The matrix PASS banner was not persisted | informational | The capture stdout is persisted as `matrix/matrix-run.log` |
 
-R8 evaluation evidence is illustrative: the reviewer's own recomputation of every
+Round-3 finding and disposition (applied in the round-3 commit):
+
+| # | Finding (round 3) | Severity | Disposition |
+|---|---|---|---|
+| R9 | The `RESIDUALS.F5-F4PROBE` scope sentences claimed the F4 probe is the only in-tree text/reference to the retired family; frozen F2/F3 evidence-directory probe texts also include removed headers | minor | Both sentences scoped to "compiled by a live verifier" / "outside the removal batch", with the frozen evidence directories named explicitly |
+
+The reviewer's own recomputation of every
 `log_sha256` in `matrix.json` matched the regenerated logs, the TSan exclusion
 entry and its `multiple definition of 'operator new'` reason are intact, and both
 `probes.json` files re-verify (25 headers, 0 standalone failures, ODR link/run
 exit 0, 0 removed headers present, control prefix 49 headers with all 24 removed
 headers present).
+
+## Final verdicts
+
+- **Review A (production correctness): `none-requiring-change`** at
+  `ba825874` — no production or package blocker; the remaining items were
+  evidence-text precision, disposed of in rounds 2 and 3 (R6, R9).
+- **Review B (evidence and honesty): `none-requiring-change`** at `ba825874` —
+  all eight round-2 items verified: the T1 blocker corrected, the recording
+  claims accurate, the probe commands reproducible with their SHA binding, the
+  E2 scope correct, the member reclassification consistent (9 canonical async +
+  4 host = 13 members), the ELF binaries out of the repository, the matrix
+  stdout persisted, and every `log_sha256` byte-identical to `matrix.json`.
+- Both reviewers re-confirmed at that head that the compiled inputs are
+  identical to `a23a94cd` and that no authorization or closure is claimed.
+
+The independent technical verdict for the decision packet is therefore
+`NONE_REQUIRING_CHANGE` at the candidate head; the owner's scope decision is
+the remaining gate and is not an engineering blocker.
