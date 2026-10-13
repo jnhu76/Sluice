@@ -1,0 +1,14 @@
+{
+  "packages": {
+    "sha256": "e338dd08aa53b44edcd7a29d2d6796a93a2d094526316b5055524fba1f443c61",
+    "file": "e338dd08aa53b44edcd7a29d2d6796a93a2d094526316b5055524fba1f443c61.tar.gz",
+    "files": 1223,
+    "size": 16798216
+  },
+  "app-and-review": {
+    "sha256": "a89bfee43c8d1c58b80a5973db5dc56a668ad75f2fab2be893ddc893085f2701",
+    "file": "a89bfee43c8d1c58b80a5973db5dc56a668ad75f2fab2be893ddc893085f2701.tar.gz",
+    "files": 1375,
+    "size": 1839059
+  }
+}

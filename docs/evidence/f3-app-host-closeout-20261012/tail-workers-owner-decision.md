@@ -27,3 +27,7 @@ MIGRATION_DISCLOSURE = existing callers must omit --workers; usage exit 1 before
 EXTERNAL_USE = UNKNOWN
 APPROVED_FOR_SCOPED_CLI_BREAK_AND_MERGE = PENDING
 ```
+
+## 2026-10-13 active human disposition (supersedes candidate PENDING)
+
+The authorizing human actively approved REJECT_REMOVED_OPTION and scoped merge in the task chat. Delegated exact-head record: https://github.com/jnhu76/Sluice/pull/513#issuecomment-6136092532 . ReviewedHEAD350e789810f16078d528e572a0b124e71bd6da97; original riskSHA256b588a51cd2bb1c08f9275f4a44748b27392644ecb72486263e8f7becf1f61415. Existing scripts must omit TAIL --workers; external use UNKNOWN, no window/shim/new runtime, COPY real workers retained. The record transcribes human authorization and is not an Agent signature or GitHub APPROVED impersonation. PR513 merged; actual sourceSHAf4a9723410539025cffa3422c5f6841ef795c755 is independently rebuilt/reexecuted in ../f3-postmerge-closeout-20261013. Future substantive risk/source changes require renewed binding.
