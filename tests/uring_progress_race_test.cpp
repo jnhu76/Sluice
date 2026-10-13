@@ -1349,6 +1349,123 @@ template <class Gate> void resume_backend_gate(Gate& gate) noexcept {
     gate.resume.notify_all();
 }
 
+// The accepted-before-poison window: a submitter that passed the backend
+// health check and had its request accepted pauses before the dispatch push,
+// a peer submission's non-retryable transport failure poisons the backend and
+// recovers the work then visible to it, and only afterwards does the parked
+// submitter push its reservation. The pushed entry is provably kernel-
+// invisible (dispatch refuses under poison before taking any SQE), so it must
+// retire through the poison failure terminal and wake the host instead of
+// stranding in the dispatch queue with no terminal and no signal. The
+// in-kernel read keeps its real completion path across the same poison.
+bool post_poison_accept_push_retires_through_failure_terminal() {
+    PoisonSubmitState state;
+    UringBackendSubmitTestHooks hooks;
+    hooks.context = &state;
+    hooks.submit = &poison_submit_hook;
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4}, hooks);
+    UringAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    HostInterest interest(ctx);
+
+    BlockedPipeRead inkernel;
+    RequestPublicationDrain drain{ctx};
+    drain.track_pipe(inkernel);
+    if (!inkernel.arm(ctx, 4))
+        return false;
+
+    UringAsyncBackend::AcceptedPreDispatchPauseGate gate;
+    raw->set_accepted_pre_dispatch_pause_gate(&gate);
+    int late_pipe[2];
+    if (::pipe(late_pipe) != 0)
+        return false;
+    std::optional<Request<std::size_t>> late_request;
+    std::vector<std::byte> late_buffer(4, std::byte{0});
+    std::thread submitter{[&] {
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(late_pipe[0], sluice::FileAccess::read_only),
+                                   late_buffer.data(), late_buffer.size(), 0});
+        if (submitted.has_value())
+            late_request = std::move(submitted.value());
+    }};
+    wait_backend_gate_paused(gate);
+
+    // The parked submitter holds the context admission mutex, so the poison is
+    // driven through the backend's own transport: the running cancel stages a
+    // control entry and the next submit attempt fails non-retryably.
+    state.fail_next.store(true, std::memory_order_release);
+    const detail::PublicCancel cancel_disposition =
+        raw->cancel_key_for_test(inkernel.request.key_for_test());
+    (void)raw->poll();
+    const bool poisoned = cancel_disposition == detail::PublicCancel::requested &&
+                          !state.fail_next.load(std::memory_order_acquire);
+
+    // Drain the poison transition's wake so the only later eventfd write can
+    // be attributed to the parked submitter's own retirement.
+    std::uint64_t token = 0;
+    while (::read(interest.fd, &token, sizeof(token)) == sizeof(token)) {
+    }
+
+    resume_backend_gate(gate);
+    submitter.join();
+    ::close(late_pipe[0]);
+    ::close(late_pipe[1]);
+
+    const bool dispatch_push_drained = raw->dispatch_size_for_test() == 0;
+    const bool retirement_wake_published = notification_fd_readable(interest.fd);
+
+    bool late_failure_terminal = false;
+    for (int i = 0; i < 2000 && !(late_request.has_value() && late_request->ready()); ++i) {
+        (void)ctx.poll_progress();
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    if (late_request.has_value()) {
+        if (!late_request->ready()) {
+            // The caller-visible escape for a stranded acceptance: the public
+            // cancel wins the pre-dispatch terminal and removes the queued
+            // reservation, letting the scenario report instead of hanging.
+            (void)late_request->cancel();
+            for (int i = 0; i < 2000 && !late_request->ready(); ++i) {
+                (void)ctx.poll_progress();
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        }
+        if (late_request->ready()) {
+            const auto observed = late_request->try_result();
+            late_failure_terminal = !observed.result.has_value() &&
+                                    observed.result.error().code == IoError::Code::backend_error;
+            (void)late_request->take_result();
+        }
+    }
+
+    inkernel.release_bytes(4);
+    bool inkernel_real_outcome = false;
+    for (int i = 0; i < 2000 && !inkernel.request.ready(); ++i) {
+        (void)ctx.poll_progress();
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+    }
+    if (inkernel.request.ready()) {
+        const auto observed = inkernel.request.try_result();
+        inkernel_real_outcome = observed.result.has_value() && observed.result.value() == 4;
+        (void)inkernel.request.take_result();
+    }
+    inkernel.close_pipe();
+
+    const bool backend_retired = raw->internal_work_retired();
+
+    const bool ok = poisoned && dispatch_push_drained && retirement_wake_published &&
+                    late_failure_terminal && inkernel_real_outcome && backend_retired;
+    if (!ok) {
+        std::fprintf(stderr,
+                     "post-poison accept push: poisoned=%d drained=%d wake=%d late_terminal=%d "
+                     "inkernel_real=%d retired=%d\n",
+                     poisoned ? 1 : 0, dispatch_push_drained ? 1 : 0,
+                     retirement_wake_published ? 1 : 0, late_failure_terminal ? 1 : 0,
+                     inkernel_real_outcome ? 1 : 0, backend_retired ? 1 : 0);
+    }
+    return ok;
+}
+
 // The delivery-record handoff under submit-concurrent-with-poll: the
 // submitting thread pauses between initializing the slot's delivery record
 // and binding it while the owner sweeps every slot repeatedly through the
@@ -1442,6 +1559,8 @@ int main() {
         {"k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq",
          k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq},
         {"poison_transition_wakes_parked_owner", poison_transition_wakes_parked_owner},
+        {"post_poison_accept_push_retires_through_failure_terminal",
+         post_poison_accept_push_retires_through_failure_terminal},
         {"u2_k15_retryable_submit_failure_does_not_strand_owner",
          u2_k15_retryable_submit_failure_does_not_strand_owner},
         {"u2b_accepted_dispatch_wakes_parked_owner", u2b_accepted_dispatch_wakes_parked_owner},

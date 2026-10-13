@@ -44,6 +44,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
     bool injected_dispatch_failure = false;
     bool newly_poisoned = false;
     bool unsubmitted_after_dispatch = false;
+    bool post_poison_push_retired = false;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -71,26 +72,58 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
             dispatch_->push_back(h);
 
             const bool poisoned_before = fatal_error_.has_value();
-            for (;;) {
-                if (dispatch_->empty())
-                    break;
-                const detail::RequestReservation front = dispatch_->front();
-                if (!dispatch_one_locked(front))
-                    break;
+            if (poisoned_before) {
+                retire_undispatched_after_poison_locked_();
+                post_poison_push_retired = true;
+            } else {
+                for (;;) {
+                    if (dispatch_->empty())
+                        break;
+                    const detail::RequestReservation front = dispatch_->front();
+                    if (!dispatch_one_locked(front))
+                        break;
+                }
+                if (!fatal_error_.has_value()) {
+                    (void)submit_transport_locked();
+                    service_pending_controls_locked_();
+                }
+                newly_poisoned = !poisoned_before && fatal_error_.has_value();
             }
-            if (!fatal_error_.has_value()) {
-                (void)submit_transport_locked();
-                service_pending_controls_locked_();
-            }
-            newly_poisoned = !poisoned_before && fatal_error_.has_value();
         }
 #if !defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
         unsubmitted_after_dispatch =
             !fatal_error_.has_value() && dispatch_retry_remains_locked_();
 #endif
     }
-    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch) {
+    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch ||
+        post_poison_push_retired) {
         signal_ready_progress();
+    }
+}
+
+void UringAsyncBackend::retire_undispatched_after_poison_locked_() noexcept {
+    const IoError error = *fatal_error_;
+    detail::RequestReservation local{};
+    while (dispatch_->pop_front(local)) {
+        const detail::RequestKey key{core_->context(), local.slot, local.generation};
+        // A public cancel that won the pre-dispatch terminal while this
+        // reservation sat between accept and queue push already owns its
+        // publication; claim_execution arbitrates that race exactly as the
+        // dispatch path does.
+        if (core_->claim_execution(key) != detail::ExecutionClaim::claimed)
+            continue;
+        detail::TerminalCandidate candidate;
+        candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+        candidate.outcome = sluice::detail::IoOutcome::failure(error);
+        if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
+            detail::uring_core_handoff_fail_fast();
+        }
+        if (core_->release_execution(key) !=
+            detail::ExecutionRelease::borrow_touch_fully_retired) {
+            detail::uring_core_handoff_fail_fast();
+        }
+        publication_pending_->push_back(local);
+        bump(stats_, &AsyncStats::completion_errors);
     }
 }
 

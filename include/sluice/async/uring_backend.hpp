@@ -230,6 +230,12 @@ class UringAsyncBackend : public AsyncBackend {
 
     bool dispatch_one_locked(detail::RequestReservation h) noexcept;
 
+    // Reservations pushed after poison never took an SQE (dispatch refuses
+    // under fatal_error_ before any ring access), so they are provably
+    // kernel-invisible and must retire through the failure terminal instead
+    // of holding a dispatch-queue seat no later pass can drain.
+    void retire_undispatched_after_poison_locked_() noexcept;
+
     // Accepted work that has not reached the kernel: undispatched entries or
     // prepared transport the last submit attempt did not consume. Poisoned
     // (retired) ledger entries are not retryable work.
