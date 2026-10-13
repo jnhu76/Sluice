@@ -394,13 +394,11 @@ void Scheduler::release_reserved_wait_record_locked(WaitRecord* record) {
 }
 
 void Scheduler::arm_wait_record_locked(WaitRecord* record, Fiber* fiber, WorkerState* owner,
-                                       const void* completion,
                                        const detail::RequestKey& request_key) {
     LockGuard rlk(wait_registry_mtx_);
     record->state = WaitRecordState::registered;
     record->fiber = fiber;
     record->owner = owner;
-    record->completion = completion;
     record->request_key = request_key;
     wait_by_request_slot_[request_key.slot.value] = record;
     ++wait_record_live_count_;
@@ -411,8 +409,7 @@ std::size_t Scheduler::wait_record_live_count_locked() const {
     return wait_record_live_count_;
 }
 
-template <class T>
-Result<void> Scheduler::await_completion_impl(Completion<T>& c) {
+Result<void> Scheduler::await_request(const RequestId& id) {
     WorkerState* ws = g_worker;
     Fiber* me = ws->current;
 
@@ -422,15 +419,18 @@ Result<void> Scheduler::await_completion_impl(Completion<T>& c) {
         if (rec == nullptr) {
             return make_unexpected<void>(IoError{IoError::Code::no_space});
         }
-        const auto attach = ctx_.attach_observer(c);
+        const auto attach = ctx_.attach_observer(id);
         if (!attach.armed()) {
             release_reserved_wait_record_locked(rec);
-            if (c.ready()) {
+            // What an already-settled request must report here is the canonical
+            // readiness, not a refusal reason: admission may have closed or
+            // another waiter armed after the result became observable.
+            if (ctx_.lookup(id) == RequestReadiness::ready) {
                 return Result<void>{};
             }
             return make_unexpected<void>(IoError{IoError::Code::invalid_state});
         }
-        arm_wait_record_locked(rec, me, ws, &c, attach.key);
+        arm_wait_record_locked(rec, me, ws, attach.key);
 
         commit_suspend_locked(ws, me);
     }
@@ -445,18 +445,9 @@ Result<void> Scheduler::await_completion_impl(Completion<T>& c) {
     return make_unexpected<void>(IoError{IoError::Code::canceled});
 }
 
-Result<void> Scheduler::await_completion_size(Completion<std::size_t>& c) {
-    return await_completion_impl(c);
-}
-
-Result<void> Scheduler::await_completion_void(Completion<void>& c) {
-    return await_completion_impl(c);
-}
-
-template <class T>
-Result<bool> Scheduler::cancel_waiter_impl(Completion<T>& c) {
+Result<bool> Scheduler::cancel_waiter(const RequestId& id) {
     LockGuard lk(global_mtx_);
-    const auto cancel = ctx_.cancel_observer(c);
+    const auto cancel = ctx_.cancel_observer(id);
     if (!cancel.retired()) {
         return Result<bool>{false};
     }
@@ -477,7 +468,6 @@ Result<bool> Scheduler::cancel_waiter_impl(Completion<T>& c) {
                 r->state = WaitRecordState::free;
                 r->fiber = nullptr;
                 r->owner = nullptr;
-                r->completion = nullptr;
                 r->request_key = {};
                 r->next_free = wait_record_free_head_;
                 wait_record_free_head_ = r;
@@ -494,14 +484,6 @@ Result<bool> Scheduler::cancel_waiter_impl(Completion<T>& c) {
         return Result<bool>{true};
     }
     return Result<bool>{false};
-}
-
-Result<bool> Scheduler::cancel_waiter(Completion<std::size_t>& c) {
-    return cancel_waiter_impl(c);
-}
-
-Result<bool> Scheduler::cancel_waiter(Completion<void>& c) {
-    return cancel_waiter_impl(c);
 }
 
 void Scheduler::await_ready_flag(const std::atomic<bool>& ready) {

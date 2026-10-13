@@ -20,9 +20,6 @@ class AsyncIoContext;
 class ApplicationRuntime;
 class Fiber;
 class Scheduler;
-namespace detail {
-class RequestArena;
-}
 }
 
 namespace {
@@ -47,8 +44,6 @@ static_assert(!is_complete<sluice::async::Fiber>::value,
               "the direct surface must not pull a Fiber into a consumer");
 static_assert(!is_complete<sluice::async::ApplicationRuntime>::value,
               "the direct surface must not pull the runtime into a consumer");
-static_assert(!is_complete<sluice::async::detail::RequestArena>::value,
-              "the direct surface must not pull the request arena into a consumer");
 
 std::string make_temp_path() {
     char path[] = "/tmp/sluice_w01_consumer_XXXXXX";

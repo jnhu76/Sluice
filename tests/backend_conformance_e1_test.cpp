@@ -5,7 +5,6 @@
 // of both profiles can be compared against each other and against the kernel.
 
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
@@ -54,7 +53,9 @@ using sluice::async::detail::CoreSnapshot;
 using sluice::async::detail::PublicCancel;
 using sluice::async::detail::RequestCore;
 
+#if defined(SLUICE_E1_CONFORMANCE_URING)
 constexpr std::uint64_t kControlTag = std::uint64_t{1} << 63u;
+#endif
 constexpr std::uint64_t kUnrepresentableOffset = std::numeric_limits<std::uint64_t>::max();
 
 struct Tracker {
@@ -136,12 +137,24 @@ template <class Gate> void wait_gate_paused(Gate& gate) {
     }
 }
 
+template <class Gate> void wait_gate_exited(Gate& gate) {
+    std::atomic<bool>& exited = gate.exited;
+    bool seen = exited.load(std::memory_order_acquire);
+    while (!seen) {
+        exited.wait(seen, std::memory_order_acquire);
+        seen = exited.load(std::memory_order_acquire);
+    }
+}
+
 template <class Gate> struct GateGuard {
     Gate& gate;
     explicit GateGuard(Gate& g) : gate(g) {}
     ~GateGuard() {
         gate.resume.store(true, std::memory_order_release);
         gate.resume.notify_all();
+        // A registered pass still owes its exit acknowledgment; the gate's
+        // storage may die only after the last pass is observed out.
+        wait_gate_exited(gate);
     }
     GateGuard(const GateGuard&) = delete;
     GateGuard& operator=(const GateGuard&) = delete;
@@ -516,28 +529,33 @@ bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
     Backend::AcceptedPreDispatchPauseGate gate;
     raw->set_accepted_pre_dispatch_pause_gate(&gate);
 
-    Completion<std::size_t> completion;
+    std::optional<Request<std::size_t>> submitted_request;
     std::vector<std::byte> buffer(8, std::byte{0});
     std::thread submitter{[&] {
         auto submitted = ctx.submit_read(
-            ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0},
-            completion);
-        (void)submitted;
+            ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0});
+        if (submitted.has_value())
+            submitted_request = std::move(submitted.value());
     }};
     wait_gate_paused(gate);
 
     // The parked submitter owns the context mutex, so the window is exercised
-    // through the backend cancel seam every public cancel path maps onto.
-    const auto key = raw->request_key_for_test(completion);
-    t.check(key.has_value(), "the accepted request is bound while dispatch is parked");
-    if (!key.has_value()) {
+    // through the backend cancel seam every public cancel path maps onto. The
+    // accepted identity is read from the core's outstanding set while the
+    // submitter is parked ahead of the Request handoff.
+    std::vector<detail::RequestKey> outstanding;
+    core.collect_outstanding(outstanding);
+    const bool have_key = outstanding.size() == 1;
+    t.check(have_key, "the accepted request is bound while dispatch is parked");
+    if (!have_key) {
         gate.resume.store(true, std::memory_order_release);
         gate.resume.notify_all();
         submitter.join();
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    const PublicCancel disposition = raw->cancel_key_for_test(*key);
+    const auto key = outstanding.front();
+    const PublicCancel disposition = raw->cancel_key_for_test(key);
     t.check(disposition == PublicCancel::won_before_execution,
             "the cancel wins inside the accepted pre-dispatch window");
 
@@ -547,17 +565,18 @@ bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
     submitter.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
-    while (!completion.ready())
+    while (!submitted_request->ready())
         (void)ctx.poll();
-    const Result<std::size_t> result = completion.result();
-    t.check(!result.has_value() && result.error().code == IoError::Code::canceled,
+    const auto observed = submitted_request->try_result();
+    t.check(!observed.result.has_value() &&
+                observed.result.error().code == IoError::Code::canceled,
             "the won cancel converges to a canceled terminal");
-    const auto canceled_slot = core.observe_slot(key->slot);
+    const auto canceled_slot = core.observe_slot(key.slot);
     t.check(canceled_slot.has_value() && canceled_slot->terminal_chosen &&
                 canceled_slot->outcome.effect ==
                     EffectReport{0, EffectCertainty::accounted},
             "the pre-dispatch cancel is a known-zero terminal at the core");
-    completion.reset();
+    (void)submitted_request->take_result();
     t.check(core_is_idle(core.snapshot()), "the canceled slot reclaims completely");
     return true;
 }
@@ -572,12 +591,12 @@ bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
     std::vector<std::byte> buffer(8, std::byte{0});
 #if !defined(SLUICE_E1_CONFORMANCE_URING)
     {
+        Backend::WorkerClaimedPauseGate gate;
         auto backend = make_backend(4);
         Backend* raw = backend.get();
         AsyncIoContext ctx(std::move(backend));
         RequestCore& core = *ctx.context_core_for_test();
 
-        Backend::WorkerClaimedPauseGate gate;
         raw->set_worker_claimed_pause_gate(&gate);
 
         auto submitted = ctx.submit_read(
@@ -664,13 +683,13 @@ bool success_wins_over_a_recorded_cancel_intent(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::WorkerClaimedPauseGate gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
     std::vector<std::byte> buffer(8, std::byte{0});
-    Backend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
 
     auto submitted =
@@ -718,29 +737,31 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
-    Completion<std::size_t> completion;
+    std::optional<Request<std::size_t>> submitted_request;
     std::vector<std::byte> buffer(8, std::byte{0});
     std::thread submitter{[&] {
         auto submitted = ctx.submit_read(
-            ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0},
-            completion);
-        (void)submitted;
+            ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0});
+        if (submitted.has_value())
+            submitted_request = std::move(submitted.value());
     }};
     wait_gate_paused(dispatch_gate);
 
-    const auto key = raw->request_key_for_test(completion);
-    t.check(key.has_value(), "the accepted request is bound while dispatch is parked");
-    if (!key.has_value()) {
+    std::vector<detail::RequestKey> outstanding;
+    core.collect_outstanding(outstanding);
+    const bool have_key = outstanding.size() == 1;
+    t.check(have_key, "the accepted request is bound while dispatch is parked");
+    if (!have_key) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -748,8 +769,9 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
+    const auto key = outstanding.front();
     const auto before_cancel = ctx.progress_token_for_test();
-    const PublicCancel disposition = raw->cancel_key_for_test(*key);
+    const PublicCancel disposition = raw->cancel_key_for_test(key);
     t.check(disposition == PublicCancel::won_before_execution,
             "the pre-dispatch cancel wins while dispatch is parked");
     // Control: the same observer sees the wake the cancel path publishes before
@@ -769,7 +791,7 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
     submitter.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
-    while (!completion.ready())
+    while (!submitted_request->ready())
         (void)ctx.poll();
 
     wait_gate_paused(retirement_gate);
@@ -782,7 +804,7 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
         GateGuard<Backend::WorkerUnclaimedRetirementPauseGate> guard{retirement_gate};
     }
     raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
-    completion.reset();
+    submitted_request->discard();
     t.check(raw->dispatch_size_for_test() == 0, "the retired entry leaves no dispatch residue");
     t.check(backend_quiescent(*raw), "the backend holds no physical residue");
     t.check(core_is_idle(core.snapshot()), "the canceled request reclaims completely");
@@ -795,25 +817,31 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
-    Completion<std::size_t> first, second;
+    std::optional<Request<std::size_t>> first, second;
     std::vector<std::byte> buffer(8, std::byte{0});
     const ReadOp op{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0};
 
-    std::thread submitter_one{[&] { (void)ctx.submit_read(op, first); }};
+    std::thread submitter_one{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            first = std::move(submitted.value());
+    }};
     wait_gate_paused(dispatch_gate);
-    const auto first_key = raw->request_key_for_test(first);
-    t.check(first_key.has_value(), "the first request is bound while dispatch is parked");
-    if (!first_key.has_value()) {
+    std::vector<detail::RequestKey> first_outstanding;
+    core.collect_outstanding(first_outstanding);
+    const bool have_first = first_outstanding.size() == 1;
+    t.check(have_first, "the first request is bound while dispatch is parked");
+    if (!have_first) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -821,7 +849,8 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*first_key) == PublicCancel::won_before_execution,
+    const auto first_key = first_outstanding.front();
+    t.check(raw->cancel_key_for_test(first_key) == PublicCancel::won_before_execution,
             "the first pre-dispatch cancel wins");
 
     // The gate latch is single-shot: release the first submitter, wait for it
@@ -832,12 +861,18 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
     }
     submitter_one.join();
     dispatch_gate.resume.store(false, std::memory_order_release);
-    std::thread submitter_two{[&] { (void)ctx.submit_read(op, second); }};
+    std::thread submitter_two{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            second = std::move(submitted.value());
+    }};
     while (dispatch_gate.exited.load(std::memory_order_acquire))
         std::this_thread::yield();
-    const auto second_key = raw->request_key_for_test(second);
-    t.check(second_key.has_value(), "the second request is bound while dispatch is parked");
-    if (!second_key.has_value()) {
+    std::vector<detail::RequestKey> second_outstanding;
+    core.collect_outstanding(second_outstanding);
+    const bool have_second = second_outstanding.size() == 2;
+    t.check(have_second, "the second request is bound while dispatch is parked");
+    if (!have_second) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -845,7 +880,8 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*second_key) == PublicCancel::won_before_execution,
+    const auto second_key = second_outstanding.back();
+    t.check(raw->cancel_key_for_test(second_key) == PublicCancel::won_before_execution,
             "the second pre-dispatch cancel wins");
 
     {
@@ -854,7 +890,7 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
     submitter_two.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
-    while (!first.ready() || !second.ready())
+    while (!first->ready() || !second->ready())
         (void)ctx.poll();
 
     // The retirement gate sits outside work_mtx_, so this read is a stable
@@ -888,8 +924,8 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
     while (raw->dispatch_size_for_test() != 0)
         std::this_thread::yield();
 
-    first.reset();
-    second.reset();
+    first->discard();
+    second->discard();
     t.check(raw->dispatch_size_for_test() == 0, "both retired entries leave no dispatch residue");
     t.check(backend_quiescent(*raw), "the backend holds no physical residue");
     t.check(core_is_idle(core.snapshot()), "both canceled requests reclaim completely");
@@ -902,25 +938,31 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
-    Completion<std::size_t> first, second;
+    std::optional<Request<std::size_t>> first, second;
     std::vector<std::byte> buffer(8, std::byte{0});
     const ReadOp op{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0};
 
-    std::thread submitter_one{[&] { (void)ctx.submit_read(op, first); }};
+    std::thread submitter_one{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            first = std::move(submitted.value());
+    }};
     wait_gate_paused(dispatch_gate);
-    const auto first_key = raw->request_key_for_test(first);
-    t.check(first_key.has_value(), "the first request is bound while dispatch is parked");
-    if (!first_key.has_value()) {
+    std::vector<detail::RequestKey> first_outstanding;
+    core.collect_outstanding(first_outstanding);
+    const bool have_first = first_outstanding.size() == 1;
+    t.check(have_first, "the first request is bound while dispatch is parked");
+    if (!have_first) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -928,7 +970,8 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*first_key) == PublicCancel::won_before_execution,
+    const auto first_key = first_outstanding.front();
+    t.check(raw->cancel_key_for_test(first_key) == PublicCancel::won_before_execution,
             "the first pre-dispatch cancel wins");
 
     {
@@ -936,12 +979,18 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
     }
     submitter_one.join();
     dispatch_gate.resume.store(false, std::memory_order_release);
-    std::thread submitter_two{[&] { (void)ctx.submit_read(op, second); }};
+    std::thread submitter_two{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            second = std::move(submitted.value());
+    }};
     while (dispatch_gate.exited.load(std::memory_order_acquire))
         std::this_thread::yield();
-    const auto second_key = raw->request_key_for_test(second);
-    t.check(second_key.has_value(), "the second request is bound while dispatch is parked");
-    if (!second_key.has_value()) {
+    std::vector<detail::RequestKey> second_outstanding;
+    core.collect_outstanding(second_outstanding);
+    const bool have_second = second_outstanding.size() == 2;
+    t.check(have_second, "the second request is bound while dispatch is parked");
+    if (!have_second) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -949,7 +998,8 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*second_key) == PublicCancel::won_before_execution,
+    const auto second_key = second_outstanding.back();
+    t.check(raw->cancel_key_for_test(second_key) == PublicCancel::won_before_execution,
             "the second pre-dispatch cancel wins");
 
     {
@@ -958,7 +1008,7 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
     submitter_two.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
-    while (!first.ready() || !second.ready())
+    while (!first->ready() || !second->ready())
         (void)ctx.poll();
 
     // Worker drops the first entry (its own wake, the repaired T-2 lane) and
@@ -974,7 +1024,10 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
     // does not move here, a ring non-empty->empty settlement transition
     // published no wake and a driver parked above would never learn the
     // predicate flipped.
-    ctx.cancel(second);
+    const auto public_cancel = ctx.cancel(second->id());
+    t.check(public_cancel.has_value() &&
+                public_cancel.value() == CancelDisposition::already_terminal,
+            "the public cancel reports the already-terminal verdict");
     t.check(raw->dispatch_size_for_test() == 0,
             "the public cancel removed the last queued stale entry");
     const auto after_public = ctx.progress_token_for_test();
@@ -987,8 +1040,8 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
     }
     raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
 
-    first.reset();
-    second.reset();
+    first->discard();
+    second->discard();
     t.check(backend_quiescent(*raw), "the backend holds no physical residue");
     t.check(core_is_idle(core.snapshot()), "both canceled requests reclaim completely");
     return true;
@@ -1000,25 +1053,31 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
-    Completion<std::size_t> first, second, third;
+    std::optional<Request<std::size_t>> first, second, third;
     std::vector<std::byte> buffer(8, std::byte{0});
     const ReadOp op{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0};
 
-    std::thread submitter_one{[&] { (void)ctx.submit_read(op, first); }};
+    std::thread submitter_one{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            first = std::move(submitted.value());
+    }};
     wait_gate_paused(dispatch_gate);
-    const auto first_key = raw->request_key_for_test(first);
-    t.check(first_key.has_value(), "the first request is bound while dispatch is parked");
-    if (!first_key.has_value()) {
+    std::vector<detail::RequestKey> first_outstanding;
+    core.collect_outstanding(first_outstanding);
+    const bool have_first = first_outstanding.size() == 1;
+    t.check(have_first, "the first request is bound while dispatch is parked");
+    if (!have_first) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -1026,7 +1085,8 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*first_key) == PublicCancel::won_before_execution,
+    const auto first_key = first_outstanding.front();
+    t.check(raw->cancel_key_for_test(first_key) == PublicCancel::won_before_execution,
             "the first pre-dispatch cancel wins");
 
     {
@@ -1034,12 +1094,18 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
     }
     submitter_one.join();
     dispatch_gate.resume.store(false, std::memory_order_release);
-    std::thread submitter_two{[&] { (void)ctx.submit_read(op, second); }};
+    std::thread submitter_two{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            second = std::move(submitted.value());
+    }};
     while (dispatch_gate.exited.load(std::memory_order_acquire))
         std::this_thread::yield();
-    const auto second_key = raw->request_key_for_test(second);
-    t.check(second_key.has_value(), "the second request is bound while dispatch is parked");
-    if (!second_key.has_value()) {
+    std::vector<detail::RequestKey> second_outstanding;
+    core.collect_outstanding(second_outstanding);
+    const bool have_second = second_outstanding.size() == 2;
+    t.check(have_second, "the second request is bound while dispatch is parked");
+    if (!have_second) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -1047,7 +1113,8 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*second_key) == PublicCancel::won_before_execution,
+    const auto second_key = second_outstanding.back();
+    t.check(raw->cancel_key_for_test(second_key) == PublicCancel::won_before_execution,
             "the second pre-dispatch cancel wins");
 
     {
@@ -1056,17 +1123,17 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
     submitter_two.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
-    while (!first.ready() || !second.ready())
+    while (!first->ready() || !second->ready())
         (void)ctx.poll();
 
     wait_gate_paused(retirement_gate);
     t.check(raw->dispatch_size_for_test() == 1,
             "exactly one stale entry remains queued before the reclaimed-identity cancel");
-    second.reset();
+    second->discard();
     const auto before_reclaim_cancel = ctx.progress_token_for_test();
 
     const PublicCancel reclaimed =
-        raw->cancel_key_for_test(*second_key);
+        raw->cancel_key_for_test(second_key);
     t.check(reclaimed == PublicCancel::not_found,
             "the reclaimed identity reports not_found to the cancel");
     t.check(raw->dispatch_size_for_test() == 0,
@@ -1078,7 +1145,7 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
             "removing a stale entry for a reclaimed identity publishes a wake");
 
     const auto before_no_op = ctx.progress_token_for_test();
-    t.check(raw->cancel_key_for_test(*second_key) == PublicCancel::not_found,
+    t.check(raw->cancel_key_for_test(second_key) == PublicCancel::not_found,
             "repeating the reclaimed-identity cancel still reports not_found");
     const auto after_no_op = ctx.progress_token_for_test();
     t.check(after_no_op.progress == before_no_op.progress &&
@@ -1087,10 +1154,12 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
 
     const auto reuse_key_marker = ctx.progress_token_for_test();
     (void)reuse_key_marker;
-    auto submitted_third = ctx.submit_read(op, third);
+    auto submitted_third = ctx.submit_read(op);
     t.check(submitted_third.has_value(), "a fresh submit is accepted while the worker is parked");
+    if (submitted_third.has_value())
+        third = std::move(submitted_third.value());
     t.check(raw->dispatch_size_for_test() == 1, "the fresh submit queues one entry");
-    t.check(raw->cancel_key_for_test(*second_key) == PublicCancel::not_found,
+    t.check(raw->cancel_key_for_test(second_key) == PublicCancel::not_found,
             "the reclaimed generation reports not_found against the reused slot");
     t.check(raw->dispatch_size_for_test() == 1,
             "the old-generation cancel removes nothing from the reused slot");
@@ -1105,14 +1174,13 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
     }
     raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
 
-    while (!third.ready())
+    while (!third->ready())
         (void)ctx.poll();
-    const Result<std::size_t> third_result = third.result();
-    t.check(third_result.has_value() && third_result.value() == 8,
+    const auto third_observed = third->take_result();
+    t.check(third_observed.result.has_value() && third_observed.result.value() == 8,
             "the slot-reusing read converges to its real outcome");
 
-    first.reset();
-    third.reset();
+    first->discard();
     t.check(raw->dispatch_size_for_test() == 0, "no dispatch residue remains");
     t.check(backend_quiescent(*raw), "the backend holds no physical residue");
     t.check(core_is_idle(core.snapshot()), "every request reclaims completely");
@@ -1125,25 +1193,31 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
         t.check(false, "fixture created");
         return false;
     }
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
     RequestCore& core = *ctx.context_core_for_test();
 
-    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
-    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
-    Completion<std::size_t> stale, queued;
+    std::optional<Request<std::size_t>> stale, queued;
     std::vector<std::byte> buffer(8, std::byte{0});
     const ReadOp op{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0};
 
-    std::thread submitter{[&] { (void)ctx.submit_read(op, stale); }};
+    std::thread submitter{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            stale = std::move(submitted.value());
+    }};
     wait_gate_paused(dispatch_gate);
-    const auto stale_key = raw->request_key_for_test(stale);
-    t.check(stale_key.has_value(), "the staged request is bound while dispatch is parked");
-    if (!stale_key.has_value()) {
+    std::vector<detail::RequestKey> staged_outstanding;
+    core.collect_outstanding(staged_outstanding);
+    const bool have_stale = staged_outstanding.size() == 1;
+    t.check(have_stale, "the staged request is bound while dispatch is parked");
+    if (!have_stale) {
         {
             GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
         }
@@ -1151,7 +1225,8 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
         raw->set_accepted_pre_dispatch_pause_gate(nullptr);
         return false;
     }
-    t.check(raw->cancel_key_for_test(*stale_key) == PublicCancel::won_before_execution,
+    t.check(raw->cancel_key_for_test(staged_outstanding.front()) ==
+                PublicCancel::won_before_execution,
             "the staged pre-dispatch cancel wins");
 
     {
@@ -1160,20 +1235,24 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
     submitter.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
-    while (!stale.ready())
+    while (!stale->ready())
         (void)ctx.poll();
 
     wait_gate_paused(retirement_gate);
     t.check(raw->dispatch_size_for_test() == 0,
             "the retired stale entry leaves the ring before the won-lane cancel");
-    auto submitted = ctx.submit_read(op, queued);
+    auto submitted = ctx.submit_read(op);
     t.check(submitted.has_value(), "a fresh submit is accepted while the worker is parked");
+    if (submitted.has_value())
+        queued = std::move(submitted.value());
     t.check(raw->dispatch_size_for_test() == 1, "the fresh submit queues one entry");
 
     // The parked worker's retirement wake precedes this snapshot and nothing
     // else signals, so the epoch delta isolates the cancel's own wake count.
     const auto before_won = ctx.progress_token_for_test();
-    ctx.cancel(queued);
+    const auto won = ctx.cancel(queued->id());
+    t.check(won.has_value() && won.value() == CancelDisposition::won_before_execution,
+            "the public cancel wins before execution on the parked worker");
     t.check(raw->dispatch_size_for_test() == 0,
             "the winning public cancel removed its own queued entry");
     const auto after_won = ctx.progress_token_for_test();
@@ -1181,23 +1260,25 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
                 after_won.progress_exhaustion == before_won.progress_exhaustion,
             "a won cancel that also removes its entry signals exactly once");
 
-    while (!queued.ready())
+    while (!queued->ready())
         (void)ctx.poll();
-    const Result<std::size_t> canceled_result = queued.result();
-    t.check(!canceled_result.has_value() &&
-                canceled_result.error().code == IoError::Code::canceled,
+    const auto canceled_observed = queued->try_result();
+    t.check(!canceled_observed.result.has_value() &&
+                canceled_observed.result.error().code == IoError::Code::canceled,
             "the won cancel converges to a canceled terminal");
 
     const auto before_no_op = ctx.progress_token_for_test();
-    ctx.cancel(queued);
+    const auto repeat = ctx.cancel(queued->id());
     const auto after_no_op = ctx.progress_token_for_test();
+    t.check(repeat.has_value() && repeat.value() == CancelDisposition::already_terminal,
+            "the repeat cancel reports the already-terminal verdict");
     t.check(after_no_op.progress == before_no_op.progress &&
                 after_no_op.progress_exhaustion == before_no_op.progress_exhaustion,
             "a repeat cancel against the terminal request with no queued entry "
             "publishes no wake");
-    const Result<std::size_t> stable_result = queued.result();
-    t.check(!stable_result.has_value() &&
-                stable_result.error().code == IoError::Code::canceled,
+    const auto stable_observed = queued->try_result();
+    t.check(!stable_observed.result.has_value() &&
+                stable_observed.result.error().code == IoError::Code::canceled,
             "the published canceled result is unchanged by the repeat cancel");
 
     {
@@ -1205,8 +1286,132 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
     }
     raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
 
-    stale.reset();
-    queued.reset();
+    stale->discard();
+    queued->discard();
+    t.check(raw->dispatch_size_for_test() == 0, "no dispatch residue remains");
+    t.check(backend_quiescent(*raw), "the backend holds no physical residue");
+    t.check(core_is_idle(core.snapshot()), "both requests reclaim completely");
+    return true;
+}
+
+bool gate_teardown_retires_registered_passes_before_detach(Tracker& t) {
+    Fixture fix = make_fixture("sluice e1 gate lifetime conformance");
+    if (!fix.ok()) {
+        t.check(false, "fixture created");
+        return false;
+    }
+
+    Backend::AcceptedPreDispatchPauseGate dispatch_gate;
+    Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
+    Backend::BeforeWorkerDequeuePauseGate dequeue_gate;
+    auto backend = make_backend(4);
+    Backend* raw = backend.get();
+    AsyncIoContext ctx(std::move(backend));
+    RequestCore& core = *ctx.context_core_for_test();
+    raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
+    raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
+
+    std::optional<Request<std::size_t>> first, second;
+    std::vector<std::byte> buffer(8, std::byte{0});
+    const ReadOp op{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0};
+
+    std::thread submitter_one{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            first = std::move(submitted.value());
+    }};
+    wait_gate_paused(dispatch_gate);
+    std::vector<detail::RequestKey> first_outstanding;
+    core.collect_outstanding(first_outstanding);
+    const bool have_first = first_outstanding.size() == 1;
+    t.check(have_first, "the first request is bound while dispatch is parked");
+    if (!have_first) {
+        {
+            GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+        }
+        submitter_one.join();
+        raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+        raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
+        return false;
+    }
+    t.check(raw->cancel_key_for_test(first_outstanding.front()) ==
+                PublicCancel::won_before_execution,
+            "the first pre-dispatch cancel wins");
+    {
+        GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+    }
+    submitter_one.join();
+    dispatch_gate.resume.store(false, std::memory_order_release);
+    std::thread submitter_two{[&] {
+        auto submitted = ctx.submit_read(op);
+        if (submitted.has_value())
+            second = std::move(submitted.value());
+    }};
+    while (dispatch_gate.exited.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    std::vector<detail::RequestKey> second_outstanding;
+    core.collect_outstanding(second_outstanding);
+    const bool have_second = second_outstanding.size() == 2;
+    t.check(have_second, "the second request is bound while dispatch is parked");
+    if (!have_second) {
+        {
+            GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+        }
+        submitter_two.join();
+        raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+        raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
+        return false;
+    }
+    t.check(raw->cancel_key_for_test(second_outstanding.back()) ==
+                PublicCancel::won_before_execution,
+            "the second pre-dispatch cancel wins");
+    {
+        GateGuard<Backend::AcceptedPreDispatchPauseGate> guard{dispatch_gate};
+    }
+    submitter_two.join();
+    raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+
+    while (!first->ready() || !second->ready())
+        (void)ctx.poll();
+
+    // The worker dropped the first stale entry and parks in its retirement
+    // seam with the second stale entry still queued.
+    wait_gate_paused(retirement_gate);
+
+    // Pin the worker between the first retirement pass's exit and the second
+    // entry's dequeue, then re-arm the retirement latch with the worker
+    // provably outside the gate.
+    raw->set_before_dequeue_pause_gate(&dequeue_gate);
+    {
+        GateGuard<Backend::WorkerUnclaimedRetirementPauseGate> guard{retirement_gate};
+    }
+    wait_gate_paused(dequeue_gate);
+    retirement_gate.resume.store(false, std::memory_order_release);
+    dequeue_gate.resume.store(true, std::memory_order_release);
+    dequeue_gate.resume.notify_all();
+
+    // The worker dequeues the second stale entry and registers a fresh pass
+    // on the still-armed retirement gate, parking on the re-armed latch.
+    while (retirement_gate.exited.load(std::memory_order_acquire))
+        std::this_thread::yield();
+    t.check(raw->dispatch_size_for_test() == 0,
+            "the registered pass holds the dequeued entry's retirement");
+
+    // The scenario-family teardown shape: resume through the guard, detach,
+    // and only then may the gate's storage die. A registered pass still
+    // parked on the latch would race that destruction.
+    {
+        GateGuard<Backend::WorkerUnclaimedRetirementPauseGate> guard{retirement_gate};
+    }
+    raw->set_worker_unclaimed_retirement_pause_gate(nullptr);
+    raw->set_before_dequeue_pause_gate(nullptr);
+    const bool no_registered_pass_at_detach =
+        retirement_gate.exited.load(std::memory_order_acquire);
+    t.check(no_registered_pass_at_detach,
+            "gate teardown waits out every registered pass before detach");
+
+    first->discard();
+    second->discard();
     t.check(raw->dispatch_size_for_test() == 0, "no dispatch residue remains");
     t.check(backend_quiescent(*raw), "the backend holds no physical residue");
     t.check(core_is_idle(core.snapshot()), "both requests reclaim completely");
@@ -1888,6 +2093,8 @@ int main() {
          stale_entry_removal_by_reclaimed_identity_and_slot_reuse},
         {"won_cancel_with_queued_entry_signals_exactly_once",
          won_cancel_with_queued_entry_signals_exactly_once},
+        {"gate_teardown_retires_registered_passes_before_detach",
+         gate_teardown_retires_registered_passes_before_detach},
 #else
         {"metadata_identity_agrees_across_backends", metadata_identity_agrees_across_backends},
         {"canceled_metadata_op_reports_the_canceled_terminal",

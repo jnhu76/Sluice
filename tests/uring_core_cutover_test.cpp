@@ -1,6 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/request_core.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -95,8 +95,8 @@ bool idle_and_whole(const CoreSnapshot& snap, RequestCore& core) {
            snap.free_slots == core.capacity();
 }
 
-bool resolves_as(const Result<RequestHandleState>& r, RequestHandleState expected) {
-    return r.has_value() && r.value() == expected;
+bool resolves_as(RequestReadiness observed, RequestReadiness expected) {
+    return observed == expected;
 }
 
 // A fake submit that reports every ready SQE as submitted without touching
@@ -196,10 +196,10 @@ template <class Gate> struct GateGuard {
     }
 };
 
-// Polls until ready (bounded), then resets and polls until the slot
-// reclaims. Returns whether the value matched and everything went idle.
-bool complete_reset_reclaim(FakeSubmitBackend& made, Completion<std::size_t>& c,
-                            std::optional<std::size_t> expected) {
+// Polls until ready (bounded), then consumes the result and polls until the
+// slot reclaims. Returns whether the value matched and everything went idle.
+bool complete_take_reclaim(FakeSubmitBackend& made, Request<std::size_t>& c,
+                           std::optional<std::size_t> expected) {
     AsyncIoContext& ctx = *made.ctx;
     RequestCore& core = *made.core;
     for (int i = 0; i < 64 && !c.ready(); ++i)
@@ -207,9 +207,11 @@ bool complete_reset_reclaim(FakeSubmitBackend& made, Completion<std::size_t>& c,
     if (!c.ready())
         return false;
     bool ok = true;
-    if (expected.has_value())
-        ok = c.result().has_value() && c.result().value() == *expected;
-    c.reset();
+    if (expected.has_value()) {
+        const auto observed = c.try_result();
+        ok = observed.result.has_value() && observed.result.value() == *expected;
+    }
+    (void)c.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     return ok && idle_and_whole(core.snapshot(), core);
@@ -229,12 +231,10 @@ bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     std::byte buffer{std::byte{0}};
-    Completion<std::size_t> c;
     auto rejected =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), &buffer, 1, kUnrepresentableOffset}, c);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), &buffer, 1, kUnrepresentableOffset});
     t.check(!rejected.has_value() && rejected.error().code == IoError::Code::invalid_argument,
-            "an unrepresentable range is rejected as invalid_argument");
-    t.check(c.idle(), "the rejected submission leaves the completion idle");
+            "an unrepresentable range is rejected as invalid_argument and yields no request");
 
     t.check(idle_and_whole(core.snapshot(), core),
             "the rejected submission leaves no core residue and no leaked capacity");
@@ -255,23 +255,19 @@ bool range_precedes_health_and_capacity(Tracker& t) {
     RequestCore& core = *made.core;
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> filler;
-    auto filled = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, filler);
+    auto filled = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(filled.has_value(), "the first request occupies the only slot");
+    Request<std::size_t> filler = std::move(filled.value());
     (void)ctx.poll();
 
-    Completion<std::size_t> invalid_range;
     auto range_rejected =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, kUnrepresentableOffset},
-                        invalid_range);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, kUnrepresentableOffset});
     t.check(!range_rejected.has_value() &&
                 range_rejected.error().code == IoError::Code::invalid_argument,
             "an invalid range outranks admission closure and capacity");
 
     made.raw()->close_admission();
-    Completion<std::size_t> after_close;
-    auto closed_rejected =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, 0}, after_close);
+    auto closed_rejected = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, 0});
     t.check(!closed_rejected.has_value() &&
                 closed_rejected.error().code == IoError::Code::invalid_state,
             "context closure outranks capacity for an otherwise valid request");
@@ -285,9 +281,10 @@ bool range_precedes_health_and_capacity(Tracker& t) {
     inject_completion(made, *cookie, 4);
     for (int i = 0; i < 64 && !filler.ready(); ++i)
         (void)ctx.poll();
-    t.check(filler.ready() && filler.result().has_value(),
+    const auto filler_result = filler.try_result();
+    t.check(filler_result.readiness == RequestReadiness::ready && filler_result.result.has_value(),
             "the accepted request still completes after admission closed");
-    filler.reset();
+    (void)filler.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core),
@@ -314,10 +311,14 @@ bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    std::optional<Result<void>> submit_result;
+    std::optional<Request<std::size_t>> request;
+    std::optional<IoError> submit_error;
     std::thread submitter([&] {
-        submit_result = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
+        else
+            submit_error = submitted.error();
     });
     wait_gate_paused(gate);
 
@@ -337,8 +338,7 @@ bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
     guard.released = true;
     submitter.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
-    t.check(submit_result.has_value() && submit_result->has_value(),
-            "the submission itself succeeds");
+    t.check(request.has_value() && !submit_error.has_value(), "the submission itself succeeds");
 
     t.check(raw->live_cookies_for_test() == 1 && raw->transport_ledger_size_for_test() == 0 &&
                 raw->sq_ready_for_test() == 0,
@@ -348,7 +348,8 @@ bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
             "the submitted operation leaves the prepared ledger and keeps its routing");
 
     fake_complete(made, 0, 4);
-    t.check(complete_reset_reclaim(made, c, 4), "the read completes with 4 bytes and reclaims");
+    t.check(complete_take_reclaim(made, *request, 4),
+            "the read completes with 4 bytes and reclaims");
     return true;
 }
 
@@ -371,15 +372,20 @@ bool pre_submit_cancel_wins_with_zero_transport(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
+    std::optional<Request<std::size_t>> request;
     std::thread submitter([&] {
-        (void)ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
     });
     wait_gate_paused(gate);
 
-    const auto key = raw->request_key_for_test(c);
-    t.check(key.has_value(), "the completion binding carries the core request key");
-    const PublicCancel disposition = raw->cancel_key_for_test(*key);
+    std::vector<detail::RequestKey> outstanding;
+    core.collect_outstanding(outstanding);
+    t.check(outstanding.size() == 1,
+            "the accepted request holds its core slot while the transport handoff is parked");
+    const detail::RequestKey key = outstanding.front();
+    const PublicCancel disposition = raw->cancel_key_for_test(key);
     t.check(disposition == PublicCancel::won_before_execution,
             "cancel wins while the transport handoff has not completed");
     const auto after_cancel = core.observe_slot(SlotIndex{0});
@@ -393,18 +399,20 @@ bool pre_submit_cancel_wins_with_zero_transport(Tracker& t) {
     submitter.join();
     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
 
+    t.check(request.has_value(), "the submission hands the public identity back to the caller");
     t.check(raw->dispatch_size_for_test() == 0,
             "the losing submitter's queue entry was dropped by its own drain");
     t.check(raw->live_cookies_for_test() == 0 && raw->submit_flushes_for_test() == 0 &&
                 raw->sq_ready_for_test() == 0 && raw->transport_ledger_size_for_test() == 0,
             "no kernel-visible operation ever existed");
 
-    for (int i = 0; i < 64 && !c.ready(); ++i)
+    for (int i = 0; i < 64 && !request->ready(); ++i)
         (void)ctx.poll();
-    t.check(c.ready() && !c.result().has_value() &&
-                c.result().error().code == IoError::Code::canceled,
+    const auto canceled_terminal = request->take_result();
+    t.check(canceled_terminal.readiness == RequestReadiness::ready &&
+                !canceled_terminal.result.has_value() &&
+                canceled_terminal.result.error().code == IoError::Code::canceled,
             "the canceled request converges through its terminal path");
-    c.reset();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "the canceled slot reclaims");
@@ -426,16 +434,17 @@ bool original_cqe_first_defers_until_control_retires(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the read is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const auto key = raw->request_key_for_test(c);
-    t.check(key.has_value(), "the request key resolves from the binding");
-    if (!key.has_value())
-        return false;
+    const detail::RequestKey key = c.key_for_test();
+    const auto live_slot = core.observe_slot(SlotIndex{0});
+    t.check(live_slot.has_value() && key.slot == SlotIndex{0} &&
+                key.generation == live_slot->generation,
+            "the request key resolves to its accepted slot");
 
-    t.check(raw->cancel_key_for_test(*key) == PublicCancel::requested,
+    t.check(raw->cancel_key_for_test(key) == PublicCancel::requested,
             "cancel on a running request records intent only");
     (void)ctx.poll();
     t.check(raw->live_control_sqes_for_test() == 1,
@@ -456,9 +465,11 @@ bool original_cqe_first_defers_until_control_retires(Tracker& t) {
 
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
-    t.check(c.ready() && c.result().has_value() && c.result().value() == 4,
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 4,
             "publication carries the real physical outcome, not the cancel");
-    c.reset();
+    (void)c.take_result();
     t.check(core.snapshot().accepted_live == 1 && core.snapshot().public_bindings == 0,
             "the released binding stops resolving without reclaiming the pinned slot");
 
@@ -483,17 +494,17 @@ bool cancel_cqe_first_never_becomes_the_terminal(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the read is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const auto key = raw->request_key_for_test(c);
+    const detail::RequestKey key = c.key_for_test();
     const auto cookie = live_cookie(made, 0);
-    t.check(key.has_value() && cookie.has_value(), "the request key and cookie resolve");
-    if (!key.has_value() || !cookie.has_value())
+    t.check(c.valid() && cookie.has_value(), "the request key and cookie resolve");
+    if (!cookie.has_value())
         return false;
 
-    t.check(raw->cancel_key_for_test(*key) == PublicCancel::requested,
+    t.check(raw->cancel_key_for_test(key) == PublicCancel::requested,
             "cancel records intent on the running request");
     (void)ctx.poll();
 
@@ -513,9 +524,11 @@ bool cancel_cqe_first_never_becomes_the_terminal(Tracker& t) {
 
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
-    t.check(c.ready() && c.result().has_value() && c.result().value() == 4,
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 4,
             "the final publication carries the physical byte count");
-    c.reset();
+    (void)c.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "the slot fully reclaims");
@@ -537,24 +550,26 @@ bool cancel_racing_completion_keeps_the_confirmed_count(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(6, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 6, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 6, 0});
     t.check(submitted.has_value(), "the read is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const auto key = raw->request_key_for_test(c);
+    const detail::RequestKey key = c.key_for_test();
     const auto cookie = live_cookie(made, 0);
-    if (!key.has_value() || !cookie.has_value())
+    if (!cookie.has_value())
         return false;
 
-    t.check(raw->cancel_key_for_test(*key) == PublicCancel::requested,
+    t.check(raw->cancel_key_for_test(key) == PublicCancel::requested,
             "cancel records intent on the running request");
     (void)ctx.poll();
     inject_completion(made, *cookie, 3);
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
-    t.check(c.ready() && c.result().has_value() && c.result().value() == 3,
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 3,
             "the physical short count outranks the racing cancel intent");
-    c.reset();
+    (void)c.take_result();
     inject_completion(made, kControlTag | *cookie, 0);
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
@@ -579,17 +594,17 @@ bool cancel_racing_short_write_keeps_confirmed_count(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     const std::vector<std::byte> payload(6, std::byte{0});
-    Completion<std::size_t> c;
     auto submitted =
-        ctx.submit_write(WriteOp{NativeFileRef(*file), payload.data(), payload.size(), 0}, c);
+        ctx.submit_write(WriteOp{NativeFileRef(*file), payload.data(), payload.size(), 0});
     t.check(submitted.has_value(), "the write is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const auto key = raw->request_key_for_test(c);
+    const detail::RequestKey key = c.key_for_test();
     const auto cookie = live_cookie(made, 0);
-    if (!key.has_value() || !cookie.has_value())
+    if (!cookie.has_value())
         return false;
 
-    t.check(raw->cancel_key_for_test(*key) == PublicCancel::requested,
+    t.check(raw->cancel_key_for_test(key) == PublicCancel::requested,
             "cancel records intent on the running write");
     (void)ctx.poll();
     inject_completion(made, *cookie, 3);
@@ -600,9 +615,11 @@ bool cancel_racing_short_write_keeps_confirmed_count(Tracker& t) {
             "the physical short write outranks the racing cancel intent");
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
-    t.check(c.ready() && c.result().has_value() && c.result().value() == 3,
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 3,
             "the publication carries the confirmed 3/6 write, never a canceled terminal");
-    c.reset();
+    (void)c.take_result();
     inject_completion(made, kControlTag | *cookie, 0);
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
@@ -625,23 +642,23 @@ bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> a;
     const auto cookie_a = raw->peek_next_cookie_for_test();
-    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, a);
+    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(first.has_value(), "request A is accepted");
+    Request<std::size_t> a = std::move(first.value());
     t.check(raw->peek_next_cookie_for_test() == cookie_a + 1,
             "request A consumed one monotonic cookie");
     fake_complete(made, 0, 4);
-    if (!complete_reset_reclaim(made, a, 4)) {
+    if (!complete_take_reclaim(made, a, 4)) {
         t.check(false, "request A retires cleanly");
         return false;
     }
 
-    Completion<std::size_t> b;
-    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, b);
+    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(second.has_value(), "request B reuses the slot");
-    const auto key_b = raw->request_key_for_test(b);
-    t.check(key_b.has_value() && key_b->generation.value == 1,
+    Request<std::size_t> b = std::move(second.value());
+    const detail::RequestKey key_b = b.key_for_test();
+    t.check(key_b.slot == SlotIndex{0} && key_b.generation.value == 1,
             "request B occupies the same slot at generation+1");
     const auto cookie_b = live_cookie(made, 0);
     t.check(cookie_b.has_value() && *cookie_b != cookie_a,
@@ -658,9 +675,11 @@ bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
     inject_completion(made, *cookie_b, 4);
     for (int i = 0; i < 64 && !b.ready(); ++i)
         (void)ctx.poll();
-    t.check(b.ready() && b.result().has_value() && b.result().value() == 4,
+    const auto b_result = b.try_result();
+    t.check(b_result.readiness == RequestReadiness::ready && b_result.result.has_value() &&
+                b_result.result.value() == 4,
             "request B completes with its own outcome");
-    b.reset();
+    (void)b.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "request B reclaims cleanly");
@@ -681,39 +700,37 @@ bool stale_identity_does_not_resolve_after_reuse(Tracker& t) {
     RequestCore& core = *made.core;
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> a;
-    auto first = ctx.submit_read_request(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, a);
-    t.check(first.has_value(), "request A carries a public handle");
+    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(first.has_value(), "request A carries a public identity");
     if (!first.has_value())
         return false;
-    const RequestHandle handle_a = first.value();
-    t.check(resolves_as(ctx.request_state(handle_a), RequestHandleState::outstanding),
+    Request<std::size_t> a = std::move(first.value());
+    const RequestId handle_a = a.id();
+    t.check(resolves_as(ctx.lookup(handle_a), RequestReadiness::pending),
             "A resolves as outstanding while running");
 
     fake_complete(made, 0, 4);
     for (int i = 0; i < 64 && !a.ready(); ++i)
         (void)ctx.poll();
-    a.reset();
+    (void)a.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "request A retires");
 
-    Completion<std::size_t> b;
-    auto second = ctx.submit_read_request(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, b);
+    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(second.has_value(), "request B reuses the slot");
     if (!second.has_value())
         return false;
-    const RequestHandle handle_b = second.value();
-    t.check(resolves_as(ctx.request_state(handle_b), RequestHandleState::outstanding),
+    Request<std::size_t> b = std::move(second.value());
+    t.check(resolves_as(ctx.lookup(b.id()), RequestReadiness::pending),
             "B resolves as outstanding");
-    const auto stale = ctx.request_state(handle_a);
-    t.check(stale.has_value() && stale.value() == RequestHandleState::not_found,
+    t.check(resolves_as(ctx.lookup(handle_a), RequestReadiness::empty),
             "A's stale identity no longer resolves after reuse");
 
     fake_complete(made, 0, 4);
     for (int i = 0; i < 64 && !b.ready(); ++i)
         (void)ctx.poll();
-    b.reset();
+    (void)b.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "everything reclaims");
@@ -736,12 +753,15 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
 
     const std::uint64_t flushes_before = raw->submit_flushes_for_test();
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
     auto submitted =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 0, kUnrepresentableOffset}, c);
+        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 0, kUnrepresentableOffset});
     t.check(submitted.has_value(), "the zero-length read is accepted despite its offset");
-    t.check(c.ready(), "the zero-op is published at acceptance, before any poll");
-    t.check(c.result().has_value() && c.result().value() == 0, "the zero-op succeeds with 0");
+    Request<std::size_t> c = std::move(submitted.value());
+    const auto zero_result = c.try_result();
+    t.check(zero_result.readiness == RequestReadiness::ready, 
+            "the zero-op is published at acceptance, before any poll");
+    t.check(zero_result.result.has_value() && zero_result.result.value() == 0,
+            "the zero-op succeeds with 0");
     t.check(raw->sq_ready_for_test() == 0 && raw->live_cookies_for_test() == 0 &&
                 raw->transport_ledger_size_for_test() == 0 &&
                 raw->submit_flushes_for_test() == flushes_before,
@@ -750,7 +770,7 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
     t.check(core.snapshot().control_refs == 1,
             "the deferred ready event pins the slot with a core control ref");
 
-    c.reset();
+    c.discard();
     const std::size_t events = ctx.poll().value_or(0);
     t.check(events == 1, "the next poll delivers exactly the owed ready event");
     t.check(idle_and_whole(core.snapshot(), core),
@@ -758,7 +778,7 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
     return true;
 }
 
-bool zero_op_event_survives_reset_before_poll(Tracker& t) {
+bool zero_op_event_survives_release_before_poll(Tracker& t) {
     auto file = open_temp_file(t, "sluice b1c zero pin\n");
     if (!file.has_value())
         return false;
@@ -772,18 +792,18 @@ bool zero_op_event_survives_reset_before_poll(Tracker& t) {
     RequestCore& core = *made.core;
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 0, 0}, c);
-    t.check(submitted.has_value() && c.ready(), "the zero-op is accepted and published");
-    c.reset();
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 0, 0});
+    t.check(submitted.has_value(), "the zero-op is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    t.check(c.ready(), "the zero-op is published at acceptance");
+    c.discard();
 
     const CoreSnapshot pinned = core.snapshot();
     t.check(pinned.accepted_live == 1 && pinned.published_live == 1 &&
                 pinned.public_bindings == 0 && pinned.control_refs == 1,
             "the released result keeps the slot pinned by the owed event");
 
-    Completion<std::size_t> next;
-    auto refused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, next);
+    auto refused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(!refused.has_value() && refused.error().code == IoError::Code::would_block,
             "the pinned slot still refuses new admission");
 
@@ -791,10 +811,11 @@ bool zero_op_event_survives_reset_before_poll(Tracker& t) {
     t.check(idle_and_whole(core.snapshot(), core),
             "the final pin retirement reclaims without new I/O");
 
-    auto again = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, next);
+    auto again = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(again.has_value(), "the slot serves a new request at the next generation");
+    Request<std::size_t> next = std::move(again.value());
     fake_complete(made, 0, 4);
-    if (!complete_reset_reclaim(made, next, 4)) {
+    if (!complete_take_reclaim(made, next, 4)) {
         t.check(false, "the follow-up request completes and reclaims");
         return false;
     }
@@ -822,25 +843,22 @@ bool submit_stage_failures_rollback_completely(Tracker& t) {
     const ReadOp op{NativeFileRef(*file), buffer.data(), 4, 0};
 
     injection.fail_reserve.store(true);
-    Completion<std::size_t> c1;
-    auto r1 = ctx.submit_read(op, c1);
-    t.check(!r1.has_value() && r1.error().code == IoError::Code::would_block && c1.idle(),
-            "a reserve-stage failure rejects without touching the completion");
+    auto r1 = ctx.submit_read(op);
+    t.check(!r1.has_value() && r1.error().code == IoError::Code::would_block,
+            "a reserve-stage failure rejects with no request handed out");
     t.check(idle_and_whole(core.snapshot(), core), "no residue after the reserve failure");
 
     injection.fail_reserve.store(false);
     injection.fail_prepare.store(true);
-    Completion<std::size_t> c2;
-    auto r2 = ctx.submit_read(op, c2);
-    t.check(!r2.has_value() && r2.error().code == IoError::Code::invalid_state && c2.idle(),
+    auto r2 = ctx.submit_read(op);
+    t.check(!r2.has_value() && r2.error().code == IoError::Code::invalid_state,
             "a prepare-stage failure rejects and rolls the reservation back");
     t.check(idle_and_whole(core.snapshot(), core), "no residue after the prepare failure");
 
     injection.fail_prepare.store(false);
     injection.fail_commit.store(true);
-    Completion<std::size_t> c3;
-    auto r3 = ctx.submit_read(op, c3);
-    t.check(!r3.has_value() && r3.error().code == IoError::Code::invalid_state && c3.idle(),
+    auto r3 = ctx.submit_read(op);
+    t.check(!r3.has_value() && r3.error().code == IoError::Code::invalid_state,
             "a commit-stage failure rejects and rolls the tentative binding back");
     t.check(idle_and_whole(core.snapshot(), core), "no residue after the commit failure");
     t.check(raw->live_cookies_for_test() == 0 && raw->transport_ledger_size_for_test() == 0,
@@ -848,11 +866,11 @@ bool submit_stage_failures_rollback_completely(Tracker& t) {
 
     raw->set_submit_stage_failure_injection(nullptr);
 
-    Completion<std::size_t> c4;
-    auto ok = ctx.submit_read(op, c4);
+    auto ok = ctx.submit_read(op);
     t.check(ok.has_value(), "the backend still accepts after the injected failures");
+    Request<std::size_t> c4 = std::move(ok.value());
     fake_complete(made, 0, 4);
-    t.check(complete_reset_reclaim(made, c4, 4),
+    t.check(complete_take_reclaim(made, c4, 4),
             "the follow-up request completes and reclaims");
     return true;
 }
@@ -876,10 +894,10 @@ bool dispatch_failure_converges_through_the_terminal(Tracker& t) {
     injection.armed.store(true);
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(),
             "an accepted request is never reported as an initiation failure");
+    Request<std::size_t> c = std::move(submitted.value());
     injection.armed.store(false);
     t.check(injection.fired.load() == 1, "the dispatch handoff failure fired exactly once");
     t.check(raw->submit_flushes_for_test() == 0 && raw->live_cookies_for_test() == 0,
@@ -887,10 +905,10 @@ bool dispatch_failure_converges_through_the_terminal(Tracker& t) {
 
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
-    t.check(c.ready() && !c.result().has_value() &&
-                c.result().error().code == IoError::Code::backend_error,
+    const auto failed = c.take_result();
+    t.check(failed.readiness == RequestReadiness::ready && !failed.result.has_value() &&
+                failed.result.error().code == IoError::Code::backend_error,
             "the post-accept failure converges through the terminal path");
-    c.reset();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core),
@@ -913,25 +931,26 @@ bool post_accept_submit_failure_poison_converges(Tracker& t) {
     RequestCore& core = *made.core;
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> visible;
-    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, visible);
+    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(first.has_value(), "the first request is accepted");
+    Request<std::size_t> visible = std::move(first.value());
     t.check(ctx.poll().has_value(), "the first request reached the kernel at its dispatch");
 
-    Completion<std::size_t> invisible;
-    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, invisible);
+    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(second.has_value(), "the second request is accepted before the failure");
+    Request<std::size_t> invisible = std::move(second.value());
     t.check(ctx.poll().has_value(),
             "the second acceptance's transport failure poisons the backend");
 
     for (int i = 0; i < 64 && !invisible.ready(); ++i)
         (void)ctx.poll();
-    t.check(invisible.ready() && !invisible.result().has_value(),
+    const auto invisible_result = invisible.try_result();
+    t.check(invisible_result.readiness == RequestReadiness::ready &&
+                !invisible_result.result.has_value(),
             "the never-visible request converged through the terminal path");
-    invisible.reset();
+    (void)invisible.take_result();
 
-    Completion<std::size_t> after;
-    auto rejected = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, after);
+    auto rejected = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(!rejected.has_value() && rejected.error().code == IoError::Code::backend_error,
             "the poisoned backend rejects new requests with its health failure");
 
@@ -942,9 +961,11 @@ bool post_accept_submit_failure_poison_converges(Tracker& t) {
         inject_completion(made, *visible_cookie, 4);
     for (int i = 0; i < 64 && !visible.ready(); ++i)
         (void)ctx.poll();
-    t.check(visible.ready() && visible.result().has_value() && visible.result().value() == 4,
+    const auto visible_result = visible.try_result();
+    t.check(visible_result.readiness == RequestReadiness::ready &&
+                visible_result.result.has_value() && visible_result.result.value() == 4,
             "the kernel-visible request completes with its real physical outcome");
-    visible.reset();
+    (void)visible.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core),
@@ -968,24 +989,25 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> a;
-    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, a);
+    auto first = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(first.has_value(), "request A is accepted");
+    Request<std::size_t> a = std::move(first.value());
     (void)ctx.poll();
-    const auto key_a = raw->request_key_for_test(a);
-    t.check(key_a.has_value() && raw->cancel_key_for_test(*key_a) == PublicCancel::requested,
+    const detail::RequestKey key_a = a.key_for_test();
+    t.check(raw->cancel_key_for_test(key_a) == PublicCancel::requested,
             "cancel records intent on the kernel-visible request");
 
-    Completion<std::size_t> b;
-    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, b);
+    auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(second.has_value(), "request B is accepted");
+    Request<std::size_t> b = std::move(second.value());
     t.check(ctx.poll().has_value(), "B's dispatch-time transport failure poisons the backend");
 
     for (int i = 0; i < 64 && !b.ready(); ++i)
         (void)ctx.poll();
-    t.check(b.ready() && !b.result().has_value(),
+    const auto b_result = b.try_result();
+    t.check(b_result.readiness == RequestReadiness::ready && !b_result.result.has_value(),
             "the never-visible request converges to its error terminal");
-    b.reset();
+    (void)b.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 1; ++i)
         (void)ctx.poll();
     t.check(core.snapshot().accepted_live == 1 && core.snapshot().control_refs == 0,
@@ -998,9 +1020,11 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
     raw->inject_cqe_for_test(*cookie_a, 4);
     for (int i = 0; i < 64 && !a.ready(); ++i)
         (void)ctx.poll();
-    t.check(a.ready() && a.result().has_value() && a.result().value() == 4,
+    const auto a_result = a.try_result();
+    t.check(a_result.readiness == RequestReadiness::ready && a_result.result.has_value() &&
+                a_result.result.value() == 4,
             "A completes with its real physical outcome after poison and cancel");
-    a.reset();
+    (void)a.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core),
@@ -1008,7 +1032,7 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
     return true;
 }
 
-bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
+bool publication_visibility_waits_for_the_epilogue(Tracker& t) {
     auto file = open_temp_file(t, "sluice b1c epilogue\n");
     if (!file.has_value())
         return false;
@@ -1027,9 +1051,9 @@ bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
     GateGuard guard{gate};
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the read is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
     {
         auto claim = ctx.claim_progress_owner();
         (void)ctx.poll();
@@ -1046,12 +1070,14 @@ bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
             (void)ctx.poll();
     });
     wait_gate_paused(gate);
-    t.check(c.ready(), "the result write published readiness before the epilogue");
-    c.reset();
+    const auto inflight = core.observe_slot(SlotIndex{0});
+    t.check(!c.ready() && c.try_result().readiness == RequestReadiness::pending &&
+                inflight.has_value() && inflight->publication_inflight && !inflight->published &&
+                inflight->binding_live,
+            "the outcome stays invisible while the publication pin is held");
     const CoreSnapshot pinned = core.snapshot();
-    t.check(pinned.accepted_live == 1 && pinned.publication_refs == 1 &&
-                pinned.public_bindings == 0,
-            "the release between the result write and the completion pins on publication");
+    t.check(pinned.accepted_live == 1 && pinned.publication_refs == 1,
+            "the held publication keeps the slot pinned and unresolvable");
 
     resume_gate(gate);
     wait_gate_exited(gate);
@@ -1059,6 +1085,13 @@ bool publication_epilogue_release_race_pins_the_slot(Tracker& t) {
     raw->set_publication_epilogue_pause_gate(nullptr);
     stop_driver.store(true, std::memory_order_release);
     driver.join();
+    for (int i = 0; i < 64 && !c.ready(); ++i)
+        (void)ctx.poll();
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 4,
+            "the epilogue publishes the outcome exactly once");
+    (void)c.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core),
@@ -1081,13 +1114,14 @@ bool observer_registration_rides_publication(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    Completion<std::size_t> c;
-    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(submitted.has_value(), "the read is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
 
-    const auto attached = ctx.attach_observer(c);
+    const auto attached = ctx.attach_observer(observed_id);
     t.check(attached.armed(), "the observer arms on the outstanding request");
-    t.check(ctx.attach_observer(c).status == detail::ObserverRegistration::duplicate,
+    t.check(ctx.attach_observer(observed_id).status == detail::ObserverRegistration::duplicate,
             "a second registration on the same request returns the occupied disposition");
     const auto observed = core.observe_slot(SlotIndex{0});
     t.check(observed.has_value() &&
@@ -1103,7 +1137,7 @@ bool observer_registration_rides_publication(Tracker& t) {
     t.check(core.observe_slot(SlotIndex{0})->observer_phase == detail::ObserverPhase::delivering,
             "the delivery is claimed before the event");
     t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
-    c.reset();
+    (void)c.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
 
@@ -1126,20 +1160,23 @@ bool concurrent_submissions_all_publish_and_reclaim(Tracker& t) {
     UringAsyncBackend* raw = made.raw();
 
     std::vector<std::byte> buffer(4, std::byte{0});
-    std::vector<Completion<std::size_t>> completions(4);
-    std::vector<std::optional<Result<void>>> results(4);
+    std::vector<std::optional<Request<std::size_t>>> requests(4);
+    std::vector<std::optional<IoError>> failures(4);
     std::vector<std::thread> submitters;
     for (int i = 0; i < 4; ++i) {
         submitters.emplace_back([&, i] {
-            results[i] = ctx.submit_read(
-                ReadOp{NativeFileRef(*file), buffer.data(), 4, static_cast<std::uint64_t>(i)},
-                completions[i]);
+            auto submitted = ctx.submit_read(
+                ReadOp{NativeFileRef(*file), buffer.data(), 4, static_cast<std::uint64_t>(i)});
+            if (submitted.has_value())
+                requests[i] = std::move(submitted.value());
+            else
+                failures[i] = submitted.error();
         });
     }
     for (auto& s : submitters)
         s.join();
     for (int i = 0; i < 4; ++i)
-        t.check(results[i].has_value() && results[i]->has_value(),
+        t.check(requests[i].has_value() && !failures[i].has_value(),
                 "every concurrent submission is accepted without waiting");
 
     (void)ctx.poll();
@@ -1152,14 +1189,15 @@ bool concurrent_submissions_all_publish_and_reclaim(Tracker& t) {
         (void)ctx.poll();
         bool all_ready = true;
         for (int i = 0; i < 4; ++i)
-            all_ready = all_ready && completions[i].ready();
+            all_ready = all_ready && requests[i]->ready();
         if (all_ready)
             break;
     }
     for (int i = 0; i < 4; ++i) {
-        t.check(completions[i].ready() && completions[i].result().has_value(),
+        const auto published = requests[i]->try_result();
+        t.check(published.readiness == RequestReadiness::ready && published.result.has_value(),
                 "every request published");
-        completions[i].reset();
+        (void)requests[i]->take_result();
     }
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
@@ -1182,25 +1220,25 @@ bool real_kernel_normal_completion_and_cancel(Tracker& t) {
     RequestCore& core = *ctx.context_core_for_test();
 
     std::vector<std::byte> buffer(8, std::byte{0});
-    Completion<std::size_t> read_done;
-    auto read_submitted =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 8, 0}, read_done);
+    auto read_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 8, 0});
     t.check(read_submitted.has_value(), "the real read is accepted");
+    Request<std::size_t> read_done = std::move(read_submitted.value());
     while (!read_done.ready())
         (void)ctx.poll();
-    t.check(read_done.result().has_value() && read_done.result().value() == 8 &&
+    const auto read_result = read_done.try_result();
+    t.check(read_result.result.has_value() && read_result.result.value() == 8 &&
                 std::memcmp(buffer.data(), "sluice b", 8) == 0,
             "the real kernel read completed with the file bytes");
-    read_done.reset();
+    (void)read_done.take_result();
     for (int i = 0; i < 256 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "the real read reclaimed through the core");
 
-    Completion<std::size_t> cancel_target;
-    auto cancel_submitted =
-        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 8, 0}, cancel_target);
+    auto cancel_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 8, 0});
     t.check(cancel_submitted.has_value(), "the cancel target is accepted");
-    ctx.cancel(cancel_target);
+    Request<std::size_t> cancel_target = std::move(cancel_submitted.value());
+    const auto cancel_disposition = cancel_target.cancel();
+    t.check(cancel_disposition.has_value(), "the public identity decides the cancel");
     int cancel_polls = 0;
     while (!cancel_target.ready() && cancel_polls < 10000) {
         (void)ctx.poll();
@@ -1209,7 +1247,7 @@ bool real_kernel_normal_completion_and_cancel(Tracker& t) {
     // The terminal itself is platform-specific cancel disposition (this
     // kernel completes the target with -EALREADY); the portable claim is
     // convergence to one terminal with the real outcome preserved.
-    const auto outcome = cancel_target.result();
+    const auto outcome = cancel_target.try_result().result;
     if (!outcome.has_value()) {
         std::fprintf(stderr, "INFO [%s] real-kernel cancel terminal: canonical=%d native=%d\n",
                      t.name, static_cast<int>(outcome.error().code), outcome.error().os_errno);
@@ -1219,7 +1257,7 @@ bool real_kernel_normal_completion_and_cancel(Tracker& t) {
     }
     t.check(cancel_target.ready(),
             "the canceled target converges to one terminal on the real kernel");
-    cancel_target.reset();
+    (void)cancel_target.take_result();
     for (int i = 0; i < 256 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
     t.check(idle_and_whole(core.snapshot(), core), "the canceled target reclaimed");
@@ -1241,14 +1279,13 @@ bool real_kernel_slot_reuse(Tracker& t) {
 
     std::vector<std::byte> buffer(4, std::byte{0});
     for (int round = 0; round < 6; ++round) {
-        Completion<std::size_t> c;
-        auto submitted = ctx.submit_read_request(
-            ReadOp{NativeFileRef(*file), buffer.data(), 4, 0}, c);
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
         if (!submitted.has_value()) {
             t.check(false, "each round accepts a request");
             return true;
         }
-        if (!resolves_as(ctx.request_state(submitted.value()), RequestHandleState::outstanding)) {
+        Request<std::size_t> c = std::move(submitted.value());
+        if (!resolves_as(ctx.lookup(c.id()), RequestReadiness::pending)) {
             t.check(false, "each round's identity resolves as outstanding");
             return true;
         }
@@ -1257,11 +1294,12 @@ bool real_kernel_slot_reuse(Tracker& t) {
             (void)ctx.poll();
             ++reuse_polls;
         }
-        if (!(c.result().has_value() && c.result().value() == 4)) {
+        const auto round_result = c.try_result();
+        if (!(round_result.result.has_value() && round_result.result.value() == 4)) {
             t.check(false, "each round completes with 4 bytes");
             return true;
         }
-        c.reset();
+        (void)c.take_result();
         for (int i = 0; i < 256 && core.snapshot().accepted_live != 0; ++i)
             (void)ctx.poll();
         if (!idle_and_whole(core.snapshot(), core)) {
@@ -1298,7 +1336,8 @@ int main() {
          stale_identity_does_not_resolve_after_reuse},
         {"zero_op_publishes_at_acceptance_without_dispatch",
          zero_op_publishes_at_acceptance_without_dispatch},
-        {"zero_op_event_survives_reset_before_poll", zero_op_event_survives_reset_before_poll},
+        {"zero_op_event_survives_release_before_poll",
+         zero_op_event_survives_release_before_poll},
         {"submit_stage_failures_rollback_completely", submit_stage_failures_rollback_completely},
         {"dispatch_failure_converges_through_the_terminal",
          dispatch_failure_converges_through_the_terminal},
@@ -1306,8 +1345,8 @@ int main() {
          post_accept_submit_failure_poison_converges},
         {"poison_with_running_cancel_keeps_the_real_completion",
          poison_with_running_cancel_keeps_the_real_completion},
-        {"publication_epilogue_release_race_pins_the_slot",
-         publication_epilogue_release_race_pins_the_slot},
+        {"publication_visibility_waits_for_the_epilogue",
+         publication_visibility_waits_for_the_epilogue},
         {"observer_registration_rides_publication", observer_registration_rides_publication},
         {"concurrent_submissions_all_publish_and_reclaim",
          concurrent_submissions_all_publish_and_reclaim},

@@ -1,6 +1,6 @@
 #include "canonical_request_test_support.hpp"
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
@@ -63,51 +63,38 @@ class CountingBackend final : public AsyncBackend {
     std::size_t poll() override { return 0; }
     std::size_t outstanding() const noexcept override { return 0; }
     bool internal_work_retired() const noexcept override { return true; }
-    bool supports_request_identity() const noexcept override { return true; }
 
   private:
     std::size_t slot_capacity() const noexcept override { return 0; }
-    Result<sluice::async::detail::RequestKey> submit_read(ReadOp op,
-                                                          Completion<std::size_t>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_read(ReadOp op) override {
         (void)op;
-        (void)c;
         ++read_entries;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey> submit_write(WriteOp op,
-                                                           Completion<std::size_t>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_write(WriteOp op) override {
         (void)op;
-        (void)c;
         ++write_entries;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey> submit_sync_data(SyncDataOp op,
-                                                               Completion<void>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_sync_data(SyncDataOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey> submit_sync_all(SyncAllOp op,
-                                                              Completion<void>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_sync_all(SyncAllOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey>
-    submit_file_info(FileInfoOp op, Completion<sluice::FileInfo>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_file_info(FileInfoOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey>
-    submit_size(SizeOp op, Completion<sluice::FileSize>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_size(SizeOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
@@ -620,88 +607,6 @@ bool submit_write_rejects_illegal_access_before_offset_validation() {
     return admission_ok && closed_after && counts->read_entries == 0 && counts->write_entries == 0;
 }
 
-bool submit_read_request_rejects_illegal_access_with_empty_buffer_before_backend() {
-    const std::string path = make_temp_file("x");
-    if (path.empty())
-        return false;
-    File file = std::move(File::open(path, mode_with(FileAccess::write_only)).value());
-    ::unlink(path.c_str());
-
-    auto backend = std::make_unique<CountingBackend>();
-    CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-
-    Completion<std::size_t> c;
-    auto r = ctx.submit_read_request(ReadOp{file, nullptr, 0, 0}, c);
-    const bool admission_ok =
-        !r.has_value() && r.error().code == IoError::Code::invalid_argument && c.idle();
-    const bool closed_after = file.close().has_value();
-    return admission_ok && closed_after && counts->read_entries == 0 && counts->write_entries == 0;
-}
-
-bool submit_write_request_rejects_illegal_access_with_empty_buffer_before_backend() {
-    const std::string path = make_temp_file("x");
-    if (path.empty())
-        return false;
-    File file = std::move(File::open(path).value());
-    ::unlink(path.c_str());
-
-    auto backend = std::make_unique<CountingBackend>();
-    CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-
-    Completion<std::size_t> c;
-    auto r = ctx.submit_write_request(WriteOp{file, nullptr, 0, 0}, c);
-    const bool admission_ok =
-        !r.has_value() && r.error().code == IoError::Code::invalid_argument && c.idle();
-    const bool closed_after = file.close().has_value();
-    return admission_ok && closed_after && counts->read_entries == 0 && counts->write_entries == 0;
-}
-
-bool submit_read_request_rejects_closed_illegal_access_as_invalid_state() {
-    const std::string path = make_temp_file("x");
-    if (path.empty())
-        return false;
-    File file = std::move(File::open(path, mode_with(FileAccess::write_only)).value());
-    ::unlink(path.c_str());
-    if (!file.close().has_value())
-        return false;
-
-    auto backend = std::make_unique<CountingBackend>();
-    CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-
-    Completion<std::size_t> c;
-    auto r = ctx.submit_read_request(ReadOp{file, nullptr, 0, 0}, c);
-    if (!reports_invalid_state(r))
-        return false;
-    if (!c.idle())
-        return false;
-    return counts->read_entries == 0 && counts->write_entries == 0;
-}
-
-bool submit_write_request_rejects_closed_illegal_access_as_invalid_state() {
-    const std::string path = make_temp_file("x");
-    if (path.empty())
-        return false;
-    File file = std::move(File::open(path).value());
-    ::unlink(path.c_str());
-    if (!file.close().has_value())
-        return false;
-
-    auto backend = std::make_unique<CountingBackend>();
-    CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-
-    Completion<std::size_t> c;
-    auto r = ctx.submit_write_request(WriteOp{file, nullptr, 0, 0}, c);
-    if (!reports_invalid_state(r))
-        return false;
-    if (!c.idle())
-        return false;
-    return counts->read_entries == 0 && counts->write_entries == 0;
-}
-
 bool submit_zero_length_read_completes_zero_despite_unrepresentable_offset() {
     const std::string path = make_temp_file("x");
     if (path.empty())
@@ -870,14 +775,6 @@ int main() {
          submit_read_rejects_illegal_access_before_offset_validation},
         {"submit_write_rejects_illegal_access_before_offset_validation",
          submit_write_rejects_illegal_access_before_offset_validation},
-        {"submit_read_request_rejects_illegal_access_with_empty_buffer_before_backend",
-         submit_read_request_rejects_illegal_access_with_empty_buffer_before_backend},
-        {"submit_write_request_rejects_illegal_access_with_empty_buffer_before_backend",
-         submit_write_request_rejects_illegal_access_with_empty_buffer_before_backend},
-        {"submit_read_request_rejects_closed_illegal_access_as_invalid_state",
-         submit_read_request_rejects_closed_illegal_access_as_invalid_state},
-        {"submit_write_request_rejects_closed_illegal_access_as_invalid_state",
-         submit_write_request_rejects_closed_illegal_access_as_invalid_state},
         {"submit_zero_length_read_completes_zero_despite_unrepresentable_offset",
          submit_zero_length_read_completes_zero_despite_unrepresentable_offset},
         {"submit_zero_length_write_completes_zero_despite_unrepresentable_offset",

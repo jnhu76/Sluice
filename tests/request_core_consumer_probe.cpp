@@ -8,9 +8,7 @@ class AsyncBackend;
 class AsyncIoContext;
 class Fiber;
 class Scheduler;
-template <class T> class Completion;
 namespace detail {
-class RequestArena;
 class SynchronousReadySink;
 struct WaiterToken;
 class RoutingLease;
@@ -30,10 +28,6 @@ static_assert(!is_complete<sluice::async::Scheduler>::value,
               "the substrate must not pull the Scheduler into a consumer");
 static_assert(!is_complete<sluice::async::Fiber>::value,
               "the substrate must not pull a Fiber into a consumer");
-static_assert(!is_complete<sluice::async::Completion<int>>::value,
-              "the substrate must not pull a Completion into a consumer");
-static_assert(!is_complete<sluice::async::detail::RequestArena>::value,
-              "the substrate must not pull the arena into a consumer");
 static_assert(!is_complete<sluice::async::detail::SynchronousReadySink>::value,
               "the substrate must not pull a ready sink into a consumer");
 static_assert(!is_complete<sluice::async::detail::WaiterToken>::value,
@@ -134,7 +128,7 @@ bool full_lifecycle_on_the_public_surface() {
     if (core.lookup(accepted.id) != PublicLookup::published) {
         return false;
     }
-    if (core.release_public_binding(accepted.id) != BindingRelease::released) {
+    if (core.discard_public_result(accepted.id) != BindingRelease::released) {
         return false;
     }
     if (core.lookup(accepted.id) != PublicLookup::not_found) {

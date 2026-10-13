@@ -40,10 +40,11 @@ std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
 }
 #endif
 
-void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
+void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noexcept {
     bool injected_dispatch_failure = false;
     bool newly_poisoned = false;
     bool unsubmitted_after_dispatch = false;
+    bool post_poison_push_retired = false;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -71,30 +72,62 @@ void UringAsyncBackend::dispatch_after_accept(detail::SlotHandle h) noexcept {
             dispatch_->push_back(h);
 
             const bool poisoned_before = fatal_error_.has_value();
-            for (;;) {
-                if (dispatch_->empty())
-                    break;
-                const detail::SlotHandle front = dispatch_->front();
-                if (!dispatch_one_locked(front))
-                    break;
+            if (poisoned_before) {
+                retire_undispatched_after_poison_locked_();
+                post_poison_push_retired = true;
+            } else {
+                for (;;) {
+                    if (dispatch_->empty())
+                        break;
+                    const detail::RequestReservation front = dispatch_->front();
+                    if (!dispatch_one_locked(front))
+                        break;
+                }
+                if (!fatal_error_.has_value()) {
+                    (void)submit_transport_locked();
+                    service_pending_controls_locked_();
+                }
+                newly_poisoned = !poisoned_before && fatal_error_.has_value();
             }
-            if (!fatal_error_.has_value()) {
-                (void)submit_transport_locked();
-                service_pending_controls_locked_();
-            }
-            newly_poisoned = !poisoned_before && fatal_error_.has_value();
         }
 #if !defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
         unsubmitted_after_dispatch =
             !fatal_error_.has_value() && dispatch_retry_remains_locked_();
 #endif
     }
-    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch) {
+    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch ||
+        post_poison_push_retired) {
         signal_ready_progress();
     }
 }
 
-bool UringAsyncBackend::dispatch_one_locked(detail::SlotHandle h) noexcept {
+void UringAsyncBackend::retire_undispatched_after_poison_locked_() noexcept {
+    const IoError error = *fatal_error_;
+    detail::RequestReservation local{};
+    while (dispatch_->pop_front(local)) {
+        const detail::RequestKey key{core_->context(), local.slot, local.generation};
+        // A public cancel that won the pre-dispatch terminal while this
+        // reservation sat between accept and queue push already owns its
+        // publication; claim_execution arbitrates that race exactly as the
+        // dispatch path does.
+        if (core_->claim_execution(key) != detail::ExecutionClaim::claimed)
+            continue;
+        detail::TerminalCandidate candidate;
+        candidate.kind = detail::TerminalCandidateKind::physical_outcome;
+        candidate.outcome = sluice::detail::IoOutcome::failure(error);
+        if (core_->offer_terminal(key, candidate) != detail::TerminalVerdict::chosen) {
+            detail::uring_core_handoff_fail_fast();
+        }
+        if (core_->release_execution(key) !=
+            detail::ExecutionRelease::borrow_touch_fully_retired) {
+            detail::uring_core_handoff_fail_fast();
+        }
+        publication_pending_->push_back(local);
+        bump(stats_, &AsyncStats::completion_errors);
+    }
+}
+
+bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexcept {
     if (fatal_error_.has_value())
         return false;
 
@@ -246,7 +279,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
 }
 
 void UringAsyncBackend::mark_consumed_control_locked_(std::uint64_t cookie,
-                                                      detail::SlotHandle handle) noexcept {
+                                                      detail::RequestReservation handle) noexcept {
     const std::size_t router_index = find_live_router_cookie_(cookie);
     if (router_index == router_.size() ||
         router_[router_index].handle.slot.value != handle.slot.value ||
@@ -314,7 +347,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
     // zero submit count), so it is provably kernel-invisible and Class-A
     // retirement is safe. Operations whose CQEs may still arrive left this
     // ledger during reconciliation and keep their real completion path.
-    detail::SlotHandle local{};
+    detail::RequestReservation local{};
     while (dispatch_->pop_front(local)) {
         const detail::RequestKey key{core_->context(), local.slot, local.generation};
         detail::TerminalCandidate candidate;
@@ -504,7 +537,7 @@ std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
     return next_cookie_++;
 }
 
-std::size_t UringAsyncBackend::find_live_router_index_(detail::SlotHandle h) const noexcept {
+std::size_t UringAsyncBackend::find_live_router_index_(detail::RequestReservation h) const noexcept {
     for (std::size_t i = 0; i < router_.size(); ++i) {
         const RouterEntry& e = router_[i];
         if (e.in_use && e.handle.slot.value == h.slot.value &&
@@ -547,16 +580,16 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
 
-        (void)dispatch_->remove_exact(detail::SlotHandle{key.slot, key.generation});
+        (void)dispatch_->remove_exact(detail::RequestReservation{key.slot, key.generation});
         disposition = core_->cancel(key);
         if (disposition == detail::PublicCancel::won_before_execution) {
             if (core_->release_execution(key) !=
                 detail::ExecutionRelease::borrow_touch_fully_retired) {
                 detail::uring_core_handoff_fail_fast();
             }
-            publication_pending_->push_back(detail::SlotHandle{key.slot, key.generation});
+            publication_pending_->push_back(detail::RequestReservation{key.slot, key.generation});
         } else if (disposition == detail::PublicCancel::requested) {
-            issue_running_cancel_locked_(detail::SlotHandle{key.slot, key.generation});
+            issue_running_cancel_locked_(detail::RequestReservation{key.slot, key.generation});
         }
     }
     if (disposition == detail::PublicCancel::won_before_execution) {
@@ -578,7 +611,7 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
     return disposition;
 }
 
-void UringAsyncBackend::issue_running_cancel_locked_(detail::SlotHandle h) noexcept {
+void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation h) noexcept {
     if (fatal_error_.has_value())
         return;
 

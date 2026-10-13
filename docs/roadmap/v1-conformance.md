@@ -2136,3 +2136,89 @@ F4=ADOPTED_SCOPED at actual merged-master de551ed09555b8ad4d118a250baf373062a01d
 ## 2026-10-13 F3 actual-master exit receipt
 
 This dated receipt supersedes2026-10-12 candidate-owner-PENDING overlays. Active human CLI approval bound PR513HEAD350e789810f16078d528e572a0b124e71bd6da97; merged/tested masterf4a9723410539025cffa3422c5f6841ef795c755 has fresh four app/package configurations, dual native-Clang sanitizers and four successful CI jobs. See docs/evidence/f3-postmerge-closeout-20261013; independent scoped technical acceptance gates #474 closure. F4 ADOPTED_SCOPED/#505/#506 CLOSED. F3 technical exit has complete evidence; optionalW04support NO, conditional N/A audit. PhaseM CLOSED_ADOPTED, #402 OPEN for F2/F5 then F6 final audit; V1_RELEASE_READY NO. Documentation-only receipt commits do not relabel the actual tested master SHA.
+
+## 2026-10-13 F2 authority contraction candidate — #402
+
+Candidate slice on branch `f2-clean-authority` (draft PR #516), unmerged: the
+installed/public API break still needs the owner's separate decision. Master and
+the F3/F4 closure records above are unchanged by this section.
+
+| Field | Value |
+|---|---|
+| Slice | #402 F2, Request/Result/Identity authority contraction (clean break) |
+| Baseline | `0ed16588b7101f108aa7282074ba3d568f9d34e9` (F3 and F4 closed) |
+| Head | the branch head recorded in `docs/evidence/f2-authority-contraction-20261013/gates.json` |
+| Requirements | MIG-02 rows for caller-owned `Completion<T>`, `RequestArena`, `RequestHandle` and the busy-poll helpers; MIG-01 slice/gate order; MIG-03 evidence shape; PROD-03 scope; GOV-02 statuses |
+| Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations; the W-03 external-loop stall blocker was closed at the corrected head with a deterministic regression and a test-only corrective diff (`docs/evidence/f2-authority-contraction-20261013/w03-root-cause.md`) |
+| Removed | 7 installed headers (`completion.hpp`, `request_handle.hpp`, `batch.hpp`, `op_helpers.hpp`, `detail/request_arena.hpp`, `detail/request_slot.hpp`, `detail/submit_transaction.hpp`), 3 compiled objects (`request_handle.cpp`, `batch.cpp`, `op_helpers.cpp`), the `RequestHandle`/`RequestHandleState` identity mapping, `Batch`/`BatchResult`, the busy-poll helpers, 16 arena/completion fail-fast diagnostics, and `RequestCore::release_public_binding` (a second release edge retired during review) |
+| Canonical after | `RequestCore` owns acceptance/terminal/publication/binding release/reclaim; `submit_*(Op) -> Result<Request<T>>`; backend vtable `submit_*(Op) -> Result<detail::RequestKey>`; `RequestId` + `AsyncIoContext::lookup`; `attach_observer`/`cancel_observer`/`await_request`/`cancel_waiter` on `RequestId` |
+| Evidence | `docs/evidence/f2-authority-contraction-20261013/` — six configuration profiles (Debug/Release x no-ring/real-ring, native Clang ASan+UBSan and TSan scopes), B-01 v5 dual-profile clean-room package capture with negative link probes and retained-consumer rows, installed-header standalone compile plus cross-TU link/ODR probes with a before-prefix control, the 64-mutant campaign against the baseline kill set (identical kill set; one survivor and one timing-flaky mutant on every tree including the baseline), the TLA+ gate (170 of 171 configurations PASS, none FAIL, `rcore-live` outstanding at a documented ≈18.5 h / ≈40-48 GB configuration on a model this slice does not change — recorded as INCOMPLETE, never as a pass), GitHub CI, and the load-attribution record for the one restructured scenario |
+| Retained obligations | publication acquire/release pin, execution (borrow) and control references with their separate retirement edges, observer claim/retire protocol, nonterminal-release fail fast (verified present in the release archive), slot reclamation predicate, notification epoch freshness |
+| Limitations | installed-surface break pending the owner decision (`installed-surface-risk-disposition.md`); the W-03 external-loop stall (10/40 two-core failures at the captured head versus 0/40 baseline) was root-caused as an application-handoff defect in the scenario's own loop protocol and closed by a test-only fix with a deterministic reproducer, negative and positive witnesses, and a three-tree differential campaign (0/80 baseline, 17/80 pre-fix at the final-head rerun, 0/80 corrected; an intermediate corrected-head campaign measured 13/80 pre-fix) — gates re-run at the corrected head (`w03-root-cause.md`); the TLA `rcore-live` configuration is outstanding; optional W-04 remains NO; F5 and F6 not started; the pre-existing io_uring poison-versus-dispatch window is unchanged from baseline and remains open |
+| Not claimed | no F2/F3/F4/F5/F6 family completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no `V1_RELEASE_READY`, no pass for the one outstanding TLA configuration |
+| Review | Two independent adversarial reviews (production; evidence and coverage). One HIGH production finding (the await refusal mapping) fixed with a biting regression; a second release edge retired; the R14 oracle's dropped half restored; the evidence package rebound and re-captured at one head; two pre-existing gaps recorded as such. Verdicts and per-finding dispositions: `docs/evidence/f2-authority-contraction-20261013/independent-review.md` |
+
+### 2026-10-13 F2 W-03 stall root-cause closure — #402 amendment
+
+The candidate's open blocker (stall of `external_poll_loop_threadpool_w03`
+under two-core starvation) was closed at corrected implementation head
+`25734314f70401472067250e68a1f9227093b7eb` (test-only commits `359155e6`
+deterministic reproducer, `b63a532e` application handoff eventfd, `25734314`
+write-result portability fix; production
+diff empty). Root cause: the zero-op's RequestCore publication and progress
+notification both occur inside `submit_read`, while the application handle
+becomes observable only afterwards; the scenario's host parked on the context
+notification fd across that boundary, so a consumed notification left a
+parked host with no owed wake — an application-handoff defect, not a library
+notification defect (classification A; options B/C excluded by the causal
+witness: delivered=1, exactly one progress epoch, fd quiescent at the forced
+pause). Evidence: deterministic three-phase regression
+(`late_handoff_wake_is_application_owned`) with pre-fix negative and post-fix
+positive witnesses; three-tree differential campaign `taskset -c 0,1`, ten
+concurrent copies, 80 runs per tree — baseline `0ed16588` 0 failures, pre-fix
+`996f434f` 17 failures at the final-head rerun (13 in the intermediate
+campaign; all the recorded stall mode), corrected 0 failures; six-profile
+matrix, B-01 package capture, installed probes and GitHub CI re-run at the
+same head, with the empty production diff (`git diff 996f434f 25734314 --
+include/ src/ apps/ xmake/`) and matching package inventories as the
+changed-input comparison (package tar hashes are not bit-reproducible across
+capture runs); TLA gate retained unchanged, `rcore-live` INCOMPLETE. One new
+pre-existing gap was measured during the closure matrix re-run (the E1
+conformance `GateGuard` teardown race flaking under ASan at both the
+corrected and captured pre-fix heads) and recorded as
+`known-preexisting-gaps.md` §3, not caused by this closure.
+PR516 remains Draft pending the installed-surface owner decision. Full
+record: `docs/evidence/f2-authority-contraction-20261013/w03-root-cause.md`.
+
+
+### 2026-10-13 F2 final corrective round — #402 amendment
+
+Final candidate implementation head
+`093332ba1b40b667763d1202200ee899962454ae` (commits `8689a720` io_uring
+poison × post-accept retirement, `e974988c` E1 pause-gate teardown lifetime,
+`0bcfda01` moved-from `retire_delivery` rejection, `093332ba` rcore-live
+reuse reconciliation). All three `known-preexisting-gaps.md` entries are
+CORRECTED with deterministic RED/GREEN receipts; the E1 fix and the W-03
+closure are test-only, the uring and context fixes are production corrections
+that add no runtime state (authority-contraction audit recorded in the
+execution record). W-03 is CLOSED as an application handoff defect with an
+empty production diff (`POSTFIX_STRESS` 0/80 at `25734314`, re-confirmed 0
+failures in the final focused campaign). Validation re-run at the head and
+bound in `gates.json`: six-profile matrix clean (debug-n 53/53, debug-y
+67/67, release-n 53/53, release-y 67/67, asanubsan-n 18/18, tsan-n 17/18
+with the recorded link exclusion; the one load-contaminated tsan attempt is
+preserved separately, identical binary 10/10 idle, serial re-run clean);
+B-01 v5 dual-profile package capture PASS (56→49 installed headers, 35→32
+objects, 33→30 archive members); installed probes clean with the negative
+control; focused differential stress vs baseline `0ed16588` under
+`taskset -c 0,1` 240/240; GitHub CI `38397035018` all four jobs success.
+TLA status: `CURRENT_RCORE_LIVE_EXECUTION = INCOMPLETE`,
+`HISTORICAL_RCORE_LIVE_PROOF = VERIFIED_REUSABLE`,
+`F2_FORMAL_ACCEPTANCE = ACCEPTED_BY_REUSE` (exact input identity:
+`git diff eb7bf055..HEAD -- formal/tla/ scripts/verify_tla.sh` empty;
+historical E2 attempt 2 all 171 jobs PASS). Status remains CANDIDATE:
+PR516 stays Draft and unmerged pending the owner's explicit scope-bound
+decision on the installed-surface break (seven headers, three objects,
+external use UNKNOWN, no shims). Full record:
+`docs/evidence/f2-authority-contraction-20261013/` (execution record,
+corrective-round section).

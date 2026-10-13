@@ -1,0 +1,13 @@
+nproc=20
+cpu=model name	: Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+load_before=0.76 0.99 1.00 1/912 1004163
+baseline_sha=0ed16588b7101f108aa7282074ba3d568f9d34e9
+prefix_sha=996f434fd1517b80d83d0bd432301f7b832aa4f8
+corrected_sha=25734314f70401472067250e68a1f9227093b7eb
+2026-10-13T19:04:22+08:00
+2026-10-13T19:05:30+08:00
+load_after=3.46 1.80 1.28 1/942 1026743
+totals:
+  prefix runs=80 failures=17
+  corrected runs=80 failures=0
+  baseline runs=80 failures=0

@@ -95,40 +95,36 @@ class RequestProbe {
                          : sluice::async::NativeFileRef{*file};
 
         if (input.operation == FileOperation::read) {
-            sluice::async::Completion<std::size_t> c;
             auto submitted = ctx_.submit_read(
-                sluice::async::ReadOp{ref, buffer, input.length, input.offset}, c);
+                sluice::async::ReadOp{ref, buffer, input.length, input.offset});
             if (!submitted.has_value())
                 return observe_rejection(submitted.error());
-            const bool published_at_acceptance = c.ready();
-            drain_size(c);
-            return observe_result(c.result(), published_at_acceptance);
+            sluice::async::Request<std::size_t> request = std::move(submitted.value());
+            const bool published_at_acceptance = request.ready();
+            while (!request.ready())
+                (void)ctx_.poll();
+            return observe_result(request.take_result().result, published_at_acceptance);
         }
         if (input.operation == FileOperation::write) {
-            sluice::async::Completion<std::size_t> c;
             auto submitted = ctx_.submit_write(
-                sluice::async::WriteOp{ref, buffer, input.length, input.offset}, c);
+                sluice::async::WriteOp{ref, buffer, input.length, input.offset});
             if (!submitted.has_value())
                 return observe_rejection(submitted.error());
-            const bool published_at_acceptance = c.ready();
-            drain_size(c);
-            return observe_result(c.result(), published_at_acceptance);
+            sluice::async::Request<std::size_t> request = std::move(submitted.value());
+            const bool published_at_acceptance = request.ready();
+            while (!request.ready())
+                (void)ctx_.poll();
+            return observe_result(request.take_result().result, published_at_acceptance);
         }
-        sluice::async::Completion<void> c;
         auto submitted = input.operation == FileOperation::sync_data
-                             ? ctx_.submit_sync_data(sluice::async::SyncDataOp{ref}, c)
-                             : ctx_.submit_sync_all(sluice::async::SyncAllOp{ref}, c);
+                             ? ctx_.submit_sync_data(sluice::async::SyncDataOp{ref})
+                             : ctx_.submit_sync_all(sluice::async::SyncAllOp{ref});
         if (!submitted.has_value())
             return observe_rejection(submitted.error());
-        while (!c.ready())
+        sluice::async::Request<void> request = std::move(submitted.value());
+        while (!request.ready())
             (void)ctx_.poll();
-        return observe_result(c.result());
-    }
-
-  private:
-    void drain_size(sluice::async::Completion<std::size_t>& c) {
-        while (!c.ready())
-            (void)ctx_.poll();
+        return observe_result(request.take_result().result);
     }
 
     sluice::async::AsyncIoContext ctx_;

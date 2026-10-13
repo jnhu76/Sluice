@@ -1,12 +1,10 @@
 #pragma once
 
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/observer_protocol.hpp>
 #include <sluice/async/detail/progress_source.hpp>
 #include <sluice/async/detail/ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/request_handle.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/measurement.hpp>
@@ -108,9 +106,6 @@ class AsyncBackend {
         return pass;
     }
 
-    virtual void cancel(Completion<std::size_t>& c) { (void)c; }
-    virtual void cancel(Completion<void>& c) { (void)c; }
-
     virtual std::size_t outstanding() const noexcept = 0;
 
     // retire_execution_resources is valid only after internal_work_retired
@@ -121,8 +116,6 @@ class AsyncBackend {
     virtual void retire_execution_resources() noexcept {}
 
     virtual bool signals_physical_progress() const noexcept { return false; }
-
-    virtual bool supports_request_identity() const noexcept { return false; }
 
   private:
     friend class AsyncIoContext;
@@ -135,37 +128,20 @@ class AsyncBackend {
     // context source are covered by token revalidation and answer false.
     virtual bool has_immediate_physical_work() const noexcept { return false; }
 
-    // A null completion destination publishes through the core only; the
-    // returned key is the accepted request identity in every accepting case.
-    virtual Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) = 0;
-    virtual Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) = 0;
-    virtual Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) = 0;
-    virtual Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) = 0;
-    virtual Result<detail::RequestKey> submit_file_info(FileInfoOp op,
-                                                        Completion<FileInfo>* c) = 0;
-    virtual Result<detail::RequestKey> submit_size(SizeOp op, Completion<FileSize>* c) = 0;
-
-    virtual Result<RequestHandleState> resolve_identity_state(std::uint64_t context,
-                                                              std::uint32_t slot,
-                                                              std::uint64_t generation) const {
-        (void)context;
-        (void)slot;
-        (void)generation;
-        return make_unexpected<RequestHandleState>(IoError{IoError::Code::not_supported});
-    }
+    // Accepts and linearizes one operation; the returned key is the accepted
+    // request identity in every accepting case.
+    virtual Result<detail::RequestKey> submit_read(ReadOp op) = 0;
+    virtual Result<detail::RequestKey> submit_write(WriteOp op) = 0;
+    virtual Result<detail::RequestKey> submit_sync_data(SyncDataOp op) = 0;
+    virtual Result<detail::RequestKey> submit_sync_all(SyncAllOp op) = 0;
+    virtual Result<detail::RequestKey> submit_file_info(FileInfoOp op) = 0;
+    virtual Result<detail::RequestKey> submit_size(SizeOp op) = 0;
 
     // The capacity of the request slot table this backend serves; the
     // context-owned core is sized by it.
     virtual std::size_t slot_capacity() const noexcept = 0;
 
     virtual detail::PublicCancel cancel_identity(detail::RequestKey key) = 0;
-
-    RequestHandle identity_of(Completion<std::size_t>& c) const noexcept;
-    RequestHandle identity_of(Completion<void>& c) const noexcept;
-    RequestHandle identity_of(Completion<FileInfo>& c) const noexcept;
-    RequestHandle identity_of(Completion<FileSize>& c) const noexcept;
-
-    Result<RequestHandleState> request_handle_state(const RequestHandle& h) const noexcept;
 
   protected:
     AsyncBackend() = default;
@@ -184,46 +160,6 @@ class AsyncBackend {
     // Installed only by the AsyncIoContext constructor; backends never set
     // or clear it, and the backend retires before the core storage does.
     detail::RequestCore* core_ = nullptr;
-
-    template <class T> static bool try_claim(Completion<T>& c) noexcept {
-        return c.try_claim_for_backend();
-    }
-
-    template <class T> static bool begin_binding(Completion<T>& c) noexcept {
-        return c.begin_binding_for_backend();
-    }
-    template <class T> static void commit_binding(Completion<T>& c) noexcept {
-        c.commit_binding_to_outstanding();
-    }
-    template <class T> static void rollback_binding_before_accept(Completion<T>& c) noexcept {
-        c.rollback_binding_before_accept();
-    }
-
-    template <class T>
-    static void install_binding(Completion<T>& c, detail::RequestArena* arena,
-                                detail::SlotHandle h) noexcept {
-        c.install_binding_for_backend(arena, h);
-    }
-    template <class T>
-    static void install_core_binding(Completion<T>& c, detail::RequestCore* core,
-                                     detail::RequestKey key) noexcept {
-        c.install_core_binding_for_backend(core, key);
-    }
-    template <class T>
-    static std::optional<detail::RequestKey> core_binding(const Completion<T>& c) noexcept {
-        return c.core_binding_for_backend();
-    }
-    template <class T> static void clear_binding(Completion<T>& c) noexcept {
-        c.clear_binding_for_backend();
-    }
-
-    template <class T> static void publish(Completion<T>& c, Result<T>&& result) noexcept {
-        c.publish_from_reap(std::move(result));
-    }
-
-    template <class T> static void rollback_claim_before_accept(Completion<T>& c) noexcept {
-        c.rollback_claim_before_accept();
-    }
 };
 
 class AsyncIoContext;
@@ -271,13 +207,6 @@ class AsyncIoContext {
 
     AsyncIoContext& operator=(AsyncIoContext&&) noexcept;
 
-    Result<void> submit_read(ReadOp op, Completion<std::size_t>& c);
-    Result<void> submit_write(WriteOp op, Completion<std::size_t>& c);
-    Result<void> submit_sync_data(SyncDataOp op, Completion<void>& c);
-    Result<void> submit_sync_all(SyncAllOp op, Completion<void>& c);
-    Result<void> submit_file_info(FileInfoOp op, Completion<FileInfo>& c);
-    Result<void> submit_size(SizeOp op, Completion<FileSize>& c);
-
     Result<Request<std::size_t>> submit_read(ReadOp op);
     Result<Request<std::size_t>> submit_write(WriteOp op);
     Result<Request<void>> submit_sync_data(SyncDataOp op);
@@ -285,18 +214,9 @@ class AsyncIoContext {
     Result<Request<FileInfo>> submit_file_info(FileInfoOp op);
     Result<Request<FileSize>> submit_size(SizeOp op);
 
-    Result<RequestHandle> submit_read_request(ReadOp op, Completion<std::size_t>& c);
-    Result<RequestHandle> submit_write_request(WriteOp op, Completion<std::size_t>& c);
-    Result<RequestHandle> submit_sync_data_request(SyncDataOp op, Completion<void>& c);
-    Result<RequestHandle> submit_sync_all_request(SyncAllOp op, Completion<void>& c);
-    Result<RequestHandle> submit_file_info_request(FileInfoOp op, Completion<FileInfo>& c);
-    Result<RequestHandle> submit_size_request(SizeOp op, Completion<FileSize>& c);
-
     Result<CancelDisposition> cancel(const RequestId& id);
 
     RequestReadiness lookup(const RequestId& id) const;
-
-    Result<RequestHandleState> request_state(const RequestHandle& h) const;
 
     Result<std::size_t> poll();
 
@@ -384,9 +304,6 @@ class AsyncIoContext {
     // borrow.
     void detach_progress_host() noexcept;
 
-    void cancel(Completion<std::size_t>& c);
-    void cancel(Completion<void>& c);
-
     // shutdown is blocking; see ADR-0004 for the caller contract.
     void close_admission() noexcept;
     void request_stop(ShutdownPolicy policy) noexcept;
@@ -413,10 +330,8 @@ class AsyncIoContext {
         }
     };
 
-    ObserverAttachment attach_observer(Completion<std::size_t>& c);
-    ObserverAttachment attach_observer(Completion<void>& c);
-    ObserverCancelResult cancel_observer(Completion<std::size_t>& c);
-    ObserverCancelResult cancel_observer(Completion<void>& c);
+    ObserverAttachment attach_observer(const RequestId& id);
+    ObserverCancelResult cancel_observer(const RequestId& id);
     bool retire_delivery(detail::RequestKey key);
 
     std::size_t outstanding() const noexcept;

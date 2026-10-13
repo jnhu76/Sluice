@@ -799,27 +799,27 @@ class ThrowingSubmitBackend final : public AsyncBackend {
         return 4;
     }
 
-    Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_read(ReadOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_write(WriteOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+    Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+    Result<detail::RequestKey> submit_size(SizeOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 

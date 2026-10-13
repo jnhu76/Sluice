@@ -26,51 +26,38 @@ class CountingBackend final : public AsyncBackend {
     std::size_t poll() override { return 0; }
     std::size_t outstanding() const noexcept override { return 0; }
     bool internal_work_retired() const noexcept override { return true; }
-    bool supports_request_identity() const noexcept override { return true; }
 
     std::size_t slot_capacity() const noexcept override { return 0; }
 
-    Result<sluice::async::detail::RequestKey> submit_read(ReadOp op,
-                                                          Completion<std::size_t>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_read(ReadOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey> submit_write(WriteOp op,
-                                                           Completion<std::size_t>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_write(WriteOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::not_supported});
     }
-    Result<sluice::async::detail::RequestKey> submit_sync_data(SyncDataOp op,
-                                                               Completion<void>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_sync_data(SyncDataOp op) override {
         (void)op;
-        (void)c;
         ++sync_data_entries;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::invalid_state});
     }
-    Result<sluice::async::detail::RequestKey> submit_sync_all(SyncAllOp op,
-                                                              Completion<void>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_sync_all(SyncAllOp op) override {
         (void)op;
-        (void)c;
         ++sync_all_entries;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::invalid_state});
     }
-    Result<sluice::async::detail::RequestKey> submit_file_info(FileInfoOp op,
-                                                               Completion<sluice::FileInfo>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_file_info(FileInfoOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::invalid_state});
     }
-    Result<sluice::async::detail::RequestKey> submit_size(SizeOp op,
-                                                          Completion<sluice::FileSize>* c) override {
+    Result<sluice::async::detail::RequestKey> submit_size(SizeOp op) override {
         (void)op;
-        (void)c;
         return sluice::make_unexpected<sluice::async::detail::RequestKey>(
             IoError{IoError::Code::invalid_state});
     }
@@ -133,40 +120,36 @@ bool submit_sync_all_rejects_closed_reference_before_backend() {
            counts->sync_all_entries == 0;
 }
 
-bool submit_sync_data_request_rejects_closed_reference_before_backend() {
+bool submit_sync_data_rejection_leaves_no_request_binding() {
     File file = closed_writable_file();
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<void> c;
-    auto r = ctx.submit_sync_data_request(SyncDataOp{file}, c);
+    auto r = ctx.submit_sync_data(SyncDataOp{file});
     if (r.has_value())
         return false;
     if (r.error().code != IoError::Code::invalid_state)
         return false;
-    if (!c.idle())
-        return false;
-    return counts->sync_data_entries == 0 && counts->sync_all_entries == 0;
+    return counts->sync_data_entries == 0 && counts->sync_all_entries == 0 &&
+           ctx.outstanding() == 0;
 }
 
-bool submit_sync_all_request_rejects_closed_reference_before_backend() {
+bool submit_sync_all_rejection_leaves_no_request_binding() {
     File file = closed_writable_file();
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
     AsyncIoContext ctx(std::move(backend));
 
-    Completion<void> c;
-    auto r = ctx.submit_sync_all_request(SyncAllOp{file}, c);
+    auto r = ctx.submit_sync_all(SyncAllOp{file});
     if (r.has_value())
         return false;
     if (r.error().code != IoError::Code::invalid_state)
         return false;
-    if (!c.idle())
-        return false;
-    return counts->sync_data_entries == 0 && counts->sync_all_entries == 0;
+    return counts->sync_data_entries == 0 && counts->sync_all_entries == 0 &&
+           ctx.outstanding() == 0;
 }
 
 }
@@ -181,10 +164,10 @@ int main() {
          submit_sync_data_rejects_closed_reference_before_backend},
         {"submit_sync_all_rejects_closed_reference_before_backend",
          submit_sync_all_rejects_closed_reference_before_backend},
-        {"submit_sync_data_request_rejects_closed_reference_before_backend",
-         submit_sync_data_request_rejects_closed_reference_before_backend},
-        {"submit_sync_all_request_rejects_closed_reference_before_backend",
-         submit_sync_all_request_rejects_closed_reference_before_backend},
+        {"submit_sync_data_rejection_leaves_no_request_binding",
+         submit_sync_data_rejection_leaves_no_request_binding},
+        {"submit_sync_all_rejection_leaves_no_request_binding",
+         submit_sync_all_rejection_leaves_no_request_binding},
     };
 
     for (const NamedTest& t : tests) {

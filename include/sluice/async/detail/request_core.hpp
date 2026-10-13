@@ -157,6 +157,12 @@ struct CoreOccupancy {
     std::size_t observer_registrations = 0;
 };
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+enum class SubmitStage : std::uint8_t { reserve, prepare, commit };
+
+#endif
+
 class RequestCore {
   public:
     enum class SlotPhase : std::uint8_t { free, reserved, accepted, retired };
@@ -191,7 +197,6 @@ class RequestCore {
 
     PublicLookup lookup(RequestKey id) const noexcept;
     PublicCancel cancel(RequestKey id) noexcept;
-    BindingRelease release_public_binding(RequestKey id) noexcept;
     BindingRelease discard_public_result(RequestKey id) noexcept;
     PublicObservation observe_public_result(RequestKey id, IoOutcome* out,
                                             sluice::FileInfo* metadata_out) const noexcept;

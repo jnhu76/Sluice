@@ -1,7 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/batch.hpp>
-#include <sluice/async/completion.hpp>
-#include <sluice/async/op_helpers.hpp>
+#include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
@@ -10,12 +8,14 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include <poll.h>
+#include <sys/eventfd.h>
 #include <unistd.h>
 
 #include <csignal>
@@ -101,10 +101,81 @@ class ExternalLoopHost {
         owner_.reset();
     }
 
+    // The application-level handoff wake: a late submission's zero-op is
+    // published and signalled inside submit-read, so the host may consume that
+    // notification before the submitted handle is observable. The handoff fd
+    // is the application's own announcement that its state changed; the host
+    // monitors it alongside the context notification fd.
+    bool enable_handoff_notification() noexcept {
+        handoff_fd_ = ::eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+        return handoff_fd_ >= 0;
+    }
+
+    int handoff_fd() const noexcept { return handoff_fd_; }
+
+    enum class WaitSource { none, notification, handoff, both };
+
+    WaitSource wait_readable_or_handoff(std::chrono::milliseconds budget) {
+        const auto deadline = std::chrono::steady_clock::now() + budget;
+        for (;;) {
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0)
+                return WaitSource::none;
+            struct pollfd p[2];
+            p[0].fd = nfd_;
+            p[0].events = POLLIN;
+            p[0].revents = 0;
+            p[1].fd = handoff_fd_;
+            p[1].events = POLLIN;
+            p[1].revents = 0;
+            const int rc = ::poll(p, handoff_fd_ >= 0 ? 2 : 1,
+                                  static_cast<int>(remaining.count()));
+            if (rc < 0) {
+                if (errno == EINTR)
+                    continue;
+                return WaitSource::none;
+            }
+            if (rc == 0)
+                continue;
+            const bool io = (p[0].revents & POLLIN) != 0;
+            const bool handoff = handoff_fd_ >= 0 && (p[1].revents & POLLIN) != 0;
+            if (io && handoff)
+                return WaitSource::both;
+            if (io)
+                return WaitSource::notification;
+            if (handoff)
+                return WaitSource::handoff;
+        }
+    }
+
+    void drain_handoff_notification() noexcept {
+        if (handoff_fd_ < 0)
+            return;
+        std::uint64_t value = 0;
+        for (;;) {
+            errno = 0;
+            const ssize_t n = ::read(handoff_fd_, &value, sizeof(value));
+            if (n == static_cast<ssize_t>(sizeof(value)))
+                continue;
+            if (n < 0 && errno == EINTR)
+                continue;
+            return;
+        }
+    }
+
+    void close_handoff_notification() noexcept {
+        if (handoff_fd_ >= 0) {
+            ::close(handoff_fd_);
+            handoff_fd_ = -1;
+        }
+    }
+
   private:
     AsyncIoContext& ctx_;
     std::optional<ProgressOwner> owner_;
     int nfd_ = -1;
+    int handoff_fd_ = -1;
 };
 
 int temp_file_fd(const std::string& content) {
@@ -124,6 +195,14 @@ int temp_file_fd(const std::string& content) {
     return fd;
 }
 
+struct JoinThreadOnExit {
+    std::thread& t;
+    ~JoinThreadOnExit() {
+        if (t.joinable())
+            t.join();
+    }
+};
+
 bool fd_readable(int fd) {
     struct pollfd p;
     p.fd = fd;
@@ -135,17 +214,93 @@ bool fd_readable(int fd) {
 
 bool host_readable_sleep(AsyncIoContext& ctx, std::chrono::milliseconds budget);
 
-// Two cross-thread submission shapes observe carrier readiness before the
-// submitter hands the Request back; the adopted binding cannot express that
-// (its wake can be consumed before the handoff), so those sub-oracles keep the
-// compat cell.
-bool submit_zero_op_into(AsyncIoContext& ctx, Completion<std::size_t>& c) {
-    std::vector<std::byte> buffer(4, std::byte{0});
-    return ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
-                                  buffer.data(), 0, 0},
-                           c)
-        .has_value();
+// Deterministic control of the handoff boundary: the helper publishes the
+// submitted handle's identity and return status, then parks between the
+// submit-read return and the mutex store until the host releases it.
+struct HandoffGate {
+    RequestId submitted_id;
+    std::atomic<bool> submit_ok{false};
+    std::atomic<bool> submit_returned{false};
+    std::atomic<bool> allow_store{false};
+
+    void signal_submitted(const RequestId& id, bool ok) noexcept {
+        submitted_id = id;
+        submit_ok.store(ok, std::memory_order_release);
+        submit_returned.store(true, std::memory_order_release);
+        submit_returned.notify_all();
+    }
+
+    void await_submitted() noexcept {
+        submit_returned.wait(false, std::memory_order_acquire);
+    }
+
+    void release_store() noexcept {
+        allow_store.store(true, std::memory_order_release);
+        allow_store.notify_all();
+    }
+
+    void await_store_release() noexcept {
+        allow_store.wait(false, std::memory_order_acquire);
+    }
+};
+
+// Consumes the write result instead of discarding it: glibc marks write(2)
+// warn_unused_result, and a lost handoff announcement would strand the host.
+bool notify_handoff_fd(int fd) noexcept {
+    const std::uint64_t one = 1;
+    for (;;) {
+        errno = 0;
+        const ssize_t n = ::write(fd, &one, sizeof(one));
+        if (n == static_cast<ssize_t>(sizeof(one)))
+            return true;
+        if (n < 0 && errno == EINTR)
+            continue;
+        return false;
+    }
 }
+
+// Two cross-thread submission shapes submit from a helper thread and observe
+// the handoff afterwards; the transferred binding is published and shared
+// under a mutex, because the Request itself carries no internal synchronization.
+struct SharedRequest {
+    std::optional<Request<std::size_t>> request;
+    std::mutex mtx;
+    // When set, the helper writes one event after the handle store: the
+    // application-owned announcement of the state change. The zero-op's
+    // library notification was generated inside submit-read, before the
+    // store, and may already have been consumed by the host.
+    int handoff_fd = -1;
+
+    bool submit_zero_op(AsyncIoContext& ctx) { return submit_zero_op(ctx, nullptr); }
+
+    bool submit_zero_op(AsyncIoContext& ctx, HandoffGate* gate) {
+        std::vector<std::byte> buffer(4, std::byte{0});
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                                   buffer.data(), 0, 0});
+        if (!submitted.has_value()) {
+            if (gate != nullptr)
+                gate->signal_submitted(RequestId{}, false);
+            return false;
+        }
+        if (gate != nullptr) {
+            gate->signal_submitted(submitted.value().id(), true);
+            gate->await_store_release();
+        }
+        {
+            std::lock_guard<std::mutex> lk(mtx);
+            request = std::move(submitted.value());
+        }
+        if (handoff_fd >= 0)
+            return notify_handoff_fd(handoff_fd);
+        return true;
+    }
+
+    bool ready() {
+        std::lock_guard<std::mutex> lk(mtx);
+        return request.has_value() && request->ready();
+    }
+};
 
 Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -162,7 +317,8 @@ Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
 // before it is released. Driving goes through the test's own progress-owner
 // path (a pass from a foreign thread is rejected) and is bounded: an
 // unpublishable binding reaches discard() as a contract violation instead of
-// hanging the test.
+// hanging the test. Declared after everything it tracks, so it is destroyed
+// first and never dereferences expired request storage.
 template <class Drive> struct RequestPublicationDrain {
     explicit RequestPublicationDrain(Drive drive) : drive_(drive) {}
 
@@ -324,7 +480,13 @@ bool external_poll_loop_threadpool_w03() {
         return false;
     w = std::move(w_submitted).value();
 
-    Completion<std::size_t> late;
+    SharedRequest late;
+    // The late handoff carries its own application-owned wake: the zero-op's
+    // library notification may be consumed before the handle is observable,
+    // so the host monitors the handoff fd alongside the notification fd.
+    if (!host.enable_handoff_notification())
+        return false;
+    late.handoff_fd = host.handoff_fd();
     std::thread helper([&] {
         // Submit from application-observed state, not from the notification
         // fd: the host and this helper must not compete for the shared
@@ -334,7 +496,7 @@ bool external_poll_loop_threadpool_w03() {
                 break;
             std::this_thread::yield();
         }
-        (void)submit_zero_op_into(ctx, late);
+        (void)late.submit_zero_op(ctx);
     });
     struct JoinOnExit {
         std::thread& t;
@@ -348,8 +510,10 @@ bool external_poll_loop_threadpool_w03() {
     for (;;) {
         if (r2.ready() && r3.ready() && w.ready() && late.ready())
             break;
-        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+        if (host.wait_readable_or_handoff(std::chrono::milliseconds{5000}) ==
+            ExternalLoopHost::WaitSource::none)
             return false;
+        host.drain_handoff_notification();
         const std::size_t delivered = host.acknowledge_and_drive();
         if (delivered == 0) {
             ++settled_without_wake;
@@ -357,6 +521,8 @@ bool external_poll_loop_threadpool_w03() {
                 return false;
         }
     }
+    helper.join();
+    host.close_handoff_notification();
     for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
     }
     if (host.acknowledge_and_drive() != 0)
@@ -377,7 +543,10 @@ bool external_poll_loop_threadpool_w03() {
     r2.discard();
     r3.discard();
     w.discard();
-    late.reset();
+    {
+        std::lock_guard<std::mutex> lk(late.mtx);
+        late.request.reset();
+    }
     // Shutdown order: all accepted work settled, only then does the host
     // retire its registration and release the retained state. A retired
     // registration is gone (a second detach has nothing to retire), but the
@@ -390,6 +559,244 @@ bool external_poll_loop_threadpool_w03() {
     const int relent = ctx.progress_notification_fd();
     ctx.detach_progress_host();
     return relent == borrowed;
+}
+
+// The W-03 late-submission handoff ordering, forced deterministically. The
+// zero-op's RequestCore publication and its progress notification both happen
+// inside submit-read, while the application handle becomes observable only
+// after submit-read returns. A host that consumed the notification before the
+// handoff is owed no further library wake: phase 1 proves that interleaving
+// with a paused helper, phase 2 proves an application-owned handoff wake
+// restores the loop, and phase 3 proves the corrected oracle detects a
+// missing handoff notification instead of hanging.
+bool late_handoff_wake_is_application_owned() {
+    {
+        auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
+        AsyncIoContext ctx(std::move(backend));
+        ExternalLoopHost host(ctx);
+        if (!host.pinned())
+            return false;
+
+        Request<std::size_t> warm = submit_zero_op(ctx);
+        RequestPublicationDrain warm_drain{
+            [&host] { (void)host.acknowledge_and_drive(); }};
+        warm_drain.track(warm);
+        if (!warm.valid())
+            return false;
+        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+            return false;
+        if (host.acknowledge_and_drive() != 1)
+            return false;
+        warm.discard();
+        if (fd_readable(host.nfd()))
+            return false;
+
+        const auto token_before = ctx.progress_token_for_test();
+        SharedRequest late;
+        HandoffGate gate;
+        std::thread helper([&] { (void)late.submit_zero_op(ctx, &gate); });
+        JoinThreadOnExit join_helper{helper};
+        gate.await_submitted();
+        if (!gate.submit_ok.load(std::memory_order_acquire))
+            return false;
+
+        // At the pause: accepted, published in RequestCore, signalled, handle
+        // still private to the paused helper.
+        const bool core_published =
+            ctx.lookup(gate.submitted_id) == RequestReadiness::ready;
+        const bool signalled = fd_readable(host.nfd());
+        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+            return false;
+        const std::size_t delivered = host.acknowledge_and_drive();
+        const bool visible_before_release = late.ready();
+        const bool quiescent_after_drive = !fd_readable(host.nfd());
+
+        // A host parked on the notification fd alone stays parked for the full
+        // budget: the helper is deterministically paused, so no library wake
+        // can arrive. This is the W-03 stall, forced.
+        struct pollfd parked;
+        parked.fd = host.nfd();
+        parked.events = POLLIN;
+        parked.revents = 0;
+        const bool library_park_expired = ::poll(&parked, 1, 200) == 0;
+
+        gate.release_store();
+        helper.join();
+        const bool visible_after_handoff = late.ready();
+        const bool handoff_generates_no_signal = ::poll(&parked, 1, 200) == 0;
+
+        const auto token_after = ctx.progress_token_for_test();
+        const unsigned long long epoch_delta =
+            token_after.progress - token_before.progress;
+        std::printf(
+            "w03-handoff phase1: core_published=%d signalled=%d delivered=%zu "
+            "visible_before_release=%d quiescent_after_drive=%d "
+            "library_park_expired=%d visible_after_handoff=%d "
+            "handoff_generates_no_signal=%d epoch_delta=%llu\n",
+            core_published ? 1 : 0, signalled ? 1 : 0, delivered,
+            visible_before_release ? 1 : 0, quiescent_after_drive ? 1 : 0,
+            library_park_expired ? 1 : 0, visible_after_handoff ? 1 : 0,
+            handoff_generates_no_signal ? 1 : 0, epoch_delta);
+
+        bool result_ok = false;
+        for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+        }
+        {
+            std::lock_guard<std::mutex> lk(late.mtx);
+            if (late.request.has_value()) {
+                const auto consumed = late.request->take_result();
+                result_ok = consumed.readiness == RequestReadiness::ready &&
+                            consumed.result.has_value() && consumed.result.value() == 0;
+                late.request.reset();
+            }
+        }
+        host.stop_and_detach();
+        if (!core_published || !signalled || delivered != 1 || visible_before_release ||
+            !quiescent_after_drive || !library_park_expired || !visible_after_handoff ||
+            !handoff_generates_no_signal || epoch_delta != 1 || !result_ok)
+            return false;
+    }
+
+    {
+        auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
+        AsyncIoContext ctx(std::move(backend));
+        ExternalLoopHost host(ctx);
+        if (!host.pinned())
+            return false;
+        if (!host.enable_handoff_notification())
+            return false;
+
+        Request<std::size_t> warm = submit_zero_op(ctx);
+        RequestPublicationDrain warm_drain{
+            [&host] { (void)host.acknowledge_and_drive(); }};
+        warm_drain.track(warm);
+        if (!warm.valid())
+            return false;
+        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+            return false;
+        if (host.acknowledge_and_drive() != 1)
+            return false;
+        warm.discard();
+        if (fd_readable(host.nfd()))
+            return false;
+
+        SharedRequest late;
+        late.handoff_fd = host.handoff_fd();
+        HandoffGate gate;
+        std::thread helper([&] { (void)late.submit_zero_op(ctx, &gate); });
+        JoinThreadOnExit join_helper{helper};
+        gate.await_submitted();
+        if (!gate.submit_ok.load(std::memory_order_acquire))
+            return false;
+
+        // The host consumes the library wake while the handle is still
+        // unobservable, exactly as in phase 1.
+        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+            return false;
+        if (host.acknowledge_and_drive() != 1)
+            return false;
+        if (late.ready())
+            return false;
+        if (fd_readable(host.nfd()))
+            return false;
+
+        gate.release_store();
+        // The parked host is released by the application handoff wake alone:
+        // the notification fd stays quiescent for the whole budget.
+        const ExternalLoopHost::WaitSource source =
+            host.wait_readable_or_handoff(std::chrono::milliseconds{2000});
+        helper.join();
+        host.drain_handoff_notification();
+        const bool completed = source == ExternalLoopHost::WaitSource::handoff &&
+                               late.ready() && !fd_readable(host.nfd());
+        std::printf("w03-handoff phase2: wake_source=%d completed=%d\n",
+                    static_cast<int>(source), completed ? 1 : 0);
+
+        for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+        }
+        bool result_ok = false;
+        {
+            std::lock_guard<std::mutex> lk(late.mtx);
+            if (late.request.has_value()) {
+                const auto consumed = late.request->take_result();
+                result_ok = consumed.readiness == RequestReadiness::ready &&
+                            consumed.result.has_value() && consumed.result.value() == 0;
+                late.request.reset();
+            }
+        }
+        host.close_handoff_notification();
+        host.stop_and_detach();
+        if (!completed || !result_ok)
+            return false;
+    }
+
+    {
+        auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
+        AsyncIoContext ctx(std::move(backend));
+        ExternalLoopHost host(ctx);
+        if (!host.pinned())
+            return false;
+        if (!host.enable_handoff_notification())
+            return false;
+
+        Request<std::size_t> warm = submit_zero_op(ctx);
+        RequestPublicationDrain warm_drain{
+            [&host] { (void)host.acknowledge_and_drive(); }};
+        warm_drain.track(warm);
+        if (!warm.valid())
+            return false;
+        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+            return false;
+        if (host.acknowledge_and_drive() != 1)
+            return false;
+        warm.discard();
+        if (fd_readable(host.nfd()))
+            return false;
+
+        // The helper completes the handoff without announcing it: the
+        // pre-fix application protocol. The corrected oracle must detect the
+        // missing edge as a bounded wait expiry, never as a hang.
+        SharedRequest late;
+        HandoffGate gate;
+        std::thread helper([&] { (void)late.submit_zero_op(ctx, &gate); });
+        JoinThreadOnExit join_helper{helper};
+        gate.await_submitted();
+        if (!gate.submit_ok.load(std::memory_order_acquire))
+            return false;
+        if (!host.wait_readable(std::chrono::milliseconds{5000}))
+            return false;
+        if (host.acknowledge_and_drive() != 1)
+            return false;
+        if (fd_readable(host.nfd()))
+            return false;
+        gate.release_store();
+        helper.join();
+
+        const ExternalLoopHost::WaitSource source =
+            host.wait_readable_or_handoff(std::chrono::milliseconds{300});
+        const bool detected = source == ExternalLoopHost::WaitSource::none;
+        const bool stranded_state =
+            detected && late.ready() && !fd_readable(host.nfd()) &&
+            !fd_readable(host.handoff_fd());
+        std::printf("w03-handoff phase3: wake_source=%d handle_ready=%d detected=%d\n",
+                    static_cast<int>(source), late.ready() ? 1 : 0, detected ? 1 : 0);
+
+        for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+        }
+        bool result_ok = false;
+        {
+            std::lock_guard<std::mutex> lk(late.mtx);
+            if (late.request.has_value()) {
+                const auto consumed = late.request->take_result();
+                result_ok = consumed.readiness == RequestReadiness::ready &&
+                            consumed.result.has_value() && consumed.result.value() == 0;
+                late.request.reset();
+            }
+        }
+        host.close_handoff_notification();
+        host.stop_and_detach();
+        return stranded_state && result_ok;
+    }
 }
 
 // One readable event may stand for several signals: five coalesced zero-op
@@ -521,8 +928,10 @@ bool saturated_notification_preserves_wake() {
 }
 
 // R14: the host acknowledges stale readiness while a new ThreadPool progress
-// signal races it; the obligation is either serviced by the post-ack pass or
-// re-asserts readiness — it can never strand.
+// signal races it. The acknowledgement may consume the incoming wake, so the
+// obligation must be carried by the pass that follows the acknowledgement:
+// one acknowledged drive settles the already-published zero-op and the fd goes
+// quiescent without a second foreign signal.
 bool host_acknowledgement_racing_new_signal_never_strands() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
     AsyncIoContext ctx(std::move(backend));
@@ -544,11 +953,13 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
         return false;
 
     std::atomic<bool> acked{false};
-    Completion<std::size_t> racing;
+    std::atomic<bool> submitted{false};
+    SharedRequest racing;
     std::thread signaler([&] {
         while (!acked.load(std::memory_order_acquire))
             std::this_thread::yield();
-        (void)submit_zero_op_into(ctx, racing);
+        if (racing.submit_zero_op(ctx))
+            submitted.store(true, std::memory_order_release);
     });
 
     // Acknowledge stale readiness (nothing pending here, so this is the
@@ -556,39 +967,64 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     acked.store(true, std::memory_order_release);
     ctx.acknowledge_progress_notification();
 
-    int wakes = 0;
-    bool settled = false;
-    while (wakes < 4) {
-        if (!fd_readable(host.nfd())) {
-            if (racing.ready()) {
-                settled = true;
-                break;
-            }
-            struct pollfd p;
-            p.fd = host.nfd();
-            p.events = POLLIN;
-            p.revents = 0;
-            const int rc = ::poll(&p, 1, 2000);
-            if (rc <= 0)
-                break;
-        }
-        ++wakes;
-        if (host.acknowledge_and_drive() > 0 && racing.ready()) {
-            settled = true;
-            break;
-        }
-    }
+    // The obligation, not a wake, is the fact under test: once the submitting
+    // thread has published the zero-op the host must settle it through its own
+    // acknowledged drive, however the two-wake race fell.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (!submitted.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
     signaler.join();
+    if (!submitted.load(std::memory_order_acquire)) {
+        // A submitter that never ran is a scheduling failure of this run, not a
+        // protocol outcome; leave no live binding behind so the run reports a
+        // failure instead of aborting in the context destructor.
+        for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
+        }
+        {
+            std::lock_guard<std::mutex> lk(racing.mtx);
+            if (racing.request.has_value())
+                racing.request->discard();
+        }
+        host.stop_and_detach();
+        return false;
+    }
 
-    // Every exit path must leave no delayed zero-op obligation behind: the
-    // drain-wins interleaving can observe the completion before any pass ran.
+    const std::size_t delivered = host.acknowledge_and_drive();
+    bool ok = delivered >= 1 && racing.ready() && !fd_readable(host.nfd());
+    if (ok) {
+        std::lock_guard<std::mutex> lk(racing.mtx);
+        const auto consumed = racing.request->take_result();
+        ok = consumed.readiness == RequestReadiness::ready && consumed.result.has_value() &&
+             consumed.result.value() == 0;
+    }
+
+    // The acknowledgement above may have consumed the racing wake. A later
+    // submission must still wake a parked host: with the fd quiescent, a second
+    // host parked in poll(2) can only be released by the next signal, so a
+    // readiness drained by an acknowledgement may not swallow the one after it.
     for (int i = 0; i < 8 && host.acknowledge_and_drive() > 0; ++i) {
     }
-
-    const bool ok = settled && racing.ready() && wakes <= 2;
-    racing.reset();
+    const bool quiescent_before_signal = !fd_readable(host.nfd());
+    std::atomic<int> parked_rc{-1};
+    std::thread parked([&] {
+        struct pollfd p;
+        p.fd = host.nfd();
+        p.events = POLLIN;
+        p.revents = 0;
+        parked_rc.store(::poll(&p, 1, 5000), std::memory_order_release);
+    });
+    Request<std::size_t> follow = submit_zero_op(ctx);
+    parked.join();
+    const bool woken = parked_rc.load(std::memory_order_acquire) == 1;
+    bool follow_ok = quiescent_before_signal && woken && follow.valid();
+    if (follow_ok) {
+        (void)host.acknowledge_and_drive();
+        follow_ok = follow.ready();
+        follow.discard();
+    }
     host.stop_and_detach();
-    return ok;
+    return ok && follow_ok;
 }
 
 // C2-D stop/settle/detach: the supported host shutdown order is stop
@@ -945,11 +1381,11 @@ bool injected_health_failure_is_sticky_and_distinguishable() {
     return true;
 }
 
-// A batch wait stops on the sticky health verdict instead of spinning past
+// A bounded wait stops on the sticky health verdict instead of spinning past
 // it: the failure surfaces through the error channel, never as a
-// zero-completion report, and the internally claimed owner is released so
-// the caller's own passes can retire the accepted work.
-bool batch_await_stops_on_health_failure() {
+// zero-completion report, and the wait's claimed owner is released so the
+// caller's own passes can retire the accepted work.
+bool wait_one_stops_on_health_failure_and_releases_owner() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx(std::move(backend));
@@ -959,29 +1395,40 @@ bool batch_await_stops_on_health_failure() {
 
     const int fd = temp_file_fd(std::string(64, 'h'));
     std::vector<std::byte> held_buf(32, std::byte{0});
-    std::vector<std::byte> batch_buf(32, std::byte{0});
+    std::vector<std::byte> waited_buf(32, std::byte{0});
     auto held_submitted = ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only),
                                                  held_buf.data(), held_buf.size(), 0});
     if (!held_submitted.has_value())
         return false;
     Request<std::size_t> held = std::move(held_submitted).value();
+    Request<std::size_t> waited;
     RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
     drain.track(held);
+    drain.track(waited);
     WorkerGateReleaseOnExit gate_release{raw, &gate};
     while (!gate.paused.load(std::memory_order_acquire))
         std::this_thread::yield();
 
-    Batch batch;
-    BatchOp op;
-    op.kind = BatchOp::Kind::read;
-    op.read = ReadOp{NativeFileRef(fd, FileAccess::read_only), batch_buf.data(), batch_buf.size(),
-                     32};
-    batch.add(op);
+    auto waited_submitted = ctx.submit_read(ReadOp{NativeFileRef(fd, FileAccess::read_only),
+                                                   waited_buf.data(), waited_buf.size(), 32});
+    if (!waited_submitted.has_value())
+        return false;
+    waited = std::move(waited_submitted).value();
 
     ctx.set_wait_health_failed_for_test();
-    const auto stopped = batch.await_one(ctx);
+    sluice::Result<AsyncIoContext::ProgressWaitOutcome> stopped =
+        sluice::make_unexpected<AsyncIoContext::ProgressWaitOutcome>(
+            sluice::IoError{sluice::IoError::Code::invalid_state});
+    {
+        auto claimed = ctx.claim_progress_owner();
+        if (claimed.has_value()) {
+            std::optional<ProgressOwner> owner = std::move(claimed).value();
+            stopped = ctx.wait_one();
+        }
+    }
     const bool surfaced_as_error =
-        !stopped.has_value() && stopped.error().code == sluice::IoError::Code::backend_error;
+        stopped.has_value() &&
+        stopped.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::health_failure;
 
     raw->set_worker_claimed_pause_gate(nullptr);
     gate.resume.store(true, std::memory_order_release);
@@ -990,19 +1437,15 @@ bool batch_await_stops_on_health_failure() {
     bool retired = false;
     for (int i = 0; i < 2000 && !retired; ++i) {
         (void)ctx.poll();
-        retired = held.ready() && ctx.outstanding() == 0;
+        retired = held.ready() && waited.ready() && ctx.outstanding() == 0;
         if (!retired)
             std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
-    // Harvesting slot readiness is the batch protocol's own step: a call with
-    // nothing outstanding claims nothing and only collects completed slots.
-    const auto harvested = batch.await_one(ctx);
-    while (batch.next().has_value()) {
-    }
+    const auto observation = waited.take_result();
 
     held.discard();
-    return surfaced_as_error && retired && harvested.has_value() && harvested.value() == 1 &&
-           batch.pending_count() == 0;
+    return surfaced_as_error && retired && observation.readiness == RequestReadiness::ready &&
+           observation.result.has_value() && observation.result.value() == 32;
 }
 
 // Driving on an unpinned context is a single domain: a second concurrent
@@ -1157,9 +1600,9 @@ bool first_drive_attaches_a_fixed_owner() {
     return reattached.load();
 }
 
-// Zero-work helpers make no driving demand: an empty read_all/write_all
-// succeeds even while another thread holds the owner claim.
-bool zero_work_helpers_skip_owner_acquisition() {
+// Zero-length operations make no driving demand: they settle at submission
+// and consume without a progress pass, even while the owner claim is held.
+bool zero_length_requests_skip_driving() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     AsyncIoContext ctx(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
@@ -1167,10 +1610,17 @@ bool zero_work_helpers_skip_owner_acquisition() {
         return false;
     std::optional<ProgressOwner> owner = std::move(claimed).value();
 
-    std::vector<std::byte> none;
-    const auto rd = read_all(ctx, NativeFileRef(0, FileAccess::read_only), none, 0);
-    const auto wr = write_all(ctx, NativeFileRef(1, FileAccess::write_only), none, 0);
-    const bool ok = rd.has_value() && rd.value() == 0 && wr.has_value() && wr.value() == 0;
+    auto rd_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(0, FileAccess::read_only), nullptr, 0, 0});
+    auto wr_submitted =
+        ctx.submit_write(WriteOp{NativeFileRef(1, FileAccess::write_only), nullptr, 0, 0});
+    const auto rd =
+        rd_submitted.has_value() ? rd_submitted.value().take_result() : RequestObservation<std::size_t>{};
+    const auto wr =
+        wr_submitted.has_value() ? wr_submitted.value().take_result() : RequestObservation<std::size_t>{};
+    const bool ok = rd.readiness == RequestReadiness::ready && rd.result.has_value() &&
+                    rd.result.value() == 0 && wr.readiness == RequestReadiness::ready &&
+                    wr.result.has_value() && wr.result.value() == 0;
     owner.reset();
     return ok;
 }
@@ -1185,6 +1635,7 @@ int main() {
     };
     const NamedTest tests[] = {
         {"external_poll_loop_threadpool_w03", external_poll_loop_threadpool_w03},
+        {"late_handoff_wake_is_application_owned", late_handoff_wake_is_application_owned},
         {"coalesced_signals_delivered_through_one_wake",
          coalesced_signals_delivered_through_one_wake},
         {"spurious_wake_is_harmless_and_completions_survive",
@@ -1208,12 +1659,13 @@ int main() {
          acknowledging_observed_control_keeps_a_later_control},
         {"injected_health_failure_is_sticky_and_distinguishable",
          injected_health_failure_is_sticky_and_distinguishable},
-        {"batch_await_stops_on_health_failure", batch_await_stops_on_health_failure},
+        {"wait_one_stops_on_health_failure_and_releases_owner",
+         wait_one_stops_on_health_failure_and_releases_owner},
         {"competing_concurrent_drives_cannot_both_succeed",
          competing_concurrent_drives_cannot_both_succeed},
         {"nested_drive_from_delivery_hook_is_rejected",
          nested_drive_from_delivery_hook_is_rejected},
-        {"zero_work_helpers_skip_owner_acquisition", zero_work_helpers_skip_owner_acquisition},
+        {"zero_length_requests_skip_driving", zero_length_requests_skip_driving},
     };
 
     std::size_t passed = 0;

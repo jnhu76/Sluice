@@ -134,6 +134,11 @@ template <class T> class Request {
 
     Result<CancelDisposition> cancel();
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    detail::RequestKey key_for_test() const noexcept { return key_; }
+#endif
+
   private:
     friend class AsyncIoContext;
 

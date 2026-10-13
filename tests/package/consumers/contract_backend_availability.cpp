@@ -28,11 +28,13 @@ int g_failures = 0;
 int main() {
     using namespace sluice::async;
 
-    // Named ThreadPool construction: the required request profile.
+    // Named ThreadPool construction: the required request profile. The
+    // identity capability probe is retired with the caller-owned Completion
+    // authority: every admitted request now carries one identity by
+    // construction, so availability is observed through the profile itself.
     {
         auto backend = std::make_unique<ThreadPoolBackend>(
             ThreadPoolConfig{.request_capacity = 4, .worker_count = 1});
-        CHECK(backend->supports_request_identity());
         CHECK(backend->signals_physical_progress());
         CHECK(backend->slot_capacity() == 4);
     }

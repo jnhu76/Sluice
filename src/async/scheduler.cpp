@@ -89,7 +89,7 @@ Scheduler::~Scheduler() {
         LockGuard rlk(wait_registry_mtx_);
         assert(wait_record_live_count_ == 0 &&
                "~Scheduler: wait_record_live_count_ != 0 (a registered "
-               "Completion waiter was neither delivered nor cancelled — "
+               "request waiter was neither delivered nor cancelled — "
                "abandoned wake obligation)");
         if (wait_record_live_count_ != 0) {
             detail::scheduler_wait_registry_nonempty_fail_fast();
@@ -312,7 +312,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
         MwState state;
         {
             LockGuard lk(global_mtx_);
-            (void)drain_routed_completion_waits_locked();
+            (void)drain_routed_request_waits_locked();
             (void)wake_ready_flags_locked();
             (void)pump_deadlines_locked();
             state = classify_locked(run_workers, ws);
@@ -368,7 +368,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         continue;
                     }
 
-                    (void)drain_routed_completion_waits_locked();
+                    (void)drain_routed_request_waits_locked();
                     (void)wake_ready_flags_locked();
                     (void)pump_deadlines_locked();
                     MwState s2 = classify_locked(run_workers, ws);
@@ -419,7 +419,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                             LockGuard lk(global_mtx_);
                             admission_ = AdmissionState::none;
                             admission_owner_ = static_cast<unsigned>(-1);
-                            (void)drain_routed_completion_waits_locked();
+                            (void)drain_routed_request_waits_locked();
                             (void)wake_ready_flags_locked();
                             (void)pump_deadlines_locked();
                         }
@@ -481,7 +481,7 @@ void Scheduler::worker_loop(WorkerState* ws, const WorkerSnapshot& run_workers) 
                         LockGuard lk(global_mtx_);
                         admission_ = AdmissionState::none;
                         admission_owner_ = static_cast<unsigned>(-1);
-                        (void)drain_routed_completion_waits_locked();
+                        (void)drain_routed_request_waits_locked();
                         (void)wake_ready_flags_locked();
                         (void)pump_deadlines_locked();
                     }
@@ -638,7 +638,7 @@ void Scheduler::route_runnable(Fiber* f, WorkerState* owner) {
     }
 }
 
-bool Scheduler::drain_routed_completion_waits_locked() {
+bool Scheduler::drain_routed_request_waits_locked() {
     // The pass needs the driving authority: the parked elected driver holds
     // it and its own passes reap what this would have, so skipping the pass
     // cannot strand work.
@@ -665,7 +665,6 @@ bool Scheduler::drain_routed_completion_waits_locked() {
             r->state = WaitRecordState::free;
             r->fiber = nullptr;
             r->owner = nullptr;
-            r->completion = nullptr;
             r->request_key = {};
             r->next_free = wait_record_free_head_;
             wait_record_free_head_ = r;

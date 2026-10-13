@@ -235,84 +235,6 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
 
 }
 
-Result<void> AsyncIoContext::submit_read(ReadOp op, Completion<std::size_t>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_read(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<void>(r.error());
-    return {};
-}
-Result<void> AsyncIoContext::submit_write(WriteOp op, Completion<std::size_t>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_write(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<void>(r.error());
-    return {};
-}
-Result<void> AsyncIoContext::submit_sync_data(SyncDataOp op, Completion<void>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_sync_data(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<void>(r.error());
-    return {};
-}
-Result<void> AsyncIoContext::submit_sync_all(SyncAllOp op, Completion<void>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_sync_all(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<void>(r.error());
-    return {};
-}
-Result<void> AsyncIoContext::submit_file_info(FileInfoOp op, Completion<FileInfo>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_file_info(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<void>(r.error());
-    return {};
-}
-Result<void> AsyncIoContext::submit_size(SizeOp op, Completion<FileSize>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    auto r = backend_->submit_size(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<void>(r.error());
-    return {};
-}
 
 Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
     if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
@@ -322,7 +244,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_)
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_read(op, nullptr);
+    auto r = backend_->submit_read(op);
     tally_submit(stats_, r);
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
@@ -338,7 +260,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_)
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_write(op, nullptr);
+    auto r = backend_->submit_write(op);
     tally_submit(stats_, r);
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
@@ -354,7 +276,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_)
         return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_sync_data(op, nullptr);
+    auto r = backend_->submit_sync_data(op);
     tally_submit(stats_, r);
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
@@ -370,7 +292,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_)
         return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_sync_all(op, nullptr);
+    auto r = backend_->submit_sync_all(op);
     tally_submit(stats_, r);
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
@@ -386,7 +308,7 @@ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_)
         return make_unexpected<Request<FileInfo>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_file_info(op, nullptr);
+    auto r = backend_->submit_file_info(op);
     tally_submit(stats_, r);
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
@@ -402,7 +324,7 @@ Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!backend_)
         return make_unexpected<Request<FileSize>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_size(op, nullptr);
+    auto r = backend_->submit_size(op);
     tally_submit(stats_, r);
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
@@ -410,97 +332,6 @@ Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
     return Request<FileSize>{core_.get(), backend_.get(), r.value()};
 }
 
-Result<RequestHandle> AsyncIoContext::submit_read_request(ReadOp op, Completion<std::size_t>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
-        rejection.has_value()) {
-        return make_unexpected<RequestHandle>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_->supports_request_identity())
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_read(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<RequestHandle>(r.error());
-    return backend_->identity_of(c);
-}
-Result<RequestHandle> AsyncIoContext::submit_write_request(WriteOp op, Completion<std::size_t>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
-        rejection.has_value()) {
-        return make_unexpected<RequestHandle>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_->supports_request_identity())
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_write(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<RequestHandle>(r.error());
-    return backend_->identity_of(c);
-}
-Result<RequestHandle> AsyncIoContext::submit_sync_data_request(SyncDataOp op, Completion<void>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
-        rejection.has_value()) {
-        return make_unexpected<RequestHandle>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_->supports_request_identity())
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_sync_data(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<RequestHandle>(r.error());
-    return backend_->identity_of(c);
-}
-Result<RequestHandle> AsyncIoContext::submit_sync_all_request(SyncAllOp op, Completion<void>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
-        rejection.has_value()) {
-        return make_unexpected<RequestHandle>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_->supports_request_identity())
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_sync_all(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<RequestHandle>(r.error());
-    return backend_->identity_of(c);
-}
-Result<RequestHandle> AsyncIoContext::submit_file_info_request(FileInfoOp op,
-                                                               Completion<FileInfo>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
-        rejection.has_value()) {
-        return make_unexpected<RequestHandle>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_->supports_request_identity())
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_file_info(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<RequestHandle>(r.error());
-    return backend_->identity_of(c);
-}
-Result<RequestHandle> AsyncIoContext::submit_size_request(SizeOp op, Completion<FileSize>& c) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
-        rejection.has_value()) {
-        return make_unexpected<RequestHandle>(*rejection);
-    }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_->supports_request_identity())
-        return make_unexpected<RequestHandle>(IoError{IoError::Code::not_supported});
-    auto r = backend_->submit_size(op, &c);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
-    if (!r.has_value())
-        return make_unexpected<RequestHandle>(r.error());
-    return backend_->identity_of(c);
-}
 
 Result<CancelDisposition> AsyncIoContext::cancel(const RequestId& id) {
     if (!id.valid()) {
@@ -550,10 +381,6 @@ RequestReadiness AsyncIoContext::lookup(const RequestId& id) const {
     return RequestReadiness::empty;
 }
 
-Result<RequestHandleState> AsyncIoContext::request_state(const RequestHandle& h) const {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    return backend_->request_handle_state(h);
-}
 
 Result<std::size_t> AsyncIoContext::poll() {
     auto pass = poll_progress();
@@ -947,14 +774,6 @@ void AsyncIoContext::detach_progress_host() noexcept {
     notification_interest_live_ = false;
 }
 
-void AsyncIoContext::cancel(Completion<std::size_t>& c) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    backend_->cancel(c);
-}
-void AsyncIoContext::cancel(Completion<void>& c) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    backend_->cancel(c);
-}
 
 void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {
     std::lock_guard<std::mutex> lk(access_mtx_);
@@ -962,68 +781,44 @@ void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {
         backend_->attach_ready_sink(sink);
 }
 
-AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<std::size_t>& c) {
+AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(const RequestId& id) {
+    if (!id.valid()) {
+        return {};
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_) {
+    if (!core_) {
         return {};
     }
-    const RequestHandle identity = backend_->identity_of(c);
-    if (!identity.valid()) {
-        return {};
-    }
-    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
-                                 detail::SlotIndex{identity.slot_},
-                                 detail::Generation{identity.generation_}};
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
     return {core_->register_observer(key), key};
 }
 
-AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(Completion<void>& c) {
+AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const RequestId& id) {
+    if (!id.valid()) {
+        return {};
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_) {
+    if (!core_) {
         return {};
     }
-    const RequestHandle identity = backend_->identity_of(c);
-    if (!identity.valid()) {
-        return {};
-    }
-    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
-                                 detail::SlotIndex{identity.slot_},
-                                 detail::Generation{identity.generation_}};
-    return {core_->register_observer(key), key};
-}
-
-AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<std::size_t>& c) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_) {
-        return {};
-    }
-    const RequestHandle identity = backend_->identity_of(c);
-    if (!identity.valid()) {
-        return {};
-    }
-    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
-                                 detail::SlotIndex{identity.slot_},
-                                 detail::Generation{identity.generation_}};
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
     return {core_->cancel_observer(key), key};
 }
 
-AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(Completion<void>& c) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_) {
-        return {};
-    }
-    const RequestHandle identity = backend_->identity_of(c);
-    if (!identity.valid()) {
-        return {};
-    }
-    const detail::RequestKey key{detail::ContextIdentity{identity.context_},
-                                 detail::SlotIndex{identity.slot_},
-                                 detail::Generation{identity.generation_}};
-    return {core_->cancel_observer(key), key};
-}
+
+
+
+
 
 bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
     std::lock_guard<std::mutex> lk(access_mtx_);
+    if (!core_) {
+        return false;
+    }
     return core_->retire_observer_delivery(key) == detail::ObserverDeliveryRetirement::retired;
 }
 
