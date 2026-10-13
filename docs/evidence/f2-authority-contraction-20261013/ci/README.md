@@ -16,6 +16,8 @@ cannot stand in.
 | `69686d2f4ab6` | failure | the W-03 stall again at CI scale: `threadpool_external_loop_test` exit -1 after 5.16 s, aborting in the context destructor (see ../../w03-root-cause.md) |
 | `b63a532ea6eb` | failure | build-only portability error in the corrective test itself: Ubuntu glibc marks write(2) `warn_unused_result` and the discarded return failed `-Werror`; fixed by `25734314` |
 | `25734314f704` | success | corrected implementation head (W-03 closure) |
+| `093332ba1b40` | success | final implementation head (corrective round; gates-bound) |
+| `a03551feecbc` | success | final pushed head (documentation-only after the implementation head) |
 
 The workflow is `.github/workflows/ci.yml`: a C++ comment-authority guard, the F1
 frozen-provenance verifier self-tests, and a Linux build-plus-`xmake test` matrix over
