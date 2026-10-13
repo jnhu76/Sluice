@@ -8,7 +8,7 @@ head by `gates.json`.
 
 ```ini
 BEGIN_F2_FINAL_CLOSEOUT
-F2_STATUS = CANDIDATE_COMPLETE_OWNER_DECISION_PENDING
+F2_STATUS = CANDIDATE_COMPLETE_DECISION_ACCEPTED_MERGE_AUTHORIZED
 IMPLEMENTATION_HEAD = 093332ba1b40b667763d1202200ee899962454ae
 URING_POISON_RACE = CORRECTED_8689a720_DETERMINISTIC_RED_GREEN
 E1_GATE_LIFETIME_RACE = CORRECTED_e974988c_TEST_ONLY
@@ -26,9 +26,9 @@ RCORE_LIVE_EXECUTION = INCOMPLETE
 RCORE_LIVE_PROOF = VERIFIED_REUSABLE
 F2_FORMAL_ACCEPTANCE = ACCEPTED_BY_REUSE
 CI_AT_IMPLEMENTATION_HEAD = SUCCESS_38397035018
-INSTALLED_SURFACE_DECISION = PENDING_HUMAN_OWNER
-MERGE_AUTHORIZATION = NOT_GRANTED
-PR_516 = DRAFT_UNMERGED
+INSTALLED_SURFACE_DECISION = ACCEPTED_BREAKAGE_NOW_2026-10-13
+MERGE_AUTHORIZATION = GRANTED_SCOPE_BOUND_TO_PR516
+PR_516 = DRAFT_PENDING_MERGE_UNDER_GRANTED_AUTHORIZATION
 F5 = PENDING
 F6 = PENDING
 V1_RELEASE_READY = NO
@@ -46,8 +46,11 @@ END_F2_FINAL_CLOSEOUT
   the two sanitizer scopes; the one load-contaminated TSan attempt is
   preserved as `tsan-n-concurrent-attempt` with its attribution evidence.
 - The installed-surface break (7 headers, 3 objects, external use UNKNOWN,
-  no shims) still requires the owner's explicit scope-bound decision before
-  merge; this receipt does not grant it, and no synthetic approval exists
-  anywhere in the slice.
+  no shims) was accepted by the owner's explicit scope-bound decision
+  (ACCEPT_BREAKAGE_NOW, 2026-10-13, recorded in
+  `installed-surface-risk-disposition.md`), which also authorized the merge of
+  PR #516 under the satisfied consistency, acceptance and CI conditions; the
+  authorization covers only the reviewed F2 deletion scope. No synthetic
+  approval exists anywhere in the slice.
 - #402 stays OPEN; F5/F6 obligations are untouched and handed over as
   pending. Nothing here claims v1 release readiness.

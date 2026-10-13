@@ -280,8 +280,10 @@ Final validation re-run at `093332ba`, every capture naming that head:
 ## Remaining limitations
 
 - Installed public surface break: seven installed headers and three compiled
-  objects are retired. The risk/disposition record is prepared; the slice stays
-  unmerged while the owner's separate decision on that break is pending.
+  objects are retired. The owner accepted the break (ACCEPT_BREAKAGE_NOW,
+  2026-10-13 — see `installed-surface-risk-disposition.md`) and authorized the
+  merge of PR #516 once the final SHA consistency check, the independent
+  technical acceptance and the CI gates were satisfied.
 - The mutation campaign is unchanged by commit 5 and by the corrective round:
   no mutant target compiles the edited test sources.
 - The TLA+ gate at this capture is `INCOMPLETE: rcore-live`; acceptance for F2
