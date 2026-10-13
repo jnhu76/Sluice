@@ -846,29 +846,10 @@ if has_config("liburing") then
                          "SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
 end
 
-do
-    target("runtime_waiter_observer_test")
-        set_kind("binary")
-        set_default(false)
-        set_group("test")
-        add_deps("sluice_core")
-        add_includedirs(R .. "include", R .. "src/async")
-        add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
-        if has_config("liburing") then
-            add_defines("SLUICE_HAS_LIBURING")
-            add_links("uring")
-        end
-        add_files(R .. "tests/runtime_waiter_observer_test.cpp",
-                  R .. "src/async/*.cpp",
-                  R .. "src/async/detail/context_identity.cpp",
-                  R .. "src/async/detail/request_core.cpp")
-        add_tests("runtime_waiter_observer_test")
-end
-
 -- Narrow stackful host: pipeline tracer, failure-path cases, progress-owner
--- composition and bound evidence. Same self-contained seam topology as the
--- runtime_waiter_observer_test target above (own copy of the async TUs with
--- the internal-testing define; never linked with the production library).
+-- composition and bound evidence. Self-contained seam topology (own copy of
+-- the async TUs with the internal-testing define; never linked with the
+-- production library).
 do
     local function stackful_host_target(name, extra_define)
         target(name)
