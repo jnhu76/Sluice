@@ -53,7 +53,9 @@ using sluice::async::detail::CoreSnapshot;
 using sluice::async::detail::PublicCancel;
 using sluice::async::detail::RequestCore;
 
+#if defined(SLUICE_E1_CONFORMANCE_URING)
 constexpr std::uint64_t kControlTag = std::uint64_t{1} << 63u;
+#endif
 constexpr std::uint64_t kUnrepresentableOffset = std::numeric_limits<std::uint64_t>::max();
 
 struct Tracker {
