@@ -1,0 +1,14 @@
++ cd /home/jnhu/Source/Sluice-f5
++ rm -rf /tmp/f5-shared-demo/build
++ xmake f -y -m debug --liburing=n --ccache=n -o /tmp/f5-shared-demo/build
++ xmake test -y
++ echo 'n full tests exit=0'
+n full tests exit=0
++ xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f5-shared-demo/build
++ xmake test -y
++ echo 'y full tests exit=255'
+y full tests exit=255
++ tail -2 /tmp/f5-shared-demo/step4-y-full-tests.log
++ sed 's/\x1b\[[0-9;]*m//g'
+collect2: error: ld returned 1 exit status
+

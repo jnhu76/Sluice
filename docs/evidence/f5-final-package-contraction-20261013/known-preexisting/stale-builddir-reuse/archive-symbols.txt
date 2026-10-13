@@ -1,0 +1,15 @@
+$ nm -C /tmp/f5-shared-demo/build/linux/x86_64/debug/libsluice_async.a | grep UringAsyncBackend::UringAsyncBackend   # reused n->y directory (stub object)
+0000000000000000 T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+0000000000000000 T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+
+$ nm -C /tmp/f5-build-debug-y/linux/x86_64/debug/libsluice_async.a | grep UringAsyncBackend::UringAsyncBackend   # isolated ring profile (correct)
+000000000000026c T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+00000000000002cc T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)
+00000000000003ba T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag)
+000000000000026c T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+00000000000002cc T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)
+00000000000003ba T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag)
+
+$ nm -C /tmp/f5-build-debug-n/linux/x86_64/debug/libsluice_async.a | grep UringAsyncBackend::UringAsyncBackend   # isolated no-ring profile (stub)
+0000000000000000 T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+0000000000000000 T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)

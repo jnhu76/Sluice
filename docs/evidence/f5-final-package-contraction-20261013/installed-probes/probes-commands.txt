@@ -1,0 +1,3 @@
+# F5 installed-prefix probes (run 2026-10-13, worktree f5-final-package at a23a94cd)
+python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run-probes.py --prefix /tmp/f5-b01-v6/after-installed-n --before-prefix /tmp/f5-b01-v6/before-installed-n --output probes-n
+python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run-probes.py --prefix /tmp/f5-b01-v6/after-installed-y --before-prefix /tmp/f5-b01-v6/before-installed-y --liburing --output probes-y

@@ -2243,3 +2243,29 @@ re-verification at the actual master SHA: the merged tree is byte-identical to
 CI `38403388160` on the merge commit passed all four jobs. **Status: CLOSED**
 — F2 executed and merged. #402 remains OPEN for the remaining phases; F5 is
 the next phase; F6 and v1 release readiness are not claimed.
+
+## 2026-10-13 F5 final package & public surface contraction candidate — #402
+
+Candidate slice on branch `f5-final-package`, unmerged: the installed/public
+break needs the owner's separate decision (the packet below), so nothing in
+this section is an authorized removal. Master and the F2/F3/F4 closure records
+above are unchanged by this section.
+
+| Field | Value |
+|---|---|
+| Slice | #402 F5, final installed/public surface and package closure contraction |
+| Baseline | `14a27a83821a94e6fc5a9684b48fcd296d7de891` (F2 final exit master) |
+| Head | `a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c` (implementation head; later branch commits are documentation-only) |
+| Requirements | MIG-02 dormant public sync primitives / Group-Future-WaitPolicy / legacy multi-worker runtime / experimental-isolation rows; HOST-01; MIG-01 phase order; PROD-03; W-01–W-03 canonical; W-04 conditional; GOV-02 statuses; #475 adopted A/B/C policies with T1–T4/E1–E5 |
+| Package delta | Installed headers 49 → 25 (23 removed from the tree, 1 de-installed private header); library objects 32 → 15 (2 core + 30 → 13 async); `libsluice_async.a` members 30 → 13; identical in both ring profiles |
+| Removed | #475 Family A (`condition.hpp`, `semaphore.hpp`, `async_queue.hpp`), Family B (`future.hpp`, `wait_policy.hpp` + TU), Family C and the scheduler/select substrate (`scheduler.hpp`, `async_mutex.hpp`, `async_rwlock.hpp`, `event.hpp`, `wait_queue.hpp`, `wait_node.hpp`, `timer_registration.hpp`, `mutex.hpp`, `lock_guard.hpp`, `thread_annotations.hpp`, `select*.hpp`, `detail/{queue_item,queue_port,select_registration,select_port}.hpp` and the matching 14 runtime TUs), the D-13 test seams (2 headers + 3 TUs, zero defined symbols in both profiles), `runtime_waiter_observer_test`, the 21 retired fail-fast diagnostics, and the never-installed `include/sluice/experimental/` + `src/experimental/` tree (M-A4 disposition) |
+| Retained | W-01/W-02/W-03 canonical closure, `RequestCore` boundary, `RequestScope`, the optional W-04 host closure (`stackful_io_host.hpp` + Fiber/FiberCtx, verified to depend only on those), and the 15 canonical fail-fast diagnostics |
+| Evidence | `docs/evidence/f5-final-package-contraction-20261013/` — closure manifest with per-member role audit and #475 trigger assessment, six-profile matrix (debug/release × no-ring/ring 52/66/52/66, `asanubsan-n` 52/52, `tsan-n` 51/51 with the recorded `request_scope_test` link exclusion), B-01 v6 four-configuration clean-room package capture (`F5_B01_V6_CANDIDATE_FRESH_PACKAGE_PASS`, 32/30/49 → 15/13/25 with 23 removed-header compile negatives and 10 old-entry relink negatives plus before-prefix controls), installed-header standalone compile + cross-TU ODR/link probes in both macro views with before-prefix control, and the execution record binding every F5 gate to raw evidence |
+| Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations; per-surface decisions, the #475 T4/E1 external-use decision and merge authorization PENDING in `installed-surface-risk-disposition.md` |
+| Not claimed | no F5/F6 completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no W-04 support, no `V1_RELEASE_READY`; external use remains UNKNOWN, not zero |
+
+The F5 closure manifest corrects the #402 CURRENT overlay's inventory
+ambiguity: the older `2 core / 33 async / 56 headers` line is the F3/F4
+adoption snapshot; the current inventory after F2 is `2 core / 30 async /
+49 headers`, and this candidate further contracts it to `2 core / 13 async /
+25 headers` (all measured, never inferred).

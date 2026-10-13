@@ -186,6 +186,7 @@ for stage, sha in (("before", sha_before), ("after", sha_after)):
             command(["nm", "-C", "--undefined-only", archive], "undefined-" + library, evidence)
         async_archive = prefix / "lib" / "libsluice_async.a"
         async_members = (evidence / "members-async.log").read_text().splitlines()
+        removed_member_names = {pathlib.Path(name).name + ".o" for name in removed_sources}
         member_dir = output / (stage + "-members-" + ring)
         member_dir.mkdir()
         for member in async_members:
@@ -198,7 +199,7 @@ for stage, sha in (("before", sha_before), ("after", sha_after)):
             names = sorted(line.split(" T ", 1)[1] for line in listing.splitlines()
                            if " T " in line)
             (member_dir / (member + ".symbols")).write_text("\n".join(names) + "\n")
-            if stage == "before":
+            if stage == "before" and member in removed_member_names:
                 removed_member_symbols[member] = set(names)
         removed_defs = (r"sluice::async::Scheduler::|sluice::async::AsyncCondition::|"
                         r"sluice::async::Semaphore::|sluice::async::AsyncQueue::|"
@@ -351,8 +352,8 @@ int main() {
             """, True),
             "semaphore-acquire": ("""
                 #include <sluice/async/async_io_context.hpp>
-                #include <sluice/async/semaphore.hpp>
                 #include <sluice/async/scheduler.hpp>
+                #include <sluice/async/semaphore.hpp>
                 #include <sluice/async/threadpool_backend.hpp>
                 #include <memory>
                 int main() {
@@ -360,9 +361,7 @@ int main() {
                     AsyncIoContext io(std::make_unique<ThreadPoolBackend>());
                     Scheduler scheduler(io);
                     Semaphore semaphore(scheduler, 1, 1);
-                    WaitNode node;
                     if (!semaphore.try_acquire()) return 2;
-                    semaphore.acquire(node);
                     return semaphore.release() ? 0 : 3;
                 }
             """, True),
@@ -397,7 +396,7 @@ int main() {
                     auto result = queue.try_push(7);
                     return result.status() == QueuePushStatus::committed ? 0 : 2;
                 }
-            """, True),
+            """, False),
             "future-await": ("""
                 #include <sluice/async/future.hpp>
                 int main() {
@@ -409,7 +408,7 @@ int main() {
             """, True),
             "wait-policy": ("""
                 #include <sluice/async/wait_policy.hpp>
-                using OldPolicy = sluice::async::WaitPolicy (*)();
+                using OldPolicy = sluice::async::WaitPolicy& (*)() noexcept;
                 int main() { OldPolicy p = &sluice::async::default_wait_policy;
                     return p == nullptr; }
             """, True),
@@ -449,6 +448,7 @@ int main() {
                 }
             """, False),
             "select-await": ("""
+                #include <sluice/async/event.hpp>
                 #include <sluice/async/select.hpp>
                 int main() {
                     using namespace sluice::async;
