@@ -4,7 +4,28 @@
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 
-## LIVE STATUS PIN — Phase M closed / F3 scoped retirement adopted (2026-10-12)
+## LIVE STATUS PIN — F2/F3/F5 CLOSED, F4 ADOPTED_SCOPED, F6 closeout in final acceptance (2026-10-15)
+
+Current contracted installed surface (post-F5 contraction, re-derived by the F6
+audit and the F5 B-01 v7 post-merge capture): **15 library objects / 13 async
+archive members / 25 installed headers**. Phase states: F2 **CLOSED** (#516,
+`27a5041a`), F3 **CLOSED** (#513 merge `f4a97234`, #515, #474 CLOSED), F4
+**ADOPTED_SCOPED** (#514, #505/#506 CLOSED), F5 **CLOSED** (`f99acbc3`,
+post-merge verified on actual master `573d616c`), pre-F6 infra #519/#520/#521
+CLOSED as FIXED_VERIFIED (#522). F6's technical audit is complete
+(`docs/evidence/f6-final-correspondence-20261014/`, frozen content
+`821c489f`; P0=0/P1=0) and its closeout — evidence adoption, 18/18 finding
+disposition, independent closeout review — is recorded in
+`docs/evidence/f6-final-closeout-20261015/`; final owner acceptance and #402
+closure follow that record. `OPTIONAL_W04_SUPPORTED=NO` (W-04 conditional N/A
+with negative package/support-claim proof, not PASS); external use of retired
+surfaces UNKNOWN; `F3_FULL_CLOSEOUT=DONE`; `V1_RELEASE_READY=NO`. #390
+remains open under its own release gates.
+
+## Historical live status pin — 2026-10-12 (superseded 2026-10-15)
+
+The numbers and issue states below are the pre-F5-contraction snapshot kept
+verbatim as a dated historical record; they are not the current surface.
 
 [Phase M → F live handoff index](phase-m-f-live-handoff-20261012.md) is the
 current **status-only** index; the detailed, dated M/F candidate sections below
@@ -2330,3 +2351,30 @@ State at freeze: F2 CLOSED (actual-master exit recorded), F3 CLOSED
 (`573d616c`, post-merge verified), #519/#520/#521 closed as
 FIXED_VERIFIED post-merge, W-04 optional support NO, `V1_RELEASE_READY` NO,
 external use UNKNOWN.
+
+## 2026-10-15 F6 final closeout — evidence adoption and status closure
+
+The F6 technical audit (P0=0/P1=0; 113/113 identifiers, 26/26 formal assets,
+16/16 #402 gates with `W04_EXTERNAL=N/A_WITH_NEGATIVE_PACKAGE_PROOF`) was
+adopted by the closeout recorded in
+`docs/evidence/f6-final-closeout-20261015/`: original audit commit `99d2d4b1`
+recovered verbatim (it had been local-only) and published; all 18 findings
+dispositioned (5 doc-corrected in this record, 10 transferred to #524/#525/
+#526/#527/#528, 1 superseded by the F6 matrix, 1 deferred-with-scope, 0
+blocked); the E1 residuals adjudicated (submit path shares the direct path's
+semantic oracle — no divergent errno table; `bad_alloc`/slot-capacity →
+`no_space` conflation confined to the unsupported W-04 candidate host, a
+mandatory precondition in #526 before any supported W-04); an independent
+closeout review passed. `F6 = CLOSED_ACCEPTED` takes effect with the merge of
+this record; the post-merge receipt is completed on actual master in
+`docs/evidence/f6-final-closeout-20261015/final-acceptance-decision.md`.
+
+Scope note (F6-F12, OBS-04): the adapter-level post-accept failure oracle is
+historical (E1-era adapter seams); current OBS-04 correspondence is at the
+request seam (fault paths in `request_core_protocol_test` + contract observer
+arms), which is sufficient for the clause.
+
+`SCOPED_LOCALLY_IRREDUCIBLE` and `GLOBALLY_MINIMAL_SURFACE` are not claimed;
+`sufficient contracted surface` is established. `V1_RELEASE_READY=NO`; no
+release action taken; #390 remains open under its own gates; external use of
+retired surfaces remains UNKNOWN (owner decision at release planning).
