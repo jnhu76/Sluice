@@ -153,7 +153,7 @@ local function _report_liburing_paths()
             .. "unverifiable install"
     end
     local lib_path = _first_existing(_candidate_library_dirs(),
-                                     {"liburing.so", "liburing.so.2", "liburing.so.3"})
+                                     {"liburing.so", "liburing.so.2"})
     if lib_path == nil then
         return "sluice --liburing=y: the liburing symbol probe linked, but no "
             .. "liburing.so/liburing.so.2 file could be located on the library "
@@ -186,8 +186,7 @@ option("__sluice_liburing_capability")
         -- passed outside configs would silently skip the link step).
         local header_path = _first_existing(_candidate_include_dirs(), {"liburing.h"})
         local library_path = _first_existing(_candidate_library_dirs(),
-                                             {"liburing.so", "liburing.so.2",
-                                              "liburing.so.3"})
+                                             {"liburing.so", "liburing.so.2"})
         local configs = {}
         if header_path ~= nil then
             configs.includedirs = path.directory(header_path)

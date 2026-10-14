@@ -6,9 +6,10 @@ Post-F5 build/test infrastructure slice on branch
 no merge authorization is claimed (PR #518's authorization is not
 transferable).
 
-- #520: a same-directory `--liburing` n↔y switch reused the previous
-  profile's objects and archive members (xmake's depend check is blind to
-  tail-appended flags). Fixed with an unconditional public
+- #520: a same-directory `--liburing` switch recompiled nothing in either
+  direction — the n→y switch kept the stub archive under `--liburing=y`
+  (xmake's depend check is blind to tail-appended flags), and the consumer
+  link failure was the loud symptom. Fixed with an unconditional public
   `SLUICE_LIBURING_PROFILE=on|off` identity define plus configure-time
   capability detection with per-layer fault-injection negatives.
 - #519: the M4 mutation target failed to compile under Clang
@@ -25,8 +26,9 @@ Contents:
 - `execution-record.md` — every gate bound to SHAs, commands and raw
   evidence, including the RED captures and the notes/limitations.
 - `red/` — RED evidence at `f99acbc3`: the same-dir switch capture
-  (stale object hashes, ring/stub identity per phase, consumer link
-  failure) and the Clang mutation-target build failures.
+  (per-phase object hashes showing that no switch in either direction
+  recompiles, the stub archive retained under `--liburing=y`, and the
+  consumer link failure) and the Clang mutation-target build failures.
 - `switch-regression/` — the green n→y→n→y same-dir cycle plus the four
   fault-injection negatives at `cdb2ca0f` (`scripts/verify_liburing_config_switch.py`).
 - `matrix/` — six-profile matrix runner and captured results

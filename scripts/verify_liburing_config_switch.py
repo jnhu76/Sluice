@@ -152,11 +152,6 @@ def consumer_depend_fingerprint(builddir):
     }
 
 
-def sha(path):
-    p = pathlib.Path(path)
-    return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
-
-
 def run_cycle(args, outdir):
     workdir = pathlib.Path(args.workdir)
     builddir = args.builddir

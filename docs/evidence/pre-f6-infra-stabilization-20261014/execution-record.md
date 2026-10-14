@@ -34,28 +34,37 @@ RED at `f99acbc3` (`red/f520-same-dir-switch/`, shared worktree
 `/tmp/f520-work`, shared build dir `/tmp/f520-shared-build`, n→y→n→y with no
 cleaning):
 
-- y1 built the real-ring profile (`sluice_async` uring object
-  `bfe265ef…`, stackful seam `9bf40c51…`).
-- The y→n switch recompiled the ring-only seam targets but left
-  `sluice_async` and `stackful_host_test` at their ring-profile objects —
-  the n2 archive kept ring ctors under `--liburing=n`.
-- The n→y switch reused the stub objects everywhere: every y2 seam object
-  equals the n2 stub hash `b5f4a300…` — `--liburing=y` resolving to stub
-  identity.
-- `step-12y-tests.log`: the ring consumer `uring_public_consumer_probe`
-  fails to link against the reused archive (`undefined reference to
+- n1 built the stub profile: `sluice_async` uring object `bfe265ef…` and
+  stackful seam `9bf40c51…` (stub ctor only).
+- The n→y switch recompiled nothing of the existing targets
+  (`step-5y-build.log` has zero compile lines): the tail-appended
+  `SLUICE_HAS_LIBURING` is invisible to the depend check, so `sluice_async`
+  and `stackful_host_test` keep the n1 stub objects — the after-y1 archive
+  carries only the stub ctor (zero `UringConfig` symbols in its nm dump)
+  under `--liburing=y`. The y-only seam targets compile for the first time
+  in this directory (ring objects `b5f4a300…`, absent from the after-y1
+  capture), and the ring consumer then fails loudly:
+  `uring_public_consumer_probe` cannot link against the stale archive
+  (`undefined reference to
   sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)`,
-  exit 255) — the stale layout fails loudly at a consumer, after the
-  archive was already wrong.
+  exit 255; `step-6y-ring-consumer.log`, `step-12y-tests.log`).
+- The y→n switch is equally invisible (`step-8n-build.log` and
+  `step-9n-tests.log` have zero compile lines): the stub objects persist,
+  which under n is coincidentally the correct content, so the n2 tests
+  pass 52/52; the ring seam objects remain in the build directory.
+- The second n→y switch changes nothing again — the stub archive is
+  retained under `--liburing=y` and the consumer link failure repeats. The
+  defect is symmetric: no switch in either direction recompiles anything.
 
 Root cause (traced through the installed xmake sources at
 `~/.local/share/xmake`, `core/project/depend.lua` `is_changed` and
 `core/cache/object.lua`): the per-object depend check compares the stored
-flag lists index by index, so a define appended at the tail by a config
-switch (the conditional `SLUICE_HAS_LIBURING`) is invisible — additions are
-not detected, only removals and in-place changes. The conditional define
-was therefore structurally unable to trigger recompilation in the n→y
-direction.
+flag lists index by index from the current list's side, so a define
+appended at the tail by a config switch (the conditional
+`SLUICE_HAS_LIBURING`) is invisible in both directions — an addition is
+not detected and neither is the removal of a tail entry. The conditional
+define was therefore structurally unable to trigger recompilation on any
+switch.
 
 Fix: `SLUICE_LIBURING_PROFILE=on|off` is defined unconditionally and
 publicly on `sluice_async` (and on the stackful seam targets, which exist
@@ -105,7 +114,7 @@ RED at `f99acbc3`: the full Clang asanubsan build fails at
 `[-Werror,-Wunused-private-field]` (`red/f519-full2.log`). Per target:
 only `request_scope_mut_destructor_skips_settle` fails (`red/f519-m1.log`);
 `request_scope_mut_finish_cancels_cleanup` already compiled (`red/f519-m2.log`)
-— the issue's count was conservative, one target is affected.
+— the issue overcounted, one target is affected.
 
 The mutation removes the destructor's settle call, which is also the TU's
 only read of `policy_`; the warning is default-on under Clang and promoted
@@ -115,7 +124,7 @@ global `-Werror` and every GCC profile are untouched.
 
 Kills at `cdb2ca0f` (`mutation-killers/`, clang asanubsan, distinguishable
 from compile failure/timeout/sanitizer crash — both mutants build first,
-then die on assertions):
+then die on assertions; `killers-exit-codes.log` records the exit codes):
 
 - M4 `SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE`: exit 134, the recorded
   kill signature — `Request` contract violation abort on destroying a
@@ -163,10 +172,15 @@ asanubsan-n (registered runs), debug-y/release-y via
 Evidence at `cdb2ca0f`, bound to the matrix's own binaries
 (`request-scope-tsan/`):
 
-- `head-dbg-rs.log`: 25 of 25 passed (oracle included); seam symbols
-  present (3).
+- `head-dbg-rs.log`: 25 of 25 passed (oracle included). The debug binary
+  defines the seam: 3 `g_allocations`/`AllocationProbe` symbols and 6
+  strong `operator new/delete` replacements.
 - `head-tsan-rs.log`: 24 of 24 passed under
-  `TSAN_OPTIONS=halt_on_error=1`; seam symbols absent (0).
+  `TSAN_OPTIONS=halt_on_error=1`. Zero seam symbols; the only operator
+  new/delete definitions left are the TSan runtime's own (20, identical
+  count in `request_core_ownership_test`, which never had a seam). The
+  F5-era failure was the link error `multiple definition of 'operator
+  new'`; the target now links.
 - `matrix/tsan-n.log`: the full 52-test registered run including
   `request_scope_test`, green.
 
@@ -234,7 +248,23 @@ python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run
   negatives prove they really re-run — each injection bites at its own
   layer on a fresh configure.
 - The negatives need user namespaces; on hosts without them the driver
-  prints a skip notice and continues (this host ran all four).
+  prints a skip notice and continues (this host ran all four). The
+  missing-library injector hides the `/usr/lib64/liburing.so{,.2,.2.13}`
+  names of this host's layout; on a different multiarch layout the
+  injection would find nothing and the driver would fail loudly rather
+  than pass silently. The matrix runner pins the F5 runner's interface
+  (including its xmake path convention); the driver script takes
+  `SLUICE_XMAKE` as an override.
+- The mixed-prefix refusal compares the top-level directory component of
+  the resolved header and library paths, so `/usr/local/include` +
+  `/usr/lib64` is accepted by design; grossly different trees (an
+  `/opt`-style stub alongside a system library) are refused. The refusal
+  message says "different installation prefixes" in that sense.
+- The #520 fix is specific to the `--liburing` switch: xmake's depend
+  check remains blind to tail-appended flags for any other config-time
+  conditional flag a target might grow. Any future conditional define
+  must either sit before the profile marker's fixed position or get its
+  own always-present identity entry.
 - `lib.detect.check_cxxsnippets` reads links and search paths only from
   its `configs` argument; links passed outside `configs` silently skip the
   link step. The capability probes pin `includedirs`, `linkdirs` and
