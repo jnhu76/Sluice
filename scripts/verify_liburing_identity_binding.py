@@ -22,6 +22,12 @@ be exactly the pair the toolchain itself resolves (compared by realpath).
 It must also refuse, at the declaration layer, a CPATH-installed header
 missing a required declaration, and it must print the resolved pair in a
 clean environment.
+
+The recorded fixture bytes of the committed GREEN run live in
+docs/evidence/pre-f6-infra-stabilization-20261014/f10-correction/green/
+identity-regression/fixtures.tar.gz (per-file hashes in SHA256SUMS). This
+script never reads them: it rebuilds its own fixtures from the toolchain's
+traced headers into --output on every run.
 """
 import argparse
 import json

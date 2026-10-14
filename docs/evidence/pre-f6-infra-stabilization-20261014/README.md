@@ -58,7 +58,9 @@ Contents:
   at `5ab32ae7`) and `green/` (identity regression, re-baselined switch
   negatives, six-profile matrix, B-01 v7 capture and installed probes all
   re-run at `9e04d3b5`; `green/PROVENANCE.md` binds every driver to its
-  worktree head and command).
+  worktree head and command). The recorded stub fixture bytes are archived
+  (`green/identity-regression/fixtures.tar.gz` + `SHA256SUMS`), not
+  committed as loose headers.
 
 F5's evidence directory (`f5-final-package-contraction-20261013/`) is
 immutable history: nothing there was modified.

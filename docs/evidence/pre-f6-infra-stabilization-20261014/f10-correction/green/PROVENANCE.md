@@ -53,3 +53,23 @@ identity regression driver was re-run green against a fresh worktree at
 `e5f3af8e` (`F10_IDENTITY_BINDING_REGRESSION_PASS`, printed identity
 `/usr/include/liburing.h + /usr/lib/gcc/.../lib64/liburing.so`); the other
 gates are unchanged because their content is bit-identical at both heads.
+
+Fixture packaging corrected 2026-10-14 (GitHub CI run 38561055545, job
+"C++ comment authority guard"): the stub include trees are archived as
+`fixtures.tar.gz` with per-file hashes in `SHA256SUMS` instead of being
+committed as loose third-party headers. Upstream liburing comment text
+(`liburing.h`: "* Check issue #291 for more information.") is part of the
+recorded bytes — it is neither mutated to bypass the scan nor shipped as a
+scanned C++ source. Source: byte copies of the host's traced
+`/usr/include/liburing.h` + `/usr/include/liburing/` (liburing 2.13) built by
+`scripts/verify_liburing_identity_binding.py` during the recorded GREEN runs;
+`stub-bad` differs from `stub-good` only in `liburing.h` (the removed
+`io_uring_get_probe_ring` declaration). Restore and verify from this
+directory:
+
+    tar xzf fixtures.tar.gz -C <fresh dir>
+    cd <fresh dir> && sha256sum -c <path to>/SHA256SUMS
+
+The regression script never reads this archive: it regenerates equivalent
+fixtures from the live toolchain's traced headers into `--output` on every
+run, so RED/GREEN reproduction is independent of the packaging.
