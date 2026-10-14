@@ -862,6 +862,10 @@ do
             if extra_define ~= nil then
                 add_defines(extra_define)
             end
+            -- #520: these targets exist under both ring profiles but carry
+            -- profile-conditional defines, so they need the profile marker at
+            -- a fixed flag position (see xmake/uring.lua).
+            add_defines(sluice_liburing_profile_define())
             if has_config("liburing") then
                 add_defines("SLUICE_HAS_LIBURING")
                 add_links("uring")

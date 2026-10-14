@@ -58,6 +58,7 @@ target("sluice_async")
     -- guarded layout the library was compiled with, or the ODR is violated.
     -- Public define + public link propagate both from this single config
     -- point; consumers must not hand-copy the macro.
+    add_defines(sluice_liburing_profile_define(), {public = true})
     if has_config("liburing") then
         add_defines("SLUICE_HAS_LIBURING", {public = true})
         add_links("uring", {public = true})
