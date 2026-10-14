@@ -76,5 +76,5 @@ The removed injected canceled-submission test returned `canceled` before
 admission; it did not prove an accepted-request cancellation schedule. Canonical
 admission/cancellation obligations remain with `async_sync_admission_test`,
 `backend_conformance_e1_threadpool_test`, `backend_conformance_e1_uring_test`,
-and the backend core-cutover suites. Retained Scheduler waiter/observer tests are separate from application execution.
+and the backend core-cutover suites. The Scheduler-era waiter/observer tests (retired with the F2 contraction) were separate from application execution.
 ApplicationRuntime has been retired; COPY uses RequestScope and TAIL its own driver.
