@@ -2273,3 +2273,28 @@ inventory after F2 is `2 core / 30 async / 49 headers`, and this candidate
 further contracts it to `2 core / 13 async / 25 headers` (all measured, never
 inferred). The overlay now carries the per-tree inventory history and the F5
 candidate state (draft PR #518) with the owner decision PENDING.
+
+## 2026-10-14 pre-F6 infrastructure stabilization candidate — #520 #519 #521
+
+Candidate slice on branch `codex/pre-f6-infra-520-519-521`, unmerged. A
+post-F5 infrastructure change (F5 evidence directories are untouched
+history): no production semantic change, no installed-surface change.
+
+| Field | Value |
+|---|---|
+| Slice | #520 same-directory ring-profile switch safety; #519 Clang build of the D1 mutation targets; #521 RequestScope zero-allocation oracle under TSan |
+| Baseline | `f99acbc3` (post-F5 origin/master; F5 = PR #518 merged) |
+| Head | `6aeea5b6` (`5d611b28` #520 → `7f9d43c7` #519 → `cdb2ca0f` #521, each independently revertable; evidence commit last) |
+| Public delta | One new public compile definition `SLUICE_LIBURING_PROFILE=on\|off` on `sluice_async` and the stackful seam targets, unconditional, configuration identity at a fixed flag position (no layout statement); `SLUICE_HAS_LIBURING` unchanged as the only public usage requirement, still defined only in the enabled branch; `SLUICE_TSAN_TESTING` is test-target-local, never installed |
+| Behavior | `--liburing=n` honest stub / `--liburing=y` real ring unchanged; a same-directory switch now recompiles the affected target and consumers (xmake's depend check compares flag lists index by index and was blind to the tail-appended conditional define — the root cause); `--liburing=y` additionally passes a configure-time compile+link capability probe (24 functions + 12 constants, explicit resolved paths, mixed-prefix refusal, no binary execution; kernel ring/opcode/statx capability stays in the `UringAsyncBackend` path) |
+| Evidence | `docs/evidence/pre-f6-infra-stabilization-20261014/` — RED captures at `f99acbc3` (ring/stub object identity per switch phase, consumer link failure, Clang `-Wunused-private-field` full-build failure); green same-dir n→y→n→y cycle with depend fingerprints, per-switch object-hash change and 52/52+66/66 tests at `cdb2ca0f`; four fault-injection negatives through real `xmake f` (missing header → declaration layer, missing library → link layer, incompatible required API → declaration layer, conflicting prefixes → prefix refusal); six-profile matrix at `cdb2ca0f` (debug/release × n/y 52/66/52/66, clang `asanubsan-n` 52/52, clang `tsan-n` **52/52 with `request_scope_test` executed for real**, superseding F5's 51-with-exclusion going forward); mutation killers M4 exit 134 / M6 exit 1 on their recorded named killers; request-scope case counts 25/25 non-TSan (oracle included) vs 24/24 TSan (seam compiled out, zero seam symbols); B-01 v7 dual-profile package capture (`--before 14a27a83 --after cdb2ca0f`, harness verbatim): installed headers stay 25 and `libsluice_async.a` keeps 13 members in both ring profiles, W-01/W-02/W-03 consumers link and run from the fresh prefixes; installed-header standalone compile + ODR probes in both macro views with the 49-header before-prefix control |
+| Status | `IMPLEMENTED_VERIFIED` for the recorded configurations at the recorded head; unmerged, no merge authorization claimed (PR #518's authorization is not transferable) |
+| Not claimed | no F6 start, no new capability framework, no runtime-probe changes, no W-04 change, no `V1_RELEASE_READY`; external use remains UNKNOWN |
+
+Notes: the M4 kill fires first at
+`destructor_cleanup_preserves_the_original_exception_and_still_releases`;
+the ledger's recorded killer `destructor_settles_on_early_return_with_drain_policy`
+was proven to kill by an isolation run (recorded in the evidence). The
+configure-time probes re-run on every `--liburing=y` configure by design;
+`lib.detect.check_cxxsnippets` reads links only from its `configs`
+argument, which the probes honor explicitly.
