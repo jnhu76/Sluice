@@ -1,0 +1,5 @@
+$ /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f10-green/switch-build-neg-mixed-include-chain-accepted
+$ CPATH=/tmp/f10-green/switch/stub-mixed-include-chain-accepted
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+checking for liburing capability ... ok (/tmp/f10-green/switch/stub-mixed-include-chain-accepted/liburing.h + /usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so)
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m

@@ -1,0 +1,15 @@
+{
+  "outcome": "F10_IDENTITY_BINDING_REGRESSION_PASS",
+  "divergence_identity": [
+    "/usr/include/liburing.h",
+    "/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so"
+  ],
+  "clean_identity": [
+    "/usr/include/liburing.h",
+    "/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so"
+  ],
+  "traced_clean_identity": [
+    "/usr/include/liburing.h",
+    "/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so"
+  ]
+}

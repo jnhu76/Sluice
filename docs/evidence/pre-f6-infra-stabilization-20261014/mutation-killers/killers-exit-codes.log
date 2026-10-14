@@ -1,0 +1,5 @@
+# exit codes at cdb2ca0f, clang asanubsan, /tmp/pre-f6-killers-build
+$ /tmp/pre-f6-killers-build/linux/x86_64/asanubsan/request_scope_mut_destructor_skips_settle
+exit=134
+$ /tmp/pre-f6-killers-build/linux/x86_64/asanubsan/request_scope_mut_finish_cancels_cleanup
+exit=1

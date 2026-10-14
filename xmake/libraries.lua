@@ -58,8 +58,20 @@ target("sluice_async")
     -- guarded layout the library was compiled with, or the ODR is violated.
     -- Public define + public link propagate both from this single config
     -- point; consumers must not hand-copy the macro.
+    add_defines(sluice_liburing_profile_define(), {public = true})
     if has_config("liburing") then
         add_defines("SLUICE_HAS_LIBURING", {public = true})
+        -- The resolved dependency identity is written to the saved config by
+        -- the capability check (xmake/uring.lua). Bind its directories
+        -- publicly only when plain toolchain resolution is
+        -- environment-dependent; otherwise every consumer resolves the same
+        -- files without the extra -I/-L reorder.
+        if get_config("__sluice_liburing_bind_includes") then
+            add_includedirs(get_config("__sluice_liburing_header_dir"), {public = true})
+        end
+        if get_config("__sluice_liburing_bind_linkdirs") then
+            add_linkdirs(get_config("__sluice_liburing_library_dir"), {public = true})
+        end
         add_links("uring", {public = true})
     end
     -- CPP-STATIC-1: Clang TSA gate.

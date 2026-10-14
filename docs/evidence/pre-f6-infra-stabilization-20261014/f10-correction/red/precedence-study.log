@@ -1,0 +1,47 @@
+# Captured resolution-order study — 2026-10-14, g++ 16, clang++ 22.1.8, Fedora (kernel 7.2.9-201.fc44.x86_64)
+# Method: each candidate directory holds a distinct token marker (const char* sluice_f10_<dir>_marker) as liburing.h;
+# the winner is whichever marker definition survives the preprocessor (-E) — 'system' means none did (the real header).
+# Library traces: g++ -Wl,--trace on a TU referencing io_uring_queue_init; fakelib is 'cp -L /usr/lib64/liburing.so'.
+# Every line below is captured stdout/stderr of the commands shown (marker dirs under /tmp/f10-study2 are ephemeral).
+
+== g++ 16, which liburing.h a C++ compile of <liburing.h> opens ==
+no env                        => system
+C_INCLUDE_PATH=cinc           => system
+CPATH=cpath                   => cpath
+CPLUS_INCLUDE_PATH=cplus      => cplus
+CPATH + CPLUS                 => cpath
+-I pin + CPATH + CPLUS        => pin
+-I pin + CPATH, quote include => pin
+clang++, -I pin + CPATH       => pin
+CPATH only, clang++           => cpath
+
+== g++ -E -v search list, no -I, CPATH + CPLUS set ==
+#include <...> search starts here:
+ /tmp/f10-study2/cpath
+ /tmp/f10-study2/cplus
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16/x86_64-redhat-linux
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16/backward
+ /usr/lib/gcc/x86_64-redhat-linux/16/include
+ /usr/local/include
+ /usr/include
+End of search list.
+== g++ -E -v search list, -I pin + CPATH set ==
+#include <...> search starts here:
+ /tmp/f10-study2/pin
+ /tmp/f10-study2/cpath
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16/x86_64-redhat-linux
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16/backward
+ /usr/lib/gcc/x86_64-redhat-linux/16/include
+ /usr/local/include
+ /usr/include
+End of search list.
+
+== linker -Wl,--trace for -luring (TU references io_uring_queue_init) ==
+-- default
+/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so
+-- LIBRARY_PATH=fakelib
+/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so
+-- -L fakelib
+/tmp/f10-study2/fakelib/liburing.so

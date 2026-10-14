@@ -1,0 +1,3 @@
+Thread 1 "request_scope_m" received signal SIGABRT, Aborted.
+#28 0x00000000004ed756 in (anonymous namespace)::destructor_settles_on_early_return_with_drain_policy (t=...) at tests/request_scope_test.cpp:606
+#29 0x00000000004ecba8 in main () at tests/request_scope_test.cpp:1417

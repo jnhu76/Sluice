@@ -29,11 +29,6 @@ option("hardened")
     set_description("Enable supported release hardening flags (use with -m release).")
 option_end()
 
-option("liburing")
-    set_default(false)
-    set_description("Build the real io_uring backend (SLUICE_HAS_LIBURING + link liburing). Requires liburing dev + runtime; without it the backend is an honest stub.")
-option_end()
-
 rule("sluice.hardened.release")
     on_config(function ()
         if has_config("hardened") and not is_mode("release") then
@@ -58,10 +53,13 @@ end
 -- ---------------------------------------------------------------------------
 -- Sub-configurations. Each file owns one concern:
 --   helpers.lua        — shared target-declaration helpers
+--   uring.lua          — the liburing switch: option, capability detection,
+--                        configuration-identity define
 --   libraries.lua      — production libs (core, async, bench_common)
 -- ---------------------------------------------------------------------------
 
 includes("xmake/helpers.lua")
+includes("xmake/uring.lua")
 includes("xmake/libraries.lua")
 includes("xmake/apps.lua")
 includes("xmake/tests.lua")

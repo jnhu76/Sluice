@@ -1,0 +1,3 @@
+===== STEP 10y-configure: /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f520-shared-build
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+exit=0

@@ -1,0 +1,8 @@
+worktree_head=9e04d3b54e8d4e0d7f5bf7cc86bb1622e55ea67b
+cxx=g++
+clean_env_header=/usr/include/liburing.h
+clean_env_library=/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so
+resolved system header: /usr/include/liburing.h
+resolved system library: /usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so
+divergence_env_header_compiler_picks=/usr/include/liburing.h
+divergence_env_library_linker_picks=/usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so

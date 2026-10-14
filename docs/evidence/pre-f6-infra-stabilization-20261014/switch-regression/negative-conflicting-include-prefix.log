@@ -1,0 +1,5 @@
+$ /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f520-head-cycle-build-neg-conflicting-include-prefix
+$ CPATH=/tmp/f520-head-cycle/stub-conflicting-include-prefix
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;1;1mno[0m
+[0m[1;38;5;1;1merror: [0msluice --liburing=y: liburing header and library resolve to different installation prefixes (/tmp/f520-head-cycle/stub-conflicting-include-prefix/liburing.h vs /usr/lib64/liburing.so); refusing an unintentionally mixed install[0m

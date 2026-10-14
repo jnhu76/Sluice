@@ -1,0 +1,3 @@
+[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_destructor_skips_settle>[0m compiling.asanubsan tests/request_scope_test.cpp[0m
+[0m[38;5;2;1m[ 82%]:[0m [38;5;5;1m<request_scope_mut_destructor_skips_settle>[0m [38;5;5;1mlinking.asanubsan request_scope_mut_destructor_skips_settle[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 2.701s[0m

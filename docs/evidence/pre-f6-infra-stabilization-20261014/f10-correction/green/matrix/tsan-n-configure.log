@@ -1,0 +1,3 @@
+$ /home/jnhu/.local/bin/xmake f -m tsan --liburing=n --ccache=n -o /tmp/pre-f6-build-tsan-n -y --toolchain=clang --ldflags=--target=x86_64-redhat-linux-gnu
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m

@@ -1,0 +1,22 @@
+$ /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f10-green/switch-build-neg-incompatible-required-api
+$ CPATH=/tmp/f10-green/switch/stub-incompatible-required-api
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;1;1mno[0m
+[0m[1;38;5;1;1merror: [0msluice --liburing=y: the resolved liburing does not provide the header/declaration surface the uring backend compiles against: /tmp/.xmake1000/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp:8:40: error: ‘io_uring_queue_exit’ was not declared in this scope; did you mean ‘io_uring_queue_init’?
+    8 |     reinterpret_cast<sluice_probe_fn>(&io_uring_queue_exit),
+      |                                        ^~~~~~~~~~~~~~~~~~~
+      |                                        io_uring_queue_init
+/tmp/.xmake1000/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp:9:40: error: ‘io_uring_get_sqe’ was not declared in this scope; did you mean ‘io_uring_sqe’?
+    9 |     reinterpret_cast<sluice_probe_fn>(&io_uring_get_sqe),
+      |                                        ^~~~~~~~~~~~~~~~
+      |                                        io_uring_sqe
+/tmp/.xmake1000/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp:10:40: error: ‘io_uring_get_probe_ring’ was not declared in this scope
+   10 |     reinterpret_cast<sluice_probe_fn>(&io_uring_get_probe_ring),
+      |                                        ^~~~~~~~~~~~~~~~~~~~~~~
+/tmp/.xmake1000/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp:11:40: error: ‘io_uring_free_probe’ was not declared in this scope
+   11 |     reinterpret_cast<sluice_probe_fn>(&io_uring_free_probe),
+      |                                        ^~~~~~~~~~~~~~~~~~~
+/tmp/.xmake1000/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp:12:40: error: ‘io_uring_opcode_supported’ was not declared in this scope
+   12 |     reinterpret_cast<sluice_probe_fn>(&io_uring_opcode_supported),
+      |                                        ^~~~~~~~~~~~~~~~~~~~~~~~~
+  [38;5;3m> in [1m/tmp/.xmake1000/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp[0m
