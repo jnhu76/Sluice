@@ -119,3 +119,29 @@ the same deficient file), and folded in F-D2/F-D3/F-B1/F-H2. No executable
 statement changed; the identity regression was re-run green against a fresh
 worktree at `e5f3af8e` (`F10_IDENTITY_BINDING_REGRESSION_PASS`), recorded in
 `f10-correction/green/PROVENANCE.md`.
+
+## Round 4 — final evidence-integrity re-check (fixture packaging)
+
+Dispatched after GitHub CI run 38561055545 failed the "C++ comment authority
+guard" job on the committed stub copies of upstream liburing.h (the
+third-party comment "* Check issue #291 for more information.", rule
+`issue-pr-reference`; the other three jobs passed). Correction commit
+`81fd2563`: the loose stub-good/stub-bad include trees are replaced by
+`fixtures.tar.gz` + per-file `SHA256SUMS`, with the packaging provenance in
+`green/PROVENANCE.md` and a docstring evidence-index paragraph in
+`scripts/verify_liburing_identity_binding.py`.
+
+Reviewer verification, all PASS: the archive restores byte-exactly (12/12
+hashes OK; SHA256SUMS covers exactly the 12 removed files; stub-bad differs
+from stub-good only in the removed `io_uring_get_probe_ring` declaration);
+the upstream comment is present verbatim in the archived bytes and every
+archived file is byte-identical to the pre-change blobs (packaging, not
+scrubbing); the scripts diff is the 6-line docstring only, scanner and its
+28 self-tests unmodified and passing, xmake/src/include/tests/apps
+untouched; the new PROVENANCE/README/docstring claims are accurate (source
+= the host's traced liburing 2.13 headers, restore commands reproduce,
+the script never reads the archive); GitHub API confirms run 38569275374
+at exactly `81fd2563` with all four jobs success and the PR head unchanged.
+Verdict: **CLEAN — no blockers.** One out-of-scope observation, no action:
+`fakelib/liburing.so` remains a committed loose binary run artifact (not a
+scannable C++ source; intentionally retained as raw run evidence).
