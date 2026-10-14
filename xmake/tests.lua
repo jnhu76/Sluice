@@ -711,7 +711,8 @@ end
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
 do
-    local function request_scope_target(name, test_source, with_liburing, extra_define)
+    local function request_scope_target(name, test_source, with_liburing, extra_define,
+                                        extra_clang_cxxflags)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -721,6 +722,9 @@ do
             add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
             if extra_define ~= nil then
                 add_defines(extra_define)
+            end
+            if extra_clang_cxxflags ~= nil then
+                add_cxxflags(extra_clang_cxxflags, {tools = {"clang", "clang_cl"}})
             end
             local files = {
                 test_source,
@@ -762,9 +766,14 @@ do
     request_scope_target("request_scope_mut_timeout_releases_slot",
                          R .. "tests/request_scope_test.cpp", false,
                          "SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT")
+    -- The destructor mutant removes the TU's only read of policy_, so Clang's
+    -- default-on -Wunused-private-field (promoted by -Werror) fails this one
+    -- mutation build; the suppression is scoped to it and never reaches GCC
+    -- or any other target. The mutant is still killed by its named assertions.
     request_scope_target("request_scope_mut_destructor_skips_settle",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE")
+                         "SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE",
+                         "-Wno-unused-private-field")
     request_scope_target("request_scope_mut_finish_swallows_error",
                          R .. "tests/request_scope_test.cpp", false,
                          "SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR")
