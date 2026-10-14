@@ -16,10 +16,20 @@ directory with no cleaning, and asserts after every phase:
 It then runs the build-time fault-injection negatives through the real
 configure entry point; every failure must be detected at its own layer:
 
-- missing liburing header            -> declaration layer (liburing.h not found)
-- missing liburing library           -> library layer (-luring unresolved)
+- missing liburing header            -> include-resolution layer (<liburing.h>
+                                        unresolved by the compiler trace)
+- missing liburing library           -> link-resolution layer (-luring
+                                        unresolved by the linker trace)
 - incompatible required API          -> declaration layer (missing declaration)
-- conflicting include/lib prefixes   -> prefix check (refused install)
+- CPATH include chain to a working
+  system header                      -> accepted, with the printed identity
+                                        naming the CPATH stub and the public
+                                        include binding recorded as
+                                        environment-dependent (F-10: no
+                                        prefix heuristic, honest identity)
+
+The probe/production dependency-identity contract itself is exercised by
+scripts/verify_liburing_identity_binding.py.
 
 Kernel-side capabilities (ring creation, required opcodes, statx) are never
 tested at configure time; they stay owned by the UringAsyncBackend
@@ -82,6 +92,8 @@ class Phase:
         text = conf.read_text() if conf.exists() else ""
         match = re.search(r"liburing = (true|false)", text)
         snap["effective_liburing"] = match.group(1) == "true" if match else None
+        match_bind = re.search(r"__sluice_liburing_bind_includes = (true|false)", text)
+        snap["bind_includes"] = match_bind.group(1) == "true" if match_bind else None
         depend = builddir / DEPEND_REL
         snap["depend_values"] = ""
         snap["depend_has_profile_on"] = False
@@ -130,6 +142,12 @@ def assert_phase(profile, snap, summary_text):
         f"[{profile}] profile marker missing in stored compile fingerprint"
     assert snap["depend_has_has_liburing"] == ring, \
         f"[{profile}] SLUICE_HAS_LIBURING missing/extra in stored compile fingerprint"
+    if ring:
+        # Clean-environment resolution is environment-independent, so the
+        # capability check must record no consumer binding (no extra -I/-L
+        # reorder in the supported workflow's compile surface).
+        assert snap["bind_includes"] is False, \
+            f"[{profile}] unexpected environment-dependent include binding: {snap['bind_includes']}"
     expected_ctors = RING_CTORS if ring else STUB_CTORS
     assert snap["ctor_symbols"] == sorted(expected_ctors), \
         f"[{profile}] archive ctor identity mismatch: {snap['ctor_symbols']}"
@@ -216,7 +234,7 @@ def run_negative(args, outdir, name, wrap_argv, expect_needles):
     configure to fail with the given layer evidence."""
     log = outdir / f"negative-{name}.log"
     env = dict(os.environ)
-    if name in ("incompatible-required-api", "conflicting-include-prefix"):
+    if name in ("incompatible-required-api", "mixed-include-chain-accepted"):
         stub_dir = outdir / f"stub-{name}"
         stub_dir.mkdir(parents=True, exist_ok=True)
         if name == "incompatible-required-api":
@@ -234,6 +252,24 @@ def run_negative(args, outdir, name, wrap_argv, expect_needles):
         completed = subprocess.run(argv, stdout=handle, stderr=subprocess.STDOUT,
                                    cwd=args.workdir, env=env, check=False)
     text = stripped(log)
+    if name == "mixed-include-chain-accepted":
+        # F-10: a working CPATH include chain is not a fault to refuse. The
+        # toolchain resolves <liburing.h> to the CPATH stub, so the accepted
+        # identity must NAME the stub and the public include binding must be
+        # recorded as environment-dependent for consumers.
+        assert completed.returncode == 0, \
+            f"[negative:{name}] configure refused a working include chain"
+        match = re.search(r"checking for liburing capability \.\.\. ok \((.*?) \+ ",
+                          text)
+        assert match, f"[negative:{name}] no accepted identity print"
+        assert match.group(1) == str(stub_dir / "liburing.h"), \
+            f"[negative:{name}] printed identity does not name the CPATH stub: {match.group(1)}"
+        conf = pathlib.Path(args.workdir, ".xmake/linux/x86_64/xmake.conf")
+        conf_text = conf.read_text() if conf.exists() else ""
+        assert "__sluice_liburing_bind_includes = true" in conf_text, \
+            f"[negative:{name}] environment-dependent include binding not recorded"
+        print(f"negative {name}: accepted with honest identity and recorded binding")
+        return
     assert completed.returncode != 0, \
         f"[negative:{name}] configure unexpectedly succeeded; the injection did not bite"
     for needle in expect_needles:
@@ -263,13 +299,14 @@ def run_negatives(args, outdir):
         print("user namespaces unavailable; build-time negatives skipped")
         return False
     run_negative(args, outdir, "missing-liburing-header", hide_header_argv(),
-                 ["liburing.h", "header/declaration surface"])
+                 ["liburing.h", "resolution"])
+    # The bind-mounted empty file still resolves as a file (ld reads it as an
+    # empty linker script), so the honest failure layer is the symbol surface.
     run_negative(args, outdir, "missing-liburing-library", hide_library_argv(),
                  ["required external symbols"])
     run_negative(args, outdir, "incompatible-required-api", [],
                  ["header/declaration surface", "was not declared"])
-    run_negative(args, outdir, "conflicting-include-prefix", [],
-                 ["different installation prefixes"])
+    run_negative(args, outdir, "mixed-include-chain-accepted", [], [])
     return True
 
 

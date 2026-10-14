@@ -17,6 +17,20 @@
 -- every consumer then recompile. It carries no public layout statement;
 -- SLUICE_HAS_LIBURING remains the only public usage requirement and is still
 -- defined only in the enabled branch.
+--
+-- Dependency identity: what the capability probe compiles and links must be
+-- what the production targets compile and link. The authority is the active
+-- toolchain's own resolution — the header its `-E -H` trace opens for
+-- <liburing.h> and the file its `-Wl,--trace` link opens for -luring — not a
+-- hand-written candidate list (env paths rank ahead of -I for gcc/clang and
+-- C_INCLUDE_PATH is invisible to C++ compiles, so a scanned candidate can be
+-- a file the toolchain never picks; the driver also checks configured
+-- directories before LIBRARY_PATH). The probe re-traces with the resolved
+-- directories pinned to prove the pin resolves to the same files, checks the
+-- required surface against exactly that pair, and binds the directories as
+-- public usage requirements only when plain resolution is
+-- environment-dependent, so consumers resolve the same files in other
+-- environments.
 
 option("liburing")
     set_default(false)
@@ -91,80 +105,12 @@ local function _sluice_uring_probe_snippet()
     return table.concat(lines, "\n")
 end
 
-local function _split_path_list(value)
-    local dirs = {}
-    for dir in (value or ""):gmatch("[^:]+") do
-        if dir ~= "" then
-            table.insert(dirs, dir)
-        end
-    end
-    return dirs
-end
-
--- Native gcc/clang resolution order for <liburing.h>: CPLUS_INCLUDE_PATH and
--- CPATH ahead of the system prefixes. The probe compile above remains the
--- authority on whether the header actually works.
-local function _candidate_include_dirs()
-    local dirs = {}
-    for _, envname in ipairs({"CPLUS_INCLUDE_PATH", "C_INCLUDE_PATH", "CPATH"}) do
-        for _, dir in ipairs(_split_path_list(os.getenv(envname))) do
-            table.insert(dirs, dir)
-        end
-    end
-    table.insert(dirs, "/usr/local/include")
-    table.insert(dirs, "/usr/include")
-    return dirs
-end
-
-local function _candidate_library_dirs()
-    local dirs = _split_path_list(os.getenv("LIBRARY_PATH"))
-    for _, dir in ipairs({"/usr/local/lib", "/usr/local/lib64", "/usr/lib64",
-                          "/usr/lib", "/lib64", "/lib"}) do
-        table.insert(dirs, dir)
-    end
-    return dirs
-end
-
-local function _first_existing(dirs, names)
-    for _, dir in ipairs(dirs) do
-        for _, name in ipairs(names) do
-            if os.isfile(path.join(dir, name)) then
-                return path.join(dir, name)
-            end
-        end
-    end
-end
-
-local function _first_path_component(file)
-    local dir = path.directory(file)
-    return (dir:gsub("^/", ""):match("^[^/]+"))
-end
-
--- Reports the header/library pair behind the passing probes and refuses an
--- unintentionally mixed multi-prefix install. The probes are the authority
--- that the pair compiles and links; this is the evidence of where they came
--- from. Returns the refusal message instead of raising: this file scope has
--- no raise, the on_check sandbox does.
-local function _report_liburing_paths()
-    local header_path = _first_existing(_candidate_include_dirs(), {"liburing.h"})
-    if header_path == nil then
-        return "sluice --liburing=y: liburing.h was accepted by the capability probe "
-            .. "but could not be located on the include search path; refusing an "
-            .. "unverifiable install"
-    end
-    local lib_path = _first_existing(_candidate_library_dirs(),
-                                     {"liburing.so", "liburing.so.2"})
-    if lib_path == nil then
-        return "sluice --liburing=y: the liburing symbol probe linked, but no "
-            .. "liburing.so/liburing.so.2 file could be located on the library "
-            .. "search path; refusing an unverifiable install"
-    end
-    if _first_path_component(header_path) ~= _first_path_component(lib_path) then
-        return "sluice --liburing=y: liburing header and library resolve to "
-            .. "different installation prefixes (" .. header_path .. " vs "
-            .. lib_path .. "); refusing an unintentionally mixed install"
-    end
-    print("checking for liburing capability ... ok (%s + %s)", header_path, lib_path)
+-- Tiny TU for the -luring resolution trace. Resolution must stay independent
+-- of capability: an empty main needs no symbols, so the trace only reports
+-- which liburing file the linker opens, never whether an ABI matches. It is
+-- only compiled and linked, never executed, so no kernel ring is involved.
+local function _sluice_uring_link_snippet()
+    return {"int main() { return 0; }"}
 end
 
 option("__sluice_liburing_capability")
@@ -175,46 +121,180 @@ option("__sluice_liburing_capability")
             option:enable(true)
             return
         end
-        import("lib.detect.check_cxxsnippets")
+        import("core.tool.compiler")
+        import("core.project.config")
 
-        -- Declaration layer: the header and the exact compile-time surface the
-        -- uring TUs use must compile. Library layer: the required external
-        -- symbols must link. Compiles and links only; never executes a binary,
-        -- so no kernel ring is required at configure time. The probes pin the
-        -- resolved header/library directories explicitly (configs is the only
-        -- place check_cxsnippets reads links and search paths from, so links
-        -- passed outside configs would silently skip the link step).
-        local header_path = _first_existing(_candidate_include_dirs(), {"liburing.h"})
-        local library_path = _first_existing(_candidate_library_dirs(),
-                                             {"liburing.so", "liburing.so.2"})
-        local configs = {}
-        if header_path ~= nil then
-            configs.includedirs = path.directory(header_path)
+        local compinst = compiler.load("cxx")
+        if compinst == nil then
+            raise("sluice --liburing=y: no C++ compiler is configured for the "
+                .. "active toolchain")
         end
-        if library_path ~= nil then
-            configs.linkdirs = path.directory(library_path)
+        local program = compinst:program()
+
+        -- Everything below runs here (not at file scope): the trace helpers
+        -- need os.tmpfile/os.iorunv, which only the on_check sandbox exposes.
+        local function _write_snippet_file(lines)
+            local file = os.tmpfile()
+            local handle = io.open(file, "w")
+            handle:write(table.concat(lines, "\n") .. "\n")
+            handle:close()
+            return file
         end
 
-        local snippet = _sluice_uring_probe_snippet()
-        local decl_ok, decl_error = check_cxxsnippets({liburing = snippet},
-                                                      {configs = configs})
-        if not decl_ok then
-            raise("sluice --liburing=y: the installed liburing does not provide the "
-                .. "header/declaration surface the uring backend compiles against: "
-                .. tostring(decl_error))
+        local function _no_dependency_env()
+            return {CPATH = "", CPLUS_INCLUDE_PATH = "", C_INCLUDE_PATH = "",
+                    LIBRARY_PATH = ""}
         end
-        local link_configs = table.clone(configs)
-        link_configs.links = "uring"
-        local link_ok, link_error = check_cxxsnippets({liburing = snippet},
-                                                      {configs = link_configs})
-        if not link_ok then
-            raise("sluice --liburing=y: the installed liburing library does not "
-                .. "provide the required external symbols: " .. tostring(link_error))
+
+        local function _run_capture(argv, envs)
+            local captured = {ok = true, output = "", errors = ""}
+            local opt = {}
+            if envs ~= nil then
+                opt.envs = envs
+            end
+            try {
+                function ()
+                    local output, errors = os.iorunv(program, argv, opt)
+                    captured.output = tostring(output or "")
+                    captured.errors = tostring(errors or "")
+                end,
+                catch {function (errors)
+                    captured.ok = false
+                    captured.errors = tostring(errors)
+                end}}
+            return captured
         end
-        local refusal = _report_liburing_paths()
-        if refusal ~= nil then
-            raise(refusal)
+
+        local function _trace_header(include_dir, envs)
+            local argv = {"-E", "-H", "-x", "c++"}
+            if include_dir ~= nil then
+                table.insert(argv, "-I")
+                table.insert(argv, include_dir)
+            end
+            local snippet = _write_snippet_file({"#include <liburing.h>",
+                                                 "int sluice_uring_identity;"})
+            table.insert(argv, snippet)
+            local captured = _run_capture(argv, envs)
+            os.tryrm(snippet)
+            local resolved = (captured.output .. "\n" .. captured.errors)
+                :match("%.%s+(%S*liburing%.h)")
+            return captured, resolved
         end
+
+        local function _trace_library(library_dir, envs)
+            local argv = {"-x", "c++"}
+            if library_dir ~= nil then
+                table.insert(argv, "-L")
+                table.insert(argv, library_dir)
+            end
+            local snippet = _write_snippet_file(_sluice_uring_link_snippet())
+            table.insert(argv, snippet)
+            local binary = os.tmpfile()
+            argv = table.join(argv, {"-luring", "-Wl,--trace", "-o", binary})
+            local captured = _run_capture(argv, envs)
+            os.tryrm(snippet)
+            os.tryrm(binary)
+            local resolved = (captured.output .. "\n" .. captured.errors)
+                :match("(%S*liburing%.so[%w%.]*)")
+            return captured, resolved
+        end
+
+        local function _resolve_identity()
+            local header_captured, header_file = _trace_header(nil, nil)
+            if header_file == nil then
+                raise("sluice --liburing=y: could not resolve <liburing.h> in "
+                    .. "the active C++ include resolution (" .. tostring(program)
+                    .. "): " .. header_captured.errors)
+            end
+            local library_captured, library_file = _trace_library(nil, nil)
+            if library_file == nil then
+                raise("sluice --liburing=y: no linker resolution for -luring in "
+                    .. "the active library search (" .. tostring(program) .. "): "
+                    .. library_captured.errors)
+            end
+            return header_file, library_file
+        end
+
+        -- The probe pins the resolved directories; the pin must resolve to
+        -- exactly the files the unpinned production resolution picks.
+        local function _verify_pinned_identity(header_file, library_file)
+            local _, header_pinned = _trace_header(path.directory(header_file), nil)
+            if header_pinned ~= header_file then
+                raise("sluice --liburing=y: pinning "
+                    .. path.directory(header_file) .. " changes the <liburing.h> "
+                    .. "resolution to " .. tostring(header_pinned) .. " instead of "
+                    .. header_file)
+            end
+            local _, library_pinned = _trace_library(path.directory(library_file), nil)
+            if library_pinned ~= library_file then
+                raise("sluice --liburing=y: pinning "
+                    .. path.directory(library_file) .. " changes the -luring "
+                    .. "resolution to " .. tostring(library_pinned) .. " instead of "
+                    .. library_file)
+            end
+        end
+
+        local function _check_capability(snippet, header_dir, library_dir)
+            import("lib.detect.check_cxxsnippets")
+
+            -- Declaration layer: the header and the exact compile-time surface
+            -- the uring TUs use must compile. Library layer: the required
+            -- external symbols must link. Compiles and links only; never
+            -- executes a binary, so no kernel ring is required at configure
+            -- time. (configs is the only place check_cxsnippets reads links
+            -- from, so links passed outside configs would silently skip the
+            -- link step.)
+            local configs = {includedirs = header_dir}
+            local decl_ok, decl_error = check_cxxsnippets({liburing = snippet},
+                                                          {configs = configs})
+            if not decl_ok then
+                raise("sluice --liburing=y: the resolved liburing does not provide "
+                    .. "the header/declaration surface the uring backend compiles "
+                    .. "against: " .. tostring(decl_error))
+            end
+            local link_configs = {includedirs = header_dir,
+                                  linkdirs = library_dir,
+                                  links = "uring"}
+            local link_ok, link_error = check_cxxsnippets({liburing = snippet},
+                                                          {configs = link_configs})
+            if not link_ok then
+                raise("sluice --liburing=y: the resolved liburing library does not "
+                    .. "provide the required external symbols: "
+                    .. tostring(link_error))
+            end
+        end
+
+        local header_file, library_file = _resolve_identity()
+        _verify_pinned_identity(header_file, library_file)
+        _check_capability(_sluice_uring_probe_snippet(),
+                          path.directory(header_file),
+                          path.directory(library_file))
+
+        -- Consumer binding: bind the resolved directories publicly only when
+        -- the plain resolution depends on this environment's variables; an
+        -- environment-independent pair is what every consumer resolves
+        -- anyway, and pinning /usr/include ahead of the C++ standard headers
+        -- would only reorder the default search.
+        local _, header_cleared = _trace_header(nil, _no_dependency_env())
+        if header_cleared ~= header_file then
+            config.set("__sluice_liburing_header_dir", path.directory(header_file),
+                       {force = true})
+            config.set("__sluice_liburing_bind_includes", true, {force = true})
+        else
+            config.set("__sluice_liburing_bind_includes", false, {force = true})
+        end
+        local _, library_cleared = _trace_library(nil, _no_dependency_env())
+        if library_cleared ~= library_file then
+            config.set("__sluice_liburing_library_dir", path.directory(library_file),
+                       {force = true})
+            config.set("__sluice_liburing_bind_linkdirs", true, {force = true})
+        else
+            config.set("__sluice_liburing_bind_linkdirs", false, {force = true})
+        end
+        config.save()
+
+        print("checking for liburing capability ... ok (%s + %s)",
+              header_file, library_file)
         option:enable(true)
     end)
 option_end()
