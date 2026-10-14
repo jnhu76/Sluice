@@ -215,9 +215,89 @@ Evidence at `cdb2ca0f`, bound to the matrix's own binaries
   record remains the truthful description of the F5 head, and this slice
   supersedes it going forward.
 
+## F-10 correction (2026-10-14, review round 2) — probe/production dependency identity
+
+Independent review finding `F10_PROBE_REAL_BUILD_DEPENDENCY_DIVERGENCE`
+(P1, scope #520 only): the round-1 capability probe selected the header and
+library by scanning candidate directories while the production build resolved
+`<liburing.h>` and `-luring` through the toolchain — two different resolution
+authorities that demonstrably diverge on this host. The empirical g++ 16
+authority, measured rather than assumed
+(`f10-correction/red/precedence-study.log`):
+
+- C++ includes: `CPATH` → `CPLUS_INCLUDE_PATH` → default directories;
+  `C_INCLUDE_PATH` is not consulted for C++ at all, and environment paths
+  rank ahead of any `-I` on the command line.
+- `-luring` link resolution: `-L` → driver-configured directories →
+  `LIBRARY_PATH`.
+
+RED at `5ab32ae7` (`f10-correction/red/`): with
+`C_INCLUDE_PATH=<full header copy>` (invisible to g++ C++, honored by the old
+candidate scan) plus `LIBRARY_PATH=<library copy>` (checked last by the
+driver, first by the old scan), the old configure accepted and printed
+`stub-good/include/liburing.h + fakelib/liburing.so` while the production
+build resolved `/usr/include/liburing.h + /usr/lib64/liburing.so` — the probe
+validated files the toolchain never opens
+(`F10_PROBE_PRODUCTION_IDENTITY_DIVERGENCE`, `red/result.json`). The
+deficient-CPATH negative already refused on the old code (the pin loses to
+`CPATH`), recorded as staying valid.
+
+Corrected mechanism, implementation head
+`9e04d3b54e8d4e0d7f5bf7cc86bb1622e55ea67b`: the resolved identity is
+whatever the toolchain itself opens — `g++ -E -H` names the header, a
+compile+link with `-Wl,--trace` names the library, both traced with the
+ambient environment left in place, then re-traced with the resolved
+directory pinned (`-I`/`-L`) and required to return exactly the same files.
+The candidate scan and the top-level-prefix guard are deleted. The
+capability probes run against exactly that pair. Version-different but
+compatible installations are not rejected: when cleared-environment
+resolution selects the same pair, nothing is bound and the supported
+compile surface is unchanged; when it selects something else, the resolved
+directories are bound publicly on `sluice_async` so production consumes the
+probed pair (`__sluice_liburing_bind_includes`/`__sluice_liburing_bind_linkdirs`
+in the stored config record which happened; the trace TUs use an empty
+`main` so resolution stays independent of capability). Fail-fast happens on
+actual mixing or unverifiable consistency: unresolvable header, unresolvable
+library, or pin re-trace disagreement all refuse at configure time.
+
+GREEN at `9e04d3b5` (`f10-correction/green/`, `PROVENANCE.md` records every
+driver, worktree head and command):
+
+- `scripts/verify_liburing_identity_binding.py` (new RED/GREEN oracle):
+  deficient-CPATH header refused at the declaration layer; the divergence
+  environment accepted with the printed identity equal (realpath) to the
+  toolchain's own resolution; clean-environment print equals the traced
+  pair (`F10_IDENTITY_BINDING_REGRESSION_PASS`).
+- Same-dir switch cycle + negatives re-baselined
+  (`scripts/verify_liburing_config_switch.py`): n→y→n→y 52/66/52/66 with
+  `bind_includes = false` in every y phase (clean-env resolution adds no
+  flags); negatives re-layered — missing header → include-resolution layer,
+  bind-mounted empty library files → symbol layer (an empty file still
+  resolves; ld reads it as an empty linker script, so the honest failure is
+  the missing symbol surface), reduced CPATH API → declaration layer, CPATH
+  `#include_next` chain → accepted with the printed identity naming the stub
+  and `bind_includes = true` recorded for consumers.
+- Six-profile matrix (`PRE_F6_MATRIX_SIX_PROFILES_PASS`), B-01 v7 package
+  capture (`--after 9e04d3b5`, harness verbatim, counts [15, 13, 25] in
+  both ring profiles), and the installed header/ODR probes re-run green at
+  `9e04d3b5`.
+- Not re-run, with reason: the #519 mutation killers and the #521 TSan
+  partition — the mutation surface and test sources are untouched by this
+  change, and the matrix's `tsan-n` profile re-executed `request_scope_test`
+  for real.
+
+Supersessions in this file: the two Notes bullets on the mixed-prefix
+refusal and `_report_liburing_paths` are marked in place; the #520 section's
+round-1 description "an explicit refusal when header and library resolve to
+different installation prefixes" states the `cdb2ca0f` behavior truthfully
+and is superseded going forward by this section.
+
 ## Reproduction
 
 ```
+# F-10 identity regression (probe/production dependency identity; head 9e04d3b5)
+python3 scripts/verify_liburing_identity_binding.py \
+    --workdir <checkout at 9e04d3b5> --output <fresh dir>
 # matrix (six profiles)
 python3 docs/evidence/pre-f6-infra-stabilization-20261014/matrix/run-matrix.py \
     --repo <checkout at cdb2ca0f> --output <fresh dir>
@@ -255,11 +335,15 @@ python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run
   than pass silently. The matrix runner pins the F5 runner's interface
   (including its xmake path convention); the driver script takes
   `SLUICE_XMAKE` as an override.
-- The mixed-prefix refusal compares the top-level directory component of
-  the resolved header and library paths, so `/usr/local/include` +
-  `/usr/lib64` is accepted by design; grossly different trees (an
-  `/opt`-style stub alongside a system library) are refused. The refusal
-  message says "different installation prefixes" in that sense.
+- Superseded 2026-10-14 by the F-10 correction: this bullet describes the
+  removed round-1 candidate-scan mechanism at `cdb2ca0f` (kept for the
+  historical record). The mixed-prefix refusal compared the top-level
+  directory component of the resolved header and library paths, so
+  `/usr/local/include` + `/usr/lib64` was accepted by design; grossly
+  different trees (an `/opt`-style stub alongside a system library) were
+  refused. The current mechanism resolves through the toolchain's own
+  traces with pin-equality verification and conditional public binding; see
+  the F-10 correction section.
 - The #520 fix is specific to the `--liburing` switch: xmake's depend
   check remains blind to tail-appended flags for any other config-time
   conditional flag a target might grow. Any future conditional define
@@ -270,10 +354,10 @@ python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run
   link step. The capability probes pin `includedirs`, `linkdirs` and
   `links` through `configs` for exactly this reason (the missing-library
   negative catches a regression here).
-- The `raise` used by the capability refusals lives in the option-check
-  sandbox; the project-file scope has no `raise`, so
-  `_report_liburing_paths` returns the refusal message for the check
-  callback to raise.
+- Superseded 2026-10-14 by the F-10 correction: `_report_liburing_paths` was
+  removed with the candidate scan. The surviving sandbox fact is that the
+  resolution, trace and refusal logic lives entirely inside the option-check
+  callback — the only scope with `raise` (the project-file scope has none).
 - The M4 isolation experiment temporarily reordered `tests[]` in the
   working tree; it was reverted before recording (tree clean at
   `cdb2ca0f`).
