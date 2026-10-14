@@ -3,8 +3,12 @@
 Post-F5 build/test infrastructure slice on branch
 `codex/pre-f6-infra-520-519-521` (commits `5d611b28` → `7f9d43c7` →
 `cdb2ca0f`, then the F-10 correction `70bf3e15` → `9e04d3b5`), baseline
-`f99acbc3`. Status: **CANDIDATE — Ready-for-Review**; no merge authorization
-is claimed (PR #518's authorization is not transferable). The F-10
+`f99acbc3`. Status: **MERGED** — owner-authorized and merged 2026-10-14 as
+merge commit `573d616cc1ee79ec7a3b3876351799708237db3a` (content identical
+to review head `7077c4d2`, GitHub CI 4/4 at that head); every gate
+re-executed green on the real post-merge master (`postmerge/`). No merge
+authorization was borrowed (the merge was explicitly authorized for this
+PR). The F-10
 correction (review round 2, P1, #520 scope) re-heads the liburing
 dependency-identity mechanism at `9e04d3b5`; every F-10 gate ran at that
 content.
@@ -61,6 +65,11 @@ Contents:
   worktree head and command). The recorded stub fixture bytes are archived
   (`green/identity-regression/fixtures.tar.gz` + `SHA256SUMS`), not
   committed as loose headers.
+- `postmerge/` — the owner-authorized merge receipt: every gate re-executed
+  green on the real post-merge master `573d616c` (identity regression,
+  switch cycle + negatives, six-profile matrix, B-01 v7 capture with the
+  unchanged 15/13/25 surface, installed probes both macro views), bound to
+  commands and raw logs in `postmerge/PROVENANCE.md`.
 
 F5's evidence directory (`f5-final-package-contraction-20261013/`) is
 immutable history: nothing there was modified.

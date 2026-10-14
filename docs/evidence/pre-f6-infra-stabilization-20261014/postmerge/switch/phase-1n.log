@@ -1,0 +1,330 @@
+$ /home/jnhu/.local/bin/xmake f -y -m debug --liburing=n --ccache=n -o /tmp/pm-switch-build
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m
+$ /home/jnhu/.local/bin/xmake build -y app_copy_consumption_test
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m compiling.debug tests/app_copy_consumption_test.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m compiling.debug apps/sluice-copy/copy_task.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m compiling.debug apps/sluice-copy/file_domain.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_core>[0m compiling.debug src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_core>[0m compiling.debug src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m compiling.debug apps/sluice-copy/safe_output.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/fiber.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/stackful_io_host.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/fiber_ctx.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/cancel.cpp[0m
+[0m[38;5;2;1m[ 10%]:[0m [38;5;5;1m<sluice_async>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.debug libsluice_core.a[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<sluice_async>[0m [38;5;5;1marchiving.debug libsluice_async.a[0m
+[0m[38;5;2;1m[ 88%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m [38;5;5;1mlinking.debug app_copy_consumption_test[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 3.631s[0m
+$ /home/jnhu/.local/bin/xmake build -y sluice_async
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.026s[0m
+$ /home/jnhu/.local/bin/xmake test -y
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m compiling.debug tests/app_copy_dir_fsync_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m compiling.debug apps/sluice-copy/copy_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m compiling.debug apps/sluice-copy/file_domain.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m compiling.debug apps/sluice-copy/safe_output.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m compiling.debug tests/app_copy_pipeline_oracle_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m compiling.debug apps/sluice-copy/copy_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_grep_consumption_test>[0m compiling.debug tests/app_grep_consumption_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_grep_consumption_test>[0m compiling.debug apps/sluice-grep/grep_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_grep_consumption_test>[0m compiling.debug apps/sluice-grep/matcher.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_hash_consumption_test>[0m compiling.debug tests/app_hash_consumption_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_hash_consumption_test>[0m compiling.debug apps/sluice-hash/hash_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_hash_consumption_test>[0m compiling.debug apps/sluice-hash/sha256.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_tail_cli_oracle_test>[0m compiling.debug tests/app_tail_cli_oracle_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<sluice-tail>[0m compiling.debug apps/sluice-tail/main.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<sluice-tail>[0m compiling.debug apps/sluice-tail/tail_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<sluice-tail>[0m compiling.debug apps/sluice-tail/cli_parse.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_tail_consumption_test>[0m compiling.debug tests/app_tail_consumption_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_tail_consumption_test>[0m compiling.debug apps/sluice-tail/tail_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_tail_lifecycle_oracle_test>[0m compiling.debug tests/app_tail_lifecycle_oracle_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<app_tail_lifecycle_oracle_test>[0m compiling.debug apps/sluice-tail/tail_task.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<async_sync_admission_test>[0m compiling.debug tests/async_sync_admission_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<tail_pread_shim>[0m compiling.debug tests/support/tail_pread_shim.c[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m compiling.debug tests/backend_conformance_e1_test.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 22%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 24%]:[0m [38;5;5;1m<blocking_file_read_test>[0m compiling.debug tests/blocking_file_read_test.cpp[0m
+[0m[38;5;2;1m[ 24%]:[0m [38;5;5;1m<blocking_file_sequential_test>[0m compiling.debug tests/blocking_file_sequential_test.cpp[0m
+[0m[38;5;2;1m[ 24%]:[0m [38;5;5;1m<blocking_file_state_test>[0m compiling.debug tests/blocking_file_state_test.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m [38;5;5;1m<blocking_file_sync_all_test>[0m compiling.debug tests/blocking_file_sync_all_test.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m [38;5;5;1m<blocking_file_sync_data_test>[0m compiling.debug tests/blocking_file_sync_data_test.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m [38;5;5;1m<blocking_file_write_test>[0m compiling.debug tests/blocking_file_write_test.cpp[0m
+[0m[38;5;2;1m[ 25%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m compiling.debug tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 26%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m compiling.debug src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 26%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m compiling.debug src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 26%]:[0m [38;5;5;1m<direct_composition_test>[0m compiling.debug tests/direct_composition_test.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m [38;5;5;1m<direct_cursor_position_test>[0m compiling.debug tests/direct_cursor_position_test.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m [38;5;5;1m<direct_w01_consumer_probe>[0m compiling.debug tests/direct_w01_consumer_probe.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m [38;5;5;1m<explicit_file_ref_test>[0m compiling.debug tests/explicit_file_ref_test.cpp[0m
+[0m[38;5;2;1m[ 27%]:[0m [38;5;5;1m<file_access_precedence_test>[0m compiling.debug tests/file_access_precedence_test.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m [38;5;5;1m<file_close_semantics_test>[0m compiling.debug tests/file_close_semantics_test.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m [38;5;5;1m<file_close_semantics_test>[0m compiling.debug src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 28%]:[0m [38;5;5;1m<file_close_semantics_test>[0m compiling.debug src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 29%]:[0m [38;5;5;1m<file_info_identity_test>[0m compiling.debug tests/file_info_identity_test.cpp[0m
+[0m[38;5;2;1m[ 29%]:[0m [38;5;5;1m<file_open_contract_test>[0m compiling.debug tests/file_open_contract_test.cpp[0m
+[0m[38;5;2;1m[ 29%]:[0m [38;5;5;1m<file_read_test>[0m compiling.debug tests/file_read_test.cpp[0m
+[0m[38;5;2;1m[ 30%]:[0m [38;5;5;1m<file_resource_test>[0m compiling.debug tests/file_resource_test.cpp[0m
+[0m[38;5;2;1m[ 30%]:[0m [38;5;5;1m<file_sync_all_test>[0m compiling.debug tests/file_sync_all_test.cpp[0m
+[0m[38;5;2;1m[ 30%]:[0m [38;5;5;1m<file_sync_data_test>[0m compiling.debug tests/file_sync_data_test.cpp[0m
+[0m[38;5;2;1m[ 30%]:[0m [38;5;5;1m<file_write_test>[0m compiling.debug tests/file_write_test.cpp[0m
+[0m[38;5;2;1m[ 31%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m compiling.debug tests/progress_source_ownership_test.cpp[0m
+[0m[38;5;2;1m[ 31%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 31%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 32%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 32%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 32%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 32%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m compiling.debug tests/public_request_release_violation_test.cpp[0m
+[0m[38;5;2;1m[ 33%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 33%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 33%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 34%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 34%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 34%]:[0m [38;5;5;1m<public_request_test>[0m compiling.debug tests/public_request_test.cpp[0m
+[0m[38;5;2;1m[ 35%]:[0m [38;5;5;1m<public_request_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 35%]:[0m [38;5;5;1m<public_request_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 35%]:[0m [38;5;5;1m<public_request_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 35%]:[0m [38;5;5;1m<public_request_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 36%]:[0m [38;5;5;1m<public_request_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 36%]:[0m [38;5;5;1m<request_core_consumer_probe>[0m compiling.debug tests/request_core_consumer_probe.cpp[0m
+[0m[38;5;2;1m[ 36%]:[0m [38;5;5;1m<request_core_consumer_probe>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<request_core_ownership_test>[0m compiling.debug tests/request_core_ownership_test.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<request_core_ownership_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<request_core_ownership_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 37%]:[0m [38;5;5;1m<request_core_ownership_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 38%]:[0m [38;5;5;1m<request_core_ownership_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 38%]:[0m [38;5;5;1m<request_core_ownership_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 38%]:[0m [38;5;5;1m<request_core_protocol_test>[0m compiling.debug tests/request_core_protocol_test.cpp[0m
+[0m[38;5;2;1m[ 39%]:[0m [38;5;5;1m<request_core_protocol_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 39%]:[0m [38;5;5;1m<request_core_publication_test>[0m compiling.debug tests/request_core_publication_test.cpp[0m
+[0m[38;5;2;1m[ 39%]:[0m [38;5;5;1m<request_core_publication_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 39%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug tests/request_scope_test.cpp[0m
+[0m[38;5;2;1m[ 40%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 40%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 40%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 41%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 41%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 41%]:[0m [38;5;5;1m<request_scope_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<semantic_durability_reference_test>[0m compiling.debug tests/semantic_durability_reference_test.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<semantic_effect_outcome_test>[0m compiling.debug tests/semantic_effect_outcome_test.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<semantic_errno_mapping_test>[0m compiling.debug tests/semantic_errno_mapping_test.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<semantic_open_test>[0m compiling.debug tests/semantic_open_test.cpp[0m
+[0m[38;5;2;1m[ 43%]:[0m [38;5;5;1m<semantic_range_test>[0m compiling.debug tests/semantic_range_test.cpp[0m
+[0m[38;5;2;1m[ 43%]:[0m [38;5;5;1m<semantic_reference_case_test>[0m compiling.debug tests/semantic_reference_case_test.cpp[0m
+[0m[38;5;2;1m[ 43%]:[0m [38;5;5;1m<semantic_short_io_reference_test>[0m compiling.debug tests/semantic_short_io_reference_test.cpp[0m
+[0m[38;5;2;1m[ 44%]:[0m [38;5;5;1m<semantic_validation_precedence_test>[0m compiling.debug tests/semantic_validation_precedence_test.cpp[0m
+[0m[38;5;2;1m[ 44%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m compiling.debug tests/shutdown_lifecycle_test.cpp[0m
+[0m[38;5;2;1m[ 44%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 45%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 46%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug tests/stackful_host_test.cpp[0m
+[0m[38;5;2;1m[ 46%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 46%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/stackful_io_host.cpp[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 48%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/fiber_ctx.cpp[0m
+[0m[38;5;2;1m[ 48%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/fiber.cpp[0m
+[0m[38;5;2;1m[ 48%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 49%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/cancel.cpp[0m
+[0m[38;5;2;1m[ 49%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 49%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 50%]:[0m [38;5;5;1m<stackful_host_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 50%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m compiling.debug tests/threadpool_core_cutover_test.cpp[0m
+[0m[38;5;2;1m[ 50%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 50%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 51%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 51%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 51%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m compiling.debug tests/threadpool_external_loop_test.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 53%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 53%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 53%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m compiling.debug tests/threadpool_progress_race_test.cpp[0m
+[0m[38;5;2;1m[ 54%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 54%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 54%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 55%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 55%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 55%]:[0m [38;5;5;1m<uring_submit_boundary_test>[0m compiling.debug tests/uring_submit_boundary_test.cpp[0m
+[0m[38;5;2;1m[ 56%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m [38;5;5;1mlinking.debug direct_composition_fault_test[0m
+[0m[38;5;2;1m[ 56%]:[0m [38;5;5;1m<file_close_semantics_test>[0m [38;5;5;1mlinking.debug file_close_semantics_test[0m
+[0m[38;5;2;1m[ 57%]:[0m [38;5;5;1m<app_grep_consumption_test>[0m [38;5;5;1mlinking.debug app_grep_consumption_test[0m
+[0m[38;5;2;1m[ 57%]:[0m [38;5;5;1m<app_hash_consumption_test>[0m [38;5;5;1mlinking.debug app_hash_consumption_test[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<sluice-tail>[0m [38;5;5;1mlinking.debug sluice-tail[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<tail_pread_shim>[0m [38;5;5;1mlinking.debug libtail_pread_shim.so[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<app_tail_consumption_test>[0m [38;5;5;1mlinking.debug app_tail_consumption_test[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<app_tail_lifecycle_oracle_test>[0m [38;5;5;1mlinking.debug app_tail_lifecycle_oracle_test[0m
+[0m[38;5;2;1m[ 59%]:[0m [38;5;5;1m<backend_conformance_e1_threadpool_test>[0m [38;5;5;1mlinking.debug backend_conformance_e1_threadpool_test[0m
+[0m[38;5;2;1m[ 59%]:[0m [38;5;5;1m<blocking_file_read_test>[0m [38;5;5;1mlinking.debug blocking_file_read_test[0m
+[0m[38;5;2;1m[ 59%]:[0m [38;5;5;1m<blocking_file_sequential_test>[0m [38;5;5;1mlinking.debug blocking_file_sequential_test[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<blocking_file_state_test>[0m [38;5;5;1mlinking.debug blocking_file_state_test[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<blocking_file_sync_all_test>[0m [38;5;5;1mlinking.debug blocking_file_sync_all_test[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<blocking_file_sync_data_test>[0m [38;5;5;1mlinking.debug blocking_file_sync_data_test[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<blocking_file_write_test>[0m [38;5;5;1mlinking.debug blocking_file_write_test[0m
+[0m[38;5;2;1m[ 61%]:[0m [38;5;5;1m<direct_composition_test>[0m [38;5;5;1mlinking.debug direct_composition_test[0m
+[0m[38;5;2;1m[ 61%]:[0m [38;5;5;1m<direct_cursor_position_test>[0m [38;5;5;1mlinking.debug direct_cursor_position_test[0m
+[0m[38;5;2;1m[ 61%]:[0m [38;5;5;1m<direct_w01_consumer_probe>[0m [38;5;5;1mlinking.debug direct_w01_consumer_probe[0m
+[0m[38;5;2;1m[ 62%]:[0m [38;5;5;1m<file_info_identity_test>[0m [38;5;5;1mlinking.debug file_info_identity_test[0m
+[0m[38;5;2;1m[ 62%]:[0m [38;5;5;1m<file_open_contract_test>[0m [38;5;5;1mlinking.debug file_open_contract_test[0m
+[0m[38;5;2;1m[ 62%]:[0m [38;5;5;1m<file_resource_test>[0m [38;5;5;1mlinking.debug file_resource_test[0m
+[0m[38;5;2;1m[ 62%]:[0m [38;5;5;1m<request_core_consumer_probe>[0m [38;5;5;1mlinking.debug request_core_consumer_probe[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<request_core_protocol_test>[0m [38;5;5;1mlinking.debug request_core_protocol_test[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<request_core_publication_test>[0m [38;5;5;1mlinking.debug request_core_publication_test[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<semantic_durability_reference_test>[0m [38;5;5;1mlinking.debug semantic_durability_reference_test[0m
+[0m[38;5;2;1m[ 64%]:[0m [38;5;5;1m<semantic_effect_outcome_test>[0m [38;5;5;1mlinking.debug semantic_effect_outcome_test[0m
+[0m[38;5;2;1m[ 64%]:[0m [38;5;5;1m<semantic_errno_mapping_test>[0m [38;5;5;1mlinking.debug semantic_errno_mapping_test[0m
+[0m[38;5;2;1m[ 64%]:[0m [38;5;5;1m<semantic_open_test>[0m [38;5;5;1mlinking.debug semantic_open_test[0m
+[0m[38;5;2;1m[ 65%]:[0m [38;5;5;1m<semantic_range_test>[0m [38;5;5;1mlinking.debug semantic_range_test[0m
+[0m[38;5;2;1m[ 65%]:[0m [38;5;5;1m<semantic_short_io_reference_test>[0m [38;5;5;1mlinking.debug semantic_short_io_reference_test[0m
+[0m[38;5;2;1m[ 65%]:[0m [38;5;5;1m<public_request_release_violation_test>[0m [38;5;5;1mlinking.debug public_request_release_violation_test[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m [38;5;5;1mlinking.debug app_copy_dir_fsync_test[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m [38;5;5;1mlinking.debug app_copy_pipeline_oracle_test[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<async_sync_admission_test>[0m [38;5;5;1mlinking.debug async_sync_admission_test[0m
+[0m[38;5;2;1m[ 74%]:[0m [38;5;5;1m<explicit_file_ref_test>[0m [38;5;5;1mlinking.debug explicit_file_ref_test[0m
+[0m[38;5;2;1m[ 74%]:[0m [38;5;5;1m<file_access_precedence_test>[0m [38;5;5;1mlinking.debug file_access_precedence_test[0m
+[0m[38;5;2;1m[ 74%]:[0m [38;5;5;1m<file_read_test>[0m [38;5;5;1mlinking.debug file_read_test[0m
+[0m[38;5;2;1m[ 75%]:[0m [38;5;5;1m<file_sync_all_test>[0m [38;5;5;1mlinking.debug file_sync_all_test[0m
+[0m[38;5;2;1m[ 75%]:[0m [38;5;5;1m<file_sync_data_test>[0m [38;5;5;1mlinking.debug file_sync_data_test[0m
+[0m[38;5;2;1m[ 75%]:[0m [38;5;5;1m<file_write_test>[0m [38;5;5;1mlinking.debug file_write_test[0m
+[0m[38;5;2;1m[ 75%]:[0m [38;5;5;1m<progress_source_ownership_test>[0m [38;5;5;1mlinking.debug progress_source_ownership_test[0m
+[0m[38;5;2;1m[ 76%]:[0m [38;5;5;1m<uring_submit_boundary_test>[0m [38;5;5;1mlinking.debug uring_submit_boundary_test[0m
+[0m[38;5;2;1m[ 76%]:[0m [38;5;5;1m<request_core_ownership_test>[0m [38;5;5;1mlinking.debug request_core_ownership_test[0m
+[0m[38;5;2;1m[ 77%]:[0m [38;5;5;1m<public_request_test>[0m [38;5;5;1mlinking.debug public_request_test[0m
+[0m[38;5;2;1m[ 84%]:[0m [38;5;5;1m<app_tail_cli_oracle_test>[0m [38;5;5;1mlinking.debug app_tail_cli_oracle_test[0m
+[0m[38;5;2;1m[ 86%]:[0m [38;5;5;1m<request_scope_test>[0m [38;5;5;1mlinking.debug request_scope_test[0m
+[0m[38;5;2;1m[ 87%]:[0m [38;5;5;1m<semantic_reference_case_test>[0m [38;5;5;1mlinking.debug semantic_reference_case_test[0m
+[0m[38;5;2;1m[ 89%]:[0m [38;5;5;1m<semantic_validation_precedence_test>[0m [38;5;5;1mlinking.debug semantic_validation_precedence_test[0m
+[0m[38;5;2;1m[ 89%]:[0m [38;5;5;1m<shutdown_lifecycle_test>[0m [38;5;5;1mlinking.debug shutdown_lifecycle_test[0m
+[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1m<threadpool_core_cutover_test>[0m [38;5;5;1mlinking.debug threadpool_core_cutover_test[0m
+[0m[38;5;2;1m[ 92%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m [38;5;5;1mlinking.debug threadpool_progress_race_test[0m
+[0m[38;5;2;1m[ 92%]:[0m [38;5;5;1m<threadpool_external_loop_test>[0m [38;5;5;1mlinking.debug threadpool_external_loop_test[0m
+[0m[38;5;2;1m[ 94%]:[0m [38;5;5;1m<stackful_host_test>[0m [38;5;5;1mlinking.debug stackful_host_test[0m
+running tests ...
+[0m[38;5;2;1m[  0%]:[0m running.test app_copy_consumption_test/app_copy_consumption_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_copy_dir_fsync_test/app_copy_dir_fsync_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_copy_pipeline_oracle_test/app_copy_pipeline_oracle_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_grep_consumption_test/app_grep_consumption_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_hash_consumption_test/app_hash_consumption_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_tail_cli_oracle_test/app_tail_cli_oracle_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_tail_consumption_test/app_tail_consumption_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test app_tail_lifecycle_oracle_test/app_tail_lifecycle_oracle_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test async_sync_admission_test/async_sync_admission_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test backend_conformance_e1_threadpool_test/backend_conformance_e1_threadpool_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test blocking_file_read_test/blocking_file_read_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test blocking_file_sequential_test/blocking_file_sequential_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test blocking_file_state_test/blocking_file_state_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test blocking_file_sync_all_test/blocking_file_sync_all_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test blocking_file_sync_data_test/blocking_file_sync_data_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test blocking_file_write_test/blocking_file_write_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test direct_composition_fault_test/direct_composition_fault_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test direct_composition_test/direct_composition_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test direct_cursor_position_test/direct_cursor_position_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test direct_w01_consumer_probe/direct_w01_consumer_probe[0m
+[0m[38;5;2;1m[  0%]:[0m running.test explicit_file_ref_test/explicit_file_ref_test[0m
+[0m[38;5;2;1m[  0%]:[0m running.test file_access_precedence_test/file_access_precedence_test[0m
+[0m[38;5;2;1m[  1%]:[0m running.test file_close_semantics_test/file_close_semantics_test[0m
+[0m[38;5;2;1m[  3%]:[0m running.test file_info_identity_test/file_info_identity_test[0m
+[0m[38;5;2;1m[  5%]:[0m running.test file_open_contract_test/file_open_contract_test[0m
+[0m[38;5;2;1m[  7%]:[0m running.test file_read_test/file_read_test[0m
+[0m[38;5;2;1m[  9%]:[0m running.test file_resource_test/file_resource_test[0m
+[0m[38;5;2;1m[ 11%]:[0m running.test file_sync_all_test/file_sync_all_test[0m
+[0m[38;5;2;1m[ 13%]:[0m running.test file_sync_data_test/file_sync_data_test[0m
+[0m[38;5;2;1m[ 15%]:[0m running.test file_write_test/file_write_test[0m
+[0m[38;5;2;1m[ 17%]:[0m running.test progress_source_ownership_test/progress_source_ownership_test[0m
+[0m[38;5;2;1m[ 19%]:[0m running.test public_request_release_violation_test/public_request_release_violation_test[0m
+[0m[38;5;2;1m[ 21%]:[0m running.test public_request_test/public_request_test[0m
+[0m[38;5;2;1m[ 23%]:[0m running.test request_core_consumer_probe/request_core_consumer_probe[0m
+[0m[38;5;2;1m[ 25%]:[0m running.test request_core_ownership_test/request_core_ownership_test[0m
+[0m[38;5;2;1m[ 26%]:[0m running.test request_core_protocol_test/request_core_protocol_test[0m
+[0m[38;5;2;1m[ 28%]:[0m running.test request_core_publication_test/request_core_publication_test[0m
+[0m[38;5;2;1m[ 30%]:[0m running.test request_scope_test/request_scope_test[0m
+[0m[38;5;2;1m[ 32%]:[0m running.test semantic_durability_reference_test/semantic_durability_reference_test[0m
+[0m[38;5;2;1m[ 34%]:[0m running.test semantic_effect_outcome_test/semantic_effect_outcome_test[0m
+[0m[38;5;2;1m[ 36%]:[0m running.test semantic_errno_mapping_test/semantic_errno_mapping_test[0m
+[0m[38;5;2;1m[ 38%]:[0m running.test semantic_open_test/semantic_open_test[0m
+[0m[38;5;2;1m[ 40%]:[0m running.test semantic_range_test/semantic_range_test[0m
+[0m[38;5;2;1m[ 42%]:[0m running.test semantic_reference_case_test/semantic_reference_case_test[0m
+[0m[38;5;2;1m[ 44%]:[0m running.test semantic_short_io_reference_test/semantic_short_io_reference_test[0m
+[0m[38;5;2;1m[ 46%]:[0m running.test semantic_validation_precedence_test/semantic_validation_precedence_test[0m
+[0m[38;5;2;1m[ 48%]:[0m running.test shutdown_lifecycle_test/shutdown_lifecycle_test[0m
+[0m[38;5;2;1m[ 50%]:[0m running.test stackful_host_test/stackful_host_test[0m
+[0m[38;5;2;1m[ 51%]:[0m running.test threadpool_core_cutover_test/threadpool_core_cutover_test[0m
+[0m[38;5;2;1m[ 53%]:[0m running.test threadpool_external_loop_test/threadpool_external_loop_test[0m
+[0m[38;5;2;1m[ 55%]:[0m running.test threadpool_progress_race_test/threadpool_progress_race_test[0m
+[0m[38;5;2;1m[ 57%]:[0m running.test uring_submit_boundary_test/uring_submit_boundary_test[0m
+
+report of tests:
+[0m[38;5;2;1m[  1%]:[0m app_copy_consumption_test/app_copy_consumption_test .......................... [38;5;2;1mpassed[0m [1m0.026s[0m
+[0m[38;5;2;1m[  3%]:[0m app_copy_dir_fsync_test/app_copy_dir_fsync_test .............................. [38;5;2;1mpassed[0m [1m0.025s[0m
+[0m[38;5;2;1m[  5%]:[0m app_grep_consumption_test/app_grep_consumption_test .......................... [38;5;2;1mpassed[0m [1m0.022s[0m
+[0m[38;5;2;1m[  7%]:[0m app_hash_consumption_test/app_hash_consumption_test .......................... [38;5;2;1mpassed[0m [1m0.022s[0m
+[0m[38;5;2;1m[  9%]:[0m async_sync_admission_test/async_sync_admission_test .......................... [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 11%]:[0m blocking_file_read_test/blocking_file_read_test .............................. [38;5;2;1mpassed[0m [1m0.016s[0m
+[0m[38;5;2;1m[ 13%]:[0m blocking_file_state_test/blocking_file_state_test ............................ [38;5;2;1mpassed[0m [1m0.014s[0m
+[0m[38;5;2;1m[ 15%]:[0m backend_conformance_e1_threadpool_test/backend_conformance_e1_threadpool_test  [38;5;2;1mpassed[0m [1m0.019s[0m
+[0m[38;5;2;1m[ 17%]:[0m blocking_file_sequential_test/blocking_file_sequential_test .................. [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 19%]:[0m blocking_file_sync_all_test/blocking_file_sync_all_test ...................... [38;5;2;1mpassed[0m [1m0.016s[0m
+[0m[38;5;2;1m[ 21%]:[0m blocking_file_sync_data_test/blocking_file_sync_data_test .................... [38;5;2;1mpassed[0m [1m0.016s[0m
+[0m[38;5;2;1m[ 23%]:[0m blocking_file_write_test/blocking_file_write_test ............................ [38;5;2;1mpassed[0m [1m0.016s[0m
+[0m[38;5;2;1m[ 25%]:[0m direct_composition_fault_test/direct_composition_fault_test .................. [38;5;2;1mpassed[0m [1m0.017s[0m
+[0m[38;5;2;1m[ 26%]:[0m direct_composition_test/direct_composition_test .............................. [38;5;2;1mpassed[0m [1m0.017s[0m
+[0m[38;5;2;1m[ 28%]:[0m direct_cursor_position_test/direct_cursor_position_test ...................... [38;5;2;1mpassed[0m [1m0.017s[0m
+[0m[38;5;2;1m[ 30%]:[0m direct_w01_consumer_probe/direct_w01_consumer_probe .......................... [38;5;2;1mpassed[0m [1m0.017s[0m
+[0m[38;5;2;1m[ 32%]:[0m explicit_file_ref_test/explicit_file_ref_test ................................ [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 34%]:[0m file_close_semantics_test/file_close_semantics_test .......................... [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 36%]:[0m file_info_identity_test/file_info_identity_test .............................. [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 38%]:[0m file_access_precedence_test/file_access_precedence_test ...................... [38;5;2;1mpassed[0m [1m0.022s[0m
+[0m[38;5;2;1m[ 40%]:[0m file_open_contract_test/file_open_contract_test .............................. [38;5;2;1mpassed[0m [1m0.020s[0m
+[0m[38;5;2;1m[ 42%]:[0m file_resource_test/file_resource_test ........................................ [38;5;2;1mpassed[0m [1m0.019s[0m
+[0m[38;5;2;1m[ 44%]:[0m file_read_test/file_read_test ................................................ [38;5;2;1mpassed[0m [1m0.021s[0m
+[0m[38;5;2;1m[ 46%]:[0m file_sync_all_test/file_sync_all_test ........................................ [38;5;2;1mpassed[0m [1m0.020s[0m
+[0m[38;5;2;1m[ 48%]:[0m file_sync_data_test/file_sync_data_test ...................................... [38;5;2;1mpassed[0m [1m0.020s[0m
+[0m[38;5;2;1m[ 50%]:[0m progress_source_ownership_test/progress_source_ownership_test ................ [38;5;2;1mpassed[0m [1m0.019s[0m
+[0m[38;5;2;1m[ 51%]:[0m file_write_test/file_write_test .............................................. [38;5;2;1mpassed[0m [1m0.021s[0m
+[0m[38;5;2;1m[ 53%]:[0m request_core_consumer_probe/request_core_consumer_probe ...................... [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 55%]:[0m public_request_test/public_request_test ...................................... [38;5;2;1mpassed[0m [1m0.020s[0m
+[0m[38;5;2;1m[ 57%]:[0m request_core_ownership_test/request_core_ownership_test ...................... [38;5;2;1mpassed[0m [1m0.019s[0m
+[0m[38;5;2;1m[ 59%]:[0m request_core_protocol_test/request_core_protocol_test ........................ [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 61%]:[0m request_core_publication_test/request_core_publication_test .................. [38;5;2;1mpassed[0m [1m0.018s[0m
+[0m[38;5;2;1m[ 63%]:[0m semantic_durability_reference_test/semantic_durability_reference_test ........ [38;5;2;1mpassed[0m [1m0.017s[0m
+[0m[38;5;2;1m[ 65%]:[0m semantic_effect_outcome_test/semantic_effect_outcome_test .................... [38;5;2;1mpassed[0m [1m0.015s[0m
+[0m[38;5;2;1m[ 67%]:[0m semantic_errno_mapping_test/semantic_errno_mapping_test ...................... [38;5;2;1mpassed[0m [1m0.015s[0m
+[0m[38;5;2;1m[ 69%]:[0m semantic_open_test/semantic_open_test ........................................ [38;5;2;1mpassed[0m [1m0.013s[0m
+[0m[38;5;2;1m[ 71%]:[0m semantic_range_test/semantic_range_test ...................................... [38;5;2;1mpassed[0m [1m0.012s[0m
+[0m[38;5;2;1m[ 73%]:[0m semantic_reference_case_test/semantic_reference_case_test .................... [38;5;2;1mpassed[0m [1m0.012s[0m
+[0m[38;5;2;1m[ 75%]:[0m semantic_short_io_reference_test/semantic_short_io_reference_test ............ [38;5;2;1mpassed[0m [1m0.011s[0m
+[0m[38;5;2;1m[ 76%]:[0m semantic_validation_precedence_test/semantic_validation_precedence_test ...... [38;5;2;1mpassed[0m [1m0.011s[0m
+[0m[38;5;2;1m[ 78%]:[0m threadpool_core_cutover_test/threadpool_core_cutover_test .................... [38;5;2;1mpassed[0m [1m0.008s[0m
+[0m[38;5;2;1m[ 80%]:[0m uring_submit_boundary_test/uring_submit_boundary_test ........................ [38;5;2;1mpassed[0m [1m0.006s[0m
+[0m[38;5;2;1m[ 82%]:[0m threadpool_progress_race_test/threadpool_progress_race_test .................. [38;5;2;1mpassed[0m [1m0.007s[0m
+[0m[38;5;2;1m[ 84%]:[0m app_tail_consumption_test/app_tail_consumption_test .......................... [38;5;2;1mpassed[0m [1m0.606s[0m
+[0m[38;5;2;1m[ 86%]:[0m request_scope_test/request_scope_test ........................................ [38;5;2;1mpassed[0m [1m0.588s[0m
+[0m[38;5;2;1m[ 88%]:[0m public_request_release_violation_test/public_request_release_violation_test .. [38;5;2;1mpassed[0m [1m0.672s[0m
+[0m[38;5;2;1m[ 90%]:[0m stackful_host_test/stackful_host_test ........................................ [38;5;2;1mpassed[0m [1m0.741s[0m
+[0m[38;5;2;1m[ 92%]:[0m threadpool_external_loop_test/threadpool_external_loop_test .................. [38;5;2;1mpassed[0m [1m1.696s[0m
+[0m[38;5;2;1m[ 94%]:[0m shutdown_lifecycle_test/shutdown_lifecycle_test .............................. [38;5;2;1mpassed[0m [1m1.812s[0m
+[0m[38;5;2;1m[ 96%]:[0m app_tail_lifecycle_oracle_test/app_tail_lifecycle_oracle_test ................ [38;5;2;1mpassed[0m [1m2.511s[0m
+[0m[38;5;2;1m[ 98%]:[0m app_tail_cli_oracle_test/app_tail_cli_oracle_test ............................ [38;5;2;1mpassed[0m [1m2.562s[0m
+[0m[38;5;2;1m[100%]:[0m app_copy_pipeline_oracle_test/app_copy_pipeline_oracle_test .................. [38;5;2;1mpassed[0m [1m2.626s[0m
+[0m
+[38;5;2;1m100%[0m tests passed, [38;5;1;1m0[0m test(s) failed out of [1m52[0m, spent [1m2.630s[0m
