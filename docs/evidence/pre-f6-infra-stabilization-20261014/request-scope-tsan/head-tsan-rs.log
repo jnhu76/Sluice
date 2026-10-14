@@ -1,0 +1,3 @@
+sluice::async::RequestScope: progress health failed while accepted scope work remains unsettled; failing fast instead of returning with live borrows
+terminate called without an active exception
+24 of 24 request scope tests passed

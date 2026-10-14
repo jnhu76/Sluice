@@ -1,0 +1,50 @@
+# Pre-F6 infrastructure stabilization — #520, #519, #521
+
+Post-F5 build/test infrastructure slice on branch
+`codex/pre-f6-infra-520-519-521` (commits `5d611b28` → `7f9d43c7` →
+`cdb2ca0f`), baseline `f99acbc3`. Status: **CANDIDATE — Ready-for-Review**;
+no merge authorization is claimed (PR #518's authorization is not
+transferable).
+
+- #520: a same-directory `--liburing` n↔y switch reused the previous
+  profile's objects and archive members (xmake's depend check is blind to
+  tail-appended flags). Fixed with an unconditional public
+  `SLUICE_LIBURING_PROFILE=on|off` identity define plus configure-time
+  capability detection with per-layer fault-injection negatives.
+- #519: the M4 mutation target failed to compile under Clang
+  (`-Wunused-private-field` via `-Werror`); fixed with a target-local,
+  Clang-tools-only suppression; both mutants still die by their recorded
+  named killers.
+- #521: the request-scope zero-allocation oracle (strong global
+  operator new/delete) collided with the TSan runtime, so TSan excluded
+  the whole target. The seam now compiles only outside TSan; TSan runs
+  the other 24 cases for real.
+
+Contents:
+
+- `execution-record.md` — every gate bound to SHAs, commands and raw
+  evidence, including the RED captures and the notes/limitations.
+- `red/` — RED evidence at `f99acbc3`: the same-dir switch capture
+  (stale object hashes, ring/stub identity per phase, consumer link
+  failure) and the Clang mutation-target build failures.
+- `switch-regression/` — the green n→y→n→y same-dir cycle plus the four
+  fault-injection negatives at `cdb2ca0f` (`scripts/verify_liburing_config_switch.py`).
+- `matrix/` — six-profile matrix runner and captured results
+  (debug/release × n/y, clang asanubsan-n, clang tsan-n; tsan-n executes
+  `request_scope_test`, expected 52).
+- `mutation-killers/` — both mutant build/run records at `cdb2ca0f` with
+  the backtraces naming the killing cases, including the recorded-killer
+  isolation run for M4.
+- `request-scope-tsan/` — 25/25 non-TSan vs 24/24 TSan case counts and
+  the seam-symbol absence, bound to the matrix binaries.
+- `b01-v7-capture/` — new versioned dual-profile package capture
+  (F5 v6 harness verbatim, `--before 14a27a83 --after cdb2ca0f`):
+  `reproduce.py`, `persist.py`, and `durable/` (928 text artifacts);
+  counts [32,30,49] → [15,13,25] in both ring profiles. The execution
+  tree is re-derivable; it is not committed.
+- `installed-probes/` — standalone compile of every installed header and
+  the cross-TU ODR/link/run probe in both macro views, with the
+  49-header before prefix as control.
+
+F5's evidence directory (`f5-final-package-contraction-20261013/`) is
+immutable history: nothing there was modified.

@@ -1,0 +1,9 @@
+$ unshare -r -m bash -c mount -t tmpfs tmpfs /usr/include && exec "$@" - /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f520-head-cycle-build-neg-missing-liburing-header
+$ CPATH=
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;1;1mno[0m
+[0m[1;38;5;1;1merror: [0msluice --liburing=y: the installed liburing does not provide the header/declaration surface the uring backend compiles against: /tmp/.xmake0/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp:4:10: fatal error: liburing.h: No such file or directory
+    4 | #include <liburing.h>
+      |          ^~~~~~~~~~~~
+compilation terminated.
+  [38;5;3m> in [1m/tmp/.xmake0/261014/_957e4e4742fd89a3f7eb3475f63a779d.cpp[0m

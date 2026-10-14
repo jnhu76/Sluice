@@ -1,0 +1,13 @@
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/uring_registration_lifecycle_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/uring_progress_race_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/uring_external_loop_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/uring_core_cutover_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/shutdown_lifecycle_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/request_scope_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/request_core_ownership_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/public_request_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/public_request_release_violation_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/progress_source_ownership_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+b5f4a3007cb98723e911466a003464756fb4eb9fd07c23086939684cc48ff428  /tmp/f520-shared-build/.objs/backend_conformance_e1_uring_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+9bf40c511af67b0f5402c6e84032dfbec454899ce85f7dccb8dfc45292f16597  /tmp/f520-shared-build/.objs/stackful_host_test/linux/x86_64/debug/src/async/uring_backend.cpp.o
+bfe265ef6874570ffa61e7caf63b31d0d08dc7ab4151f55da3895bf9f29e0360  /tmp/f520-shared-build/.objs/sluice_async/linux/x86_64/debug/src/async/uring_backend.cpp.o
