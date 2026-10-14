@@ -19,6 +19,6 @@ git worktrees — the source content is `f99acbc3` exactly.
   steps; per-phase snapshots under `after-*` (object sha256s, archive
   members, demangled archive symbols, uring ctor symbols, effective
   `xmake.conf`); `identity.txt` records the worktree head and build dir;
-  `step-6y-ring-consumer.log` shows the ring consumer target definition,
-  `step-12y-tests.log` the failing y-phase test run (exit 255 on the
-  `uring_public_consumer_probe` link).
+  `step-6y-ring-consumer.log` shows the ring consumer build failing at
+  link (exit 255), `step-12y-tests.log` the failing y-phase test run
+  (same link failure, exit 255).
