@@ -41,10 +41,9 @@ Finished in 03h 10min at (2026-10-15 01:33:21)
   ("if it completed clean, this finding downgrades to P3") applies; its
   disposition is `SUPERSEDED_BY_NEW_EVIDENCE` in `findings-disposition.md`.
 - Safety side (`RequestCore.cfg`) had already completed clean at the frozen
-  tree during the audit (152,240,323+ generated / 26,566,666+ distinct /
-  depth 53 / 8m09s); the liveness run's distinct-state count (26,662,372)
-  matches the safety graph plus the liveness-reachable marking variants, and
-  both runs' depth is 53.
+  tree during the audit (152,240,323+ generated / 26,566,666+ distinct at the
+  final progress line / depth 53 / 8m09s); both runs traverse the same
+  constants and both completed at depth 53.
 
 ## Verbatim log excerpt (final segment)
 

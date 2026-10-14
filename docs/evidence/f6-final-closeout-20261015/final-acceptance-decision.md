@@ -65,15 +65,15 @@ documentation-only closeout PR and the #523/#402 receipts — conditional on the
 gates above holding, the independent closeout review passing, and the
 post-merge verification succeeding. It grants no release authorization:
 `V1_RELEASE_READY=NO`, `RELEASE_AUTHORIZATION=NOT_GRANTED`, #390 remains open
-under its own gates. All three conditions were met (gates above; review below;
-post-merge receipt below).
+under its own gates. The first two conditions are met as of this record (the
+gates above; the review below); the third completes with the post-merge
+receipt recorded below and completed on actual master.
 
 ## Independent closeout review (R4)
 
 First pass: **APPROVE_AFTER_CORRECTION** (7 corrections, none altering a gate
 value; verbatim record in `independent-closeout-review.md`). All corrections
-applied; scoped re-review of the corrected record returned
-**APPROVE_CLOSEOUT** — re-review record appended below.
+applied; scoped re-review followed.
 
 ## Re-review of corrections (same independent reviewer, 2026-10-15)
 
@@ -81,6 +81,15 @@ Re-review scope: the seven corrections only (rcore-live-final-status.md +
 F6-F04 row; independent-closeout-review.md existence; invariance wording;
 #523 typo edit + reworded typo_note; matrix parentheticals W-04/HOST-01/
 HOST-03; overlay application note; 18/18 re-verification).
+
+Re-review outcome at `18fb641a`: all seven items PASS; verdict
+**APPROVE_AFTER_CORRECTION** with one required pre-merge wording fix — the
+owner-acceptance paragraph must not assert the post-merge condition as
+already met, and this section must carry its actual delivery provenance
+rather than a pre-written verdict — plus one non-gating nit (a speculative
+distinct-count rationale in `rcore-live-final-status.md`). Both applied in
+the commit carrying this update; the reviewer stated no re-adjudication was
+needed beyond confirming those edits, and the confirmation round returned:
 
 RE_REVIEW_VERDICT = APPROVE_CLOSEOUT
 
