@@ -58,6 +58,11 @@ struct Tracker {
     }
 };
 
+// The zero-allocation oracle observes allocation through strong global
+// operator new/delete replacements, which collide with the TSan runtime's
+// own interceptors at link time. Under SLUICE_TSAN_TESTING the seam is
+// compiled out and the oracle is owned by every non-TSan profile instead.
+#if !defined(SLUICE_TSAN_TESTING)
 std::atomic<std::size_t> g_allocations{0};
 
 }
@@ -116,6 +121,7 @@ struct AllocationProbe {
         return g_allocations.load(std::memory_order_relaxed) - before;
     }
 };
+#endif
 
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
 
@@ -1299,6 +1305,7 @@ bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
 
 #endif
 
+#if !defined(SLUICE_TSAN_TESTING)
 bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
     auto file = open_temp_file(t, "sluice d1 alloc\n");
     if (!file.has_value())
@@ -1332,6 +1339,7 @@ bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
     t.check(core_is_idle(core.snapshot()), "the allocation probe pipeline reclaimed");
     return true;
 }
+#endif
 
 struct NamedTest {
     const char* name;
@@ -1397,8 +1405,10 @@ int main() {
         {"health_failure_during_cleanup_fails_fast_instead_of_returning",
          health_failure_during_cleanup_fails_fast_instead_of_returning},
 #endif
+#if !defined(SLUICE_TSAN_TESTING)
         {"submit_path_allocates_nothing_after_acceptance",
          submit_path_allocates_nothing_after_acceptance},
+#endif
     };
     int failed = 0;
     int passed = 0;

@@ -726,6 +726,12 @@ do
             if extra_clang_cxxflags ~= nil then
                 add_cxxflags(extra_clang_cxxflags, {tools = {"clang", "clang_cl"}})
             end
+            -- #521: TSan replaces the global allocation functions, so the
+            -- suite's strong overrides and the zero-allocation oracle compile
+            -- only outside TSan (see the SLUICE_TSAN_TESTING seam guards).
+            if is_mode("tsan") then
+                add_defines("SLUICE_TSAN_TESTING")
+            end
             local files = {
                 test_source,
                 R .. "src/async/async_io_context.cpp",
