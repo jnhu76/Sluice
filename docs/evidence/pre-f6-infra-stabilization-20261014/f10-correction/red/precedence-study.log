@@ -1,0 +1,22 @@
+# Empirical resolution-order study (gcc 16, Fedora, 2026-10-14)
+# Marker headers: const char* sluice_f10_<name>_marker in each dir.
+
+== which liburing.h a C++ compile opens ==
+C_INCLUDE_PATH only      => (ignored: no marker, falls through to system header)
+CPATH only               => cpath marker
+CPLUS_INCLUDE_PATH only  => cplus marker
+CPATH+CPLUS              => cpath marker
+
+== g++ -E -xc++ -v search list with CPATH+cplus set ==
+ /tmp/f10-study/cpath-dir
+ /tmp/f10-study/cplus-dir
+ /usr/lib/gcc/x86_64-redhat-linux/16/../../../../include/c++/16
+ ... (backward, gcc internal, /usr/local/include, /usr/include)
+
+== -I vs CPATH (both present) ==
+g++ -c -I stub-good -o o.cpp with CPATH=stub-bad => stub-bad wins (env paths rank ahead of -I)
+
+== linker -Wl,--trace ==
+default:                  /usr/lib/gcc/.../lib64/liburing.so (configured dirs)
+LIBRARY_PATH=fakelib:     still configured dirs (LIBRARY_PATH checked last)
+-L fakelib:               fakelib/liburing.so (-L beats configured dirs)
