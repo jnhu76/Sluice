@@ -14,8 +14,8 @@
     }
   },
   "frozen_content_invariance": {
-    "claim": "All F6 closeout commits after 99d2d4b1 touch docs/ only; production/build/test/model content is byte-identical to 821c489f",
-    "verification": "git diff --name-only 821c489f..<closeout-head> contains only paths under docs/ (checked per commit and for the PR head before merge)"
+    "claim": "All F6 closeout commits after 99d2d4b1 are documentation-only (docs/ tree plus wording fixes in the two apps READMEs); production/build/test/model content is byte-identical to 821c489f",
+    "verification": "git diff --name-only 821c489f..<closeout-head> contains only docs/ paths plus apps/sluice-copy/README.md and apps/sluice-grep/README.md (wording only; checked per commit and for the PR head before merge)"
   },
   "gates": {
     "E_REQUIRED_CLOSURE_ADOPTED": {"value": "PASS", "closeout_basis": "unchanged from 99d2d4b1; PR #453 merge eb7bf055 re-cited; ADR-0004 status banner re-read"},
@@ -55,15 +55,15 @@
       "E2-era and Lean corpus": {"cited_by": [], "validity": "no current row cites Lean (REUSE=0 per formal evidence map); E2 receipts cited only through the dated ledger rows"}
     }
   },
-  "typo_note": "#523's body spells 'SLUCE_LIBURING_PROFILE' once; the committed evidence and the actual define are SLUICE_LIBURING_PROFILE (xmake/uring.lua:85). Issue-body typo corrected at closeout; no build macro or production file was touched for this.",
+  "typo_note": "#523's body spelled 'SLUCE_LIBURING_PROFILE' once (line 42 of the original body); the committed evidence and the actual define are SLUICE_LIBURING_PROFILE (xmake/uring.lua:85). The issue body was corrected by editing that single token (documented in a #523 comment); no build macro or production file was touched for this.",
   "blockers": {"P0": 0, "P1": 0},
   "findings_disposition_summary": {
     "total": 18,
     "CLOSED_DOC_CORRECTED": 5,
     "TRANSFERRED_TO_TRACKED_ISSUE": 10,
-    "SUPERSEDED_BY_NEW_EVIDENCE": 1,
-    "ACCEPTED_DEFERRED_WITH_SCOPE": 1,
-    "F6_F04": "recorded in rcore-live-final-status.md (see findings-disposition.md for the definitive row)",
+      "SUPERSEDED_BY_NEW_EVIDENCE": 2,
+      "ACCEPTED_DEFERRED_WITH_SCOPE": 1,
+      "F6_F04": "SUPERSEDED_BY_NEW_EVIDENCE - fresh RequestCoreLive.cfg run completed clean at the frozen tree 2026-10-15 01:33 +0800 (COMPLETE_PASS: 153,347,909 generated / 26,662,372 distinct / 0 on queue / depth 53 / 3h10m / no errors; complete graph exactly equals the E2 receipt's 26,662,372 states); E2-dated receipt remains the closure authority; see rcore-live-final-status.md",
     "BLOCKED_REQUIRES_REPAIR": 0,
     "deferred_issues": [524, 525, 526, 527, 528]
   }

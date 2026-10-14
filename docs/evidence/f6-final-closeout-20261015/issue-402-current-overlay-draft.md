@@ -41,3 +41,8 @@ closeout. #390 continues under its own release gates.
 Earlier dated paragraphs below this overlay are historical and must not
 override the dated receipts; where they conflict with a dated receipt, the
 receipt governs.
+
+Application note (from the independent closeout review): when applying this
+overlay, also update #402's lower normative-authority text that still says
+"v1-r3" so the refreshed body leaves no live contradiction with the v1-r4
+receipts (v1-r4, adopted via PR #488 at `d4973100`).

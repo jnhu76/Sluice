@@ -3,8 +3,9 @@
 Evidence-adoption and status-closure record for task F6_FINAL_CLOSEOUT
 (following `../f6-final-correspondence-20261014/`, the frozen F6 technical
 audit). No production, build, test or formal-model content was changed by this
-closeout: every commit after the original audit commit touches `docs/` only,
-and the audited content remains frozen master `821c489f`.
+closeout: every commit after the original audit commit is documentation-only
+(`docs/` plus wording fixes in the two apps READMEs), and the audited content
+remains frozen master `821c489f`.
 
 ## Provenance of the original audit artifacts (R0)
 
