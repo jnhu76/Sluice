@@ -2,8 +2,11 @@
 
 Execution baseline: `14a27a83821a94e6fc5a9684b48fcd296d7de891` (F2 final exit
 master). Candidate branch: `f5-final-package`, implementation head
-`a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c`. Status: **CANDIDATE — owner
-decision pending**; nothing here is merged or authorized.
+`a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c`. Status: **MERGED AND CLOSED**
+2026-10-14 — merged as `f99acbc3` (PR #518; owner authorization recorded at
+`5ef4f801`); the formal closeout receipt and the post-merge verification on
+actual master live in `postmerge-closeout-20261014.md`. The CANDIDATE wording
+below is the pre-merge record.
 
 Contents:
 

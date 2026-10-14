@@ -2298,3 +2298,23 @@ was proven to kill by an isolation run (recorded in the evidence). The
 configure-time probes re-run on every `--liburing=y` configure by design;
 `lib.detect.check_cxxsnippets` reads links only from its `configs`
 argument, which the probes honor explicitly.
+
+## 2026-10-14 F5 post-merge closeout — #402
+
+`F5 = CLOSED`. Owner authorization was recorded pre-merge at the F5 branch
+tip `5ef4f801` (`ACCEPT_BREAKAGE_NOW` + the scoped #518 merge authorization);
+the merge is `f99acbc3` ("Merge PR #518", parents `14a27a83` F2-exit master +
+`5ef4f801`). Gate-content continuity: the F5 gates ran at implementation head
+`a23a94cd` and `git diff a23a94cd 5ef4f801 -- src include xmake.lua xmake
+apps tests scripts` is empty, so the merged code content is the executed gate
+content. Post-merge verification on actual master `573d616c` (PR #522's
+post-merge receipt, `b01-v7/` + `installed-probes/`): B-01 v7 capture
+`F5_B01_V6_CANDIDATE_FRESH_PACKAGE_PASS 14a27a83… 573d616c…` — 25 installed
+headers, 13 archive members, 15 library objects in both ring profiles;
+removed headers absent (`removed_present` 0) with the 49-header pre-F5
+control; W-01/W-02/W-03 consumers link and run from the fresh prefixes; the
+F5-era `tsan-n` exclusion is superseded going forward by #521's fix
+(`request_scope_test` executes under TSan, 52/52). Receipt:
+`docs/evidence/f5-final-package-contraction-20261013/postmerge-closeout-20261014.md`.
+Issue #402 carries the receipt and remains open solely for the F6 final-audit
+tail recorded by the PhaseM row.
