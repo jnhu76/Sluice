@@ -225,9 +225,9 @@ authorities that demonstrably diverge on this host. The empirical g++ 16
 authority, measured rather than assumed
 (`f10-correction/red/precedence-study.log`):
 
-- C++ includes: `CPATH` → `CPLUS_INCLUDE_PATH` → default directories;
-  `C_INCLUDE_PATH` is not consulted for C++ at all, and environment paths
-  rank ahead of any `-I` on the command line.
+- C++ includes: command-line `-I` directories first, then `CPATH` →
+  `CPLUS_INCLUDE_PATH` → the default directories; `C_INCLUDE_PATH` is not
+  consulted for C++ at all.
 - `-luring` link resolution: `-L` → driver-configured directories →
   `LIBRARY_PATH`.
 
@@ -239,8 +239,11 @@ driver, first by the old scan), the old configure accepted and printed
 build resolved `/usr/include/liburing.h + /usr/lib64/liburing.so` — the probe
 validated files the toolchain never opens
 (`F10_PROBE_PRODUCTION_IDENTITY_DIVERGENCE`, `red/result.json`). The
-deficient-CPATH negative already refused on the old code (the pin loses to
-`CPATH`), recorded as staying valid.
+deficient-CPATH negative already refused on the old code and stays valid:
+with only `CPATH` set, the old scan's first existing candidate was the
+`CPATH` directory itself, so the probe's pinned `-I` named the same
+deficient file the toolchain resolves through `CPATH` — probe and
+production agreed, and the declaration layer refused.
 
 Corrected mechanism, implementation head
 `9e04d3b54e8d4e0d7f5bf7cc86bb1622e55ea67b`: the resolved identity is
@@ -256,9 +259,11 @@ compile surface is unchanged; when it selects something else, the resolved
 directories are bound publicly on `sluice_async` so production consumes the
 probed pair (`__sluice_liburing_bind_includes`/`__sluice_liburing_bind_linkdirs`
 in the stored config record which happened; the trace TUs use an empty
-`main` so resolution stays independent of capability). Fail-fast happens on
-actual mixing or unverifiable consistency: unresolvable header, unresolvable
-library, or pin re-trace disagreement all refuse at configure time.
+`main` so resolution stays independent of capability). Fail-fast is
+confined to unverifiable consistency — an unresolvable header, an
+unresolvable library, or a pin re-trace disagreement refuse at configure
+time; a resolvable, pin-consistent pair is accepted regardless of which
+directories it spans (there is deliberately no prefix-equality refusal).
 
 GREEN at `9e04d3b5` (`f10-correction/green/`, `PROVENANCE.md` records every
 driver, worktree head and command):
@@ -298,7 +303,10 @@ and is superseded going forward by this section.
 # F-10 identity regression (probe/production dependency identity; head 9e04d3b5)
 python3 scripts/verify_liburing_identity_binding.py \
     --workdir <checkout at 9e04d3b5> --output <fresh dir>
-# matrix (six profiles)
+# matrix (six profiles) — the original gates at cdb2ca0f; the F-10 correction
+# re-ran every driver below with the same commands against a worktree at
+# 9e04d3b5 (--repo/--workdir <checkout at 9e04d3b5>, B-01 --after 9e04d3b5,
+# installed probes --source-sha 9e04d3b5…)
 python3 docs/evidence/pre-f6-infra-stabilization-20261014/matrix/run-matrix.py \
     --repo <checkout at cdb2ca0f> --output <fresh dir>
 # same-dir switch cycle + negatives (needs user namespaces)
@@ -361,3 +369,15 @@ python3 docs/evidence/f5-final-package-contraction-20261013/installed-probes/run
 - The M4 isolation experiment temporarily reordered `tests[]` in the
   working tree; it was reverted before recording (tree clean at
   `cdb2ca0f`).
+- Re-running the identical `xmake f` command in the same build directory
+  under a changed environment does not re-run the option check (xmake's
+  option cache), so the persisted resolution and binding stay from the
+  previous probe. The identity remains internally consistent — a bound
+  `-I` keeps production on the previously probed pair, and deleting that
+  directory fails loudly — and any option change or `xmake f -c` re-probes.
+  All recorded gates configure fresh build directories per phase.
+- With binding disabled (clean-environment resolution), a consumer that
+  adds its own `-I` containing a different `liburing.h` could shadow the
+  resolved header at its own compile; that is inherent toolchain semantics
+  outside `sluice_async`'s usage requirements, and no target in this
+  repository adds such a path.

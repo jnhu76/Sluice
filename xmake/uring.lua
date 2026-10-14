@@ -22,7 +22,8 @@
 -- what the production targets compile and link. The authority is the active
 -- toolchain's own resolution — the header its `-E -H` trace opens for
 -- <liburing.h> and the file its `-Wl,--trace` link opens for -luring — not a
--- hand-written candidate list (env paths rank ahead of -I for gcc/clang and
+-- hand-written candidate list (command-line -I ranks ahead of CPATH and
+-- CPLUS_INCLUDE_PATH, which rank ahead of the default directories, and
 -- C_INCLUDE_PATH is invisible to C++ compiles, so a scanned candidate can be
 -- a file the toolchain never picks; the driver also checks configured
 -- directories before LIBRARY_PATH). The probe re-traces with the resolved

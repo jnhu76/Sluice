@@ -2,9 +2,9 @@
 """#520/F-10 regression: probe and production must share one liburing identity.
 
 The C++-effective resolution the production targets get is fixed by the
-toolchain itself: for #include <liburing.h> gcc/clang search CPATH, then
-CPLUS_INCLUDE_PATH, then the default directories (C_INCLUDE_PATH is not
-consulted for C++ at all, and env paths rank ahead of any -I), and for
+toolchain itself: for #include <liburing.h> gcc/clang search command-line -I
+directories first, then CPATH, then CPLUS_INCLUDE_PATH, then the default
+directories (C_INCLUDE_PATH is not consulted for C++ at all), and for
 -luring the driver searches its configured directories and command-line -L
 before LIBRARY_PATH.
 
