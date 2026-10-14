@@ -102,10 +102,10 @@ FROZEN_CONTENT_SHA = 821c489fb081308d5ef95b13a14cc6435ac78d41
 ORIGINAL_AUDIT_ISSUE = 523
 ORIGINAL_AUDIT_EVIDENCE_SHA = 99d2d4b14498f9b71e4df620f97c1a2306e036ff
 PUBLISHED_EVIDENCE_SHA = 99d2d4b14498f9b71e4df620f97c1a2306e036ff (verbatim; branch codex/f6-final-closeout-523)
-F6_CLOSEOUT_PR = NOT_SET
-REVIEWED_HEAD_SHA = NOT_SET
-MERGE_SHA = NOT_SET
-POSTMERGE_VERIFIED_SHA = NOT_SET
+F6_CLOSEOUT_PR = #529 (CI run 38608903468, 4/4 pass at reviewed head)
+REVIEWED_HEAD_SHA = 845e17f5 (reviewed range: 99d2d4b1..845e17f5)
+MERGE_SHA = 2b1729580d7629516815e6b33f90a519a82c460c (merged tree byte-identical to 845e17f5)
+POSTMERGE_VERIFIED_SHA = 2b1729580d7629516815e6b33f90a519a82c460c (master CI run 38609542581, 4/4 success; evidence readable on master via API; diff vs frozen 821c489f = docs/ + two apps READMEs only)
 
 NORMATIVE_ROOT = v1-r4
 REQUIREMENTS = 113/113
@@ -137,15 +137,15 @@ SUFFICIENT_CONTRACTED_SURFACE_ESTABLISHED = YES
 SCOPED_LOCALLY_IRREDUCIBLE = NOT_CLAIMED
 GLOBALLY_MINIMAL_SURFACE = NOT_CLAIMED
 
-ISSUE_523 = NOT_SET
-ISSUE_402 = NOT_SET
+ISSUE_523 = CLOSED (acceptance + merge receipt comment 6174776096)
+ISSUE_402 = CLOSED (F0–F6 final receipt comment 6174791096; CURRENT overlay refreshed; v1-r3 residuals corrected to v1-r4)
 V1_RELEASE_READY = NO
 RELEASE_AUTHORIZATION = NOT_GRANTED
 
 END_F6_FINAL_CLOSEOUT
 ```
 
-Fields marked `NOT_SET` above are completed on actual master in the post-merge
+The former `NOT_SET` fields were completed on actual master in this post-merge
 receipt commit, exactly as the previous phases did (e.g. `df2ed3ec`); the
-issue-state fields are set only after the corresponding issue receipts are
-published.
+issue-state fields were set only after the corresponding issue receipts were
+published (#523 comment 6174776096, #402 comment 6174791096).
