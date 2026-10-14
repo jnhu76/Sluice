@@ -2318,3 +2318,15 @@ F5-era `tsan-n` exclusion is superseded going forward by #521's fix
 `docs/evidence/f5-final-package-contraction-20261013/postmerge-closeout-20261014.md`.
 Issue #402 carries the receipt and remains open solely for the F6 final-audit
 tail recorded by the PhaseM row.
+
+## 2026-10-14 F6 entry — evidence-only audit
+
+F6 is entered as an evidence-only audit; no production or build changes are
+in scope. Frozen master SHA at entry: `821c489fb081308d5ef95b13a14cc6435ac78d41`
+(this ledger row is docs-only on top of it and changes no audited surface).
+State at freeze: F2 CLOSED (actual-master exit recorded), F3 CLOSED
+(actual-master exit recorded, #515), F4 ADOPTED_SCOPED (#514/#506), F5 CLOSED
+(`f99acbc3`, closeout at 2026-10-14), pre-F6 infrastructure slice merged
+(`573d616c`, post-merge verified), #519/#520/#521 closed as
+FIXED_VERIFIED post-merge, W-04 optional support NO, `V1_RELEASE_READY` NO,
+external use UNKNOWN.
