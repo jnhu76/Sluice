@@ -55,3 +55,67 @@ disclosed no-op hygiene removals. One wording nit was found and fixed
 (`red/PROVENANCE.md`, consumer link vs target definition).
 
 Verdict: **READY** at HEAD `54c4886a`.
+
+## Round 3 — the F-10 dependency-identity correction
+
+Dispatched after the external finding `F10_PROBE_REAL_BUILD_DEPENDENCY_DIVERGENCE`
+(P1, #520 scope): the round-1 probe selected header/library by candidate scan
+while production resolves through the toolchain. Reviewed content: RED at
+`5ab32ae7`, fix at `9e04d3b5`, evidence/docs at `780703a7`. The reviewer
+re-ran the identity oracle against its own worktrees (RED reproduces at
+`5ab32ae7` with `F10_PROBE_PRODUCTION_IDENTITY_DIVERGENCE`; GREEN reproduces
+at `9e04d3b5` with `F10_IDENTITY_BINDING_REGRESSION_PASS`), re-derived the
+linker precedence (`-L` → gcc-configured dirs → `LIBRARY_PATH`, confirmed
+including the surprising case that a `LIBRARY_PATH` copy loses to the gcc
+multilib dirs), built its own adversarial environments (deficient `CPATH`
+header vs working `CPLUS_INCLUDE_PATH` copy; working stub with binding;
+symbol-less `LIBRARY_PATH` .so; fresh-process build under a bound stub), and
+checked the diff scope, the re-baselined negative layers, the matrix, the
+B-01 v7 capture and the installed probes against the raw artifacts.
+
+| Point | Verdict |
+|---|---|
+| A. RED honesty (deterministic counterexample, precedence claims) | PASS-WITH-NOTES |
+| B. Mechanism (toolchain traces, pin equality, conditional binding) | PASS |
+| C. No over-rejection (compatible version-different installs accepted) | PASS |
+| D. Doc corrections (C_INCLUDE_PATH role, superseded prefix claims) | PASS-WITH-NOTES |
+| E. RED/GREEN oracle independence (executed for real, both heads) | PASS |
+| F. Regression constraints (cycle/negatives/matrix/B-01/probes, #519/#521 untouched) | PASS |
+| G. Evidence integrity (heads, no contradictions) | PASS-WITH-NOTES |
+| H. Mechanism justification (config keys, no speculative framework) | PASS |
+
+Verdict: **READY-AFTER-FIXES** — all six human-required actions satisfied
+with independently reproduced evidence. Findings:
+
+- F-A1 (NON-BLOCKER, must fix before merge): the precedence study's claim
+  "env paths rank ahead of `-I`" (and the propagated "the pin loses to
+  `CPATH`" reason for the deficient-CPATH negative) is false on this host —
+  the `-I` directory wins for gcc and clang, angle and quote forms; recorded
+  as measured evidence in five locations, and `precedence-study.log` was a
+  hand-written summary despite the PROVENANCE claim of captured output.
+- F-D2 (NON-BLOCKER): "actual mixing refuses at configure time" wording —
+  the mechanism deliberately has no prefix-equality refusal; only
+  unverifiable identity (unresolvable header/library, pin disagreement)
+  refuses.
+- F-D3 (NON-BLOCKER): the Reproduction block still pointed the re-run gates
+  at the `cdb2ca0f` era.
+- F-B1 (NON-BLOCKER): re-running the identical configure command in the same
+  build dir under a changed environment skips the option check (xmake option
+  cache), leaving the previous probe's persisted identity — internally
+  consistent and loudly fail-loud if invalidated, but undisclosed.
+- F-H2 (NON-BLOCKER): with binding disabled, a consumer adding its own `-I`
+  with a different `liburing.h` could shadow the resolved header at its own
+  compile — inherent toolchain semantics, no construction in this repo hits
+  it, undisclosed.
+
+Disposition (commit `e5f3af8e`): the author independently re-measured and
+confirmed F-A1 (`-I` beats `CPATH`; search-list order agrees with
+resolution; CPATH before CPLUS_INCLUDE_PATH; C_INCLUDE_PATH invisible to
+C++; linker order unchanged), re-captured `precedence-study.log` as real
+command output, corrected all five propagation sites, re-derived the
+deficient-CPATH negative's validity from the corrected order (the old scan's
+first candidate was the `CPATH` dir itself, so probe and production compiled
+the same deficient file), and folded in F-D2/F-D3/F-B1/F-H2. No executable
+statement changed; the identity regression was re-run green against a fresh
+worktree at `e5f3af8e` (`F10_IDENTITY_BINDING_REGRESSION_PASS`), recorded in
+`f10-correction/green/PROVENANCE.md`.

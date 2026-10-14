@@ -45,3 +45,11 @@ partition is untouched (no test-source or `request_scope_target` changes).
 
 Scratch paths under /tmp are ephemeral; `identity.txt` and each driver log
 record the exact worktree head, build directory and tool versions.
+
+Correction commit `e5f3af8e` (review round 3, F-A1): comment/doc-only on top
+of `9e04d3b5` (xmake/uring.lua comment, oracle docstring, evidence prose, the
+re-captured `red/precedence-study.log`); no executable statement changed. The
+identity regression driver was re-run green against a fresh worktree at
+`e5f3af8e` (`F10_IDENTITY_BINDING_REGRESSION_PASS`, printed identity
+`/usr/include/liburing.h + /usr/lib/gcc/.../lib64/liburing.so`); the other
+gates are unchanged because their content is bit-identical at both heads.
