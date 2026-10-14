@@ -1,0 +1,92 @@
+{
+  "audit": "F6_FINAL_EVIDENCE_CORRESPONDENCE_AUDIT",
+  "frozen_content_sha": "821c489fb081308d5ef95b13a14cc6435ac78d41",
+  "f6_entry_sha": "fdb4b743c8f24bdcc4ec446c4bc7efbd386e61c3",
+  "evaluated_at": "2026-10-14T23:05:00+08:00",
+  "gates": {
+    "E_REQUIRED_CLOSURE_ADOPTED": {
+      "value": "PASS",
+      "basis": "#401 adopted through PR #453 at eb7bf055ad4fce5540de0f876609ab38c45e385b; tracker closure was not used as a substitute"
+    },
+    "EACH_FINAL_DISPOSITION_HAS_ROOT_ROLE_POLICY_AND_EVIDENCE": {
+      "value": "PASS",
+      "basis": "F0 role/profile census + package policy + migration DAG (a34d96c6), formal evidence map dispositions, F2-F5 closeouts, and this audit's formal-assets.tsv 3-axis classification for every retained formal asset"
+    },
+    "RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED": {
+      "value": "PASS",
+      "basis": "F3/F4 execution records; f4_retirement negative probes (17 probes) all fail as required; retained mechanisms carry explicit role dispositions"
+    },
+    "CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY": {
+      "value": "PASS",
+      "basis": "raw/cleanroom-consumers.txt: three consumers built with -I installed-prefix only; ldd shows zero non-system deps"
+    },
+    "PACKAGE_USAGE_REQUIREMENTS_AND_DECLARATIONS_MATCH_ARTIFACTS": {
+      "value": "PASS",
+      "basis": "25 installed headers / 13 async archive members / 15 library objects re-derived from a fresh install (package-and-claims.md); SLUICE_HAS_LIBURING public define and SLUICE_LIBURING_PROFILE identity define match the guarded uring_backend.hpp layout"
+    },
+    "NO_UNQUALIFIED_CANONICAL_DOC_CLAIMS_FOR_RETIRED_AUTHORITY": {
+      "value": "PASS",
+      "basis": "R5 scan: no canonical README/tutorial/example instructs use of a retired canonical authority; residual staleness items are non-canonical wording (F6-F05/F06/F07/F15, all P3)"
+    },
+    "DIRECT_AND_REQUEST_CORE_HOST_FIREWALL": {
+      "value": "PASS",
+      "basis": "sluice_core serves W-01 standalone (raw/w01_direct.cpp links -lsluice_core only); negative_async_symbols_in_core.cpp excludes async symbols from the core archive; backends/core carry no host identity/continuation/routing authority (authority-dag.md risk A5)"
+    },
+    "CURRENT_IMPLEMENTATION_CLAIMS_WITH_INVALID_OR_MISSING_CORRESPONDENCE": {
+      "value": 0,
+      "basis": "R1 exhaustive matrix (113 root identifiers): every current claim has requirement correspondence, evidence anchor and honest scope; the one model-side superset (ReleaseBind) is disclosed as model-maintenance finding F6-F03 and no current production claim asserts exact correspondence over that sub-graph"
+    },
+    "SINGLE_CANONICAL_NATIVE_RESOURCE_AUTHORITY": {
+      "value": "PASS",
+      "basis": "File is the sole fd owner; legacy FileReader/FileWriter/buffered world removed (F4 probes fail on presence); authority-dag.md risk A9"
+    },
+    "CANONICAL_ACCEPTED_REQUEST_HAS_SINGLE_MOVE_ONLY_SETTLEMENT_BINDING": {
+      "value": "PASS",
+      "basis": "Request<T> is the only settlement binding; caller-owned Completion removed entirely (F2); risk A1/A2 probes"
+    },
+    "BACKEND_CORE_HOST_SPECIFIC_IDENTITY_CONTINUATION_ROUTING_AUTHORITY": {
+      "value": 0,
+      "basis": "AsyncBackend seam is host-neutral; StackfulIoHost drives through the public seam only (risk A5)"
+    },
+    "RETIRED_ROLE_CODE_IN_CANONICAL_TARGET": {
+      "value": 0,
+      "basis": "No Scheduler/Completion/FileReader/Writer/RequestHandle/RequestArena/op_helpers definitions exist in the canonical target; one inert friend-declaration residue in fiber.hpp:64 confers no capability (no Scheduler definition exists anywhere) - disclosed as P3 F6-F08, classified cosmetic residue rather than role code because it grants no authority and cannot execute"
+    },
+    "W01_EXTERNAL": {
+      "value": "PASS",
+      "basis": "raw/w01_direct.cpp compile+link+run against installed prefix, -lsluice_core only"
+    },
+    "W02_EXTERNAL": {
+      "value": "PASS",
+      "basis": "raw/w02_scope.cpp compile+link+run; capacity-1 rejection (V18) observed"
+    },
+    "W03_EXTERNAL": {
+      "value": "PASS",
+      "basis": "raw/w03_external_loop.cpp compile+link+run; detach-refusal contract reproduced as positive evidence"
+    },
+    "W04_EXTERNAL": {
+      "value": "N/A_WITH_NEGATIVE_PACKAGE_PROOF",
+      "basis": "conditional on a shipped/supported profile; W-04 is not shipped or supported (OPTIONAL_W04_SUPPORTED=NO): candidate-labeled headers, honest construction failure without liburing, no support claim anywhere current; negative package/support-claim proof recorded (package-and-claims.md R4)"
+    }
+  },
+  "supplementary_verifications": {
+    "tla_safety_recheck": {
+      "ObserverCore": "clean; 5123 states generated, 1734 distinct, depth 16",
+      "ProgressSourceSafety": "clean; 21784 states generated, 4783 distinct, depth 18",
+      "ShutdownCore": "clean; 47521 states generated, 11156 distinct, depth 21",
+      "RequestCore": "clean; complete graph: 152,240,323+ states generated, 26,566,666+ distinct, depth 53, finished 8m09s, 'Model checking completed. No error has been found.'"
+    },
+    "tla_liveness_recheck": "RequestCoreLive.cfg fresh run launched at frozen tree (command and log captured in raw/tla-results.txt); at audit close still in flight ~23% of distinct space; E2-dated receipt plus F2 historical-reuse ruling remain the REQ-06/L1 closure authority (finding F6-F04)"
+  },
+  "blockers": { "P0": 0, "P1": 0 },
+  "findings_summary": { "P2": 4, "P3": 14 },
+  "final_decision": {
+    "F6": "VERIFIED_READY_FOR_FINAL_REVIEW",
+    "F6_RETIREMENT_READY_FOR_FINAL_REVIEW": "YES",
+    "SUFFICIENT_CONTRACTED_SURFACE_ESTABLISHED": "YES",
+    "SCOPED_LOCALLY_IRREDUCIBLE": "NOT_CLAIMED_NO_PREREGISTERED_ABLATION_REQUIRED",
+    "GLOBALLY_MINIMAL_SURFACE": "NOT_CLAIMED_FORBIDDEN",
+    "V1_RELEASE_READY": "NO",
+    "ISSUE_402": "OPEN_PENDING_FINAL_OWNER_ACCEPTANCE"
+  }
+}
