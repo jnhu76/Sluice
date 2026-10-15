@@ -1,0 +1,3 @@
+label	exit_code
+safety	0
+liveness	STOPPED_ON_OWNER_REQUEST
