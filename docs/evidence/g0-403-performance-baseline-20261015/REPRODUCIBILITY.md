@@ -18,6 +18,40 @@ dynamic dependencies rather than from the directory name:
 * `bench_w01_direct` links `sluice_core` only, so it is byte-identical in both
   profiles — asserted, not assumed.
 
+## Byte-identical reproduction of the measured binaries
+
+The measured binaries were rebuilt from the **`preregistration_freeze` commit
+`8c98b417`** with the recorded flags, and their sha256 match the values written
+into `matrix-run.log` before the runs:
+
+```text
+build-bench-noring  bench_w01_direct        9ec8915ea53e44f1e6305822735ca505c4cf61b864335954ab97d27b9a0a69fd  (recorded and reproduced)
+build-bench-ring    bench_w02_pipeline      dcacf5a19c233dd0a27d94a8e59ebb07c7b014a3e5065c9a534974848ec2f971  (recorded and reproduced)
+build-bench-ring    bench_w03_external_loop 1bcfa3f8b725f87071f26b8c030cc2fa00e162f5fb70d2784219287dcf6477cd  (recorded and reproduced)
+```
+
+Reproduction recipe (from a tree at `8c98b417`, using the archives produced by
+`bench/build_profiles.sh`):
+
+```bash
+# no-ring W-01
+gcc -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 \
+    -std=c++20 -Ibench -Iinclude -DSLUICE_LIBURING_PROFILE=off -DNDEBUG \
+    -o w01.o bench/bench_w01_direct.cpp
+g++ -o w01 w01.o -m64 -Lbuild-bench-noring/linux/x86_64/release -s -lsluice_core
+
+# ring W-02 / W-03
+gcc -c -m64 -fvisibility=hidden -fvisibility-inlines-hidden -Wall -Werror -O3 \
+    -std=c++20 -Ibench -Iinclude -DSLUICE_LIBURING_PROFILE=on \
+    -DSLUICE_HAS_LIBURING -DNDEBUG -o w02.o bench/bench_w02_pipeline.cpp
+g++ -o w02 w02.o -m64 -Lbuild-bench-ring/linux/x86_64/release -s \
+    -lsluice_async -luring -lsluice_core
+```
+
+`BENCHMARK_HEAD_SHA = 8c98b417` is therefore the source state of the measured
+artifacts, and it is reachable by hash; the harness changes described below all
+came after it and are opt-in.
+
 ## Harness delta after the measured run
 
 Two harness capabilities were added *after* the measured matrix, and both are
