@@ -59,6 +59,12 @@ int open_flags_for(FileOpen mode) noexcept {
 
 }
 
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+namespace detail {
+bool life_mutant_armed = false;
+}
+#endif
+
 Result<File> File::open(const std::string& path, FileOpen mode) {
     if (auto rejection =
             detail::open_rejection_of(detail::precheck_open(mode, path));
@@ -76,7 +82,9 @@ Result<File> File::open(const std::string& path, FileOpen mode) {
 File::File(File&& other) noexcept
     : fd_(std::exchange(other.fd_, -1)), access_(other.access_) {
 #if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
-    (void)close();
+    if (detail::life_mutant_armed) {
+        (void)close();
+    }
 #endif
 }
 

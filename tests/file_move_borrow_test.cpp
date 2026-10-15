@@ -20,6 +20,12 @@
 #include <sluice/async/uring_backend.hpp>
 #endif
 
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+namespace sluice::detail {
+extern bool life_mutant_armed;
+}
+#endif
+
 namespace {
 
 using namespace sluice::async;
@@ -117,7 +123,13 @@ bool moved_owner_keeps_outstanding_borrow_settling() {
         return false;
     Request<std::size_t> request = std::move(submitted.value());
 
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+    sluice::detail::life_mutant_armed = true;
+#endif
     File target = std::move(opened.value());
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+    sluice::detail::life_mutant_armed = false;
+#endif
     check(!opened.value().is_open(), "the moved-from owner releases the resource");
 
     drive_ready(ctx, request);
@@ -162,7 +174,13 @@ bool second_submission_through_moved_owner_settles() {
     if (!first.has_value())
         return false;
 
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+    sluice::detail::life_mutant_armed = true;
+#endif
     File target = std::move(opened.value());
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+    sluice::detail::life_mutant_armed = false;
+#endif
     auto second = ctx.submit_read(
         ReadOp{NativeFileRef{target}, high.data(), high.size(), low.size()});
     check(second.has_value(), "second read accepted through the moved owner");

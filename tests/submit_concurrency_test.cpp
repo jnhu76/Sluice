@@ -132,9 +132,14 @@ bool fill_regions(const std::string& path) {
 
 // The serialized-acceptance window: one submitter is parked between its
 // reservation and its commit; a second submitter must not be able to
-// establish its own reservation inside that window. The core snapshot only
-// observes the interleaving; the public consequences are asserted at the end
-// of this case and throughout the next two.
+// establish its own reservation inside that window. The second submitter's
+// arrival at its submission call is witnessed before the window is judged:
+// if the scheduler never runs it, the case fails its precondition instead of
+// passing vacuously, and under an unserialized-acceptance defect the second
+// reservation parks at the same gate, so the violated state is stable and
+// bounded polling cannot miss it. The core snapshot only observes the
+// interleaving; the public consequences are asserted at the end of this case
+// and throughout the next two.
 bool acceptance_window_excludes_a_second_submitter() {
     const std::string path = temp_path("window");
     if (path.empty() || !fill_regions(path)) {
@@ -161,13 +166,18 @@ bool acceptance_window_excludes_a_second_submitter() {
     });
     wait_gate_paused(gate);
 
+    std::atomic<int> second_arrived{0};
     std::atomic<bool> second_done{false};
     std::optional<Result<Request<std::size_t>>> second_outcome;
     std::thread second([&] {
+        second_arrived.store(1, std::memory_order_release);
         second_outcome = ctx.submit_read(
             ReadOp{NativeFileRef{file}, high_buffer.data(), kRegion, kRegion});
         second_done.store(true, std::memory_order_release);
     });
+
+    check(wait_counter_reaches(second_arrived, 1),
+          "the second submitter enters its submission call before the window is judged");
 
     bool second_inside_window = false;
     for (int i = 0; i < 1000000; ++i) {
