@@ -245,6 +245,32 @@ code. `context-switches:u` and `cpu-migrations:u` read 0 for this process, so
 that channel is **UNAVAILABLE_WITH_REASON** (not zero contention) under
 `perf_event_paranoid=2`.
 
+### 5.2b Per-operation mutex traffic (LD_PRELOAD probe, test-side)
+
+A test-side `LD_PRELOAD` shim interposes `pthread_mutex_lock` and counts one
+*contended* acquisition whenever an added `pthread_mutex_trylock` fails. It
+perturbs every lock (the extra trylock costs ~14% throughput), so only counts and
+ratios are quoted. Raw output: `logs/mutex-probe.txt`.
+
+| Case | lock acquisitions | per phase-operation | contended | contended rate |
+|---|---|---|---|---|
+| ThreadPool d16 **w1** | 1,942,464 | **32.4** | 95,752 | **4.93%** |
+| ThreadPool d16 **w4** | 1,271,956 | 21.2 | 22,136 | 1.74% |
+| ThreadPool d16 **w8** | 1,248,509 | 20.8 | 17,404 | 1.39% |
+| **io_uring** d16 | 1,118,432 | **18.6** | **0** | **0.0000%** |
+| ThreadPool **d1 w1** (slowest case) | 2,698,944 | **45.0** | **161** | **0.0001%** |
+
+Two facts follow, and they **refute the lock-blocking explanation** of the
+worker-count inversion:
+
+* the contended rate is *highest* (4.93%) in the fastest ThreadPool
+  configuration and *lowest* (0.0001%) in the slowest one, while the fastest path
+  of all (io_uring) reports **zero** contended acquisitions; blocking therefore
+  does not track slowness;
+* the request path takes **18-45 mutex acquisitions per 4 KiB read** even with a
+  single thread driving everything (io_uring: 18.6, zero contention) — mutual
+  exclusion traffic is structural, not a product of worker count.
+
 `perf record` DSO split: **kernel ≈ 52% (w4) / 46% (w1)** of samples,
 bench+library ≈ 23% / 26%, libc ≈ 19% / 22%, vdso ≈ 3-5%. Kernel symbols are
 hidden at `perf_event_paranoid=2`, but the syscall counts above show what the
@@ -309,41 +335,84 @@ SOURCE_LOCATION = src/async/detail/request_core.cpp (single `mutex_` guarding
   (work_mtx_ + work_cv_ on submit, dequeue and completion, core_->occupancy()
   calls at lines 587, 774, 835), src/async/async_io_context.cpp (submit wrapper
   holding the context access mutex across the backend submit).
-HYPOTHESIS = the submitter and every worker share the same RequestCore mutex on
-  every operation; with more workers the per-operation critical sections
-  (accept, publish, occupancy, resolve) are acquired more often and from more
-  threads, so the pipeline is serialised behind one lock plus contention stalls.
+HYPOTHESIS = every operation's state is touched by two threads (submitter and
+  worker) through a large number of mutual-exclusion steps, so each operation
+  costs a fixed amount of *inter-thread coherence traffic* that grows with the
+  number of participating threads: more workers mean more distinct cores
+  touching the same request slot, queue node, core mutex and progress state, so
+  cache lines transfer between cores more often. Under this hypothesis the cost
+  is transfers, not blocking — which is why throughput falls while no one
+  actually waits on a lock.
 ALTERNATIVE_EXPLANATIONS =
   (a) CPU exhaustion -> refuted: 1.4-1.8 of 8 CPUs are used.
-  (b) SMT placement / core sharing -> partially real but not causal: pinning
+  (b) **Lock blocking / contention -> refuted by direct measurement**: the
+      contended-acquisition rate is 4.93% in the fastest ThreadPool
+      configuration (d16/w1) and 0.0001% in the slowest (d1/w1), and the fastest
+      path of all (io_uring) has zero contended acquisitions (section 5.2b). The
+      "one lock serialises the pipeline" story is not supported.
+  (c) SMT placement / core sharing -> partially real but not causal: pinning
       w4 to 2 physical cores improves it 33% (116k -> 154k) yet it stays far
       below w1 (271k), and w1 is placement-insensitive (271k unpinned vs 255k on
       a shared core vs 256k on distinct cores).
-  (c) O(capacity) slot scans under the lock -> refuted as the dominant term:
-      scope capacity 4->64 costs 4.4%, core capacity 16->64 costs 4.3% at fixed
-      concurrency.
-  (d) The submitter is the hard ceiling -> not supported as an independent
+  (d) O(capacity) slot scans -> refuted as the dominant term: scope capacity
+      4->64 costs 4.4%, core capacity 16->64 costs 4.3% at fixed concurrency.
+  (e) The submitter is the hard ceiling -> not supported as an independent
       cause: the same submitter sustains 276,170 submissions+consumes per second
       at w1 and only 112,027 at w4.
 DISCRIMINATING_EXPERIMENT = worker dose-response at fixed depth with fixed work
-  per operation, plus per-op instruction/cycle/cache counters and per-call futex
-  blocking time.
+  per operation; per-op instruction/cycle/cache counters; per-call futex blocking
+  time; and an LD_PRELOAD lock probe that separates "acquisitions" from
+  "contended acquisitions" (section 5.2b).
 RESULT = instructions/op constant (14.1k) while cycles/op 10.5k -> 12.8k -> 19.9k
-  and cache-misses/op 154 -> 261 -> 550 (IPC 1.35 -> 0.71); futex blocking time
-  under strace rises 28 µs -> 94 µs per call; the profile's hot symbols are
-  exactly the mutex-guarded core operations (take, submit_read, worker_loop,
-  occupancy, publish_one, accept).
-CONFIDENCE = medium-high. The inversion is unambiguous in the raw data and the
-  stalls are measured; the precise split between "one lock serialises the
-  pipeline" and "cache-line transfer between the lock owners" needs a
-  lock-hold-time measurement that this host cannot provide (perf lock tracing is
-  unavailable; no public hold-time instrumentation exists -> NOT_OBSERVABLE).
+  and cache-misses/op 154 -> 261 -> 550 (IPC 1.35 -> 0.71); 18-45 lock
+  acquisitions per operation with *no* correlation between contended rate and
+  throughput; pinning reduces the penalty by 33% without changing the
+  instruction count. The measured cost is coherence/stall traffic plus the fixed
+  per-operation handshake, not lock waiting.
+CONFIDENCE = medium. The inversion, the stall counters and the lock-traffic
+  counts are measured directly; the *mechanism* (cross-core cache-line
+  transfers) is inferred from those counters plus the pinning result, because
+  cross-core invalidation counts and lock hold time are NOT_OBSERVABLE here
+  (section 6). The refutation of the contention explanation is solid.
 AFFECTED_REQUIREMENTS = REQ-01..REQ-06, PROG-01, THREAD-01, W-02.
 PROOF_PRESERVATION_OBLIGATIONS = RequestCore's single-authority mutex is
   load-bearing for acceptance/reclaim/publication atomicity; any change to its
   granularity must preserve every REQ-02/REQ-04/REQ-05 invariant and needs the
   RequestCore/observer correspondence re-validated (#524 is the running model
   maintenance; its result is NOT evidence about any future G1 change).
+```
+
+```text
+BOTTLENECK_ID = B-G0-06
+OBSERVED_SYMPTOM = the request path performs 18-45 mutex acquisitions per 4 KiB
+  read even when a single thread drives everything, and the count per operation
+  does not fall to anything small on any supported backend.
+MEASURED_COST = 18.6 acquisitions/op (io_uring d16, zero contention), 21.2
+  (ThreadPool d16 w4), 32.4 (ThreadPool d16 w1), 45.0 (ThreadPool d1 w1); every
+  acquisition is a read-modify-write on a shared cache line, and the paths that
+  involve more threads also show more cache misses per operation (154 -> 550).
+WORKLOAD_AND_PROFILE = W02-{threadpool,uring}-4k-*; LD_PRELOAD lock probe
+  (`logs/mutex-probe.txt`), perf stat cache-misses.
+SOURCE_LOCATION = src/async/detail/request_core.cpp (one mutex per operation
+  step), src/async/threadpool_backend.cpp (work_mtx_ on submit, dequeue,
+  completion), src/async/async_io_context.cpp (context access mutex across the
+  backend submit), RequestScope slot bookkeeping.
+HYPOTHESIS = the per-operation work is expressed as many small separately
+  locked steps; each step is cheap in isolation but costs a coherence event and
+  prevents the compiler from keeping the operation's state in registers.
+ALTERNATIVE_EXPLANATIONS = (a) contention/blocking -> refuted (B-G0-02 (b));
+  (b) the acquisitions are all required by distinct invariants -> not yet
+  established; (c) it is only visible because the operation is tiny (4 KiB tmpfs
+  read) -> relevant, and the 64 KiB cases show the same pattern at lower
+  relative cost.
+DISCRIMINATING_EXPERIMENT = count acquisitions per operation per backend and per
+  depth (this probe), and compare per-op cache misses across thread counts.
+RESULT = the counts above; no configuration gets close to a hand-serialised path.
+CONFIDENCE = high for the counts, medium for the cost interpretation.
+AFFECTED_REQUIREMENTS = REQ-01..REQ-06, PROG-01, W-02, W-03.
+PROOF_PRESERVATION_OBLIGATIONS = any merging or removal of a lock step must
+  preserve the invariant that step protected; a "fewer locks" change is only
+  admissible with the per-step invariant accounting written down first.
 ```
 
 ```text
