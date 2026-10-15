@@ -1,0 +1,35 @@
+harness = 25e85e06
+BENCHMARK_HEAD_SHA = c0bee1f8 (revision 2 bench sources; v1 was 8c98b417)
+comment_only_source_revision = 3bfdf4cb (all six binaries rebuild byte-identically)
+preregistration_freeze = 8c98b417ffbe963d6bcc0869c77947af9b2aa015
+raw_measurement_evidence = 2a5b85f4691a3d3189b273893f02432368ec5542
+report_commits = 1b182f22, eb2435e8, 6f57a6cb, 88662029, 79910c28
+
+# raw evidence hashes (v2, authoritative)
+f476aa6bc98c6744a970c841a798ad0bd9c2685963c218b993500b16e29dfc6b  w01.jsonl
+a8d4fc151b98d4ec45d7c31b340c1e880253594793bf9c309e009fe23a27b2f7  w02-diagnostics.jsonl
+f59e81074e9ff4a0fbd4298d8db80e95f8b61571d20a3aeec7cff54e486e3838  w02-noring-notrun.jsonl
+6367d6745a5113e96e191173e773fae930c14d8d998c597cfd5e831da694d8d6  w02.jsonl
+d45cf0534a41170c93b0f6c98a03d44e9d72cc3d6743606902507558e9509a0f  w03-noring-notrun.jsonl
+e76ae2c8d9de161acf5cec892a9e6425673517120067d6093c72b55a82e8a685  w03.jsonl
+
+# raw evidence hashes (v1, as published in comment B)
+1704e4b86f90ef5bb71dbfa3023f8cc7fbfb32e2941d18f94fb14ea2729c2dfa  w01.jsonl
+db57bdf61583367322253149ad8db70d305ed2945c47692fbe62d6c5ef61bc1e  w02-noring-notrun.jsonl
+81882e21b8227e94ba7711273f871665e357bdcf3135c6f9ddc4700d153755d1  w02.jsonl
+9e60c65d61213f1678a940258f88e877942415a236a957ab5df4dddc0ad3c006  w03-noring-notrun.jsonl
+c2feb808c86c66bd072b84c36ce005ae3d887b1ba78619f80ff8fbbe8ea9213a  w03.jsonl
+
+# archived captures
+#   strace-fd.txt.gz is gzip -9n of the 355,868-line trace the attribution log
+#   names as attribution/strace-fd.txt; gunzip -c restores exactly those bytes.
+325c65e46995db24037fb94cfdf842286839cd88f49e5fbcf7af4021895b6eae  attribution/strace-fd.txt.gz
+9fef6b88df2235132fc3a517c751c33126409c5e74995ad47d429a5a0dcdf843  attribution/strace-fd.txt (uncompressed, 355,868 lines)
+447c99e9c5b7ed213f8956a136508c5d658e7d92ed666aabd70e7272607ad51a  attribution/perf-w4.data
+
+# removed after the evidence review: not committed, regenerable or unreferenced
+# (capture-time hashes of the profiling build stay in logs/attribution.txt)
+77f89206eca90c8449a3798823e066733365ae9c3ba832d9cf424c5e774b78bf  profiling-build/bench_w01_direct
+9f66bf095078733b7c60acd598b5222c2d25b999d6523f593b9698f4ac348929  profiling-build/bench_w02_pipeline
+daa3983853cdc3538f78bd7445333e873383b6ebf5753b868de370f5d3a66358  profiling-build/bench_w03_external_loop
+(no hash recorded)                                        attribution/perf-w4.data.old

@@ -1,0 +1,23 @@
+# LD_PRELOAD mutex probe (test-side, no production change)
+# shim: interposes pthread_mutex_lock; a failing pthread_mutex_trylock counts one contended acquisition
+# perturbation: every lock pays an extra trylock, so throughput here is ~14% below the unperturbed binary
+
+## =W02-threadpool-4k-d16-w1
+MUTEX_SHIM locks=1942464 contended=95752 contended_rate=0.0493
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0888s 225200 ops/s 879.7 MiB/s cpu=0.123s util=138.9% | lat p50=56799 p95=102736 p99=127815 max=191562 ns (n=20000)
+
+## =W02-threadpool-4k-d16-w4
+MUTEX_SHIM locks=1271956 contended=22136 contended_rate=0.0174
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1677s 119289 ops/s 466.0 MiB/s cpu=0.313s util=186.9% | lat p50=132284 p95=175226 p99=216385 max=393384 ns (n=20000)
+
+## =W02-threadpool-4k-d16-w8
+MUTEX_SHIM locks=1248509 contended=17404 contended_rate=0.0139
+  [W02-threadpool-4k-d16-w8 rep=0] ops=20000 wall=0.1805s 110794 ops/s 432.8 MiB/s cpu=0.340s util=188.5% | lat p50=134438 p95=183922 p99=212151 max=257027 ns (n=20000)
+
+## =W02-uring-4k-d16
+MUTEX_SHIM locks=1118432 contended=0 contended_rate=0.0000
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0628s 318713 ops/s 1245.0 MiB/s cpu=0.114s util=182.4% | lat p50=48933 p95=66658 p99=85233 max=162631 ns (n=20000)
+
+## =W02-threadpool-4k-d1-w1
+MUTEX_SHIM locks=2698944 contended=161 contended_rate=0.0001
+  [W02-threadpool-4k-d1-w1 rep=0] ops=20000 wall=0.7866s 25426 ops/s 99.3 MiB/s cpu=0.699s util=88.8% | lat p50=24848 p95=42902 p99=65595 max=143023 ns (n=20000)
