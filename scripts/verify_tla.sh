@@ -532,9 +532,10 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #   Stage B1-1 (#394): RequestCore, the first liveness-carrying model.
 #    28. Safety: the full fact set (admission close race, single acceptance,
 #        single admissible winner, generation matching, cancel-admissibility,
-#        publication gated on exec retirement, release invalidation, the
-#        four-pin reclaim predicate, health-gated acceptance, the E-chain
-#        capability rules) must complete cleanly.
+#        publication gated on exec retirement, release invalidation, release
+#        implies publication complete, the four-pin reclaim predicate,
+#        health-gated acceptance, the E-chain capability rules) must
+#        complete cleanly.
 #    29. Liveness: PROPERTY L1 (accepted ~> published) and L5 (reclaimable ~>
 #        reclaimed) under the declared WF_ fairness conjuncts, by full
 #        request identity.
@@ -551,23 +552,31 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #        submit wake); MutCtlAfterSettled must violate L5 (re-acquiring
 #        control on settled work keeps Reclaimable non-monotone and starves
 #        the reclaim service through intermittent enabling).
-#    32. Separation witness: MutReadyBeforePayload (publication may begin
-#        with no terminal chosen) must complete CLEANLY since the B1-1
-#        Corrective-1 E-chain rule: exec = 0 with no terminal is now
-#        unreachable, so the fault is subsumed one layer earlier and the
-#        mutant's unkillability is that subsumption's certificate.
-#    33. B2 (#395) public consumption mutants: MutConsumeKeepsBind
-#        (take_result forgets the binding release) must die on
-#        InvReleasedNotLive; MutConsumeUnpublished (consume runs before
-#        publication completes) must die on InvConsumeAfterPublish -- the
-#        per-identity pubDoneIds fact is what makes "was published"
-#        expressible, because consume promotes stage past 2 in the same
-#        step it records consumption.  MutDiscardInflight (public
-#        discard/destruction accepts an inflight publication) must die on
-#        InvDiscardAfterPublish -- the per-identity discarded[] fact is
-#        what makes "was publicly discarded" expressible, because discard
-#        promotes stage past 2 in the same step; ReleaseBind stays
-#        deliberately inflight-tolerant as the compatibility flavor.
+#    32. Subsumption witnesses (2): historical fault shapes whose enabling
+#        state the current protocol makes unreachable, so their cfgs must
+#        complete CLEANLY and a violation means the enabling state came
+#        back.  MutReadyBeforePayload (publication may begin with no
+#        terminal chosen) is subsumed by the B1-1 Corrective-1 E-chain rule
+#        (exec = 0 with no terminal is unreachable).  MutReclaimIgnoresPub
+#        (reclaim drops the published requirement) is subsumed by #524's
+#        convergence: with the retired inflight-tolerant release flavor
+#        gone, every release edge requires publication complete, so
+#        InvBindImpliesPublished makes the dropped guard redundant -- and
+#        that witness is the tripwire for an inflight-tolerant release
+#        path reappearing.
+#    33. B2 (#395) public release-edge mutants: each release edge carries its
+#        own mutant.  MutConsumeKeepsBind (take_result forgets the binding
+#        release) and MutDiscardKeepsBind (discard/destruction forgets it)
+#        must each die on InvReleasedNotLive from their own edge;
+#        MutConsumeUnpublished (consume runs before publication completes)
+#        must die on InvConsumeAfterPublish and MutDiscardInflight (public
+#        discard/destruction accepts an inflight publication) on
+#        InvDiscardAfterPublish -- the per-identity pubDoneIds and
+#        discarded[] facts are what make "was published" expressible,
+#        because both edges promote stage past 2 in the same step they
+#        record the consumption/discard.  #524 removed ReleaseBind, the
+#        pre-F2 Completion release flavor, which was the only inflight-
+#        tolerant release edge; MutReleaseResolvable died with it.
 echo "== Stage B1-1: RequestCore safety =="
 run_clean rcore-safety RequestCore.cfg RequestCore
 
@@ -581,9 +590,7 @@ run_violate rcore-mut-rollback-residue RequestCoreMutRollbackResidue.cfg Request
 run_violate rcore-mut-terminal-overwrite RequestCoreMutTerminalOverwrite.cfg RequestCore InvSingleWinner
 run_violate rcore-mut-cancel-as-physical RequestCoreMutCancelAsPhysical.cfg RequestCore InvCancelWinRequiresUnclaimed
 run_violate rcore-mut-publish-while-e RequestCoreMutPublishWhileE.cfg RequestCore InvNoPubWhileExec
-run_violate rcore-mut-release-resolvable RequestCoreMutReleaseResolvable.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-gen-wrap RequestCoreMutGenWrap.cfg RequestCore InvAcceptedRepresented
-run_violate rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg RequestCore InvReclaimConditions
 run_violate rcore-mut-reclaim-ignores-ctl RequestCoreMutReclaimIgnoresCtl.cfg RequestCore InvReclaimConditions
 run_violate rcore-mut-retire-last-exec RequestCoreMutRetireLastExec.cfg RequestCore InvExecHeldUntilTerminal
 run_violate_any rcore-mut-exec-after-terminal RequestCoreMutExecAfterTerminal.cfg RequestCore "InvNoExecRevival|InvNoPubWhileExec"
@@ -595,12 +602,14 @@ run_temporal_violate rcore-mut-strand-post-accept RequestCoreMutStrandPostAccept
 run_temporal_violate rcore-mut-lazy-reclaim RequestCoreMutLazyReclaim.cfg RequestCore
 run_temporal_violate rcore-mut-ctl-after-settled RequestCoreMutCtlAfterSettled.cfg RequestCore
 
-echo "== Stage B1-1: SUBSUMPTION WITNESS MutReadyBeforePayload (enabling state made unreachable; must remain clean) =="
+echo "== Stage B1-1: SUBSUMPTION WITNESSES (enabling state made unreachable; each must remain clean) =="
 run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore
+run_clean rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg RequestCore
 
-echo "== Stage B2: RequestCore public consumption mutants (ACTIVE MUTATION: each must violate its named invariant) =="
+echo "== Stage B2: RequestCore public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) =="
 run_violate rcore-mut-consume-keeps-bind RequestCoreMutConsumeKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-consume-unpublished RequestCoreMutConsumeUnpublished.cfg RequestCore InvConsumeAfterPublish
+run_violate rcore-mut-discard-keeps-bind RequestCoreMutDiscardKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg RequestCore InvDiscardAfterPublish
 
 #   Stage C1 (#396/#433): ObserverCore, the host-neutral observer delivery

@@ -8,6 +8,20 @@
 [v1 conformance ledger](v1-conformance.md) carries the ledger-facing record.
 **Branch:** `feat/394-b1-1-request-core-substrate`.
 
+> **Supersession (2026-10-15, #524).** This is a dated B1-1 slice record: its
+> numbers and claims were accurate at its own baseline and are retained as
+> written. The model it describes has since been converged to the current
+> protocol — `ReleaseBind` (the pre-F2 caller-owned `Completion` release
+> flavor) was removed, `MutReleaseResolvable` retired with it,
+> `MutDiscardKeepsBind` was added for the discard release edge, and
+> `MutReclaimIgnoresPub` became a subsumption witness. The three rows marked
+> `[superseded by #524]` below (the cfg inventory, the `MutReleaseResolvable`
+> mutation row, and the `ReleaseBind` entry in the MODEL ACTIONS mapping)
+> describe the pre-#524 model. Current authority:
+> [issue-524 evidence](../evidence/issue-524-requestcore-convergence-20261015/INDEX.md)
+> and the dated #524 section of the
+> [v1 conformance ledger](v1-conformance.md).
+
 This note is the substrate's evidence record: the deterministic C++ evidence,
 the TLA+ safety/liveness results, the mutation campaign, the C++/TLA+
 correspondence in the evidence map's section 13 format, and the C++
@@ -134,7 +148,7 @@ production protocol exists and is connected (B1-2 onward).
 | `tests/request_core_publication_test.cpp` | 11 publication tests (ordering, races, epilogue safety, last-access audits, reclaim variants) |
 | `tests/request_core_consumer_probe.cpp` | 2 host-neutrality probes (incomplete-type static asserts + a full lifecycle on the public surface) |
 | `xmake/tests.lua` | Three additive test targets; each compiles the substrate TU directly and links only `sluice_core`; the protocol/publication targets define `SLUICE_ASYNC_INTERNAL_TESTING`, the probe does not |
-| `formal/tla/RequestCore.tla` + 20 cfgs | Safety model, liveness cfg (`PROPERTY L1 L5`), 14 safety-mutant cfgs, 3 temporal-mutant cfgs, 1 subsumption-witness cfg |
+| `formal/tla/RequestCore.tla` + 20 cfgs `[superseded by #524]` | Safety model, liveness cfg (`PROPERTY L1 L5`), 14 safety-mutant cfgs, 3 temporal-mutant cfgs, 1 subsumption-witness cfg (post-#524 inventory: 23 cfgs, 16 killed mutants, 2 subsumption witnesses, and `MutReleaseResolvable` no longer exists) |
 | `scripts/verify_tla.sh` | Stage B1-1 gate: clean safety, clean liveness, 17 active mutant kills (14 invariant + 3 temporal), 1 clean subsumption witness |
 
 ## 3. Protocol facts and pin classes
@@ -563,7 +577,7 @@ script's stage headers:
 | `MutTerminalOverwrite` | a second candidate overwrites the winner | `InvSingleWinner` | killed on `InvSingleWinner` |
 | `MutCancelAsPhysical` | cancel wins even after the execution claim | `InvCancelWinRequiresUnclaimed` | killed on `InvCancelWinRequiresUnclaimed` |
 | `MutPublishWhileE` | publication may begin while E > 0 | `InvNoPubWhileExec` | killed on `InvNoPubWhileExec` |
-| `MutReleaseResolvable` | binding release forgets to invalidate binding | `InvReleasedNotLive` | killed on `InvReleasedNotLive` |
+| `MutReleaseResolvable` `[superseded by #524]` | binding release forgets to invalidate binding | `InvReleasedNotLive` | killed on `InvReleasedNotLive` (retired with the deleted `ReleaseBind` edge; the fault class is carried by `MutConsumeKeepsBind` and the new `MutDiscardKeepsBind`) |
 | `MutGenWrap` | release does not advance the generation | `InvAcceptedRepresented` | killed on `InvAcceptedRepresented`; `InvSingleAcceptance` kills it when checked alone (the wrapped slot re-accepts the same identity — both kills are legitimate, the gate pins the first) |
 | `MutReclaimIgnoresPub` | reclaim drops the published requirement | `InvReclaimConditions` | killed on `InvReclaimConditions` (a logged reclaim with `pub # "done"`) |
 | `MutReclaimIgnoresCtl` | reclaim drops the C-pin requirement | `InvReclaimConditions` | killed on `InvReclaimConditions` (a logged reclaim with `ctl > 0`) |
@@ -675,8 +689,8 @@ check only that gate (C:91, C:129). The model's Reserve/Accept guards
 
 MODEL ACTIONS Reserve/Rollback/Accept/CloseAdmission/NoteHealth/ClaimExec/
               PhysicalOutcome/CancelRequest/RetireExec/AcquireExec/
-              AcquireCtl/RetireCtl/BeginPublish/CompletePublish/ReleaseBind/
-              Reclaim:
+              AcquireCtl/RetireCtl/BeginPublish/CompletePublish/Reclaim
+              [superseded by #524: ReleaseBind removed from this list]:
 C++ AUTHORITY:            the same-named RequestCore member
                           (H:150-172; C:89-350), Reclaim realized as
                           try_reclaim_/release_slot_ (C:357-386) invoked

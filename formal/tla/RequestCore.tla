@@ -75,9 +75,17 @@
 (*   MutTerminalOverwrite  a second candidate overwrites the winner        *)
 (*   MutCancelAsPhysical   cancel wins even after the execution claim      *)
 (*   MutPublishWhileE      publication may begin while exec > 0            *)
-(*   MutReleaseResolvable  binding release forgets to invalidate binding   *)
 (*   MutGenWrap            release does not advance the generation         *)
-(*   MutReclaimIgnoresPub  reclaim drops the published requirement         *)
+(*   MutReclaimIgnoresPub  reclaim drops the published requirement;       *)
+(*                         subsumed since #524: the retired inflight-     *)
+(*                         tolerant release flavor is gone, so a released *)
+(*                         binding implies publication complete           *)
+(*                         (InvBindImpliesPublished) and the dropped      *)
+(*                         guard is implied by the surviving one.  Its    *)
+(*                         cfg must now complete CLEANLY as that          *)
+(*                         subsumption's witness, and a violation there   *)
+(*                         means an inflight-tolerant release path came   *)
+(*                         back                                           *)
 (*   MutReclaimIgnoresCtl  reclaim drops the control-pin requirement       *)
 (*   MutRetireLastExec     the last exec retires with no terminal chosen   *)
 (*   MutExecAfterTerminal  a new exec is acquired after a chosen terminal  *)
@@ -111,9 +119,16 @@
 (*   terminal must ALREADY be established (pub = "done"); an inflight      *)
 (*   publication is not a public terminal, so an early discard is the      *)
 (*   same nonterminal-release violation the always-on diagnostics guard.   *)
-(*   ReleaseBind remains the compatibility release flavor, which may fire  *)
-(*   from "inflight" (a ready Completion's own release edge predates the   *)
-(*   core's publication completion).                                       *)
+(*   Since #524 this is the ONLY public release edge besides consumption: *)
+(*   pre-F2 caller-owned Completion release edge that made an inflight    *)
+(*   release legal in the model is removed, because production deleted it *)
+(*   in F2 and discard_public_result refuses that window (not_visible_yet *)
+(*   -> the nonterminal-release diagnostic).                              *)
+(*   MutDiscardKeepsBind    discard forgets to release the binding;       *)
+(*                          discarded[] records the release while bind    *)
+(*                          stays live, so InvReleasedNotLive is the kill *)
+(*                          (the discard-edge sibling of                  *)
+(*                          MutConsumeKeepsBind)                          *)
 (*   MutDiscardInflight     public discard accepts an inflight publication; *)
 (*                          discarded[] makes "was publicly discarded" a   *)
 (*                          per-identity fact stage cannot express,        *)
@@ -128,7 +143,6 @@ CONSTANT MutIgnoreClose,
           MutTerminalOverwrite,
           MutCancelAsPhysical,
           MutPublishWhileE,
-          MutReleaseResolvable,
           MutGenWrap,
           MutReclaimIgnoresPub,
           MutReclaimIgnoresCtl,
@@ -142,6 +156,7 @@ CONSTANT MutIgnoreClose,
           MutReadyBeforePayload,
           MutConsumeKeepsBind,
           MutConsumeUnpublished,
+          MutDiscardKeepsBind,
           MutDiscardInflight
 
 Slots == {"s0", "s1"}
@@ -424,25 +439,12 @@ DiscardPublic(s) ==
   /\ discarded' = [discarded EXCEPT ![Identity(s)] = TRUE]
   /\ stage' = [stage EXCEPT ![Identity(s)] =
                  IF stage[Identity(s)] < 3 THEN 3 ELSE stage[Identity(s)]]
-  /\ bind' = [bind EXCEPT ![s] = FALSE]
-  /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
-                 closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
-
-ReleaseBind(s) ==
-  /\ phase[s] = "accepted"
-  /\ bind[s]
-  /\ term[s] # "none"
-  /\ exec[s] = 0
-  /\ pub[s] # "none"
-  /\ stage' = [stage EXCEPT ![Identity(s)] =
-                 IF stage[Identity(s)] < 3 THEN 3 ELSE stage[Identity(s)]]
-  /\ IF MutReleaseResolvable
+  /\ IF MutDiscardKeepsBind
        THEN UNCHANGED bind
        ELSE bind' = [bind EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
-                 acceptCount, chosenIds, reclaimLog, consumed, discarded, pubDoneIds>>
+                 acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
 
 Reclaim(s) ==
   /\ phase[s] = "accepted"
@@ -475,7 +477,6 @@ SlotAction(s) ==
   \/ CompletePublish(s)
   \/ Consume(s)
   \/ DiscardPublic(s)
-  \/ ReleaseBind(s)
   \/ Reclaim(s)
   \/ \E g \in 0..(gen[s] - 1) : StaleTerminal(s, g)
 
@@ -574,6 +575,10 @@ InvReleasedNotLive ==
   \A i \in Ids :
     (stage[i] >= 3) =>
       ~((phase[i.slot] = "accepted") /\ (gen[i.slot] = i.gen) /\ bind[i.slot])
+
+InvBindImpliesPublished ==
+  \A s \in Slots :
+    (phase[s] = "accepted" /\ ~bind[s]) => (pub[s] = "done")
 
 InvReclaimedNotLive ==
   \A i \in Ids :
