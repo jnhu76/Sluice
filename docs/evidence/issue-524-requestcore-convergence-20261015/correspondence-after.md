@@ -71,13 +71,19 @@ empirical check).
   abstraction scope (observer pin, zero-op) is unchanged and pre-existing, so
   no exact-correspondence claim is made beyond it.
 
-## Residuals handed to the owner (not fixed by this slice)
+## Superseded rows in the B1-1 record (fixed after review)
 
-- `docs/roadmap/b1-1-request-core-evidence.md` rows `:137` (cfg count),
-  `:566` (`MutReleaseResolvable` row) and `:678` (action list incl.
-  `ReleaseBind`) are falsified by this convergence. The file is a dated B1-1
-  slice record and is **outside this slice's allowed change set**, so it was
-  deliberately not edited; its supersession is recorded here, in
-  `review.md`, and in the conformance ledger's dated #524 section.
-- The pre-existing C++-only paths listed in the B1-1 note (zero-op fast path,
-  pre-claim physical outcome, publication target stand-in) are unchanged.
+`docs/roadmap/b1-1-request-core-evidence.md` rows `:137` (cfg count),
+`:566,568` (`MutReleaseResolvable` row) and `:678` (action list incl.
+`ReleaseBind`) were falsified by this convergence. The file is a dated B1-1
+slice record, so its historical numbers are not rewritten; it was instead
+marked in place in `docs(formal): mark the superseded B1-1 rows` (`eb0a7350`) —
+a dated supersession banner at the top naming the three rows and pointing at
+this directory and the ledger's dated #524 section, plus inline
+`[superseded by #524]` marks on the rows themselves with the post-#524
+inventory stated. This supersedes the earlier "not edited" disposition recorded
+by the first review round, which the second round correctly rejected.
+
+Residuals that remain genuinely out of scope: the pre-existing C++-only paths
+listed in the B1-1 note (zero-op fast path, pre-claim physical outcome,
+publication target stand-in) are unchanged.

@@ -2563,19 +2563,37 @@ commands in `resource-and-execution-manifest.md`): the complete safety gate
 liveness gate `RequestCoreLive.cfg` (L1 + L5) is **NOT YET RUN**: the run was
 started on the frozen snapshot and stopped on owner instruction for review, so
 no L1/L5 result is recorded here and no partial exploration is reported as one.
+An independent reviewer's complete-space liveness run on the converged model
+exists as corroborating scratch evidence in
+`docs/evidence/issue-524-requestcore-convergence-20261015/review.md`; it is not
+a formal receipt and is not substituted for one.
 `MODEL_STATUS = MODEL_CONVERGED_PENDING_FULL_TLC`. The 19 violating gates
 (preflight) pass on the converged model with their exact named kills, and the
 independent R4 review returned one `APPROVE_MODEL_FREEZE` with no
-correspondence failure (`review.md`).
+correspondence failure (`review.md`); the follow-up review round on the pushed
+head returned `REQUEST_CHANGES` on the evidence/classification bookkeeping
+only, which is dispositioned in the same file.
 
 Transition relation and state space: the delta is five code changes
 (`transition-diff.md`); `Next` loses exactly the `ReleaseBind` pairs and gains
 none; an isolation control (baseline model with only `\/ ReleaseBind(s)`
 deleted) reproduces the converged counters exactly, so the entire behavioural
-change is that one disjunct. The removed state family is precisely
-`phase = accepted ∧ bind = FALSE ∧ pub ≠ "done"` — the retired flavor's states.
-Distinct states fall from the frozen model's 26,662,372 to 5,359,732 (~4.9×),
-as a consequence of convergence, not as a modelling trade.
+change is that one disjunct. In the protocol-state projection — the ghost
+monitors excluded — the removed family is precisely
+`phase = accepted ∧ bind = FALSE ∧ pub ≠ "done"`, the retired flavor's states;
+the exactness argument is the guard (`DiscardPublic` in the reference
+configuration is the same predicate as the removed edge restricted to
+`pub = "done"`, minus the `exec = 0` conjunct, so the completed-publication
+half keeps a surviving pair). In the **full** state, ghost monitors included,
+one further configuration is removed and is not in that family: the retired
+edge released a completed publication *without recording which edge was taken*
+(`pub = "done" ∧ bind = FALSE ∧ consumed = discarded = FALSE`), while the
+converged model records every release in `consumed` or `discarded` (bind is
+cleared only by `Consume`, `DiscardPublic`, and `RetireSlot`, which leaves
+`accepted`). Both statements rest on the guard/enabledness argument, not on the
+control's counters, which establish the relation delta only. Distinct states
+fall from the frozen model's 26,662,372 to 5,359,732 (~4.9×), as a consequence
+of convergence, not as a modelling trade.
 
 Supersession of earlier dated rows in this ledger. The B1-B, B1-C, B1-D and B2
 rows below that map `Completion` reset/destructor to `ReleaseBind` (`:479`,
@@ -2589,10 +2607,12 @@ same applies to the cfg counts and the single-witness statement at `:414`. In
 the flavor in the present tense (`:244`, `:268`) were updated in place, since a
 living map may not describe a removed mechanism as current.
 
-Out-of-scope residual for the owner: `docs/roadmap/b1-1-request-core-evidence.md`
-rows `:137` (cfg count), `:566` (`MutReleaseResolvable` row) and `:678`
-(action list including `ReleaseBind`) are falsified by this convergence but sit
-outside this slice's allowed change set, so they were not edited; their
-supersession is recorded here and in the #524 evidence. F6 gate values are
-unaffected: F6-F03 was transferred as model-side debt and no F6 verdict rested
-on the flavor's presence (`docs/evidence/f6-final-closeout-20261015/`).
+The `b1-1-request-core-evidence.md` rows falsified by this convergence (the cfg
+inventory, the `MutReleaseResolvable` mutation row, and the `ReleaseBind` entry
+in the MODEL ACTIONS mapping) were outside this slice's original change set;
+after review they were marked in place in
+`docs(formal): mark the superseded B1-1 rows` (`eb0a7350`) with a dated
+supersession banner and inline `[superseded by #524]` marks, without rewriting
+that record's historical numbers. F6 gate values are unaffected: F6-F03 was
+transferred as model-side debt and no F6 verdict rested on the flavor's
+presence (`docs/evidence/f6-final-closeout-20261015/`).

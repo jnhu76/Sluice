@@ -43,15 +43,29 @@ recorded here rather than explained away.
 
 ## Which states were lost
 
-Exactly one family:
+The model state includes the ghost monitors, so two different sets must be
+separated: the protocol-state projection, and the full state.
+
+### Protocol-state projection (ghost monitors excluded)
+
+Exactly one family is lost:
 
 ```text
 phase = "accepted"  /\  bind = FALSE  /\  pub /= "done"
 ```
 
-equivalently, by the ghost monitors,
-`stage[i] >= 3` with `i ∉ pubDoneIds` and `consumed[i] = discarded[i] = FALSE`.
-These are the states the retired pre-F2 `Completion` release edge produced.
+These are the states the retired pre-F2 `Completion` release edge produced, and
+the exactness argument is the guard, not the counters: the removed pairs are
+those with `phase = "accepted" ∧ bind ∧ term ≠ "none" ∧ exec = 0 ∧ pub ≠ "none"`.
+For the `pub = "done"` half, `DiscardPublic`'s guard in the reference
+configuration is `phase = "accepted" ∧ bind ∧ term ≠ "none" ∧ pub = "done"` —
+the same predicate without the `exec = 0` conjunct, hence at least as
+permissive, and `Consume` carries the same guard — so each such pair has a
+surviving pair with the same protocol effect from the same pre-state; only the
+ghost recording the edge differs. For the `pub = "inflight"` half there is no
+survivor, which is the family above. The descendants of the removed targets add
+no further loss, because the protocol projections they produce
+(`… ∧ pub = "done"`) are reachable through the survivors as well.
 
 - At BASE the family is reachable. Reviewer A's witness invariant
   (`stage >= 3 ∧ identity not published`) is violated at BASE in 1659 states,
@@ -61,6 +75,33 @@ These are the states the retired pre-F2 `Completion` release edge produced.
 - In the converged model the same witness is unreachable over the complete
   reachable set, and reviewer B confirmed the same for the *mutant's* extra
   precondition `phase = accepted ∧ ~bind ∧ exec = 0 ∧ ctl = 0 ∧ pub ≠ "done"`.
+
+### Full model state (ghost monitors included)
+
+Here a **second** family is lost, which the projection statement above hides.
+The old model reached
+
+```text
+phase = "accepted"  /\  bind = FALSE  /\  pub = "done"
+                    /\  consumed = FALSE  /\  discarded = FALSE  /\  stage = 3
+```
+
+by `Reserve → Accept → CancelRequest → RetireExec → BeginPublish →
+CompletePublish → ReleaseBind`: the retired edge released a *completed*
+publication without recording which edge was taken. In the converged model
+`bind` is cleared only by `Consume` (sets `consumed`), `DiscardPublic` (sets
+`discarded`) and `RetireSlot` (which moves `phase` off `"accepted"`), so inside
+an accepted generation every release is recorded in a ghost and that
+unrecorded-release configuration is unreachable. It is the ghost-level
+counterpart of the deleted edge, and it is reached only through the edge: at
+BASE the same protocol projection with `consumed = TRUE` or `discarded = TRUE`
+stays reachable after convergence.
+
+The isolation control's counters are about the *relation* delta (one disjunct
+removed, no transition added): they do not by themselves establish either state
+classification above, which rests on the guard and enabledness arguments. What
+the control does rule out is that any part of the ~4.9× state reduction comes
+from something other than that one deleted disjunct.
 
 Nothing else was lost: no fair action, no invariant antecedent, and no
 liveness antecedent became unreachable. `ReclaimableId` (which needs
