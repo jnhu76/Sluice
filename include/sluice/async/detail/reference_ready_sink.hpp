@@ -8,7 +8,7 @@ namespace sluice::async::detail {
 
 class ReferenceReadySink final : public SynchronousReadySink {
   public:
-    void on_ready(ReadyEvent event) noexcept override {
+    void on_ready([[maybe_unused]] ReadyEvent event) noexcept override {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
         ++deliveries_;
         last_key_ = event.key;
