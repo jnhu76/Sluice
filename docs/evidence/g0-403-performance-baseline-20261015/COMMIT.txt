@@ -1,5 +1,6 @@
 harness = 25e85e06
 BENCHMARK_HEAD_SHA = c0bee1f8 (revision 2 bench sources; v1 was 8c98b417)
+comment_only_source_revision = 3bfdf4cb (all six binaries rebuild byte-identically)
 preregistration_freeze = 8c98b417ffbe963d6bcc0869c77947af9b2aa015
 raw_measurement_evidence = 2a5b85f4691a3d3189b273893f02432368ec5542
 report_commits = 1b182f22, eb2435e8, 6f57a6cb, 88662029, 79910c28

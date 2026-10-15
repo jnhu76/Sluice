@@ -55,6 +55,15 @@ Profile identity is asserted from dynamic dependencies, not from directory names
 only the ring builds depend on `liburing.so.2`, and `bench_w01_direct` is
 byte-identical across profiles because W-01 has no async dependency.
 
+### Source revision after the report
+
+`bench/` and `xmake/bench.lua` received a comment-only revision after the runs
+(`3bfdf4cb`, on top of `BENCHMARK_HEAD_SHA`), because the repository's comment
+authority guard flagged requirement-id citations in the workload files. All six
+binaries rebuild **byte-identically** from that revision — the hashes in the
+table above were reproduced from it, not just from the earlier tree — so the
+recorded evidence and the committed sources describe the same artifacts.
+
 ## Provenance of each committed raw file
 
 The authoritative v2 files are named canonically (`raw/w01.jsonl`, `w02.jsonl`,
