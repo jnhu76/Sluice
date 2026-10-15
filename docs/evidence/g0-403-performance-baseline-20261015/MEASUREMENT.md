@@ -266,10 +266,21 @@ Divided by the three passes, that is 3,752 / 4,506 / 7,260 cycles and 62 / 99 /
 
 `context-switches:u` and `cpu-migrations:u` read 0 for this process at
 `perf_event_paranoid=2` — recorded as UNAVAILABLE_WITH_REASON, not as evidence of
-zero contention. `perf record` DSO split: kernel ≈ 52% (w4) / 46% (w1),
-bench+library ≈ 23% / 26%, libc ≈ 19% / 22%. The top in-binary symbols are the
-mutex-guarded bookkeeping: `RequestScope::take`, `ThreadPoolBackend::submit_read`,
-`worker_loop`, `RequestCore::occupancy()`, `publish_one`, `accept`.
+zero contention.
+
+`perf record` DSO split for ThreadPool d16 w4, from the committed capture
+(`attribution/perf-w4.data`): **[unknown] 47.5%**, libc 23.7%,
+bench+library 23.3%, vdso 2.8%, libstdc++ 1.6%. The `[unknown]` bucket is not
+literally all kernel — it is samples whose DSO has no resolvable symbols, which
+at `perf_event_paranoid=2` means the kernel samples (`[k]` frames were observed
+there) plus any unresolved mapping; it is quoted as an upper bound on the kernel
+share, not as a measured kernel fraction.
+
+Top in-binary symbols by self percentage (resolved with `addr2line`, since perf
+does not symbolise the main DSO here): `RequestScope::take` 1.3% across three
+addresses, `RequestCore::occupancy()` 0.9% across three, `ThreadPoolBackend::worker_loop`
+0.8%, `submit_read` 1.2% across two, `publish_one` 0.5% — i.e. a flat profile of
+mutex-guarded bookkeeping with no single dominant function.
 
 ### 5.2b Per-operation mutex traffic (LD_PRELOAD probe, test-side)
 
