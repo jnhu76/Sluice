@@ -590,7 +590,7 @@ AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
         std::lock_guard<std::mutex> lk(work_mtx_);
         pass.immediate_work_remains = !publication_pending_.empty();
     }
-    pass.accepted_work_remains = core_ != nullptr && core_->occupancy().outstanding != 0;
+    pass.accepted_work_remains = core_ != nullptr && core_->outstanding_summary() != 0;
     return pass;
 }
 
@@ -777,7 +777,7 @@ detail::PublicCancel ThreadPoolBackend::cancel_identity(detail::RequestKey key) 
 }
 
 std::size_t ThreadPoolBackend::outstanding() const noexcept {
-    return core_ != nullptr ? core_->occupancy().outstanding : 0;
+    return core_ != nullptr ? core_->outstanding_summary() : 0;
 }
 
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {
