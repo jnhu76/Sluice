@@ -1,0 +1,24 @@
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d1-w1 rep=0] ops=20000 wall=0.1983s 100838 ops/s 393.9 MiB/s cpu=0.248s util=125.2% | lat p50=8902 p95=9399 p99=12018 max=78407 ns (n=20000)
+  [W02-uring-4k-d1 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W02-threadpool-4k-d4-w4 rep=0] ops=20000 wall=0.0998s 200465 ops/s 783.1 MiB/s cpu=0.302s util=302.8% | lat p50=18018 p95=26538 p99=30982 max=52073 ns (n=20000)
+  [W02-uring-4k-d4 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0841s 237683 ops/s 928.5 MiB/s cpu=0.277s util=328.7% | lat p50=65368 p95=84626 p99=94117 max=131221 ns (n=20000)
+  [W02-uring-4k-d16 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W02-threadpool-4k-d64-w4 rep=0] ops=20000 wall=0.0794s 251973 ops/s 984.3 MiB/s cpu=0.267s util=336.4% | lat p50=249610 p95=285660 p99=304806 max=366635 ns (n=20000)
+  [W02-uring-4k-d64 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0849s 235697 ops/s 920.7 MiB/s cpu=0.159s util=187.3% | lat p50=68417 p95=88462 p99=105037 max=157037 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=0] ops=20000 wall=0.0902s 221720 ops/s 866.1 MiB/s cpu=0.365s util=404.6% | lat p50=69237 p95=89759 p99=100155 max=126072 ns (n=20000)
+  [W02-threadpool-64k-d16-w4 rep=0] ops=2000 wall=0.0095s 210948 ops/s 13184.2 MiB/s cpu=0.043s util=458.8% | lat p50=74248 p95=93316 p99=105083 max=118197 ns (n=2000)
+  [W02-uring-64k-d16 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0119s 268247 ops/s 1047.8 MiB/s cpu=0.040s util=331.8% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-uring-4k-d16-saturate rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W02-threadpool-4k-d4-w4-scope64 rep=0] ops=20000 wall=0.0961s 208189 ops/s 813.2 MiB/s cpu=0.276s util=287.7% | lat p50=16111 p95=24019 p99=28083 max=46001 ns (n=20000)
+  [W02-threadpool-4k-d16-w4-scope64 rep=0] ops=20000 wall=0.0747s 267573 ops/s 1045.2 MiB/s cpu=0.256s util=342.5% | lat p50=61769 p95=80649 p99=89270 max=135974 ns (n=20000)
+
+=== W-02 complete, failing repetitions=6 ===

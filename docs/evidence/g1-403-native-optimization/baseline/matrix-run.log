@@ -1,0 +1,43 @@
+# g0 matrix run provenance (stage=all suffix=-g1r0)
+started=2026-10-16T00:14:46+08:00
+git_head=10aaf58b19092d44bfdc31c2761b90636d3a1518
+git_status_dirty=1
+warmup=2 measured=7 stage=all suffix=-g1r0
+host_manifest=host-manifest.txt
+binary noring bench_w01_direct sha256=9cb468d3080420e939bf3fe11cea45b62f589007f4d2693f38c8b49bbd60d6f2
+binary noring bench_w02_pipeline sha256=b41b6ec058e2954db0186fd9e3940d4073fd10c0e82e99d7f4ef50ffd2dcac44
+binary noring bench_w03_external_loop sha256=69218c3c6f926e405c55f04f755a1e576fafc3d5f8f16c1f8bbdd9dffc0282ff
+binary ring bench_w01_direct sha256=9cb468d3080420e939bf3fe11cea45b62f589007f4d2693f38c8b49bbd60d6f2
+binary ring bench_w02_pipeline sha256=29b2eb93b4c6104e7b0ce18daa10025e28a3027a9de73fd29a4a70969e503cc5
+binary ring bench_w03_external_loop sha256=1c5533f94a645ab006a59751254bab3fd2c1e7b428524a7008bc510c19f95e32
+# load_before
+ 00:14:46 up  2:59,  2 users,  load average: 0.25, 0.26, 0.16
+                 total        used        free      shared  buff/cache   available
+  Mem:     67252555776  4851720192 55467773952  1163898880  8844406784 62400835584
+  Swap:     8589930496           0  8589930496
+== w01 direct :: noring/bench_w01_direct -> w01-g1r0 (check=measured)
+2026-10-16T00:14:46+08:00
+exit=0 records=145
+check_run: OK w01-g1r0.jsonl stage=measured cases=15 records=145 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+== w02 pipeline :: ring/bench_w02_pipeline -> w02-g1r0 (check=measured)
+2026-10-16T00:16:15+08:00
+exit=0 records=145
+check_run: OK w02-g1r0.jsonl stage=measured cases=16 records=145 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+== w03 external loop :: ring/bench_w03_external_loop -> w03-g1r0 (check=measured)
+2026-10-16T00:16:49+08:00
+exit=0 records=55
+check_run: OK w03-g1r0.jsonl stage=measured cases=6 records=55 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+== w02 no-ring profile :: noring/bench_w02_pipeline -> w02-noring-notrun (check=notrun)
+2026-10-16T00:17:09+08:00
+exit=1 records=17
+check_run: OK w02-noring-notrun.jsonl stage=notrun cases=16 records=17 warmup_per_case=0 measured_per_case=1 not_run=6 exit=1
+== w03 no-ring profile :: noring/bench_w03_external_loop -> w03-noring-notrun (check=notrun)
+2026-10-16T00:17:12+08:00
+exit=1 records=7
+check_run: OK w03-noring-notrun.jsonl stage=notrun cases=6 records=7 warmup_per_case=0 measured_per_case=1 not_run=3 exit=1
+# load_after
+ 00:17:13 up  3:02,  2 users,  load average: 2.79, 1.21, 0.53
+                 total        used        free      shared  buff/cache   available
+  Mem:     67252555776  6228615168 53096091648  2517229568 11192209408 61023940608
+  Swap:     8589930496           0  8589930496
+finished=2026-10-16T00:17:13+08:00

@@ -1,0 +1,14 @@
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=0 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d4-w4 rep=0] ops=20000 wall=0.1446s 138282 ops/s 540.2 MiB/s cpu=0.388s util=268.0% | lat p50=28451 p95=43388 p99=50830 max=161961 ns (n=20000)
+  [W03-uring-4k-d4 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1453s 137644 ops/s 537.7 MiB/s cpu=0.434s util=298.4% | lat p50=66646 p95=102952 p99=117403 max=207246 ns (n=20000)
+  [W03-uring-4k-d16 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W03-threadpool-4k-d64-w4 rep=0] ops=20000 wall=0.1070s 186959 ops/s 730.3 MiB/s cpu=0.381s util=356.0% | lat p50=199273 p95=321161 p99=356885 max=409317 ns (n=20000)
+  [W03-uring-4k-d64 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+
+=== W-03 complete, failing repetitions=3 ===
