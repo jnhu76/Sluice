@@ -538,39 +538,45 @@ std::size_t ThreadPoolBackend::poll() {
 
 AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
     std::size_t published = 0;
+    // The entry snapshot is the pass boundary: completions a worker posts
+    // during this pass are the next pass's immediate work, reported honestly
+    // below, never absorbed into this invocation.
     std::size_t pass_bound = 0;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
         pass_bound = publication_pending_.size();
-    }
-    // The entry snapshot is the pass boundary: completions a worker posts
-    // during this pass are the next pass's immediate work, reported honestly
-    // below, never absorbed into this invocation.
-    for (std::size_t n = 0; n < pass_bound; ++n) {
-        detail::RequestReservation h{};
-        bool have = false;
-        {
-            std::lock_guard<std::mutex> lk(work_mtx_);
-            have = publication_pending_.pop_front(h);
+        publish_batch_.clear();
+        for (std::size_t n = 0; n < pass_bound; ++n) {
+            detail::RequestReservation h{};
+            if (!publication_pending_.pop_front(h))
+                break;
+            publish_batch_.push_back(h);
         }
-        if (!have)
-            break;
+    }
+    for (const detail::RequestReservation h : publish_batch_) {
         publish_one(h);
         ++published;
     }
-    for (std::uint32_t i = 0; i < capacity_; ++i) {
+    for (;;) {
         detail::RequestKey owed{};
         detail::OperationKind owed_kind = detail::OperationKind::read;
+        bool have = false;
         {
             std::lock_guard<std::mutex> lk(work_mtx_);
-            DeliveryRecord& record = delivery_[i];
-            if (!record.event_owed)
-                continue;
-            record.event_owed = false;
-            owed = record.owed_key;
-            record.owed_key = {};
-            owed_kind = record.kind;
+            for (std::uint32_t i = 0; i < capacity_; ++i) {
+                DeliveryRecord& record = delivery_[i];
+                if (!record.event_owed)
+                    continue;
+                record.event_owed = false;
+                owed = record.owed_key;
+                record.owed_key = {};
+                owed_kind = record.kind;
+                have = true;
+                break;
+            }
         }
+        if (!have)
+            break;
         deliver_event(owed, owed_kind);
         if (core_->release_control(owed) != detail::ControlRelease::released) {
             detail::threadpool_core_handoff_fail_fast();

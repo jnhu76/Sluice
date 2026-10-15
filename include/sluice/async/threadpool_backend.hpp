@@ -225,6 +225,7 @@ class ThreadPoolBackend : public AsyncBackend {
     std::condition_variable work_cv_;
     BoundedHandleRing dispatch_;
     BoundedHandleRing publication_pending_;
+    std::vector<detail::RequestReservation> publish_batch_;
     std::size_t active_workers_ = 0;
     bool stopping_ = false;
 
