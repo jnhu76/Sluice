@@ -63,6 +63,7 @@ includes("xmake/uring.lua")
 includes("xmake/libraries.lua")
 includes("xmake/apps.lua")
 includes("xmake/tests.lua")
+includes("xmake/bench.lua")
 
 option("sanitizers")
     set_default("")
