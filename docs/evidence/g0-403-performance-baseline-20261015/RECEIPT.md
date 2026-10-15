@@ -43,9 +43,10 @@ G1_DECISION = start with C1 and C2 only, each as its own reviewable slice with a
 
 COMMENT_ADMISSION_URL = https://github.com/jnhu76/Sluice/issues/403#issuecomment-6188705332
 COMMENT_MEASUREMENT_URL = https://github.com/jnhu76/Sluice/issues/403#issuecomment-6188757379
-COMMENT_FINAL_URL = see comment C
-GITHUB_READBACK_VERIFIED = comments A and B verified by content hash; comment C
-  verification reported with its result
+COMMENT_FINAL_URL = https://github.com/jnhu76/Sluice/issues/403#issuecomment-6189912033
+GITHUB_READBACK_VERIFIED = all three comments re-read from the GitHub API and
+  compared against their local sources; each differs only by GitHub's appended
+  trailing newline (A: 17350 vs 17351 bytes, B: 26033 vs 26034, C: 19448 vs 19449)
 
 PRODUCTION_CODE_CHANGED = NO (git diff BASE_SHA..HEAD -- src include is empty)
 ROOT_SPEC_CHANGED = NO
