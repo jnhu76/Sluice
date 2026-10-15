@@ -351,6 +351,15 @@ int case_write_at(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t or
     const std::string path = fx.write_4k;
     const std::size_t block = meta.block_size;
     const std::size_t count = meta.request_count;
+    // Distinct source content per pool slot, so a write that lands at the wrong
+    // offset is detectable; every slot's content is generated outside the timed
+    // region.
+    const std::size_t pool_slots = std::min<std::size_t>(count, 1024);
+    std::vector<std::byte> pool(pool_slots * block);
+    for (std::size_t slot = 0; slot < pool_slots; ++slot) {
+        bench::fill_pattern(pool.data() + slot * block, block, slot * block);
+    }
+    auto source_of = [&](std::size_t i) { return pool.data() + (i % pool_slots) * block; };
 
     return bench::run_case_reps(
         meta, cfg, order,
@@ -384,12 +393,12 @@ int case_write_at(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t or
                 return bench::RunOutcome{false, failure, 0, 0, 0};
             }
             File file = std::move(opened).value();
-            bench::fill_pattern(buf.data(), block, 0);
+            (void)buf;
             return bench::time_ops(count, [&](std::size_t i, std::size_t& bytes,
                                               std::string& fail) {
                 const std::uint64_t base = static_cast<std::uint64_t>(i) * block;
                 auto res = sluice::blocking::write_at(
-                    file, base, std::span<const std::byte>(buf.data(), block));
+                    file, base, std::span<const std::byte>(source_of(i), block));
                 if (!res.has_value()) {
                     fail = "write_at failed: " + err_name(res.error());
                     return false;
@@ -418,9 +427,11 @@ int case_write_at(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t or
                     failure = "readback failed at operation " + std::to_string(i);
                     return false;
                 }
-                const auto mismatch = bench::verify_pattern(probe.data(), block, base);
+                const auto mismatch = bench::verify_pattern(
+                    probe.data(), block, static_cast<std::uint64_t>(i % pool_slots) * block);
                 if (!mismatch.ok) {
-                    failure = "written data mismatch at operation " + std::to_string(i);
+                    failure = "written data mismatch at operation " + std::to_string(i) +
+                              " (expected pool slot " + std::to_string(i % pool_slots) + ")";
                     return false;
                 }
             }
@@ -433,14 +444,12 @@ int case_write_at(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t or
                 return false;
             }
             File file = std::move(opened).value();
-            std::vector<std::byte> buf(block);
-            bench::fill_pattern(buf.data(), block, 0);
             return bench::time_ops_perop(
                 count,
                 [&](std::size_t i, std::size_t& bytes, std::string& fail) {
                     const std::uint64_t base = static_cast<std::uint64_t>(i) * block;
                     auto res = sluice::blocking::write_at(
-                        file, base, std::span<const std::byte>(buf.data(), block));
+                        file, base, std::span<const std::byte>(source_of(i), block));
                     if (!res.has_value()) {
                         fail = "write_at failed";
                         return false;
@@ -664,6 +673,16 @@ int case_composition(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t
     const std::size_t count = meta.request_count;
     const std::size_t file_blocks = (4u << 20) / block;
 
+    // For the write variant, each file block gets its own content so a misplaced
+    // write is detectable; the buffers are produced outside the timed region.
+    std::vector<std::byte> source_pool(file_blocks * block);
+    for (std::size_t slot = 0; slot < file_blocks; ++slot) {
+        bench::fill_pattern(source_pool.data() + slot * block, block, slot * block);
+    }
+    auto source_of = [&](std::size_t i) {
+        return source_pool.data() + (i % file_blocks) * block;
+    };
+
     return bench::run_case_reps(
         meta, cfg, order, [](std::size_t, std::string&) { return true; },
         [&](std::vector<std::byte>& buf, std::string& failure) {
@@ -678,7 +697,7 @@ int case_composition(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t
                 const std::uint64_t base = static_cast<std::uint64_t>(i % file_blocks) * block;
                 if (use_write_all) {
                     auto res = sluice::blocking::write_all_at(
-                        file, base, std::span<const std::byte>(buf.data(), block));
+                        file, base, std::span<const std::byte>(source_of(i), block));
                     if (!res.has_value() || !res.value().complete()) {
                         fail = "write_all_at failed";
                         return false;
@@ -737,7 +756,7 @@ int case_composition(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t
                         static_cast<std::uint64_t>(i % file_blocks) * block;
                     if (use_write_all) {
                         auto res = sluice::blocking::write_all_at(
-                            file, base, std::span<const std::byte>(scratch.data(), block));
+                            file, base, std::span<const std::byte>(source_of(i), block));
                         if (!res.has_value() || !res.value().complete()) {
                             fail = "write_all_at failed";
                             return false;
@@ -810,6 +829,7 @@ int main() {
             failed += run();
         }
     };
+    failed += bench::oracle_self_test_case(cfg);
     run_if("CAL-clock-overhead", [&] { return case_clock_calibration(cfg); });
     run_if("W01-open_close", [&] { return case_open_close(fx, cfg, 1); });
     run_if("W01-file_info", [&] { return case_file_info(fx, cfg, 2); });

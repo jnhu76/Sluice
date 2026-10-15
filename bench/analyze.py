@@ -47,6 +47,23 @@ def cv(values):
     return statistics.stdev(values) / mean * 100.0 if mean else 0.0
 
 
+REQUIRED_FIELDS = (
+    "ops_per_sec", "lat_p50_ns", "lat_p95_ns", "lat_p99_ns", "lat_max_ns", "ops",
+    "cpu_s", "wall_s", "stats_poll_calls", "stats_wait_calls", "notifications",
+    "passes", "would_block", "stats_max_outstanding", "stats_completion_errors",
+    "stats_invalid_state",
+)
+
+
+def check_fields(records):
+    missing = set()
+    for record in records:
+        for field in REQUIRED_FIELDS:
+            if field not in record:
+                missing.add(field)
+    return sorted(missing)
+
+
 def main() -> int:
     evidence = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(
         "docs/evidence/g0-403-performance-baseline-20261015")
@@ -57,6 +74,10 @@ def main() -> int:
     control = [r for r in records if "noring-notrun" in r["_file"]]
     records = [r for r in records if "noring-notrun" not in r["_file"]]
 
+    absent = check_fields(records)
+    if absent:
+        print("ERROR: records are missing fields the analysis reads:", absent)
+        return 2
     measured = [r for r in records if r["measured"]]
     warmups = [r for r in records if not r["measured"]]
 
@@ -118,9 +139,11 @@ def main() -> int:
     print()
     print("## counters (median per operation)")
     print(f"| {'CASE_ID':44s} | {'polls/op':>9s} | {'waits/op':>9s} | {'notif/op':>9s} | "
-          f"{'passes/op':>10s} | {'would_block':>11s} | {'max_outst':>10s} | {'canon errs':>10s} |")
+          f"{'passes/op':>10s} | {'would_block':>11s} | {'max_outst':>10s} | {'compl errs':>10s} | "
+          f"{'invalid st':>10s} |")
     print("|" + "-" * 46 + "|" + "-" * 11 + "|" + "-" * 11 + "|" + "-" * 11 + "|"
-          + "-" * 12 + "|" + "-" * 13 + "|" + "-" * 12 + "|" + "-" * 12 + "|")
+          + "-" * 12 + "|" + "-" * 13 + "|" + "-" * 12 + "|" + "-" * 12 + "|"
+          + "-" * 12 + "|")
     for (source, case_id), group in sorted(by_case.items(), key=lambda kv: kv[0][1]):
         if "NOT_RUN" in group[0].get("failure", ""):
             continue
@@ -133,7 +156,8 @@ def main() -> int:
               f"{per_op('stats_wait_calls'):9.3f} | {per_op('notifications'):9.3f} | "
               f"{per_op('passes'):10.3f} | {median([r['would_block'] for r in group]):11.0f} | "
               f"{median([r['stats_max_outstanding'] for r in group]):10.0f} | "
-              f"{median([r['stats_canonical_errors'] if 'stats_canonical_errors' in r else 0 for r in group]):10.0f} |")
+              f"{median([r['stats_completion_errors'] for r in group]):10.0f} | "
+              f"{median([r['stats_invalid_state'] for r in group]):10.0f} |")
 
     print()
     print("## no-ring profile control (1 repetition, evidence that uring is absent)")

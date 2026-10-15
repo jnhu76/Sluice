@@ -124,16 +124,41 @@ inline Stats compute_stats(std::vector<double> samples) {
 // separately timed throughput pass.
 constexpr std::size_t kPatternPeriod = 65536;
 
+inline std::uint64_t mix64(std::uint64_t x) noexcept {
+    x += 0x9E3779B97F4A7C15ull;
+    x = (x ^ (x >> 30)) * 0xBF58476D1CE4E5B9ull;
+    x = (x ^ (x >> 27)) * 0x94D049BB133111EBull;
+    return x ^ (x >> 31);
+}
+
+// A single splitmix64 step per byte. The first version of this table used
+// (i * 2654435761ull) >> 56, which is identically zero for every i below 65536
+// and made the whole oracle compare zeros with zeros; the distinct-value count
+// below is the guard against that class of mistake.
 inline const std::byte* pattern_table() {
     static const std::vector<std::byte> table = [] {
         std::vector<std::byte> t(kPatternPeriod);
         for (std::size_t i = 0; i < kPatternPeriod; ++i) {
-            t[i] = static_cast<std::byte>(static_cast<std::uint8_t>(
-                (static_cast<std::uint64_t>(i) * 2654435761ull) >> 56));
+            t[i] = static_cast<std::byte>(
+                static_cast<std::uint8_t>(mix64(static_cast<std::uint64_t>(i)) >> 24));
         }
         return t;
     }();
     return table.data();
+}
+
+inline std::size_t pattern_distinct_values() {
+    const std::byte* t = pattern_table();
+    bool seen[256] = {};
+    std::size_t distinct = 0;
+    for (std::size_t i = 0; i < kPatternPeriod; ++i) {
+        const auto v = static_cast<std::size_t>(static_cast<unsigned char>(t[i]));
+        if (!seen[v]) {
+            seen[v] = true;
+            ++distinct;
+        }
+    }
+    return distinct;
 }
 
 inline void fill_pattern(std::byte* dst, std::size_t len, std::uint64_t base) noexcept {
@@ -182,6 +207,57 @@ inline MismatchReport verify_pattern(const std::byte* src, std::size_t len,
         offset = 0;
     }
     return r;
+}
+
+// Self-test for the correctness oracle. Runs before any case and must pass, so a
+// degenerate pattern, an offset confusion or a non-biting comparison cannot go
+// unnoticed the way the all-zero table did.
+struct OracleSelfTest {
+    bool ok = true;
+    std::string failure;
+};
+
+inline OracleSelfTest oracle_self_test() {
+    OracleSelfTest result;
+    const std::size_t distinct = pattern_distinct_values();
+    if (distinct < 200) {
+        result.ok = false;
+        result.failure = "pattern table has only " + std::to_string(distinct) +
+                         " distinct byte values";
+        return result;
+    }
+    std::vector<std::byte> buffer(kPatternPeriod + 4096);
+    constexpr std::uint64_t kBase = 123456;
+    fill_pattern(buffer.data(), 4096, kBase);
+    if (!verify_pattern(buffer.data(), 4096, kBase).ok) {
+        result.ok = false;
+        result.failure = "a correctly filled buffer failed verification";
+        return result;
+    }
+    // Offset confusion must be detected.
+    if (verify_pattern(buffer.data(), 4096, kBase + 1).ok) {
+        result.ok = false;
+        result.failure = "an off-by-one offset was not detected";
+        return result;
+    }
+    // A single flipped byte must be detected, at the right position.
+    buffer[2000] ^= std::byte{0x01};
+    const MismatchReport flipped = verify_pattern(buffer.data(), 4096, kBase);
+    if (flipped.ok || flipped.first_bad_position != kBase + 2000) {
+        result.ok = false;
+        result.failure = "a single flipped byte was not reported at the right position";
+        return result;
+    }
+    buffer[2000] ^= std::byte{0x01};
+    // The exact defect that existed: an all-zero buffer must not pass at a
+    // non-zero offset.
+    std::vector<std::byte> zeros(4096, std::byte{0});
+    if (verify_pattern(zeros.data(), 4096, kBase).ok) {
+        result.ok = false;
+        result.failure = "an all-zero buffer passed verification (degenerate pattern)";
+        return result;
+    }
+    return result;
 }
 
 struct Record {
@@ -522,6 +598,33 @@ inline Record make_record(const CaseMeta& meta, const EnvConfig& cfg, std::size_
     r.order_index = order_index;
     r.measured = measured;
     return r;
+}
+
+// Emits one record for the oracle self-test so the gate is visible in the raw
+// evidence of every workload binary. Returns non-zero on failure.
+inline int oracle_self_test_case(const EnvConfig& cfg) {
+    CaseMeta meta;
+    meta.case_id = "CAL-oracle-self-test";
+    meta.workload = "calibration";
+    meta.backend = "n/a";
+    meta.dataset = "pattern table + verify_pattern discrimination";
+    meta.cache_policy = "n/a";
+    meta.filesystem = "n/a";
+    meta.notes = "must pass before any case; a degenerate pattern or a non-biting "
+                 "comparison fails here";
+    Record r = make_record(meta, cfg, 0, false, 0);
+    const OracleSelfTest result = oracle_self_test();
+    r.ok = result.ok;
+    r.failure = result.failure;
+    emit_record(r);
+    if (!result.ok) {
+        std::printf("  [%s] FAILED: %s\n", meta.case_id.c_str(), result.failure.c_str());
+    } else {
+        std::printf("  [%s] pattern distinct values=%zu; offset confusion, single-byte "
+                    "flip and all-zero buffers are all detected\n",
+                    meta.case_id.c_str(), pattern_distinct_values());
+    }
+    return result.ok ? 0 : 1;
 }
 
 // Drives warmup + measured repetitions for one case. Each measured repetition

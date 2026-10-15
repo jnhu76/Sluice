@@ -147,6 +147,10 @@ struct PipelineParams {
     // while the pipeline depth stays fixed isolates the request core's
     // O(capacity) slot scans (occupancy) from the concurrency itself.
     std::size_t core_capacity = 0;
+    // Diagnostic: consume whichever request is ready first instead of the
+    // oldest. Discriminates a harness-side head-of-line explanation of the
+    // worker-count inversion from a library-side one.
+    bool any_ready_consume = false;
     std::string label_suffix;
 };
 
@@ -328,11 +332,21 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
     std::deque<Inflight> window;
     std::size_t submitted = 0;
     std::size_t completed = 0;
+    // A destination buffer is available only when no in-flight request holds it.
+    // A `submitted % depth` slot map is only correct while consumption is in
+    // submission order; the out-of-order diagnostic aliased two live requests
+    // onto one buffer, which the byte oracle caught. Slots are recycled through
+    // an explicit free list instead.
+    std::vector<std::size_t> free_slots(params.depth);
+    for (std::size_t i = 0; i < params.depth; ++i) {
+        free_slots[i] = i;
+    }
 
     const bench::TimePoint start = bench::now();
     while (completed < params.request_count) {
         while (window.size() < params.depth && submitted < params.request_count) {
-            const std::size_t slot = submitted % params.depth;
+            const std::size_t slot = free_slots.back();
+            free_slots.pop_back();
             const std::uint64_t offset = static_cast<std::uint64_t>(submitted % blocks) *
                                          params.block_size;
             ReadOp op;
@@ -362,27 +376,48 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
                              std::to_string(completed);
             return result;
         }
-        Inflight& oldest = window.front();
-        ++result.counters.waits;
-        auto waited = scope.wait_for(oldest.ticket, kWaitDeadline);
-        if (!waited.has_value()) {
-            result.ok = false;
-            result.failure = "wait failed: " + describe(waited.error());
-            return result;
+        // Selection: the preregistered default consumes in submission order
+        // (FIFO), as an ordered pipeline does. The diagnostic mode consumes
+        // whichever request reports published first, which prices the
+        // head-of-line wait that an ordered consumer pays when workers complete
+        // out of order.
+        std::size_t victim = window.size();
+        if (params.any_ready_consume) {
+            for (std::size_t index = 0; index < window.size(); ++index) {
+                if (ctx.lookup(window[index].ticket.id()) == RequestReadiness::ready) {
+                    victim = index;
+                    break;
+                }
+            }
         }
-        if (waited.value() != ScopeWaitStatus::ready) {
-            result.ok = false;
-            result.failure = "wait outcome was not ready at operation " +
-                             std::to_string(completed);
-            return result;
+        RequestObservation<std::size_t> observed;
+        if (victim == window.size()) {
+            Inflight& oldest = window.front();
+            ++result.counters.waits;
+            auto waited = scope.wait_for(oldest.ticket, kWaitDeadline);
+            if (!waited.has_value()) {
+                result.ok = false;
+                result.failure = "wait failed: " + describe(waited.error());
+                return result;
+            }
+            if (waited.value() != ScopeWaitStatus::ready) {
+                result.ok = false;
+                result.failure = "wait outcome was not ready at operation " +
+                                 std::to_string(completed);
+                return result;
+            }
+            observed = scope.take(oldest.ticket);
+            victim = 0;
+        } else {
+            observed = scope.take(window[victim].ticket);
         }
-        const auto observed = scope.take(oldest.ticket);
         if (observed.readiness != RequestReadiness::ready) {
             result.ok = false;
             result.failure = "take did not observe a ready result at operation " +
                              std::to_string(completed);
             return result;
         }
+        Inflight& entry = window[victim];
         if (!observed.result.has_value()) {
             result.ok = false;
             result.failure = "operation failed: " + describe(observed.result.error());
@@ -395,22 +430,26 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
             return result;
         }
         if (instrument) {
-            result.latencies.push_back(bench::now_ns() - oldest.submitted_ns);
+            result.latencies.push_back(bench::now_ns() - entry.submitted_ns);
         }
         if (verify) {
-            const auto mismatch = bench::verify_pattern(buffers[oldest.slot].data(),
-                                                       params.block_size, oldest.offset);
+            const auto mismatch = bench::verify_pattern(buffers[entry.slot].data(),
+                                                       params.block_size, entry.offset);
             if (!mismatch.ok) {
                 result.ok = false;
                 result.failure = "byte mismatch at absolute " +
-                                 std::to_string(mismatch.first_bad_position);
+                                 std::to_string(mismatch.first_bad_position) +
+                                 " (operation " + std::to_string(completed) + ", buffer slot " +
+                                 std::to_string(entry.slot) + ", offset " +
+                                 std::to_string(entry.offset) + ")";
                 return result;
             }
         }
         result.bytes += observed.result.value();
         ++result.ops;
         ++completed;
-        window.pop_front();
+        free_slots.push_back(entry.slot);
+        window.erase(window.begin() + static_cast<std::ptrdiff_t>(victim));
     }
     const bench::TimePoint end = bench::now();
     result.wall_s = bench::seconds_between(start, end);
@@ -623,6 +662,7 @@ int main() {
         p.depth = 4;
         p.workers = 4;
         p.scope_capacity = 64;
+        p.core_capacity = 4;  // isolate the scope scan only
         p.label_suffix = "-scope64";
         cases.push_back(p);
     }
@@ -634,6 +674,7 @@ int main() {
         p.depth = 16;
         p.workers = 4;
         p.scope_capacity = 64;
+        p.core_capacity = p.depth;  // isolate the scope scan only
         p.label_suffix = "-scope64";
         cases.push_back(p);
     }
@@ -651,9 +692,33 @@ int main() {
         p.core_capacity = 64;
         p.label_suffix = "-core64";
         cases.push_back(p);
+
+        PipelineParams ordered;
+        ordered.backend = &threadpool;
+        ordered.block_size = 4096;
+        ordered.request_count = 20000;
+        ordered.depth = 16;
+        ordered.workers = 4;
+        ordered.scope_capacity = 16;
+        ordered.core_capacity = 16;
+        ordered.any_ready_consume = true;
+        ordered.label_suffix = "-anyready";
+        cases.push_back(ordered);
+
+        PipelineParams ordered_sat;
+        ordered_sat.backend = &threadpool;
+        ordered_sat.block_size = 4096;
+        ordered_sat.request_count = 20000;
+        ordered_sat.depth = 64;
+        ordered_sat.workers = 4;
+        ordered_sat.scope_capacity = 64;
+        ordered_sat.core_capacity = 64;
+        ordered_sat.any_ready_consume = true;
+        ordered_sat.label_suffix = "-anyready";
+        cases.push_back(ordered_sat);
     }
 
-    int failed = 0;
+    int failed = bench::oracle_self_test_case(cfg);
     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
         const bool measured = round >= cfg.warmup;
         const std::vector<std::size_t> order = bench::rotation_order(cases.size(), round);

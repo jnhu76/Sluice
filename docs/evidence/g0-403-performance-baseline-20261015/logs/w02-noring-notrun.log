@@ -3,21 +3,22 @@ io_uring backend unavailable: io_uring backend not present in this build profile
 G0 W-02 bounded RequestScope pipeline benchmark
 warmup=0 measured_repetitions=1
 ========================================================
-  [W02-threadpool-4k-d1-w1 rep=0] ops=20000 wall=0.7305s 27378 ops/s 106.9 MiB/s cpu=0.654s util=89.5% | lat p50=24848 p95=41891 p99=65849 max=146742 ns (n=20000)
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d1-w1 rep=0] ops=20000 wall=0.7767s 25751 ops/s 100.6 MiB/s cpu=0.681s util=87.7% | lat p50=26230 p95=47220 p99=68127 max=512829 ns (n=20000)
   [W02-uring-4k-d1 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
-  [W02-threadpool-4k-d4-w4 rep=0] ops=20000 wall=0.1749s 114347 ops/s 446.7 MiB/s cpu=0.311s util=178.0% | lat p50=26772 p95=52351 p99=85054 max=182442 ns (n=20000)
+  [W02-threadpool-4k-d4-w4 rep=0] ops=20000 wall=0.1859s 107581 ops/s 420.2 MiB/s cpu=0.332s util=178.4% | lat p50=27943 p95=50777 p99=65989 max=129597 ns (n=20000)
   [W02-uring-4k-d4 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
-  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1707s 117137 ops/s 457.6 MiB/s cpu=0.308s util=180.1% | lat p50=129298 p95=160489 p99=185066 max=261302 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1819s 109937 ops/s 429.4 MiB/s cpu=0.325s util=178.6% | lat p50=136831 p95=200954 p99=235370 max=387912 ns (n=20000)
   [W02-uring-4k-d16 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
-  [W02-threadpool-4k-d64-w4 rep=0] ops=20000 wall=0.1446s 138326 ops/s 540.3 MiB/s cpu=0.264s util=182.7% | lat p50=538464 p95=604481 p99=660760 max=758763 ns (n=20000)
+  [W02-threadpool-4k-d64-w4 rep=0] ops=20000 wall=0.1288s 155230 ops/s 606.4 MiB/s cpu=0.257s util=199.7% | lat p50=568547 p95=656284 p99=737690 max=898547 ns (n=20000)
   [W02-uring-4k-d64 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
-  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0723s 276518 ops/s 1080.2 MiB/s cpu=0.100s util=138.6% | lat p50=52942 p95=96846 p99=129249 max=212281 ns (n=20000)
-  [W02-threadpool-4k-d16-w8 rep=0] ops=20000 wall=0.1771s 112949 ops/s 441.2 MiB/s cpu=0.320s util=180.8% | lat p50=130541 p95=168524 p99=192620 max=325205 ns (n=20000)
-  [W02-threadpool-64k-d16-w4 rep=0] ops=2000 wall=0.0282s 70883 ops/s 4430.2 MiB/s cpu=0.052s util=185.4% | lat p50=184694 p95=438873 p99=477042 max=536601 ns (n=2000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0866s 231066 ops/s 902.6 MiB/s cpu=0.118s util=136.2% | lat p50=63487 p95=110352 p99=140117 max=296883 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=0] ops=20000 wall=0.1865s 107231 ops/s 418.9 MiB/s cpu=0.341s util=182.6% | lat p50=137953 p95=201596 p99=241155 max=339756 ns (n=20000)
+  [W02-threadpool-64k-d16-w4 rep=0] ops=2000 wall=0.0426s 46942 ops/s 2933.9 MiB/s cpu=0.072s util=169.4% | lat p50=441354 p95=495973 p99=536881 max=608954 ns (n=2000)
   [W02-uring-64k-d16 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
-  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0284s 112484 ops/s 439.4 MiB/s cpu=0.051s util=177.8% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0297s 107720 ops/s 420.8 MiB/s cpu=0.053s util=178.4% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
   [W02-uring-4k-d16-saturate rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
-  [W02-threadpool-4k-d4-w4-scope64 rep=0] ops=20000 wall=0.1893s 105632 ops/s 412.6 MiB/s cpu=0.325s util=171.7% | lat p50=27663 p95=50216 p99=64854 max=133216 ns (n=20000)
-  [W02-threadpool-4k-d16-w4-scope64 rep=0] ops=20000 wall=0.1786s 112000 ops/s 437.5 MiB/s cpu=0.310s util=173.3% | lat p50=133397 p95=182160 p99=226216 max=339056 ns (n=20000)
+  [W02-threadpool-4k-d4-w4-scope64 rep=0] ops=20000 wall=0.1937s 103271 ops/s 403.4 MiB/s cpu=0.339s util=175.3% | lat p50=27613 p95=46980 p99=66948 max=131651 ns (n=20000)
+  [W02-threadpool-4k-d16-w4-scope64 rep=0] ops=20000 wall=0.1997s 100151 ops/s 391.2 MiB/s cpu=0.354s util=177.2% | lat p50=137563 p95=190705 p99=239458 max=336924 ns (n=20000)
 
 === W-02 complete, failing repetitions=6 ===

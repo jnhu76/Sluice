@@ -612,7 +612,7 @@ int main() {
     add(threadpool, 64, 4);
     add(uring, 64, 0);
 
-    int failed = 0;
+    int failed = bench::oracle_self_test_case(cfg);
     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
         const bool measured = round >= cfg.warmup;
         const std::vector<std::size_t> order = bench::rotation_order(cases.size(), round);
