@@ -1,0 +1,30 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=20
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1346s 148597 ops/s 580.5 MiB/s cpu=0.421s util=312.6% | lat p50=103062 p95=176290 p99=213008 max=339002 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1823s 109694 ops/s 428.5 MiB/s cpu=0.553s util=303.2% | lat p50=97425 p95=166139 p99=197293 max=270998 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=1] ops=20000 wall=0.1789s 111764 ops/s 436.6 MiB/s cpu=0.551s util=307.8% | lat p50=105700 p95=184203 p99=233885 max=333708 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=2] ops=20000 wall=0.1759s 113712 ops/s 444.2 MiB/s cpu=0.544s util=309.1% | lat p50=91679 p95=152421 p99=177687 max=268492 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=3] ops=20000 wall=0.1694s 118075 ops/s 461.2 MiB/s cpu=0.522s util=308.2% | lat p50=90955 p95=151762 p99=181877 max=234088 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=4] ops=20000 wall=0.1533s 130496 ops/s 509.8 MiB/s cpu=0.475s util=309.8% | lat p50=85891 p95=147337 p99=176926 max=270522 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=5] ops=20000 wall=0.1573s 127186 ops/s 496.8 MiB/s cpu=0.489s util=310.9% | lat p50=96198 p95=148797 p99=182949 max=281201 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=6] ops=20000 wall=0.1287s 155415 ops/s 607.1 MiB/s cpu=0.412s util=320.3% | lat p50=83072 p95=135185 p99=167081 max=239410 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=7] ops=20000 wall=0.1254s 159427 ops/s 622.8 MiB/s cpu=0.393s util=313.6% | lat p50=90191 p95=150777 p99=180481 max=248374 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=8] ops=20000 wall=0.1747s 114472 ops/s 447.2 MiB/s cpu=0.541s util=309.4% | lat p50=105200 p95=174435 p99=211925 max=288055 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=9] ops=20000 wall=0.1958s 102148 ops/s 399.0 MiB/s cpu=0.609s util=311.3% | lat p50=100271 p95=171229 p99=209131 max=316245 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=10] ops=20000 wall=0.1791s 111694 ops/s 436.3 MiB/s cpu=0.550s util=307.2% | lat p50=93105 p95=155380 p99=184648 max=238522 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=11] ops=20000 wall=0.1637s 122170 ops/s 477.2 MiB/s cpu=0.506s util=309.1% | lat p50=82580 p95=135484 p99=166321 max=234605 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=12] ops=20000 wall=0.1562s 128031 ops/s 500.1 MiB/s cpu=0.475s util=303.9% | lat p50=98076 p95=161359 p99=191669 max=275397 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=13] ops=20000 wall=0.1798s 111235 ops/s 434.5 MiB/s cpu=0.554s util=307.9% | lat p50=93295 p95=158505 p99=183467 max=299944 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=14] ops=20000 wall=0.1857s 107705 ops/s 420.7 MiB/s cpu=0.560s util=301.6% | lat p50=98417 p95=163223 p99=191829 max=252295 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=15] ops=20000 wall=0.1751s 114194 ops/s 446.1 MiB/s cpu=0.544s util=310.5% | lat p50=88225 p95=149466 p99=179725 max=278308 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=16] ops=20000 wall=0.1700s 117617 ops/s 459.4 MiB/s cpu=0.529s util=311.3% | lat p50=93981 p95=156333 p99=182512 max=305574 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=17] ops=20000 wall=0.1618s 123618 ops/s 482.9 MiB/s cpu=0.525s util=324.2% | lat p50=91463 p95=152789 p99=181864 max=269308 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=18] ops=20000 wall=0.1830s 109317 ops/s 427.0 MiB/s cpu=0.558s util=305.2% | lat p50=95616 p95=153606 p99=186255 max=303313 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=19] ops=20000 wall=0.1338s 149476 ops/s 583.9 MiB/s cpu=0.425s util=317.8% | lat p50=86075 p95=140738 p99=165535 max=238971 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+[ perf record: Woken up 156 times to write data ]
+[ perf record: Captured and wrote 41.042 MB $EVIDENCE_DIR/data/w03-tp-4k-d16-w4.data (301030 samples) ]

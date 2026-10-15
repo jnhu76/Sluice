@@ -1,0 +1,30 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=20
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-64k-d16-w4 rep=0 warmup] ops=2000 wall=0.0117s 171061 ops/s 10691.3 MiB/s cpu=0.055s util=467.4% | lat p50=85850 p95=121187 p99=137743 max=163172 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=0] ops=2000 wall=0.0108s 184391 ops/s 11524.4 MiB/s cpu=0.049s util=450.6% | lat p50=86051 p95=119771 p99=145145 max=171099 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=1] ops=2000 wall=0.0111s 179910 ops/s 11244.4 MiB/s cpu=0.050s util=450.3% | lat p50=90513 p95=118445 p99=136962 max=177480 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=2] ops=2000 wall=0.0111s 179967 ops/s 11247.9 MiB/s cpu=0.050s util=448.2% | lat p50=84692 p95=110156 p99=125709 max=138741 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=3] ops=2000 wall=0.0103s 193591 ops/s 12099.5 MiB/s cpu=0.046s util=449.6% | lat p50=83454 p95=108581 p99=122458 max=157267 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=4] ops=2000 wall=0.0099s 201303 ops/s 12581.4 MiB/s cpu=0.044s util=445.2% | lat p50=75223 p95=98905 p99=111856 max=128003 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=5] ops=2000 wall=0.0108s 185186 ops/s 11574.1 MiB/s cpu=0.048s util=441.6% | lat p50=80008 p95=107027 p99=120819 max=145122 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=6] ops=2000 wall=0.0102s 196919 ops/s 12307.4 MiB/s cpu=0.046s util=449.5% | lat p50=80829 p95=109005 p99=126057 max=144081 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=7] ops=2000 wall=0.0101s 198514 ops/s 12407.1 MiB/s cpu=0.045s util=448.2% | lat p50=82869 p95=126961 p99=151936 max=184133 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=8] ops=2000 wall=0.0116s 171722 ops/s 10732.6 MiB/s cpu=0.052s util=443.0% | lat p50=76221 p95=109856 p99=125873 max=155192 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=9] ops=2000 wall=0.0090s 221101 ops/s 13818.8 MiB/s cpu=0.041s util=456.9% | lat p50=73489 p95=103906 p99=127654 max=149458 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=10] ops=2000 wall=0.0096s 209274 ops/s 13079.6 MiB/s cpu=0.043s util=450.8% | lat p50=75908 p95=102005 p99=112712 max=145554 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=11] ops=2000 wall=0.0101s 198994 ops/s 12437.1 MiB/s cpu=0.045s util=449.0% | lat p50=78075 p95=102154 p99=112672 max=126033 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=12] ops=2000 wall=0.0098s 205113 ops/s 12819.6 MiB/s cpu=0.044s util=451.7% | lat p50=76659 p95=105025 p99=117456 max=129696 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=13] ops=2000 wall=0.0097s 206464 ops/s 12904.0 MiB/s cpu=0.044s util=451.2% | lat p50=78315 p95=102198 p99=118171 max=147319 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=14] ops=2000 wall=0.0100s 199468 ops/s 12466.7 MiB/s cpu=0.045s util=447.4% | lat p50=78847 p95=103782 p99=113618 max=131739 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=15] ops=2000 wall=0.0104s 192427 ops/s 12026.7 MiB/s cpu=0.047s util=449.8% | lat p50=81173 p95=106092 p99=117899 max=140918 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=16] ops=2000 wall=0.0103s 194906 ops/s 12181.6 MiB/s cpu=0.046s util=449.1% | lat p50=79094 p95=111909 p99=129443 max=149576 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=17] ops=2000 wall=0.0104s 192040 ops/s 12002.5 MiB/s cpu=0.047s util=448.7% | lat p50=82301 p95=110870 p99=138914 max=188725 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=18] ops=2000 wall=0.0099s 201909 ops/s 12619.3 MiB/s cpu=0.045s util=450.6% | lat p50=76804 p95=104504 p99=114947 max=129373 ns (n=2000)
+  [W02-threadpool-64k-d16-w4 rep=19] ops=2000 wall=0.0102s 196091 ops/s 12255.7 MiB/s cpu=0.046s util=453.6% | lat p50=81055 p95=107750 p99=122289 max=151975 ns (n=2000)
+
+=== W-02 complete, failing repetitions=0 ===
+[ perf record: Woken up 5 times to write data ]
+[ perf record: Captured and wrote 3.158 MB $EVIDENCE_DIR/data/w02-tp-64k-d16-w4.data (20030 samples) ]

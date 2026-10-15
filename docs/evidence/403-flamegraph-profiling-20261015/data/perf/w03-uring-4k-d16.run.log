@@ -1,0 +1,30 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=20
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-uring-4k-d16 rep=0 warmup] ops=20000 wall=0.1107s 180598 ops/s 705.5 MiB/s cpu=0.221s util=199.4% | lat p50=51421 p95=78327 p99=87859 max=154578 ns (n=20000)
+  [W03-uring-4k-d16 rep=0] ops=20000 wall=0.0982s 203636 ops/s 795.5 MiB/s cpu=0.219s util=223.4% | lat p50=53946 p95=79552 p99=92905 max=121590 ns (n=20000)
+  [W03-uring-4k-d16 rep=1] ops=20000 wall=0.0954s 209540 ops/s 818.5 MiB/s cpu=0.229s util=239.8% | lat p50=47943 p95=68722 p99=80007 max=104594 ns (n=20000)
+  [W03-uring-4k-d16 rep=2] ops=20000 wall=0.0834s 239796 ops/s 936.7 MiB/s cpu=0.209s util=250.1% | lat p50=48547 p95=69024 p99=80675 max=107241 ns (n=20000)
+  [W03-uring-4k-d16 rep=3] ops=20000 wall=0.0835s 239383 ops/s 935.1 MiB/s cpu=0.205s util=245.2% | lat p50=48628 p95=68948 p99=81457 max=117902 ns (n=20000)
+  [W03-uring-4k-d16 rep=4] ops=20000 wall=0.0849s 235527 ops/s 920.0 MiB/s cpu=0.211s util=248.1% | lat p50=52987 p95=79764 p99=92332 max=151741 ns (n=20000)
+  [W03-uring-4k-d16 rep=5] ops=20000 wall=0.0951s 210396 ops/s 821.9 MiB/s cpu=0.247s util=260.3% | lat p50=56071 p95=80706 p99=93332 max=121740 ns (n=20000)
+  [W03-uring-4k-d16 rep=6] ops=20000 wall=0.0924s 216342 ops/s 845.1 MiB/s cpu=0.243s util=262.8% | lat p50=49227 p95=70747 p99=83117 max=117422 ns (n=20000)
+  [W03-uring-4k-d16 rep=7] ops=20000 wall=0.0863s 231778 ops/s 905.4 MiB/s cpu=0.227s util=263.6% | lat p50=49704 p95=69996 p99=82297 max=111811 ns (n=20000)
+  [W03-uring-4k-d16 rep=8] ops=20000 wall=0.0853s 234377 ops/s 915.5 MiB/s cpu=0.225s util=263.2% | lat p50=49917 p95=70561 p99=84019 max=114456 ns (n=20000)
+  [W03-uring-4k-d16 rep=9] ops=20000 wall=0.0858s 233216 ops/s 911.0 MiB/s cpu=0.227s util=264.9% | lat p50=50975 p95=70957 p99=83660 max=112927 ns (n=20000)
+  [W03-uring-4k-d16 rep=10] ops=20000 wall=0.0858s 233024 ops/s 910.3 MiB/s cpu=0.226s util=263.9% | lat p50=50140 p95=70815 p99=82143 max=112726 ns (n=20000)
+  [W03-uring-4k-d16 rep=11] ops=20000 wall=0.0845s 236771 ops/s 924.9 MiB/s cpu=0.224s util=265.0% | lat p50=49936 p95=71343 p99=83238 max=114977 ns (n=20000)
+  [W03-uring-4k-d16 rep=12] ops=20000 wall=0.0867s 230619 ops/s 900.9 MiB/s cpu=0.214s util=247.0% | lat p50=48446 p95=70924 p99=82436 max=101775 ns (n=20000)
+  [W03-uring-4k-d16 rep=13] ops=20000 wall=0.0873s 229060 ops/s 894.8 MiB/s cpu=0.215s util=245.7% | lat p50=49983 p95=71283 p99=83752 max=163838 ns (n=20000)
+  [W03-uring-4k-d16 rep=14] ops=20000 wall=0.0859s 232718 ops/s 909.1 MiB/s cpu=0.232s util=270.4% | lat p50=48490 p95=71967 p99=85180 max=131761 ns (n=20000)
+  [W03-uring-4k-d16 rep=15] ops=20000 wall=0.0867s 230608 ops/s 900.8 MiB/s cpu=0.237s util=273.8% | lat p50=46570 p95=71071 p99=85354 max=117300 ns (n=20000)
+  [W03-uring-4k-d16 rep=16] ops=20000 wall=0.0879s 227514 ops/s 888.7 MiB/s cpu=0.245s util=278.3% | lat p50=49824 p95=72959 p99=87222 max=116486 ns (n=20000)
+  [W03-uring-4k-d16 rep=17] ops=20000 wall=0.0853s 234333 ops/s 915.4 MiB/s cpu=0.229s util=267.8% | lat p50=49594 p95=70497 p99=82598 max=115060 ns (n=20000)
+  [W03-uring-4k-d16 rep=18] ops=20000 wall=0.0852s 234772 ops/s 917.1 MiB/s cpu=0.230s util=270.2% | lat p50=50665 p95=72683 p99=86494 max=117427 ns (n=20000)
+  [W03-uring-4k-d16 rep=19] ops=20000 wall=0.0861s 232241 ops/s 907.2 MiB/s cpu=0.232s util=269.2% | lat p50=50517 p95=72824 p99=86680 max=118313 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+[ perf record: Woken up 57 times to write data ]
+[ perf record: Captured and wrote 16.393 MB $EVIDENCE_DIR/data/w03-uring-4k-d16.data (120026 samples) ]

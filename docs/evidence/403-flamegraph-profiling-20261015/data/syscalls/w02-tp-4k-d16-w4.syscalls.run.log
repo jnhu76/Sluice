@@ -1,0 +1,18 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=10
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1006s 198712 ops/s 776.2 MiB/s cpu=0.356s util=353.5% | lat p50=68059 p95=94361 p99=106172 max=170745 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0825s 242494 ops/s 947.2 MiB/s cpu=0.310s util=375.3% | lat p50=62877 p95=86770 p99=97277 max=138140 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=1] ops=20000 wall=0.0790s 253063 ops/s 988.5 MiB/s cpu=0.280s util=353.9% | lat p50=61663 p95=85739 p99=97135 max=154285 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=2] ops=20000 wall=0.0813s 246060 ops/s 961.2 MiB/s cpu=0.292s util=359.5% | lat p50=63074 p95=86974 p99=97750 max=167370 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=3] ops=20000 wall=0.0795s 251716 ops/s 983.3 MiB/s cpu=0.292s util=368.1% | lat p50=66091 p95=93902 p99=108480 max=155860 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=4] ops=20000 wall=0.0827s 241745 ops/s 944.3 MiB/s cpu=0.298s util=360.1% | lat p50=62842 p95=86589 p99=97575 max=134600 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=5] ops=20000 wall=0.0902s 221780 ops/s 866.3 MiB/s cpu=0.307s util=340.8% | lat p50=66806 p95=89293 p99=99534 max=135780 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=6] ops=20000 wall=0.0819s 244323 ops/s 954.4 MiB/s cpu=0.296s util=361.0% | lat p50=62619 p95=87194 p99=97909 max=140533 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=7] ops=20000 wall=0.0789s 253557 ops/s 990.5 MiB/s cpu=0.290s util=367.1% | lat p50=62756 p95=85927 p99=96162 max=128617 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=8] ops=20000 wall=0.0845s 236638 ops/s 924.4 MiB/s cpu=0.300s util=354.4% | lat p50=67146 p95=91346 p99=102860 max=124998 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=9] ops=20000 wall=0.0860s 232548 ops/s 908.4 MiB/s cpu=0.304s util=353.6% | lat p50=65999 p95=90545 p99=103212 max=173153 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===

@@ -1,0 +1,18 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=10
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0 warmup] ops=20000 wall=0.0687s 291012 ops/s 1136.8 MiB/s cpu=0.117s util=170.7% | lat p50=51140 p95=56202 p99=60105 max=149322 ns (n=20000)
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0667s 299975 ops/s 1171.8 MiB/s cpu=0.113s util=168.9% | lat p50=42947 p95=53337 p99=59946 max=92234 ns (n=20000)
+  [W02-uring-4k-d16 rep=1] ops=20000 wall=0.0566s 353396 ops/s 1380.5 MiB/s cpu=0.095s util=168.3% | lat p50=46573 p95=58469 p99=64454 max=108470 ns (n=20000)
+  [W02-uring-4k-d16 rep=2] ops=20000 wall=0.0641s 312220 ops/s 1219.6 MiB/s cpu=0.138s util=214.8% | lat p50=48152 p95=60168 p99=65513 max=79228 ns (n=20000)
+  [W02-uring-4k-d16 rep=3] ops=20000 wall=0.0638s 313457 ops/s 1224.4 MiB/s cpu=0.144s util=226.4% | lat p50=48127 p95=59827 p99=65761 max=80109 ns (n=20000)
+  [W02-uring-4k-d16 rep=4] ops=20000 wall=0.0634s 315241 ops/s 1231.4 MiB/s cpu=0.143s util=224.8% | lat p50=49678 p95=55816 p99=58739 max=67879 ns (n=20000)
+  [W02-uring-4k-d16 rep=5] ops=20000 wall=0.0629s 317766 ops/s 1241.3 MiB/s cpu=0.140s util=222.5% | lat p50=49018 p95=55110 p99=58013 max=72850 ns (n=20000)
+  [W02-uring-4k-d16 rep=6] ops=20000 wall=0.0635s 315044 ops/s 1230.6 MiB/s cpu=0.145s util=228.6% | lat p50=49258 p95=55448 p99=58236 max=77558 ns (n=20000)
+  [W02-uring-4k-d16 rep=7] ops=20000 wall=0.0646s 309431 ops/s 1208.7 MiB/s cpu=0.152s util=234.8% | lat p50=49530 p95=55581 p99=58119 max=87453 ns (n=20000)
+  [W02-uring-4k-d16 rep=8] ops=20000 wall=0.0608s 328817 ops/s 1284.4 MiB/s cpu=0.117s util=192.5% | lat p50=48680 p95=55331 p99=59123 max=71109 ns (n=20000)
+  [W02-uring-4k-d16 rep=9] ops=20000 wall=0.0624s 320556 ops/s 1252.2 MiB/s cpu=0.137s util=219.0% | lat p50=49464 p95=55429 p99=58297 max=72658 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===

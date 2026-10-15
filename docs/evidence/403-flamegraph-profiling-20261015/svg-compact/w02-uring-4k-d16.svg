@@ -1,0 +1,3322 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1400" height="678" onload="init(evt)" viewBox="0 0 1400 678" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1400.0" height="678.0" fill="url(#background)"  />
+<text id="title" x="700.00" y="24" >w02-uring-4k-d16</text>
+<text id="details" x="10.00" y="661" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1290.00" y="24" >Search</text>
+<text id="ignorecase" x="1374.00" y="24" >ic</text>
+<text id="matched" x="1290.00" y="661" > </text>
+<g id="frames">
+<g >
+<title>sluice::async::detail::RequestCore::consume_public_result (47,344,847 cycles, 0.13%)</title><rect x="94.3" y="373" width="1.7" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="97.26" y="383.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::BoundedDispatchQueue::remove_exact (45,633,855 cycles, 0.12%)</title><rect x="775.8" y="325" width="1.7" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="778.82" y="335.5" ></text>
+</g>
+<g >
+<title>psi_task_switch (295,087,068 cycles, 0.79%)</title><rect x="1324.7" y="501" width="11.0" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="1327.75" y="511.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock (30,012,123 cycles, 0.08%)</title><rect x="1308.3" y="469" width="1.1" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="1311.33" y="479.5" ></text>
+</g>
+<g >
+<title>get_signal (26,621,437 cycles, 0.07%)</title><rect x="124.2" y="277" width="1.0" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="127.23" y="287.5" ></text>
+</g>
+<g >
+<title>io_init_req (36,186,686 cycles, 0.10%)</title><rect x="140.8" y="245" width="1.3" height="15.0" fill="rgb(211,32,7)" rx="2" ry="2" />
+<text  x="143.76" y="255.5" ></text>
+</g>
+<g >
+<title>std::mutex::unlock (249,457,113 cycles, 0.67%)</title><rect x="338.0" y="165" width="9.3" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="341.05" y="175.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (33,103,492 cycles, 0.09%)</title><rect x="418.3" y="357" width="1.2" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="421.30" y="367.5" ></text>
+</g>
+<g >
+<title>sluice::blocking::write_at (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="469" width="2.1" height="15.0" fill="rgb(240,163,39)" rx="2" ry="2" />
+<text  x="911.76" y="479.5" ></text>
+</g>
+<g >
+<title>put_prev_task_fair (68,078,509 cycles, 0.18%)</title><rect x="1296.1" y="485" width="2.6" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="1299.13" y="495.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestObservation&lt;unsigned long&gt; sluice::async::RequestScope::take_&lt;unsigned long&gt; (345,683,331 cycles, 0.93%)</title><rect x="371.9" y="421" width="12.8" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="374.89" y="431.5" ></text>
+</g>
+<g >
+<title>mutex_unlock (21,283,821 cycles, 0.06%)</title><rect x="254.5" y="181" width="0.8" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="257.46" y="191.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::resolve_public_ (18,966,005 cycles, 0.05%)</title><rect x="889.8" y="389" width="0.7" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="892.76" y="399.5" ></text>
+</g>
+<g >
+<title>___task_rq_lock (906,967,766 cycles, 2.43%)</title><rect x="566.3" y="213" width="33.6" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="569.28" y="223.5" >__..</text>
+</g>
+<g >
+<title>__io_submit_flush_completions (20,055,509 cycles, 0.05%)</title><rect x="115.1" y="213" width="0.7" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="118.09" y="223.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (20,540,608 cycles, 0.06%)</title><rect x="295.9" y="277" width="0.8" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="298.94" y="287.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock (21,378,099 cycles, 0.06%)</title><rect x="1241.4" y="469" width="0.8" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="1244.36" y="479.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::poll (732,494,611 cycles, 1.97%)</title><rect x="321.9" y="293" width="27.1" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="324.87" y="303.5" >s..</text>
+</g>
+<g >
+<title>__io_prep_rw (266,526,961 cycles, 0.72%)</title><rect x="153.8" y="229" width="9.8" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="156.77" y="239.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock_irq (48,007,084 cycles, 0.13%)</title><rect x="648.6" y="245" width="1.7" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="651.55" y="255.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::poll (732,494,611 cycles, 1.97%)</title><rect x="321.9" y="309" width="27.1" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="324.87" y="319.5" >s..</text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::complete_publication (19,180,311 cycles, 0.05%)</title><rect x="10.9" y="533" width="0.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="13.87" y="543.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::wait_for (1,939,246,021 cycles, 5.20%)</title><rect x="825.1" y="453" width="71.8" height="15.0" fill="rgb(217,56,13)" rx="2" ry="2" />
+<text  x="828.06" y="463.5" >sluice::..</text>
+</g>
+<g >
+<title>__raw_spin_lock_irqsave (64,292,314 cycles, 0.17%)</title><rect x="1264.0" y="501" width="2.4" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1267.04" y="511.5" ></text>
+</g>
+<g >
+<title>update_se (76,691,012 cycles, 0.21%)</title><rect x="1357.9" y="421" width="2.9" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="1360.94" y="431.5" ></text>
+</g>
+<g >
+<title>kiocb_done (45,653,194 cycles, 0.12%)</title><rect x="1189.7" y="469" width="1.7" height="15.0" fill="rgb(221,74,17)" rx="2" ry="2" />
+<text  x="1192.73" y="479.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (54,658,890 cycles, 0.15%)</title><rect x="114.2" y="341" width="2.0" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="117.17" y="351.5" ></text>
+</g>
+<g >
+<title>erase (119,364,191 cycles, 0.32%)</title><rect x="361.3" y="453" width="4.4" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="364.31" y="463.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (519,419,886 cycles, 1.39%)</title><rect x="329.6" y="277" width="19.3" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="332.62" y="287.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::find_live_router_cookie_ (63,561,661 cycles, 0.17%)</title><rect x="332.7" y="197" width="2.4" height="15.0" fill="rgb(238,153,36)" rx="2" ry="2" />
+<text  x="335.71" y="207.5" ></text>
+</g>
+<g >
+<title>void std::__unguarded_insertion_sort&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, std::less&lt;void&gt; &gt; (26,865,179 cycles, 0.07%)</title><rect x="82.7" y="389" width="1.0" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="85.71" y="399.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;sluice::async::detail::RequestReservation, std::allocator&lt;sluice::async::detail::RequestReservation&gt; &gt;::operator[] (28,725,621 cycles, 0.08%)</title><rect x="776.4" y="309" width="1.1" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="779.44" y="319.5" ></text>
+</g>
+<g >
+<title>ret_from_fork_asm (12,880,976,111 cycles, 34.57%)</title><rect x="912.8" y="597" width="477.0" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="915.81" y="607.5" >ret_from_fork_asm</text>
+</g>
+<g >
+<title>_raw_spin_unlock (60,395,903 cycles, 0.16%)</title><rect x="971.0" y="533" width="2.2" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="974.00" y="543.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::TransportLedger::pop_front (52,790,075 cycles, 0.14%)</title><rect x="300.6" y="293" width="2.0" height="15.0" fill="rgb(242,170,40)" rx="2" ry="2" />
+<text  x="303.60" y="303.5" ></text>
+</g>
+<g >
+<title>[unknown] (488,450,989 cycles, 1.31%)</title><rect x="10.0" y="597" width="18.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="13.00" y="607.5" ></text>
+</g>
+<g >
+<title>io_file_get_normal (47,438,541 cycles, 0.13%)</title><rect x="147.9" y="229" width="1.7" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="150.88" y="239.5" ></text>
+</g>
+<g >
+<title>compose&lt;sluice::blocking::write_all_at (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="501" width="2.1" height="15.0" fill="rgb(220,72,17)" rx="2" ry="2" />
+<text  x="911.76" y="511.5" ></text>
+</g>
+<g >
+<title>__gthread_mutex_unlock (516,103,840 cycles, 1.38%)</title><rect x="864.2" y="165" width="19.1" height="15.0" fill="rgb(212,32,7)" rx="2" ry="2" />
+<text  x="867.21" y="175.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (801,856,145 cycles, 2.15%)</title><rect x="941.3" y="533" width="29.7" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="944.31" y="543.5" >_r..</text>
+</g>
+<g >
+<title>io_acct_activate_free_worker (1,034,809,720 cycles, 2.78%)</title><rect x="180.4" y="229" width="38.3" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="183.40" y="239.5" >io_..</text>
+</g>
+<g >
+<title>__update_load_avg_cfs_rq (98,102,089 cycles, 0.26%)</title><rect x="1368.8" y="405" width="3.7" height="15.0" fill="rgb(234,137,32)" rx="2" ry="2" />
+<text  x="1371.83" y="415.5" ></text>
+</g>
+<g >
+<title>shmem_file_read_iter (4,203,749,431 cycles, 11.28%)</title><rect x="1034.0" y="453" width="155.7" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="1037.04" y="463.5" >shmem_file_read_iter</text>
+</g>
+<g >
+<title>irqentry_exit (49,246,045 cycles, 0.13%)</title><rect x="434.2" y="325" width="1.8" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="437.17" y="335.5" ></text>
+</g>
+<g >
+<title>io_acct_activate_free_worker (2,119,129,122 cycles, 5.69%)</title><rect x="547.7" y="245" width="78.5" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="550.70" y="255.5" >io_acct_a..</text>
+</g>
+<g >
+<title>irqentry_exit (66,473,223 cycles, 0.18%)</title><rect x="770.7" y="277" width="2.4" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="773.66" y="287.5" ></text>
+</g>
+<g >
+<title>__smp_call_single_queue (69,158,972 cycles, 0.19%)</title><rect x="214.5" y="181" width="2.6" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="217.51" y="191.5" ></text>
+</g>
+<g >
+<title>__io_read (4,631,631,769 cycles, 12.43%)</title><rect x="1018.2" y="469" width="171.5" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="1021.19" y="479.5" >__io_read</text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (84,495,835 cycles, 0.23%)</title><rect x="414.7" y="325" width="3.2" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="417.74" y="335.5" ></text>
+</g>
+<g >
+<title>clock_gettime@@GLIBC_2.17 (73,431,749 cycles, 0.20%)</title><rect x="354.5" y="421" width="2.7" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="357.47" y="431.5" ></text>
+</g>
+<g >
+<title>memset_orig (21,086,021 cycles, 0.06%)</title><rect x="513.2" y="213" width="0.8" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="516.22" y="223.5" ></text>
+</g>
+<g >
+<title>io_wq_enqueue (2,615,910,437 cycles, 7.02%)</title><rect x="529.3" y="261" width="96.9" height="15.0" fill="rgb(239,156,37)" rx="2" ry="2" />
+<text  x="532.30" y="271.5" >io_wq_enqueue</text>
+</g>
+<g >
+<title>io_rw_alloc_async (432,531,673 cycles, 1.16%)</title><rect x="498.0" y="229" width="16.0" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="500.99" y="239.5" ></text>
+</g>
+<g >
+<title>[[vdso]] (69,930,751 cycles, 0.19%)</title><rect x="354.6" y="405" width="2.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="357.56" y="415.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (34,832,781 cycles, 0.09%)</title><rect x="114.7" y="245" width="1.3" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="117.73" y="255.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (25,521,477 cycles, 0.07%)</title><rect x="377.5" y="341" width="1.0" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="380.54" y="351.5" ></text>
+</g>
+<g >
+<title>atime_needs_update (232,665,552 cycles, 0.62%)</title><rect x="1181.1" y="421" width="8.6" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="1184.09" y="431.5" ></text>
+</g>
+<g >
+<title>io_read (4,705,239,785 cycles, 12.63%)</title><rect x="1017.2" y="485" width="174.2" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="1020.17" y="495.5" >io_read</text>
+</g>
+<g >
+<title>sluice::Result&lt;sluice::async::ScopeWaitStatus&gt; sluice::async::RequestScope::wait_for_slot_&lt;unsigned long&gt; (890,813,292 cycles, 2.39%)</title><rect x="318.7" y="421" width="33.0" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="321.74" y="431.5" >sl..</text>
+</g>
+<g >
+<title>tally_submit&lt;sluice::async::detail::RequestKey&gt; (19,288,803 cycles, 0.05%)</title><rect x="823.1" y="389" width="0.7" height="15.0" fill="rgb(247,196,47)" rx="2" ry="2" />
+<text  x="826.12" y="399.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::deliver_event (51,865,009 cycles, 0.14%)</title><rect x="324.9" y="261" width="1.9" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="327.88" y="271.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (156,039,786 cycles, 0.42%)</title><rect x="669.0" y="181" width="5.7" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="671.96" y="191.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (23,602,025 cycles, 0.06%)</title><rect x="306.2" y="261" width="0.8" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="309.17" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::begin_publication (90,165,808 cycles, 0.24%)</title><rect x="841.0" y="277" width="3.3" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="844.00" y="287.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (28,033,137 cycles, 0.08%)</title><rect x="800.6" y="213" width="1.0" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="803.60" y="223.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::claim_execution (87,137,879 cycles, 0.23%)</title><rect x="782.2" y="325" width="3.3" height="15.0" fill="rgb(205,4,1)" rx="2" ry="2" />
+<text  x="785.23" y="335.5" ></text>
+</g>
+<g >
+<title>sluice::async::AsyncIoContext::wait_one (813,399,312 cycles, 2.18%)</title><rect x="319.3" y="405" width="30.1" height="15.0" fill="rgb(210,27,6)" rx="2" ry="2" />
+<text  x="322.30" y="415.5" >sl..</text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (33,523,325 cycles, 0.09%)</title><rect x="863.0" y="165" width="1.2" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="865.97" y="175.5" ></text>
+</g>
+<g >
+<title>update_cfs_rq_load_avg (112,816,736 cycles, 0.30%)</title><rect x="1368.3" y="421" width="4.2" height="15.0" fill="rgb(212,33,8)" rx="2" ry="2" />
+<text  x="1371.28" y="431.5" ></text>
+</g>
+<g >
+<title>io_run_task_work (48,964,648 cycles, 0.13%)</title><rect x="973.3" y="533" width="1.8" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="976.27" y="543.5" ></text>
+</g>
+<g >
+<title>shmem_get_folio_gfp (46,973,325 cycles, 0.13%)</title><rect x="909.1" y="277" width="1.8" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="912.13" y="287.5" ></text>
+</g>
+<g >
+<title>xas_start (34,854,023 cycles, 0.09%)</title><rect x="1179.0" y="389" width="1.3" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="1181.98" y="399.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (150,879,670 cycles, 0.40%)</title><rect x="70.0" y="341" width="5.6" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="73.01" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::take (352,506,133 cycles, 0.95%)</title><rect x="371.6" y="437" width="13.1" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="374.64" y="447.5" ></text>
+</g>
+<g >
+<title>io_wq_dec_running (23,968,227 cycles, 0.06%)</title><rect x="1381.8" y="517" width="0.9" height="15.0" fill="rgb(229,111,26)" rx="2" ry="2" />
+<text  x="1384.79" y="527.5" ></text>
+</g>
+<g >
+<title>io_wq_worker_running (174,429,921 cycles, 0.47%)</title><rect x="1266.7" y="533" width="6.5" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="1269.72" y="543.5" ></text>
+</g>
+<g >
+<title>__raw_spin_lock_irqsave (94,200,297 cycles, 0.25%)</title><rect x="599.9" y="213" width="3.5" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="602.86" y="223.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (31,122,864 cycles, 0.08%)</title><rect x="843.2" y="245" width="1.1" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="846.19" y="255.5" ></text>
+</g>
+<g >
+<title>sched_clock_cpu (27,625,781 cycles, 0.07%)</title><rect x="1334.7" y="485" width="1.0" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1337.65" y="495.5" ></text>
+</g>
+<g >
+<title>__do_sys_io_uring_enter (4,858,878,901 cycles, 13.04%)</title><rect x="454.5" y="309" width="180.0" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="457.53" y="319.5" >__do_sys_io_uring_enter</text>
+</g>
+<g >
+<title>tctx_task_work (28,451,966 cycles, 0.08%)</title><rect x="291.4" y="197" width="1.0" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="294.40" y="207.5" ></text>
+</g>
+<g >
+<title>io_submit_sqe (2,120,213,824 cycles, 5.69%)</title><rect x="140.2" y="261" width="78.5" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="143.23" y="271.5" >io_submit..</text>
+</g>
+<g >
+<title>pick_eevdf (46,171,075 cycles, 0.12%)</title><rect x="1283.7" y="469" width="1.7" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="1286.71" y="479.5" ></text>
+</g>
+<g >
+<title>fput (76,716,730 cycles, 0.21%)</title><rect x="458.3" y="293" width="2.9" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="461.33" y="303.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (33,568,586 cycles, 0.09%)</title><rect x="753.2" y="341" width="1.3" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="756.22" y="351.5" ></text>
+</g>
+<g >
+<title> (20,315,960 cycles, 0.05%)</title><rect x="298.8" y="293" width="0.7" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="301.77" y="303.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (438,614,124 cycles, 1.18%)</title><rect x="190.5" y="165" width="16.2" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="193.45" y="175.5" ></text>
+</g>
+<g >
+<title>__libc_start_main@@GLIBC_2.34 (23,835,278,978 cycles, 63.96%)</title><rect x="28.2" y="581" width="882.7" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="31.24" y="591.5" >__libc_start_main@@GLIBC_2.34</text>
+</g>
+<g >
+<title>std::mutex::lock (33,103,492 cycles, 0.09%)</title><rect x="418.3" y="341" width="1.2" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="421.30" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::reserve_slot_ (72,078,889 cycles, 0.19%)</title><rect x="386.9" y="437" width="2.7" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="389.90" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::occupancy (42,378,919 cycles, 0.11%)</title><rect x="829.0" y="373" width="1.5" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="831.96" y="383.5" ></text>
+</g>
+<g >
+<title>sluice::async::AsyncIoContext::submit_read (11,668,901,880 cycles, 31.31%)</title><rect x="391.7" y="405" width="432.1" height="15.0" fill="rgb(238,156,37)" rx="2" ry="2" />
+<text  x="394.71" y="415.5" >sluice::async::AsyncIoContext::submit_read</text>
+</g>
+<g >
+<title>sluice::async::RequestObservation&lt;unsigned long&gt;::operator= (379,791,387 cycles, 1.02%)</title><rect x="370.9" y="453" width="14.1" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="373.89" y="463.5" ></text>
+</g>
+<g >
+<title>shmem_get_folio_gfp (666,464,412 cycles, 1.79%)</title><rect x="1155.6" y="437" width="24.7" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="1158.59" y="447.5" >s..</text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (22,393,392 cycles, 0.06%)</title><rect x="815.1" y="309" width="0.8" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="818.08" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_read (10,846,619,042 cycles, 29.11%)</title><rect x="419.8" y="389" width="401.6" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="422.78" y="399.5" >sluice::async::UringAsyncBackend::submit_read</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::dispatch_one_locked (671,711,772 cycles, 1.80%)</title><rect x="762.2" y="341" width="24.9" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="765.18" y="351.5" >s..</text>
+</g>
+<g >
+<title>__mod_timer (221,837,253 cycles, 0.60%)</title><rect x="1258.3" y="533" width="8.2" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="1261.31" y="543.5" ></text>
+</g>
+<g >
+<title>ttwu_queue_wakelist (145,495,288 cycles, 0.39%)</title><rect x="212.7" y="197" width="5.4" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="215.67" y="207.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (87,885,032 cycles, 0.24%)</title><rect x="543.8" y="229" width="3.2" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="546.77" y="239.5" ></text>
+</g>
+<g >
+<title>touch_atime (254,910,556 cycles, 0.68%)</title><rect x="1180.3" y="437" width="9.4" height="15.0" fill="rgb(211,32,7)" rx="2" ry="2" />
+<text  x="1183.27" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::dispatch_one_locked (321,775,086 cycles, 0.86%)</title><rect x="287.6" y="325" width="11.9" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="290.61" y="335.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (37,994,936 cycles, 0.10%)</title><rect x="178.3" y="213" width="1.4" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="181.32" y="223.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_&lt;unsigned long&gt; (120,460,744 cycles, 0.32%)</title><rect x="892.4" y="437" width="4.5" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="895.42" y="447.5" ></text>
+</g>
+<g >
+<title>__io_uring_submit (4,403,469,045 cycles, 11.82%)</title><rect x="119.7" y="341" width="163.1" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="122.70" y="351.5" >__io_uring_submit</text>
+</g>
+<g >
+<title>get_signal (31,133,662 cycles, 0.08%)</title><rect x="753.3" y="309" width="1.2" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="756.31" y="319.5" ></text>
+</g>
+<g >
+<title>entry_SYSRETQ_unsafe_stack (1,118,043,885 cycles, 3.00%)</title><rect x="700.5" y="341" width="41.5" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="703.55" y="351.5" >ent..</text>
+</g>
+<g >
+<title>io_prep_rw (381,975,966 cycles, 1.03%)</title><rect x="149.7" y="245" width="14.2" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="152.73" y="255.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (21,061,747 cycles, 0.06%)</title><rect x="868.3" y="37" width="0.8" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="871.31" y="47.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::outstanding (336,417,872 cycles, 0.90%)</title><rect x="104.7" y="373" width="12.4" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="107.67" y="383.5" ></text>
+</g>
+<g >
+<title>default_send_IPI_single_phys (87,711,127 cycles, 0.24%)</title><rect x="993.9" y="469" width="3.2" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="996.87" y="479.5" ></text>
+</g>
+<g >
+<title>schedule (2,973,677,105 cycles, 7.98%)</title><rect x="1273.2" y="533" width="110.1" height="15.0" fill="rgb(211,29,7)" rx="2" ry="2" />
+<text  x="1276.18" y="543.5" >schedule</text>
+</g>
+<g >
+<title>io_uring_get_sqe (102,703,462 cycles, 0.28%)</title><rect x="289.3" y="309" width="3.8" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="292.28" y="319.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (25,472,385 cycles, 0.07%)</title><rect x="784.2" y="293" width="1.0" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="787.25" y="303.5" ></text>
+</g>
+<g >
+<title>io_prep_async_work (284,732,172 cycles, 0.76%)</title><rect x="518.8" y="229" width="10.5" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="521.76" y="239.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::complete_publication (49,725,174 cycles, 0.13%)</title><rect x="844.4" y="277" width="1.8" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="847.36" y="287.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::retire_router_entry_ (85,137,061 cycles, 0.23%)</title><rect x="872.2" y="133" width="3.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="875.22" y="143.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (25,521,477 cycles, 0.07%)</title><rect x="377.5" y="357" width="1.0" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="380.54" y="367.5" ></text>
+</g>
+<g >
+<title>sluice::detail::IoOutcome::success (54,208,063 cycles, 0.15%)</title><rect x="860.9" y="197" width="2.0" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="863.91" y="207.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_end (21,163,595 cycles, 0.06%)</title><rect x="113.4" y="341" width="0.7" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="116.37" y="351.5" ></text>
+</g>
+<g >
+<title>io_queue_iowq (184,497,741 cycles, 0.50%)</title><rect x="164.7" y="245" width="6.8" height="15.0" fill="rgb(206,8,1)" rx="2" ry="2" />
+<text  x="167.70" y="255.5" ></text>
+</g>
+<g >
+<title>task_work_run (40,997,187 cycles, 0.11%)</title><rect x="114.5" y="277" width="1.5" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="117.50" y="287.5" ></text>
+</g>
+<g >
+<title>native_sched_clock (21,779,380 cycles, 0.06%)</title><rect x="624.1" y="165" width="0.8" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="627.12" y="175.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (27,926,581 cycles, 0.07%)</title><rect x="306.2" y="293" width="1.0" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="309.17" y="303.5" ></text>
+</g>
+<g >
+<title>get_signal (32,417,634 cycles, 0.09%)</title><rect x="800.4" y="261" width="1.2" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="803.44" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::account_transport_result_locked (76,429,530 cycles, 0.21%)</title><rect x="300.0" y="309" width="2.8" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="302.96" y="319.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock_irqrestore (57,277,790 cycles, 0.15%)</title><rect x="208.2" y="197" width="2.1" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="211.19" y="207.5" ></text>
+</g>
+<g >
+<title>__io_submit_flush_completions (409,559,518 cycles, 1.10%)</title><rect x="239.2" y="181" width="15.2" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="242.23" y="191.5" ></text>
+</g>
+<g >
+<title>rw_verify_area (247,701,689 cycles, 0.66%)</title><rect x="1024.9" y="453" width="9.1" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1027.87" y="463.5" ></text>
+</g>
+<g >
+<title>io_eventfd_signal (157,533,551 cycles, 0.42%)</title><rect x="244.5" y="165" width="5.8" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="247.51" y="175.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::occupancy (618,722,497 cycles, 1.66%)</title><rect x="396.9" y="373" width="22.9" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="399.86" y="383.5" >s..</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::poll (1,454,111,010 cycles, 3.90%)</title><rect x="832.2" y="309" width="53.8" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="835.19" y="319.5" >sluic..</text>
+</g>
+<g >
+<title>sched_clock (25,533,077 cycles, 0.07%)</title><rect x="624.0" y="181" width="0.9" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="626.98" y="191.5" ></text>
+</g>
+<g >
+<title>io_file_supports_nowait (37,748,565 cycles, 0.10%)</title><rect x="477.3" y="197" width="1.4" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="480.31" y="207.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (29,357,850 cycles, 0.08%)</title><rect x="781.0" y="309" width="1.0" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="783.96" y="319.5" ></text>
+</g>
+<g >
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::~basic_string (23,740,676,254 cycles, 63.71%)</title><rect x="28.8" y="517" width="879.1" height="15.0" fill="rgb(248,201,48)" rx="2" ry="2" />
+<text  x="31.76" y="527.5" >std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::~basic_string</text>
+</g>
+<g >
+<title>__io_uring_submit (8,844,373,856 cycles, 23.73%)</title><rect x="425.2" y="357" width="327.5" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="428.22" y="367.5" >__io_uring_submit</text>
+</g>
+<g >
+<title>__perf_event_task_sched_in (217,544,401 cycles, 0.58%)</title><rect x="1304.8" y="485" width="8.0" height="15.0" fill="rgb(237,151,36)" rx="2" ry="2" />
+<text  x="1307.78" y="495.5" ></text>
+</g>
+<g >
+<title>eventfd_signal_mask (187,383,154 cycles, 0.50%)</title><rect x="1243.0" y="469" width="6.9" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="1245.99" y="479.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (85,698,250 cycles, 0.23%)</title><rect x="680.0" y="165" width="3.2" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="682.98" y="175.5" ></text>
+</g>
+<g >
+<title>[[vdso]] (182,123,067 cycles, 0.49%)</title><rect x="899.1" y="421" width="6.7" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="902.06" y="431.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::take (207,897,875 cycles, 0.56%)</title><rect x="92.2" y="421" width="7.7" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="95.23" y="431.5" ></text>
+</g>
+<g >
+<title>syscall_return_via_sysret (139,001,402 cycles, 0.37%)</title><rect x="277.6" y="325" width="5.2" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="280.62" y="335.5" ></text>
+</g>
+<g >
+<title>native_smp_send_reschedule (19,766,565 cycles, 0.05%)</title><rect x="997.1" y="469" width="0.7" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="1000.11" y="479.5" ></text>
+</g>
+<g >
+<title>get_signal (27,301,795 cycles, 0.07%)</title><rect x="904.7" y="357" width="1.0" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="907.66" y="367.5" ></text>
+</g>
+<g >
+<title>__perf_event_task_sched_out (82,616,285 cycles, 0.22%)</title><rect x="1315.4" y="485" width="3.1" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1318.40" y="495.5" ></text>
+</g>
+<g >
+<title>cpuacct_charge (37,433,151 cycles, 0.10%)</title><rect x="1294.6" y="437" width="1.4" height="15.0" fill="rgb(240,162,38)" rx="2" ry="2" />
+<text  x="1297.59" y="447.5" ></text>
+</g>
+<g >
+<title>std::unique_ptr&lt;sluice::async::UringRingState, std::default_delete&lt;sluice::async::UringRingState&gt; &gt;::get (28,661,314 cycles, 0.08%)</title><rect x="785.8" y="293" width="1.0" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="788.78" y="303.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64 (240,481,555 cycles, 0.65%)</title><rect x="436.5" y="341" width="8.9" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="439.45" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_&lt;unsigned long&gt; (54,731,528 cycles, 0.15%)</title><rect x="351.7" y="421" width="2.1" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="354.73" y="431.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (40,488,551 cycles, 0.11%)</title><rect x="76.8" y="437" width="1.5" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="79.79" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::reserve (73,958,732 cycles, 0.20%)</title><rect x="817.2" y="341" width="2.8" height="15.0" fill="rgb(211,28,6)" rx="2" ry="2" />
+<text  x="820.24" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::AsyncIoContext::run_progress_pass_ (1,599,199,692 cycles, 4.29%)</title><rect x="827.5" y="405" width="59.2" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="830.49" y="415.5" >sluice..</text>
+</g>
+<g >
+<title>choose_idle_cpu (22,281,310 cycles, 0.06%)</title><rect x="609.9" y="181" width="0.8" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="612.88" y="191.5" ></text>
+</g>
+<g >
+<title>__rcu_read_unlock (21,265,397 cycles, 0.06%)</title><rect x="486.5" y="213" width="0.8" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="489.51" y="223.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (56,408,905 cycles, 0.15%)</title><rect x="11.6" y="517" width="2.1" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="14.62" y="527.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (19,427,308 cycles, 0.05%)</title><rect x="348.0" y="245" width="0.7" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="351.02" y="255.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::ReserveAttempt::ok (51,368,921 cycles, 0.14%)</title><rect x="314.4" y="341" width="1.9" height="15.0" fill="rgb(213,36,8)" rx="2" ry="2" />
+<text  x="317.36" y="351.5" ></text>
+</g>
+<g >
+<title>fget (82,831,134 cycles, 0.22%)</title><rect x="484.6" y="229" width="3.0" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="487.58" y="239.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::try_reclaim_ (24,732,804 cycles, 0.07%)</title><rect x="96.0" y="373" width="0.9" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="99.02" y="383.5" ></text>
+</g>
+<g >
+<title>dequeue_task_fair (987,871,451 cycles, 2.65%)</title><rect x="1338.7" y="485" width="36.6" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="1341.68" y="495.5" >deq..</text>
+</g>
+<g >
+<title>io_arm_poll_handler (22,328,969 cycles, 0.06%)</title><rect x="515.4" y="245" width="0.8" height="15.0" fill="rgb(239,156,37)" rx="2" ry="2" />
+<text  x="518.37" y="255.5" ></text>
+</g>
+<g >
+<title>io_prep_rw (716,195,518 cycles, 1.92%)</title><rect x="487.8" y="261" width="26.5" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="490.78" y="271.5" >i..</text>
+</g>
+<g >
+<title>iou-wrk-5908 (12,907,900,505 cycles, 34.64%)</title><rect x="911.8" y="613" width="478.0" height="15.0" fill="rgb(252,217,51)" rx="2" ry="2" />
+<text  x="914.82" y="623.5" >iou-wrk-5908</text>
+</g>
+<g >
+<title>task_work_run (170,208,632 cycles, 0.46%)</title><rect x="69.3" y="373" width="6.3" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="72.29" y="383.5" ></text>
+</g>
+<g >
+<title>sluice::async::Request&lt;unsigned long&gt;::ready (115,717,462 cycles, 0.31%)</title><rect x="887.4" y="421" width="4.3" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="890.40" y="431.5" ></text>
+</g>
+<g >
+<title>io_uring_cqe_seen (20,699,114 cycles, 0.06%)</title><rect x="331.5" y="197" width="0.7" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="334.48" y="207.5" ></text>
+</g>
+<g >
+<title>task_work_run (31,165,268 cycles, 0.08%)</title><rect x="800.5" y="245" width="1.1" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="803.48" y="255.5" ></text>
+</g>
+<g >
+<title>io_wq_free_work (141,865,584 cycles, 0.38%)</title><rect x="1005.3" y="533" width="5.3" height="15.0" fill="rgb(221,74,17)" rx="2" ry="2" />
+<text  x="1008.32" y="543.5" ></text>
+</g>
+<g >
+<title>io_submit_sqes (4,455,667,428 cycles, 11.96%)</title><rect x="461.2" y="293" width="165.0" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="464.20" y="303.5" >io_submit_sqes</text>
+</g>
+<g >
+<title>update_rq_clock_task (82,245,722 cycles, 0.22%)</title><rect x="1378.7" y="501" width="3.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="1381.73" y="511.5" ></text>
+</g>
+<g >
+<title>io_queue_async (22,256,611 cycles, 0.06%)</title><rect x="163.9" y="245" width="0.8" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="166.87" y="255.5" ></text>
+</g>
+<g >
+<title>__kmalloc_noprof (356,131,806 cycles, 0.96%)</title><rect x="499.9" y="197" width="13.1" height="15.0" fill="rgb(241,168,40)" rx="2" ry="2" />
+<text  x="502.85" y="207.5" ></text>
+</g>
+<g >
+<title>__update_idle_core (40,977,134 cycles, 0.11%)</title><rect x="1300.2" y="469" width="1.5" height="15.0" fill="rgb(241,168,40)" rx="2" ry="2" />
+<text  x="1303.22" y="479.5" ></text>
+</g>
+<g >
+<title>sched_balance_newidle (40,782,393 cycles, 0.11%)</title><rect x="1285.4" y="469" width="1.5" height="15.0" fill="rgb(247,194,46)" rx="2" ry="2" />
+<text  x="1288.42" y="479.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::complete_publication (19,230,103 cycles, 0.05%)</title><rect x="328.2" y="261" width="0.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="331.21" y="271.5" ></text>
+</g>
+<g >
+<title>__memcmp_avx2_movbe (1,175,245,002 cycles, 3.15%)</title><rect x="32.8" y="453" width="43.5" height="15.0" fill="rgb(224,91,21)" rx="2" ry="2" />
+<text  x="35.81" y="463.5" >__me..</text>
+</g>
+<g >
+<title>irqentry_exit (32,417,634 cycles, 0.09%)</title><rect x="800.4" y="293" width="1.2" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="803.44" y="303.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64 (122,327,359 cycles, 0.33%)</title><rect x="125.4" y="325" width="4.5" height="15.0" fill="rgb(245,186,44)" rx="2" ry="2" />
+<text  x="128.40" y="335.5" ></text>
+</g>
+<g >
+<title>__io_submit_flush_completions (41,669,469 cycles, 0.11%)</title><rect x="416.0" y="229" width="1.6" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="419.05" y="239.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (45,301,237 cycles, 0.12%)</title><rect x="416.0" y="245" width="1.7" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="419.00" y="255.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::account_transport_result_locked (19,721,361 cycles, 0.05%)</title><rect x="757.5" y="357" width="0.7" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="760.46" y="367.5" ></text>
+</g>
+<g >
+<title>perf_event_context_sched_out (72,674,412 cycles, 0.20%)</title><rect x="1315.8" y="469" width="2.7" height="15.0" fill="rgb(248,200,47)" rx="2" ry="2" />
+<text  x="1318.77" y="479.5" ></text>
+</g>
+<g >
+<title>update_irq_load_avg (22,672,878 cycles, 0.06%)</title><rect x="1380.9" y="485" width="0.9" height="15.0" fill="rgb(239,156,37)" rx="2" ry="2" />
+<text  x="1383.94" y="495.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (65,222,608 cycles, 0.18%)</title><rect x="770.7" y="261" width="2.4" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="773.71" y="271.5" ></text>
+</g>
+<g >
+<title>migrate_disable_switch.isra.0 (22,178,184 cycles, 0.06%)</title><rect x="1313.7" y="501" width="0.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="1316.71" y="511.5" ></text>
+</g>
+<g >
+<title>io_uring_ctx_get_file (72,280,745 cycles, 0.19%)</title><rect x="626.2" y="293" width="2.7" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="629.20" y="303.5" ></text>
+</g>
+<g >
+<title>pick_task_fair (406,000,069 cycles, 1.09%)</title><rect x="1280.9" y="485" width="15.1" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="1283.94" y="495.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock_irqrestore (21,779,034 cycles, 0.06%)</title><rect x="1242.2" y="469" width="0.8" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="1245.15" y="479.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (440,166,213 cycles, 1.18%)</title><rect x="239.0" y="197" width="16.3" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="241.95" y="207.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (27,813,523 cycles, 0.07%)</title><rect x="124.2" y="309" width="1.0" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="127.19" y="319.5" ></text>
+</g>
+<g >
+<title>do_syscall_64 (57,565,850 cycles, 0.15%)</title><rect x="908.8" y="373" width="2.1" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="911.77" y="383.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (44,866,247 cycles, 0.12%)</title><rect x="605.2" y="197" width="1.7" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="608.21" y="207.5" ></text>
+</g>
+<g >
+<title>dequeue_entity (843,249,292 cycles, 2.26%)</title><rect x="1344.0" y="453" width="31.3" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="1347.04" y="463.5" >de..</text>
+</g>
+<g >
+<title>get_signal (45,389,270 cycles, 0.12%)</title><rect x="114.3" y="293" width="1.7" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="117.34" y="303.5" ></text>
+</g>
+<g >
+<title>push_back (28,092,041 cycles, 0.08%)</title><rect x="367.1" y="453" width="1.1" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="370.13" y="463.5" ></text>
+</g>
+<g >
+<title>record_times (27,584,821 cycles, 0.07%)</title><rect x="1333.6" y="469" width="1.1" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="1336.63" y="479.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::operator- (57,368,006 cycles, 0.15%)</title><rect x="80.6" y="277" width="2.1" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="83.59" y="287.5" ></text>
+</g>
+<g >
+<title>select_idle_sibling (32,792,812 cycles, 0.09%)</title><rect x="609.5" y="197" width="1.2" height="15.0" fill="rgb(227,104,25)" rx="2" ry="2" />
+<text  x="612.49" y="207.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::offer_terminal (110,077,638 cycles, 0.30%)</title><rect x="875.4" y="133" width="4.1" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="878.45" y="143.5" ></text>
+</g>
+<g >
+<title>io_file_get_flags (21,420,577 cycles, 0.06%)</title><rect x="147.0" y="165" width="0.8" height="15.0" fill="rgb(237,150,35)" rx="2" ry="2" />
+<text  x="150.02" y="175.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_end (24,269,115 cycles, 0.07%)</title><rect x="769.7" y="293" width="0.9" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="772.72" y="303.5" ></text>
+</g>
+<g >
+<title>fget (57,994,712 cycles, 0.16%)</title><rect x="626.7" y="277" width="2.2" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="629.71" y="287.5" ></text>
+</g>
+<g >
+<title>operator- (47,949,553 cycles, 0.13%)</title><rect x="368.2" y="437" width="1.7" height="15.0" fill="rgb(213,41,9)" rx="2" ry="2" />
+<text  x="371.17" y="447.5" ></text>
+</g>
+<g >
+<title>timer_delete_sync (162,580,082 cycles, 0.44%)</title><rect x="1383.3" y="533" width="6.0" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="1386.30" y="543.5" ></text>
+</g>
+<g >
+<title>lock_timer_base (83,525,750 cycles, 0.22%)</title><rect x="1386.2" y="517" width="3.1" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="1389.23" y="527.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock_irqrestore (23,878,541 cycles, 0.06%)</title><rect x="1004.1" y="469" width="0.9" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="1007.14" y="479.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::release_execution (33,939,132 cycles, 0.09%)</title><rect x="345.2" y="117" width="1.2" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="348.16" y="127.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::offer_terminal (54,229,401 cycles, 0.15%)</title><rect x="343.1" y="117" width="2.1" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="346.15" y="127.5" ></text>
+</g>
+<g >
+<title>operator (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="485" width="2.1" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="911.76" y="495.5" ></text>
+</g>
+<g >
+<title>io_prep_async_work (143,930,960 cycles, 0.39%)</title><rect x="166.2" y="213" width="5.3" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="169.20" y="223.5" ></text>
+</g>
+<g >
+<title>__rcu_read_lock (19,045,411 cycles, 0.05%)</title><rect x="1233.8" y="469" width="0.7" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="1236.77" y="479.5" ></text>
+</g>
+<g >
+<title>update_curr (244,265,836 cycles, 0.66%)</title><rect x="1286.9" y="469" width="9.1" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1289.93" y="479.5" ></text>
+</g>
+<g >
+<title>sluice::async::Request&lt;unsigned long&gt;::take_result (123,289,503 cycles, 0.33%)</title><rect x="92.4" y="389" width="4.5" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="95.37" y="399.5" ></text>
+</g>
+<g >
+<title>std::mutex::unlock (516,103,840 cycles, 1.38%)</title><rect x="864.2" y="181" width="19.1" height="15.0" fill="rgb(227,105,25)" rx="2" ry="2" />
+<text  x="867.21" y="191.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (224,807,031 cycles, 0.60%)</title><rect x="67.8" y="437" width="8.3" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="70.82" y="447.5" ></text>
+</g>
+<g >
+<title>io_free_batch_list (109,421,383 cycles, 0.29%)</title><rect x="250.3" y="165" width="4.1" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="253.34" y="175.5" ></text>
+</g>
+<g >
+<title>memset_orig (44,029,662 cycles, 0.12%)</title><rect x="161.6" y="165" width="1.6" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="164.60" y="175.5" ></text>
+</g>
+<g >
+<title>sluice::async::operator== (24,248,432 cycles, 0.07%)</title><rect x="352.7" y="405" width="0.9" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="355.75" y="415.5" ></text>
+</g>
+<g >
+<title>__smp_call_single_queue (154,856,221 cycles, 0.42%)</title><rect x="617.3" y="197" width="5.8" height="15.0" fill="rgb(225,95,22)" rx="2" ry="2" />
+<text  x="620.33" y="207.5" ></text>
+</g>
+<g >
+<title>sluice::async::Request&lt;unsigned long&gt;::take_result (216,001,971 cycles, 0.58%)</title><rect x="371.9" y="405" width="8.0" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="374.89" y="415.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (50,271,675 cycles, 0.13%)</title><rect x="771.3" y="197" width="1.8" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="774.26" y="207.5" ></text>
+</g>
+<g >
+<title>sched_clock_cpu (28,601,839 cycles, 0.08%)</title><rect x="623.9" y="197" width="1.0" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="626.87" y="207.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (21,651,459 cycles, 0.06%)</title><rect x="845.4" y="229" width="0.8" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="848.36" y="239.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (22,901,624 cycles, 0.06%)</title><rect x="845.3" y="261" width="0.9" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="848.31" y="271.5" ></text>
+</g>
+<g >
+<title>lock_timer_base (86,610,332 cycles, 0.23%)</title><rect x="1263.3" y="517" width="3.2" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="1266.32" y="527.5" ></text>
+</g>
+<g >
+<title>__intel_pmu_enable_all.isra.0 (76,293,934 cycles, 0.20%)</title><rect x="1309.6" y="453" width="2.8" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="1312.60" y="463.5" ></text>
+</g>
+<g >
+<title>error_entry (32,685,189 cycles, 0.09%)</title><rect x="742.0" y="341" width="1.2" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="744.95" y="351.5" ></text>
+</g>
+<g >
+<title>retry_on_eintr&lt;sluice::blocking::write_at (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="453" width="2.1" height="15.0" fill="rgb(214,44,10)" rx="2" ry="2" />
+<text  x="911.76" y="463.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::consume_public_result (107,261,726 cycles, 0.29%)</title><rect x="374.6" y="389" width="3.9" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="377.56" y="399.5" ></text>
+</g>
+<g >
+<title>io_queue_iowq (353,992,351 cycles, 0.95%)</title><rect x="516.2" y="261" width="13.1" height="15.0" fill="rgb(206,8,1)" rx="2" ry="2" />
+<text  x="519.20" y="271.5" ></text>
+</g>
+<g >
+<title>io_worker_handle_work (8,775,394,600 cycles, 23.55%)</title><rect x="931.2" y="549" width="325.0" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="934.21" y="559.5" >io_worker_handle_work</text>
+</g>
+<g >
+<title>rcu_note_context_switch (34,190,061 cycles, 0.09%)</title><rect x="1336.4" y="501" width="1.3" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="1339.39" y="511.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64_after_hwframe (57,565,850 cycles, 0.15%)</title><rect x="908.8" y="389" width="2.1" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="911.77" y="399.5" ></text>
+</g>
+<g >
+<title>select_task_rq (63,640,671 cycles, 0.17%)</title><rect x="210.3" y="197" width="2.4" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="213.31" y="207.5" ></text>
+</g>
+<g >
+<title>io_issue_sqe (203,433,136 cycles, 0.55%)</title><rect x="142.1" y="245" width="7.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="145.10" y="255.5" ></text>
+</g>
+<g >
+<title>operator (955,594,140 cycles, 2.56%)</title><rect x="849.2" y="229" width="35.4" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="852.18" y="239.5" >op..</text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (23,650,861 cycles, 0.06%)</title><rect x="412.5" y="357" width="0.9" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="415.50" y="367.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (31,014,445 cycles, 0.08%)</title><rect x="248.1" y="133" width="1.2" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="251.13" y="143.5" ></text>
+</g>
+<g >
+<title>bench::compute_stats (144,402,550 cycles, 0.39%)</title><rect x="78.4" y="453" width="5.3" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="81.36" y="463.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (39,232,801 cycles, 0.11%)</title><rect x="878.0" y="85" width="1.5" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="881.05" y="95.5" ></text>
+</g>
+<g >
+<title>main (23,821,301,886 cycles, 63.92%)</title><rect x="28.8" y="549" width="882.1" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="31.76" y="559.5" >main</text>
+</g>
+<g >
+<title>tctx_task_work (50,896,827 cycles, 0.14%)</title><rect x="771.2" y="213" width="1.9" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="774.24" y="223.5" ></text>
+</g>
+<g >
+<title>erase (49,407,502 cycles, 0.13%)</title><rect x="87.5" y="437" width="1.9" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="90.53" y="447.5" ></text>
+</g>
+<g >
+<title>__gthread_mutex_unlock (249,457,113 cycles, 0.67%)</title><rect x="338.0" y="149" width="9.3" height="15.0" fill="rgb(212,32,7)" rx="2" ry="2" />
+<text  x="341.05" y="159.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (42,931,436 cycles, 0.12%)</title><rect x="76.8" y="453" width="1.6" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="79.77" y="463.5" ></text>
+</g>
+<g >
+<title>write_fixture (77,707,930 cycles, 0.21%)</title><rect x="908.0" y="533" width="2.9" height="15.0" fill="rgb(208,14,3)" rx="2" ry="2" />
+<text  x="911.03" y="543.5" ></text>
+</g>
+<g >
+<title>vfs_write (57,565,850 cycles, 0.15%)</title><rect x="908.8" y="341" width="2.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="911.77" y="351.5" ></text>
+</g>
+<g >
+<title>std::deque&lt;(anonymous namespace)::run_pipeline_phase (51,577,205 cycles, 0.14%)</title><rect x="363.8" y="437" width="1.9" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="366.82" y="447.5" ></text>
+</g>
+<g >
+<title>set_next_task_idle (83,373,165 cycles, 0.22%)</title><rect x="1298.7" y="485" width="3.0" height="15.0" fill="rgb(212,33,7)" rx="2" ry="2" />
+<text  x="1301.65" y="495.5" ></text>
+</g>
+<g >
+<title>psi_account_irqtime (169,796,205 cycles, 0.46%)</title><rect x="1318.5" y="501" width="6.2" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="1321.46" y="511.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (32,243,102 cycles, 0.09%)</title><rect x="904.6" y="405" width="1.2" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="907.59" y="415.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (21,651,869 cycles, 0.06%)</title><rect x="881.0" y="101" width="0.8" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="883.95" y="111.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (24,226,980 cycles, 0.07%)</title><rect x="306.2" y="277" width="0.9" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="309.17" y="287.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::release_execution (60,887,749 cycles, 0.16%)</title><rect x="879.5" y="133" width="2.3" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="882.52" y="143.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::TransportLedger::pop_front (98,517,749 cycles, 0.26%)</title><rect x="789.5" y="309" width="3.7" height="15.0" fill="rgb(242,170,40)" rx="2" ry="2" />
+<text  x="792.54" y="319.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (19,347,786 cycles, 0.05%)</title><rect x="761.4" y="325" width="0.7" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="764.42" y="335.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (36,593,577 cycles, 0.10%)</title><rect x="434.6" y="261" width="1.4" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="437.62" y="271.5" ></text>
+</g>
+<g >
+<title>select_task_rq_fair (54,883,163 cycles, 0.15%)</title><rect x="610.7" y="197" width="2.0" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="613.70" y="207.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (206,800,375 cycles, 0.55%)</title><rect x="539.4" y="245" width="7.7" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="542.39" y="255.5" ></text>
+</g>
+<g >
+<title>fput (61,849,339 cycles, 0.17%)</title><rect x="251.5" y="149" width="2.3" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="254.50" y="159.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (644,034,766 cycles, 1.73%)</title><rect x="232.6" y="213" width="23.8" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="235.57" y="223.5" >t..</text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (29,952,799 cycles, 0.08%)</title><rect x="890.6" y="357" width="1.1" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="893.58" y="367.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::outstanding (665,257,513 cycles, 1.79%)</title><rect x="395.1" y="389" width="24.7" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="398.14" y="399.5" >s..</text>
+</g>
+<g >
+<title>io_eventfd_signal (816,101,680 cycles, 2.19%)</title><rect x="1226.0" y="485" width="30.2" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="1228.95" y="495.5" >io..</text>
+</g>
+<g >
+<title>mutex_lock (51,137,045 cycles, 0.14%)</title><rect x="694.7" y="213" width="1.9" height="15.0" fill="rgb(223,87,20)" rx="2" ry="2" />
+<text  x="697.70" y="223.5" ></text>
+</g>
+<g >
+<title>detach_if_pending (26,436,505 cycles, 0.07%)</title><rect x="1385.3" y="517" width="0.9" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="1388.25" y="527.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (50,520,850 cycles, 0.14%)</title><rect x="969.1" y="517" width="1.9" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="972.13" y="527.5" ></text>
+</g>
+<g >
+<title>fget (29,581,879 cycles, 0.08%)</title><rect x="148.5" y="213" width="1.1" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="151.54" y="223.5" ></text>
+</g>
+<g >
+<title>task_work_run (43,245,044 cycles, 0.12%)</title><rect x="434.4" y="277" width="1.6" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="437.37" y="287.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::TransportLedger::append (65,109,439 cycles, 0.17%)</title><rect x="294.3" y="309" width="2.4" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="297.31" y="319.5" ></text>
+</g>
+<g >
+<title>task_work_run (20,655,066 cycles, 0.06%)</title><rect x="781.2" y="245" width="0.8" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="784.19" y="255.5" ></text>
+</g>
+<g >
+<title>error_entry (56,751,950 cycles, 0.15%)</title><rect x="24.6" y="533" width="2.1" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="27.62" y="543.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (28,514,999 cycles, 0.08%)</title><rect x="868.1" y="133" width="1.0" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="871.08" y="143.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_end (31,727,839 cycles, 0.09%)</title><rect x="413.4" y="357" width="1.2" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="416.38" y="367.5" ></text>
+</g>
+<g >
+<title>get_signal (27,335,411 cycles, 0.07%)</title><rect x="856.5" y="149" width="1.1" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="859.55" y="159.5" ></text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (90,010,372 cycles, 0.24%)</title><rect x="79.4" y="325" width="3.3" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="82.38" y="335.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (27,956,025 cycles, 0.08%)</title><rect x="856.5" y="181" width="1.1" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="859.52" y="191.5" ></text>
+</g>
+<g >
+<title>__raw_spin_lock_irqsave (36,119,089 cycles, 0.10%)</title><rect x="206.7" y="197" width="1.3" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="209.69" y="207.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (519,419,886 cycles, 1.39%)</title><rect x="329.6" y="261" width="19.3" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="332.62" y="271.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (32,417,634 cycles, 0.09%)</title><rect x="800.4" y="277" width="1.2" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="803.44" y="287.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (1,195,212,597 cycles, 3.21%)</title><rect x="652.4" y="229" width="44.2" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="655.36" y="239.5" >tctx..</text>
+</g>
+<g >
+<title>pthread_mutex_unlock@@GLIBC_2.2.5 (27,810,919 cycles, 0.07%)</title><rect x="755.7" y="357" width="1.0" height="15.0" fill="rgb(227,104,24)" rx="2" ry="2" />
+<text  x="758.70" y="367.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (36,073,881 cycles, 0.10%)</title><rect x="753.1" y="357" width="1.4" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="756.15" y="367.5" ></text>
+</g>
+<g >
+<title>io_rw_init_file (69,635,861 cycles, 0.19%)</title><rect x="1022.3" y="453" width="2.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="1025.29" y="463.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (34,764,232 cycles, 0.09%)</title><rect x="862.9" y="197" width="1.3" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="865.92" y="207.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (41,163,036 cycles, 0.11%)</title><rect x="291.0" y="277" width="1.5" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="294.01" y="287.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (21,629,028 cycles, 0.06%)</title><rect x="868.3" y="53" width="0.8" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="871.29" y="63.5" ></text>
+</g>
+<g >
+<title>__io_commit_cqring_flush (93,513,862 cycles, 0.25%)</title><rect x="1197.2" y="485" width="3.5" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="1200.23" y="495.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;sluice::async::UringAsyncBackend::RouterEntry, std::allocator&lt;sluice::async::UringAsyncBackend::RouterEntry&gt; &gt;::operator[] (22,888,579 cycles, 0.06%)</title><rect x="801.9" y="309" width="0.8" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="804.87" y="319.5" ></text>
+</g>
+<g >
+<title>generic_perform_write (57,565,850 cycles, 0.15%)</title><rect x="908.8" y="309" width="2.1" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="911.77" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::AsyncIoContext::run_progress_pass_ (797,382,484 cycles, 2.14%)</title><rect x="319.7" y="389" width="29.5" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="322.66" y="399.5" >sl..</text>
+</g>
+<g >
+<title>operator (461,746,417 cycles, 1.24%)</title><rect x="330.9" y="213" width="17.1" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="333.92" y="223.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (65,269,394 cycles, 0.18%)</title><rect x="415.4" y="261" width="2.5" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="418.45" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::wait_for (948,672,774 cycles, 2.55%)</title><rect x="318.6" y="437" width="35.2" height="15.0" fill="rgb(217,56,13)" rx="2" ry="2" />
+<text  x="321.63" y="447.5" >sl..</text>
+</g>
+<g >
+<title>_io_uring_get_sqe (102,703,462 cycles, 0.28%)</title><rect x="289.3" y="293" width="3.8" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="292.28" y="303.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::reserve_slot_ (41,695,824 cycles, 0.11%)</title><rect x="100.6" y="421" width="1.6" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="103.62" y="431.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::lookup (70,706,908 cycles, 0.19%)</title><rect x="889.1" y="405" width="2.6" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="892.07" y="415.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_transport_locked (67,627,424 cycles, 0.18%)</title><rect x="309.2" y="309" width="2.5" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="312.16" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::dispatch_after_accept (726,333,874 cycles, 1.95%)</title><rect x="285.6" y="341" width="26.9" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="288.56" y="351.5" >s..</text>
+</g>
+<g >
+<title>sched_clock_cpu (73,966,934 cycles, 0.20%)</title><rect x="1376.0" y="485" width="2.7" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1378.99" y="495.5" ></text>
+</g>
+<g >
+<title>__io_commit_cqring_flush (46,126,604 cycles, 0.12%)</title><rect x="667.1" y="181" width="1.7" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="670.13" y="191.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::service_pending_controls_locked_ (246,528,652 cycles, 0.66%)</title><rect x="299.9" y="325" width="9.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.89" y="335.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (19,906,930 cycles, 0.05%)</title><rect x="291.7" y="165" width="0.7" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="294.67" y="175.5" ></text>
+</g>
+<g >
+<title>ret_from_fork (12,880,976,111 cycles, 34.57%)</title><rect x="912.8" y="581" width="477.0" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="915.81" y="591.5" >ret_from_fork</text>
+</g>
+<g >
+<title>_raw_spin_lock (49,192,074 cycles, 0.13%)</title><rect x="247.5" y="149" width="1.8" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="250.46" y="159.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (89,858,027 cycles, 0.24%)</title><rect x="176.4" y="229" width="3.3" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="179.40" y="239.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestObservation&lt;unsigned long&gt;::RequestObservation (31,113,410 cycles, 0.08%)</title><rect x="379.9" y="405" width="1.1" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="382.89" y="415.5" ></text>
+</g>
+<g >
+<title>do_syscall_64 (3,398,923,568 cycles, 9.12%)</title><rect x="131.1" y="309" width="125.9" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="134.14" y="319.5" >do_syscall_64</text>
+</g>
+<g >
+<title>__io_issue_sqe (135,717,536 cycles, 0.36%)</title><rect x="142.8" y="229" width="5.0" height="15.0" fill="rgb(222,79,19)" rx="2" ry="2" />
+<text  x="145.81" y="239.5" ></text>
+</g>
+<g >
+<title>memset_orig (102,748,348 cycles, 0.28%)</title><rect x="509.2" y="181" width="3.8" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="512.19" y="191.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (32,417,464 cycles, 0.09%)</title><rect x="77.1" y="357" width="1.2" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="80.09" y="367.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (40,485,591 cycles, 0.11%)</title><rect x="878.0" y="101" width="1.5" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="881.00" y="111.5" ></text>
+</g>
+<g >
+<title>sched_clock (33,844,103 cycles, 0.09%)</title><rect x="1323.5" y="469" width="1.2" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="1326.50" y="479.5" ></text>
+</g>
+<g >
+<title>__syscall_cancel (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="421" width="2.1" height="15.0" fill="rgb(227,102,24)" rx="2" ry="2" />
+<text  x="911.76" y="431.5" ></text>
+</g>
+<g >
+<title>io_wq_enqueue (1,274,974,728 cycles, 3.42%)</title><rect x="171.5" y="245" width="47.2" height="15.0" fill="rgb(239,156,37)" rx="2" ry="2" />
+<text  x="174.53" y="255.5" >io_w..</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (29,287,560 cycles, 0.08%)</title><rect x="209.0" y="181" width="1.1" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="212.04" y="191.5" ></text>
+</g>
+<g >
+<title>task_work_run (75,849,630 cycles, 0.20%)</title><rect x="415.1" y="293" width="2.8" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="418.06" y="303.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (23,023,194 cycles, 0.06%)</title><rect x="809.6" y="341" width="0.8" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="812.57" y="351.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (24,919,978 cycles, 0.07%)</title><rect x="673.8" y="165" width="0.9" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="676.81" y="175.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::submit_read (5,903,204,721 cycles, 15.84%)</title><rect x="100.0" y="437" width="218.6" height="15.0" fill="rgb(227,104,24)" rx="2" ry="2" />
+<text  x="102.98" y="447.5" >sluice::async::RequestScope:..</text>
+</g>
+<g >
+<title>record_times (35,689,032 cycles, 0.10%)</title><rect x="1322.0" y="485" width="1.4" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="1325.04" y="495.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (21,720,087 cycles, 0.06%)</title><rect x="860.1" y="197" width="0.8" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="863.06" y="207.5" ></text>
+</g>
+<g >
+<title>bench::process_cpu_seconds (7,391,782,049 cycles, 19.84%)</title><rect x="84.1" y="453" width="273.8" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="87.12" y="463.5" >bench::process_cpu_seconds</text>
+</g>
+<g >
+<title>sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_&lt;unsigned long&gt; (65,976,590 cycles, 0.18%)</title><rect x="97.5" y="389" width="2.4" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="100.49" y="399.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (19,843,286 cycles, 0.05%)</title><rect x="860.1" y="181" width="0.7" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="863.06" y="191.5" ></text>
+</g>
+<g >
+<title>try_to_wake_up (905,389,731 cycles, 2.43%)</title><rect x="185.1" y="213" width="33.5" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="188.08" y="223.5" >tr..</text>
+</g>
+<g >
+<title>sluice::async::operator== (31,701,993 cycles, 0.09%)</title><rect x="98.6" y="373" width="1.2" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="101.64" y="383.5" ></text>
+</g>
+<g >
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_is_local (23,740,676,254 cycles, 63.71%)</title><rect x="28.8" y="485" width="879.1" height="15.0" fill="rgb(241,168,40)" rx="2" ry="2" />
+<text  x="31.76" y="495.5" >std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_is_local</text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (57,368,006 cycles, 0.15%)</title><rect x="80.6" y="261" width="2.1" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="83.59" y="271.5" ></text>
+</g>
+<g >
+<title>size (25,973,551 cycles, 0.07%)</title><rect x="90.4" y="437" width="1.0" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="93.39" y="447.5" ></text>
+</g>
+<g >
+<title>io_cq_unlock_post (474,302,219 cycles, 1.27%)</title><rect x="1208.0" y="485" width="17.6" height="15.0" fill="rgb(219,66,15)" rx="2" ry="2" />
+<text  x="1211.01" y="495.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (134,041,375 cycles, 0.36%)</title><rect x="431.5" y="341" width="5.0" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="434.49" y="351.5" ></text>
+</g>
+<g >
+<title>void sluice::async::RequestScope::commit_&lt;unsigned long&gt; (5,844,223,177 cycles, 15.68%)</title><rect x="102.2" y="421" width="216.4" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="105.16" y="431.5" >void sluice::async::RequestS..</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (23,706,528 cycles, 0.06%)</title><rect x="663.4" y="213" width="0.8" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="666.37" y="223.5" ></text>
+</g>
+<g >
+<title>mutex_lock (49,160,421 cycles, 0.13%)</title><rect x="628.9" y="293" width="1.8" height="15.0" fill="rgb(223,87,20)" rx="2" ry="2" />
+<text  x="631.88" y="303.5" ></text>
+</g>
+<g >
+<title>__memcmp_avx2_movbe (29,252,090 cycles, 0.08%)</title><rect x="15.0" y="581" width="1.1" height="15.0" fill="rgb(224,91,21)" rx="2" ry="2" />
+<text  x="18.05" y="591.5" ></text>
+</g>
+<g >
+<title>prepare_task_switch (102,914,987 cycles, 0.28%)</title><rect x="1314.7" y="501" width="3.8" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="1317.65" y="511.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::occupancy (23,468,513 cycles, 0.06%)</title><rect x="27.2" y="581" width="0.8" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="30.17" y="591.5" ></text>
+</g>
+<g >
+<title>__libc_pwrite (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="437" width="2.1" height="15.0" fill="rgb(215,46,11)" rx="2" ry="2" />
+<text  x="911.76" y="447.5" ></text>
+</g>
+<g >
+<title>kick_process (158,427,424 cycles, 0.43%)</title><rect x="992.0" y="485" width="5.8" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="994.98" y="495.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::find_live_router_cookie_ (135,594,062 cycles, 0.36%)</title><rect x="852.8" y="213" width="5.1" height="15.0" fill="rgb(238,153,36)" rx="2" ry="2" />
+<text  x="855.84" y="223.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (27,927,231 cycles, 0.07%)</title><rect x="904.6" y="373" width="1.1" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="907.63" y="383.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::poll (1,456,618,764 cycles, 3.91%)</title><rect x="832.1" y="325" width="53.9" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="835.10" y="335.5" >sluic..</text>
+</g>
+<g >
+<title>__gnu_cxx::operator- (69,794,160 cycles, 0.19%)</title><rect x="80.1" y="309" width="2.6" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="83.13" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::claim_execution (47,830,741 cycles, 0.13%)</title><rect x="296.8" y="309" width="1.8" height="15.0" fill="rgb(205,4,1)" rx="2" ry="2" />
+<text  x="299.81" y="319.5" ></text>
+</g>
+<g >
+<title>try_to_wake_up (193,758,803 cycles, 0.52%)</title><rect x="997.8" y="485" width="7.2" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="1000.85" y="495.5" ></text>
+</g>
+<g >
+<title>__softirqentry_text_end (21,042,343 cycles, 0.06%)</title><rect x="430.6" y="341" width="0.7" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="433.57" y="351.5" ></text>
+</g>
+<g >
+<title>__io_submit_flush_completions (35,323,008 cycles, 0.09%)</title><rect x="771.7" y="165" width="1.3" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="774.72" y="175.5" ></text>
+</g>
+<g >
+<title>std::unique_ptr&lt;sluice::async::UringRingState, std::default_delete&lt;sluice::async::UringRingState&gt; &gt;::operator (28,661,314 cycles, 0.08%)</title><rect x="785.8" y="325" width="1.0" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="788.78" y="335.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64_after_hwframe (3,431,601,787 cycles, 9.21%)</title><rect x="129.9" y="325" width="127.1" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="132.93" y="335.5" >entry_SYSCALL_6..</text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::claim_observer_delivery (34,330,964 cycles, 0.09%)</title><rect x="839.6" y="261" width="1.3" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="842.64" y="271.5" ></text>
+</g>
+<g >
+<title>import_ubuf (35,361,764 cycles, 0.09%)</title><rect x="152.5" y="213" width="1.3" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="155.46" y="223.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (49,771,159 cycles, 0.13%)</title><rect x="114.2" y="325" width="1.8" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="117.17" y="335.5" ></text>
+</g>
+<g >
+<title>io_wq_submit_work (6,632,191,067 cycles, 17.80%)</title><rect x="1010.6" y="533" width="245.6" height="15.0" fill="rgb(207,13,3)" rx="2" ry="2" />
+<text  x="1013.57" y="543.5" >io_wq_submit_work</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (97,390,954 cycles, 0.26%)</title><rect x="414.6" y="357" width="3.7" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="417.65" y="367.5" ></text>
+</g>
+<g >
+<title>std::unique_ptr&lt;sluice::async::UringRingState, std::default_delete&lt;sluice::async::UringRingState&gt; &gt;::operator (20,315,960 cycles, 0.05%)</title><rect x="298.8" y="309" width="0.7" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="301.77" y="319.5" ></text>
+</g>
+<g >
+<title>clock_gettime@@GLIBC_2.17 (46,146,559 cycles, 0.12%)</title><rect x="359.2" y="453" width="1.7" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="362.19" y="463.5" ></text>
+</g>
+<g >
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_dispose (23,740,676,254 cycles, 63.71%)</title><rect x="28.8" y="501" width="879.1" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="31.76" y="511.5" >std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_dispose</text>
+</g>
+<g >
+<title>update_load_avg (315,274,753 cycles, 0.85%)</title><rect x="1360.8" y="437" width="11.7" height="15.0" fill="rgb(247,194,46)" rx="2" ry="2" />
+<text  x="1363.78" y="447.5" ></text>
+</g>
+<g >
+<title>void std::sort&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt; &gt; (136,885,768 cycles, 0.37%)</title><rect x="78.6" y="437" width="5.1" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="81.64" y="447.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (25,472,385 cycles, 0.07%)</title><rect x="784.2" y="309" width="1.0" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="787.25" y="319.5" ></text>
+</g>
+<g >
+<title>folio_mark_accessed (44,529,642 cycles, 0.12%)</title><rect x="1152.3" y="437" width="1.7" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="1155.31" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::account_transport_result_locked (150,888,933 cycles, 0.40%)</title><rect x="788.1" y="325" width="5.6" height="15.0" fill="rgb(220,70,16)" rx="2" ry="2" />
+<text  x="791.11" y="335.5" ></text>
+</g>
+<g >
+<title>__raw_spin_lock_irqsave (34,618,842 cycles, 0.09%)</title><rect x="1387.9" y="501" width="1.3" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1390.87" y="511.5" ></text>
+</g>
+<g >
+<title>io_uring_get_sqe (241,862,211 cycles, 0.65%)</title><rect x="765.9" y="325" width="8.9" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="768.87" y="335.5" ></text>
+</g>
+<g >
+<title>sched_clock_cpu (37,504,254 cycles, 0.10%)</title><rect x="1323.4" y="485" width="1.3" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1326.36" y="495.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (658,228,540 cycles, 1.77%)</title><rect x="232.0" y="229" width="24.4" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="235.04" y="239.5" >t..</text>
+</g>
+<g >
+<title>task_work_add (555,780,377 cycles, 1.49%)</title><rect x="984.7" y="501" width="20.6" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="987.74" y="511.5" ></text>
+</g>
+<g >
+<title>io_wq_worker (12,880,976,111 cycles, 34.57%)</title><rect x="912.8" y="565" width="477.0" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="915.81" y="575.5" >io_wq_worker</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (21,167,325 cycles, 0.06%)</title><rect x="295.9" y="293" width="0.8" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="298.94" y="303.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (809,417,881 cycles, 2.17%)</title><rect x="664.2" y="213" width="30.0" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="667.25" y="223.5" >ct..</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::deliver_event (72,238,311 cycles, 0.19%)</title><rect x="838.3" y="277" width="2.7" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="841.31" y="287.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_transport_locked (71,385,761 cycles, 0.19%)</title><rect x="309.0" y="325" width="2.7" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="312.02" y="335.5" ></text>
+</g>
+<g >
+<title>io_rw_init_file (55,267,033 cycles, 0.15%)</title><rect x="145.8" y="181" width="2.0" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="148.76" y="191.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (23,749,258 cycles, 0.06%)</title><rect x="124.3" y="229" width="0.9" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="127.34" y="239.5" ></text>
+</g>
+<g >
+<title>std::chrono::_V2::steady_clock::now (233,041,236 cycles, 0.63%)</title><rect x="897.2" y="453" width="8.7" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="900.22" y="463.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (46,240,440 cycles, 0.12%)</title><rect x="434.3" y="309" width="1.7" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="437.26" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_read (84,437,802 cycles, 0.23%)</title><rect x="11.6" y="565" width="3.2" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="14.62" y="575.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (26,174,538 cycles, 0.07%)</title><rect x="753.5" y="277" width="1.0" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="756.49" y="287.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64_safe_stack (22,603,318 cycles, 0.06%)</title><rect x="257.0" y="325" width="0.8" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="260.01" y="335.5" ></text>
+</g>
+<g >
+<title>clock_gettime@@GLIBC_2.17 (191,452,261 cycles, 0.51%)</title><rect x="898.8" y="437" width="7.1" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="901.76" y="447.5" ></text>
+</g>
+<g >
+<title>mutex_unlock (41,782,471 cycles, 0.11%)</title><rect x="692.7" y="197" width="1.5" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="695.67" y="207.5" ></text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (102,521,143 cycles, 0.28%)</title><rect x="78.9" y="357" width="3.8" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="81.91" y="367.5" ></text>
+</g>
+<g >
+<title>__io_uring_flush_sq (27,991,384 cycles, 0.08%)</title><rect x="807.0" y="309" width="1.0" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="809.97" y="319.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (184,547,319 cycles, 0.50%)</title><rect x="1201.1" y="485" width="6.9" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="1204.12" y="495.5" ></text>
+</g>
+<g >
+<title>task_work_run (29,245,796 cycles, 0.08%)</title><rect x="753.4" y="293" width="1.1" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="756.38" y="303.5" ></text>
+</g>
+<g >
+<title>task_work_run (740,480,110 cycles, 1.99%)</title><rect x="229.0" y="245" width="27.4" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="232.00" y="255.5" >t..</text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (26,257,775 cycles, 0.07%)</title><rect x="434.9" y="229" width="1.0" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="437.93" y="239.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::operator- (40,497,165 cycles, 0.11%)</title><rect x="81.2" y="245" width="1.5" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="84.21" y="255.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (417,994,962 cycles, 1.12%)</title><rect x="191.2" y="149" width="15.5" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="194.21" y="159.5" ></text>
+</g>
+<g >
+<title>get_signal (64,597,055 cycles, 0.17%)</title><rect x="770.7" y="245" width="2.4" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="773.73" y="255.5" ></text>
+</g>
+<g >
+<title>std::unique_ptr&lt;sluice::async::RequestScope::Slot [], std::default_delete&lt;sluice::async::RequestScope::Slot []&gt; &gt;::operator[] (11,733,402,895 cycles, 31.49%)</title><rect x="390.3" y="421" width="434.5" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="393.33" y="431.5" >std::unique_ptr&lt;sluice::async::RequestScope::Slot [], std::..</text>
+</g>
+<g >
+<title>io_worker_release (69,952,688 cycles, 0.19%)</title><rect x="553.8" y="229" width="2.6" height="15.0" fill="rgb(234,133,32)" rx="2" ry="2" />
+<text  x="556.78" y="239.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;sluice::async::UringAsyncBackend::RouterEntry, std::allocator&lt;sluice::async::UringAsyncBackend::RouterEntry&gt; &gt;::size (72,886,307 cycles, 0.20%)</title><rect x="802.7" y="309" width="2.7" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="805.72" y="319.5" ></text>
+</g>
+<g >
+<title>dequeue_entities (962,176,669 cycles, 2.58%)</title><rect x="1339.6" y="469" width="35.7" height="15.0" fill="rgb(247,196,47)" rx="2" ry="2" />
+<text  x="1342.64" y="479.5" >deq..</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (30,740,828 cycles, 0.08%)</title><rect x="223.6" y="293" width="1.2" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="226.62" y="303.5" ></text>
+</g>
+<g >
+<title>call_function_single_prep_ipi (19,895,615 cycles, 0.05%)</title><rect x="622.3" y="181" width="0.8" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="625.33" y="191.5" ></text>
+</g>
+<g >
+<title>__io_uring_flush_sq (21,106,622 cycles, 0.06%)</title><rect x="309.8" y="293" width="0.8" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="312.80" y="303.5" ></text>
+</g>
+<g >
+<title>__io_issue_sqe (4,764,277,884 cycles, 12.78%)</title><rect x="1015.0" y="501" width="176.4" height="15.0" fill="rgb(222,79,19)" rx="2" ry="2" />
+<text  x="1018.01" y="511.5" >__io_issue_sqe</text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (19,772,725 cycles, 0.05%)</title><rect x="813.3" y="341" width="0.7" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="816.29" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestObservation&lt;unsigned long&gt;::operator= (216,037,003 cycles, 0.58%)</title><rect x="92.0" y="437" width="8.0" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="94.97" y="447.5" ></text>
+</g>
+<g >
+<title>io_run_task_work (40,035,749 cycles, 0.11%)</title><rect x="929.7" y="549" width="1.5" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="932.72" y="559.5" ></text>
+</g>
+<g >
+<title>task_work_run (1,398,289,711 cycles, 3.75%)</title><rect x="644.8" y="261" width="51.8" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="647.84" y="271.5" >task_..</text>
+</g>
+<g >
+<title>tctx_task_work_run (23,581,897 cycles, 0.06%)</title><rect x="856.7" y="101" width="0.9" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="859.69" y="111.5" ></text>
+</g>
+<g >
+<title>clock_gettime@@GLIBC_2.17 (20,619,578 cycles, 0.06%)</title><rect x="86.5" y="437" width="0.8" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="89.52" y="447.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock (32,365,996 cycles, 0.09%)</title><rect x="928.5" y="549" width="1.2" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="931.50" y="559.5" ></text>
+</g>
+<g >
+<title>ttwu_queue_wakelist (329,939,919 cycles, 0.89%)</title><rect x="612.7" y="213" width="12.3" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="615.74" y="223.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (77,552,967 cycles, 0.21%)</title><rect x="770.7" y="293" width="2.8" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="773.66" y="303.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (21,651,869 cycles, 0.06%)</title><rect x="881.0" y="117" width="0.8" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="883.95" y="127.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (85,121,840 cycles, 0.23%)</title><rect x="414.7" y="341" width="3.2" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="417.71" y="351.5" ></text>
+</g>
+<g >
+<title>get_signal (80,792,234 cycles, 0.22%)</title><rect x="414.9" y="309" width="3.0" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="417.87" y="319.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (34,764,232 cycles, 0.09%)</title><rect x="862.9" y="181" width="1.3" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="865.92" y="191.5" ></text>
+</g>
+<g >
+<title>selinux_file_permission (121,293,790 cycles, 0.33%)</title><rect x="1029.5" y="421" width="4.5" height="15.0" fill="rgb(205,4,1)" rx="2" ry="2" />
+<text  x="1032.55" y="431.5" ></text>
+</g>
+<g >
+<title>io_free_batch_list (196,523,334 cycles, 0.53%)</title><rect x="685.3" y="181" width="7.3" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="688.30" y="191.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::finalize_operation_terminal_ (501,153,083 cycles, 1.34%)</title><rect x="864.2" y="149" width="18.6" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="867.23" y="159.5" ></text>
+</g>
+<g >
+<title>void std::__final_insertion_sort&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, std::less&lt;void&gt; &gt; (136,885,768 cycles, 0.37%)</title><rect x="78.6" y="405" width="5.1" height="15.0" fill="rgb(247,195,46)" rx="2" ry="2" />
+<text  x="81.64" y="415.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (36,574,882 cycles, 0.10%)</title><rect x="771.7" y="181" width="1.4" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="774.70" y="191.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (21,883,059 cycles, 0.06%)</title><rect x="822.0" y="373" width="0.8" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="824.96" y="383.5" ></text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (31,242,659 cycles, 0.08%)</title><rect x="81.6" y="197" width="1.1" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="84.55" y="207.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64_after_hwframe (6,833,110,436 cycles, 18.34%)</title><rect x="445.4" y="341" width="253.0" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="448.36" y="351.5" >entry_SYSCALL_64_after_hwframe</text>
+</g>
+<g >
+<title>sluice::async::Request&lt;unsigned long&gt;::ready (51,981,025 cycles, 0.14%)</title><rect x="349.4" y="405" width="1.9" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="352.42" y="415.5" ></text>
+</g>
+<g >
+<title>get_signal (1,538,001,422 cycles, 4.13%)</title><rect x="639.7" y="277" width="56.9" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="642.67" y="287.5" >get_si..</text>
+</g>
+<g >
+<title>__internal_syscall_cancel (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="405" width="2.1" height="15.0" fill="rgb(251,214,51)" rx="2" ry="2" />
+<text  x="911.76" y="415.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (20,540,608 cycles, 0.06%)</title><rect x="295.9" y="261" width="0.8" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="298.94" y="271.5" ></text>
+</g>
+<g >
+<title>syscall_return_via_sysret (257,994,501 cycles, 0.69%)</title><rect x="743.2" y="341" width="9.5" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="746.19" y="351.5" ></text>
+</g>
+<g >
+<title>get_signal (814,054,315 cycles, 2.18%)</title><rect x="226.3" y="261" width="30.1" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="229.27" y="271.5" >ge..</text>
+</g>
+<g >
+<title>sluice::Result&lt;sluice::async::detail::RequestKey&gt; sluice::async::UringAsyncBackend::submit_request&lt;sluice::async::ReadOp&gt; (5,380,636,734 cycles, 14.44%)</title><rect x="117.4" y="357" width="199.3" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="120.45" y="367.5" >sluice::Result&lt;sluice::asy..</text>
+</g>
+<g >
+<title>task_work_run (21,722,215 cycles, 0.06%)</title><rect x="306.2" y="229" width="0.8" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="309.24" y="239.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (21,665,762 cycles, 0.06%)</title><rect x="904.9" y="325" width="0.8" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="907.87" y="335.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::BoundedDispatchQueue::pop_front (19,261,101 cycles, 0.05%)</title><rect x="833.8" y="293" width="0.7" height="15.0" fill="rgb(205,4,1)" rx="2" ry="2" />
+<text  x="836.81" y="303.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::~lock_guard (516,103,840 cycles, 1.38%)</title><rect x="864.2" y="197" width="19.1" height="15.0" fill="rgb(221,75,18)" rx="2" ry="2" />
+<text  x="867.21" y="207.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (756,183,705 cycles, 2.03%)</title><rect x="321.1" y="341" width="28.0" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="324.06" y="351.5" >s..</text>
+</g>
+<g >
+<title>io_worker_release (38,068,884 cycles, 0.10%)</title><rect x="183.7" y="213" width="1.4" height="15.0" fill="rgb(234,133,32)" rx="2" ry="2" />
+<text  x="186.67" y="223.5" ></text>
+</g>
+<g >
+<title>size (47,949,553 cycles, 0.13%)</title><rect x="368.2" y="453" width="1.7" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="371.17" y="463.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::lookup (29,769,592 cycles, 0.08%)</title><rect x="350.2" y="389" width="1.1" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="353.24" y="399.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (38,413,175 cycles, 0.10%)</title><rect x="291.1" y="261" width="1.4" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="294.07" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::begin_publication (38,267,689 cycles, 0.10%)</title><rect x="326.8" y="261" width="1.4" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="329.80" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_read (5,389,331,213 cycles, 14.46%)</title><rect x="117.1" y="373" width="199.6" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="120.13" y="383.5" >sluice::async::UringAsyncB..</text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (33,659,800 cycles, 0.09%)</title><rect x="884.6" y="261" width="1.2" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="887.56" y="271.5" ></text>
+</g>
+<g >
+<title>operator- (25,973,551 cycles, 0.07%)</title><rect x="90.4" y="421" width="1.0" height="15.0" fill="rgb(213,41,9)" rx="2" ry="2" />
+<text  x="93.39" y="431.5" ></text>
+</g>
+<g >
+<title>io_eventfd_signal (277,823,511 cycles, 0.75%)</title><rect x="675.0" y="181" width="10.3" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="678.01" y="191.5" ></text>
+</g>
+<g >
+<title>all (37,265,172,391 cycles, 100%)</title><rect x="10.0" y="629" width="1380.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="639.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::TransportLedger::append (122,607,501 cycles, 0.33%)</title><rect x="777.5" y="325" width="4.5" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="780.51" y="335.5" ></text>
+</g>
+<g >
+<title>sched_clock (23,434,587 cycles, 0.06%)</title><rect x="1334.8" y="469" width="0.9" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="1337.81" y="479.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (33,093,568 cycles, 0.09%)</title><rect x="890.5" y="389" width="1.2" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="893.46" y="399.5" ></text>
+</g>
+<g >
+<title>get_signal (196,916,094 cycles, 0.53%)</title><rect x="68.3" y="389" width="7.3" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="71.30" y="399.5" ></text>
+</g>
+<g >
+<title>__update_load_avg_se (100,546,966 cycles, 0.27%)</title><rect x="1364.0" y="421" width="3.8" height="15.0" fill="rgb(210,27,6)" rx="2" ry="2" />
+<text  x="1367.03" y="431.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (19,267,670 cycles, 0.05%)</title><rect x="809.7" y="309" width="0.7" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="812.71" y="319.5" ></text>
+</g>
+<g >
+<title>void std::__unguarded_linear_insert&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, std::less&lt;void&gt; &gt; (23,721,906 cycles, 0.06%)</title><rect x="82.8" y="373" width="0.9" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="85.83" y="383.5" ></text>
+</g>
+<g >
+<title>io_req_complete_post (1,748,005,734 cycles, 4.69%)</title><rect x="1191.4" y="501" width="64.8" height="15.0" fill="rgb(245,188,44)" rx="2" ry="2" />
+<text  x="1194.44" y="511.5" >io_req_..</text>
+</g>
+<g >
+<title>exit_to_user_mode_loop (847,959,115 cycles, 2.28%)</title><rect x="225.0" y="293" width="31.4" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="228.02" y="303.5" >ex..</text>
+</g>
+<g >
+<title>_raw_spin_lock (23,136,400 cycles, 0.06%)</title><rect x="72.7" y="293" width="0.8" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="75.67" y="303.5" ></text>
+</g>
+<g >
+<title>get_signal (39,863,161 cycles, 0.11%)</title><rect x="76.8" y="405" width="1.5" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="79.82" y="415.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (191,986,862 cycles, 0.52%)</title><rect x="17.5" y="533" width="7.1" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="20.51" y="543.5" ></text>
+</g>
+<g >
+<title>__io_import_rw_buffer (94,091,771 cycles, 0.25%)</title><rect x="490.7" y="245" width="3.5" height="15.0" fill="rgb(246,192,45)" rx="2" ry="2" />
+<text  x="493.70" y="255.5" ></text>
+</g>
+<g >
+<title>__gthread_mutex_lock (1,503,367,719 cycles, 4.03%)</title><rect x="830.5" y="341" width="55.7" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="833.53" y="351.5" >__gth..</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::reap_cqes (978,029,915 cycles, 2.62%)</title><rect x="848.3" y="245" width="36.3" height="15.0" fill="rgb(253,221,52)" rx="2" ry="2" />
+<text  x="851.35" y="255.5" >slu..</text>
+</g>
+<g >
+<title>std::mutex::lock (1,506,497,576 cycles, 4.04%)</title><rect x="830.5" y="357" width="55.8" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="833.53" y="367.5" >std::..</text>
+</g>
+<g >
+<title>_copy_to_iter (2,320,570,186 cycles, 6.23%)</title><rect x="1066.4" y="421" width="85.9" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="1069.37" y="431.5" >_copy_to_i..</text>
+</g>
+<g >
+<title>io_eventfd_put (33,725,836 cycles, 0.09%)</title><rect x="684.1" y="165" width="1.2" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="687.05" y="175.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::service_pending_controls_locked_ (477,221,579 cycles, 1.28%)</title><rect x="787.7" y="341" width="17.7" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="790.74" y="351.5" ></text>
+</g>
+<g >
+<title>std::__uniq_ptr_impl&lt;sluice::async::UringRingState, std::default_delete&lt;sluice::async::UringRingState&gt; &gt;::_M_ptr (20,315,960 cycles, 0.05%)</title><rect x="298.8" y="261" width="0.7" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="301.77" y="271.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (23,749,258 cycles, 0.06%)</title><rect x="124.3" y="245" width="0.9" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="127.34" y="255.5" ></text>
+</g>
+<g >
+<title>__io_prep_rw (535,208,053 cycles, 1.44%)</title><rect x="494.2" y="245" width="19.8" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="497.19" y="255.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (23,023,194 cycles, 0.06%)</title><rect x="809.6" y="325" width="0.8" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="812.57" y="335.5" ></text>
+</g>
+<g >
+<title>mutex_unlock (101,709,634 cycles, 0.27%)</title><rect x="630.7" y="293" width="3.8" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="633.70" y="303.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::operator- (90,010,372 cycles, 0.24%)</title><rect x="79.4" y="341" width="3.3" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="82.38" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_transport_locked (97,245,404 cycles, 0.26%)</title><rect x="805.7" y="325" width="3.6" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="808.69" y="335.5" ></text>
+</g>
+<g >
+<title>rep_movs_alternative (2,278,586,956 cycles, 6.11%)</title><rect x="1067.9" y="405" width="84.4" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="1070.92" y="415.5" >rep_movs_..</text>
+</g>
+<g >
+<title>sluice::async::AsyncIoContext::wait_one (1,636,133,706 cycles, 4.39%)</title><rect x="826.8" y="421" width="60.6" height="15.0" fill="rgb(210,27,6)" rx="2" ry="2" />
+<text  x="829.82" y="431.5" >sluice..</text>
+</g>
+<g >
+<title>__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt; std::__unguarded_partition&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, std::less&lt;void&gt; &gt; (19,594,281 cycles, 0.05%)</title><rect x="79.4" y="293" width="0.7" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="82.38" y="303.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (29,169,398 cycles, 0.08%)</title><rect x="820.2" y="341" width="1.1" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="823.18" y="351.5" ></text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (110,020,589 cycles, 0.30%)</title><rect x="78.6" y="389" width="4.1" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="81.64" y="399.5" ></text>
+</g>
+<g >
+<title>io_req_normal_work_add (770,553,534 cycles, 2.07%)</title><rect x="976.8" y="517" width="28.5" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="979.79" y="527.5" >io..</text>
+</g>
+<g >
+<title>io_submit_sqe (4,306,080,954 cycles, 11.56%)</title><rect x="466.7" y="277" width="159.5" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="469.71" y="287.5" >io_submit_sqe</text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (25,594,765 cycles, 0.07%)</title><rect x="418.6" y="325" width="0.9" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="421.58" y="335.5" ></text>
+</g>
+<g >
+<title>update_se (119,163,496 cycles, 0.32%)</title><rect x="1291.6" y="453" width="4.4" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="1294.57" y="463.5" ></text>
+</g>
+<g >
+<title>select_task_rq (149,552,392 cycles, 0.40%)</title><rect x="607.2" y="213" width="5.5" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="610.20" y="223.5" ></text>
+</g>
+<g >
+<title>native_sched_clock (52,469,519 cycles, 0.14%)</title><rect x="1376.7" y="453" width="1.9" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="1379.70" y="463.5" ></text>
+</g>
+<g >
+<title>vruntime_eligible (75,793,286 cycles, 0.20%)</title><rect x="1372.5" y="437" width="2.8" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="1375.46" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::retire_router_entry_ (30,213,547 cycles, 0.08%)</title><rect x="342.0" y="117" width="1.1" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="345.01" y="127.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (21,039,511 cycles, 0.06%)</title><rect x="904.9" y="309" width="0.8" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="907.89" y="319.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (839,737,782 cycles, 2.25%)</title><rect x="568.8" y="165" width="31.1" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="571.77" y="175.5" >na..</text>
+</g>
+<g >
+<title>default_send_IPI_single_phys (21,217,873 cycles, 0.06%)</title><rect x="623.1" y="197" width="0.7" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="626.06" y="207.5" ></text>
+</g>
+<g >
+<title>__io_import_rw_buffer (57,718,707 cycles, 0.15%)</title><rect x="151.6" y="229" width="2.2" height="15.0" fill="rgb(246,192,45)" rx="2" ry="2" />
+<text  x="154.63" y="239.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::publish_one (156,366,943 cycles, 0.42%)</title><rect x="323.2" y="277" width="5.8" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="326.20" y="287.5" ></text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (27,297,346 cycles, 0.07%)</title><rect x="118.7" y="341" width="1.0" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="121.69" y="351.5" ></text>
+</g>
+<g >
+<title>ktime_get_coarse_real_ts64_mg (53,876,635 cycles, 0.14%)</title><rect x="1187.0" y="389" width="2.0" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1190.05" y="399.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (96,382,493 cycles, 0.26%)</title><rect x="71.6" y="325" width="3.6" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="74.64" y="335.5" ></text>
+</g>
+<g >
+<title>task_work_run (56,532,845 cycles, 0.15%)</title><rect x="771.0" y="229" width="2.1" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="774.03" y="239.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (21,275,263 cycles, 0.06%)</title><rect x="869.2" y="133" width="0.7" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="872.16" y="143.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (25,472,385 cycles, 0.07%)</title><rect x="784.2" y="277" width="1.0" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="787.25" y="287.5" ></text>
+</g>
+<g >
+<title>enqueue_timer (27,770,659 cycles, 0.07%)</title><rect x="1262.3" y="517" width="1.0" height="15.0" fill="rgb(226,97,23)" rx="2" ry="2" />
+<text  x="1265.29" y="527.5" ></text>
+</g>
+<g >
+<title>fget (30,994,281 cycles, 0.08%)</title><rect x="219.0" y="261" width="1.2" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="222.05" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_&lt;unsigned long&gt; (97,941,755 cycles, 0.26%)</title><rect x="381.0" y="405" width="3.7" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="384.05" y="415.5" ></text>
+</g>
+<g >
+<title>void sluice::async::RequestScope::commit_&lt;unsigned long&gt; (11,753,873,106 cycles, 31.54%)</title><rect x="389.6" y="437" width="435.2" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="392.57" y="447.5" >void sluice::async::RequestScope::commit_&lt;unsigned long&gt;</text>
+</g>
+<g >
+<title>tctx_task_work (23,581,897 cycles, 0.06%)</title><rect x="856.7" y="117" width="0.9" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="859.69" y="127.5" ></text>
+</g>
+<g >
+<title>do_syscall_64 (6,760,371,034 cycles, 18.14%)</title><rect x="448.1" y="325" width="250.3" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="451.05" y="335.5" >do_syscall_64</text>
+</g>
+<g >
+<title>security_file_permission (191,702,049 cycles, 0.51%)</title><rect x="1026.9" y="437" width="7.1" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="1029.94" y="447.5" ></text>
+</g>
+<g >
+<title>folio_unlock (44,144,815 cycles, 0.12%)</title><rect x="1154.0" y="437" width="1.6" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="1156.96" y="447.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_end (71,251,830 cycles, 0.19%)</title><rect x="65.1" y="437" width="2.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="68.07" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::finalize_operation_terminal_ (19,292,976 cycles, 0.05%)</title><rect x="852.1" y="213" width="0.7" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="855.12" y="223.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::try_reclaim_ (36,760,846 cycles, 0.10%)</title><rect x="378.5" y="389" width="1.4" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="381.53" y="399.5" ></text>
+</g>
+<g >
+<title>task_work_run (25,368,876 cycles, 0.07%)</title><rect x="124.3" y="261" width="0.9" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="127.28" y="271.5" ></text>
+</g>
+<g >
+<title>io_prep_async_link (295,302,192 cycles, 0.79%)</title><rect x="518.4" y="245" width="10.9" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="521.37" y="255.5" ></text>
+</g>
+<g >
+<title>get_signal (23,602,025 cycles, 0.06%)</title><rect x="306.2" y="245" width="0.8" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="309.17" y="255.5" ></text>
+</g>
+<g >
+<title>sluice::async::operator== (30,999,296 cycles, 0.08%)</title><rect x="383.2" y="389" width="1.2" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="386.20" y="399.5" ></text>
+</g>
+<g >
+<title>io_issue_sqe (6,550,738,978 cycles, 17.58%)</title><rect x="1013.6" y="517" width="242.6" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="1016.59" y="527.5" >io_issue_sqe</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (76,023,481 cycles, 0.20%)</title><rect x="122.6" y="325" width="2.8" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="125.59" y="335.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (33,093,568 cycles, 0.09%)</title><rect x="890.5" y="373" width="1.2" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="893.46" y="383.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (870,248,574 cycles, 2.34%)</title><rect x="567.6" y="181" width="32.3" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="570.64" y="191.5" >_r..</text>
+</g>
+<g >
+<title>psi_group_change (193,813,675 cycles, 0.52%)</title><rect x="1327.5" y="485" width="7.2" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="1330.48" y="495.5" ></text>
+</g>
+<g >
+<title>bench_w02_pipel (24,352,429,171 cycles, 65.35%)</title><rect x="10.0" y="613" width="901.8" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="13.00" y="623.5" >bench_w02_pipel</text>
+</g>
+<g >
+<title>std::enable_if&lt;is_constructible_v&lt;std::_Nth_type&lt;1ul, std::monostate, sluice::async::Request&lt;unsigned long&gt;, sluice::async::Request&lt;void&gt; &gt;::type, sluice::async::Request&lt;unsigned long&gt; &gt;, std::_Nth_type&lt;1ul, std::monostate, sluice::async::Request&lt;unsigned long&gt;, sluice::async::Request&lt;void&gt; &gt;::type&amp;&gt;::type std::variant&lt;std::monostate, sluice::async::Request&lt;unsigned long&gt;, sluice::async::Request&lt;void&gt; &gt;::emplace&lt;1ul, sluice::async::Request&lt;unsigned long&gt; &gt; (20,470,211 cycles, 0.05%)</title><rect x="389.6" y="421" width="0.7" height="15.0" fill="rgb(211,29,7)" rx="2" ry="2" />
+<text  x="392.57" y="431.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (1,506,497,576 cycles, 4.04%)</title><rect x="830.5" y="373" width="55.8" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="833.53" y="383.5" >std::..</text>
+</g>
+<g >
+<title>irqentry_exit (26,289,469 cycles, 0.07%)</title><rect x="781.0" y="293" width="1.0" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="783.98" y="303.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (31,122,864 cycles, 0.08%)</title><rect x="843.2" y="261" width="1.1" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="846.19" y="271.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (1,557,287,209 cycles, 4.18%)</title><rect x="639.0" y="293" width="57.6" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="641.95" y="303.5" >arch_d..</text>
+</g>
+<g >
+<title>io_queue_async (50,999,542 cycles, 0.14%)</title><rect x="514.3" y="261" width="1.9" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="517.31" y="271.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (66,521,701 cycles, 0.18%)</title><rect x="415.4" y="277" width="2.5" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="418.40" y="287.5" ></text>
+</g>
+<g >
+<title>__io_issue_sqe (273,142,500 cycles, 0.73%)</title><rect x="472.5" y="245" width="10.1" height="15.0" fill="rgb(222,79,19)" rx="2" ry="2" />
+<text  x="475.50" y="255.5" ></text>
+</g>
+<g >
+<title>__io_submit_flush_completions (23,305,968 cycles, 0.06%)</title><rect x="435.0" y="213" width="0.8" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="437.97" y="223.5" ></text>
+</g>
+<g >
+<title>std::unique_ptr&lt;sluice::async::UringRingState, std::default_delete&lt;sluice::async::UringRingState&gt; &gt;::get (20,315,960 cycles, 0.05%)</title><rect x="298.8" y="277" width="0.7" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="301.77" y="287.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (21,883,059 cycles, 0.06%)</title><rect x="822.0" y="389" width="0.8" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="824.96" y="399.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::operator- (102,521,143 cycles, 0.28%)</title><rect x="78.9" y="373" width="3.8" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="81.91" y="383.5" ></text>
+</g>
+<g >
+<title>calc_wheel_index (33,230,959 cycles, 0.09%)</title><rect x="1261.0" y="517" width="1.2" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="1263.98" y="527.5" ></text>
+</g>
+<g >
+<title>io_uring_ctx_get_file (39,114,587 cycles, 0.10%)</title><rect x="218.7" y="277" width="1.5" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="221.74" y="287.5" ></text>
+</g>
+<g >
+<title>std::unique_ptr&lt;sluice::async::RequestScope::Slot [], std::default_delete&lt;sluice::async::RequestScope::Slot []&gt; &gt;::operator[] (5,832,537,426 cycles, 15.65%)</title><rect x="102.6" y="405" width="216.0" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="105.59" y="415.5" >std::unique_ptr&lt;sluice::asyn..</text>
+</g>
+<g >
+<title>__gthread_mutex_lock (755,619,156 cycles, 2.03%)</title><rect x="321.1" y="325" width="27.9" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="324.06" y="335.5" >_..</text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::occupancy (19,867,018 cycles, 0.05%)</title><rect x="320.3" y="357" width="0.8" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="323.33" y="367.5" ></text>
+</g>
+<g >
+<title>io_init_req (69,628,185 cycles, 0.19%)</title><rect x="468.4" y="261" width="2.6" height="15.0" fill="rgb(211,32,7)" rx="2" ry="2" />
+<text  x="471.45" y="271.5" ></text>
+</g>
+<g >
+<title>entity_lag.isra.0 (40,175,049 cycles, 0.11%)</title><rect x="1352.5" y="437" width="1.5" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="1355.55" y="447.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;sluice::async::UringAsyncBackend::RouterEntry, std::allocator&lt;sluice::async::UringAsyncBackend::RouterEntry&gt; &gt;::size (35,910,681 cycles, 0.10%)</title><rect x="307.7" y="293" width="1.3" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="310.69" y="303.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (98,961,693 cycles, 0.27%)</title><rect x="924.8" y="533" width="3.7" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="927.83" y="543.5" ></text>
+</g>
+<g >
+<title>task_work_run (25,420,451 cycles, 0.07%)</title><rect x="904.7" y="341" width="1.0" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="907.73" y="351.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (1,040,927,190 cycles, 2.79%)</title><rect x="847.3" y="277" width="38.6" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="850.31" y="287.5" >std..</text>
+</g>
+<g >
+<title>sluice::Result&lt;sluice::async::detail::RequestKey&gt; sluice::async::UringAsyncBackend::submit_request&lt;sluice::async::ReadOp&gt; (257,120,751 cycles, 0.69%)</title><rect x="17.5" y="565" width="9.5" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="20.51" y="575.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (24,923,992 cycles, 0.07%)</title><rect x="753.5" y="261" width="1.0" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="756.54" y="271.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::resolve_public_ (22,237,674 cycles, 0.06%)</title><rect x="376.7" y="373" width="0.8" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="379.72" y="383.5" ></text>
+</g>
+<g >
+<title>try_to_block_task.constprop.0.isra.0 (1,015,661,265 cycles, 2.73%)</title><rect x="1337.7" y="501" width="37.6" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1340.65" y="511.5" >try..</text>
+</g>
+<g >
+<title>native_write_msr (76,293,934 cycles, 0.20%)</title><rect x="1309.6" y="437" width="2.8" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="1312.60" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::Result&lt;sluice::async::detail::RequestKey&gt; sluice::async::UringAsyncBackend::submit_request&lt;sluice::async::ReadOp&gt; (84,437,802 cycles, 0.23%)</title><rect x="11.6" y="549" width="3.2" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="14.62" y="559.5" ></text>
+</g>
+<g >
+<title>import_ubuf (49,847,700 cycles, 0.13%)</title><rect x="492.3" y="229" width="1.9" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="495.34" y="239.5" ></text>
+</g>
+<g >
+<title>__kmalloc_noprof (179,347,314 cycles, 0.48%)</title><rect x="156.6" y="181" width="6.6" height="15.0" fill="rgb(241,168,40)" rx="2" ry="2" />
+<text  x="159.61" y="191.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::handle_one_cqe (350,053,257 cycles, 0.94%)</title><rect x="335.1" y="197" width="12.9" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
+<text  x="338.06" y="207.5" ></text>
+</g>
+<g >
+<title>__x64_sys_pwrite64 (57,565,850 cycles, 0.15%)</title><rect x="908.8" y="357" width="2.1" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="911.77" y="367.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt; std::__unguarded_partition_pivot&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, std::less&lt;void&gt; &gt; (20,216,212 cycles, 0.05%)</title><rect x="79.4" y="309" width="0.7" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="82.38" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back (34,938,635 cycles, 0.09%)</title><rect x="760.9" y="341" width="1.3" height="15.0" fill="rgb(207,13,3)" rx="2" ry="2" />
+<text  x="763.88" y="351.5" ></text>
+</g>
+<g >
+<title>io_uring_cqe_seen (30,984,794 cycles, 0.08%)</title><rect x="850.5" y="213" width="1.2" height="15.0" fill="rgb(250,208,49)" rx="2" ry="2" />
+<text  x="853.54" y="223.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::dispatch_after_accept (1,428,978,401 cycles, 3.83%)</title><rect x="758.2" y="357" width="52.9" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="761.19" y="367.5" >sluic..</text>
+</g>
+<g >
+<title>get_signal (19,914,776 cycles, 0.05%)</title><rect x="296.0" y="245" width="0.7" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="298.96" y="255.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (32,319,580 cycles, 0.09%)</title><rect x="753.3" y="325" width="1.2" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="756.27" y="335.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (26,011,712 cycles, 0.07%)</title><rect x="868.1" y="101" width="1.0" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="871.13" y="111.5" ></text>
+</g>
+<g >
+<title>__gthread_mutex_lock (1,006,015,051 cycles, 2.70%)</title><rect x="847.3" y="261" width="37.3" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="850.31" y="271.5" >__g..</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::service_pending_controls_locked_ (168,226,770 cycles, 0.45%)</title><rect x="302.8" y="309" width="6.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="305.79" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_transport_locked (104,758,161 cycles, 0.28%)</title><rect x="805.4" y="341" width="3.9" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="808.42" y="351.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (201,166,617 cycles, 0.54%)</title><rect x="68.1" y="405" width="7.5" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="71.14" y="415.5" ></text>
+</g>
+<g >
+<title>fput (92,215,502 cycles, 0.25%)</title><rect x="687.5" y="165" width="3.4" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="690.50" y="175.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::poll_progress (785,049,228 cycles, 2.11%)</title><rect x="320.0" y="373" width="29.1" height="15.0" fill="rgb(254,225,53)" rx="2" ry="2" />
+<text  x="323.00" y="383.5" >sl..</text>
+</g>
+<g >
+<title>xas_load (174,616,735 cycles, 0.47%)</title><rect x="1173.8" y="405" width="6.5" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="1176.81" y="415.5" ></text>
+</g>
+<g >
+<title>get_signal (46,240,440 cycles, 0.12%)</title><rect x="434.3" y="293" width="1.7" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="437.26" y="303.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (107,414,019 cycles, 0.29%)</title><rect x="1237.4" y="453" width="4.0" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="1240.38" y="463.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back (42,366,633 cycles, 0.11%)</title><rect x="870.6" y="133" width="1.6" height="15.0" fill="rgb(207,13,3)" rx="2" ry="2" />
+<text  x="873.61" y="143.5" ></text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (46,214,975 cycles, 0.12%)</title><rect x="423.5" y="357" width="1.7" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="426.50" y="367.5" ></text>
+</g>
+<g >
+<title>___task_rq_lock (449,887,725 cycles, 1.21%)</title><rect x="190.0" y="197" width="16.7" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="193.03" y="207.5" ></text>
+</g>
+<g >
+<title>fput (36,736,754 cycles, 0.10%)</title><rect x="136.0" y="277" width="1.3" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="138.95" y="287.5" ></text>
+</g>
+<g >
+<title>io_file_get_normal (134,062,589 cycles, 0.36%)</title><rect x="482.7" y="245" width="5.0" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="485.70" y="255.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::submit_read (257,120,751 cycles, 0.69%)</title><rect x="17.5" y="581" width="9.5" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="20.51" y="591.5" ></text>
+</g>
+<g >
+<title>update_curr (164,553,426 cycles, 0.44%)</title><rect x="1354.7" y="437" width="6.1" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1357.69" y="447.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::poll_progress (1,573,100,923 cycles, 4.22%)</title><rect x="828.1" y="389" width="58.2" height="15.0" fill="rgb(254,225,53)" rx="2" ry="2" />
+<text  x="831.06" y="399.5" >sluice..</text>
+</g>
+<g >
+<title>task_work_run (37,359,804 cycles, 0.10%)</title><rect x="76.9" y="389" width="1.4" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="79.91" y="399.5" ></text>
+</g>
+<g >
+<title>entry_SYSRETQ_unsafe_stack (512,409,299 cycles, 1.38%)</title><rect x="257.8" y="325" width="19.0" height="15.0" fill="rgb(213,37,8)" rx="2" ry="2" />
+<text  x="260.85" y="335.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::finalize_operation_terminal_ (242,625,869 cycles, 0.65%)</title><rect x="338.0" y="133" width="9.0" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="341.05" y="143.5" ></text>
+</g>
+<g >
+<title>mutex_lock (24,091,598 cycles, 0.06%)</title><rect x="255.5" y="197" width="0.9" height="15.0" fill="rgb(223,87,20)" rx="2" ry="2" />
+<text  x="258.52" y="207.5" ></text>
+</g>
+<g >
+<title>get_signal (26,011,712 cycles, 0.07%)</title><rect x="868.1" y="85" width="1.0" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="871.13" y="95.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::ReserveAttempt::ok (104,772,152 cycles, 0.28%)</title><rect x="816.1" y="357" width="3.9" height="15.0" fill="rgb(213,36,8)" rx="2" ry="2" />
+<text  x="819.10" y="367.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::operator- (31,242,659 cycles, 0.08%)</title><rect x="81.6" y="213" width="1.1" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="84.55" y="223.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (28,552,333 cycles, 0.08%)</title><rect x="904.6" y="389" width="1.1" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="907.63" y="399.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::deliver_event (22,309,768 cycles, 0.06%)</title><rect x="10.8" y="549" width="0.8" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="13.75" y="559.5" ></text>
+</g>
+<g >
+<title>io_wq_free_work.cold (816,430,445 cycles, 2.19%)</title><rect x="975.1" y="533" width="30.2" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="978.09" y="543.5" >io..</text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (62,787,411 cycles, 0.17%)</title><rect x="635.4" y="309" width="2.3" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="638.41" y="319.5" ></text>
+</g>
+<g >
+<title>__do_sys_io_uring_enter (2,403,711,095 cycles, 6.45%)</title><rect x="134.4" y="293" width="89.0" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="137.43" y="303.5" >__do_sys_i..</text>
+</g>
+<g >
+<title>mutex_lock (26,789,734 cycles, 0.07%)</title><rect x="220.2" y="277" width="1.0" height="15.0" fill="rgb(223,87,20)" rx="2" ry="2" />
+<text  x="223.19" y="287.5" ></text>
+</g>
+<g >
+<title>sched_clock (62,394,268 cycles, 0.17%)</title><rect x="1376.4" y="469" width="2.3" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="1379.42" y="479.5" ></text>
+</g>
+<g >
+<title>__raw_spin_lock_irqsave (141,164,643 cycles, 0.38%)</title><rect x="1244.4" y="453" width="5.2" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1247.41" y="463.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (36,176,073 cycles, 0.10%)</title><rect x="800.4" y="309" width="1.4" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="803.41" y="319.5" ></text>
+</g>
+<g >
+<title>tctx_task_work_run (28,451,966 cycles, 0.08%)</title><rect x="291.4" y="181" width="1.0" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="294.40" y="191.5" ></text>
+</g>
+<g >
+<title>_io_uring_get_sqe (241,862,211 cycles, 0.65%)</title><rect x="765.9" y="309" width="8.9" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="768.87" y="319.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (91,063,179 cycles, 0.24%)</title><rect x="1204.6" y="469" width="3.4" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="1207.58" y="479.5" ></text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (19,397,645 cycles, 0.05%)</title><rect x="782.9" y="309" width="0.7" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="785.93" y="319.5" ></text>
+</g>
+<g >
+<title>shmem_alloc_and_add_folio (45,707,548 cycles, 0.12%)</title><rect x="909.2" y="261" width="1.7" height="15.0" fill="rgb(240,163,39)" rx="2" ry="2" />
+<text  x="912.16" y="271.5" ></text>
+</g>
+<g >
+<title>void std::__detail::__variant::__emplace&lt;1ul, false, std::monostate, sluice::async::Request&lt;unsigned long&gt;, sluice::async::Request&lt;void&gt;, sluice::async::Request&lt;unsigned long&gt; &gt; (20,470,211 cycles, 0.05%)</title><rect x="389.6" y="405" width="0.7" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="392.57" y="415.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestObservation&lt;unsigned long&gt; sluice::async::RequestScope::take_&lt;unsigned long&gt; (204,150,422 cycles, 0.55%)</title><rect x="92.4" y="405" width="7.5" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="95.37" y="415.5" ></text>
+</g>
+<g >
+<title>std::chrono::_V2::steady_clock::now (90,140,918 cycles, 0.24%)</title><rect x="353.9" y="437" width="3.3" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="356.85" y="447.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (29,169,398 cycles, 0.08%)</title><rect x="820.2" y="357" width="1.1" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="823.18" y="367.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (22,901,624 cycles, 0.06%)</title><rect x="845.3" y="245" width="0.9" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="848.31" y="255.5" ></text>
+</g>
+<g >
+<title>io_cache_alloc_new (190,440,501 cycles, 0.51%)</title><rect x="156.2" y="197" width="7.1" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="159.24" y="207.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock_irq (21,172,119 cycles, 0.06%)</title><rect x="230.8" y="229" width="0.8" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="233.79" y="239.5" ></text>
+</g>
+<g >
+<title>task_work_run (22,880,847 cycles, 0.06%)</title><rect x="868.2" y="69" width="0.9" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="871.24" y="79.5" ></text>
+</g>
+<g >
+<title>[unknown] (128,938,553 cycles, 0.35%)</title><rect x="10.0" y="581" width="4.8" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="13.02" y="591.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::accept (45,842,920 cycles, 0.12%)</title><rect x="312.6" y="341" width="1.7" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="315.64" y="351.5" ></text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (29,902,889 cycles, 0.08%)</title><rect x="832.6" y="293" width="1.1" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="835.56" y="303.5" ></text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (40,497,165 cycles, 0.11%)</title><rect x="81.2" y="229" width="1.5" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="84.21" y="239.5" ></text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (24,917,237 cycles, 0.07%)</title><rect x="392.4" y="389" width="0.9" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="395.38" y="399.5" ></text>
+</g>
+<g >
+<title>exit_to_user_mode_loop (1,583,383,811 cycles, 4.25%)</title><rect x="638.1" y="309" width="58.6" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="641.06" y="319.5" >exit_t..</text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (29,829,260 cycles, 0.08%)</title><rect x="814.8" y="341" width="1.1" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="817.81" y="351.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (20,042,683 cycles, 0.05%)</title><rect x="116.2" y="341" width="0.7" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="119.20" y="351.5" ></text>
+</g>
+<g >
+<title>__GI___pthread_mutex_unlock_usercnt (32,928,790 cycles, 0.09%)</title><rect x="759.2" y="341" width="1.2" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="762.18" y="351.5" ></text>
+</g>
+<g >
+<title>copy_page_to_iter (2,377,855,715 cycles, 6.38%)</title><rect x="1064.3" y="437" width="88.0" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="1067.25" y="447.5" >copy_page_..</text>
+</g>
+<g >
+<title>__softirqentry_text_end (20,551,076 cycles, 0.06%)</title><rect x="911.8" y="597" width="0.8" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="914.82" y="607.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (240,441,908 cycles, 0.65%)</title><rect x="919.6" y="549" width="8.9" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="922.59" y="559.5" ></text>
+</g>
+<g >
+<title>__schedule (2,900,755,445 cycles, 7.78%)</title><rect x="1274.4" y="517" width="107.4" height="15.0" fill="rgb(234,133,31)" rx="2" ry="2" />
+<text  x="1277.36" y="527.5" >__schedule</text>
+</g>
+<g >
+<title>tctx_task_work (154,007,395 cycles, 0.41%)</title><rect x="69.9" y="357" width="5.7" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="72.89" y="367.5" ></text>
+</g>
+<g >
+<title>__io_req_task_work_add.constprop.0 (29,131,922 cycles, 0.08%)</title><rect x="975.3" y="517" width="1.1" height="15.0" fill="rgb(217,57,13)" rx="2" ry="2" />
+<text  x="978.33" y="527.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (27,813,523 cycles, 0.07%)</title><rect x="124.2" y="293" width="1.0" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="127.19" y="303.5" ></text>
+</g>
+<g >
+<title>ctx_flush_and_put.isra.0 (20,681,493 cycles, 0.06%)</title><rect x="115.1" y="229" width="0.8" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="118.09" y="239.5" ></text>
+</g>
+<g >
+<title>asm_sysvec_reschedule_ipi (32,272,583 cycles, 0.09%)</title><rect x="856.5" y="197" width="1.2" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="859.50" y="207.5" ></text>
+</g>
+<g >
+<title>io_issue_sqe (449,399,461 cycles, 1.21%)</title><rect x="471.0" y="261" width="16.7" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="474.03" y="271.5" ></text>
+</g>
+<g >
+<title>io_read (127,007,442 cycles, 0.34%)</title><rect x="143.1" y="213" width="4.7" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="146.13" y="223.5" ></text>
+</g>
+<g >
+<title>io_cache_alloc_new (382,401,159 cycles, 1.03%)</title><rect x="499.1" y="213" width="14.1" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="502.06" y="223.5" ></text>
+</g>
+<g >
+<title>perf_ctx_disable (44,347,735 cycles, 0.12%)</title><rect x="1316.8" y="453" width="1.7" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1319.82" y="463.5" ></text>
+</g>
+<g >
+<title>raw_spin_rq_lock_nested (19,219,857 cycles, 0.05%)</title><rect x="1335.7" y="501" width="0.7" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="1338.68" y="511.5" ></text>
+</g>
+<g >
+<title>bench::verify_pattern (32,143,769 cycles, 0.09%)</title><rect x="358.0" y="453" width="1.2" height="15.0" fill="rgb(224,91,21)" rx="2" ry="2" />
+<text  x="361.00" y="463.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::claim_observer_delivery (23,531,748 cycles, 0.06%)</title><rect x="325.8" y="245" width="0.9" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="328.79" y="255.5" ></text>
+</g>
+<g >
+<title>io_free_batch_list (22,950,228 cycles, 0.06%)</title><rect x="74.2" y="293" width="0.8" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="77.17" y="303.5" ></text>
+</g>
+<g >
+<title>__io_uring_submit (82,612,782 cycles, 0.22%)</title><rect x="11.6" y="533" width="3.1" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="14.62" y="543.5" ></text>
+</g>
+<g >
+<title>__io_read (187,865,566 cycles, 0.50%)</title><rect x="475.6" y="213" width="6.9" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="478.56" y="223.5" ></text>
+</g>
+<g >
+<title>io_submit_sqes (2,197,736,208 cycles, 5.90%)</title><rect x="137.4" y="277" width="81.3" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="140.36" y="287.5" >io_submit..</text>
+</g>
+<g >
+<title>io_prep_async_link (153,325,096 cycles, 0.41%)</title><rect x="165.9" y="229" width="5.6" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="168.85" y="239.5" ></text>
+</g>
+<g >
+<title>error_entry (21,498,636 cycles, 0.06%)</title><rect x="276.8" y="325" width="0.8" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="279.82" y="335.5" ></text>
+</g>
+<g >
+<title>entry_SYSCALL_64_safe_stack (58,021,601 cycles, 0.16%)</title><rect x="698.4" y="341" width="2.1" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="701.40" y="351.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::release_slot_ (29,931,162 cycles, 0.08%)</title><rect x="378.8" y="373" width="1.1" height="15.0" fill="rgb(251,213,50)" rx="2" ry="2" />
+<text  x="381.79" y="383.5" ></text>
+</g>
+<g >
+<title>mutex_unlock (60,976,825 cycles, 0.16%)</title><rect x="221.2" y="277" width="2.2" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="224.19" y="287.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (27,263,462 cycles, 0.07%)</title><rect x="868.1" y="117" width="1.0" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="871.11" y="127.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (47,892,534 cycles, 0.13%)</title><rect x="114.2" y="309" width="1.8" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="117.24" y="319.5" ></text>
+</g>
+<g >
+<title>void std::__sort&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, std::less&lt;void&gt; &gt; (136,885,768 cycles, 0.37%)</title><rect x="78.6" y="421" width="5.1" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="81.64" y="431.5" ></text>
+</g>
+<g >
+<title>raw_spin_rq_lock_nested (877,694,771 cycles, 2.36%)</title><rect x="567.4" y="197" width="32.5" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="570.36" y="207.5" >ra..</text>
+</g>
+<g >
+<title>shmem_file_write_iter (57,565,850 cycles, 0.15%)</title><rect x="908.8" y="325" width="2.1" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="911.77" y="335.5" ></text>
+</g>
+<g >
+<title>filemap_get_entry (481,137,395 cycles, 1.29%)</title><rect x="1162.5" y="421" width="17.8" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="1165.46" y="431.5" ></text>
+</g>
+<g >
+<title>bench::CaseMeta::~CaseMeta (23,740,676,254 cycles, 63.71%)</title><rect x="28.8" y="533" width="879.1" height="15.0" fill="rgb(232,125,30)" rx="2" ry="2" />
+<text  x="31.76" y="543.5" >bench::CaseMeta::~CaseMeta</text>
+</g>
+<g >
+<title>__io_read (106,486,306 cycles, 0.29%)</title><rect x="143.9" y="197" width="3.9" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="146.87" y="207.5" ></text>
+</g>
+<g >
+<title>sluice::Result&lt;sluice::async::ScopeWaitStatus&gt; sluice::async::RequestScope::wait_for_slot_&lt;unsigned long&gt; (1,806,955,986 cycles, 4.85%)</title><rect x="825.5" y="437" width="66.9" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="828.50" y="447.5" >sluice:..</text>
+</g>
+<g >
+<title>prandom_u32_state (30,025,504 cycles, 0.08%)</title><rect x="696.7" y="309" width="1.1" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="699.69" y="319.5" ></text>
+</g>
+<g >
+<title>select_task_rq_fair (26,160,339 cycles, 0.07%)</title><rect x="211.7" y="181" width="1.0" height="15.0" fill="rgb(217,59,14)" rx="2" ry="2" />
+<text  x="214.70" y="191.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::handle_one_cqe (721,083,685 cycles, 1.94%)</title><rect x="857.9" y="213" width="26.7" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
+<text  x="860.86" y="223.5" >s..</text>
+</g>
+<g >
+<title>io_rw_init_file (102,788,146 cycles, 0.28%)</title><rect x="478.7" y="197" width="3.8" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="481.71" y="207.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::resolve_internal_ (19,782,134 cycles, 0.05%)</title><rect x="877.3" y="117" width="0.7" height="15.0" fill="rgb(246,188,45)" rx="2" ry="2" />
+<text  x="880.27" y="127.5" ></text>
+</g>
+<g >
+<title>avg_vruntime (27,307,416 cycles, 0.07%)</title><rect x="1351.5" y="437" width="1.0" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="1354.54" y="447.5" ></text>
+</g>
+<g >
+<title>std::mutex::lock (20,042,683 cycles, 0.05%)</title><rect x="116.2" y="325" width="0.7" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="119.20" y="335.5" ></text>
+</g>
+<g >
+<title> (28,661,314 cycles, 0.08%)</title><rect x="785.8" y="309" width="1.0" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="788.78" y="319.5" ></text>
+</g>
+<g >
+<title>try_to_wake_up (1,876,377,445 cycles, 5.04%)</title><rect x="556.4" y="229" width="69.5" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="559.37" y="239.5" >try_to_..</text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (36,595,300 cycles, 0.10%)</title><rect x="291.1" y="245" width="1.3" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="294.09" y="255.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (1,040,927,190 cycles, 2.79%)</title><rect x="847.3" y="293" width="38.6" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="850.31" y="303.5" >std..</text>
+</g>
+<g >
+<title>void std::__introsort_loop&lt;__gnu_cxx::__normal_iterator&lt;double*, std::vector&lt;double, std::allocator&lt;double&gt; &gt; &gt;, long, std::less&lt;void&gt; &gt; (69,794,160 cycles, 0.19%)</title><rect x="80.1" y="293" width="2.6" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="83.13" y="303.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (25,521,477 cycles, 0.07%)</title><rect x="377.5" y="373" width="1.0" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="380.54" y="383.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (1,223,819,019 cycles, 3.28%)</title><rect x="651.3" y="245" width="45.3" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="654.30" y="255.5" >tctx..</text>
+</g>
+<g >
+<title>tctx_task_work_run (36,027,757 cycles, 0.10%)</title><rect x="434.6" y="245" width="1.4" height="15.0" fill="rgb(239,157,37)" rx="2" ry="2" />
+<text  x="437.64" y="255.5" ></text>
+</g>
+<g >
+<title>emplace_back&lt;(anonymous namespace)::run_pipeline_phase (28,092,041 cycles, 0.08%)</title><rect x="367.1" y="437" width="1.1" height="15.0" fill="rgb(236,146,35)" rx="2" ry="2" />
+<text  x="370.13" y="447.5" ></text>
+</g>
+<g >
+<title>__io_uring_submit (248,738,812 cycles, 0.67%)</title><rect x="17.5" y="549" width="9.2" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="20.51" y="559.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::service_pending_controls_locked_ (316,399,374 cycles, 0.85%)</title><rect x="793.7" y="325" width="11.7" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="796.70" y="335.5" ></text>
+</g>
+<g >
+<title>native_queued_spin_lock_slowpath (45,697,497 cycles, 0.12%)</title><rect x="681.5" y="149" width="1.7" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="684.46" y="159.5" ></text>
+</g>
+<g >
+<title>sluice::async::operator== (39,849,221 cycles, 0.11%)</title><rect x="894.8" y="421" width="1.5" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="897.78" y="431.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (25,662,985 cycles, 0.07%)</title><rect x="781.0" y="277" width="1.0" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="784.01" y="287.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::reserve (31,444,115 cycles, 0.08%)</title><rect x="315.1" y="325" width="1.2" height="15.0" fill="rgb(211,28,6)" rx="2" ry="2" />
+<text  x="318.10" y="335.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (27,335,411 cycles, 0.07%)</title><rect x="856.5" y="165" width="1.1" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="859.55" y="175.5" ></text>
+</g>
+<g >
+<title>sluice::Result&lt;sluice::async::detail::RequestKey&gt; sluice::async::UringAsyncBackend::submit_request&lt;sluice::async::ReadOp&gt; (10,831,852,007 cycles, 29.07%)</title><rect x="420.3" y="373" width="401.1" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="423.32" y="383.5" >sluice::Result&lt;sluice::async::detail::RequestKey&gt; slui..</text>
+</g>
+<g >
+<title>io_file_get_flags (40,872,566 cycles, 0.11%)</title><rect x="481.0" y="181" width="1.5" height="15.0" fill="rgb(237,150,35)" rx="2" ry="2" />
+<text  x="484.01" y="191.5" ></text>
+</g>
+<g >
+<title>get_signal (35,342,434 cycles, 0.09%)</title><rect x="291.1" y="229" width="1.3" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="294.14" y="239.5" ></text>
+</g>
+<g >
+<title>current_time (126,727,107 cycles, 0.34%)</title><rect x="1184.4" y="405" width="4.6" height="15.0" fill="rgb(241,168,40)" rx="2" ry="2" />
+<text  x="1187.35" y="415.5" ></text>
+</g>
+<g >
+<title>io_read (241,124,497 cycles, 0.65%)</title><rect x="473.7" y="229" width="8.9" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="476.68" y="239.5" ></text>
+</g>
+<g >
+<title>task_work_run (24,832,320 cycles, 0.07%)</title><rect x="856.6" y="133" width="1.0" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="859.64" y="143.5" ></text>
+</g>
+<g >
+<title>io_eventfd_put (168,648,463 cycles, 0.45%)</title><rect x="1249.9" y="469" width="6.3" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1252.93" y="479.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (829,452,895 cycles, 2.23%)</title><rect x="225.7" y="277" width="30.7" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="228.70" y="287.5" >ar..</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::publish_one (319,832,446 cycles, 0.86%)</title><rect x="834.5" y="293" width="11.9" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="837.52" y="303.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::accept (119,061,779 cycles, 0.32%)</title><rect x="811.5" y="357" width="4.4" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="814.53" y="367.5" ></text>
+</g>
+<g >
+<title>sluice::blocking::write_all_at (57,987,354 cycles, 0.16%)</title><rect x="908.8" y="517" width="2.1" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="911.76" y="527.5" ></text>
+</g>
+<g >
+<title>__libc_start_call_main (23,835,278,978 cycles, 63.96%)</title><rect x="28.2" y="565" width="882.7" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="31.24" y="575.5" >__libc_start_call_main</text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::publish_one (25,378,193 cycles, 0.07%)</title><rect x="10.6" y="565" width="1.0" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="13.64" y="575.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::reap_cqes (471,639,623 cycles, 1.27%)</title><rect x="330.6" y="229" width="17.4" height="15.0" fill="rgb(253,221,52)" rx="2" ry="2" />
+<text  x="333.56" y="239.5" ></text>
+</g>
+<g >
+<title>update_rq_clock (93,535,107 cycles, 0.25%)</title><rect x="1375.3" y="501" width="3.4" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="1378.27" y="511.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (35,458,236 cycles, 0.10%)</title><rect x="114.7" y="261" width="1.3" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="117.70" y="271.5" ></text>
+</g>
+<g >
+<title>__io_submit_flush_completions (757,055,708 cycles, 2.03%)</title><rect x="664.5" y="197" width="28.1" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="667.54" y="207.5" >_..</text>
+</g>
+<g >
+<title>std::mutex::lock (29,829,260 cycles, 0.08%)</title><rect x="814.8" y="325" width="1.1" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="817.81" y="335.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (33,662,992 cycles, 0.09%)</title><rect x="77.0" y="373" width="1.3" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="80.04" y="383.5" ></text>
+</g>
+<g >
+<title>kfree (44,922,049 cycles, 0.12%)</title><rect x="690.9" y="165" width="1.7" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="693.92" y="175.5" ></text>
+</g>
+<g >
+<title>_start (23,835,563,199 cycles, 63.96%)</title><rect x="28.2" y="597" width="882.7" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="31.24" y="607.5" >_start</text>
+</g>
+<g >
+<title>native_sched_clock (26,638,055 cycles, 0.07%)</title><rect x="1323.7" y="453" width="1.0" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="1326.69" y="463.5" ></text>
+</g>
+<g >
+<title>_raw_spin_lock (70,760,384 cycles, 0.19%)</title><rect x="241.7" y="165" width="2.7" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="244.75" y="175.5" ></text>
+</g>
+<g >
+<title>error_entry (26,203,877 cycles, 0.07%)</title><rect x="13.7" y="517" width="1.0" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="16.71" y="527.5" ></text>
+</g>
+<g >
+<title>update_curr_dl_se (25,137,312 cycles, 0.07%)</title><rect x="1290.6" y="453" width="1.0" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="1293.64" y="463.5" ></text>
+</g>
+<g >
+<title>task_work_run (32,836,641 cycles, 0.09%)</title><rect x="291.2" y="213" width="1.2" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="294.23" y="223.5" ></text>
+</g>
+<g >
+<title>std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_data (23,740,676,254 cycles, 63.71%)</title><rect x="28.8" y="469" width="879.1" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="31.76" y="479.5" >std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;::_M_data</text>
+</g>
+<g >
+<title>get_signal (25,037,577 cycles, 0.07%)</title><rect x="781.0" y="261" width="1.0" height="15.0" fill="rgb(217,58,14)" rx="2" ry="2" />
+<text  x="784.03" y="271.5" ></text>
+</g>
+<g >
+<title>finish_task_switch.isra.0 (316,672,668 cycles, 0.85%)</title><rect x="1302.0" y="501" width="11.7" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="1304.98" y="511.5" ></text>
+</g>
+<g >
+<title>__io_submit_flush_completions (90,137,529 cycles, 0.24%)</title><rect x="71.7" y="309" width="3.3" height="15.0" fill="rgb(233,129,30)" rx="2" ry="2" />
+<text  x="74.68" y="319.5" ></text>
+</g>
+<g >
+<title>sluice::detail::IoOutcome::success (28,632,256 cycles, 0.08%)</title><rect x="336.5" y="181" width="1.0" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="339.49" y="191.5" ></text>
+</g>
+<g >
+<title>irqentry_exit (209,864,879 cycles, 0.56%)</title><rect x="67.9" y="421" width="7.8" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="70.91" y="431.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock_irqrestore (95,814,252 cycles, 0.26%)</title><rect x="603.6" y="213" width="3.6" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="606.60" y="223.5" ></text>
+</g>
+<g >
+<title>__raw_spin_lock_irqsave (109,989,267 cycles, 0.30%)</title><rect x="999.8" y="469" width="4.1" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1002.81" y="479.5" ></text>
+</g>
+<g >
+<title>sluice::async::detail::RequestCore::occupancy (304,379,242 cycles, 0.82%)</title><rect x="105.9" y="357" width="11.2" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="108.85" y="367.5" ></text>
+</g>
+<g >
+<title>sluice::async::AsyncIoContext::submit_read (5,800,455,797 cycles, 15.57%)</title><rect x="103.1" y="389" width="214.8" height="15.0" fill="rgb(238,156,37)" rx="2" ry="2" />
+<text  x="106.10" y="399.5" >sluice::async::AsyncIoContex..</text>
+</g>
+<g >
+<title>__gthread_mutex_lock (496,222,296 cycles, 1.33%)</title><rect x="329.6" y="245" width="18.4" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="332.65" y="255.5" ></text>
+</g>
+<g >
+<title>sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back (29,055,164 cycles, 0.08%)</title><rect x="340.9" y="117" width="1.1" height="15.0" fill="rgb(207,13,3)" rx="2" ry="2" />
+<text  x="343.93" y="127.5" ></text>
+</g>
+<g >
+<title>std::__uniq_ptr_impl&lt;sluice::async::UringRingState, std::default_delete&lt;sluice::async::UringRingState&gt; &gt;::_M_ptr (28,661,314 cycles, 0.08%)</title><rect x="785.8" y="277" width="1.0" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="788.78" y="287.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (756,183,705 cycles, 2.03%)</title><rect x="321.1" y="357" width="28.0" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="324.06" y="367.5" >s..</text>
+</g>
+<g >
+<title>raw_spin_rq_lock_nested (439,239,286 cycles, 1.18%)</title><rect x="190.4" y="181" width="16.3" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="193.43" y="191.5" ></text>
+</g>
+<g >
+<title>_raw_spin_unlock (19,153,467 cycles, 0.05%)</title><rect x="1224.8" y="469" width="0.7" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="1227.76" y="479.5" ></text>
+</g>
+<g >
+<title>tctx_task_work (28,660,172 cycles, 0.08%)</title><rect x="800.6" y="229" width="1.0" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="803.58" y="239.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::lock_guard (40,485,591 cycles, 0.11%)</title><rect x="878.0" y="117" width="1.5" height="15.0" fill="rgb(235,139,33)" rx="2" ry="2" />
+<text  x="881.00" y="127.5" ></text>
+</g>
+<g >
+<title>arch_do_signal_or_restart (40,488,551 cycles, 0.11%)</title><rect x="76.8" y="421" width="1.5" height="15.0" fill="rgb(209,20,4)" rx="2" ry="2" />
+<text  x="79.79" y="431.5" ></text>
+</g>
+<g >
+<title>io_rw_alloc_async (216,410,413 cycles, 0.58%)</title><rect x="155.6" y="213" width="8.0" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="158.63" y="223.5" ></text>
+</g>
+<g >
+<title>__pick_next_task (602,835,498 cycles, 1.62%)</title><rect x="1279.4" y="501" width="22.3" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="1282.42" y="511.5" >_..</text>
+</g>
+<g >
+<title>std::vector&lt;sluice::async::detail::RequestReservation, std::allocator&lt;sluice::async::detail::RequestReservation&gt; &gt;::operator[] (23,713,362 cycles, 0.06%)</title><rect x="871.3" y="117" width="0.9" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="874.30" y="127.5" ></text>
+</g>
+<g >
+<title>shmem_write_begin (47,395,316 cycles, 0.13%)</title><rect x="909.1" y="293" width="1.8" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="912.12" y="303.5" ></text>
+</g>
+<g >
+<title>pthread_mutex_lock@@GLIBC_2.2.5 (26,734,626 cycles, 0.07%)</title><rect x="843.4" y="229" width="0.9" height="15.0" fill="rgb(244,179,42)" rx="2" ry="2" />
+<text  x="846.35" y="239.5" ></text>
+</g>
+<g >
+<title>std::lock_guard&lt;std::mutex&gt;::~lock_guard (249,457,113 cycles, 0.67%)</title><rect x="338.0" y="181" width="9.3" height="15.0" fill="rgb(221,75,18)" rx="2" ry="2" />
+<text  x="341.05" y="191.5" ></text>
+</g>
+<g >
+<title>sluice::async::RequestScope::submit_read (11,878,651,281 cycles, 31.88%)</title><rect x="385.0" y="453" width="439.8" height="15.0" fill="rgb(227,104,24)" rx="2" ry="2" />
+<text  x="387.95" y="463.5" >sluice::async::RequestScope::submit_read</text>
+</g>
+<g >
+<title>_raw_spin_lock (185,927,441 cycles, 0.50%)</title><rect x="1234.5" y="469" width="6.9" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="1237.48" y="479.5" ></text>
+</g>
+<g >
+<title>perf_ctx_enable (80,729,384 cycles, 0.22%)</title><rect x="1309.4" y="469" width="3.0" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1312.44" y="479.5" ></text>
+</g>
+<g >
+<title>__irqentry_text_end (21,021,268 cycles, 0.06%)</title><rect x="429.8" y="341" width="0.8" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="432.79" y="351.5" ></text>
+</g>
+<g >
+<title>schedule_timeout (3,608,893,048 cycles, 9.68%)</title><rect x="1256.2" y="549" width="133.6" height="15.0" fill="rgb(241,167,39)" rx="2" ry="2" />
+<text  x="1259.18" y="559.5" >schedule_timeout</text>
+</g>
+</g>
+</svg>

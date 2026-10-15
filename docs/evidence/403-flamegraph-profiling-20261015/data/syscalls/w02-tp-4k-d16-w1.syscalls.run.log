@@ -1,0 +1,18 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=10
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.1399s 142909 ops/s 558.2 MiB/s cpu=0.255s util=182.1% | lat p50=102754 p95=132400 p99=147039 max=198095 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.1204s 166055 ops/s 648.7 MiB/s cpu=0.209s util=173.2% | lat p50=96156 p95=123796 p99=136708 max=184261 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=1] ops=20000 wall=0.1218s 164203 ops/s 641.4 MiB/s cpu=0.212s util=174.3% | lat p50=96134 p95=125750 p99=144209 max=291895 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=2] ops=20000 wall=0.1202s 166445 ops/s 650.2 MiB/s cpu=0.209s util=174.2% | lat p50=95438 p95=127275 p99=148995 max=424602 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=3] ops=20000 wall=0.1262s 158493 ops/s 619.1 MiB/s cpu=0.216s util=171.2% | lat p50=83205 p95=112577 p99=129991 max=177819 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=4] ops=20000 wall=0.1174s 170372 ops/s 665.5 MiB/s cpu=0.205s util=174.8% | lat p50=89923 p95=123903 p99=141546 max=247367 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=5] ops=20000 wall=0.1175s 170196 ops/s 664.8 MiB/s cpu=0.207s util=176.5% | lat p50=98841 p95=129276 p99=143409 max=292319 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=6] ops=20000 wall=0.1183s 169100 ops/s 660.5 MiB/s cpu=0.207s util=175.0% | lat p50=98676 p95=130944 p99=149707 max=294207 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=7] ops=20000 wall=0.1262s 158453 ops/s 619.0 MiB/s cpu=0.215s util=170.7% | lat p50=101509 p95=138469 p99=180897 max=264406 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=8] ops=20000 wall=0.1272s 157202 ops/s 614.1 MiB/s cpu=0.216s util=170.2% | lat p50=98707 p95=128676 p99=142469 max=236829 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=9] ops=20000 wall=0.1287s 155383 ops/s 607.0 MiB/s cpu=0.220s util=170.9% | lat p50=105389 p95=135280 p99=149699 max=274267 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===

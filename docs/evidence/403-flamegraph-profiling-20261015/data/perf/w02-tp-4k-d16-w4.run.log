@@ -1,0 +1,50 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=40
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0866s 230949 ops/s 902.1 MiB/s cpu=0.289s util=333.5% | lat p50=63182 p95=91675 p99=106309 max=163538 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0796s 251135 ops/s 981.0 MiB/s cpu=0.267s util=335.0% | lat p50=67634 p95=95482 p99=110500 max=137952 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=1] ops=20000 wall=0.0885s 225978 ops/s 882.7 MiB/s cpu=0.295s util=332.9% | lat p50=66638 p95=94366 p99=110133 max=169046 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=2] ops=20000 wall=0.0963s 207751 ops/s 811.5 MiB/s cpu=0.308s util=319.7% | lat p50=60182 p95=84553 p99=97529 max=150786 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=3] ops=20000 wall=0.0810s 246853 ops/s 964.3 MiB/s cpu=0.273s util=336.4% | lat p50=61955 p95=88336 p99=100980 max=135710 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=4] ops=20000 wall=0.0845s 236754 ops/s 924.8 MiB/s cpu=0.282s util=334.0% | lat p50=69730 p95=98642 p99=115659 max=157963 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=5] ops=20000 wall=0.0820s 243809 ops/s 952.4 MiB/s cpu=0.275s util=334.9% | lat p50=70058 p95=101036 p99=117484 max=177532 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=6] ops=20000 wall=0.0803s 249042 ops/s 972.8 MiB/s cpu=0.273s util=339.8% | lat p50=61732 p95=89774 p99=103122 max=159761 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=7] ops=20000 wall=0.0802s 249358 ops/s 974.1 MiB/s cpu=0.271s util=338.3% | lat p50=62088 p95=88478 p99=102321 max=136527 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=8] ops=20000 wall=0.0816s 245157 ops/s 957.6 MiB/s cpu=0.276s util=337.8% | lat p50=62143 p95=87280 p99=100076 max=135754 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=9] ops=20000 wall=0.0804s 248690 ops/s 971.4 MiB/s cpu=0.272s util=338.1% | lat p50=62280 p95=87804 p99=101900 max=185534 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=10] ops=20000 wall=0.0892s 224261 ops/s 876.0 MiB/s cpu=0.296s util=332.4% | lat p50=66233 p95=93614 p99=108803 max=160592 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=11] ops=20000 wall=0.0949s 210716 ops/s 823.1 MiB/s cpu=0.299s util=315.3% | lat p50=61880 p95=88358 p99=100342 max=146762 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=12] ops=20000 wall=0.0789s 253582 ops/s 990.6 MiB/s cpu=0.268s util=340.3% | lat p50=63988 p95=90157 p99=103102 max=150263 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=13] ops=20000 wall=0.0845s 236684 ops/s 924.5 MiB/s cpu=0.279s util=330.3% | lat p50=68418 p95=95670 p99=109073 max=145451 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=14] ops=20000 wall=0.0958s 208812 ops/s 815.7 MiB/s cpu=0.313s util=326.5% | lat p50=72218 p95=100435 p99=115964 max=144998 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=15] ops=20000 wall=0.0816s 245157 ops/s 957.6 MiB/s cpu=0.284s util=348.0% | lat p50=61273 p95=85756 p99=98659 max=125758 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=16] ops=20000 wall=0.0781s 256192 ops/s 1000.7 MiB/s cpu=0.261s util=333.9% | lat p50=61117 p95=86283 p99=98286 max=131483 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=17] ops=20000 wall=0.0811s 246586 ops/s 963.2 MiB/s cpu=0.272s util=335.5% | lat p50=62072 p95=88841 p99=101400 max=145685 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=18] ops=20000 wall=0.0799s 250456 ops/s 978.3 MiB/s cpu=0.271s util=339.7% | lat p50=64654 p95=95272 p99=112802 max=147123 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=19] ops=20000 wall=0.0802s 249325 ops/s 973.9 MiB/s cpu=0.271s util=337.4% | lat p50=62381 p95=90017 p99=101851 max=134582 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=20] ops=20000 wall=0.0815s 245370 ops/s 958.5 MiB/s cpu=0.267s util=327.4% | lat p50=69930 p95=97312 p99=111050 max=152290 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=21] ops=20000 wall=0.0891s 224534 ops/s 877.1 MiB/s cpu=0.295s util=330.8% | lat p50=67817 p95=96259 p99=111791 max=177335 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=22] ops=20000 wall=0.0890s 224616 ops/s 877.4 MiB/s cpu=0.295s util=330.8% | lat p50=66941 p95=93621 p99=106555 max=147863 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=23] ops=20000 wall=0.0806s 248137 ops/s 969.3 MiB/s cpu=0.272s util=337.0% | lat p50=61144 p95=87112 p99=100539 max=154282 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=24] ops=20000 wall=0.0793s 252062 ops/s 984.6 MiB/s cpu=0.269s util=338.5% | lat p50=61305 p95=87107 p99=100156 max=127170 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=25] ops=20000 wall=0.0813s 245957 ops/s 960.8 MiB/s cpu=0.274s util=336.6% | lat p50=62240 p95=88614 p99=101951 max=135646 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=26] ops=20000 wall=0.0822s 243377 ops/s 950.7 MiB/s cpu=0.290s util=352.8% | lat p50=61141 p95=86508 p99=100474 max=140967 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=27] ops=20000 wall=0.0805s 248315 ops/s 970.0 MiB/s cpu=0.271s util=336.2% | lat p50=61685 p95=87950 p99=100679 max=125820 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=28] ops=20000 wall=0.0811s 246577 ops/s 963.2 MiB/s cpu=0.268s util=330.2% | lat p50=62519 p95=87966 p99=101008 max=145484 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=29] ops=20000 wall=0.0796s 251133 ops/s 981.0 MiB/s cpu=0.271s util=339.9% | lat p50=61731 p95=87812 p99=101167 max=364525 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=30] ops=20000 wall=0.0789s 253558 ops/s 990.5 MiB/s cpu=0.268s util=339.7% | lat p50=61656 p95=87921 p99=102050 max=147690 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=31] ops=20000 wall=0.0797s 251085 ops/s 980.8 MiB/s cpu=0.270s util=339.1% | lat p50=66936 p95=93110 p99=106001 max=144570 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=32] ops=20000 wall=0.0837s 238949 ops/s 933.4 MiB/s cpu=0.282s util=337.3% | lat p50=62524 p95=88921 p99=102076 max=132483 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=33] ops=20000 wall=0.0798s 250472 ops/s 978.4 MiB/s cpu=0.269s util=337.4% | lat p50=64422 p95=90697 p99=104659 max=188039 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=34] ops=20000 wall=0.0877s 228022 ops/s 890.7 MiB/s cpu=0.293s util=334.3% | lat p50=66475 p95=92896 p99=105961 max=181946 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=35] ops=20000 wall=0.0830s 241037 ops/s 941.6 MiB/s cpu=0.279s util=335.8% | lat p50=64088 p95=94185 p99=109856 max=165287 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=36] ops=20000 wall=0.0878s 227829 ops/s 890.0 MiB/s cpu=0.288s util=328.2% | lat p50=66472 p95=92203 p99=106318 max=134253 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=37] ops=20000 wall=0.0846s 236314 ops/s 923.1 MiB/s cpu=0.280s util=331.3% | lat p50=71232 p95=97937 p99=111106 max=176413 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=38] ops=20000 wall=0.0837s 239020 ops/s 933.7 MiB/s cpu=0.279s util=332.9% | lat p50=61709 p95=87135 p99=101342 max=201280 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=39] ops=20000 wall=0.0802s 249275 ops/s 973.7 MiB/s cpu=0.272s util=338.8% | lat p50=62210 p95=88764 p99=102446 max=134258 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+[ perf record: Woken up 125 times to write data ]
+[ perf record: Captured and wrote 33.577 MB $EVIDENCE_DIR/data/w02-tp-4k-d16-w4.data (249009 samples) ]

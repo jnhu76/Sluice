@@ -1,0 +1,32 @@
+========================================================
+G0 W-01 direct-execution benchmark
+warmup=1 measured_repetitions=20
+tmp_dir=/tmp/sluice-g0-prof
+disk_dir=$G0_DISK_DIR
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W01-write_at-4k-seq rep=0 warmup] ops=100000 wall=0.1260s 793872 ops/s 3101.1 MiB/s cpu=0.125s util=99.6% | lat p50=1074 p95=1179 p99=1374 max=47192 ns (n=100000)
+  [W01-write_at-4k-seq rep=0] ops=100000 wall=0.1088s 918852 ops/s 3589.3 MiB/s cpu=0.108s util=99.6% | lat p50=1079 p95=1183 p99=1389 max=18354 ns (n=100000)
+  [W01-write_at-4k-seq rep=1] ops=100000 wall=0.1095s 913581 ops/s 3568.7 MiB/s cpu=0.109s util=99.6% | lat p50=1071 p95=1173 p99=1357 max=30366 ns (n=100000)
+  [W01-write_at-4k-seq rep=2] ops=100000 wall=0.1099s 909972 ops/s 3554.6 MiB/s cpu=0.109s util=99.6% | lat p50=1079 p95=1189 p99=1407 max=39020 ns (n=100000)
+  [W01-write_at-4k-seq rep=3] ops=100000 wall=0.1089s 917945 ops/s 3585.7 MiB/s cpu=0.109s util=99.7% | lat p50=1075 p95=1177 p99=1355 max=39442 ns (n=100000)
+  [W01-write_at-4k-seq rep=4] ops=100000 wall=0.1098s 911091 ops/s 3558.9 MiB/s cpu=0.109s util=99.6% | lat p50=1075 p95=1176 p99=1375 max=34451 ns (n=100000)
+  [W01-write_at-4k-seq rep=5] ops=100000 wall=0.1092s 915389 ops/s 3575.7 MiB/s cpu=0.109s util=99.6% | lat p50=1073 p95=1192 p99=1393 max=45079 ns (n=100000)
+  [W01-write_at-4k-seq rep=6] ops=100000 wall=0.1090s 917720 ops/s 3584.8 MiB/s cpu=0.108s util=99.6% | lat p50=1073 p95=1179 p99=1396 max=33978 ns (n=100000)
+  [W01-write_at-4k-seq rep=7] ops=100000 wall=0.1090s 917307 ops/s 3583.2 MiB/s cpu=0.109s util=99.6% | lat p50=1078 p95=1181 p99=1388 max=13548 ns (n=100000)
+  [W01-write_at-4k-seq rep=8] ops=100000 wall=0.1091s 916538 ops/s 3580.2 MiB/s cpu=0.109s util=99.6% | lat p50=1071 p95=1171 p99=1351 max=55226 ns (n=100000)
+  [W01-write_at-4k-seq rep=9] ops=100000 wall=0.1091s 916692 ops/s 3580.8 MiB/s cpu=0.109s util=99.6% | lat p50=1073 p95=1182 p99=1406 max=16784 ns (n=100000)
+  [W01-write_at-4k-seq rep=10] ops=100000 wall=0.1096s 912810 ops/s 3565.7 MiB/s cpu=0.109s util=99.6% | lat p50=1078 p95=1184 p99=1381 max=35784 ns (n=100000)
+  [W01-write_at-4k-seq rep=11] ops=100000 wall=0.1098s 910887 ops/s 3558.2 MiB/s cpu=0.109s util=99.6% | lat p50=1071 p95=1173 p99=1374 max=37324 ns (n=100000)
+  [W01-write_at-4k-seq rep=12] ops=100000 wall=0.1109s 901326 ops/s 3520.8 MiB/s cpu=0.111s util=99.6% | lat p50=1076 p95=1179 p99=1385 max=36796 ns (n=100000)
+  [W01-write_at-4k-seq rep=13] ops=100000 wall=0.1090s 917287 ops/s 3583.2 MiB/s cpu=0.109s util=99.6% | lat p50=1071 p95=1172 p99=1383 max=30893 ns (n=100000)
+  [W01-write_at-4k-seq rep=14] ops=100000 wall=0.1101s 908187 ops/s 3547.6 MiB/s cpu=0.110s util=99.6% | lat p50=1080 p95=1189 p99=1402 max=58957 ns (n=100000)
+  [W01-write_at-4k-seq rep=15] ops=100000 wall=0.1096s 912154 ops/s 3563.1 MiB/s cpu=0.109s util=99.6% | lat p50=1074 p95=1182 p99=1397 max=54886 ns (n=100000)
+  [W01-write_at-4k-seq rep=16] ops=100000 wall=0.1088s 919145 ops/s 3590.4 MiB/s cpu=0.108s util=99.7% | lat p50=1078 p95=1181 p99=1388 max=29646 ns (n=100000)
+  [W01-write_at-4k-seq rep=17] ops=100000 wall=0.1090s 917522 ops/s 3584.1 MiB/s cpu=0.109s util=99.6% | lat p50=1071 p95=1172 p99=1352 max=35478 ns (n=100000)
+  [W01-write_at-4k-seq rep=18] ops=100000 wall=0.1092s 915619 ops/s 3576.6 MiB/s cpu=0.109s util=99.6% | lat p50=1102 p95=1223 p99=1424 max=37326 ns (n=100000)
+  [W01-write_at-4k-seq rep=19] ops=100000 wall=0.1104s 905641 ops/s 3537.7 MiB/s cpu=0.110s util=99.5% | lat p50=1078 p95=1180 p99=1387 max=32589 ns (n=100000)
+
+=== W-01 complete, failing repetitions=0 ===
+[ perf record: Woken up 32 times to write data ]
+[ perf record: Captured and wrote 8.461 MB $EVIDENCE_DIR/data/w01-write-4k-seq.data (50861 samples) ]

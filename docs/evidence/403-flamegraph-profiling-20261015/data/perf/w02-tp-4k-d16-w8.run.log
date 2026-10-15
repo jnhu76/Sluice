@@ -1,0 +1,30 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=20
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w8 rep=0 warmup] ops=20000 wall=0.1049s 190712 ops/s 745.0 MiB/s cpu=0.447s util=426.1% | lat p50=72863 p95=105414 p99=128045 max=188431 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=0] ops=20000 wall=0.0898s 222755 ops/s 870.1 MiB/s cpu=0.404s util=450.4% | lat p50=68166 p95=95397 p99=113610 max=158395 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=1] ops=20000 wall=0.0941s 212649 ops/s 830.7 MiB/s cpu=0.409s util=435.3% | lat p50=64669 p95=91291 p99=108091 max=138531 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=2] ops=20000 wall=0.0962s 207866 ops/s 812.0 MiB/s cpu=0.442s util=459.2% | lat p50=64829 p95=91886 p99=108996 max=149060 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=3] ops=20000 wall=0.0851s 235100 ops/s 918.4 MiB/s cpu=0.373s util=438.9% | lat p50=81249 p95=115264 p99=133736 max=181350 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=4] ops=20000 wall=0.0985s 203143 ops/s 793.5 MiB/s cpu=0.472s util=479.0% | lat p50=80296 p95=124937 p99=153582 max=226867 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=5] ops=20000 wall=0.0943s 211989 ops/s 828.1 MiB/s cpu=0.420s util=445.6% | lat p50=68413 p95=98386 p99=115884 max=162596 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=6] ops=20000 wall=0.0888s 225132 ops/s 879.4 MiB/s cpu=0.396s util=446.0% | lat p50=72084 p95=105977 p99=126033 max=187920 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=7] ops=20000 wall=0.0929s 215255 ops/s 840.8 MiB/s cpu=0.441s util=474.5% | lat p50=64957 p95=90483 p99=107329 max=154962 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=8] ops=20000 wall=0.0850s 235257 ops/s 919.0 MiB/s cpu=0.363s util=426.5% | lat p50=70854 p95=100837 p99=116407 max=184363 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=9] ops=20000 wall=0.0909s 220059 ops/s 859.6 MiB/s cpu=0.418s util=459.6% | lat p50=70120 p95=99581 p99=118308 max=161890 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=10] ops=20000 wall=0.0980s 204127 ops/s 797.4 MiB/s cpu=0.457s util=466.0% | lat p50=71642 p95=101848 p99=117779 max=155567 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=11] ops=20000 wall=0.0877s 227992 ops/s 890.6 MiB/s cpu=0.363s util=414.2% | lat p50=74215 p95=107377 p99=125113 max=167037 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=12] ops=20000 wall=0.0899s 222550 ops/s 869.3 MiB/s cpu=0.378s util=420.1% | lat p50=86567 p95=125401 p99=149021 max=221200 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=13] ops=20000 wall=0.1133s 176497 ops/s 689.4 MiB/s cpu=0.501s util=441.9% | lat p50=87849 p95=127899 p99=149885 max=252137 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=14] ops=20000 wall=0.1158s 172701 ops/s 674.6 MiB/s cpu=0.532s util=459.0% | lat p50=72419 p95=102927 p99=121618 max=208409 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=15] ops=20000 wall=0.0914s 218776 ops/s 854.6 MiB/s cpu=0.390s util=426.9% | lat p50=77356 p95=111031 p99=131838 max=166154 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=16] ops=20000 wall=0.1043s 191689 ops/s 748.8 MiB/s cpu=0.436s util=417.4% | lat p50=70795 p95=100310 p99=122156 max=190638 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=17] ops=20000 wall=0.0914s 218870 ops/s 855.0 MiB/s cpu=0.414s util=452.8% | lat p50=68134 p95=94930 p99=112587 max=160152 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=18] ops=20000 wall=0.0915s 218568 ops/s 853.8 MiB/s cpu=0.395s util=431.5% | lat p50=75281 p95=106744 p99=128394 max=171486 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=19] ops=20000 wall=0.0973s 205598 ops/s 803.1 MiB/s cpu=0.440s util=452.1% | lat p50=82640 p95=123915 p99=153333 max=264753 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+[ perf record: Woken up 132 times to write data ]
+[ perf record: Captured and wrote 34.871 MB $EVIDENCE_DIR/data/w02-tp-4k-d16-w8.data (252993 samples) ]

@@ -1,0 +1,20 @@
+========================================================
+G0 W-01 direct-execution benchmark
+warmup=1 measured_repetitions=10
+tmp_dir=/tmp/sluice-g0-prof
+disk_dir=$G0_DISK_DIR
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W01-read_at-4k-seq rep=0 warmup] ops=100000 wall=0.1259s 794214 ops/s 3102.4 MiB/s cpu=0.126s util=99.7% | lat p50=1189 p95=1425 p99=1592 max=24124 ns (n=100000)
+  [W01-read_at-4k-seq rep=0] ops=100000 wall=0.1168s 856450 ops/s 3345.5 MiB/s cpu=0.116s util=99.8% | lat p50=1180 p95=1408 p99=1518 max=13156 ns (n=100000)
+  [W01-read_at-4k-seq rep=1] ops=100000 wall=0.1182s 846286 ops/s 3305.8 MiB/s cpu=0.118s util=99.7% | lat p50=1180 p95=1406 p99=1513 max=22577 ns (n=100000)
+  [W01-read_at-4k-seq rep=2] ops=100000 wall=0.1180s 847534 ops/s 3310.7 MiB/s cpu=0.118s util=99.7% | lat p50=1177 p95=1408 p99=1508 max=23754 ns (n=100000)
+  [W01-read_at-4k-seq rep=3] ops=100000 wall=0.1168s 856291 ops/s 3344.9 MiB/s cpu=0.117s util=99.8% | lat p50=1183 p95=1417 p99=1573 max=24027 ns (n=100000)
+  [W01-read_at-4k-seq rep=4] ops=100000 wall=0.1168s 856080 ops/s 3344.1 MiB/s cpu=0.117s util=99.8% | lat p50=1180 p95=1409 p99=1517 max=80904 ns (n=100000)
+  [W01-read_at-4k-seq rep=5] ops=100000 wall=0.1189s 841381 ops/s 3286.6 MiB/s cpu=0.119s util=99.7% | lat p50=1178 p95=1407 p99=1509 max=13363 ns (n=100000)
+  [W01-read_at-4k-seq rep=6] ops=100000 wall=0.1169s 855317 ops/s 3341.1 MiB/s cpu=0.117s util=99.8% | lat p50=1181 p95=1406 p99=1516 max=21956 ns (n=100000)
+  [W01-read_at-4k-seq rep=7] ops=100000 wall=0.1168s 856402 ops/s 3345.3 MiB/s cpu=0.117s util=99.8% | lat p50=1190 p95=1425 p99=1594 max=30420 ns (n=100000)
+  [W01-read_at-4k-seq rep=8] ops=100000 wall=0.1170s 854963 ops/s 3339.7 MiB/s cpu=0.117s util=99.8% | lat p50=1180 p95=1407 p99=1519 max=21737 ns (n=100000)
+  [W01-read_at-4k-seq rep=9] ops=100000 wall=0.1181s 846695 ops/s 3307.4 MiB/s cpu=0.118s util=99.7% | lat p50=1179 p95=1406 p99=1508 max=18586 ns (n=100000)
+
+=== W-01 complete, failing repetitions=0 ===

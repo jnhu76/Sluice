@@ -63,3 +63,7 @@ formal/.lake/
 
 # tlc trace dumps (TLC writes counterexample dumps into the working directory)
 *_TTrace*.bin
+
+# #403 flame-graph profiling: the third-party FlameGraph scripts are cloned here
+# on demand (CDDL-1.0; deliberately not vendored into this MIT repository).
+docs/evidence/403-flamegraph-profiling-20261015/tools/flamegraph/

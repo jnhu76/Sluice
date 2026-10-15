@@ -1,0 +1,31 @@
+
+
+@syscalls[main, 202]: 1
+@syscalls[main, 21]: 1
+@syscalls[main, 273]: 1
+@syscalls[main, 231]: 1
+@syscalls[main, 334]: 1
+@syscalls[main, 302]: 1
+@syscalls[main, 218]: 1
+@syscalls[main, 318]: 1
+@syscalls[main, 158]: 1
+@syscalls[main, 59]: 2
+@syscalls[main, 61]: 2
+@syscalls[main, 435]: 2
+@syscalls[main, 12]: 5
+@syscalls[main, 11]: 5
+@syscalls[main, 10]: 6
+@syscalls[main, 75]: 11
+@syscalls[main, 98]: 11
+@syscalls[main, 13]: 12
+@syscalls[main, 14]: 12
+@syscalls[main, 1]: 13
+@syscalls[main, 0]: 15
+@syscalls[main, 5]: 18
+@syscalls[main, 228]: 22
+@syscalls[main, 9]: 23
+@syscalls[main, 8]: 23
+@syscalls[main, 3]: 71
+@syscalls[main, 257]: 72
+@syscalls[main, 18]: 1479
+@syscalls[main, 17]: 3300706

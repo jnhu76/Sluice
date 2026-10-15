@@ -1,0 +1,18 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=10
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1180s 169427 ops/s 661.8 MiB/s cpu=0.438s util=370.8% | lat p50=80414 p95=131058 p99=158390 max=244047 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1521s 131511 ops/s 513.7 MiB/s cpu=0.523s util=344.1% | lat p50=79532 p95=121589 p99=138971 max=178299 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=1] ops=20000 wall=0.1484s 134786 ops/s 526.5 MiB/s cpu=0.522s util=351.8% | lat p50=74603 p95=118176 p99=136644 max=197684 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=2] ops=20000 wall=0.1401s 142779 ops/s 557.7 MiB/s cpu=0.497s util=354.8% | lat p50=78243 p95=121324 p99=136155 max=169991 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=3] ops=20000 wall=0.1476s 135498 ops/s 529.3 MiB/s cpu=0.495s util=335.7% | lat p50=75549 p95=118591 p99=133536 max=173491 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=4] ops=20000 wall=0.1271s 157353 ops/s 614.7 MiB/s cpu=0.447s util=352.0% | lat p50=70207 p95=110365 p99=128299 max=193586 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=5] ops=20000 wall=0.1277s 156637 ops/s 611.9 MiB/s cpu=0.443s util=346.6% | lat p50=75447 p95=121096 p99=138573 max=179379 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=6] ops=20000 wall=0.1307s 153046 ops/s 597.8 MiB/s cpu=0.466s util=356.8% | lat p50=85164 p95=134005 p99=160233 max=232270 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=7] ops=20000 wall=0.1478s 135354 ops/s 528.7 MiB/s cpu=0.490s util=331.5% | lat p50=72770 p95=111565 p99=126925 max=207934 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=8] ops=20000 wall=0.1345s 148697 ops/s 580.8 MiB/s cpu=0.464s util=344.8% | lat p50=75836 p95=116945 p99=131565 max=180946 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=9] ops=20000 wall=0.1389s 143972 ops/s 562.4 MiB/s cpu=0.492s util=354.5% | lat p50=71707 p95=107434 p99=124449 max=180119 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
