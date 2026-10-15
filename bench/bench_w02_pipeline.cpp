@@ -55,6 +55,7 @@ using sluice::async::ThreadPoolConfig;
 constexpr std::size_t kInstrumentedSampleCap = 200000;
 constexpr std::size_t kScratchBytes = 2u << 20;
 constexpr std::size_t kFixtureBytes = 64u << 20;
+constexpr std::size_t kSaturationRounds = 200;
 constexpr auto kWaitDeadline = std::chrono::seconds(20);
 
 FileOpen rw_open_existing() {
@@ -137,6 +138,11 @@ struct PipelineParams {
     std::size_t depth = 16;
     std::size_t workers = 4;
     bool saturating = false;
+    // Scope tracking capacity. Zero means "same as depth". Decoupling it from
+    // the pipeline depth is what lets a diagnostic case separate the scope's
+    // per-take slot scan cost from the pipeline concurrency itself.
+    std::size_t scope_capacity = 0;
+    std::string label_suffix;
 };
 
 struct PipelineCounters {
@@ -193,7 +199,10 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
 
     AsyncStats stats;
     std::string backend_failure;
-    auto backend = make_backend(*params.backend, params.depth, params.workers, backend_failure);
+    const std::size_t backend_capacity =
+        std::max(params.depth, params.scope_capacity != 0 ? params.scope_capacity : params.depth);
+    auto backend =
+        make_backend(*params.backend, backend_capacity, params.workers, backend_failure);
     if (backend == nullptr) {
         phase.ok = false;
         phase.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
@@ -217,88 +226,97 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
 
     PhaseResult result;
     if (params.saturating) {
-        // Backpressure shape: submit until admission refuses, without consuming.
-        RequestScope scope(ctx, params.depth, ScopeCleanupPolicy::drain);
-        const std::size_t attempts = params.depth * 2;
-        std::vector<Inflight> inflight;
+        // Backpressure shape: repeatedly fill the bound until admission refuses,
+        // then settle the accepted window. Rejection at the bound is a counted
+        // outcome, not a failure.
         const double start = bench::now_ns() * 1e-9;
-        for (std::size_t i = 0; i < attempts; ++i) {
-            const std::uint64_t offset =
-                static_cast<std::uint64_t>(i % blocks) * params.block_size;
-            ReadOp op;
-            op.file = NativeFileRef(file);
-            op.dst = buffers[i % params.depth].data();
-            op.len = params.block_size;
-            op.offset = offset;
-            ++result.counters.submits;
-            auto ticket = scope.submit_read(op);
-            if (!ticket.has_value()) {
-                if (ticket.error().code == IoError::Code::would_block) {
-                    ++result.counters.would_block;
-                    ++result.counters.rejected_at_saturation;
-                    continue;
-                }
-                result.ok = false;
-                result.failure = "submit failed: " + describe(ticket.error());
-                return result;
-            }
-            ++result.counters.accepted_at_saturation;
-            inflight.push_back(Inflight{ticket.value(), i % params.depth, offset, 0.0});
-        }
-        for (auto& entry : inflight) {
-            ++result.counters.waits;
-            auto waited = scope.wait_for(entry.ticket, kWaitDeadline);
-            if (!waited.has_value()) {
-                result.ok = false;
-                result.failure = "wait failed: " + describe(waited.error());
-                return result;
-            }
-            if (waited.value() != ScopeWaitStatus::ready) {
-                result.ok = false;
-                result.failure = "wait did not reach ready";
-                return result;
-            }
-            const auto observed = scope.take(entry.ticket);
-            if (observed.readiness != RequestReadiness::ready || !observed.result.has_value()) {
-                result.ok = false;
-                result.failure = "settled result was not successful";
-                return result;
-            }
-            if (verify) {
-                const auto mismatch = bench::verify_pattern(buffers[entry.slot].data(),
-                                                           params.block_size, entry.offset);
-                if (!mismatch.ok) {
+        for (std::size_t round = 0; round < kSaturationRounds; ++round) {
+            const std::size_t scope_capacity =
+        params.scope_capacity != 0 ? params.scope_capacity : params.depth;
+    RequestScope scope(ctx, scope_capacity, ScopeCleanupPolicy::drain);
+            std::vector<Inflight> inflight;
+            std::size_t sequence = round * params.depth;
+            for (;;) {
+                const std::size_t index = sequence % params.depth;
+                const std::uint64_t offset =
+                    static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
+                ReadOp op;
+                op.file = NativeFileRef(file);
+                op.dst = buffers[index].data();
+                op.len = params.block_size;
+                op.offset = offset;
+                ++result.counters.submits;
+                auto ticket = scope.submit_read(op);
+                if (!ticket.has_value()) {
+                    if (ticket.error().code == IoError::Code::would_block) {
+                        ++result.counters.would_block;
+                        ++result.counters.rejected_at_saturation;
+                        break;
+                    }
                     result.ok = false;
-                    result.failure = "byte mismatch at absolute " +
-                                     std::to_string(mismatch.first_bad_position);
+                    result.failure = "submit failed: " + describe(ticket.error());
                     return result;
                 }
+                ++result.counters.accepted_at_saturation;
+                inflight.push_back(Inflight{ticket.value(), index, offset, 0.0});
+                ++sequence;
             }
-            ++result.ops;
+            for (auto& entry : inflight) {
+                ++result.counters.waits;
+                auto waited = scope.wait_for(entry.ticket, kWaitDeadline);
+                if (!waited.has_value()) {
+                    result.ok = false;
+                    result.failure = "wait failed: " + describe(waited.error());
+                    return result;
+                }
+                if (waited.value() != ScopeWaitStatus::ready) {
+                    result.ok = false;
+                    result.failure = "wait did not reach ready";
+                    return result;
+                }
+                const auto observed = scope.take(entry.ticket);
+                if (observed.readiness != RequestReadiness::ready ||
+                    !observed.result.has_value()) {
+                    result.ok = false;
+                    result.failure = "settled result was not successful";
+                    return result;
+                }
+                if (verify) {
+                    const auto mismatch = bench::verify_pattern(buffers[entry.slot].data(),
+                                                               params.block_size, entry.offset);
+                    if (!mismatch.ok) {
+                        result.ok = false;
+                        result.failure = "byte mismatch at absolute " +
+                                         std::to_string(mismatch.first_bad_position);
+                        return result;
+                    }
+                }
+                ++result.ops;
             result.bytes += observed.result.value();
         }
-        auto finished = scope.finish();
-        if (!finished.has_value()) {
-            result.ok = false;
-            result.failure = "scope finish failed";
-            return result;
+            auto finished = scope.finish();
+            if (!finished.has_value()) {
+                result.ok = false;
+                result.failure = "scope finish failed";
+                return result;
+            }
         }
         const double end = bench::now_ns() * 1e-9;
         result.wall_s = end - start;
-        std::string shutdown_failure;
         const auto outcome = ctx.shutdown(ShutdownPolicy::drain);
         if (!outcome.has_value()) {
             result.ok = false;
             result.failure = "shutdown failed";
             return result;
         }
-        (void)shutdown_failure;
         result.stats_delta = stats;
         return result;
     }
 
     AsyncStats before = stats;
-    RequestScope scope(ctx, params.depth, ScopeCleanupPolicy::drain);
+    const std::size_t scope_capacity =
+        params.scope_capacity != 0 ? params.scope_capacity : params.depth;
+    RequestScope scope(ctx, scope_capacity, ScopeCleanupPolicy::drain);
     std::deque<Inflight> window;
     std::size_t submitted = 0;
     std::size_t completed = 0;
@@ -412,7 +430,7 @@ bench::CaseMeta make_meta(const PipelineParams& params) {
                    (params.block_size == 4096 ? "4k" : "64k") + "-d" + bound +
                    (params.backend->name == "threadpool" ? "-w" + std::to_string(params.workers)
                                                          : "") +
-                   (params.saturating ? "-saturate" : "");
+                   (params.saturating ? "-saturate" : "") + params.label_suffix;
     meta.workload = "W-02";
     meta.backend = params.backend->name;
     meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, " +
@@ -423,7 +441,8 @@ bench::CaseMeta make_meta(const PipelineParams& params) {
                      ? "submit until admission refuses, then settle; backpressure counted"
                      : "bounded sliding window; unconsumed results never exceed the bound";
     meta.block_size = params.block_size;
-    meta.request_count = params.saturating ? params.depth * 2 : params.request_count;
+    meta.request_count = params.saturating ? kSaturationRounds * params.depth
+                                           : params.request_count;
     meta.concurrency = params.depth;
     meta.queue_depth = params.depth;
     meta.worker_count = params.backend->name == "threadpool" ? params.workers : 0;
@@ -585,12 +604,42 @@ int main() {
     add_tp(4096, 16, 16, 4, true);
     add_uring(4096, 16, 16, true);
 
+    // Diagnostics: hold the pipeline depth fixed and vary only the scope
+    // tracking capacity, so the scope's per-take slot scan is isolated from the
+    // concurrency bound.
+    {
+        PipelineParams p;
+        p.backend = &threadpool;
+        p.block_size = 4096;
+        p.request_count = 20000;
+        p.depth = 4;
+        p.workers = 4;
+        p.scope_capacity = 64;
+        p.label_suffix = "-scope64";
+        cases.push_back(p);
+    }
+    {
+        PipelineParams p;
+        p.backend = &threadpool;
+        p.block_size = 4096;
+        p.request_count = 20000;
+        p.depth = 16;
+        p.workers = 4;
+        p.scope_capacity = 64;
+        p.label_suffix = "-scope64";
+        cases.push_back(p);
+    }
+
     int failed = 0;
     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
         const bool measured = round >= cfg.warmup;
         const std::vector<std::size_t> order = bench::rotation_order(cases.size(), round);
         for (std::size_t position = 0; position < order.size(); ++position) {
             const PipelineParams& params = cases[order[position]];
+            const bench::CaseMeta meta = make_meta(params);
+            if (!bench::case_selected(meta.case_id)) {
+                continue;
+            }
             failed += run_one_repetition(cfg, params, path, position,
                                         measured ? round - cfg.warmup : round, measured);
         }

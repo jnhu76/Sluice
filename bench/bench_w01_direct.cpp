@@ -96,6 +96,7 @@ struct Fixture {
     std::string sync_small;
     std::string disk_64k;
     std::string disk_1m;
+    std::string disk_sync;
     bool disk_available = false;
 
     static constexpr std::size_t kFile4kSeqBytes = 64u << 20;
@@ -130,10 +131,11 @@ struct Fixture {
             bench::ensure_dir(disk_dir);
             disk_64k = disk_dir + "/read_64k.bin";
             disk_1m = disk_dir + "/read_1m.bin";
+            disk_sync = disk_dir + "/sync_small.bin";
             std::string disk_failure;
             const bool ok64 = write_file(disk_64k, kDisk64kBytes, disk_failure);
             const bool ok1m = ok64 && write_file(disk_1m, kDisk1mBytes, disk_failure);
-            disk_available = ok1m;
+            disk_available = ok1m && write_file(disk_sync, 4096, disk_failure);
             if (!disk_available) {
                 std::fprintf(stderr, "note: disk-backed fixture unavailable: %s\n",
                              disk_failure.c_str());
@@ -449,22 +451,22 @@ int case_write_at(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t or
         scratch);
 }
 
-int case_durability(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t order,
-                    bool use_sync_all) {
+int case_durability(const bench::EnvConfig& cfg, std::size_t order, bool use_sync_all,
+                    const std::string& path, const std::string& fs,
+                    const std::string& suffix) {
     bench::CaseMeta meta;
-    meta.case_id = use_sync_all ? "W01-sync_all-4k" : "W01-sync_data-4k";
+    meta.case_id = (use_sync_all ? "W01-sync_all-4k" : "W01-sync_data-4k") + suffix;
     meta.workload = "W-01";
     meta.backend = "direct";
     meta.dataset = "4096B write followed by an explicit durability barrier";
     meta.cache_policy = "durability barrier timed alone";
-    meta.filesystem = "tmpfs";
-    meta.notes = "the write is followed by the barrier inside the timed operation; "
+    meta.filesystem = fs;
+    meta.notes = "the write and the barrier are both inside the timed operation; "
                  "durability cost is reported separately from plain read/write";
     meta.block_size = 4096;
     meta.request_count = 200;
 
     std::vector<std::byte> scratch(kScratchBytes);
-    const std::string path = fx.sync_small;
     const std::size_t count = meta.request_count;
     std::vector<std::byte> payload(4096);
     bench::fill_pattern(payload.data(), payload.size(), 0);
@@ -801,31 +803,48 @@ int main() {
     }
 
     int failed = 0;
-    failed += case_clock_calibration(cfg);
-    failed += case_open_close(fx, cfg, 1);
-    failed += case_file_info(fx, cfg, 2);
-    failed += case_read_at(cfg, 3, "W01-read_at-4k-seq", fx.read_4k_seq, 4096, 100000, false,
-                           false, Fixture::kFile4kSeqBytes, "tmpfs");
-    failed += case_read_at(cfg, 4, "W01-read_at-4k-rand", fx.read_4k_rand, 4096, 100000, true,
-                           false, Fixture::kFile4kSeqBytes, "tmpfs");
-    failed += case_read_at(cfg, 5, "W01-read_at-64k-seq", fx.read_64k, 65536, 4000, false, false,
-                           Fixture::kFile64kBytes, "tmpfs");
-    failed += case_read_at(cfg, 6, "W01-read_at-1m-seq", fx.read_1m, 1u << 20, 512, false, false,
-                           Fixture::kFile1mBytes, "tmpfs");
-    failed += case_write_at(fx, cfg, 7);
-    failed += case_durability(fx, cfg, 8, false);
-    failed += case_durability(fx, cfg, 9, true);
-    failed += case_composition(fx, cfg, 10, false);
-    failed += case_composition(fx, cfg, 11, true);
+    auto run_if = [&](const std::string& id, auto&& run) {
+        if (bench::case_selected(id)) {
+            failed += run();
+        }
+    };
+    run_if("CAL-clock-overhead", [&] { return case_clock_calibration(cfg); });
+    run_if("W01-open_close", [&] { return case_open_close(fx, cfg, 1); });
+    run_if("W01-file_info", [&] { return case_file_info(fx, cfg, 2); });
+    run_if("W01-read_at-4k-seq", [&] { return case_read_at(cfg, 3, "W01-read_at-4k-seq", fx.read_4k_seq, 4096, 100000, false,
+                           false, Fixture::kFile4kSeqBytes, "tmpfs"); });
+    run_if("W01-read_at-4k-rand", [&] { return case_read_at(cfg, 4, "W01-read_at-4k-rand", fx.read_4k_rand, 4096, 100000, true,
+                           false, Fixture::kFile4kSeqBytes, "tmpfs"); });
+    run_if("W01-read_at-64k-seq", [&] { return case_read_at(cfg, 5, "W01-read_at-64k-seq", fx.read_64k, 65536, 4000, false, false,
+                           Fixture::kFile64kBytes, "tmpfs"); });
+    run_if("W01-read_at-1m-seq", [&] { return case_read_at(cfg, 6, "W01-read_at-1m-seq", fx.read_1m, 1u << 20, 512, false, false,
+                           Fixture::kFile1mBytes, "tmpfs"); });
+    run_if("W01-write_at-4k-seq", [&] { return case_write_at(fx, cfg, 7); });
+    run_if("W01-sync_data-4k", [&] { return case_durability(cfg, 8, false, fx.sync_small, "tmpfs", ""); });
+    run_if("W01-sync_all-4k", [&] { return case_durability(cfg, 9, true, fx.sync_small, "tmpfs", ""); });
+    run_if("W01-read_exact_at-4k", [&] { return case_composition(fx, cfg, 10, false); });
+    run_if("W01-write_all_at-4k", [&] { return case_composition(fx, cfg, 11, true); });
 
     if (fx.disk_available) {
-        failed += case_read_at(cfg, 12, "W01-read_at-64k-seq-cold", fx.disk_64k, 65536, 4000,
-                               false, true, Fixture::kDisk64kBytes, "ext4");
-        failed += case_read_at(cfg, 13, "W01-read_at-1m-seq-cold", fx.disk_1m, 1u << 20, 512,
-                               false, true, Fixture::kDisk1mBytes, "ext4");
+        run_if("W01-read_at-64k-seq-cold", [&] {
+            return case_read_at(cfg, 12, "W01-read_at-64k-seq-cold", fx.disk_64k, 65536, 4000,
+                                false, true, Fixture::kDisk64kBytes, "ext4");
+        });
+        run_if("W01-read_at-1m-seq-cold", [&] {
+            return case_read_at(cfg, 13, "W01-read_at-1m-seq-cold", fx.disk_1m, 1u << 20, 512,
+                                false, true, Fixture::kDisk1mBytes, "ext4");
+        });
+        run_if("W01-sync_data-4k-disk", [&] {
+            return case_durability(cfg, 14, false, fx.disk_sync, "ext4", "-disk");
+        });
+        run_if("W01-sync_all-4k-disk", [&] {
+            return case_durability(cfg, 15, true, fx.disk_sync, "ext4", "-disk");
+        });
     } else {
         std::printf("W01-read_at-64k-seq-cold: NOT_RUN (disk fixture unavailable)\n");
         std::printf("W01-read_at-1m-seq-cold: NOT_RUN (disk fixture unavailable)\n");
+        std::printf("W01-sync_data-4k-disk: NOT_RUN (disk fixture unavailable)\n");
+        std::printf("W01-sync_all-4k-disk: NOT_RUN (disk fixture unavailable)\n");
     }
 
     std::printf("\n=== W-01 complete, failing repetitions=%d ===\n", failed);

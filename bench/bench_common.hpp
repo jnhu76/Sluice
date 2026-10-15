@@ -418,6 +418,16 @@ inline std::vector<std::size_t> rotation_order(std::size_t count, std::size_t ro
     return order;
 }
 
+// Case selection for targeted profiling runs: G0_CASE_FILTER selects the cases
+// whose id contains the given substring. An empty filter runs everything.
+inline bool case_selected(const std::string& case_id) {
+    const char* filter = std::getenv("G0_CASE_FILTER");
+    if (filter == nullptr || *filter == '\0') {
+        return true;
+    }
+    return case_id.find(filter) != std::string::npos;
+}
+
 struct RunOutcome {
     bool ok = true;
     std::string failure;

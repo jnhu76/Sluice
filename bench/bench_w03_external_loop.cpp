@@ -618,6 +618,10 @@ int main() {
         const std::vector<std::size_t> order = bench::rotation_order(cases.size(), round);
         for (std::size_t position = 0; position < order.size(); ++position) {
             const LoopParams& params = cases[order[position]];
+            const bench::CaseMeta meta = make_meta(params);
+            if (!bench::case_selected(meta.case_id)) {
+                continue;
+            }
             failed += run_one_repetition(cfg, params, path, position,
                                         measured ? round - cfg.warmup : round, measured);
         }
