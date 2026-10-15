@@ -74,7 +74,11 @@ Result<File> File::open(const std::string& path, FileOpen mode) {
 }
 
 File::File(File&& other) noexcept
-    : fd_(std::exchange(other.fd_, -1)), access_(other.access_) {}
+    : fd_(std::exchange(other.fd_, -1)), access_(other.access_) {
+#if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
+    (void)close();
+#endif
+}
 
 File& File::operator=(File&& other) noexcept {
     if (this != &other) {
