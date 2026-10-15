@@ -89,7 +89,8 @@ dependency).
 
 Raw evidence hashes and the retained v1 set are listed in `COMMIT.txt` and
 section 0; `REPRODUCIBILITY.md` records that the v2 binaries reproduce
-byte-identically from `8c98b417`.
+byte-identically from the revision-2 benchmark head (`c0bee1f8`) and from the
+later comment-only source revision.
 
 ## 2. W-01 — direct execution (root W-01, INV-02)
 
