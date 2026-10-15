@@ -163,7 +163,12 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         if (is_byte_op)
             return;
 #endif
+#if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
+        terminal = sluice::detail::IoOutcome::failure(
+            IoError{.code = IoError::Code::backend_error});
+#else
         terminal = sluice::detail::IoOutcome::failure(sluice::from_errno_value(-res));
+#endif
     } else if (is_byte_op) {
         terminal = sluice::detail::IoOutcome::success(static_cast<std::uint64_t>(res));
     } else if (is_metadata_op) {
