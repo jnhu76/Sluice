@@ -2378,3 +2378,41 @@ arms), which is sufficient for the clause.
 `sufficient contracted surface` is established. `V1_RELEASE_READY=NO`; no
 release action taken; #390 remains open under its own gates; external use of
 retired surfaces remains UNKNOWN (owner decision at release planning).
+
+## 2026-10-15 Post-F6 deferred debt: request-path error-domain re-diff (#526)
+
+Executes the F6-F10 work item only (F6-F11 stays deferred as a mandatory
+precondition of any W-04 support promotion). This is verification-completeness
+debt retirement on the already-adjudicated E1 residual — not a reopened F6 gap;
+`F6 = CLOSED_ACCEPTED` stands.
+
+New oracle `tests/request_error_domain_test.cpp` (both backends, production
+shape — no internal-testing seam), covering the two previously-unasserted
+edges plus the domain-boundary cross-check:
+
+- Request-path terminals from real kernel errno: an accepted write to
+  `/dev/full` settles `no_space` with `os_errno == ENOSPC`; an accepted read
+  positioned on a directory settles `backend_error` with `os_errno == EISDIR`;
+  each matches the direct path's spelling for the same fault (request-path
+  errno re-diff previously did not exist; `/dev/full` appeared only on the
+  direct path, EISDIR in no test).
+- Admission-closed submissions spell `invalid_state` with `os_errno == 0` for
+  all six operation kinds (previously asserted for `submit_read` only —
+  threadpool consumer probe `contract_admission.cpp` and the uring seam
+  cutover — without the native-detail pin or mutant enforcement).
+- A closed resource is a rejection on both paths and never a settled request.
+
+Named mutation builds (executed manually, never regular tests), renamed to
+the `SLUICE_ERR01_MUTANT_*` prefix so the #400 E1 mutant inventory stays
+closed: `ADMISSION_CLOSE_REPORTS_CAPACITY` (admission-closed conflated with
+capacity, both backends) killed by the six admission-spelling assertions;
+`PHYSICAL_ERRNO_UNMAPPED` (physical errno bypassing the canonical table at
+`run_syscall`/ring completion, both backends) killed by both terminal re-diff
+assertions. The canonical error table and `stackful_io_host.cpp` are
+untouched.
+
+Matrix at the slice head: liburing=y 68/68, liburing=n 53/53; all four mutant
+builds red with the named assertions; the restructured
+`SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED` write arm rebuilt and its E1 kill
+re-verified. PR #531 (review: APPROVE code after the PR-description evidence
+correction recorded there).

@@ -222,7 +222,7 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::Oper
 
     const auto reservation = core_->reserve();
     if (!reservation.ok()) {
-#if defined(SLUICE_E1_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY)
+#if defined(SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY)
         const IoError::Code code = IoError::Code::would_block;
 #else
         const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed
@@ -477,7 +477,7 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
                            static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
-#if defined(SLUICE_E1_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
+#if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
             return sluice::detail::failed_dispatched_attempt(
                 IoError{.code = IoError::Code::backend_error});
 #else
@@ -491,7 +491,7 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
                             static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
-#if defined(SLUICE_E1_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
+#if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
             return sluice::detail::failed_dispatched_attempt(
                 IoError{.code = IoError::Code::backend_error});
 #elif defined(SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED)

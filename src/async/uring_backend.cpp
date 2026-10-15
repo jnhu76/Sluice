@@ -435,7 +435,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
 
     const auto reservation = core_->reserve();
     if (!reservation.ok()) {
-#if defined(SLUICE_E1_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY)
+#if defined(SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY)
         const IoError::Code code = IoError::Code::would_block;
 #else
         const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed

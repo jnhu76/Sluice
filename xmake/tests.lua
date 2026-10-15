@@ -753,14 +753,14 @@ do
         -- error-domain suite; executed and recorded manually, never run as
         -- regular tests.
         request_error_domain_target("request_error_domain_uring_mut_admission_reports_capacity",
-                                    true, "SLUICE_E1_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
+                                    true, "SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
         request_error_domain_target("request_error_domain_uring_mut_physical_errno_unmapped",
-                                    true, "SLUICE_E1_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
+                                    true, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
     end
     request_error_domain_target("request_error_domain_threadpool_mut_admission_reports_capacity",
-                                false, "SLUICE_E1_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
+                                false, "SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
     request_error_domain_target("request_error_domain_threadpool_mut_physical_errno_unmapped",
-                                false, "SLUICE_E1_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
+                                false, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
 end
 
 -- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
