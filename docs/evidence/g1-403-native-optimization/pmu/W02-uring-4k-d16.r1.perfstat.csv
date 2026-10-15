@@ -1,0 +1,12 @@
+# started on Fri Oct 16 00:44:36 2026
+
+429.46,msec,task-clock:u,429455472,100.00,,
+836,,page-faults:u,429455472,100.00,,
+272044191,,cycles:u,205566576,47.00,,
+294435136,,instructions:u,262789016,61.00,,
+65537889,,branches:u,264158181,61.00,,
+994234,,branch-misses:u,268879677,62.00,,
+2165669,,cache-references:u,274998588,64.00,,
+17225,,cache-misses:u,277385319,64.00,,
+3991,,LLC-load-misses:u,216604463,50.00,,
+4782,,dTLB-load-misses:u,210229084,48.00,,
