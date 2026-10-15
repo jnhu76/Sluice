@@ -2501,3 +2501,98 @@ vacuous pass. Matrix re-run at the corrected head: liburing=y 70/70,
 liburing=n 54/54; both mutants red on both profiles with the named arms;
 20/20 stability per profile re-confirmed; TSan, ASan and UBSan re-run clean
 on the updated suites (clang — the host lacks the gcc sanitizer runtimes).
+
+## 2026-10-15 Post-F6 deferred debt: RequestCore model convergence (#524)
+
+Executes the F6-F03 debt item, which was deferred from the F6 closeout as
+model-side maintenance (P2, non-blocking; no gate value was affected). The
+model is converged to the current C++ protocol rather than carrying the
+compatibility flavor permanently: `ReleaseBind` — the pre-F2 caller-owned
+`Completion` release edge — is removed from `formal/tla/RequestCore.tla`,
+because production deleted that mechanism in F2 and the current C++
+`discard_public_result` *refuses* its defining window
+(`not_visible_yet` → the always-on nonterminal-release diagnostic), so the edge
+had no owner.
+
+Correspondence was established before removal and is recorded in
+`docs/evidence/issue-524-requestcore-convergence-20261015/`
+(`correspondence-before.md`): every current write of the public binding is
+`accept` (`request_core.cpp:191`), `consume_public_result` (`:332`),
+`discard_public_result` (`:283`), or `release_slot_`/`reserve` on an already
+non-live binding; both live release edges require `published`
+(`:322-324`, `:278-282`). `Consume` and `DiscardPublic` therefore cover every
+legal public release, and the deleted edge's `pub = "done"` branch is subsumed
+by `DiscardPublic` while its inflight branch was the retired flavor. A sweep of
+all RequestCore cfgs at the baseline found the two mutants whose kill trace
+used the deleted action: `MutReleaseResolvable` (retired with the edge it
+mutated) and `MutReclaimIgnoresPub`.
+
+Mutation oracle after the migration
+(`formal(test): migrate retired binding-release mutant`): the discard release
+edge — the path taken by `Request::discard`, the destructor and
+move-assign-over, whose C++ mutation seam is
+`SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING` — gains its own mutant
+`MutDiscardKeepsBind`, reached by `Reserve → Accept → CancelRequest →
+RetireExec → BeginPublish → CompletePublish → DiscardPublic` and killed by
+`InvReleasedNotLive`, distinct from `MutConsumeKeepsBind` (its consume-edge
+sibling, same invariant, different witness state) and from
+`MutDiscardInflight` (killed by `InvDiscardAfterPublish`).
+`MutReclaimIgnoresPub` becomes the second **subsumption witness** (after
+`MutReadyBeforePayload`): with the inflight-tolerant edge gone, a released
+binding always has `pub = "done"`, so the guard it drops is implied by the
+surviving one and its gate is `run_clean` instead of `run_violate`. That
+witness is not a silenced gate: its clean run equals the reference reachable
+set exactly (31,289,609 generated / 5,359,732 distinct), the subsuming fact is
+named by the new invariant `InvBindImpliesPublished` (`phase = accepted ∧
+~bind ⇒ pub = "done"`) asserted in the reference cfg, and it fails loudly if an
+inflight-tolerant release edge is reintroduced (under `MutDiscardInflight` the
+same cfg reports `Invariant InvBindImpliesPublished is violated`).
+`InvReclaimConditions` keeps a live killer (`MutReclaimIgnoresCtl`).
+
+Gate taxonomy in `scripts/verify_tla.sh`: `rcore-mut-release-resolvable`
+removed, `rcore-mut-discard-keeps-bind` added, `rcore-mut-reclaim-ignores-pub`
+moved to the subsumption-witness section. No other gate moved; 171/171 gate
+references resolve; every RequestCore cfg declares exactly the module's 21
+constants.
+
+Model verification on the frozen snapshot (`28f0fe33`; SHAs, host topology and
+commands in `resource-and-execution-manifest.md`): the complete safety gate
+`RequestCore.cfg` (20 invariants including the new one) **PASSES** —
+`Model checking completed. No error has been found.`, 31,289,609 generated /
+5,359,732 distinct / 0 on queue / depth 53 / 48 s, exit 0. The complete
+liveness gate `RequestCoreLive.cfg` (L1 + L5) is **NOT YET RUN**: the run was
+started on the frozen snapshot and stopped on owner instruction for review, so
+no L1/L5 result is recorded here and no partial exploration is reported as one.
+`MODEL_STATUS = MODEL_CONVERGED_PENDING_FULL_TLC`. The 19 violating gates
+(preflight) pass on the converged model with their exact named kills, and the
+independent R4 review returned one `APPROVE_MODEL_FREEZE` with no
+correspondence failure (`review.md`).
+
+Transition relation and state space: the delta is five code changes
+(`transition-diff.md`); `Next` loses exactly the `ReleaseBind` pairs and gains
+none; an isolation control (baseline model with only `\/ ReleaseBind(s)`
+deleted) reproduces the converged counters exactly, so the entire behavioural
+change is that one disjunct. The removed state family is precisely
+`phase = accepted ∧ bind = FALSE ∧ pub ≠ "done"` — the retired flavor's states.
+Distinct states fall from the frozen model's 26,662,372 to 5,359,732 (~4.9×),
+as a consequence of convergence, not as a modelling trade.
+
+Supersession of earlier dated rows in this ledger. The B1-B, B1-C, B1-D and B2
+rows below that map `Completion` reset/destructor to `ReleaseBind` (`:479`,
+`:504`), list `ReleaseBind` among the mapped actions (`:550`), describe it as
+the deliberately inflight-tolerant compatibility flavor (`:584`, `:587`,
+`:588`) or as the split that gave `MutDiscardInflight` its killer (`:606`) were
+accurate at their baselines and are retained verbatim as dated records; for the
+current tree their `ReleaseBind` clauses are superseded by this section. The
+same applies to the cfg counts and the single-witness statement at `:414`. In
+`docs/roadmap/v1-formal-evidence-map.md` the two *living* rows that asserted
+the flavor in the present tense (`:244`, `:268`) were updated in place, since a
+living map may not describe a removed mechanism as current.
+
+Out-of-scope residual for the owner: `docs/roadmap/b1-1-request-core-evidence.md`
+rows `:137` (cfg count), `:566` (`MutReleaseResolvable` row) and `:678`
+(action list including `ReleaseBind`) are falsified by this convergence but sit
+outside this slice's allowed change set, so they were not edited; their
+supersession is recorded here and in the #524 evidence. F6 gate values are
+unaffected: F6-F03 was transferred as model-side debt and no F6 verdict rested
+on the flavor's presence (`docs/evidence/f6-final-closeout-20261015/`).
