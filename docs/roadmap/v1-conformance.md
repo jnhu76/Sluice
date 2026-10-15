@@ -2638,3 +2638,54 @@ reproduced with the verified conditions and the scope limitation in
 finite bounds and the declared fairness assumptions; it is not a verdict on the
 repository's whole formal matrix, and the end-to-end gate run was not executed
 for this slice.
+
+## G1 review record — Issue #403 native optimization (2026-10-16)
+
+Scope: performance-only convergence slice under the #390 mechanism justification
+gate. No root requirement, public behavior, or semantic authority changes: the
+conformance surface (REQ-01..06, PROG-01..04) is untouched by construction, and
+the G0 matrix revalidation (frozen structure checks at the adopt head) plus the
+gate receipt below are the conformance evidence for that claim.
+
+Adopted (single branch `codex/403-g1-native-optimization`, baseline freeze
+`d0673a8b`): C9-A driver-side mutex merges `001512d4`; C1 redundant
+completion-notification-write suppression `4c86d3fe`; C2 derived outstanding
+occupancy summary `0891be17`. Rejected/deferred candidates (C9-G2, C9-G4,
+notification drain-skip) were reverted with retained research evidence.
+Status: VERIFIED for the named workload claims at the recorded commits
+(VERIFIED never means universal correctness).
+
+Evidence: `docs/evidence/g1-403-native-optimization/` — LOCK-INVARIANTS.md r3,
+EXECUTION-DAG.md r2, PMU.md (user-space only; kernel-side PERMISSION_REQUIRED),
+C1.md, C2.md, paired interleaved A/B campaigns (`ab/c9`, `ab/c1`, `ab/c2`,
+`ab/final`; frozen B0 binary hashes pinned per campaign), formal receipts
+(`formal/`), G0 matrix revalidation (`matrix/`).
+
+Measured (paired medians vs the frozen baseline, `ab/final`): TP w4 +19.3%,
+saturate +14.6%, W03-tp-w4 +29.5%; uring cases +1.6..2.0% (inside the recorded
+±3–5% cross-binary noise band, disclosed); W-01 +0.7% (direct-path binary
+byte-identical to the baseline); TP w1 −11.0% disclosed with park-cycle
+attribution (the strace census behind the attribution was not retained as raw
+capture — reviewer finding 3).
+
+Gates at the adopt head: ring suite 61/61, no-ring suite 54/54, mutation
+campaign 71/72 with only the documented F2 survivor, runner_failure_control
+11/11, SANY PASS, TLC safety PASS (rc=0), TLC liveness PASS (rc=0, depth 53,
+12/12 temporal-property branches clean; correspondence note in
+`formal/provenance.txt`), G0 matrix structure revalidation PASS. Sanitizer
+matrix: PERMISSION_REQUIRED recorded (TSan/ASan/UBSan runtimes absent on the
+measurement host; exact install/run commands in the #403 G1-C evidence).
+
+Independent final review verdict:
+`APPROVE_WITH_DISCLOSED_LIMITATIONS`, nine non-blocking findings: stale
+preliminary campaign numbers quoted in the `001512d4` commit message (the
+retained reproducible numbers govern and support the same adoption decision);
+owed-event pass-granularity wording in that message overstates equivalence
+(the F1 settlement-gating argument in LOCK-INVARIANS.md §4 is the justification
+of record); unretained strace raw capture behind the w1 attribution; sanitizer
+receipt outstanding (PERMISSION_REQUIRED); A/B provenance headers record
+dirty-tree runs, mitigated by pinned binary hashes reproduced at the adopt
+head; full-suite run logs not retained in the evidence tree; the missing
+ledger entry (closed by this section); one borderline authority-adjacent
+comment retained deliberately as a settlement-misuse guard; a label typo in
+the review request. The G1 PR remains unmerged per #403 process.
