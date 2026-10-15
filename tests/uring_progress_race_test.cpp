@@ -1401,10 +1401,11 @@ bool post_poison_accept_push_retires_through_failure_terminal() {
                           !state.fail_next.load(std::memory_order_acquire);
 
     // Drain the poison transition's wake so the only later eventfd write can
-    // be attributed to the parked submitter's own retirement.
-    std::uint64_t token = 0;
-    while (::read(interest.fd, &token, sizeof(token)) == sizeof(token)) {
-    }
+    // be attributed to the parked submitter's own retirement. The
+    // source-level acknowledge is the drain authority; a raw read of the fd
+    // would desynchronize the notification-pending summary from the counter
+    // and suppress the retirement wake.
+    ctx.progress_source_for_test()->acknowledge_notification();
 
     resume_backend_gate(gate);
     submitter.join();

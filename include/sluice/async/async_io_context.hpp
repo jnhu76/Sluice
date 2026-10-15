@@ -343,6 +343,8 @@ class AsyncIoContext {
 
     detail::ProgressSource::Token progress_token_for_test() const noexcept;
 
+    detail::ProgressSource* progress_source_for_test() noexcept { return progress_.get(); }
+
     void set_progress_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
 
     void set_progress_prerevalidate_pause_gate_for_test(

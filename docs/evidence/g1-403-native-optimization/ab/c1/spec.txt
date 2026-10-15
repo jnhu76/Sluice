@@ -1,0 +1,5 @@
+W02-threadpool-4k-d16-w4 ring bench_w02_pipeline 7
+W02-threadpool-4k-d16-w1 ring bench_w02_pipeline 7
+W03-threadpool-4k-d16-w4 ring bench_w03_external_loop 15
+W02-uring-4k-d16 ring bench_w02_pipeline 7
+W03-uring-4k-d16 ring bench_w03_external_loop 7
