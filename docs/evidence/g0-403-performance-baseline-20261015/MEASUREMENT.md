@@ -213,8 +213,12 @@ the honest normalisation for "syscalls per 4 KiB read":
 | W-02 ThreadPool d16 (w4) | 1.00 `pread64` + 1.00 eventfd `write` + 0.07 eventfd `read` + <0.02 `poll` + **3.61 `futex`** ≈ 5.7 |
 
 The `w4` row shows the *same* single eventfd signal per completion even though
-the owner only parked 0.072 times per operation — i.e. most signals are emitted
-while readiness is already asserted and nobody is waiting. The number of futex
+the owner called `wait_one` only 0.072 times per operation — i.e. the great
+majority of signals are emitted while the owner is not parked and no wait is
+outstanding. Whether each such signal was nonetheless *required* (the counter is
+the persistent-readiness mechanism, so a signal written while the owner is awake
+may still be consumed by the owner's next arm/acknowledge step) is not directly
+observable and is exactly the obligation C1 must satisfy. The number of futex
 calls is slightly lower at w4 but each blocks ~3.4x longer (28 µs → 94 µs per
 call under strace), which is the contention signature used in B-G0-02.
 
