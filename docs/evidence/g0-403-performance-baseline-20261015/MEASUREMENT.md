@@ -49,8 +49,11 @@ fixture content was zero, the deltas are large:
 | `W01-read_at-1m-seq` | 11,365 | 9,000 | −21% | same, at 1 MiB per operation |
 | `W01-read_at-4k-seq` | 1,288,004 | 1,021,337 | −21% | same, at 4 KiB per operation |
 | `W02-threadpool-4k-d16-w1` | 276,170 | 220,366 | −20% | same |
+| `W01-write_all_at-4k` | 1,224,152 | 1,054,908 | −13.8% | partly deliberate: the timed source is now a per-slot pattern pool instead of one unfilled buffer |
+| `W01-write_at-4k-seq` | 979,494 | 861,949 | −12.0% | same class; the v1 case also wrote identical content to every block |
 | `W01-sync_data-4k-disk` | 1,367 | 1,392 | +1.8% | durability barrier unaffected |
-| `W03-*`, `W02-*-saturate`, small-block cases | — | — | |−3%..+1%| mostly unaffected |
+| `W01-read_at-4k-rand` | 1,036,247 | 999,684 | −3.5% | 4 KiB real-byte reads |
+| `W03-*`, `W02-*-saturate` | — | — | within ±1.5% | unaffected within spread |
 
 The 4 KiB and 1 MiB read deltas (≈20%) are the same class of effect at page
 granularity: a zero-filled page is cheaper to serve than a page with real bytes.
@@ -172,8 +175,8 @@ Facts established by W-02 (v2):
   **w1 = 220,366, w4 = 111,757, w8 = 108,043 ops/s** (v1 showed the same ordering
   at 276,170 / 112,027 / 107,206). The inversion is robust: w1's minimum
   (195,206) exceeds w4's maximum (114,366). CPU per operation rises
-  6.11 → 16.23 → 16.91 µs from w1 → w4 → w8.
-* **No completion-order effect in the harness.** Consuming whichever request is
+  **6.18 → 16.17 → 16.91 µs** from w1 → w4 → w8 (2.6x), taken as the median over the 7
+  repetitions of `cpu_s / wall_s ÷ ops_per_sec` in this primary run.
   ready first instead of the oldest changes nothing: **d16 109,730 (FIFO) vs
   109,212 (any-ready), −0.5%**; at d64 any-ready is 7.1% *slower*. The harness's
   ordered consumer is therefore not the cause of the inversion.
@@ -183,9 +186,9 @@ Facts established by W-02 (v2):
   108,810 (−0.8%). Raising only the backend slot capacity 16 → 64 at fixed
   concurrency: 109,730 → 106,514 (−2.9%). Both are real but minor.
 * **io_uring shows no inversion and saturates near depth 16**: d1 26,644,
-  d4 166,671, d16 287,764, d64 291,082 ops/s — but d64 buys no throughput, raises the median
-  (p50 73,670 → 328,608 ns, 4.5x) and raises p95 3.3x (112,398 → 367,044 ns).
-* **Backpressure behaves as bounded admission**: in the saturation cases the
+  d4 166,671, d16 287,764, d64 291,082 ops/s — but d64 buys no throughput and costs
+  tail latency: the medians of the per-repetition p50/p95 in the table above move
+  73,670 → 328,608 ns (4.5x) and 112,775 → 453,236 ns (4.0x) from d16 to d64.
   full window is accepted and the rest rejected with `would_block` (200
   rejections per 200 rounds), `max_outstanding` = 16, no other error kind.
 
@@ -277,20 +280,24 @@ there) plus any unresolved mapping; it is quoted as an upper bound on the kernel
 share, not as a measured kernel fraction.
 
 Top in-binary symbols by self percentage (resolved with `addr2line`, since perf
-does not symbolise the main DSO here): `RequestScope::take` 1.3% across three
-addresses, `RequestCore::occupancy()` 0.9% across three, `ThreadPoolBackend::worker_loop`
-0.8%, `submit_read` 1.2% across two, `publish_one` 0.5% — i.e. a flat profile of
-mutex-guarded bookkeeping with no single dominant function.
+does not symbolise the main DSO here, self percentages summed across addresses):
+`RequestScope::take` 1.74% across three, `ThreadPoolBackend::submit_read` 1.47%
+across three, `RequestCore::occupancy()` 1.24% across three,
+NOPE
 
 ### 5.2b Per-operation mutex traffic (LD_PRELOAD probe, test-side)
 
 A test-side shim interposes `pthread_mutex_lock`; an added `pthread_mutex_trylock`
 counts one *contended* acquisition. Source: `logs/mutex_probe.c`; output:
-`logs/attribution.txt`. The shim perturbs every lock, and its effect on throughput is
-configuration-dependent: measured against the baseline medians it ranges from
-**−18.4% (d16 w1) to +6.5% (w4)**, with +3.3% (w8), +5.1% (io_uring d16) and
-−5.1% (d1 w1); each probe configuration has a single repetition. Only counts and
-rates from this probe are used anywhere in this report.
+`logs/mutex-probe.txt` (the table below); the re-run in `logs/attribution.txt` reports
+the same shape with slightly different counts. The shim perturbs every lock, and
+its effect on throughput is configuration-dependent. Captured while the v1 medians
+were still the baseline, it ranges against *those* from −18.4% (d16 w1) to +6.5%
+(w4), with +3.3% (w8), +5.1% (io_uring d16) and −5.1% (d1 w1); recomputed against
+the authoritative v2 medians the same runs are +2.2% / +6.7% / +2.5% / +10.8% /
+−3.0%. Each probe configuration has a single repetition, so neither range is a
+distribution. Only counts and rates from this probe are used anywhere in this
+report; no throughput figure from it is compared with the baseline binary.
 
 | Case | lock acquisitions | per phase-op | contended | contended rate |
 |---|---|---|---|---|
@@ -313,22 +320,22 @@ Two consequences:
 ### 5.3 CPU-placement discriminator
 
 Pinning to fewer or distinct physical cores changes the w4 result materially but
-never approaches w1: w4 unpinned 115,383 ops/s (single repetition each, placement
-section of `logs/attribution.txt`) vs 152,315 on two physical cores (+32%) and
-144,196 on four distinct cores, against w1 at 258,545-259,389 in the same
-section. So placement is a contributing factor, not the cause.
-
-### 5.4 Bottleneck records
-
-```text
+never approaches w1. From the committed capture (`logs/attribution.txt`, placement
+section; one repetition per configuration, so these are single-run values, not
+medians): w4 unpinned **111,787 ops/s**, w4 on two physical cores (`taskset -c 0-3`)
+**178,913** (+60%), w4 on four distinct cores (`0,2,4,6`) **162,547** (+45%), against
+w1 at **226,830** unpinned, **231,260** on one physical core (`0,1`) and **220,892**
+on two distinct cores (`0,2`) in the same section. Pinning therefore recovers a large
+part of the w4 penalty, but w4 still stays below w1 and w1 is insensitive to
+placement — so placement is a contributing factor, not the cause.
 BOTTLENECK_ID = B-G0-01
 OBSERVED_SYMPTOM = the ThreadPool request path costs ~27x the wrapped operation
   at single outstanding (p50 24,597 ns vs 912 ns) and ~10 syscalls per operation
   in steady state at every depth.
 MEASURED_COST = 1 eventfd signal write + ~2 eventfd drain reads + ~1 poll +
   ~5 futex per completed operation (d16/w1); 1 io_uring_enter/op for uring and
-  1 pread/op for direct. 46-52% of process samples are kernel-side.
-WORKLOAD_AND_PROFILE = W02-{threadpool,uring}-4k-*, W01-read_at-4k-seq;
+  1 pread/op for direct. The `[unknown]` DSO bucket — an upper bound on the kernel
+  share, not a measured kernel fraction — is 47.5% for w4 (section 5.2).
   strace -c / strace -y in logs/attribution.txt.
 SOURCE_LOCATION = src/async/threadpool_backend.cpp (completion signal, work_mtx_/
   work_cv_ handshake), src/async/detail/progress_source.cpp and
@@ -356,8 +363,8 @@ BOTTLENECK_ID = B-G0-02
 OBSERVED_SYMPTOM = ThreadPool throughput inverts with worker count at depth 16:
   w1 220,366 > w4 111,757 > w8 108,043 ops/s, while CPU utilisation rises
   134.6% -> 181.4% -> 182.7% and p50 latency rises 69,183 -> 134,187 -> 136,811 ns.
-MEASURED_COST = 1.97x throughput loss and 2.7x CPU per operation (6.11 -> 16.23 µs)
-  from w1 to w4; ideal w4 would be ~880,000 ops/s.
+MEASURED_COST = 1.97x throughput loss and 2.6x CPU per operation (6.18 -> 16.91 µs as
+  the median of the per-repetition `cpu_s/wall_s ÷ ops_per_sec`)
 WORKLOAD_AND_PROFILE = W02-threadpool-4k-d16-{w1,w4,w8}; perf stat per-op
   counters; perf record DSO/symbol attribution; strace; the lock probe.
 SOURCE_LOCATION = src/async/detail/request_core.cpp (single mutex_ guarding
@@ -380,8 +387,8 @@ ALTERNATIVE_EXPLANATIONS =
       ops/s (-0.5%) and d64 135,964 vs 146,340 (-7.1%). The harness's FIFO
       consumer is not the cause.
   (d) CPU placement / SMT sharing -> contributing, not causal: pinning w4 to two
-      physical cores recovers 32% (115,383 -> 152,315) but stays far below w1
-      (258,545-259,389), and w1 is placement-insensitive.
+      physical cores recovers 60% (111,787 -> 178,913) but stays below w1
+      (226,830-231,260) in the same capture, and w1 is placement-insensitive.
   (e) O(capacity) slot scans -> B-G0-03/04, both <=3% with one capacity varied at
       a time.
   (f) The submitter is the hard ceiling -> not supported: the same submitter
@@ -390,9 +397,9 @@ DISCRIMINATING_EXPERIMENT = worker dose-response at fixed depth and work per
   operation; per-op instruction/cycle/cache counters; per-call futex blocking
   time; an LD_PRELOAD lock probe separating acquisitions from contended
   acquisitions; a completion-order variant; a CPU-placement sweep.
-RESULT = instructions/op constant (14.1k) while cycles/op 10.5k -> 12.8k -> 19.9k
-  and cache-misses/op 154 -> 261 -> 550 (IPC 1.35 -> 0.71); 18-45 lock
-  acquisitions per operation with no correlation between contended rate and
+RESULT = instructions per recorded operation essentially constant (15,011 -> 14,818 ->
+  14,761) while cycles rise 11,255 -> 13,517 -> 21,780 and cache misses rise
+  187 -> 296 -> 603 (IPC 1.33 -> 1.10 -> 0.68), all from the committed captures;
   throughput; ordering and contention both refuted by experiment.
 CONFIDENCE = medium for the mechanism (coherence/stall traffic is inferred from
   cache-miss counts, IPC and the placement result; cross-core invalidation counts
@@ -494,7 +501,7 @@ CONFIDENCE = high.
 | Allocation count per operation | No public allocation counter exists | `LD_PRELOAD` interposition on `malloc`/`free` (test-side only), or a derived counter in an instrumentation build; RSS is recorded today as a coarse substitute |
 | Mutex hold time | `perf lock` needs kernel support unavailable at `perf_event_paranoid=2`; `context-switches:u`/`cpu-migrations:u` read 0 | `LD_PRELOAD` shim timing `pthread_mutex_lock`/`unlock` per thread (the acquisition *count* probe already exists in `logs/`), or a test-side instrumentation build |
 | Cross-core cache-line transfers | No counter for invalidations is exposed | `perf stat` of platform-specific coherence events if permitted, or an instrumented layout experiment |
-| Kernel-side symbol attribution | Kernel symbols hidden at this `perf_event_paranoid` | `perf` with kernel symbols / `ftrace` where permitted; the kernel *share* (46-52%) is measured |
+| Kernel-side symbol attribution, and the kernel share itself | Kernel symbols are hidden at this `perf_event_paranoid`; the `[unknown]` DSO bucket mixes kernel samples with unresolved mappings, so the kernel share is **not separable** here (the bucket is only an upper bound: 47.5% for w4) | `perf` with kernel symbols / `ftrace` where permitted would separate them |
 | Physical storage device behaviour | WSL2 `Virtual Disk` in a VHDX | Re-run the same frozen matrix on a native Linux host with a known device |
 | Page-cache residency per page | Not exposed by the API | `mincore()` in a test-side probe, or `smaps`/`fincore` sampling between phases |
 | Per-thread CPU time | `pidstat` (sysstat) not installed | Read `/proc/<pid>/task/*/stat` from a harness-side sampler |
