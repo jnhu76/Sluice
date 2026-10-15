@@ -566,7 +566,8 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #        path reappearing.
 #    33. B2 (#395) public release-edge mutants: each release edge carries its
 #        own mutant.  MutConsumeKeepsBind (take_result forgets the binding
-#        release) must die on InvReleasedNotLive from its own edge;
+#        release) and MutDiscardKeepsBind (discard/destruction forgets it)
+#        must each die on InvReleasedNotLive from their own edge;
 #        MutConsumeUnpublished (consume runs before publication completes)
 #        must die on InvConsumeAfterPublish and MutDiscardInflight (public
 #        discard/destruction accepts an inflight publication) on
@@ -608,6 +609,7 @@ run_clean rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg Requ
 echo "== Stage B2: RequestCore public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) =="
 run_violate rcore-mut-consume-keeps-bind RequestCoreMutConsumeKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-consume-unpublished RequestCoreMutConsumeUnpublished.cfg RequestCore InvConsumeAfterPublish
+run_violate rcore-mut-discard-keeps-bind RequestCoreMutDiscardKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg RequestCore InvDiscardAfterPublish
 
 #   Stage C1 (#396/#433): ObserverCore, the host-neutral observer delivery

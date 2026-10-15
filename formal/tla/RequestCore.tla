@@ -124,6 +124,11 @@
 (*   release legal in the model is removed, because production deleted it *)
 (*   in F2 and discard_public_result refuses that window (not_visible_yet *)
 (*   -> the nonterminal-release diagnostic).                              *)
+(*   MutDiscardKeepsBind    discard forgets to release the binding;       *)
+(*                          discarded[] records the release while bind    *)
+(*                          stays live, so InvReleasedNotLive is the kill *)
+(*                          (the discard-edge sibling of                  *)
+(*                          MutConsumeKeepsBind)                          *)
 (*   MutDiscardInflight     public discard accepts an inflight publication; *)
 (*                          discarded[] makes "was publicly discarded" a   *)
 (*                          per-identity fact stage cannot express,        *)
@@ -151,6 +156,7 @@ CONSTANT MutIgnoreClose,
           MutReadyBeforePayload,
           MutConsumeKeepsBind,
           MutConsumeUnpublished,
+          MutDiscardKeepsBind,
           MutDiscardInflight
 
 Slots == {"s0", "s1"}
@@ -433,7 +439,9 @@ DiscardPublic(s) ==
   /\ discarded' = [discarded EXCEPT ![Identity(s)] = TRUE]
   /\ stage' = [stage EXCEPT ![Identity(s)] =
                  IF stage[Identity(s)] < 3 THEN 3 ELSE stage[Identity(s)]]
-  /\ bind' = [bind EXCEPT ![s] = FALSE]
+  /\ IF MutDiscardKeepsBind
+       THEN UNCHANGED bind
+       ELSE bind' = [bind EXCEPT ![s] = FALSE]
   /\ UNCHANGED <<phase, gen, term, exec, ctl, pub, claimed, intent, choices,
                  closed, health, wake, acceptsAfterClose, acceptsAfterHealth, execRevived,
                  acceptCount, chosenIds, reclaimLog, consumed, pubDoneIds>>
