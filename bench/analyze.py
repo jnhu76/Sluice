@@ -172,20 +172,22 @@ def main() -> int:
     print()
     print("## pre-declared comparisons")
 
+    primary = {k: v for k, v in by_case.items() if "diagnostics" not in k[0]}
+
     def case_ops(case_id):
-        for (source, cid), group in by_case.items():
+        for (source, cid), group in primary.items():
             if cid == case_id and "NOT_RUN" not in group[0].get("failure", ""):
                 return statistics.median([r["ops_per_sec"] for r in group])
         return None
 
     def case_lat(case_id, field="lat_p50_ns"):
-        for (source, cid), group in by_case.items():
+        for (source, cid), group in primary.items():
             if cid == case_id and "NOT_RUN" not in group[0].get("failure", ""):
                 return statistics.median([r[field] for r in group])
         return None
 
     def case_field(case_id, field):
-        for (source, cid), group in by_case.items():
+        for (source, cid), group in primary.items():
             if cid == case_id and "NOT_RUN" not in group[0].get("failure", ""):
                 return statistics.median([r[field] for r in group])
         return None
@@ -200,7 +202,7 @@ def main() -> int:
     direct_p50 = case_lat("W01-read_at-4k-seq")
     tp1_p50 = case_lat("W02-threadpool-4k-d1-w1")
     show("Q1 direct vs request-path single outstanding",
-         f"{direct / tp1:.1f}x throughput, {direct_p50 / tp1_p50:.1f}x p50 latency")
+         f"{direct / tp1:.1f}x throughput, {tp1_p50 / direct_p50:.1f}x p50 latency")
     show("Q1 direct 4k p50 ns", f"{case_lat('W01-read_at-4k-seq'):.0f}")
     show("Q1 threadpool 4k d1 p50 ns", f"{case_lat('W02-threadpool-4k-d1-w1'):.0f}")
     for case_id in ["W02-threadpool-4k-d1-w1", "W02-threadpool-4k-d4-w4",
