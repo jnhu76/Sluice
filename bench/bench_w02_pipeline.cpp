@@ -20,6 +20,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <deque>
 #include <memory>
@@ -636,7 +637,10 @@ int main() {
         p.label_suffix = "-scope64";
         cases.push_back(p);
     }
-    {
+    // The core-capacity isolation was added after the measured matrix as an
+    // attribution diagnostic, so it is opt-in: a default rebuild reproduces the
+    // frozen case list exactly.
+    if (std::getenv("G0_DIAGNOSTICS") != nullptr) {
         PipelineParams p;
         p.backend = &threadpool;
         p.block_size = 4096;
