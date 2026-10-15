@@ -238,9 +238,6 @@ int case_read_at(const bench::EnvConfig& cfg, std::size_t order, const std::stri
     return bench::run_case_reps(
         meta, cfg, order,
         [&](std::size_t, std::string& failure) {
-            if (evict) {
-                evict_page_cache(path);
-            }
             auto opened = open();
             if (!opened.has_value()) {
                 failure = "open failed";
@@ -263,6 +260,11 @@ int case_read_at(const bench::EnvConfig& cfg, std::size_t order, const std::stri
                     failure = "fixture content mismatch at offset index " + std::to_string(index);
                     return false;
                 }
+            }
+            // Eviction is the last preparation step so the probe reads cannot
+            // warm pages that the timed phase is supposed to find cold.
+            if (evict) {
+                evict_page_cache(path);
             }
             return true;
         },
