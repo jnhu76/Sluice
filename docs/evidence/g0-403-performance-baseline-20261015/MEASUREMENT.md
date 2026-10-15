@@ -397,19 +397,20 @@ AFFECTED_REQUIREMENTS = PROG-01, PROG-03, PROG-04, W-03.
 PROOF_PRESERVATION_OBLIGATIONS = n/a until a cause is established.
 ```
 
-## 6. What is NOT_OBSERVABLE on this host
+## 6. What is NOT_OBSERVABLE on this host, and how it could be obtained
 
-* Allocation count per operation — no public counter; RSS is recorded instead.
-* Mutex hold time / lock contention directly — `perf lock` tracing and
-  `context-switches:u`/`cpu-migrations:u` are unavailable at
-  `perf_event_paranoid=2`; contention is inferred from the worker dose-response,
-  per-op stall counters and futex blocking time.
-* Kernel-side symbol attribution — kernel symbols are hidden; the kernel share is
-  measured (46-52%) but its internal split is not.
-* Physical storage device behaviour — WSL2 `Virtual Disk` inside a VHDX.
-* Page-cache residency directly — only the hot-vs-`fadvise` latency difference.
-* `pidstat`-style per-thread CPU — the tool is not installed; process CPU time is
-  used instead.
+Each row states the blocker and the non-invasive measurement that would close it;
+none of these methods changes production code.
+
+| Metric | Why not observable here | Non-invasive method that would measure it |
+|---|---|---|
+| Allocation count per operation | No public allocation counter exists | `LD_PRELOAD` interposition on `malloc`/`free` (test-side only), or a temporary derived counter in an instrumentation build; RSS is recorded today as a coarse substitute |
+| Mutex hold time / contention directly | `perf lock` needs kernel support unavailable at `perf_event_paranoid=2`; `context-switches:u` and `cpu-migrations:u` read 0 for this process | `LD_PRELOAD` shim timing `pthread_mutex_lock`/`unlock` per thread, or a test-side instrumentation build accumulating hold time; today it is inferred from the worker dose-response, per-op stall counters and futex blocking time |
+| Kernel-side symbol attribution | Kernel symbols are hidden at this `perf_event_paranoid` | `perf` with kernel symbols/`ftrace` where permitted; the kernel *share* (46-52%) is measured even though its internal split is not |
+| Physical storage device behaviour | The device is a WSL2 `Virtual Disk` inside a VHDX; the host medium is not visible from inside the distribution | Re-run the same frozen matrix on a native Linux host with a known device, keeping the harness and case ids unchanged |
+| Page-cache residency per page | Not exposed by the API | `mincore()` in a test-side probe, or `smaps`/`fincore` sampling between phases; today only the hot-vs-`fadvise` latency difference is evidence |
+| Per-thread CPU time | `pidstat` (sysstat) is not installed | Read `/proc/<pid>/task/*/stat` from a harness-side sampler, or install sysstat |
+| Segmented queueing / submission / completion latency | `AsyncStats` counts calls but attaches no timestamps, and no stage clock exists on the public surface | Test-side timestamps around the submit and consume calls in the harness, plus a derived instrumentation build for the in-between stages; the end-to-end submit-to-consume distribution is what is recorded today |
 * **Segmented queueing / submission / completion latency — NOT MEASURED in G0.**
   `AsyncStats` counts calls but attaches no timestamps, and the public surface
   exposes no per-stage clock, so splitting an operation's latency into
