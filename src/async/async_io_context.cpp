@@ -241,7 +241,9 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
         rejection.has_value()) {
         return make_unexpected<Request<std::size_t>>(*rejection);
     }
+#if !defined(SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED)
     std::lock_guard<std::mutex> lk(access_mtx_);
+#endif
     if (!backend_)
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_read(op);

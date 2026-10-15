@@ -763,6 +763,120 @@ do
                                 false, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
 end
 
+-- #527 (F6-F13) File-owner moves against outstanding accepted borrows. The
+-- target compiles the two core TUs itself so the named move mutation build
+-- can flip the move constructor alone; the async TUs stay in production
+-- shape (no internal-testing seam).
+do
+    local function file_move_borrow_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_includedirs(R .. "include", R .. "src/async")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/file_move_borrow_test.cpp",
+                R .. "src/file_resource.cpp",
+                R .. "src/blocking_file.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    file_move_borrow_target("file_move_borrow_test", false)
+    if has_config("liburing") then
+        file_move_borrow_target("file_move_borrow_uring_test", true)
+    end
+    -- The move mutant closes the native descriptor only at the moves the
+    -- oracle performs with an outstanding accepted borrow (the suite arms it
+    -- around exactly those statements), so files open and accept normally and
+    -- the kill lands on post-move observations: deterministically on "second
+    -- read accepted through the moved owner", where the closed moved-to owner
+    -- rejects before any syscall, and on the pool profile additionally on the
+    -- settling-payload arm whenever the worker's pread resolves after the
+    -- close. On the ring a pre-submitted op keeps succeeding because the
+    -- kernel holds its own file reference, so the payload arm stays
+    -- unobservable there by construction while the deterministic arm still
+    -- kills.
+    file_move_borrow_target("file_move_borrow_mut_move_closes_native", false,
+                            "SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE")
+    if has_config("liburing") then
+        file_move_borrow_target("file_move_borrow_uring_mut_move_closes_native", true,
+                                "SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE")
+    end
+end
+
+-- #527 (F6-F14) concurrent submissions through one context. Same
+-- self-contained seam-build shape as the ownership target: the submit pause
+-- gates and the core snapshot need the internal-testing define.
+do
+    local function submit_concurrency_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/submit_concurrency_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    submit_concurrency_target("submit_concurrency_test", false)
+    if has_config("liburing") then
+        submit_concurrency_target("submit_concurrency_uring_test", true)
+
+        -- The unserialized-submit mutation drops the acceptance
+        -- serialization in the context submit path and must be killed by the
+        -- reserve-window discriminator: the second submitter's arrival at its
+        -- submission call is witnessed first, and under the mutation its
+        -- reservation parks at the same gate, so the violated snapshot is
+        -- stable and cannot be missed by the bounded poll. Executed and
+        -- recorded manually, never run as a regular test.
+        submit_concurrency_target("submit_concurrency_uring_mut_submit_unserialized", true,
+                                  "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
+    end
+    submit_concurrency_target("submit_concurrency_mut_submit_unserialized", false,
+                              "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
+end
+
 -- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.

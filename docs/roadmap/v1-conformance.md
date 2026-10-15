@@ -2426,3 +2426,78 @@ fault injection`) instead of folding into the passed line, following the
 `semantic_errno_mapping_test.cpp` attempted-case precedent. Matrix re-run at
 the corrected head: liburing=y 68/68, liburing=n 53/53, both mutant kinds
 red on both profiles (six admission failures / two terminal failures).
+
+## 2026-10-15 Post-F6 deferred debt: LIFE-01 move oracle and THREAD-01 concurrent-submit corner (#527)
+
+Executes both #527 work items (F6-F13, F6-F14). Neither is a conformance
+gap: both clauses' closure evidence stands from the F6 requirements matrix;
+these strengthen evidence directness only. `F6 = CLOSED_ACCEPTED` stands.
+
+`tests/file_move_borrow_test.cpp` (both backends, production shape) drives
+the legal interleavings of the borrow contract's move clause: a read accepted
+before the owner move-constructs settles the stored payload through the moved
+descriptor and the new owner closes only after acquired terminal; a second
+submission initiated through the moved owner at its new address settles its
+own region beside the still-outstanding first borrow. Illegal interleavings
+(close/move-assign over the borrowed object) stay caller obligations and are
+deliberately not driven. Mutation build `SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE`
+closes the native descriptor only at the two moves the oracle performs with an
+outstanding accepted borrow (the suite arms a mutant-only flag around exactly
+those statements, so `File::open` and acceptance run normally). The kill lands
+on post-move observations: deterministically on "second read accepted through
+the moved owner" — the closed moved-to owner rejects before any syscall — and
+on the pool profile additionally on the settling-payload arms whenever the
+worker's pread resolves after the close. After the named kills the production
+fail-fast aborts (exit 134) on the abandoned accepted borrow at teardown, a
+second, independent detection. A kernel-ring variant is offered as well: its
+payload arm stays unobservable there by construction (the kernel holds its own
+file reference for an already-submitted ring op, so the outstanding read keeps
+settling), while the deterministic second-submission arm still kills.
+
+`tests/submit_concurrency_test.cpp` (both backends, internal-testing seam for
+the submit pause gates and core snapshot) pins the concurrency matrix's
+concurrent-submission corner: a reserve-window discriminator (a second
+submitter can neither reserve nor complete inside another submitter's
+reserve-to-accept window, observed via the core snapshot with the public
+consequences asserted after release), a four-thread barrier corner (all
+submissions accepted, identities pairwise distinct while simultaneously live,
+each settling exactly its own region, stats exact), and a saturated capacity
+corner (with no driver publishing, exactly the capacity accepts and every
+other concurrent submission reads `would_block` with no other spelling).
+No sleep-based synchronization: pause gates, start barriers and bounded
+progress observation only. The second submitter's arrival at its submission
+call is witnessed before the window is judged — a scheduler that never runs
+it converts to an explicit precondition failure instead of a vacuous pass —
+and under the mutation the second reservation parks at the same gate, so the
+violated snapshot is stable and the bounded poll cannot miss it; the only
+remaining nondeterminism is the arrival wall-time, which the witness bound
+turns into that precondition failure. This is a witnessed bounded
+discriminator, not a scheduler-independent proof that the second submitter
+must block (that would require mutex instrumentation and is not claimed).
+Mutation build `SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED` (drops the
+acceptance serialization in the context submit path) is killed by the
+reserve-window discriminator on both profiles (10/10 pool, 5/5 ring runs,
+arrival precondition never false-failing); TSan additionally reports the
+unserialized AsyncStats writes as a data race under it, while the correct
+code is TSan-clean.
+
+Matrix at the slice head: liburing=y 70/70, liburing=n 54/54; mutant builds
+red with the named assertions; TSan clean on correct code and racing under
+the mutant (clang 22 — the host lacks the gcc libtsan runtime); ASan+UBSan
+clean on both new suites; 20 consecutive runs of each concurrent test stable.
+PR #532 (review: REQUEST_CHANGES resolved by the corrected named killer
+recorded above and this ledger row).
+
+Review round 2 on PR #532: the LIFE-01 mutation previously fired inside the
+move that `File::open` performs into its Result, so every obtained File
+arrived closed and the kill landed on acceptance assertions rather than the
+adjudicated "borrow accepted, then owner moves" scenario. The mutation is now
+armed at exactly the two target moves (mutant-only flag, zero production
+footprint outside the mutation define), the kill arms are as recorded above,
+and a ring mutant variant was added since the deterministic arm is now
+observable there. The THREAD-01 window case gained the arrival witness
+described above, so an unscheduled second submitter can no longer produce a
+vacuous pass. Matrix re-run at the corrected head: liburing=y 70/70,
+liburing=n 54/54; both mutants red on both profiles with the named arms;
+20/20 stability per profile re-confirmed; TSan, ASan and UBSan re-run clean
+on the updated suites (clang — the host lacks the gcc sanitizer runtimes).
