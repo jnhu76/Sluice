@@ -1,0 +1,19 @@
+exit: 0
+# runner failure control
+command: bench/runner_failure_control.sh
+date: 2026-10-15T19:27:30+08:00
+git_head: 6929316661943be3a036e2522cc7ff1fb9985f1e
+# scenario P0: the unshimmed no-ring control still passes
+PASS: P0: the real no-ring control is accepted
+PASS: P1: fixture shims accepted when nothing is injected (measured): runner accepted the run
+PASS: P2: fixture shims accepted when nothing is injected (notrun): runner accepted the run
+PASS: N1: an empty capture with a zero exit: runner rejected the run (exit=1)
+PASS: N2: a non-zero exit with no capture: runner rejected the run (exit=1)
+PASS: N3: a crashing benchmark: runner rejected the run (exit=1)
+PASS: N4: a lost repetition: runner rejected the run (exit=1)
+PASS: N5: a lost case: runner rejected the run (exit=1)
+PASS: N6: a failure with no reason marker: runner rejected the run (exit=1)
+PASS: N7: a control run that claims success: runner rejected the run (exit=1)
+PASS: N8: a control run that hides a NOT_RUN case: runner rejected the run (exit=1)
+
+runner failure control: all 11 scenarios behaved as required
