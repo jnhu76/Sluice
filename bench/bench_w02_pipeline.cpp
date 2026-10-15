@@ -142,6 +142,10 @@ struct PipelineParams {
     // the pipeline depth is what lets a diagnostic case separate the scope's
     // per-take slot scan cost from the pipeline concurrency itself.
     std::size_t scope_capacity = 0;
+    // Backend request-slot capacity. Zero means "same as depth". Raising it
+    // while the pipeline depth stays fixed isolates the request core's
+    // O(capacity) slot scans (occupancy) from the concurrency itself.
+    std::size_t core_capacity = 0;
     std::string label_suffix;
 };
 
@@ -200,7 +204,10 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
     AsyncStats stats;
     std::string backend_failure;
     const std::size_t backend_capacity =
-        std::max(params.depth, params.scope_capacity != 0 ? params.scope_capacity : params.depth);
+        params.core_capacity != 0
+            ? params.core_capacity
+            : std::max(params.depth,
+                       params.scope_capacity != 0 ? params.scope_capacity : params.depth);
     auto backend =
         make_backend(*params.backend, backend_capacity, params.workers, backend_failure);
     if (backend == nullptr) {
@@ -627,6 +634,18 @@ int main() {
         p.workers = 4;
         p.scope_capacity = 64;
         p.label_suffix = "-scope64";
+        cases.push_back(p);
+    }
+    {
+        PipelineParams p;
+        p.backend = &threadpool;
+        p.block_size = 4096;
+        p.request_count = 20000;
+        p.depth = 16;
+        p.workers = 4;
+        p.scope_capacity = 16;
+        p.core_capacity = 64;
+        p.label_suffix = "-core64";
         cases.push_back(p);
     }
 

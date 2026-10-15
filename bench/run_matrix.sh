@@ -9,9 +9,10 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-out="${1:?usage: run_matrix.sh <outdir> [warmup] [measured]}"
+out="${1:?usage: run_matrix.sh <outdir> [warmup] [measured] [stage]}"
 warmup="${2:-2}"
 measured="${3:-7}"
+stage="${4:-all}"
 mode="release"
 
 mkdir -p "$out/raw" "$out/logs"
@@ -26,7 +27,7 @@ provenance() {
     echo "started=$(date -Is)"
     echo "git_head=$(git rev-parse HEAD)"
     echo "git_status_dirty=$(git status --porcelain | wc -l)"
-    echo "warmup=$warmup measured=$measured"
+    echo "warmup=$warmup measured=$measured stage=$stage"
     echo "host_manifest=host-manifest.txt"
     for profile in noring ring; do
         for target in bench_w01_direct bench_w02_pipeline bench_w03_external_loop; do
@@ -42,18 +43,23 @@ provenance() {
 
 provenance | tee "$out/matrix-run.log"
 
+# A benchmark process exits non-zero when any case failed; for the no-ring
+# profile that is the *expected* outcome for the io_uring cases, so the exit code
+# is recorded rather than treated as a script failure.
 run_case() {
     local label="$1" profile="$2" target="$3" output="$4"
     shift 4
-    local b
+    local b rc
     b="$(bin "$profile" "$target")"
     echo "== $label :: $profile/$target -> $output" | tee -a "$out/matrix-run.log"
     date -Is | tee -a "$out/matrix-run.log"
-    G0_JSONL="$out/raw/$output.jsonl" "$b" >"$out/logs/$output.log" 2>&1
-    echo "exit=$? records=$(wc -l <"$out/raw/$output.jsonl" 2>/dev/null || echo 0)" \
+    rc=0
+    G0_JSONL="$out/raw/$output.jsonl" "$b" >"$out/logs/$output.log" 2>&1 || rc=$?
+    echo "exit=$rc records=$(wc -l <"$out/raw/$output.jsonl" 2>/dev/null || echo 0)" \
         | tee -a "$out/matrix-run.log"
 }
 
+if [ "$stage" = "all" ] || [ "$stage" = "measured" ]; then
 # W-01 is profile-independent (core only); the no-ring binary is used.
 run_case "w01 direct" noring bench_w01_direct w01
 
@@ -62,6 +68,9 @@ run_case "w01 direct" noring bench_w01_direct w01
 run_case "w02 pipeline" ring bench_w02_pipeline w02
 run_case "w03 external loop" ring bench_w03_external_loop w03
 
+fi
+
+if [ "$stage" = "all" ] || [ "$stage" = "notrun" ]; then
 # Explicit NOT_RUN evidence for the io_uring cases in the no-ring profile. A
 # backend that is not in the build profile must be reported as unavailable, not
 # as a pass and not as a silent fallback.
@@ -69,6 +78,7 @@ G0_WARMUP=0 G0_MEASURED=1 run_case "w02 no-ring profile" noring bench_w02_pipeli
     w02-noring-notrun
 G0_WARMUP=0 G0_MEASURED=1 run_case "w03 no-ring profile" noring bench_w03_external_loop \
     w03-noring-notrun
+fi
 
 {
     echo "# load_after"

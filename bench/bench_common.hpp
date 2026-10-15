@@ -425,6 +425,9 @@ inline bool case_selected(const std::string& case_id) {
     if (filter == nullptr || *filter == '\0') {
         return true;
     }
+    if (filter[0] == '=') {
+        return case_id == (filter + 1);
+    }
     return case_id.find(filter) != std::string::npos;
 }
 

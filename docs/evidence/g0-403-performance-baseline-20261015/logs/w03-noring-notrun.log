@@ -1,0 +1,13 @@
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=0 measured_repetitions=1
+========================================================
+  [W03-threadpool-4k-d4-w4 rep=0] ops=20000 wall=0.3865s 51741 ops/s 202.1 MiB/s cpu=0.672s util=173.9% | lat p50=47441 p95=78506 p99=96866 max=173368 ns (n=20000)
+  [W03-uring-4k-d4 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1915s 104425 ops/s 407.9 MiB/s cpu=0.372s util=194.4% | lat p50=76787 p95=218320 p99=260340 max=443061 ns (n=20000)
+  [W03-uring-4k-d16 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+  [W03-threadpool-4k-d64-w4 rep=0] ops=20000 wall=0.1849s 108183 ops/s 422.6 MiB/s cpu=0.354s util=191.2% | lat p50=316959 p95=941736 p99=1116851 max=1700227 ns (n=20000)
+  [W03-uring-4k-d64 rep=0] FAILED: NOT_RUN_WITH_REASON: io_uring backend not present in this build profile
+
+=== W-03 complete, failing repetitions=3 ===
