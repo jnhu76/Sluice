@@ -1,0 +1,6 @@
+case_requested  = W02-uring-4k-d16
+measured_reps   = 0 (setup path only)
+bench_rc        = 0
+repetition_lines= 0
+syscalls_total  = 382
+verdict         = OK

@@ -1,16 +1,26 @@
 # SHA-256 manifest for the #403 flame-graph profiling evidence
-# generated: 2026-10-15T15:09:21Z
+# generated: 2026-10-15T16:10:23Z
 #
 # Section 1: committed artifacts (path relative to this directory).
 #           svg/ hashes verify the committed bytes only: flamegraph.pl iterates a
 #           Perl hash internally, so frame ordering can differ between regenerations
-#           of identical input (REPORT.md section 3, limitation 7).
-#           In *.run.log, host-specific prefixes are replaced with $SLUICE_ROOT,
-#           $EVIDENCE_DIR and $G0_DISK_DIR; nothing else in those logs was edited.
+#           of identical input (REPORT.md section 3, limitation 9).
+#           In *.run.log and *.strace.log, host-specific prefixes are replaced with
+#           $SLUICE_ROOT, $EVIDENCE_DIR and $G0_DISK_DIR; nothing else was edited.
 # Section 2: raw perf captures, deliberately NOT committed (about 371 MB);
-#           they are the input to tools/fold_stacks.sh.
+#           they are the input to tools/fold_stacks.sh. tools/verify_perf_captures.sh
+#           re-checks them against this section and reports their sample counts.
 
-84b9eee7510625985140144cc01ee437afe214b0f1f234fb89dcce2cead734c5  data/ATTRIBUTION.md
+e2f57a99fa365f3fe4fb7dceb27796e6ae8683d34d7e8dcfd191191e1c002b9b  REPORT.md
+b8df3032a3cc1d879ee8f55ef9ffc431b126132a1e15b4964a81b15022d11886  REPORT.superseded-v1.md
+a008626cef8fb37430cb3eaedec56770fba4e90d61aad6ca74a38834ce25a581  data/ATTRIBUTION.md
+84b9eee7510625985140144cc01ee437afe214b0f1f234fb89dcce2cead734c5  data/ATTRIBUTION.superseded-v1.md
+a5e81d1c24365b5b75a4f4c6f96d9174e54febeacd70c53583592dfd21c3e6b2  data/CASE-MEDIANS.md
+24f08160fe488248295ef97545e164abed01c997c97305bc45ce3426228f1ec9  data/INIT-COST.md
+aace6dfa3831ffc1adbff4d47b2060f30f14a139e756ff2ddf844228373e67ea  data/LOCK-EVENTS.md
+c9e86cd86e0e378cecb7a92288937689dd55c3fd368dcf765486bb656a560712  data/SUMMARY.md
+505acb245119dea22b74c9ff916a19d328a122ca3f5def0e8df8e3a2256c2022  data/SYSCALLS.md
+746eece2a4840021ffb0e93b421311442e6e9c3cab3454b948c92a4682e197ed  data/SYSCALLS.superseded-v1.md
 847c0cfe48158d2a7083d18319b179db09b79054ee7ffd93c6c9bed7b923c3eb  data/folded/w01-read-4k-seq.folded.gz
 0b7b82e7f0730e57d0af1840ceacde47b8258f114199c787795524a0ec77315a  data/folded/w01-read-4k-seq.tid.folded.gz
 e77ea73ac99cad8d1315c54fa4ee13c0ea95a41a63e24e962214e02a4aa72454  data/folded/w01-sync-data-4k.folded.gz
@@ -33,6 +43,13 @@ f9d32cca92870a4c7f44381eff02d73646e90c34a91646bae6e513a82ff33ada  data/folded/w0
 286df09a8ac6b41c8fd44372bd6e4346344cece1bdf71605a8d9c42182f82b64  data/folded/w03-tp-4k-d16-w4.tid.folded.gz
 23cd352257179f4d0336fc05f49d4f5a37752b43d0ee926e94fe68fe0a2ff64a  data/folded/w03-uring-4k-d16.folded.gz
 e8e4c7af75e0df76aeedbb51e72875d8999b38ce0989b753db220bd12adb3d60  data/folded/w03-uring-4k-d16.tid.folded.gz
+9845a41da5a4cdc83dd2a748c67ee667c75066afb0f26c45f4025e1698e30f3f  data/lock-events/w02-tp-4k-d16-w4.strace.log
+74f69b5881f264bb25e811852d4109af401e3b91f5423324e91893c6d820792c  data/lock-events/w02-tp-4k-d16-w4.strace.txt.gz
+a8064730665f8c7a70ba49a09ddadbc931c4c401f946934f4e469536ffdc7f47  data/lock-events/w02-tp-4k-d16-w4.verify.txt
+a9199a38fbda206d8f8ce7ecfae4a22e5dbecef011debf0e096b88fe56b2e151  data/lock-events/w02-uring-4k-d16.strace.log
+423e0c94837ebb938ee472fb26c0eda3be23c79423c3f15b60ccbdda268967ba  data/lock-events/w02-uring-4k-d16.strace.txt.gz
+5f60a8e8f689fa9f127a492501ccf48b8fae90f726f3d09fe69615b4fac77827  data/lock-events/w02-uring-4k-d16.verify.txt
+cf263c7232da65741e8387cbb1c1fcb388cf184628fdea08054f5b5165b4c505  data/perf/SAMPLE-COUNTS.md
 f1925be2c9248dad74e39262af0a238985fa13e318a660b6c3c8287d1bb2c9d5  data/perf/w01-read-4k-seq.jsonl
 66fdad15fc815525f6e2b887b32bad5b28ce7986f323ee8c16a9a02c1c958496  data/perf/w01-read-4k-seq.run.log
 0cc0d726fc59ed1dd09d497ca74e791cf7171342d87ab921c4bffe7a24419b42  data/perf/w01-sync-data-4k.jsonl
@@ -55,24 +72,41 @@ eb7d84d53b81931e86f0cd372186932137e4aaa9135bfeefdc1c76f326e9f4e1  data/perf/w02-
 fda846070efe859e9beb3c092eefb6b2397cd9021e0cee7bc13f5c0054ac5bed  data/perf/w03-tp-4k-d16-w4.run.log
 cef51db376e7364d245b89f6bc0cb0c183cf498abf6444f32d3444b2632ef19f  data/perf/w03-uring-4k-d16.jsonl
 9a5566ee86d593c0840eadf346b313e71e11e0ca21198877b67850e8e4d4cf02  data/perf/w03-uring-4k-d16.run.log
-c9e86cd86e0e378cecb7a92288937689dd55c3fd368dcf765486bb656a560712  data/SUMMARY.md
-746eece2a4840021ffb0e93b421311442e6e9c3cab3454b948c92a4682e197ed  data/SYSCALLS.md
+5164f586f1bd56ba0b92e7ac722092292b80013433c6b8ef288f4c16e34948af  data/syscalls/init/w01-read-4k-seq.init.log
+b2ccdf82486360aa0cd711cc7f0aea70376cda483232b3f5b665c3385d14f75e  data/syscalls/init/w01-read-4k-seq.init.strace.txt
+b72da824763207dcd0297401afb95393cf8c4a14b33836cbe1c19ba8190f5217  data/syscalls/init/w01-read-4k-seq.init.verify.txt
+ce80b47f87d6746d864cceab6187d1c49fdcd70a538838b3022c87731c0d29b1  data/syscalls/init/w02-tp-4k-d16-w1.init.log
+3598589e54fe3d1321604dadf90582aeb8374e4f3757230bb7813a91f6187580  data/syscalls/init/w02-tp-4k-d16-w1.init.strace.txt
+6c28706d5f5cf338fec5582968a772f4505200ff5e0e6cc94f6800f816568e24  data/syscalls/init/w02-tp-4k-d16-w1.init.verify.txt
+ce80b47f87d6746d864cceab6187d1c49fdcd70a538838b3022c87731c0d29b1  data/syscalls/init/w02-tp-4k-d16-w4.init.log
+637e112a2680f26748afbec1963466e62d65d98c1eff5c14d89e70394da2350c  data/syscalls/init/w02-tp-4k-d16-w4.init.strace.txt
+8266fe59b8af49b8334d2b42e55798ce05b38c023398a4ae2671a37a806f925b  data/syscalls/init/w02-tp-4k-d16-w4.init.verify.txt
+ce80b47f87d6746d864cceab6187d1c49fdcd70a538838b3022c87731c0d29b1  data/syscalls/init/w02-uring-4k-d16.init.log
+ff726a8860c5da321e9eb632cd7dacae8cad20f833becaa18f6a9ea33c3c7b5d  data/syscalls/init/w02-uring-4k-d16.init.strace.txt
+a885a56c7cff05388f0b8b5def4ba8dd5a106cd37fb5009b398676d7278e56bb  data/syscalls/init/w02-uring-4k-d16.init.verify.txt
+c591999fb1905a50d75e8ec84e94969f91809f2bbf9e0a6e5ca18a4c62bc95f6  data/syscalls/init/w03-tp-4k-d16-w4.init.log
+b47dd5e66f549516770f100f77339c6b50b73dbae1e774271a856645ca88710f  data/syscalls/init/w03-tp-4k-d16-w4.init.strace.txt
+2b814c51d18f71ec7b9370802477394cf72c6047c9573bf170a39fb429f33a2d  data/syscalls/init/w03-tp-4k-d16-w4.init.verify.txt
 7fd1ea811203c4eecc5607189f220f558e819a1eb01e6dc38d4fd86ca42dd101  data/syscalls/w01-read-4k-seq.jsonl
+10b15704adbcff7e98c8c91fc88b51a9a00940737cd0d078ffd062971854a773  data/syscalls/w01-read-4k-seq.syscalls.err
 ea707917ce0c867ecf84e0a2e7ce54b8dc3291bdc305ed20ab16605e47ac6739  data/syscalls/w01-read-4k-seq.syscalls.run.log
 d82e8dd997188a6e235b21a624796018b1758f96d67484a5bf40db98d2982e61  data/syscalls/w01-read-4k-seq.syscalls.txt
 7c3badec03b64bee82b0c9a2082fe32d3645e5bcb5bb49bfa49f0fb8c8da7fce  data/syscalls/w02-tp-4k-d16-w1.jsonl
+10b15704adbcff7e98c8c91fc88b51a9a00940737cd0d078ffd062971854a773  data/syscalls/w02-tp-4k-d16-w1.syscalls.err
 e41be7d3ce92df5e7f4268849693bd4f81a69be39ebea6b46955e3e5c6149d6b  data/syscalls/w02-tp-4k-d16-w1.syscalls.run.log
 655b07979d4dd23f9ea62c9243816e4023430f858a8ca3bb6696b31e22b89f00  data/syscalls/w02-tp-4k-d16-w1.syscalls.txt
 dfc952d14476edbbf3207e46ae6cae4d7e49ddc1ac527b1da025f3af16de8b04  data/syscalls/w02-tp-4k-d16-w4.jsonl
+10b15704adbcff7e98c8c91fc88b51a9a00940737cd0d078ffd062971854a773  data/syscalls/w02-tp-4k-d16-w4.syscalls.err
 e1496edc9dcbcb8fef987d3e8a7f3c0d0c6d2735f287e541c5a5ce5e10380d76  data/syscalls/w02-tp-4k-d16-w4.syscalls.run.log
 cd61023e7df1ab6d859131b333cc278570b7d055742253bd7d5fa483a208ffcd  data/syscalls/w02-tp-4k-d16-w4.syscalls.txt
 abafdcd477756b2f65e99a3b3a850dbe79f2edfd1b7a2e6fc330585cb4027009  data/syscalls/w02-uring-4k-d16.jsonl
+10b15704adbcff7e98c8c91fc88b51a9a00940737cd0d078ffd062971854a773  data/syscalls/w02-uring-4k-d16.syscalls.err
 017f5b9b7c9f93e587637a2f7b02fe8a6b5e2d0e8c2ea5fab60d58ac914da2ac  data/syscalls/w02-uring-4k-d16.syscalls.run.log
 79c93b007375f02b45f8f40bc6acda369fb17f19e183e876a20dda7412d860c2  data/syscalls/w02-uring-4k-d16.syscalls.txt
 28eb8ab4a6cb598f7bf70caa2202ff5363756014ddd3f7792f17cf9b03413097  data/syscalls/w03-tp-4k-d16-w4.jsonl
+10b15704adbcff7e98c8c91fc88b51a9a00940737cd0d078ffd062971854a773  data/syscalls/w03-tp-4k-d16-w4.syscalls.err
 f7b4928b323fcc4b4cbe1bb873811b3c87186492192109258f2a9dc76637648e  data/syscalls/w03-tp-4k-d16-w4.syscalls.run.log
 43787aa8edf3a96ca65b0a9fd854ff176038108968bb322273864a3d6b57d626  data/syscalls/w03-tp-4k-d16-w4.syscalls.txt
-b8df3032a3cc1d879ee8f55ef9ffc431b126132a1e15b4964a81b15022d11886  REPORT.md
 9613270a1b4a05514f2141ec7b2eddaf7cec7012949e8b5b054195b3098c5db6  svg-compact/w01-read-4k-seq.svg
 6972f76994874afc4f8f2617527ecdc3b7b45e03bf7bf851e656fc71ed1d9bb0  svg-compact/w02-tp-4k-d16-w4.svg
 78a78e3583923ed3edf758f822e00aa4c8aff5eaf4594e2becb3b312ef12e984  svg-compact/w02-uring-4k-d16.svg
@@ -99,13 +133,22 @@ d156f09691ede235557620022a99d68479047518e0aa155b177a1f346b5a6b2f  svg/w02-uring-
 2a2ca7c8708c4ddda12aad0b2ee0ce8df8e4c4d674523f27b05dc8a45e6ac3a5  svg/w03-tp-4k-d16-w4.threads.svg
 3753c8ffaaeb1b26c1d53ac097dd8e1f7e62ac705fb158c0a38c82d0b8530d22  svg/w03-uring-4k-d16.svg
 44b75b3b33b412abf5533c4e8477badc209bcc8fe1407b03dde64f18b10f1abe  svg/w03-uring-4k-d16.threads.svg
+d274db0588517a4429b020b204d3c4e58b19a301df26e867434eb4da96dfa1a4  tools/__pycache__/report_attribution.cpython-314.pyc
 ebaad5cee897f79a2afa793eed1f3734cb2bf5fc6808055f4a53a6f7a33fa1f2  tools/build_inline_view.py
-c353b5f52290ea5777b0992955ef1eafd36fcebfa35b08f1adfe3f7185172058  tools/capture_perf.sh
-6741d3ed2639a8b4dc9ccbdedf93ee52a2ed559e71ab50e5fc1c09439d1f29ef  tools/count_syscalls.sh
+bbb0e5ed1cdd7502e4260129418e09d907eeaaba42d24865201523c35c29c00a  tools/capture_perf.sh
+851e7cd3189ab711f6bcfb82b907d5a0624a57d96b04ecf86651a9d4d09925b0  tools/count_syscalls.sh
 edecab068cdf42b18662006bec8bbc8c23fb35b89d0707a656b4440b8732a757  tools/fold_stacks.sh
-1dc659f7cc557aafa5254ed4a64678870283a5546ed844fae1cdbbd2653b2196  tools/report_attribution.py
+4b073a57ec54b0486e482cc08662464af7f36786d3f71ac0daf222179f79fc6c  tools/measure_init_cost.sh
+2072f13798dbf54521d55b8cffbca475519fc3eabd3d321cd6d8056a33936764  tools/measure_lock_events.sh
+adef4f74c706314ba81419604ac0530e2e01950a317ecd9e8f8cdc93a3bdc179  tools/report_attribution.py
+39d6d33fad494b802b94d060626475229eac1a3e5e0c54e0bed5eb60b20fb0fb  tools/report_case_medians.py
+bbad17d94c03cffce2d2ad804bb6821e0460f3397a5bdc017dde2be7ad0bd61d  tools/report_init_cost.py
+fcd29709749eea273a5432295c96f069b5ca9f33772dcc8b90dc12b6dfa6a666  tools/report_lock_events.py
 cd999ea063367ed6cd69cfac8952f70add280a788cc7a6922c1cbb5a80ad5dd7  tools/report_self_cost.py
-bb5fbd8b800aa5005b52801f7e8c32481c0bc75cd402718f44cbc53fb9014af9  tools/report_syscalls.py
+7e6b950c67831b0505b57fbc4466fadc3ad8775b1a6fff7545a46aa0c6faf9ec  tools/report_syscalls.py
+d5c0fa02ca219e590c4eb4a66b60d436a20ceb69a478890d62a642087343984a  tools/verify_capture.py
+6f3b90c5770b0989893da31a93c347466c050777783c97994dc0e4ccaa67eb54  tools/verify_perf_captures.sh
+9750d62aa63e7f290505e26edc89ed25c1ab862f62b81ea224644fcafeecdef1  tools/write_manifest.sh
 
 # raw perf.data (not committed) — SHA-256, size in bytes, name
 e6d43cb38a63e18695a94f61dbfe99e3ef9e558cff292774fb81326e72a2e9e6  6479016  w01-read-4k-seq.data

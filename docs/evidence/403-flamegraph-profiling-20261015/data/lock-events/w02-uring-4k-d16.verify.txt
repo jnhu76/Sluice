@@ -1,0 +1,5 @@
+case_requested = W02-uring-4k-d16
+measured_reps  = 1
+bench_rc       = 0
+trace_lines    = 60009
+verdict        = OK

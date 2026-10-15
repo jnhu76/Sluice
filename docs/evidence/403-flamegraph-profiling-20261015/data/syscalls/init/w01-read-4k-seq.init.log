@@ -1,0 +1,9 @@
+========================================================
+G0 W-01 direct-execution benchmark
+warmup=0 measured_repetitions=0
+tmp_dir=/tmp/sluice-g0-prof
+disk_dir=/var/tmp/sluice-g0-prof
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+
+=== W-01 complete, failing repetitions=0 ===

@@ -1,0 +1,5 @@
+case_requested = W02-threadpool-4k-d16-w4
+measured_reps  = 1
+bench_rc       = 0
+trace_lines    = 417234
+verdict        = OK

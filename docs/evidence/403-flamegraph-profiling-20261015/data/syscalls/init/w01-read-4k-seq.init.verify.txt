@@ -1,0 +1,6 @@
+case_requested  = W01-read_at-4k-seq
+measured_reps   = 0 (setup path only)
+bench_rc        = 0
+repetition_lines= 0
+syscalls_total  = 2048
+verdict         = OK
