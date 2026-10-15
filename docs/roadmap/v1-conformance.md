@@ -2378,3 +2378,48 @@ arms), which is sufficient for the clause.
 `sufficient contracted surface` is established. `V1_RELEASE_READY=NO`; no
 release action taken; #390 remains open under its own gates; external use of
 retired surfaces remains UNKNOWN (owner decision at release planning).
+
+## 2026-10-15 Post-F6 deferred debt: LIFE-01 move oracle and THREAD-01 concurrent-submit corner (#527)
+
+Executes both #527 work items (F6-F13, F6-F14). Neither is a conformance
+gap: both clauses' closure evidence stands from the F6 requirements matrix;
+these strengthen evidence directness only. `F6 = CLOSED_ACCEPTED` stands.
+
+`tests/file_move_borrow_test.cpp` (both backends, production shape) drives
+the legal interleavings of the borrow contract's move clause: a read accepted
+before the owner move-constructs settles the stored payload through the moved
+descriptor and the new owner closes only after acquired terminal; a second
+submission initiated through the moved owner at its new address settles its
+own region beside the still-outstanding first borrow. Illegal interleavings
+(close/move-assign over the borrowed object) stay caller obligations and are
+deliberately not driven. Mutation build `SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE`
+(closes the native descriptor at every move) is killed at the acceptance
+assertions — under it every obtained File arrives closed because the move
+into the Result inside `File::open` fires first; no kernel-ring variant is
+offered because the payload arm is unobservable there (the kernel holds its
+own file reference for an already-submitted ring op).
+
+`tests/submit_concurrency_test.cpp` (both backends, internal-testing seam for
+the submit pause gates and core snapshot) pins the concurrency matrix's
+concurrent-submission corner: a reserve-window discriminator (a second
+submitter can neither reserve nor complete inside another submitter's
+reserve-to-accept window, observed via the core snapshot with the public
+consequences asserted after release), a four-thread barrier corner (all
+submissions accepted, identities pairwise distinct while simultaneously live,
+each settling exactly its own region, stats exact), and a saturated capacity
+corner (with no driver publishing, exactly the capacity accepts and every
+other concurrent submission reads `would_block` with no other spelling).
+No sleep-based synchronization: pause gates, start barriers and bounded
+progress observation only. Mutation build
+`SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED` (drops the acceptance
+serialization in the context submit path) is killed by the reserve-window
+discriminator on both ring profiles; TSan additionally reports the
+unserialized AsyncStats writes as a data race under it, while the correct
+code is TSan-clean.
+
+Matrix at the slice head: liburing=y 70/70, liburing=n 54/54; mutant builds
+red with the named assertions; TSan clean on correct code and racing under
+the mutant (clang 22 — the host lacks the gcc libtsan runtime); ASan+UBSan
+clean on both new suites; 20 consecutive runs of each concurrent test stable.
+PR #532 (review: REQUEST_CHANGES resolved by the corrected named killer
+recorded above and this ledger row).

@@ -748,11 +748,13 @@ do
     if has_config("liburing") then
         file_move_borrow_target("file_move_borrow_uring_test", true)
     end
-    -- The move mutant closes the native descriptor at the move: the
-    -- outstanding borrow settles against a closed fd and the payload
-    -- assertion kills it. A kernel-ring variant is not offered because the
-    -- kernel holds its own file reference for an already-submitted ring op,
-    -- so the close cannot be observed there.
+    -- The move mutant closes the native descriptor at every move, including
+    -- the move into the Result inside File::open, so every obtained File
+    -- arrives closed and the acceptance assertions ("read accepted before
+    -- the move", "first read accepted") are the named killers. A kernel-ring
+    -- variant adds no ring-specific evidence: the payload arm is unobservable
+    -- there because the kernel holds its own file reference for an
+    -- already-submitted ring op.
     file_move_borrow_target("file_move_borrow_mut_move_closes_native", false,
                             "SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE")
 end
