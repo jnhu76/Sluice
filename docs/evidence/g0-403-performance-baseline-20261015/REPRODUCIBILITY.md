@@ -55,6 +55,33 @@ Profile identity is asserted from dynamic dependencies, not from directory names
 only the ring builds depend on `liburing.so.2`, and `bench_w01_direct` is
 byte-identical across profiles because W-01 has no async dependency.
 
+## Provenance of each committed raw file
+
+The authoritative v2 files are named canonically (`raw/w01.jsonl`, `w02.jsonl`,
+`w03.jsonl`, `w02-diagnostics.jsonl`) while the run log records them with a `v2`
+suffix, because the runner accepts a suffix to keep revisions apart. **The
+committed files were renamed after their runs; renaming does not change content,
+and the sha256 list in `COMMIT.txt` identifies exactly the bytes committed.** File
+mtimes equal the end of the corresponding run block in `matrix-run.log`.
+
+Because the log is append-only across stages, it contains more invocations than
+the six committed evidence files. What the extras are:
+
+| Log entry | Status |
+|---|---|
+| v2 primary block (17:47:30-17:50:17), outputs `w01v2`/`w02v2`/`w03v2` | **Authoritative** for `raw/w01.jsonl`, `raw/w02.jsonl`, `raw/w03.jsonl` |
+| `w02-diagnostics` at 17:59 (172 records, exit 0) | **Authoritative** for `raw/w02-diagnostics.jsonl` |
+| no-ring controls in the same v2 block | **Authoritative** for the two `*-noring-notrun.jsonl` files |
+| an earlier diagnostics run at 17:44 (exit 1) | **Superseded and deleted**: it contained the buffer-aliasing failures described in `MEASUREMENT.md` section 0. Its output is not committed. |
+| an earlier v2 build (binaries `bc238cca` / `161cacb4`) | **Superseded** by the authoritative build (`c1923010` / `60225bc7`) after the free-slot fix; only the authoritative binaries' outputs are committed. |
+| three no-op invocations at 17:58:39 / 17:58:47 | Runner stage-gating bug; they executed no case and produced no data. Fixed; the diagnostics stage no longer re-runs W-01. |
+
+The v2 runs were executed on a **dirty working tree** (`git_status_dirty=16..22`
+in the log). That tree's benchmark sources are identical to commit
+`BENCHMARK_HEAD_SHA` — verified by `git diff --stat <sha>..HEAD -- bench xmake`
+being empty — and all six measured binaries reproduce byte-identically from those
+sources, which is the property that matters for the evidence.
+
 ## Case selection
 
 `G0_CASE_FILTER` selects cases (substring, or `=ID` for an exact match);

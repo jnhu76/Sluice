@@ -197,7 +197,10 @@ def main() -> int:
     tp1 = case_ops("W02-threadpool-4k-d1-w1")
     show("Q1 direct 4k read ops/s (W01-read_at-4k-seq)", f"{direct:,.0f}")
     show("Q1 threadpool 4k single-outstanding ops/s", f"{tp1:,.0f}")
-    show("Q1 ratio direct / request-path single", f"{direct / tp1:.1f}x lower via request path")
+    direct_p50 = case_lat("W01-read_at-4k-seq")
+    tp1_p50 = case_lat("W02-threadpool-4k-d1-w1")
+    show("Q1 direct vs request-path single outstanding",
+         f"{direct / tp1:.1f}x throughput, {direct_p50 / tp1_p50:.1f}x p50 latency")
     show("Q1 direct 4k p50 ns", f"{case_lat('W01-read_at-4k-seq'):.0f}")
     show("Q1 threadpool 4k d1 p50 ns", f"{case_lat('W02-threadpool-4k-d1-w1'):.0f}")
     for case_id in ["W02-threadpool-4k-d1-w1", "W02-threadpool-4k-d4-w4",

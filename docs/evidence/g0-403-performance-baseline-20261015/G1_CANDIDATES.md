@@ -4,7 +4,7 @@
 [SLUICE-G0-403]
 REPORT_VERSION = g0-2
 BASE_SHA = dcc46266709e98d760b3be2957d18c09e1e55952
-RAW_EVIDENCE_SHA = see COMMIT.txt (revision 2: corrected oracle)691a3d3189b273893f02432368ec5542
+RAW_EVIDENCE_SHA = see COMMIT.txt (revision 2 lists both the v2 and retained v1 raw hashes)
 STAGE = C — G0 final decision
 ```
 
@@ -17,13 +17,13 @@ column names the measured cost, not a profiler hotspot.
 | Candidate | Measured evidence | Expected benefit | Semantic risk | Regression gate | Decision |
 |---|---|---|---|---|---|
 | **C1** Stop generating a progress notification for a completion when the notification source is already asserting readiness | 1.000 eventfd `write` per operation at every depth (strace; 3 writer threads x 20,000 writes / 20,000 ops), while the owner parked only 0.072 times/op at d16/w4 — so the large majority of signals wake nobody | Removes ~1 of ~9.9 syscalls/op plus its kernel work on the ThreadPool path (B-G0-01). Bounded: cannot close the 2.5x inversion | Internal signalling only; must preserve PROG-02 persistent readiness. No public surface change | Full ThreadPool+uring test matrix, progress/wake and observer suites, shutdown lifecycle, mutants; **progress/observer model re-validation** | `G1_CANDIDATE_READY` |
-| **C2** Remove global-mutex `occupancy()` queries from hot paths in favour of a derived, non-authoritative counter | `occupancy()` is 1.1% self in the w4 profile and takes the core mutex; called from `poll_progress`, `outstanding` and the worker completion path (B-G0-02/B-G0-04). Scan length alone is 4.3% | Removes one shared-mutex acquisition per completion/query from the path that the inversion lives on. Expected: a fraction of B-G0-02, to be measured | Must stay derived and non-authoritative; `outstanding()` public meaning unchanged | REQ-05 reclaim + publication suites, `request_core_protocol_test`, `request_core_publication_test`, both backend conformance suites | `G1_CANDIDATE_READY` |
+| **C2** Remove global-mutex `occupancy()` queries from hot paths in favour of a derived, non-authoritative counter | `occupancy()` is 1.1% self in the w4 profile and takes the core mutex; called from `poll_progress`, `outstanding` and the worker completion path (B-G0-02/B-G0-04). The scan length alone is **2.9%** (core-only isolation, 7 repetitions) | Removes one shared-mutex acquisition per completion/query from the path that the inversion lives on. Expected: a fraction of B-G0-02, to be measured | Must stay derived and non-authoritative; `outstanding()` public meaning unchanged | REQ-05 reclaim + publication suites, `request_core_protocol_test`, `request_core_publication_test`, both backend conformance suites | `G1_CANDIDATE_READY` |
 | **C3** Change the granularity of the single `RequestCore::mutex_` | B-G0-02 inverted as: the *contention* explanation is refuted (contended rate 4.93% in the fastest ThreadPool config vs 0.006% in the slowest, 0% for the fastest path of all) and the ordered-consumer explanation is refuted too (B-G0-07), leaving coherence/stall traffic as the leading explanation | Unknown after the refutation | HIGH: the mutex is the atomicity authority for acceptance, publication and reclaim | Would require the full REQ-01..06 evidence set plus model correspondence | `MORE_EVIDENCE_REQUIRED` — and the original premise is withdrawn; see §3 |
 | **C9** Reduce the number of separately locked steps per operation (18-45 acquisitions per 4 KiB read on every backend) | B-G0-06: 18.6 acquisitions/op with **zero** contention on the fastest path (io_uring d16), 21.2 (w4), 32.4 (w1), 45.0 (d1/w1); cache-misses/op grow 154→550 as threads are added | Fewer coherence events and a shorter submit-to-consume path per operation; the only candidate that targets the structural per-op cost rather than an execution policy | Moderate: every removed/merged step must keep the invariant it protected; a wrong merge is a correctness defect, not a slowdown | REQ-01..06 + publication/reclaim suites + both backend conformance suites + mutants | `G1_CANDIDATE_READY` (investigation-level: the first step is writing down the per-step invariant accounting, not changing code) |
 | **C4** RequestScope per-`take` slot scan | 0.8-2.0% (`-scope64` vs depth-matched control, only the scope capacity varied, 7 reps) | ≤2% | Low | Scope suites | `NOT_WORTH_OPTIMIZING` |
-| **C5** External-loop integration gap | uring d16: 144,144 (W-03) vs 303,295 (W-02) ops/s; threadpool 97,284 vs 112,027 | Unknown | Unknown | — | `MORE_EVIDENCE_REQUIRED` (B-G0-05: gap measured, cause not attributed) |
+| **C5** External-loop integration gap | uring d16: 143,620 (W-03) vs 287,764 (W-02) ops/s (2.0x); threadpool 95,938 vs 111,757 | Unknown | Unknown | — | `MORE_EVIDENCE_REQUIRED` (B-G0-05: gap measured, cause not attributed) |
 | **C6** io_uring queue depth > 16 | d64 288,424 ops/s (34.2% spread) with p95 428,113 ns vs d16 303,295 (6.8%) with p95 67,466 ns | None; deeper is neutral on throughput and 6.4x worse on p95 | — | — | `NOT_WORTH_OPTIMIZING` (execution-policy finding, must not become a contract) |
-| **C7** W-01 direct path | 1.00 `pread64`/op, p50 711 ns for 4 KiB on tmpfs | None identified | — | — | `NO_OPTIMIZATION_JUSTIFIED` |
+| **C7** W-01 direct path | 1.00 `pread64`/op, p50 912 ns for 4 KiB on tmpfs with real byte content | None identified | — | — | `NO_OPTIMIZATION_JUSTIFIED` |
 | **C8** Allocation/result-storage cost per request | No allocation counter exists (NOT_OBSERVABLE); RSS recorded per repetition and not a differentiator | Unknown | — | — | `MORE_EVIDENCE_REQUIRED` (no evidence either way) |
 
 No candidate requires amending the v1 root: C1, C2 and C3 are internal
@@ -69,17 +69,20 @@ a public-behaviour change, it leaves #403 and becomes a root amendment first.
 
 * **Real bottleneck.** Part of B-G0-02: the global core mutex is acquired on
   every completion and every progress/outstanding query, and each acquisition is
-  accompanied by an O(capacity) slot scan (`RequestCore::occupancy()`, 1.1% self
+  accompanied by an O(capacity) slot scan (`RequestCore::occupancy()`, ~1% self
   in the w4 profile, called from `ThreadPoolBackend::poll_progress` line 587,
   `ThreadPoolBackend::outstanding` line 774 and the worker completion path lines
-  834-846).
+  834-846). The scan's *own* length was measured at **2.9%** with concurrency
+  fixed and only the backend slot capacity raised 16 -> 64 (`-core64`, 7
+  repetitions); the cost that matters for contention is the mutex acquisition
+  around it, which this isolation deliberately does not remove.
 * **Affected workload.** W-02/W-03 on ThreadPool at depth ≥ 4 with workers ≥ 4;
   the uring backend also calls `poll_progress` but has no worker contention.
 * **Where the improvement comes from.** Removing an O(capacity) scan *and* its
   mutex acquisition from the completion and progress paths shortens the section
-  that all workers and the submitter serialise on. The scan length alone is worth
-  4.3% (measured); the mutex acquisition on top of it is the part that matters
-  for contention.
+  that all workers and the submitter serialise on. The scan's own length is 2.9%
+  (core-only isolation, 7 repetitions); the mutex acquisition on top of it is the
+  part that matters for the shared-cache-line traffic of B-G0-02.
 * **Metrics that could get worse.** `outstanding()`/`admission` diagnostics could
   become momentarily stale if the derived counter is not maintained exactly at
   the same linearization points; a wrong counter would be a correctness defect,
@@ -113,7 +116,7 @@ a public-behaviour change, it leaves #403 and becomes a root amendment first.
   explanation — the harness's ordered consumer head-of-line blocking — was also
   refuted by experiment (B-G0-07: any-ready consumption is -0.5% at d16).
 * **What survives.** B-G0-02's inversion and stall counters are still real and
-  still unexplained: 2.5x throughput loss from w1 to w4 with constant
+  still unexplained: 1.97x throughput loss from w1 to w4 with constant
   instructions/op, 1.9x cycles/op, 3.6x cache-misses/op and a 32% recovery from
   pinning to fewer cores. The lead explanation is now coherence/stall traffic
   from many shared-cache-line touches per operation, i.e. C9's territory rather
