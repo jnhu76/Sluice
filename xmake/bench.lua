@@ -1,8 +1,6 @@
--- G0 performance benchmark targets (issue #403). These are non-default targets:
--- they are not registered as tests and are not built by `xmake` / `xmake test`.
--- Each target depends on the shipped library targets, so the measured artifact
--- is the same archive the release build produces (no benchmark-specific
--- recompilation of library translation units).
+-- Performance benchmark targets. Non-default: not registered as tests and not
+-- built by `xmake` / `xmake test`; each depends on the shipped library targets,
+-- so the measured artifact is the same archive the release build produces.
 --
 -- Build:  xmake build -g bench -y
 -- Run:    G0_JSONL=<file> xmake run bench_w01_direct

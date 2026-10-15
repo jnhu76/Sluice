@@ -1,11 +1,5 @@
-// G0 W-02 workload: bounded RequestScope pipeline over the public
-// AsyncIoContext / ThreadPoolBackend / UringAsyncBackend surface (root W-02).
-//
-// The pipeline keeps a bounded sliding window of in-flight positional reads:
-// submit while the window has room, otherwise consume the oldest ticket and
-// reuse its buffer. Each in-flight request owns its own destination buffer, as
-// LIFE-01 requires. Backpressure (admission rejection at the bound) is counted,
-// not treated as an error.
+// W-02 bounded pipeline: a sliding window of in-flight positional reads; each
+// in-flight request owns its own destination buffer.
 
 #include "bench_common.hpp"
 
@@ -139,17 +133,13 @@ struct PipelineParams {
     std::size_t depth = 16;
     std::size_t workers = 4;
     bool saturating = false;
-    // Scope tracking capacity. Zero means "same as depth". Decoupling it from
-    // the pipeline depth is what lets a diagnostic case separate the scope's
-    // per-take slot scan cost from the pipeline concurrency itself.
+    // Scope tracking capacity; 0 means "same as depth". Varying it alone
+    // isolates the scope's per-take slot scan from the pipeline concurrency.
     std::size_t scope_capacity = 0;
-    // Backend request-slot capacity. Zero means "same as depth". Raising it
-    // while the pipeline depth stays fixed isolates the request core's
-    // O(capacity) slot scans (occupancy) from the concurrency itself.
+    // Backend request-slot capacity; 0 means "same as depth". Varying it alone
+    // isolates the request core's slot scans from the pipeline concurrency.
     std::size_t core_capacity = 0;
-    // Diagnostic: consume whichever request is ready first instead of the
-    // oldest. Discriminates a harness-side head-of-line explanation of the
-    // worker-count inversion from a library-side one.
+    // Diagnostic: consume whichever request is ready first instead of the oldest.
     bool any_ready_consume = false;
     std::string label_suffix;
 };
@@ -190,10 +180,8 @@ AsyncStats stats_diff(const AsyncStats& after, const AsyncStats& before) {
     return d;
 }
 
-// One bounded sliding-window pipeline phase. `instrument` adds per-operation
-// submit/settle timestamps; the uninstrumented variant is the throughput
-// measurement. `verify` additionally checks every returned byte range against
-// the file-content oracle (used by the separate correctness phase).
+// One bounded sliding-window pipeline phase; `instrument` adds per-operation
+// submit/settle timestamps and `verify` checks returned bytes against the oracle.
 PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& path,
                                bool instrument, bool verify) {
     PhaseResult phase;
@@ -238,9 +226,8 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
 
     PhaseResult result;
     if (params.saturating) {
-        // Backpressure shape: repeatedly fill the bound until admission refuses,
-        // then settle the accepted window. Rejection at the bound is a counted
-        // outcome, not a failure.
+        // Backpressure shape: fill the bound until admission refuses, then settle
+        // the accepted window; rejection at the bound is counted, not failed.
         const double start = bench::now_ns() * 1e-9;
         for (std::size_t round = 0; round < kSaturationRounds; ++round) {
             const std::size_t scope_capacity =
@@ -332,11 +319,8 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
     std::deque<Inflight> window;
     std::size_t submitted = 0;
     std::size_t completed = 0;
-    // A destination buffer is available only when no in-flight request holds it.
-    // A `submitted % depth` slot map is only correct while consumption is in
-    // submission order; the out-of-order diagnostic aliased two live requests
-    // onto one buffer, which the byte oracle caught. Slots are recycled through
-    // an explicit free list instead.
+    // A destination buffer becomes reusable only once the request holding it has
+    // settled: consumers may take results out of submission order.
     std::vector<std::size_t> free_slots(params.depth);
     for (std::size_t i = 0; i < params.depth; ++i) {
         free_slots[i] = i;
@@ -376,11 +360,8 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
                              std::to_string(completed);
             return result;
         }
-        // Selection: the preregistered default consumes in submission order
-        // (FIFO), as an ordered pipeline does. The diagnostic mode consumes
-        // whichever request reports published first, which prices the
-        // head-of-line wait that an ordered consumer pays when workers complete
-        // out of order.
+        // Default consumes in submission order; the diagnostic consumes whichever
+        // request reports published first.
         std::size_t victim = window.size();
         if (params.any_ready_consume) {
             for (std::size_t index = 0; index < window.size(); ++index) {
@@ -651,9 +632,7 @@ int main() {
     add_tp(4096, 16, 16, 4, true);
     add_uring(4096, 16, 16, true);
 
-    // Diagnostics: hold the pipeline depth fixed and vary only the scope
-    // tracking capacity, so the scope's per-take slot scan is isolated from the
-    // concurrency bound.
+    // Diagnostics vary one capacity at a time while the pipeline depth is fixed.
     {
         PipelineParams p;
         p.backend = &threadpool;
@@ -662,7 +641,7 @@ int main() {
         p.depth = 4;
         p.workers = 4;
         p.scope_capacity = 64;
-        p.core_capacity = 4;  // isolate the scope scan only
+        p.core_capacity = 4;
         p.label_suffix = "-scope64";
         cases.push_back(p);
     }
@@ -674,13 +653,11 @@ int main() {
         p.depth = 16;
         p.workers = 4;
         p.scope_capacity = 64;
-        p.core_capacity = p.depth;  // isolate the scope scan only
+        p.core_capacity = p.depth;
         p.label_suffix = "-scope64";
         cases.push_back(p);
     }
-    // The core-capacity isolation was added after the measured matrix as an
-    // attribution diagnostic, so it is opt-in: a default rebuild reproduces the
-    // frozen case list exactly.
+    // Opt-in: a default rebuild reproduces the frozen case list exactly.
     if (std::getenv("G0_DIAGNOSTICS") != nullptr) {
         PipelineParams p;
         p.backend = &threadpool;

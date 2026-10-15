@@ -1,6 +1,5 @@
-// G0 W-01 workload: direct-execution File I/O through the public
-// sluice::File / sluice::blocking surface, with no AsyncIoContext, worker,
-// request table or progress source (root W-01 / INV-02).
+// W-01 direct execution: the blocking File surface only; no AsyncIoContext,
+// worker, request table or progress source may appear in this translation unit.
 
 #include "bench_common.hpp"
 
@@ -261,8 +260,8 @@ int case_read_at(const bench::EnvConfig& cfg, std::size_t order, const std::stri
                     return false;
                 }
             }
-            // Eviction is the last preparation step so the probe reads cannot
-            // warm pages that the timed phase is supposed to find cold.
+            // Eviction is the last preparation step: probe reads otherwise warm
+            // pages the timed phase must find cold.
             if (evict) {
                 evict_page_cache(path);
             }
@@ -351,9 +350,8 @@ int case_write_at(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t or
     const std::string path = fx.write_4k;
     const std::size_t block = meta.block_size;
     const std::size_t count = meta.request_count;
-    // Distinct source content per pool slot, so a write that lands at the wrong
-    // offset is detectable; every slot's content is generated outside the timed
-    // region.
+    // Distinct content per pool slot, so a write that lands at the wrong offset
+    // is detectable; the pool is filled outside the timed region.
     const std::size_t pool_slots = std::min<std::size_t>(count, 1024);
     std::vector<std::byte> pool(pool_slots * block);
     for (std::size_t slot = 0; slot < pool_slots; ++slot) {
@@ -673,8 +671,8 @@ int case_composition(const Fixture& fx, const bench::EnvConfig& cfg, std::size_t
     const std::size_t count = meta.request_count;
     const std::size_t file_blocks = (4u << 20) / block;
 
-    // For the write variant, each file block gets its own content so a misplaced
-    // write is detectable; the buffers are produced outside the timed region.
+    // Distinct content per file block, so a write that lands at the wrong offset
+    // is detectable; the pool is filled outside the timed region.
     std::vector<std::byte> source_pool(file_blocks * block);
     for (std::size_t slot = 0; slot < file_blocks; ++slot) {
         bench::fill_pattern(source_pool.data() + slot * block, block, slot * block);

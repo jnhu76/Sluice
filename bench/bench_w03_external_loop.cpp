@@ -1,11 +1,5 @@
-// G0 W-03 workload: application-owned external event loop (root W-03 / PROG-03).
-//
-// The application owns the loop and the progress owner. A driver thread
-// registers the borrowed notification fd with its own epoll instance and drives
-// bounded nonblocking passes; the submitter thread keeps a bounded window of
-// in-flight positional reads and consumes published results. Neither thread
-// busy-polls: the driver parks in epoll_wait and the submitter parks on its own
-// condition variable.
+// W-03 external event loop: the driver thread parks in epoll_wait and the
+// submitter parks on its own condition variable; neither thread busy-polls.
 
 #include "bench_common.hpp"
 
@@ -136,10 +130,10 @@ struct LoopParams {
     std::size_t workers = 4;
 };
 
-// Application-owned state shared between the driver thread (progress owner) and
-// the submitter thread. The completion counter is what prevents an application
-// level lost wake: the submitter re-checks it while holding the mutex before it
-// parks, and the driver publishes it after every bounded drive batch.
+// Shared between the driver thread (progress owner) and the submitter. The
+// completion counter is what prevents a lost wake at this level: the submitter
+// re-checks it under the mutex before parking, and the driver publishes it after
+// every drive batch.
 struct SharedLoop {
     std::mutex mutex;
     std::condition_variable cv;
@@ -214,9 +208,8 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
         std::size_t batch_completions = 0;
         bool retry_remains = false;
         bool pass_failed = false;
-        // Keep passing while the pass reports immediate work. A pass that owes a
-        // further transport attempt is handled by the next epoll_wait timeout,
-        // so a retry never turns into a spin and never strands the transport.
+        // A pass that owes another transport attempt is handled by the next
+        // epoll_wait timeout, so a retry never spins and never strands it.
         for (std::size_t guard = 0; guard < 1000000; ++guard) {
             auto pass = ctx.poll_progress();
             if (!pass.has_value()) {
@@ -245,9 +238,8 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
         shared.cv.notify_all();
     }
 
-    // Teardown order follows the documented external-host sequence: retire the
-    // external registration first, then the notification interest, then drive
-    // the blocking shutdown while still holding the owner.
+    // Retire the external registration first, then shut down while this thread
+    // still holds the progress owner.
     if (::epoll_ctl(epoll_fd, EPOLL_CTL_DEL, notification_fd, nullptr) != 0) {
         std::lock_guard<std::mutex> lock(shared.mutex);
         shared.shutdown_failure = "EPOLL_CTL_DEL failed";

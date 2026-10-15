@@ -70,8 +70,6 @@ inline long peak_rss_kb() noexcept {
     return static_cast<long>(usage.ru_maxrss);
 }
 
-// Quantiles use the nearest-rank method on the sorted sample vector; the raw
-// per-repetition sample vectors are retained by the harness for the raw record.
 struct Stats {
     std::size_t n = 0;
     double min_ns = 0;
@@ -118,10 +116,6 @@ inline Stats compute_stats(std::vector<double> samples) {
     return s;
 }
 
-// The file-content oracle is a fixed 64 KiB periodic byte pattern. Periodicity
-// keeps whole-buffer verification a bounded sequence of memcmp segments, so a
-// verification pass can cover every exercised offset without distorting the
-// separately timed throughput pass.
 constexpr std::size_t kPatternPeriod = 65536;
 
 inline std::uint64_t mix64(std::uint64_t x) noexcept {
@@ -131,10 +125,8 @@ inline std::uint64_t mix64(std::uint64_t x) noexcept {
     return x ^ (x >> 31);
 }
 
-// A single splitmix64 step per byte. The first version of this table used
-// (i * 2654435761ull) >> 56, which is identically zero for every i below 65536
-// and made the whole oracle compare zeros with zeros; the distinct-value count
-// below is the guard against that class of mistake.
+// A full mix per byte position: the cheaper high-byte multiply hash is constant
+// over the first kPatternPeriod positions, which makes verification vacuous.
 inline const std::byte* pattern_table() {
     static const std::vector<std::byte> table = [] {
         std::vector<std::byte> t(kPatternPeriod);
@@ -209,9 +201,8 @@ inline MismatchReport verify_pattern(const std::byte* src, std::size_t len,
     return r;
 }
 
-// Self-test for the correctness oracle. Runs before any case and must pass, so a
-// degenerate pattern, an offset confusion or a non-biting comparison cannot go
-// unnoticed the way the all-zero table did.
+// Gate for the oracle itself, run before any case: a degenerate pattern table,
+// an offset confusion or a non-biting comparison must fail here.
 struct OracleSelfTest {
     bool ok = true;
     std::string failure;
@@ -234,13 +225,11 @@ inline OracleSelfTest oracle_self_test() {
         result.failure = "a correctly filled buffer failed verification";
         return result;
     }
-    // Offset confusion must be detected.
     if (verify_pattern(buffer.data(), 4096, kBase + 1).ok) {
         result.ok = false;
         result.failure = "an off-by-one offset was not detected";
         return result;
     }
-    // A single flipped byte must be detected, at the right position.
     buffer[2000] ^= std::byte{0x01};
     const MismatchReport flipped = verify_pattern(buffer.data(), 4096, kBase);
     if (flipped.ok || flipped.first_bad_position != kBase + 2000) {
@@ -249,8 +238,6 @@ inline OracleSelfTest oracle_self_test() {
         return result;
     }
     buffer[2000] ^= std::byte{0x01};
-    // The exact defect that existed: an all-zero buffer must not pass at a
-    // non-zero offset.
     std::vector<std::byte> zeros(4096, std::byte{0});
     if (verify_pattern(zeros.data(), 4096, kBase).ok) {
         result.ok = false;
@@ -426,9 +413,8 @@ inline void print_record(const Record& r) {
         r.latency.p99_ns, r.latency.max_ns, r.latency.n);
 }
 
-// Per-op timestamping is instrumentation: the throughput phase never calls the
-// clock inside its timed region, and the calibration case reports what one
-// timestamp pair costs on this host.
+// One timestamp pair; the throughput phase must not call the clock inside its
+// timed region, so this cost is reported separately.
 inline double clock_overhead_ns(std::size_t iterations = 200000) {
     volatile std::uint64_t sink = 0;
     const TimePoint start = now();
@@ -483,9 +469,8 @@ inline void ensure_dir(const std::string& path) {
     (void)rc;
 }
 
-// Alternating order: each repetition round rotates the case order so that no
-// case is permanently first, spreading frequency/thermal drift evenly across
-// the comparable cases.
+// Per-round rotation: no case is measured first in every round, so drift over
+// the run is spread across the comparable cases.
 inline std::vector<std::size_t> rotation_order(std::size_t count, std::size_t round) {
     std::vector<std::size_t> order(count);
     for (std::size_t i = 0; i < count; ++i) {
@@ -494,8 +479,6 @@ inline std::vector<std::size_t> rotation_order(std::size_t count, std::size_t ro
     return order;
 }
 
-// Case selection for targeted profiling runs: G0_CASE_FILTER selects the cases
-// whose id contains the given substring. An empty filter runs everything.
 inline bool case_selected(const std::string& case_id) {
     const char* filter = std::getenv("G0_CASE_FILTER");
     if (filter == nullptr || *filter == '\0') {
@@ -515,9 +498,8 @@ struct RunOutcome {
     std::size_t bytes = 0;
 };
 
-// Uninstrumented timed region: no clock call inside the loop, so the recorded
-// wall time carries no per-operation timestamping cost. The operation reports
-// its transferred byte count or fails with a message.
+// Uninstrumented timed region; the operation reports its transferred byte count
+// or fails with a message.
 template <class Op>
 inline RunOutcome time_ops(std::size_t count, Op&& op) {
     RunOutcome r;
@@ -538,9 +520,8 @@ inline RunOutcome time_ops(std::size_t count, Op&& op) {
     return r;
 }
 
-// Instrumented companion pass: same operations, per-operation clock pairs. Its
-// cost is reported separately through the calibration case rather than being
-// folded into the throughput numbers above.
+// Instrumented companion pass: the same operations with per-operation clock
+// pairs, never folded into the throughput numbers.
 template <class Op>
 inline bool time_ops_perop(std::size_t count, Op&& op, std::vector<double>& samples,
                            std::string& failure, std::size_t max_samples) {
@@ -600,8 +581,7 @@ inline Record make_record(const CaseMeta& meta, const EnvConfig& cfg, std::size_
     return r;
 }
 
-// Emits one record for the oracle self-test so the gate is visible in the raw
-// evidence of every workload binary. Returns non-zero on failure.
+// Records the gate outcome in the raw evidence and exits non-zero if it failed.
 inline int oracle_self_test_case(const EnvConfig& cfg) {
     CaseMeta meta;
     meta.case_id = "CAL-oracle-self-test";
@@ -627,10 +607,8 @@ inline int oracle_self_test_case(const EnvConfig& cfg) {
     return result.ok ? 0 : 1;
 }
 
-// Drives warmup + measured repetitions for one case. Each measured repetition
-// emits one record carrying the uninstrumented throughput phase, the result of
-// the correctness oracle, and the instrumented per-operation latency pass. A
-// failing repetition is reported as failing and is never dropped.
+// Warmup plus measured repetitions; a failing repetition is emitted as failing
+// and is never dropped from the raw record.
 template <class PrepareFn, class ThroughputFn, class VerifyFn, class LatencyFn>
 inline int run_case_reps(const CaseMeta& meta, const EnvConfig& cfg, std::size_t order_index,
                          PrepareFn&& prepare, ThroughputFn&& throughput, VerifyFn&& verify,
