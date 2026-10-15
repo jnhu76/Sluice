@@ -192,14 +192,24 @@ and the pinning discriminator.
 ### 5.1 Per-operation syscall cost (strace -c, ratios only)
 
 `strace` serialises and inflates every syscall, so only *counts per operation*
-are quoted. With one timed phase per operation (60000 phase-ops per case):
+are quoted. Each measured repetition runs three passes over the same operation
+pattern (uninstrumented throughput, byte-verifying oracle, instrumented
+latency), so one recorded operation equals three phase-operations; all figures
+below are per **phase-operation** (60,000 of them in the counted run), which is
+the honest normalisation for "syscalls per 4 KiB read":
 
 | Path | syscalls per operation |
 |---|---|
 | W-01 direct `read_at` | **1.00 `pread64`**, nothing else |
 | W-02 io_uring d16 | **1.0001 `io_uring_enter`**, nothing else above noise |
-| W-02 ThreadPool d16 (w1) | 1.00 `pread64` + 1.00 eventfd `write` + 1.99 eventfd `read` + 0.98 `poll` + **4.96 `futex`** ≈ 9.9 |
+| W-02 ThreadPool d16 (w1) | 1.00 `pread64` + 1.00 eventfd `write` + 1.99 eventfd `read` + 0.98 `poll` + **4.96 `futex`** ≈ **9.9** |
 | W-02 ThreadPool d16 (w4) | 1.00 `pread64` + 1.00 eventfd `write` + 0.07 eventfd `read` + <0.02 `poll` + **3.61 `futex`** ≈ 5.7 |
+
+The `w4` row shows the *same* single eventfd signal per completion even though
+the owner only parked 0.072 times per operation — i.e. most signals are emitted
+while readiness is already asserted and nobody is waiting. The number of futex
+calls is slightly lower at w4 but each blocks ~3.4x longer (28 µs → 94 µs per
+call under strace), which is the contention signature used in B-G0-02.
 
 The fd was identified with `strace -y`: `write(4<anon_inode:[eventfd]>, "\1\0…",
 8)`. Thread attribution shows **3 writer threads each writing exactly 20,000
