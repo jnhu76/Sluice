@@ -20,3 +20,11 @@ same cfg, same model file):
 
 The metadir was left in place (not deleted) so the run can be resumed or
 restarted; the safety gate already completed and its log/exit code stand.
+
+Addendum (same day). A second attempt at the complete runs was launched at
+18:31:50 and aborted on the same owner instruction after ~1 minute (TLC JVM pid
+64722; it had reached 1,634,014 generated / 306,411 distinct states of the
+safety gate). Its partial safety log was discarded so that the committed
+safety receipt stays the clean complete run recorded above (pid 63151, exit 0,
+48 s); the aborted attempt produced no result for either gate. No TLC process
+is running as of this record.
