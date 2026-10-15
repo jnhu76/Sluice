@@ -41,6 +41,14 @@ unchanged by these additions: neither touches the timed regions.
 change is `includes("xmake/bench.lua")` in `xmake.lua` plus the new
 `xmake/bench.lua`; no existing target, flag or source file was modified.
 
+## Known defect in the recorded cold-path cases
+
+The run that produced `W01-read_at-64k-seq-cold` and `W01-read_at-1m-seq-cold`
+probed the fixture *after* `fadvise(DONTNEED)`, re-warming 4 MiB / 64 MiB of the
+file before the timed phase. The harness now probes first and evicts last. The
+recorded figures were left untouched (re-measuring would silently replace
+baseline evidence) and are disclosed in `MEASUREMENT.md` as conservative.
+
 ## Post-hoc attribution runs
 
 The `-core64`, `-scope64`, CPU-pinning, `perf` and `strace` runs are attribution

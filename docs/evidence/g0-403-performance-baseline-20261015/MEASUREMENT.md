@@ -95,6 +95,13 @@ Facts established by W-01:
   and re-read, but the device is a WSL2 `Virtual Disk` (`ROTA=1`) inside a VHDX:
   the physical medium is NOT_OBSERVABLE from inside the distribution and these
   are not bare-metal device numbers.
+  **Recorded-ordering defect (disclosed):** in the run that produced these
+  numbers, the per-repetition fixture probe read 64 blocks (4 MiB for the 64 KiB
+  case, 64 MiB for the 1 MiB case) *after* eviction, so part of the file was warm
+  again before the timed phase. The harness now evicts after probing; the
+  recorded cold figures were **not** re-measured and are therefore conservative
+  lower bounds on the cold penalty. The defect weakens the magnitude, not the
+  direction, and no conclusion in this report depends on the cold cases.
 * **Composition is nearly free when the primitive completes in one step.**
   `read_exact_at` (641 ns p50) is within noise of the raw `read_at` (711 ns), so
   the SEM-05 composition rule adds no visible per-call penalty for a
