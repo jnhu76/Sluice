@@ -406,6 +406,13 @@ PROOF_PRESERVATION_OBLIGATIONS = n/a until a cause is established.
 * Page-cache residency directly — only the hot-vs-`fadvise` latency difference.
 * `pidstat`-style per-thread CPU — the tool is not installed; process CPU time is
   used instead.
+* **Segmented queueing / submission / completion latency — NOT MEASURED in G0.**
+  `AsyncStats` counts calls but attaches no timestamps, and the public surface
+  exposes no per-stage clock, so splitting an operation's latency into
+  "queue wait / physical execution / publication" needs test-side instrumentation
+  inside the producer and consumer paths. It was left unmeasured rather than
+  estimated; the end-to-end submit-to-consume distribution (recorded for every
+  case) is what the report uses instead.
 
 ## 7. Stability
 

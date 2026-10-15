@@ -143,3 +143,6 @@ a public-behaviour change, it leaves #403 and becomes a root amendment first.
 * The measured `W-03` vs `W-02` gap is recorded as a gap, not as a proven
   bottleneck.
 * No claim that the WSL2 virtualised storage results generalise to bare metal.
+* No per-stage latency split (queue wait vs physical execution vs publication):
+  not measured, because no stage clock exists on the public surface. The
+  end-to-end submit-to-consume distribution is what was recorded.
