@@ -179,21 +179,33 @@ By the reviewer-confirmed criteria this is the same merge class as F1; TP-D1
 **cannot** fold in: it is ordered after the processing (TP-D3..D5) so a push
 during processing still reports — it keeps its own acquisition.
 
-## 5. Verdict
+## 5. Verdict (r3, after the A/B campaign)
 
-C9 candidate set (all protocol-preserving, no new runtime state):
-- C9-G1 delivery-scan single acquisition (both backends) — F1.
-- C9-G2 per-batch CQE lock (uring) — F2, with the seam and flush constraints above.
-- C9-G3 publication-pop single acquisition within the fixed pass bound, absorbing TP-D1 — F6.
-- C9-G4 health+deadline merge in `wait_if_unchanged` (acquisitions 1+2 only; gate stays outside `mtx_`) — F5, low priority.
+Measured outcome (`ab/c9/AB.md`, paired interleaved A/B vs the frozen B0
+binaries; 7 reps, or 15 for the preregistered noisy W03 case):
+
+- **C9-G1+G3 (TP driver-side merges) — ADOPTED**, commit `001512d4`:
+  W02-threadpool-4k-d16-w4 paired ratio 1.0535 (cpu/op 12659→12592 ns),
+  saturate 1.0465, W03-threadpool-4k-d16-w4 1.1210 (preregistered noisy,
+  CV≈14%: paired spread 0.97..1.33, worst paired p99 ×1.22 in this campaign,
+  ×1.003 in the preliminary mixed-arm campaign `04d131b6` — the tail is the
+  case's own variance, not a mechanism regression). All 60 test targets pass
+  on the adopted code (release, liburing=y).
+- **C9-G2 (uring per-batch CQE lock) — REJECTED.** First campaign: −3.4% on
+  its primary, −2.1% at saturate (where multi-CQE batches would have shown a
+  win). Reverted; evidence retained here. Caveat recorded honestly: the
+  C9-A-only campaign still shows ±3–5% deltas on uring cases C9-A cannot
+  mechanically affect, so part of the observed C9-B delta is binary
+  layout/run noise — but the candidate showed no benefit anywhere it was
+  designed to help, which fails its gate regardless.
+- **C9-G4 (`wait_if_unchanged` acquisitions 1+2) — DEFERRED** without
+  measurement: bounded win (one parking pass per idle wait), gate-ordering
+  constraint from F5, and the campaign above shows the A/B resolution is
+  ~±5% at these case durations, so the expected sub-1% effect is not
+  measurable with the preregistered protocol.
 
 Out of C9 scope, deferred with reasons:
 - occupancy counter → C2 experiment (derived state, needs mechanism gate).
 - offer_terminal+release_execution fusion → new core API (protocol surface).
 - signal/eventfd batching, submit batching → C1 territory (PROG-02/PROG-03
   protocol analysis and negative oracles required).
-
-No synchronization change is implemented until the reviewer corrections are
-applied (done in this revision) and each candidate passes its negative
-oracles plus A/B; C9 ends either in measured, gated implementations or in
-`C9_INVESTIGATED_NO_SAFE_CHANGE` with the evidence retained.
