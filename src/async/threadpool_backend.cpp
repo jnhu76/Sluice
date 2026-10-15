@@ -222,9 +222,13 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::Oper
 
     const auto reservation = core_->reserve();
     if (!reservation.ok()) {
+#if defined(SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY)
+        const IoError::Code code = IoError::Code::would_block;
+#else
         const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed
                                        ? IoError::Code::invalid_state
                                        : IoError::Code::would_block;
+#endif
         return make_unexpected<detail::RequestKey>(IoError{code});
     }
     const detail::RequestReservation h{reservation.reservation.slot, reservation.reservation.generation};
@@ -473,7 +477,12 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
                            static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
+#if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
+            return sluice::detail::failed_dispatched_attempt(
+                IoError{.code = IoError::Code::backend_error});
+#else
             return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
+#endif
         return sluice::detail::IoOutcome::success(static_cast<std::uint64_t>(n));
     }
     case detail::OperationKind::write: {
@@ -482,7 +491,10 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
                             static_cast<off_t>(static_cast<std::int64_t>(p.offset)));
         });
         if (n < 0)
-            #if defined(SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED)
+#if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
+            return sluice::detail::failed_dispatched_attempt(
+                IoError{.code = IoError::Code::backend_error});
+#elif defined(SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED)
             return sluice::detail::IoOutcome::failure(sluice::from_errno_value(errno));
 #else
             return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));

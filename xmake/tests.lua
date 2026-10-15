@@ -707,6 +707,62 @@ do
                           "SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED")
 end
 
+-- #526 (F6-F10) request-path error-domain re-diff: the submission-failure
+-- and terminal-outcome spellings observed on the public request path are
+-- compared against the same native faults driven through the direct path.
+-- The async TUs compile in production shape (no internal-testing seam): the
+-- claim is about the shipped configuration.
+do
+    local function request_error_domain_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/request_error_domain_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    request_error_domain_target("request_error_domain_threadpool_test", false)
+    if has_config("liburing") then
+        request_error_domain_target("request_error_domain_uring_test", true)
+
+        -- #526 named mutation builds. Each flips one request-path error
+        -- spelling and must be killed by the named failing assertion of the
+        -- error-domain suite; executed and recorded manually, never run as
+        -- regular tests.
+        request_error_domain_target("request_error_domain_uring_mut_admission_reports_capacity",
+                                    true, "SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
+        request_error_domain_target("request_error_domain_uring_mut_physical_errno_unmapped",
+                                    true, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
+    end
+    request_error_domain_target("request_error_domain_threadpool_mut_admission_reports_capacity",
+                                false, "SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
+    request_error_domain_target("request_error_domain_threadpool_mut_physical_errno_unmapped",
+                                false, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
+end
+
 -- #527 (F6-F13) File-owner moves against outstanding accepted borrows. The
 -- target compiles the two core TUs itself so the named move mutation build
 -- can flip the move constructor alone; the async TUs stay in production
