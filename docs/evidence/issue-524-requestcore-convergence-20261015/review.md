@@ -172,6 +172,27 @@ receipt — is now closed by the formal run described in
 `resource-and-execution-manifest.md`, which is what moves `MODEL_STATUS` from
 `MODEL_CONVERGED_PENDING_FULL_TLC` to `FULL_TLC_PASS`.
 
+## Closeout review of the pushed head — `APPROVE_CLOSEOUT`
+
+A final review, by a reviewer other than the implementer, of head `0070c1da`
+returned `APPROVE_CLOSEOUT` with no new blocking item, and authorised merging
+the PR and closing the issue. It re-verified, from the committed artifacts
+rather than from the run: the `ReleaseBind` removal and the mutation migration
+(unchanged in this round); the complete safety result (5,359,732 distinct
+states, queue drained, depth 53); the complete L1/L5 result (the log contains
+the temporal check of the complete graph followed by a normal completion); the
+provenance of the formal run (log, pid `65752`, timestamps, exit 0, frozen
+hashes and run metadata in agreement); the separation of the stopped attempt's
+partial log from the formal receipt; and the classification, ledger and
+disposition records at `FULL_TLC_PASS`. It ran no TLC and no build, and
+concluded that neither the end-to-end `scripts/verify_tla.sh` nor a C++ build
+is required to close this issue. It also confirmed that the unsupported
+liveness PASS the implementer had found in `safety-preflight.md` was corrected
+with its provenance note.
+
+The record of that review, including the scope that keeps `FULL_TLC_PASS`
+bounded to the RequestCore slice, is `closeout.md`.
+
 ## Defect found by the implementer during the liveness phase
 
 `docs/evidence/issue-524-requestcore-convergence-20261015/safety-preflight.md`

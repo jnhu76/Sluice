@@ -2622,3 +2622,19 @@ supersession banner and inline `[superseded by #524]` marks, without rewriting
 that record's historical numbers. F6 gate values are unaffected: F6-F03 was
 transferred as model-side debt and no F6 verdict rested on the flavor's
 presence (`docs/evidence/f6-final-closeout-20261015/`).
+
+Closeout. An independent review of the pushed head returned
+`APPROVE_CLOSEOUT` with no new blocking item (`APPROVE_CLOSEOUT`, no TLC or
+build re-run: neither the end-to-end `scripts/verify_tla.sh` nor a C++ build is
+required, since the other models are untouched and C++ production is
+byte-identical to BASE). The issue's close record is
+`CLOSEOUT_VERDICT = PASS` / `MODEL_STATUS = FULL_TLC_PASS` /
+`ISSUE_524_CLOSE_READY = YES` /
+`RESOLUTION = ReleaseBind removed; mutation gates migrated; formal
+safety/liveness receipts and evidence classification aligned`, and it is
+reproduced with the verified conditions and the scope limitation in
+`docs/evidence/issue-524-requestcore-convergence-20261015/closeout.md`.
+`FULL_TLC_PASS` is bounded to the RequestCore slice under the established
+finite bounds and the declared fairness assumptions; it is not a verdict on the
+repository's whole formal matrix, and the end-to-end gate run was not executed
+for this slice.
