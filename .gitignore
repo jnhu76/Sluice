@@ -12,6 +12,7 @@ tla2tools.jar
 # Xmake
 .xmake/
 build/
+build-bench-*/
 xmake-requires.lock
 
 # MacOS Cache
