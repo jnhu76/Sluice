@@ -26,6 +26,7 @@ using sluice::FileOpen;
 using sluice::IoError;
 
 int g_failures = 0;
+bool g_enospc_injection_ran = false;
 
 void check(bool ok, const char* what) {
     if (!ok) {
@@ -88,20 +89,22 @@ bool admission_closed_rejection_spells_invalid_state() {
           "write after admission close is invalid_state without native detail");
 
     auto sync_data = ctx.submit_sync_data(SyncDataOp{ref});
-    check(!sync_data.has_value() && sync_data.error().code == expected,
-          "sync_data after admission close is invalid_state");
+    check(!sync_data.has_value() && sync_data.error().code == expected &&
+              sync_data.error().os_errno == 0,
+          "sync_data after admission close is invalid_state without native detail");
 
     auto sync_all = ctx.submit_sync_all(SyncAllOp{ref});
-    check(!sync_all.has_value() && sync_all.error().code == expected,
-          "sync_all after admission close is invalid_state");
+    check(!sync_all.has_value() && sync_all.error().code == expected &&
+              sync_all.error().os_errno == 0,
+          "sync_all after admission close is invalid_state without native detail");
 
     auto info = ctx.submit_file_info(FileInfoOp{ref});
-    check(!info.has_value() && info.error().code == expected,
-          "file_info after admission close is invalid_state");
+    check(!info.has_value() && info.error().code == expected && info.error().os_errno == 0,
+          "file_info after admission close is invalid_state without native detail");
 
     auto sized = ctx.submit_size(SizeOp{ref});
-    check(!sized.has_value() && sized.error().code == expected,
-          "size after admission close is invalid_state");
+    check(!sized.has_value() && sized.error().code == expected && sized.error().os_errno == 0,
+          "size after admission close is invalid_state without native detail");
 
     check(ctx.outstanding() == 0, "the rejected submissions accepted no work");
     return true;
@@ -116,6 +119,7 @@ bool accepted_write_fault_settles_no_space_with_native_detail() {
         std::printf("NOT RUN: /dev/full unavailable on this host\n");
         return true;
     }
+    g_enospc_injection_ran = true;
     File file = std::move(opened.value());
 
     AsyncIoContext ctx(make_backend());
@@ -222,6 +226,11 @@ int main() {
         std::fprintf(stderr, "request error domain re-diff: %d failure(s)\n", g_failures);
         return 1;
     }
-    std::printf("request error domain re-diff passed\n");
+    if (g_enospc_injection_ran) {
+        std::printf("request error domain re-diff passed (fault injections: ENOSPC, EISDIR)\n");
+    } else {
+        std::printf("request error domain re-diff passed; NOT RUN: ENOSPC fault injection "
+                    "(/dev/full unavailable); EISDIR injection ran\n");
+    }
     return 0;
 }

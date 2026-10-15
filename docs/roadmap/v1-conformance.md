@@ -2416,3 +2416,13 @@ builds red with the named assertions; the restructured
 `SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED` write arm rebuilt and its E1 kill
 re-verified. PR #531 (review: APPROVE code after the PR-description evidence
 correction recorded there).
+
+Review round 2 on PR #531: the four non-byte operations (`sync_data`,
+`sync_all`, `file_info`, `size`) previously pinned only the code, not the
+native detail; all six kinds now carry the `os_errno == 0` pin, so the
+six-kind claim above is fully code-supported. A missing `/dev/full` now
+prints a summary line that names the skipped injection (`NOT RUN: ENOSPC
+fault injection`) instead of folding into the passed line, following the
+`semantic_errno_mapping_test.cpp` attempted-case precedent. Matrix re-run at
+the corrected head: liburing=y 68/68, liburing=n 53/53, both mutant kinds
+red on both profiles (six admission failures / two terminal failures).
