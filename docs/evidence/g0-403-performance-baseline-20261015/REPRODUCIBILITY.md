@@ -109,6 +109,66 @@ list exactly — verified by set equality against the recorded case ids.
   counters from them are used, and the profiling build's absolute throughput is
   never compared with the baseline binary's.
 
+## Run validation and failure control
+
+`bench/run_matrix.sh` validates every run with `bench/check_run.py` before it
+starts the next one, and aborts with a non-zero status on the first deviation:
+
+* a measured or diagnostics stage that exits non-zero, or reports any `NOT_RUN`;
+* a missing or short capture, or a record that is not valid JSON, or one that
+  lacks the fields the analysis reads;
+* a case set that differs from the frozen matrix, or a workload-case count that
+  differs from the preregistered count (W-01 15, W-02 16, W-03 6, diagnostics 19,
+  controls 16 and 6);
+* a failure without a `NOT_RUN_WITH_REASON` marker, or a `max_outstanding` above
+  the declared bound;
+* a control run whose exit status is not the "cases failed" status, whose
+  `NOT_RUN` set differs from the frozen set, or that reports no `NOT_RUN` at all.
+
+`bench/runner_failure_control.sh` proves this cannot be a paper guarantee. It
+injects an empty capture with a zero exit, a non-zero exit with no capture, a
+crashing benchmark, a lost repetition, a lost case, an unexplained failure, a
+control run claiming success and a control run hiding a `NOT_RUN` case; it
+requires the runner to reject all eight, and requires it to accept both the
+unshimmed no-ring control and the same shims with nothing injected, so every
+rejection is attributable to the injected defect (`logs/runner-failure-control.txt`,
+exit 0). What these checks establish is shape, exit status, repetition counts and
+the `NOT_RUN` set; they cannot establish that a recorded number is the true
+capability of the machine — that bound is the recorded per-case spread.
+
+The runner was also exercised end to end on the frozen matrix in
+`logs/runner-validation.txt`: all six stage runs reproduce the frozen case sets,
+repetition counts and controls. That same-day re-run agrees with the frozen
+medians for 31 of 40 cases within ±5% and 37 within ±10% (median absolute
+deviation 2.1%); the exceptions are the large-block and deep-queue cases that
+also carry the widest frozen spread. It is not a controlled A/B and does not
+replace or re-baseline `raw/`. Its raw files are not committed: the log names the
+directory it wrote.
+
+## Archived captures and removed intermediates
+
+Every research input stays in git: harness sources, the frozen preregistration,
+the v1 and v2 raw JSONL, the reports, the scripts, the stripped summaries and
+`COMMIT.txt`. The one large textual capture is stored compressed, and the review's
+suggestion to drop regenerable or unreferenced execution outputs was applied:
+
+| Artifact | Status |
+|---|---|
+| `attribution/strace-fd.txt.gz` | The full 355,868-line `strace -y` capture, gzip `-9n` (25 MB → 119 KB: the trace is one repeated line shape). `gunzip -c attribution/strace-fd.txt.gz` restores the exact bytes the capture log names; both hashes are in `COMMIT.txt`. |
+| `attribution/perf-w4.data` | The `perf record` capture quoted in `MEASUREMENT.md` section 5.2, kept uncompressed for `perf report`. |
+| `attribution/profiling-build/` | **Not committed.** These are `-g` builds that embed the absolute build path; they are regenerable with `bench/attribution.sh`, their capture-time sha256 stay recorded in `logs/attribution.txt`, and only counts, ratios and per-operation figures are taken from those captures. |
+| `attribution/perf-w4.data.old` | **Removed.** A superseded capture that no report or log references. |
+
+Path and host exposure of what remains: the fd trace contains no user, home or
+fixture path — only `/usr/lib/...`, `/proc/<pid>/maps|mounts` and
+`anon_inode:[eventfd]` annotations; the removed `-g` binaries were the only
+committed artifacts embedding the absolute build path.
+
+`bench/verify_hashes.py` re-checks every hash recorded in `COMMIT.txt` against the
+committed bytes, resolving each block to its directory and decompressing the trace
+in memory for its uncompressed entry; `logs/verify-hashes.txt` is its output
+(14 entries match, 0 problems).
+
 ## Production code
 
 `git diff BASE_SHA..HEAD -- src include` is empty. The only build-system change is

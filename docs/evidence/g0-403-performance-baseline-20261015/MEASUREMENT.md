@@ -3,6 +3,8 @@
 ```text
 [SLUICE-G0-403]
 REPORT_VERSION = g0-2
+POST_REVIEW_REVISION = r3 — case-count labels in section 1 and the section 1
+  benchmark-head reference corrected; no measured value changed
 BASE_SHA = dcc46266709e98d760b3be2957d18c09e1e55952
 BENCHMARK_HEAD_SHA = c0bee1f8 (revision 2 bench sources; the six v2 binaries reproduce byte-identically)
 V1_BENCHMARK_HEAD_SHA = 8c98b417
@@ -59,16 +61,27 @@ The 4 KiB and 1 MiB read deltas (≈20%) are the same class of effect at page
 granularity: a zero-filled page is cheaper to serve than a page with real bytes.
 No conclusion in this report rests on a v1 number.
 
+### Post-review corrections (r3)
+
+The independent review of the evidence PR found two label-level defects, both in
+section 1: the run table double-counted cases (it called `raw/w01.jsonl` "16
+workload cases + 1 self-test" when the file holds 15 preregistered cases plus
+`CAL-clock-overhead` and `CAL-oracle-self-test`, and similarly 18 and 20 for the
+W-02 and diagnostics rows), and the reproduction note named the v1 benchmark head
+for the v2 binaries. Both are corrected; the preregistration, the raw files and
+every measured value are unchanged, and the case counts are now executable checks
+in `bench/check_run.py`.
+
 ## 1. What executed, and the integrity check
 
 | Run | Binary profile | Cases | Measured reps/case | Failures |
 |---|---|---|---|---|
-| `raw/w01.jsonl` | no-ring (core only) | 16 workload cases + 1 self-test record = 145 records | 7 | 0 |
-| `raw/w02.jsonl` | ring | 18 cases (16 frozen + 2 preregistered `-scope64`) + self-test = 145 records | 7 | 0 |
+| `raw/w01.jsonl` | no-ring (core only) | 15 preregistered cases + `CAL-clock-overhead` + `CAL-oracle-self-test` = 17 case ids, 145 records | 7 | 0 |
+| `raw/w02.jsonl` | ring | 16 preregistered cases (14 primary + the 2 `-scope64`) + self-test = 145 records | 7 | 0 |
 | `raw/w03.jsonl` | ring | 6 cases + self-test = 55 records | 7 | 0 |
-| `raw/w02-diagnostics.jsonl` | ring, `G0_DIAGNOSTICS=1` | 20 cases + self-test = 172 records | 7 | 0 |
-| `raw/w02-noring-notrun.jsonl` | no-ring control | 16 + self-test = 17 records | 1 | 6 NOT_RUN (expected) |
-| `raw/w03-noring-notrun.jsonl` | no-ring control | 6 + self-test = 7 records | 1 | 3 NOT_RUN (expected) |
+| `raw/w02-diagnostics.jsonl` | ring, `G0_DIAGNOSTICS=1` | 19 cases (the 16 above + 3 diagnostics) + self-test = 172 records | 7 | 0 |
+| `raw/w02-noring-notrun.jsonl` | no-ring control | 16 cases + self-test = 17 records | 1 | 6 NOT_RUN (expected) |
+| `raw/w03-noring-notrun.jsonl` | no-ring control | 6 cases + self-test = 7 records | 1 | 3 NOT_RUN (expected) |
 
 Integrity check recomputed from the raw JSONL: **all measured repetitions have
 `ok=true`; 7 measured repetitions for every case; `AsyncStats::max_outstanding`
@@ -76,6 +89,12 @@ equals the declared `queue_depth` and never exceeds it in any W-02 record;
 `would_block` is 0 outside the deliberate saturation cases and exactly 200 inside
 them.** The only `ok=false` records are the 9 deliberate
 `NOT_RUN_WITH_REASON` io_uring records of the no-ring control.
+
+Those properties, together with the case set and the per-case repetition counts,
+are enforced mechanically on every new run by `bench/check_run.py`, which
+`bench/run_matrix.sh` calls after each stage and which aborts the matrix on any
+deviation; `REPRODUCIBILITY.md` records the failure control that proves the
+runner cannot report a false success.
 
 Both backends run in ONE process for W-02/W-03 and cases are rotated per
 repetition (`order[i] = (i + round) mod n`), so ThreadPool and io_uring alternate
