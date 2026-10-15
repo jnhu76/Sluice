@@ -129,12 +129,12 @@ Every RequestCore mutant cfg was re-run on the converged model with the gate's
 own verdict semantics (exact named kill, never a bare exit code): 19 violate /
 temporal gates PASS in the R5 preflight, and the two subsumption witnesses
 (`ready-before-payload`, `reclaim-ignores-pub`) plus the reference safety run
-complete cleanly. The reference **liveness** run is deliberately not part of
-this matrix: it is the outstanding formal receipt, PENDING rather than passed
-(`resource-and-execution-manifest.md`, `formal-assets.tsv`). Reviewer B
-reproduced the full battery plus the two witnesses independently; reviewer C
-reproduced the mechanical cfg/constant/gate-resolvability checks and three of
-the cfgs by TLC.
+complete cleanly. The reference liveness gate is not part of this matrix and
+was taken separately as its own receipt: **PASS** on the frozen snapshot
+(`raw/tlc/liveness.log`, exit 0, 24 min 20 s, L1 and L5 over the complete state
+space). Reviewer B reproduced the full battery plus the two witnesses
+independently; reviewer C reproduced the mechanical
+cfg/constant/gate-resolvability checks and three of the cfgs by TLC.
 
 No expected kill changed: each mutant still reports exactly the invariant (or
 temporal violation) its gate names, including the two whose cfg lists place the

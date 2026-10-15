@@ -57,7 +57,7 @@ git archaeology):
 |---|---|
 | `docs/roadmap/v1-formal-evidence-map.md:244,268` still assert `ReleaseBind` as the live compatibility release flavor | **fixed** in `docs(formal): update RequestCore correspondence` — both rows now state the #524 removal and name `InvBindImpliesPublished` |
 | `docs/roadmap/b1-1-request-core-evidence.md:566,568,678` (and the cfg count at `:137`) list the retired mutant and action as live | **fixed** in `docs(formal): mark the superseded B1-1 rows` (`eb0a7350`) — a dated supersession banner plus inline `[superseded by #524]` marks on the three rows and a post-#524 inventory; the file's historical numbers are not rewritten. Reviewer A's objection was recorded before that commit and is kept here verbatim as the review-time finding |
-| No full-run receipt for the converged model | **safety: fixed** — the complete safety run is a committed receipt (`raw/tlc/safety.log`, exit 0, 31,289,609 / 5,359,732 / depth 53). **liveness: still open** — the formal liveness receipt is PENDING: the gate was started on the frozen snapshot and stopped on owner instruction, so `raw/tlc/liveness.log` is partial and `exit-codes.tsv` records `liveness STOPPED_ON_OWNER_REQUEST`. Reviewer B's complete-space liveness run is corroborating scratch evidence, not a substituted receipt (see `resource-and-execution-manifest.md` and the round-2 section below) |
+| No full-run receipt for the converged model | **closed** — the complete safety run is a committed receipt (`raw/tlc/safety.log`, exit 0, 31,289,609 / 5,359,732 / depth 53) and the complete liveness run has since been taken on the frozen snapshot (`raw/tlc/liveness.log`, exit 0, 24 min 20 s, L1 + L5 over the complete space). At the time of this round only the safety half existed, which is what the round-2 section recorded |
 
 ## Reviewer B — safety, liveness, mutation adequacy
 
@@ -134,8 +134,11 @@ rewritten. This is the disposition the round-2 review confirmed as required.
 3. `formal-assets.tsv` in the frozen F6 directory is historical and was not
    overwritten; the successor classification is
    `formal-assets.tsv` in this directory.
-4. The formal liveness receipt is outstanding. This is the only item of the
-   round-1 `REQUEST_CHANGES` that is neither fixed nor dismissed; see below.
+4. The formal liveness receipt was outstanding. **Closed** by the run recorded
+   in `resource-and-execution-manifest.md` (`raw/tlc/liveness.log`, exit 0,
+   24 min 20 s, 12 branches over the complete state space); it was the item the
+   round-2 review correctly refused to let stand as fixed, and the reason the
+   owner's authorisation was required before taking it.
 
 ## Round-2 independent review (2026-10-15) — `REQUEST_CHANGES`
 
@@ -153,7 +156,7 @@ commits have the same tree SHA).
 
 | # | Finding | Disposition |
 |---|---|---|
-| 1 | The classification still asserted liveness PASS: `formal-assets.tsv` said "liveness PASS on the complete space" and the round-1 disposition above marked the missing-receipt finding **fixed**, while the manifest itself scopes reviewer B's result to scratch evidence and the committed liveness log is partial (`STOPPED_ON_OWNER_REQUEST`) | **fixed here** — the model row now reads: formal safety PASS (receipt in `raw/tlc/`); formal liveness **PENDING**, no L1/L5 claim, reviewer B's run corroborating only. The round-1 disposition was split into its closed safety half and its open liveness half, and the missing-receipt finding is no longer marked fully resolved |
+| 1 | The classification still asserted liveness PASS: `formal-assets.tsv` said "liveness PASS on the complete space" and the round-1 disposition above marked the missing-receipt finding **fixed**, while the manifest itself scopes reviewer B's result to scratch evidence and the committed liveness log is partial (`STOPPED_ON_OWNER_REQUEST`) | **fixed, then closed by the run** — the model row was corrected to PENDING with reviewer B's run labelled corroboration only, and the round-1 disposition was split into its closed safety half and its open liveness half; the formal liveness receipt has since been taken on the frozen snapshot (exit 0, 24 min 20 s, L1 + L5 over the complete space), so the status is now `FULL_TLC_PASS` on a receipt that a later reader can re-read |
 | 2 | The successor `formal-assets.tsv` had a 7-field row under an 8-column header (`RequestCoreLive.cfg`), and lumped 21 `Mut*` cfgs as negative mutants although two of them are the separately-listed subsumption witnesses | **fixed here** — every row is 8 fields; the mutant row is the 19 kill gates (16 invariant-killed + 3 temporal-killed) and says so, with both witnesses excluded from that count and cross-referenced to their own rows |
 | 3 | "Which states were lost" claimed the lost state set was exactly the inflight family, which is false for the ghost-inclusive state: old `… → BeginPublish → CompletePublish → ReleaseBind` reached `pub = "done" ∧ bind = FALSE` with `consumed = discarded = FALSE`, which the converged model cannot (its releases always record the edge) | **fixed here** — `transition-diff.md` now separates the protocol-state projection (where exactly the inflight family is lost) from the full model state (which additionally loses the unrecorded-release ghost configuration), and states that the isolation control's counters establish the relation delta, not this state classification. The same assertion in the ledger received the same qualification |
 | 4 | The final disposition still described the B1-1 record as unedited and "outside this slice's allowed change set", although `eb0a7350` had already marked it | **fixed here** — `review.md` (both places), `correspondence-after.md` and the ledger's #524 section now record it as fixed by `eb0a7350`, with the review-time objection kept as history |
@@ -163,6 +166,22 @@ keep `MutReclaimIgnoresPub` as a subsumption witness; complete the formal
 liveness run before closing #524; add no C++ baseline build for this
 model-only change.
 
-`MODEL_STATUS` stays `MODEL_CONVERGED_PENDING_FULL_TLC`, and this file gains no
-freeze clearance from round 2: the round-2 verdict was `REQUEST_CHANGES`, and
-the outstanding liveness receipt is the item that keeps #524 open.
+The round-2 verdict was `REQUEST_CHANGES`, so this file granted no freeze
+clearance on its own. The item that kept #524 open — the outstanding liveness
+receipt — is now closed by the formal run described in
+`resource-and-execution-manifest.md`, which is what moves `MODEL_STATUS` from
+`MODEL_CONVERGED_PENDING_FULL_TLC` to `FULL_TLC_PASS`.
+
+## Defect found by the implementer during the liveness phase
+
+`docs/evidence/issue-524-requestcore-convergence-20261015/safety-preflight.md`
+(Level 3), committed in `docs(evidence): record #524 verification and review`,
+listed the reference liveness run as `PASS, exit code 0 ... Finished checking
+temporal properties` while the only liveness execution at that point had been
+stopped on owner instruction: an unsupported PASS of exactly the class the
+round-2 review rejected elsewhere, surviving in a file neither the round-2
+reviewer nor I re-read for it. It is corrected in place with a provenance note
+rather than silently rewritten, and the entry now names the run, its wall time,
+its branch count and its complete-space pass. The lesson recorded for the next
+reader: the round-2 sweep for "PASS without a receipt" checked the classification
+files but not the per-level summary sections, which is where this one sat.

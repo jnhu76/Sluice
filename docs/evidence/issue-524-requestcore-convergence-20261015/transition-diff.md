@@ -38,8 +38,13 @@ therefore semantically inert at the reference configuration.
 
 Reviewer B also observed a cosmetic difference in TLC's *maximum outdegree*
 statistic (11 with the mutant switch present, 10 in the isolation control) with
-byte-identical generated/distinct/depth counts. It feeds no gate verdict and is
-recorded here rather than explained away.
+byte-identical generated/distinct/depth counts. It feeds no gate verdict. The
+later R6 runs settle what it is: the same converged `RequestCore.cfg` that
+printed 11 printed **10** when re-run from the frozen snapshot (48 s, exit 0,
+identical 31,289,609 / 5,359,732 / depth 53), and the liveness gate likewise
+prints 10. The statistic therefore varies across runs of identical artifacts
+and cannot be read as a difference between the models; the four observations
+are tabulated in `resource-and-execution-manifest.md`.
 
 ## Which states were lost
 

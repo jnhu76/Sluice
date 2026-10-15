@@ -28,3 +28,16 @@ safety gate). Its partial safety log was discarded so that the committed
 safety receipt stays the clean complete run recorded above (pid 63151, exit 0,
 48 s); the aborted attempt produced no result for either gate. No TLC process
 is running as of this record.
+
+Addendum 2 (same day, after the owner authorised the formal liveness phase).
+The gate was then taken on a hash-verified frozen snapshot and completed
+cleanly: `liveness.log` in this directory is now the COMPLETE run (pid 65752,
+2026-10-15 19:12:35 -> 19:36:56, exit 0, 24 min 20 s, L1 and L5 over the
+complete state space). The partial log described above was renamed to
+`liveness-stopped-partial.log` so that both the history and the result are
+readable side by side; nothing in either file was edited. `exit-codes.tsv` now
+records `liveness 0` for the completed run. See
+`../../resource-and-execution-manifest.md` for the method and
+`liveness-run.tsv` for the run metadata. A safety re-run from the same snapshot
+(`safety-from-snapshot.log`, exit 0, identical counters) was taken with it as
+an auxiliary check; the safety receipt of record remains `safety.log`.

@@ -2560,14 +2560,20 @@ commands in `resource-and-execution-manifest.md`): the complete safety gate
 `RequestCore.cfg` (20 invariants including the new one) **PASSES** —
 `Model checking completed. No error has been found.`, 31,289,609 generated /
 5,359,732 distinct / 0 on queue / depth 53 / 48 s, exit 0. The complete
-liveness gate `RequestCoreLive.cfg` (L1 + L5) is **NOT YET RUN**: the run was
-started on the frozen snapshot and stopped on owner instruction for review, so
-no L1/L5 result is recorded here and no partial exploration is reported as one.
-An independent reviewer's complete-space liveness run on the converged model
-exists as corroborating scratch evidence in
-`docs/evidence/issue-524-requestcore-convergence-20261015/review.md`; it is not
-a formal receipt and is not substituted for one.
-`MODEL_STATUS = MODEL_CONVERGED_PENDING_FULL_TLC`. The 19 violating gates
+liveness gate `RequestCoreLive.cfg` (L1 + L5) also **PASSES**, on the same
+frozen artifacts and the same reachable set: exit 0 after 24 min 20 s,
+`Model checking completed. No error has been found.` with `Finished checking
+temporal properties`, no `Temporal properties were violated` line, and the
+same model counters (31,289,609 / 5,359,732 / 0 on queue / depth 53). Both
+properties were instantiated for every request identity: the gate reports 12
+temporal branches = |Ids| (2 slots × generations 0..2) × {L1, L5}, and the final
+pass is announced for the *complete* state space (64,316,784 total distinct
+states = 12 × 5,359,732, one copy of the reachable set per branch). The full
+reading of that evidence, including why the branch count rules out a silently
+skipped L5, is in the manifest. An earlier run of this gate had been stopped on
+owner instruction for review; the receipt recorded here is the later authorised
+run, and the stopped attempt's partial log is retained as history.
+`MODEL_STATUS = FULL_TLC_PASS`. The 19 violating gates
 (preflight) pass on the converged model with their exact named kills, and the
 independent R4 review returned one `APPROVE_MODEL_FREEZE` with no
 correspondence failure (`review.md`); the follow-up review round on the pushed

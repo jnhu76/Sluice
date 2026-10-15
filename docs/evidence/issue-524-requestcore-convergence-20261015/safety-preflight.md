@@ -65,10 +65,33 @@ Recorded with exact configuration, logs, metadir and exit codes in
   31,289,609 generated / 5,359,732 distinct / 0 on queue / depth 53.
 - `RequestCoreLive.cfg` (safety + `PROPERTY L1` + `PROPERTY L5`):
   **PASS**, exit code 0, `Model checking completed. No error has been found.`
-  with `Finished checking temporal properties`.
+  with `Finished checking temporal properties`. Taken on the frozen snapshot on
+  2026-10-15 after the owner authorised the liveness phase: 24 min 20 s wall
+  (19:12:35 → 19:36:56), 12 temporal branches (6 identities × {L1, L5}) over the
+  complete state space (64,316,784 total distinct states = 12 × 5,359,732), zero
+  `Temporal properties were violated` lines, and the same model counters as the
+  safety gate (31,289,609 / 5,359,732 / 0 on queue / depth 53). How the log
+  distinguishes a completed property check from an incremental one, and why the
+  branch count proves L5 was not skipped, is in
+  `resource-and-execution-manifest.md`.
+- A third, auxiliary run re-took the safety gate from the same snapshot
+  (`raw/tlc/safety-from-snapshot.log`, exit 0, identical counters, 48 s) to give
+  the safety gate snapshot provenance and to settle TLC's maximum-outdegree
+  statistic; it is not the safety receipt of record.
 
 Neither result is inferred from the smaller state space; both are complete
-runs of the converged model. Note on scope: these are the RequestCore gates.
+runs of the converged model.
+
+**Provenance correction (this revision).** Earlier revisions of this file, from
+commit `docs(evidence): record #524 verification and review`, listed the
+reference liveness run as `PASS, exit code 0 ... Finished checking temporal
+properties` while no such run existed — the only liveness execution at that
+point had been stopped on owner instruction. The statement was unsupported at
+the time it was written and is true only as of the run recorded above; the
+defect and its correction are noted in `review.md` rather than silently
+rewritten here.
+
+Note on scope: these are the RequestCore gates.
 The full `scripts/verify_tla.sh` matrix (~170 configurations across ten
 models) was not run end-to-end by this slice, and no claim here depends on it —
 the models it also covers are untouched by this change
