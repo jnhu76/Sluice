@@ -48,7 +48,7 @@ same PR.
 
 | Path | Purpose |
 |---|---|
-| `docs/explicit-io-v1-final-decision.md` | Sole normative root (v1-r3) |
+| `docs/explicit-io-v1-final-decision.md` | Sole normative root (v1-r4) |
 | `docs/roadmap/v1-conformance.md` | Implementation/evidence ledger |
 | `docs/roadmap/v1-formal-evidence-map.md` | Non-normative formal evidence map (issue #391) |
 | `docs/README.md` | This navigation page |
@@ -58,6 +58,16 @@ These four are the only current records under `docs/`. Everything else under
 
 `research/RESULTS.md` (repository root, outside `docs/`) holds retained research
 conclusions; it is evidence and rationale, not an authority.
+
+## Adopted ADRs
+
+| Path | Purpose |
+|---|---|
+| `docs/adr/0003-narrow-stackful-io-host.md` | ADOPTED — DESIGN_AUTHORITY_ONLY (narrow stackful I/O host; no supported-profile claim) |
+| `docs/adr/0004-e2-shutdown-state-contract.md` | ADOPTED via PR #453 (E2 shutdown state contract) |
+
+Both derive from the root and add no scope; see each ADR's own status banner
+for its adoption type and authority record.
 
 ## Historical ADRs
 

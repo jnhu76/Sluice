@@ -121,7 +121,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(R .. "tests/app_hash_consumption_test.cpp", dir .. "/hash_task.cpp",
                       dir .. "/sha256.cpp")
@@ -136,7 +136,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(R .. "tests/app_grep_consumption_test.cpp", dir .. "/grep_task.cpp",
                       dir .. "/matcher.cpp")
@@ -151,7 +151,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(R .. "tests/app_tail_consumption_test.cpp", dir .. "/tail_task.cpp")
             add_tests("app_tail_consumption_test")
@@ -169,7 +169,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async")
+            add_deps("sluice_core")
             add_includedirs(R .. "include", dir)
             add_files(R .. "tests/app_tail_lifecycle_oracle_test.cpp", dir .. "/tail_task.cpp")
             add_tests("app_tail_lifecycle_oracle_test", {run_timeout = 120000})
@@ -194,7 +194,7 @@ do
             set_kind("binary")
             set_default(false)
             set_group("test")
-            add_deps("sluice_core", "sluice_async", "sluice-tail", "tail_pread_shim")
+            add_deps("sluice_core", "sluice-tail", "tail_pread_shim")
             add_includedirs(R .. "include")
             add_files(R .. "tests/app_tail_cli_oracle_test.cpp")
             add_tests("app_tail_cli_oracle_test", {run_timeout = 180000})
@@ -332,7 +332,6 @@ do
                 R .. "tests/request_core_ownership_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -375,7 +374,6 @@ do
                 R .. "tests/progress_source_ownership_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -425,10 +423,7 @@ do
             add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
             add_files(test_source,
                       R .. "src/async/async_io_context.cpp",
-                      R .. "src/async/batch.cpp",
-                      R .. "src/async/op_helpers.cpp",
                       R .. "src/async/threadpool_backend.cpp",
-                      R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -463,7 +458,6 @@ if has_config("liburing") then
                       R .. "src/async/uring_transport.cpp",
                       R .. "src/async/uring_completion.cpp",
                       R .. "src/async/uring_backend.cpp",
-                      R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -519,7 +513,6 @@ do
                 test_source,
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -593,7 +586,6 @@ do
                 R .. "tests/shutdown_lifecycle_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -667,7 +659,6 @@ do
                 R .. "tests/backend_conformance_e1_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -716,11 +707,127 @@ do
                           "SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED")
 end
 
--- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
--- public request target: the target compiles its own copies of the async TUs it
--- observes and links neither sluice_async nor the other seam builds.
+-- #526 (F6-F10) request-path error-domain re-diff: the submission-failure
+-- and terminal-outcome spellings observed on the public request path are
+-- compared against the same native faults driven through the direct path.
+-- The async TUs compile in production shape (no internal-testing seam): the
+-- claim is about the shipped configuration.
 do
-    local function request_scope_target(name, test_source, with_liburing, extra_define)
+    local function request_error_domain_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/request_error_domain_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    request_error_domain_target("request_error_domain_threadpool_test", false)
+    if has_config("liburing") then
+        request_error_domain_target("request_error_domain_uring_test", true)
+
+        -- #526 named mutation builds. Each flips one request-path error
+        -- spelling and must be killed by the named failing assertion of the
+        -- error-domain suite; executed and recorded manually, never run as
+        -- regular tests.
+        request_error_domain_target("request_error_domain_uring_mut_admission_reports_capacity",
+                                    true, "SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
+        request_error_domain_target("request_error_domain_uring_mut_physical_errno_unmapped",
+                                    true, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
+    end
+    request_error_domain_target("request_error_domain_threadpool_mut_admission_reports_capacity",
+                                false, "SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY")
+    request_error_domain_target("request_error_domain_threadpool_mut_physical_errno_unmapped",
+                                false, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
+end
+
+-- #527 (F6-F13) File-owner moves against outstanding accepted borrows. The
+-- target compiles the two core TUs itself so the named move mutation build
+-- can flip the move constructor alone; the async TUs stay in production
+-- shape (no internal-testing seam).
+do
+    local function file_move_borrow_target(name, with_liburing, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_includedirs(R .. "include", R .. "src/async")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            local files = {
+                R .. "tests/file_move_borrow_test.cpp",
+                R .. "src/file_resource.cpp",
+                R .. "src/blocking_file.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name)
+            end
+    end
+
+    file_move_borrow_target("file_move_borrow_test", false)
+    if has_config("liburing") then
+        file_move_borrow_target("file_move_borrow_uring_test", true)
+    end
+    -- The move mutant closes the native descriptor only at the moves the
+    -- oracle performs with an outstanding accepted borrow (the suite arms it
+    -- around exactly those statements), so files open and accept normally and
+    -- the kill lands on post-move observations: deterministically on "second
+    -- read accepted through the moved owner", where the closed moved-to owner
+    -- rejects before any syscall, and on the pool profile additionally on the
+    -- settling-payload arm whenever the worker's pread resolves after the
+    -- close. On the ring a pre-submitted op keeps succeeding because the
+    -- kernel holds its own file reference, so the payload arm stays
+    -- unobservable there by construction while the deterministic arm still
+    -- kills.
+    file_move_borrow_target("file_move_borrow_mut_move_closes_native", false,
+                            "SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE")
+    if has_config("liburing") then
+        file_move_borrow_target("file_move_borrow_uring_mut_move_closes_native", true,
+                                "SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE")
+    end
+end
+
+-- #527 (F6-F14) concurrent submissions through one context. Same
+-- self-contained seam-build shape as the ownership target: the submit pause
+-- gates and the core snapshot need the internal-testing define.
+do
+    local function submit_concurrency_target(name, with_liburing, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -732,11 +839,74 @@ do
                 add_defines(extra_define)
             end
             local files = {
+                R .. "tests/submit_concurrency_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    submit_concurrency_target("submit_concurrency_test", false)
+    if has_config("liburing") then
+        submit_concurrency_target("submit_concurrency_uring_test", true)
+
+        -- The unserialized-submit mutation drops the acceptance
+        -- serialization in the context submit path and must be killed by the
+        -- reserve-window discriminator: the second submitter's arrival at its
+        -- submission call is witnessed first, and under the mutation its
+        -- reservation parks at the same gate, so the violated snapshot is
+        -- stable and cannot be missed by the bounded poll. Executed and
+        -- recorded manually, never run as a regular test.
+        submit_concurrency_target("submit_concurrency_uring_mut_submit_unserialized", true,
+                                  "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
+    end
+    submit_concurrency_target("submit_concurrency_mut_submit_unserialized", false,
+                              "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
+end
+
+-- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
+-- public request target: the target compiles its own copies of the async TUs it
+-- observes and links neither sluice_async nor the other seam builds.
+do
+    local function request_scope_target(name, test_source, with_liburing, extra_define,
+                                        extra_clang_cxxflags)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            if extra_clang_cxxflags ~= nil then
+                add_cxxflags(extra_clang_cxxflags, {tools = {"clang", "clang_cl"}})
+            end
+            -- #521: TSan replaces the global allocation functions, so the
+            -- suite's strong overrides and the zero-allocation oracle compile
+            -- only outside TSan (see the SLUICE_TSAN_TESTING seam guards).
+            if is_mode("tsan") then
+                add_defines("SLUICE_TSAN_TESTING")
+            end
+            local files = {
                 test_source,
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/request_scope.cpp",
                 R .. "src/async/threadpool_backend.cpp",
-                R .. "src/async/request_handle.cpp",
                 R .. "src/async/fail_fast.cpp",
                 R .. "src/async/detail/context_identity.cpp",
                 R .. "src/async/detail/request_core.cpp",
@@ -772,9 +942,14 @@ do
     request_scope_target("request_scope_mut_timeout_releases_slot",
                          R .. "tests/request_scope_test.cpp", false,
                          "SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT")
+    -- The destructor mutant removes the TU's only read of policy_, so Clang's
+    -- default-on -Wunused-private-field (promoted by -Werror) fails this one
+    -- mutation build; the suppression is scoped to it and never reaches GCC
+    -- or any other target. The mutant is still killed by its named assertions.
     request_scope_target("request_scope_mut_destructor_skips_settle",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE")
+                         "SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE",
+                         "-Wno-unused-private-field")
     request_scope_target("request_scope_mut_finish_swallows_error",
                          R .. "tests/request_scope_test.cpp", false,
                          "SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR")
@@ -798,7 +973,6 @@ do
         add_files(R .. "tests/threadpool_core_cutover_test.cpp",
                   R .. "src/async/async_io_context.cpp",
                   R .. "src/async/threadpool_backend.cpp",
-                  R .. "src/async/request_handle.cpp",
                   R .. "src/async/fail_fast.cpp",
                   R .. "src/async/detail/context_identity.cpp",
                   R .. "src/async/detail/request_core.cpp")
@@ -827,7 +1001,6 @@ if has_config("liburing") then
                       R .. "src/async/uring_transport.cpp",
                       R .. "src/async/uring_completion.cpp",
                       R .. "src/async/uring_backend.cpp",
-                      R .. "src/async/request_handle.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
@@ -858,36 +1031,10 @@ if has_config("liburing") then
                          "SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
 end
 
--- C1-D (#430) RuntimeTaskContext waiter-adapter evidence. The scheduler and
--- runtime seams are macro-guarded internal-testing surface, so this target
--- compiles its own copy of the async TUs the runtime needs (the full
--- src/async set plus the core detail TUs) and links neither sluice_async nor
--- the other seam builds: the seam build and the production build never meet
--- in one binary. `src/async` is on the include path for the internal headers
--- the seams include relative to their own directory.
-do
-    target("runtime_waiter_observer_test")
-        set_kind("binary")
-        set_default(false)
-        set_group("test")
-        add_deps("sluice_core")
-        add_includedirs(R .. "include", R .. "src/async")
-        add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
-        if has_config("liburing") then
-            add_defines("SLUICE_HAS_LIBURING")
-            add_links("uring")
-        end
-        add_files(R .. "tests/runtime_waiter_observer_test.cpp",
-                  R .. "src/async/*.cpp",
-                  R .. "src/async/detail/context_identity.cpp",
-                  R .. "src/async/detail/request_core.cpp")
-        add_tests("runtime_waiter_observer_test")
-end
-
 -- Narrow stackful host: pipeline tracer, failure-path cases, progress-owner
--- composition and bound evidence. Same self-contained seam topology as the
--- runtime_waiter_observer_test target above (own copy of the async TUs with
--- the internal-testing define; never linked with the production library).
+-- composition and bound evidence. Self-contained seam topology (own copy of
+-- the async TUs with the internal-testing define; never linked with the
+-- production library).
 do
     local function stackful_host_target(name, extra_define)
         target(name)
@@ -900,6 +1047,10 @@ do
             if extra_define ~= nil then
                 add_defines(extra_define)
             end
+            -- #520: these targets exist under both ring profiles but carry
+            -- profile-conditional defines, so they need the profile marker at
+            -- a fixed flag position (see xmake/uring.lua).
+            add_defines(sluice_liburing_profile_define())
             if has_config("liburing") then
                 add_defines("SLUICE_HAS_LIBURING")
                 add_links("uring")

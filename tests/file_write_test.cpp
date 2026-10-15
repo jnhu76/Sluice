@@ -1,5 +1,4 @@
-#include <sluice/async/file.hpp>
-#include <sluice/async/task_result.hpp>
+#include "canonical_request_test_support.hpp"
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -89,12 +88,15 @@ bool write_replaces_bytes_at_offset() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     const std::string src_str = "XYZ";
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            slot.publish(await_write_at(file, ctx, 2, as_bytes(src_str), c));
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_write(
+            WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 2});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     const bool content_ok = file_content_is(path, "abXYZf");
     ::unlink(path.c_str());
@@ -115,12 +117,15 @@ bool write_can_extend_file() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     const std::string src_str = "Z";
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            slot.publish(await_write_at(file, ctx, 5, as_bytes(src_str), c));
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_write(
+            WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 5});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     const bool size_ok = file_size_is(path, 6);
     const bool byte_ok = byte_at_offset_is(path, 5, 'Z');
@@ -137,23 +142,24 @@ bool write_can_extend_file() {
     return file.close().has_value();
 }
 
-bool write_empty_buffer_returns_zero_without_operation() {
+bool write_empty_buffer_returns_zero_without_data_effect() {
     const std::string path = make_temp_file("abc");
     if (path.empty())
         return false;
     File file = std::move(File::open(path, writable_mode()).value());
 
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            auto r = await_write_at(file, ctx, 0, std::span<const std::byte>{}, c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_write(WriteOp{file, nullptr, 0, 0});
+        if (!r_admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(r_admitted.error());
+        if (!r_admitted.value().valid() ||
+            ctx.lookup(r_admitted.value().id()) != RequestReadiness::ready)
+            return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+        auto r = sluice::test::wait_and_take(scope, r_admitted.value());
+        return r;
+    }();
 
     const bool content_ok = file_content_is(path, "abc");
     ::unlink(path.c_str());
@@ -178,17 +184,15 @@ bool write_after_close_reports_invalid_state() {
         return false;
 
     const std::string src_str = "X";
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            auto r = await_write_at(file, ctx, 0, as_bytes(src_str), c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_write(
+            WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
+        if (r_admitted.has_value() || ctx.outstanding() != 0)
+            return sluice::make_unexpected<std::size_t>(IoError{IoError::Code::backend_error});
+        return sluice::make_unexpected<std::size_t>(r_admitted.error());
+    }();
 
     if (result.has_value())
         return false;
@@ -204,17 +208,15 @@ bool write_with_read_only_access_fails() {
     File file = std::move(File::open(path).value());
 
     const std::string src_str = "X";
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            auto r = await_write_at(file, ctx, 0, as_bytes(src_str), c);
-            if (!c.idle()) {
-                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            slot.publish(r);
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto r_admitted = scope.submit_write(
+            WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
+        if (r_admitted.has_value() || ctx.outstanding() != 0)
+            return sluice::make_unexpected<std::size_t>(IoError{IoError::Code::backend_error});
+        return sluice::make_unexpected<std::size_t>(r_admitted.error());
+    }();
 
     const bool content_ok = file_content_is(path, "keep");
     ::unlink(path.c_str());
@@ -235,12 +237,15 @@ bool write_result_reports_bytes_written() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     const std::string src_str = "HELLO";
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            slot.publish(await_write_at(file, ctx, 0, as_bytes(src_str), c));
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted = scope.submit_write(
+            WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
+        if (!admitted.has_value())
+            return sluice::make_unexpected<std::size_t>(admitted.error());
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     const bool content_ok = file_content_is(path, "HELLO");
     ::unlink(path.c_str());
@@ -261,33 +266,17 @@ bool write_keeps_resource_and_buffer_valid_until_terminal() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     const std::string src_str = "XYZ";
-    auto result = run_task_to_result<std::size_t>(
-        1, std::make_unique<ThreadPoolBackend>(),
-        [&](RuntimeTaskContext& ctx, TaskResultSlot<Result<std::size_t>>& slot) {
-            Completion<std::size_t> c;
-            auto sr =
-                ctx.submit_write(WriteOp{file, as_bytes(src_str).data(), src_str.size(), 2}, c);
-            if (!sr.has_value()) {
-                slot.publish(make_unexpected<std::size_t>(sr.error()));
-                return;
-            }
-            if (!c.outstanding()) {
-                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            if (!file.is_open()) {
-                slot.publish(make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state}));
-                return;
-            }
-            auto wr = ctx.await_completion(c);
-            if (!wr.has_value()) {
-                slot.publish(make_unexpected<std::size_t>(wr.error()));
-                return;
-            }
-            auto rr = c.result();
-            c.reset();
-            slot.publish(rr);
-        });
+    auto result = [&]() -> Result<std::size_t> {
+        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto admitted =
+            scope.submit_write(WriteOp{file, as_bytes(src_str).data(), src_str.size(), 2});
+        if (!admitted.has_value())
+            return make_unexpected<std::size_t>(admitted.error());
+        if (!admitted.value().valid() || !file.is_open())
+            return make_unexpected<std::size_t>(IoError{IoError::Code::invalid_state});
+        return sluice::test::wait_and_take(scope, admitted.value());
+    }();
 
     const bool content_ok = file_content_is(path, "abXYZf");
     ::unlink(path.c_str());
@@ -330,7 +319,7 @@ bool file_access_query_reports_open_mode() {
     return closed;
 }
 
-}
+} // namespace
 
 int main() {
     struct NamedTest {
@@ -340,8 +329,8 @@ int main() {
     const NamedTest tests[] = {
         {"write_replaces_bytes_at_offset", write_replaces_bytes_at_offset},
         {"write_can_extend_file", write_can_extend_file},
-        {"write_empty_buffer_returns_zero_without_operation",
-         write_empty_buffer_returns_zero_without_operation},
+        {"write_empty_buffer_returns_zero_without_data_effect",
+         write_empty_buffer_returns_zero_without_data_effect},
         {"write_after_close_reports_invalid_state", write_after_close_reports_invalid_state},
         {"write_with_read_only_access_fails", write_with_read_only_access_fails},
         {"write_result_reports_bytes_written", write_result_reports_bytes_written},

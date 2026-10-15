@@ -19,9 +19,6 @@ class AsyncIoContext;
 class ApplicationRuntime;
 class Fiber;
 class Scheduler;
-namespace detail {
-class RequestArena;
-}
 }
 
 template <class T, class = void> struct is_complete : std::false_type {};
@@ -31,7 +28,6 @@ static_assert(!is_complete<sluice::async::AsyncIoContext>::value);
 static_assert(!is_complete<sluice::async::Scheduler>::value);
 static_assert(!is_complete<sluice::async::Fiber>::value);
 static_assert(!is_complete<sluice::async::ApplicationRuntime>::value);
-static_assert(!is_complete<sluice::async::detail::RequestArena>::value);
 
 namespace {
 

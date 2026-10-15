@@ -1,0 +1,13 @@
+uring_transport.cpp.o
+uring_completion.cpp.o
+uring_backend.cpp.o
+threadpool_backend.cpp.o
+stackful_io_host.cpp.o
+request_scope.cpp.o
+fiber_ctx.cpp.o
+fiber.cpp.o
+fail_fast.cpp.o
+cancel.cpp.o
+async_io_context.cpp.o
+context_identity.cpp.o
+request_core.cpp.o

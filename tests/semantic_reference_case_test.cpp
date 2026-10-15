@@ -1,6 +1,5 @@
 #include "semantic_path_probes.hpp"
 
-#include <sluice/async/detail/request_slot.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
 
@@ -111,18 +110,17 @@ void v03_zero_request_with_full_table_is_admission_rejected() {
     const sluice::async::NativeFileRef ref{*file};
     std::vector<std::byte> scratch(4, std::byte{0});
 
-    sluice::async::Completion<std::size_t> holding;
-    auto first = ctx.submit_read(sluice::async::ReadOp{ref, scratch.data(), scratch.size(), 0},
-                                 holding);
+    auto first = ctx.submit_read(sluice::async::ReadOp{ref, scratch.data(), scratch.size(), 0});
     check(first.has_value(), "V03: the first request occupies the only slot");
+    sluice::async::Request<std::size_t> holding = std::move(first.value());
 
-    sluice::async::Completion<std::size_t> noop;
-    auto second = ctx.submit_read(sluice::async::ReadOp{ref, scratch.data(), 0, 0}, noop);
+    auto second = ctx.submit_read(sluice::async::ReadOp{ref, scratch.data(), 0, 0});
     check(!second.has_value() && second.error().code == IoError::Code::would_block,
           "V03 request: zero-length request is admission rejected when the table is full");
 
     while (!holding.ready())
         (void)ctx.poll();
+    holding.discard();
 }
 
 void v15_unknown_effect_write_failure() {
@@ -159,11 +157,10 @@ void v15_unknown_effect_write_failure() {
               "V15 physical: the failure becomes an unaccounted remainder");
     }
 
-    const sluice::async::detail::TerminalResult error_only =
-        sluice::async::detail::TerminalResult::err(
-            IoError{.code = IoError::Code::backend_error, .os_errno = EIO});
-    check(error_only.is_error && error_only.bytes == 0,
-          "V15 characterization: TerminalResult::err records an error with a zero byte count");
+    const IoOutcome error_only = IoOutcome::failure(
+        IoError{.code = IoError::Code::backend_error, .os_errno = EIO});
+    check(!error_only.succeeded && error_only.effect.confirmed_bytes == 0,
+          "V15 characterization: a failed terminal records an error with a zero byte count");
     std::printf("DEFERRED: V15 request-side representation evidence (owner #400); the shared "
                 "request terminal has no effect-certainty channel and its error factory writes a "
                 "zero byte count\n");

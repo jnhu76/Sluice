@@ -1,0 +1,15 @@
+{
+  "before_sha": "a9165f0a997f46d65411967100f87a1cb2627b2b",
+  "after_sha": "94507a57c71704513497ecee3cc01d2bed3b1f24",
+  "capture_source": "fresh git archive before SHA with exactly paired files removed",
+  "equivalence": [
+    {
+      "profile": "n",
+      "all_tracked_production_and_build_inputs_byte_identical": true
+    },
+    {
+      "profile": "y",
+      "all_tracked_production_and_build_inputs_byte_identical": true
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "app": "hash",
+    "profile": "debug-n",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/hash-debug-n-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "N/A"
+  },
+  {
+    "app": "hash",
+    "profile": "debug-y",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/hash-debug-y-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "N/A"
+  },
+  {
+    "app": "hash",
+    "profile": "release-n",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/hash-release-n-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "N/A"
+  },
+  {
+    "app": "hash",
+    "profile": "release-y",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/hash-release-y-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "N/A"
+  }
+]

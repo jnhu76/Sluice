@@ -1,0 +1,4 @@
+ok external_poll_loop_threadpool_w03
+FAIL: late_handoff_wake_is_application_owned
+w03-handoff phase1: core_published=1 signalled=1 delivered=1 visible_before_release=0 quiescent_after_drive=1 library_park_expired=1 visible_after_handoff=1 handoff_generates_no_signal=1 epoch_delta=1
+w03-handoff phase2: wake_source=0 completed=0

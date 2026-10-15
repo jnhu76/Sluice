@@ -67,7 +67,6 @@ int main(int argc, char** argv) {
     options.poll_interval_ms = args.poll_interval_ms;
     options.buffer_size = args.buffer_size;
     options.max_line_bytes = args.max_line_bytes;
-    options.workers = args.workers;
 
     TailEngine engine(
         std::move(opened).value(), options,

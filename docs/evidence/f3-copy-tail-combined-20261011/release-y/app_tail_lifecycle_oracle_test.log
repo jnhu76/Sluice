@@ -1,0 +1,14 @@
+CASE PASS: concurrent_start_is_single_owner
+CASE PASS: callback_self_wait_and_stop
+CASE PASS: callback_exception_is_task_error
+CASE PASS: destructor_waits_for_physical_read
+CASE PASS: destructor_waits_for_callback_return
+CASE PASS: competing_waiters_keep_one_result
+idle stop latency: 0 ms
+CASE PASS: idle_follow_stops_bounded
+CASE PASS: lifecycle_api_states
+CASE PASS: pending_read_settles_before_retire
+CASE PASS: append_delivery_and_partial_withholding
+CASE PASS: truncate_resets_partial_carry
+CASE PASS: descriptor_follow_across_rename
+all 12 tail lifecycle oracle cases passed

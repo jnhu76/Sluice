@@ -1,0 +1,210 @@
+[
+  {
+    "profile": "debug-n",
+    "mode": "debug",
+    "liburing": "n",
+    "builddir": "/tmp/pre-f6-build-debug-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "debug",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/pre-f6-build-debug-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n-configure.log",
+      "log_sha256": "43e394901dc3a6773fe3c0ef5c20bc01c2f1375ff960ea966513df5ed815d3ce"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n.log",
+      "log_sha256": "11fbc69765bb012f26e7e77ed3e157bdacfaddafea68ac600b3d37a0c41bd983"
+    }
+  },
+  {
+    "profile": "debug-y",
+    "mode": "debug",
+    "liburing": "y",
+    "builddir": "/tmp/pre-f6-build-debug-y",
+    "tests": 66,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "debug",
+        "--liburing=y",
+        "--ccache=n",
+        "-o",
+        "/tmp/pre-f6-build-debug-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y-configure.log",
+      "log_sha256": "47b20e2ecc356fb66129df1dfc201794a2d72fefb10fbba59b5cdd758fe3c9e0"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y.log",
+      "log_sha256": "d9c9230ab03287bc87d012af6a2381f7c2aac091185386efbcd58834bf1142eb"
+    }
+  },
+  {
+    "profile": "release-n",
+    "mode": "release",
+    "liburing": "n",
+    "builddir": "/tmp/pre-f6-build-release-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "release",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/pre-f6-build-release-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-n-configure.log",
+      "log_sha256": "1b7e20e121b7aa1d422b88459fce08cfd570337c0ee63f875ecf74a18231464c"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-n.log",
+      "log_sha256": "19f5530c60b28de57057182ecbe690d1349465dbc5afb6e1a8cb00d789f9ccbc"
+    }
+  },
+  {
+    "profile": "release-y",
+    "mode": "release",
+    "liburing": "y",
+    "builddir": "/tmp/pre-f6-build-release-y",
+    "tests": 66,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "release",
+        "--liburing=y",
+        "--ccache=n",
+        "-o",
+        "/tmp/pre-f6-build-release-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-y-configure.log",
+      "log_sha256": "6a757a58e2cfddff453d9d6dfde688203b9818c4bc539b24531e8126ffca8385"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-y.log",
+      "log_sha256": "d71ec0bc9d258101408cf961dd9f34319866144d35fc1b6a9c137046208ab78f"
+    }
+  },
+  {
+    "profile": "asanubsan-n",
+    "mode": "asanubsan",
+    "liburing": "n",
+    "builddir": "/tmp/pre-f6-build-asanubsan-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "asanubsan",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/pre-f6-build-asanubsan-n",
+        "-y",
+        "--toolchain=clang",
+        "--ldflags=--target=x86_64-redhat-linux-gnu"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n-configure.log",
+      "log_sha256": "30a273cdc2325123ea91ce508da4740835b2167047b638f0b4e422143e937c16"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n.log",
+      "log_sha256": "c261521a7433bd66030c9649103facfc6a5d9fa5b8d437f291a975f0b1a9b99e"
+    }
+  },
+  {
+    "profile": "tsan-n",
+    "mode": "tsan",
+    "liburing": "n",
+    "builddir": "/tmp/pre-f6-build-tsan-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "tsan",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/pre-f6-build-tsan-n",
+        "-y",
+        "--toolchain=clang",
+        "--ldflags=--target=x86_64-redhat-linux-gnu"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n-configure.log",
+      "log_sha256": "c578c51b42d43b77ae1542b74a9d80d523118e163f5aaed1d85db36ef3420b6a"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n.log",
+      "log_sha256": "7ac2b5cb9364f98490e877b0ce30998ce326cc3ffad01cfa794a5901ed87472f"
+    }
+  }
+]

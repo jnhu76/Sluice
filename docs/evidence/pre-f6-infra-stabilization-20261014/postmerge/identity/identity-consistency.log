@@ -1,0 +1,8 @@
+$ C_INCLUDE_PATH=
+$ CPATH=
+$ CPLUS_INCLUDE_PATH=
+$ LIBRARY_PATH=
+$ /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/postmerge/identity/build-consistency
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+checking for liburing capability ... ok (/usr/include/liburing.h + /usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so)
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m

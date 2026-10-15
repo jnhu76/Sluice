@@ -23,7 +23,7 @@ bool parse_digits(const char* s, std::size_t& out) {
     return true;
 }
 
-}
+} // namespace
 
 int usage(const char* prog) {
     std::fprintf(stderr,
@@ -34,7 +34,6 @@ int usage(const char* prog) {
                  "  --buffer-size <bytes>   scan/read buffer (default 64 KiB; %zu..%zu)\n"
                  "  --max-line-bytes <n>    retained-line cap; longer lines are reported\n"
                  "                          and skipped (default %zu; <= %zu)\n"
-                 "  --workers <count>       runtime workers (default 1; <= %u)\n"
                  "  --help                  show this help\n"
                  "\n"
                  "Exit codes: 0 = success (follow ended by signal counts as success),\n"
@@ -42,24 +41,12 @@ int usage(const char* prog) {
                  prog, static_cast<unsigned>(kMinPollMs), static_cast<unsigned>(kMaxPollMs), 200u,
                  static_cast<std::size_t>(kMinBufferSize), static_cast<std::size_t>(kMaxBufferSize),
                  static_cast<std::size_t>(kDefaultMaxLineBytes),
-                 static_cast<std::size_t>(kMaxMaxLineBytes), static_cast<unsigned>(kMaxWorkers));
+                 static_cast<std::size_t>(kMaxMaxLineBytes));
     return 1;
 }
 
 bool parse_count(const char* s, std::size_t& out) {
     return parse_digits(s, out);
-}
-
-bool parse_workers(const char* s, unsigned& out) {
-    std::size_t v = 0;
-    if (!parse_digits(s, v) || v == 0)
-        return false;
-    if (v > std::numeric_limits<unsigned>::max())
-        return false;
-    if (v > static_cast<std::size_t>(kMaxWorkers))
-        return false;
-    out = static_cast<unsigned>(v);
-    return true;
 }
 
 bool parse_poll_ms(const char* s, unsigned& out) {
@@ -73,6 +60,15 @@ bool parse_poll_ms(const char* s, unsigned& out) {
 }
 
 int parse_args(int argc, char** argv, CliArgs& args) {
+    for (int i = 1; i < argc; ++i) {
+        const std::string option = argv[i];
+        if (option == "--workers" || option.starts_with("--workers=")) {
+            std::fprintf(stderr,
+                         "%s: --workers has been removed; omit it to use the app-owned driver\n",
+                         argv[0]);
+            return usage(argv[0]);
+        }
+    }
     int positionals = 0;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -106,10 +102,6 @@ int parse_args(int argc, char** argv, CliArgs& args) {
             if (!v || !parse_digits(v, args.max_line_bytes) || args.max_line_bytes == 0 ||
                 args.max_line_bytes > kMaxMaxLineBytes)
                 return usage(argv[0]);
-        } else if (a == "--workers") {
-            const char* v = next("--workers");
-            if (!v || !parse_workers(v, args.workers))
-                return usage(argv[0]);
         } else if (a.size() > 1 && a[0] == '-') {
             std::fprintf(stderr, "%s: unknown option %s\n", argv[0], a.c_str());
             return usage(argv[0]);
@@ -128,4 +120,4 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     return 0;
 }
 
-}
+} // namespace sluice_tail::cli

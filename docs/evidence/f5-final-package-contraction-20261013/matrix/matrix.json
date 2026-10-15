@@ -1,0 +1,269 @@
+[
+  {
+    "profile": "debug-n",
+    "mode": "debug",
+    "liburing": "n",
+    "builddir": "/tmp/f5-build-debug-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "debug",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/f5-build-debug-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n-configure.log",
+      "log_sha256": "4f43f61f52c148657d676dc3ba838a7f55f781e1aa0cdba47af258a384ff7f05"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n.log",
+      "log_sha256": "c2a577d34d7fc1c332c9bdb8a59c1a793d197397a3a87db830787d3674a9d264"
+    }
+  },
+  {
+    "profile": "debug-y",
+    "mode": "debug",
+    "liburing": "y",
+    "builddir": "/tmp/f5-build-debug-y",
+    "tests": 66,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "debug",
+        "--liburing=y",
+        "--ccache=n",
+        "-o",
+        "/tmp/f5-build-debug-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y-configure.log",
+      "log_sha256": "df44f12d364779e33d25ecb1a7129e837c9dcea6e4bf4ebc2b6ed8e8b1ab919f"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y.log",
+      "log_sha256": "8a7bc9aea3c7681963e210f4a78c1ff979aae9f893b90d10a093a7f7a78e5a36"
+    }
+  },
+  {
+    "profile": "release-n",
+    "mode": "release",
+    "liburing": "n",
+    "builddir": "/tmp/f5-build-release-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "release",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/f5-build-release-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-n-configure.log",
+      "log_sha256": "b9f18109a575b7893ad7fb6eb1bef1dbc70366f22b9e013cc587abeb9241bb01"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-n.log",
+      "log_sha256": "f0dc7b2a6b0fff9470a587c59758b242568152018e93eb36d87806ec7d7c959b"
+    }
+  },
+  {
+    "profile": "release-y",
+    "mode": "release",
+    "liburing": "y",
+    "builddir": "/tmp/f5-build-release-y",
+    "tests": 66,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "release",
+        "--liburing=y",
+        "--ccache=n",
+        "-o",
+        "/tmp/f5-build-release-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-y-configure.log",
+      "log_sha256": "f64f77d093aafc35c21fb93f48501a9402b892df886bfb07d4ba6d232a0af914"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-y.log",
+      "log_sha256": "d321090978ec7095e98a003185adcfcdc83f4b996df3f45fcf3330aff6cc7185"
+    }
+  },
+  {
+    "profile": "asanubsan-n",
+    "mode": "asanubsan",
+    "liburing": "n",
+    "builddir": "/tmp/f5-build-asanubsan-n",
+    "tests": 52,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "asanubsan",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/f5-build-asanubsan-n",
+        "-y",
+        "--toolchain=clang",
+        "--ldflags=--target=x86_64-redhat-linux-gnu"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n-configure.log",
+      "log_sha256": "4dbff5b7b3eac88ab648e0057a7fd3d5e2232d2107766b41541ad47f3114cf22"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n.log",
+      "log_sha256": "5e2dd6b43fe172fd19755f0be8cfda7d1baf90f4719c8cc51d77823adb75f26d"
+    }
+  },
+  {
+    "profile": "tsan-n",
+    "mode": "tsan",
+    "liburing": "n",
+    "builddir": "/tmp/f5-build-tsan-n",
+    "tests": 51,
+    "failed": 0,
+    "configure": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "f",
+        "-m",
+        "tsan",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/f5-build-tsan-n",
+        "-y",
+        "--toolchain=clang",
+        "--ldflags=--target=x86_64-redhat-linux-gnu"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n-configure.log",
+      "log_sha256": "5457bb951b37c84ef02701c456e479252adedc1e002e2c518ad67a5d92547c36"
+    },
+    "test": {
+      "argv": [
+        "/home/jnhu/.local/bin/xmake",
+        "test",
+        "-y",
+        "*/app_copy_consumption_test",
+        "*/app_copy_dir_fsync_test",
+        "*/app_copy_pipeline_oracle_test",
+        "*/app_grep_consumption_test",
+        "*/app_hash_consumption_test",
+        "*/app_tail_cli_oracle_test",
+        "*/app_tail_consumption_test",
+        "*/app_tail_lifecycle_oracle_test",
+        "*/async_sync_admission_test",
+        "*/backend_conformance_e1_threadpool_test",
+        "*/blocking_file_read_test",
+        "*/blocking_file_sequential_test",
+        "*/blocking_file_state_test",
+        "*/blocking_file_sync_all_test",
+        "*/blocking_file_sync_data_test",
+        "*/blocking_file_write_test",
+        "*/direct_composition_fault_test",
+        "*/direct_composition_test",
+        "*/direct_cursor_position_test",
+        "*/direct_w01_consumer_probe",
+        "*/explicit_file_ref_test",
+        "*/file_access_precedence_test",
+        "*/file_close_semantics_test",
+        "*/file_info_identity_test",
+        "*/file_open_contract_test",
+        "*/file_read_test",
+        "*/file_resource_test",
+        "*/file_sync_all_test",
+        "*/file_sync_data_test",
+        "*/file_write_test",
+        "*/progress_source_ownership_test",
+        "*/public_request_release_violation_test",
+        "*/public_request_test",
+        "*/request_core_consumer_probe",
+        "*/request_core_ownership_test",
+        "*/request_core_protocol_test",
+        "*/request_core_publication_test",
+        "*/semantic_durability_reference_test",
+        "*/semantic_effect_outcome_test",
+        "*/semantic_errno_mapping_test",
+        "*/semantic_open_test",
+        "*/semantic_range_test",
+        "*/semantic_reference_case_test",
+        "*/semantic_short_io_reference_test",
+        "*/semantic_validation_precedence_test",
+        "*/shutdown_lifecycle_test",
+        "*/stackful_host_test",
+        "*/threadpool_core_cutover_test",
+        "*/threadpool_external_loop_test",
+        "*/threadpool_progress_race_test",
+        "*/uring_submit_boundary_test"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n.log",
+      "log_sha256": "604cf3b3c8ad99ced505e70e6c2593f4ce20c8c5cab8d5d1f8734e0966202935"
+    },
+    "excluded": {
+      "target": "request_scope_test",
+      "reason": "LINK_UNAVAILABLE_STRONG_ALLOCATION_OVERRIDES",
+      "log": "tsan-n-request_scope_test-link-attempt.log",
+      "log_sha256": "63c54932b3b5ec8aaf2e3d40bbb9134293f569f3233b49f4927cdc6f7797b2f3",
+      "source_identical_to_base": true,
+      "source_sha256": "05a58a67a6346b396c10a0e321b511eedd8ff6aaa233745f4014dfd48487640b"
+    }
+  }
+]

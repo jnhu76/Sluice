@@ -1,13 +1,12 @@
 #include "tail_task.hpp"
 
-#include <sluice/async/await_op_helpers.hpp>
-#include <sluice/async/file.hpp>
-#include <sluice/async/task_result.hpp>
-#include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 
 #include <chrono>
+#include <condition_variable>
 #include <cstring>
+#include <mutex>
+#include <system_error>
 #include <memory>
 #include <span>
 #include <thread>
@@ -18,7 +17,6 @@ namespace sluice_tail {
 
 namespace {
 
-using namespace sluice::async;
 using sluice::IoError;
 
 struct LineAssembler {
@@ -84,6 +82,25 @@ struct LineAssembler {
     }
 };
 
+struct DriverState {
+    std::mutex mutex;
+    std::condition_variable wake;
+    bool started = false;
+    bool waited = false;
+    bool stop = false;
+    std::thread::id driver_id;
+
+    bool stop_requested() {
+        std::lock_guard lock(mutex);
+        return stop;
+    }
+
+    void wait_poll(unsigned interval_ms) {
+        std::unique_lock lock(mutex);
+        wake.wait_for(lock, std::chrono::milliseconds(interval_ms), [this] { return stop; });
+    }
+};
+
 struct TailTask {
     const sluice::File* file;
     TailOptions options;
@@ -91,9 +108,7 @@ struct TailTask {
     DiagSink diag;
     std::vector<std::uint8_t> buffer;
 
-    TaskResultSlot<TailResult>& slot;
-
-    void publish(TailResult r) { slot.publish(std::move(r)); }
+    DriverState& state;
 
     void emit(std::vector<std::string>& lines, TailResult& r) {
         for (auto& l : lines) {
@@ -109,26 +124,22 @@ struct TailTask {
             diag(msg);
     }
 
-    sluice::Result<std::size_t> read_at(RuntimeTaskContext& ctx, Completion<std::size_t>& rc,
-                                        std::uint64_t offset) {
-        return await_read_at(
-            *file, ctx, offset,
-            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()), rc);
+    sluice::Result<std::size_t> read_at(std::uint64_t offset) {
+        return sluice::blocking::read_at(
+            *file, offset,
+            std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()));
     }
 
-    sluice::Result<std::uint64_t> find_last_lines_offset(RuntimeTaskContext& ctx,
-                                                         std::uint64_t size, std::size_t n) {
+    sluice::Result<std::uint64_t> find_last_lines_offset(std::uint64_t size, std::size_t n) {
         if (size == 0 || n == 0)
             return size;
 
         bool skip_final_nl = false;
         {
-            Completion<std::size_t> rc;
             std::uint8_t last = 0;
 
-            auto rr = await_read_at(*file, ctx, size - 1,
-                                    std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1),
-                                    rc);
+            auto rr = sluice::blocking::read_at(
+                *file, size - 1, std::span<std::byte>(reinterpret_cast<std::byte*>(&last), 1));
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             skip_final_nl = (last == '\n');
@@ -136,16 +147,14 @@ struct TailTask {
 
         std::size_t count = 0;
         std::uint64_t pos = size;
-        Completion<std::size_t> rc;
         while (pos > 0) {
-            if (ctx.cancel_token().is_requested())
+            if (state.stop_requested())
                 return size;
             std::uint64_t lo = (pos > buffer.size()) ? pos - buffer.size() : 0;
 
             std::size_t want = static_cast<std::size_t>(pos - lo);
-            auto rr = await_read_at(
-                *file, ctx, lo,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), want), rc);
+            auto rr = sluice::blocking::read_at(
+                *file, lo, std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), want));
             if (!rr.has_value())
                 return make_unexpected<std::uint64_t>(rr.error());
             std::size_t got = rr.value();
@@ -168,18 +177,20 @@ struct TailTask {
         return 0;
     }
 
-    void operator()(RuntimeTaskContext& ctx) {
+    TailResult operator()() {
         TailResult r;
         try {
-            run(ctx, r);
+            run(r);
+        } catch (const std::bad_alloc&) {
+            r.error = IoError{IoError::Code::no_space};
         } catch (...) {
             if (!r.error.has_value())
                 r.error = IoError{IoError::Code::backend_error};
         }
-        publish(std::move(r));
+        return r;
     }
 
-    void run(RuntimeTaskContext& ctx, TailResult& r) {
+    void run(TailResult& r) {
         auto size_r = sluice::blocking::size(*file);
         if (!size_r.has_value()) {
             r.error = size_r.error();
@@ -190,22 +201,25 @@ struct TailTask {
         std::uint64_t off = size;
 
         if (options.lines > 0) {
-            auto start_r = find_last_lines_offset(ctx, size, options.lines);
+            auto start_r = find_last_lines_offset(size, options.lines);
             if (!start_r.has_value()) {
                 r.error = start_r.error();
                 return;
             }
-            if (ctx.cancel_token().is_requested()) {
+            if (state.stop_requested()) {
                 r.stopped_by_cancel = true;
                 return;
             }
 
             LineAssembler asmbl(options.max_line_bytes);
             std::vector<std::string> lines;
-            Completion<std::size_t> rc;
             off = start_r.value();
             while (off < size) {
-                auto rr = read_at(ctx, rc, off);
+                if (state.stop_requested()) {
+                    r.stopped_by_cancel = true;
+                    return;
+                }
+                auto rr = read_at(off);
                 if (!rr.has_value()) {
                     r.error = rr.error();
                     return;
@@ -230,14 +244,12 @@ struct TailTask {
 
         LineAssembler asmbl(options.max_line_bytes);
         std::vector<std::string> lines;
-        Completion<std::size_t> rc;
-        const auto slice = std::chrono::milliseconds(50);
         while (true) {
-            if (ctx.cancel_token().is_requested()) {
+            if (state.stop_requested()) {
                 r.stopped_by_cancel = true;
                 return;
             }
-            auto rr = read_at(ctx, rc, off);
+            auto rr = read_at(off);
             if (!rr.has_value()) {
                 r.error = rr.error();
                 return;
@@ -256,12 +268,10 @@ struct TailTask {
                 continue;
             }
 
-            auto deadline = std::chrono::steady_clock::now() +
-                            std::chrono::milliseconds(options.poll_interval_ms);
-            while (std::chrono::steady_clock::now() < deadline) {
-                if (ctx.cancel_token().is_requested())
-                    break;
-                std::this_thread::sleep_for(slice);
+            state.wait_poll(options.poll_interval_ms);
+            if (state.stop_requested()) {
+                r.stopped_by_cancel = true;
+                return;
             }
 
             auto cur_r = sluice::blocking::size(*file);
@@ -280,7 +290,7 @@ struct TailTask {
     }
 };
 
-}
+} // namespace
 
 struct TailEngine::Impl {
     explicit Impl(sluice::File f) : file(std::move(f)) {}
@@ -289,11 +299,9 @@ struct TailEngine::Impl {
     TailOptions options;
     LineSink sink;
     DiagSink diag;
-    std::unique_ptr<ApplicationRuntime> rt;
-    TaskResultSlot<TailResult> slot;
-    std::atomic<bool> started{false};
-    std::atomic<bool> waited{false};
-    std::vector<std::uint8_t> buffer;
+    DriverState state;
+    std::thread driver;
+    TailResult result;
 };
 
 namespace {
@@ -301,11 +309,11 @@ namespace {
 bool options_valid(const TailOptions& o) {
     return o.lines <= kMaxLines && o.buffer_size >= kMinBufferSize &&
            o.buffer_size <= kMaxBufferSize && o.max_line_bytes > 0 &&
-           o.max_line_bytes <= kMaxMaxLineBytes && o.workers > 0 && o.workers <= kMaxWorkers &&
+           o.max_line_bytes <= kMaxMaxLineBytes &&
            o.poll_interval_ms >= kMinPollMs && o.poll_interval_ms <= kMaxPollMs;
 }
 
-}
+} // namespace
 
 TailEngine::TailEngine(sluice::File file, TailOptions options, LineSink sink, DiagSink diag)
     : impl_(std::make_unique<Impl>(std::move(file))) {
@@ -314,66 +322,63 @@ TailEngine::TailEngine(sluice::File file, TailOptions options, LineSink sink, Di
     impl_->diag = std::move(diag);
 }
 
-TailEngine::~TailEngine() = default;
+TailEngine::~TailEngine() {
+    request_stop();
+    if (impl_->driver.joinable())
+        impl_->driver.join();
+}
 
 sluice::Result<void> TailEngine::start() {
-    if (!options_valid(impl_->options))
+    std::lock_guard lock(impl_->state.mutex);
+    if (impl_->state.started || !options_valid(impl_->options))
         return sluice::make_unexpected<void>(IoError{IoError::Code::invalid_state});
     try {
-        impl_->buffer.assign(impl_->options.buffer_size, 0);
+        TailTask task{&impl_->file,
+                      impl_->options,
+                      impl_->sink,
+                      impl_->diag,
+                      std::vector<std::uint8_t>(impl_->options.buffer_size),
+                      impl_->state};
+        impl_->driver =
+            std::thread([this, task = std::move(task)]() mutable { impl_->result = task(); });
     } catch (const std::bad_alloc&) {
         return sluice::make_unexpected<void>(IoError{IoError::Code::no_space});
-    }
-
-    RuntimeBuilder builder;
-    builder.backend(std::make_unique<ThreadPoolBackend>());
-    builder.workers(impl_->options.workers);
-    try {
-        auto build_r = builder.build();
-        if (!build_r.has_value())
-            return sluice::make_unexpected<void>(build_r.error());
-        impl_->rt = std::move(build_r.value());
-        auto start_r = impl_->rt->start();
-        if (!start_r.has_value())
-            return sluice::make_unexpected<void>(start_r.error());
+    } catch (const std::system_error& error) {
+        return sluice::make_unexpected<void>(
+            IoError{IoError::Code::backend_error, error.code().value()});
     } catch (...) {
-        if (impl_->rt)
-            (void)impl_->rt->shutdown();
-        return sluice::make_unexpected<void>(IoError{IoError::Code::no_space});
+        return sluice::make_unexpected<void>(IoError{IoError::Code::backend_error});
     }
-
-    TailTask task{&impl_->file, impl_->options, impl_->sink,
-                  impl_->diag,  std::move(impl_->buffer), impl_->slot};
-
-    auto sub_r =
-        impl_->rt->submit([t = std::move(task)](RuntimeTaskContext& ctx) mutable { t(ctx); });
-    if (!sub_r.has_value()) {
-        (void)impl_->rt->shutdown();
-        return sluice::make_unexpected<void>(sub_r.error());
-    }
-    impl_->started.store(true, std::memory_order::release);
+    impl_->state.driver_id = impl_->driver.get_id();
+    impl_->state.started = true;
     return {};
 }
 
 void TailEngine::request_stop() noexcept {
-    if (impl_->started.load(std::memory_order::acquire) && impl_->rt)
-        impl_->rt->request_stop();
+    {
+        std::lock_guard lock(impl_->state.mutex);
+        if (!impl_->state.started)
+            return;
+        impl_->state.stop = true;
+    }
+    impl_->state.wake.notify_all();
 }
 
 sluice::Result<TailResult> TailEngine::wait() {
-    if (!impl_->started.load(std::memory_order::acquire))
-        return sluice::make_unexpected<TailResult>(IoError{IoError::Code::invalid_state});
-    bool already = false;
-    if (!impl_->waited.compare_exchange_strong(already, true)) {
-        return sluice::make_unexpected<TailResult>(IoError{IoError::Code::invalid_state});
+    {
+        std::lock_guard lock(impl_->state.mutex);
+        if (!impl_->state.started || impl_->state.waited ||
+            impl_->state.driver_id == std::this_thread::get_id())
+            return sluice::make_unexpected<TailResult>(IoError{IoError::Code::invalid_state});
+        impl_->state.waited = true;
     }
-
-    TailResult out = impl_->slot.wait_and_take();
-
-    impl_->rt->request_stop();
-    (void)impl_->rt->drain();
-    (void)impl_->rt->join();
-    return std::move(out);
+    try {
+        impl_->driver.join();
+    } catch (const std::system_error& error) {
+        return sluice::make_unexpected<TailResult>(
+            IoError{IoError::Code::backend_error, error.code().value()});
+    }
+    return std::move(impl_->result);
 }
 
 }

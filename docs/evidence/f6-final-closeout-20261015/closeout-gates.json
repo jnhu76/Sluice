@@ -1,0 +1,70 @@
+{
+  "audit": "F6_FINAL_CLOSEOUT",
+  "mode": "EVIDENCE_ADOPTION_AND_STATUS_CLOSURE",
+  "frozen_content_sha": "821c489fb081308d5ef95b13a14cc6435ac78d41",
+  "original_audit_evidence_sha": "99d2d4b14498f9b71e4df620f97c1a2306e036ff",
+  "evaluated_at": "2026-10-15T00:30:00+08:00",
+  "provenance": {
+    "original_commit_recovered": "local-only commit 99d2d4b1 (child of origin/master fdb4b743, never pushed) was carried verbatim on branch codex/f6-final-closeout-523 and became GitHub-API-resolvable; evidence files readable at the exact commit URL; original tree content unchanged",
+    "independent_recheck": {
+      "requirement_rows": "113 data rows, unique IDs, set-identical to the root's 71 clause IDs (22 families, recount from headings) + S1-S10 + L1-L5 + V01-V27",
+      "formal_assets": "26 rows with 3-axis classification (retention / eligibility / proof-scope)",
+      "findings": "18 unique IDs F6-F01..F6-F18 with the mandated field set",
+      "hard_gate_list": "16 gates, verbatim-identical to the #402 'Final hard gates' list"
+    }
+  },
+  "frozen_content_invariance": {
+    "claim": "All F6 closeout commits after 99d2d4b1 are documentation-only (docs/ tree plus wording fixes in the two apps READMEs); production/build/test/model content is byte-identical to 821c489f",
+    "verification": "git diff --name-only 821c489f..<closeout-head> contains only docs/ paths plus apps/sluice-copy/README.md and apps/sluice-grep/README.md (wording only; checked per commit and for the PR head before merge)"
+  },
+  "gates": {
+    "E_REQUIRED_CLOSURE_ADOPTED": {"value": "PASS", "closeout_basis": "unchanged from 99d2d4b1; PR #453 merge eb7bf055 re-cited; ADR-0004 status banner re-read"},
+    "EACH_FINAL_DISPOSITION_HAS_ROOT_ROLE_POLICY_AND_EVIDENCE": {"value": "PASS", "closeout_basis": "unchanged; formal-assets.tsv 26/26 re-checked for axis completeness"},
+    "RETAINED_CONSUMERS_MIGRATED_OR_EXPLICITLY_ISOLATED": {"value": "PASS", "closeout_basis": "unchanged; F3/F4 execution records on master"},
+    "CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY": {"value": "PASS", "closeout_basis": "raw/cleanroom-consumers.txt re-read; scope honestly limited to debug + liburing=n (disclosed); dual-profile package evidence reused from F5 B-01 v7 executed at 573d616c, which is docs-only away from frozen 821c489f (verified: git diff 573d616c..821c489f is docs-only)"},
+    "PACKAGE_USAGE_REQUIREMENTS_AND_DECLARATIONS_MATCH_ARTIFACTS": {"value": "PASS", "closeout_basis": "25 headers / 13 async members / 15 objects re-derived by the audit; installed prefix spot-checked at closeout (/tmp/f6-prefix: 25 headers); SLUICE_HAS_LIBURING public define + SLUICE_LIBURING_PROFILE identity define match xmake/uring.lua and the guarded uring_backend.hpp layout"},
+    "NO_UNQUALIFIED_CANONICAL_DOC_CLAIMS_FOR_RETIRED_AUTHORITY": {"value": "PASS", "closeout_basis": "residual stale items F6-F06/F06-F07 wording corrected in this closeout (docs-only); F6-F05 deferred to #528; none instructed use of retired authority"},
+    "DIRECT_AND_REQUEST_CORE_HOST_FIREWALL": {"value": "PASS", "closeout_basis": "unchanged; ::open() exists only in src/file_resource.cpp (single native fd authority re-grepped at closeout)"},
+    "CURRENT_IMPLEMENTATION_CLAIMS_WITH_INVALID_OR_MISSING_CORRESPONDENCE": {
+      "value": 0,
+      "closeout_basis": "re-derived, not copied: see reverse_claim_enumeration below; every anchor-to-claims direction was regenerated from requirements-matrix.tsv and each anchor's validity re-checked; the one known model-side superset (ReleaseBind) is disclosed in REQ-01/REQ-05 scope columns and no row claims exact correspondence over the reclaim sub-graph"
+    },
+    "SINGLE_CANONICAL_NATIVE_RESOURCE_AUTHORITY": {"value": "PASS", "closeout_basis": "File sole fd owner re-verified: only File::open opens descriptors; FileReader/Writer world absent (F4 probes)"},
+    "CANONICAL_ACCEPTED_REQUEST_HAS_SINGLE_MOVE_ONLY_SETTLEMENT_BINDING": {"value": "PASS", "closeout_basis": "no second binding type exists (no Completion class/struct/using anywhere; residual enum names CompletionState/CompletionWaitOutcome are unrelated shared-oracle/fiber enums, not settlement bindings)"},
+    "BACKEND_CORE_HOST_SPECIFIC_IDENTITY_CONTINUATION_ROUTING_AUTHORITY": {"value": 0, "closeout_basis": "unchanged; AsyncBackend seam host-neutral"},
+    "RETIRED_ROLE_CODE_IN_CANONICAL_TARGET": {"value": 0, "closeout_basis": "inert residue F6-F08 disclosed and transferred to #525; no Scheduler definition exists anywhere (re-grepped at closeout)"},
+    "W01_EXTERNAL": {"value": "PASS", "closeout_basis": "raw/w01_direct.cpp links -lsluice_core only"},
+    "W02_EXTERNAL": {"value": "PASS", "closeout_basis": "raw/w02_scope.cpp; V18 capacity rejection observed"},
+    "W03_EXTERNAL": {"value": "PASS", "closeout_basis": "raw/w03_external_loop.cpp; detach refusal reproduced as positive evidence"},
+    "W04_EXTERNAL": {"value": "N/A_WITH_NEGATIVE_PACKAGE_PROOF", "closeout_basis": "unchanged: profile not shipped/supported (OPTIONAL_W04_SUPPORTED=NO), candidate-labeled install, honest construction failure, no support claim; negative package/support-claim proof in package-and-claims.md R4; closeout added the confinement adjudication that the only ERR-01-questionable mappings (bad_alloc/slot-capacity -> no_space) live inside this unsupported candidate host (#526 precondition for any future support)"}
+  },
+  "reverse_claim_enumeration": {
+    "method": "for every evidence anchor cited by requirements-matrix.tsv (columns production/test/formal/external), the set of claim rows citing it was regenerated mechanically at closeout; anchors below carry the load-bearing claims; every enumerated anchor either exists and supports its citing rows at 821c489f or its rows carry an explicit honest scope",
+    "anchors": {
+      "RequestCore.tla": {"cited_by": ["BOUND-01","BOUND-02","CANCEL-01","HANDLE-01","HANDLE-02","HANDLE-03","REQ-01","REQ-02","REQ-03","REQ-04","REQ-05","S1","S2","S3","S4","S5","S6","V01","V02","V03","V04","V05","V09","V14","V24"], "validity": "safety re-run complete clean at 821c489f (152,240,323+ generated / 26,566,666+ distinct / depth 53); REQ-05 (reclaim sub-graph) classified MODEL_SUPERSET with ReleaseBind disclosed; all other citing rows claim properties over the full modeled space, which is a superset of the C++ protocol, so pass is conservative; no citing row claims exact reclaim-sub-graph correspondence"},
+      "RequestCoreLive.cfg": {"cited_by": ["REQ-06","L1"], "validity": "closure authority = E2-dated complete receipt (26,662,372 states, 171/171 PASS at eb7bf055) under F2's historical-reuse ruling; closeout re-verified the reuse premises at 821c489f: formal/tla + scripts/verify_tla.sh byte-identical eb7bf055..821c489f, and request_core.cpp/request.hpp byte-identical 27a5041a..821c489f; fresh-run status recorded without relabeling the authority (rcore-live-final-status.md)"},
+      "ObserverCore.tla": {"cited_by": ["CANCEL-02","OBS-01","OBS-02","OBS-03","OBS-04","S7","V06","V07","V08"], "validity": "re-run clean at 821c489f (5,123 states, depth 16); OBS-04 scope note recorded at closeout (request seam is current; adapter oracle historical)"},
+      "ProgressSource.tla": {"cited_by": ["CANCEL-02","PROG-01","PROG-02","PROG-03","PROG-04","S9","V10","V11","V12","V24"], "validity": "re-run clean at 821c489f (21,784 states, depth 18)"},
+      "ShutdownCore.tla": {"cited_by": ["S8","SHUT-01","SHUT-02","SHUT-03","SHUT-04","V20","V21","V22","V23","V26"], "validity": "re-run clean at 821c489f (47,521 states, depth 21)"},
+      "w01_direct.cpp (raw)": {"cited_by": ["ARCH-01","S10","SEM-01","SEM-02","SEM-05","SEM-06","SEM-07","V25","V27","W-01"], "validity": "compile+link+run at installed prefix, -lsluice_core only; scope debug+liburing=n (dual-profile package coverage via F5 B-01 v7 at content-identical 573d616c)"},
+      "w02_scope.cpp (raw)": {"cited_by": ["BOUND-01","BOUND-02","HOST-02","L5","REQ-02","REQ-05","S6","V18","W-02"], "validity": "same clean-room scope as W-01"},
+      "w03_external_loop.cpp (raw)": {"cited_by": ["BACKEND-03","HANDLE-01","HANDLE-03","L1","L2","L4","LIFE-01","LIFE-03","PROD-02","PROG-02","PROG-03","S5","S8","S9","SHUT-02","THREAD-02","V11","V12","V13","V22","W-03"], "validity": "same clean-room scope; detach refusal recorded as positive evidence; PROD-02 dual-profile correspondence via uring variant in-repo package consumers plus B-01 v7"},
+      "semantic_errno_mapping_test": {"cited_by": ["ERR-01"], "validity": "direct-path coverage; request path shares the same oracle functions (closeout-traced: precheck_state_op + rejection_of/accept_or_reject at async_io_context.cpp:24, uring_backend.cpp:103-115, threadpool_backend.cpp:147-162), so no divergent table exists; the untested re-diff is tracked in #526"},
+      "contract_* oracles (request lifetime / admission / backend availability / cancel effect / progress)": {"cited_by": "33 rows across REQ/SEM/S/V/HOST/BACKEND/PROG families", "validity": "on master at 821c489f; both test matrices green at the frozen tree (66/66 liburing=y, 52/52 liburing=n)"},
+      "f4_retirement probes": {"cited_by": "F4 retirement rows", "validity": "present on master (tests/package/f4_retirement/probes/); fail-as-required on presence of retired surfaces"},
+      "E2-era and Lean corpus": {"cited_by": [], "validity": "no current row cites Lean (REUSE=0 per formal evidence map); E2 receipts cited only through the dated ledger rows"}
+    }
+  },
+  "typo_note": "#523's body spelled 'SLUCE_LIBURING_PROFILE' once (line 42 of the original body); the committed evidence and the actual define are SLUICE_LIBURING_PROFILE (xmake/uring.lua:85). The issue body was corrected by editing that single token (documented in a #523 comment); no build macro or production file was touched for this.",
+  "blockers": {"P0": 0, "P1": 0},
+  "findings_disposition_summary": {
+    "total": 18,
+    "CLOSED_DOC_CORRECTED": 5,
+    "TRANSFERRED_TO_TRACKED_ISSUE": 10,
+      "SUPERSEDED_BY_NEW_EVIDENCE": 2,
+      "ACCEPTED_DEFERRED_WITH_SCOPE": 1,
+      "F6_F04": "SUPERSEDED_BY_NEW_EVIDENCE - fresh RequestCoreLive.cfg run completed clean at the frozen tree 2026-10-15 01:33 +0800 (COMPLETE_PASS: 153,347,909 generated / 26,662,372 distinct / 0 on queue / depth 53 / 3h10m / no errors; complete graph exactly equals the E2 receipt's 26,662,372 states); E2-dated receipt remains the closure authority; see rcore-live-final-status.md",
+    "BLOCKED_REQUIRES_REPAIR": 0,
+    "deferred_issues": [524, 525, 526, 527, 528]
+  }
+}

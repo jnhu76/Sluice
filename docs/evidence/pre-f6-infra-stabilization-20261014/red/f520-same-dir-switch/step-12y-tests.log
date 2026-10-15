@@ -1,0 +1,27 @@
+===== STEP 12y-tests: /home/jnhu/.local/bin/xmake test -y
+[0m[38;5;2;1m[ 50%]:[0m [38;5;5;1m<shutdown_lifecycle_uring_test>[0m compiling.debug tests/shutdown_lifecycle_test.cpp[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<uring_backend_smoke_test>[0m compiling.debug tests/uring_backend_smoke_test.cpp[0m
+[0m[38;5;2;1m[ 58%]:[0m [38;5;5;1m<uring_core_cutover_test>[0m compiling.debug tests/uring_core_cutover_test.cpp[0m
+[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<uring_external_loop_test>[0m compiling.debug tests/uring_external_loop_test.cpp[0m
+[0m[38;5;2;1m[ 61%]:[0m [38;5;5;1m<uring_progress_race_test>[0m compiling.debug tests/uring_progress_race_test.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<uring_registration_lifecycle_test>[0m compiling.debug tests/uring_registration_lifecycle_test.cpp[0m
+[0m[38;5;2;1m[ 71%]:[0m [38;5;5;1m<stackful_host_test>[0m [38;5;5;1mlinking.debug stackful_host_test[0m
+[0m[38;5;2;1m[ 78%]:[0m [38;5;5;1m<app_copy_consumption_test>[0m [38;5;5;1mlinking.debug app_copy_consumption_test[0m
+[0m[38;5;2;1m[ 78%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m [38;5;5;1mlinking.debug app_copy_dir_fsync_test[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m [38;5;5;1mlinking.debug app_copy_pipeline_oracle_test[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<async_sync_admission_test>[0m [38;5;5;1mlinking.debug async_sync_admission_test[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<explicit_file_ref_test>[0m [38;5;5;1mlinking.debug explicit_file_ref_test[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<file_access_precedence_test>[0m [38;5;5;1mlinking.debug file_access_precedence_test[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<file_read_test>[0m [38;5;5;1mlinking.debug file_read_test[0m
+[0m[38;5;2;1m[ 80%]:[0m [38;5;5;1m<file_sync_all_test>[0m [38;5;5;1mlinking.debug file_sync_all_test[0m
+[0m[38;5;2;1m[ 80%]:[0m [38;5;5;1m<file_sync_data_test>[0m [38;5;5;1mlinking.debug file_sync_data_test[0m
+[0m[38;5;2;1m[ 80%]:[0m [38;5;5;1m<file_write_test>[0m [38;5;5;1mlinking.debug file_write_test[0m
+[0m[38;5;2;1m[ 80%]:[0m [38;5;5;1m<semantic_reference_case_test>[0m [38;5;5;1mlinking.debug semantic_reference_case_test[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<semantic_validation_precedence_test>[0m [38;5;5;1mlinking.debug semantic_validation_precedence_test[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<uring_public_consumer_probe>[0m [38;5;5;1mlinking.debug uring_public_consumer_probe[0m
+[0m[38;5;2;1m[ 89%]:[0m [38;5;5;1m<app_tail_cli_oracle_test>[0m [38;5;5;1mlinking.debug app_tail_cli_oracle_test[0m
+[0m[1;38;5;1;1merror: [0m/usr/bin/ld.bfd: ../f520-shared-build/.objs/uring_public_consumer_probe/linux/x86_64/debug/tests/uring_public_consumer_probe.cpp.o: in function `main':
+/tmp/f520-work/tests/uring_public_consumer_probe.cpp:35:(.text+0x72): undefined reference to `sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)'
+collect2: error: ld returned 1 exit status
+[0m
+exit=255

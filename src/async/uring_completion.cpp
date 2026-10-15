@@ -21,7 +21,7 @@ namespace sluice::async {
 #if defined(SLUICE_HAS_LIBURING)
 
 void UringAsyncBackend::finalize_operation_terminal_(
-    RouterEntry& route, std::size_t router_index, const detail::TerminalResult& terminal,
+    RouterEntry& route, std::size_t router_index, const sluice::detail::IoOutcome& terminal,
     const sluice::FileInfo* metadata) noexcept {
     if (router_index >= router_.size() || !route.in_use || route.terminal_delivered) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: invalid operation terminal "
@@ -36,7 +36,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
         prep.kind == detail::OperationKind::read || prep.kind == detail::OperationKind::write;
     detail::TerminalCandidate candidate;
     candidate.kind = detail::TerminalCandidateKind::physical_outcome;
-    if (terminal.stored && terminal.is_error) {
+    if (!terminal.succeeded) {
         // A dispatched attempt that reached the kernel and reports failure
         if (!is_byte_op) {
             if (terminal_is_kernel_cancel(terminal.error)) {
@@ -55,7 +55,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
 #endif
         }
     } else if (is_byte_op) {
-        candidate.outcome = sluice::detail::IoOutcome::success(terminal.bytes);
+        candidate.outcome = sluice::detail::IoOutcome::success(terminal.effect.confirmed_bytes);
     } else {
         candidate.outcome = sluice::detail::IoOutcome::success();
         if (metadata != nullptr) {
@@ -76,9 +76,9 @@ void UringAsyncBackend::finalize_operation_terminal_(
 
     if (cookie_terminal_is_canceled(terminal)) {
         bump(stats_, &AsyncStats::canceled_ops);
-    } else if (terminal.stored && terminal.is_error) {
+    } else if (!terminal.succeeded) {
         bump(stats_, &AsyncStats::completion_errors);
-    } else if (is_byte_op && terminal.bytes < prep.length) {
+    } else if (is_byte_op && terminal.effect.confirmed_bytes < prep.length) {
         bump(stats_, &AsyncStats::short_completions);
     }
 
@@ -157,19 +157,24 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         (prep.kind == detail::OperationKind::file_info || prep.kind == detail::OperationKind::size);
     sluice::FileInfo metadata;
     const sluice::FileInfo* metadata_out = nullptr;
-    detail::TerminalResult terminal;
+    sluice::detail::IoOutcome terminal;
     if (res < 0) {
 #if defined(SLUICE_B1C_MUTANT_DROP_ORIGINAL_OUTCOME)
         if (is_byte_op)
             return;
 #endif
-        terminal = detail::TerminalResult::err(sluice::from_errno_value(-res));
+#if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
+        terminal = sluice::detail::IoOutcome::failure(
+            IoError{.code = IoError::Code::backend_error});
+#else
+        terminal = sluice::detail::IoOutcome::failure(sluice::from_errno_value(-res));
+#endif
     } else if (is_byte_op) {
-        terminal = detail::TerminalResult::ok_bytes(static_cast<std::uint64_t>(res));
+        terminal = sluice::detail::IoOutcome::success(static_cast<std::uint64_t>(res));
     } else if (is_metadata_op) {
         if (res != 0 || (prep.statx_buffer->stx_mask & STATX_SIZE) == 0 ||
             (prep.statx_buffer->stx_mask & (STATX_TYPE | STATX_MODE)) == 0) {
-            terminal = detail::TerminalResult::err(IoError{IoError::Code::backend_error});
+            terminal = sluice::detail::IoOutcome::failure(IoError{IoError::Code::backend_error});
         } else {
             metadata.kind = S_ISREG(prep.statx_buffer->stx_mode) ? sluice::FileKind::regular
                                                                  : sluice::FileKind::other;
@@ -183,10 +188,10 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
                     prep.statx_buffer->stx_ino};
             }
             metadata_out = &metadata;
-            terminal = detail::TerminalResult::ok_void();
+            terminal = sluice::detail::IoOutcome::success();
         }
     } else {
-        terminal = detail::TerminalResult::ok_void();
+        terminal = sluice::detail::IoOutcome::success();
     }
 
     finalize_operation_terminal_(entry, router_index, terminal, metadata_out);

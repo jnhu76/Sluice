@@ -1,0 +1,30 @@
+The information of target(uring_public_consumer_probe):
+[0m    [38;5;5;1mat[0m: /tmp/f520-work/xmake/xmake.lua[0m
+[0m    [38;5;5;1mkind[0m: binary[0m
+[0m    [38;5;5;1mtargetfile[0m: ../f520-shared-build/linux/x86_64/debug/uring_public_consumer_probe[0m
+[0m    [38;5;5;1mdeps[0m:[0m
+[0m      [38;5;3m->[0m sluice_core [2m-> ./xmake/tests.lua:98[0m[0m
+[0m      [38;5;3m->[0m sluice_async [2m-> ./xmake/tests.lua:98[0m[0m
+[0m    [38;5;5;1mrules[0m:[0m
+[0m      [38;5;3m->[0m mode.debug [2m-> ./xmake.lua:3[0m[0m
+[0m      [38;5;3m->[0m mode.release [2m-> ./xmake.lua:3[0m[0m
+[0m      [38;5;3m->[0m mode.valgrind [2m-> ./xmake.lua:3[0m[0m
+[0m      [38;5;3m->[0m plugin.compile_commands.autoupdate [2m-> ./xmake.lua:4[0m[0m
+[0m      [38;5;3m->[0m sluice.hardened.release [2m-> ./xmake.lua:44[0m[0m
+[0m    [38;5;5;1mlinks[0m:[0m
+[0m      [38;5;3m->[0m uring [2m-> dep(sluice_async) -> [0m[0m
+[0m    [38;5;5;1mdefines[0m:[0m
+[0m      [38;5;3m->[0m SLUICE_HAS_LIBURING [2m-> dep(sluice_async) -> [0m[0m
+[0m    [38;5;5;1mincludedirs[0m:[0m
+[0m      [38;5;3m->[0m /tmp/f520-work/include [2m-> ./xmake/tests.lua:99[0m[0m
+[0m      [38;5;3m->[0m /tmp/f520-work/include [2m-> dep(sluice_core) -> [0m[0m
+[0m    [38;5;5;1mfiles[0m:[0m
+[0m      [38;5;3m->[0m /tmp/f520-work/tests/uring_public_consumer_probe.cpp [2m-> ./xmake/tests.lua:100[0m[0m
+[0m    [38;5;5;1mcompiler (cxx)[0m: /usr/lib64/ccache/g++[0m
+[0m      [38;5;3m->[0m -m64 -Wall -Werror -std=c++20 -I/tmp/f520-work/include -DSLUICE_HAS_LIBURING[0m
+[0m    [38;5;5;1mcompflags (cxx)[0m:[0m
+[0m      [38;5;3m->[0m -m64 -Wall -Werror -std=c++20 -I/tmp/f520-work/include -DSLUICE_HAS_LIBURING[0m
+[0m    [38;5;5;1mlinker (ld)[0m: /usr/lib64/ccache/g++[0m
+[0m      [38;5;3m->[0m -m64 -luring[0m
+[0m    [38;5;5;1mlinkflags (ld)[0m:[0m
+[0m      [38;5;3m->[0m -m64 -luring[0m

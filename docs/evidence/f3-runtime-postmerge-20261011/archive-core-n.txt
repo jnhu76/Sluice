@@ -1,0 +1,13 @@
+blocking_file.cpp.o
+blocking_io_pool.cpp.o
+buffer.cpp.o
+copy.cpp.o
+copy_strategy.cpp.o
+fault.cpp.o
+file.cpp.o
+file_resource.cpp.o
+io_context.cpp.o
+observed.cpp.o
+reader.cpp.o
+wal.cpp.o
+writer.cpp.o

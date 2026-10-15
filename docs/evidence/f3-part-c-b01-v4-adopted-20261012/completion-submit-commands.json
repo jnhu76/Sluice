@@ -1,0 +1,102 @@
+[
+  {
+    "stage": "before",
+    "profile": "n",
+    "argv": [
+      "/usr/bin/g++",
+      "-std=c++20",
+      "-I/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-installed-n/include",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-consumers-n/completion-submit.cpp",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-installed-n/lib/libsluice_async.a",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-installed-n/lib/libsluice_core.a",
+      "-pthread",
+      "-o",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-consumers-n/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "before",
+    "profile": "n",
+    "argv": [
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-consumers-n/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "before",
+    "profile": "y",
+    "argv": [
+      "/usr/bin/g++",
+      "-std=c++20",
+      "-I/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-installed-y/include",
+      "-DSLUICE_HAS_LIBURING",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-consumers-y/completion-submit.cpp",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-installed-y/lib/libsluice_async.a",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-installed-y/lib/libsluice_core.a",
+      "-pthread",
+      "-luring",
+      "-o",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-consumers-y/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "before",
+    "profile": "y",
+    "argv": [
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/before-consumers-y/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "after",
+    "profile": "n",
+    "argv": [
+      "/usr/bin/g++",
+      "-std=c++20",
+      "-I/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-installed-n/include",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-consumers-n/completion-submit.cpp",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-installed-n/lib/libsluice_async.a",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-installed-n/lib/libsluice_core.a",
+      "-pthread",
+      "-o",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-consumers-n/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "after",
+    "profile": "n",
+    "argv": [
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-consumers-n/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "after",
+    "profile": "y",
+    "argv": [
+      "/usr/bin/g++",
+      "-std=c++20",
+      "-I/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-installed-y/include",
+      "-DSLUICE_HAS_LIBURING",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-consumers-y/completion-submit.cpp",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-installed-y/lib/libsluice_async.a",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-installed-y/lib/libsluice_core.a",
+      "-pthread",
+      "-luring",
+      "-o",
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-consumers-y/completion-submit"
+    ],
+    "returncode": 0
+  },
+  {
+    "stage": "after",
+    "profile": "y",
+    "argv": [
+      "/home/jnhu/f3-part-c/merge-gates-20261012-c8QZZL5S/master-package-v4/after-consumers-y/completion-submit"
+    ],
+    "returncode": 0
+  }
+]

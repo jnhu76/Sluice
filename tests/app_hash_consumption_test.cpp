@@ -60,15 +60,14 @@ bool hash_files_streams_known_digest_over_file() {
     std::vector<HashInput> inputs;
     inputs.push_back(HashInput{path, std::move(opened).value()});
 
-    const auto results = sluice_hash::hash_files(std::move(inputs), 4096, 1);
+    const auto results = sluice_hash::hash_files(std::move(inputs), 4096);
     if (results.size() != 1)
         return false;
     if (results[0].error.has_value())
         return false;
     if (results[0].bytes_hashed != 3)
         return false;
-    return results[0].hex ==
-           "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+    return results[0].hex == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 }
 
 bool hash_files_multi_chunk_matches_direct_digest() {
@@ -87,7 +86,7 @@ bool hash_files_multi_chunk_matches_direct_digest() {
     std::vector<HashInput> inputs;
     inputs.push_back(HashInput{path, std::move(opened).value()});
 
-    const auto results = sluice_hash::hash_files(std::move(inputs), 4096, 1);
+    const auto results = sluice_hash::hash_files(std::move(inputs), 4096);
     if (results.size() != 1)
         return false;
     if (results[0].error.has_value())
@@ -109,15 +108,14 @@ bool hash_files_empty_file_yields_empty_digest() {
     std::vector<HashInput> inputs;
     inputs.push_back(HashInput{path, std::move(opened).value()});
 
-    const auto results = sluice_hash::hash_files(std::move(inputs), 4096, 1);
+    const auto results = sluice_hash::hash_files(std::move(inputs), 4096);
     if (results.size() != 1)
         return false;
     if (results[0].error.has_value())
         return false;
     if (results[0].bytes_hashed != 0)
         return false;
-    return results[0].hex ==
-           "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    return results[0].hex == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 }
 
 bool hash_files_reports_error_for_closed_file() {
@@ -135,7 +133,7 @@ bool hash_files_reports_error_for_closed_file() {
     std::vector<HashInput> inputs;
     inputs.push_back(HashInput{path, std::move(file)});
 
-    const auto results = sluice_hash::hash_files(std::move(inputs), 4096, 1);
+    const auto results = sluice_hash::hash_files(std::move(inputs), 4096);
     if (results.size() != 1)
         return false;
     return results[0].error.has_value();
@@ -162,7 +160,7 @@ bool hash_files_preserves_input_order() {
     inputs.push_back(HashInput{path_a, std::move(opened_a).value()});
     inputs.push_back(HashInput{path_b, std::move(opened_b).value()});
 
-    const auto results = sluice_hash::hash_files(std::move(inputs), 4096, 1);
+    const auto results = sluice_hash::hash_files(std::move(inputs), 4096);
     if (results.size() != 2)
         return false;
     if (results[0].path != path_a || results[1].path != path_b)
@@ -170,6 +168,26 @@ bool hash_files_preserves_input_order() {
     if (results[0].error.has_value() || results[1].error.has_value())
         return false;
     return results[0].hex == digest_hex("abc") && results[1].hex == digest_hex("def");
+}
+
+bool hash_files_continues_after_read_error() {
+    const std::string path = make_temp_file("abc");
+    if (path.empty())
+        return false;
+    auto opened = File::open(path);
+    auto closed = File::open(path);
+    ::unlink(path.c_str());
+    if (!opened.has_value() || !closed.has_value() || !closed.value().close().has_value())
+        return false;
+    std::vector<HashInput> inputs;
+    inputs.push_back(HashInput{"closed", std::move(closed).value()});
+    inputs.push_back(HashInput{path, std::move(opened).value()});
+    auto results = sluice_hash::hash_files(std::move(inputs), 4096);
+    if (results.size() != 2 || results[0].path != "closed" || !results[0].error.has_value() ||
+        results[1].path != path || results[1].error.has_value() || results[1].bytes_hashed != 3 ||
+        results[1].hex != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+        return false;
+    return true;
 }
 
 }
@@ -180,15 +198,13 @@ int main() {
         bool (*fn)();
     };
     const NamedTest tests[] = {
-        {"hash_files_streams_known_digest_over_file",
-         hash_files_streams_known_digest_over_file},
+        {"hash_files_streams_known_digest_over_file", hash_files_streams_known_digest_over_file},
         {"hash_files_multi_chunk_matches_direct_digest",
          hash_files_multi_chunk_matches_direct_digest},
-        {"hash_files_empty_file_yields_empty_digest",
-         hash_files_empty_file_yields_empty_digest},
-        {"hash_files_reports_error_for_closed_file",
-         hash_files_reports_error_for_closed_file},
+        {"hash_files_empty_file_yields_empty_digest", hash_files_empty_file_yields_empty_digest},
+        {"hash_files_reports_error_for_closed_file", hash_files_reports_error_for_closed_file},
         {"hash_files_preserves_input_order", hash_files_preserves_input_order},
+        {"hash_files_continues_after_read_error", hash_files_continues_after_read_error},
     };
 
     for (const NamedTest& t : tests) {
@@ -197,7 +213,6 @@ int main() {
             return 1;
         }
     }
-    std::printf("all %zu app hash consumption tests passed\n",
-                sizeof(tests) / sizeof(tests[0]));
+    std::printf("all %zu app hash consumption tests passed\n", sizeof(tests) / sizeof(tests[0]));
     return 0;
 }

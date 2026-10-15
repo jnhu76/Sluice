@@ -6,8 +6,8 @@
 #include "copy_task.hpp"
 #include "support/pipelined_copy_oracle_support.hpp"
 
-#include <sluice/async/await_op_helpers.hpp>
-#include <sluice/async/task_result.hpp>
+#include <sluice/async/request_scope.hpp>
+#include <sluice/async/uring_backend.hpp>
 
 #include <algorithm>
 #include <array>
@@ -188,48 +188,38 @@ bool borrow_live_write_peak_selftest() {
     for (std::size_t i = 0; i < payload.size(); ++i)
         payload[i] = seed_byte(static_cast<std::uint64_t>(i));
 
-    struct TwoWriteTask {
-        NativeFileRef dst;
-        const std::byte* first = nullptr;
-        const std::byte* second = nullptr;
-        void operator()(RuntimeTaskContext& ctx,
-                        TaskResultSlot<Result<std::size_t>>& slot) const {
-            Completion<std::size_t> first_c;
-            Completion<std::size_t> second_c;
-            auto a = ctx.submit_write(WriteOp{dst, first, B, 0}, first_c);
-            if (!a.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(a.error()));
-                return;
-            }
-            auto b = ctx.submit_write(WriteOp{dst, second, B, B}, second_c);
-            if (!b.has_value()) {
-                auto da = await_drain(ctx, first_c);
-                slot.publish(sluice::make_unexpected<std::size_t>(
-                    da.has_value() ? b.error() : da.error()));
-                return;
-            }
-            auto ra = await_take(ctx, first_c);
-            if (!ra.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(ra.error()));
-                return;
-            }
-            auto rb = await_take(ctx, second_c);
-            if (!rb.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(rb.error()));
-                return;
-            }
-            slot.publish(Result<std::size_t>{ra.value() + rb.value()});
-        }
-    };
-
     auto shared = std::make_shared<ScriptedShared>();
     ScriptedController ctrl(shared);
     std::optional<Result<std::size_t>> result;
     std::atomic<bool> done{false};
     std::thread runner([&]() {
-        result = run_task_to_result<std::size_t>(
-            1, std::make_unique<ScriptedBackend>(shared, 8),
-            TwoWriteTask{dst_ref, payload.data(), payload.data() + B});
+        AsyncIoContext ctx(std::make_unique<ScriptedBackend>(shared, 8));
+        RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
+        auto run = [&]() -> Result<std::size_t> {
+            auto first = scope.submit_write(WriteOp{dst_ref, payload.data(), B, 0});
+            if (!first.has_value())
+                return sluice::make_unexpected<std::size_t>(first.error());
+            auto second = scope.submit_write(WriteOp{dst_ref, payload.data() + B, B, B});
+            if (!second.has_value())
+                return sluice::make_unexpected<std::size_t>(second.error());
+            auto first_wait = scope.wait_for(first.value(), std::chrono::nanoseconds::max());
+            if (!first_wait.has_value())
+                return sluice::make_unexpected<std::size_t>(first_wait.error());
+            auto first_result = scope.take(first.value());
+            if (!first_result.result.has_value())
+                return sluice::make_unexpected<std::size_t>(first_result.result.error());
+            auto second_wait = scope.wait_for(second.value(), std::chrono::nanoseconds::max());
+            if (!second_wait.has_value())
+                return sluice::make_unexpected<std::size_t>(second_wait.error());
+            auto second_result = scope.take(second.value());
+            if (!second_result.result.has_value())
+                return sluice::make_unexpected<std::size_t>(second_result.result.error());
+            return first_result.result.value() + second_result.result.value();
+        };
+        auto observed = run();
+        auto settled = scope.finish();
+        result = settled.has_value() ? std::move(observed)
+                                    : sluice::make_unexpected<std::size_t>(settled.error());
         done.store(true, std::memory_order_release);
     });
 
@@ -269,45 +259,34 @@ bool borrow_live_write_peak_selftest() {
                            !ctrl.borrow_overlap_violation() &&
                            ctrl.protocol_violation().empty();
 
-    struct SlotReuseWriteTask {
-        NativeFileRef dst;
-        const std::byte* data = nullptr;
-        void operator()(RuntimeTaskContext& ctx,
-                        TaskResultSlot<Result<std::size_t>>& slot) const {
-            Completion<std::size_t> first_c;
-            auto a = ctx.submit_write(WriteOp{dst, data, B, 0}, first_c);
-            if (!a.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(a.error()));
-                return;
-            }
-            auto ra = await_take(ctx, first_c);
-            if (!ra.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(ra.error()));
-                return;
-            }
-            Completion<std::size_t> second_c;
-            auto b = ctx.submit_write(WriteOp{dst, data + B, B, B}, second_c);
-            if (!b.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(b.error()));
-                return;
-            }
-            auto rb = await_take(ctx, second_c);
-            if (!rb.has_value()) {
-                slot.publish(sluice::make_unexpected<std::size_t>(rb.error()));
-                return;
-            }
-            slot.publish(Result<std::size_t>{ra.value() + rb.value()});
-        }
-    };
-
     auto shared2 = std::make_shared<ScriptedShared>();
     ScriptedController ctrl2(shared2);
     std::optional<Result<std::size_t>> result2;
     std::atomic<bool> done2{false};
     std::thread runner2([&]() {
-        result2 = run_task_to_result<std::size_t>(
-            1, std::make_unique<ScriptedBackend>(shared2, 1),
-            SlotReuseWriteTask{dst_ref, payload.data()});
+        AsyncIoContext ctx(std::make_unique<ScriptedBackend>(shared2, 1));
+        RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+        auto run = [&]() -> Result<std::size_t> {
+            std::size_t total = 0;
+            for (std::size_t offset : {std::size_t{0}, B}) {
+                auto submitted = scope.submit_write(
+                    WriteOp{dst_ref, payload.data() + offset, B, offset});
+                if (!submitted.has_value())
+                    return sluice::make_unexpected<std::size_t>(submitted.error());
+                auto waited = scope.wait_for(submitted.value(), std::chrono::nanoseconds::max());
+                if (!waited.has_value())
+                    return sluice::make_unexpected<std::size_t>(waited.error());
+                auto observed = scope.take(submitted.value());
+                if (!observed.result.has_value())
+                    return sluice::make_unexpected<std::size_t>(observed.result.error());
+                total += observed.result.value();
+            }
+            return total;
+        };
+        auto observed = run();
+        auto settled = scope.finish();
+        result2 = settled.has_value() ? std::move(observed)
+                                     : sluice::make_unexpected<std::size_t>(settled.error());
         done2.store(true, std::memory_order_release);
     });
 
@@ -365,9 +344,8 @@ bool short_read_retry_same_slot() {
     const auto cont4 = sc.ctrl->op_view(r4);
     std::size_t continuation_len = cont4.has_value() ? cont4->len : 0;
     check(continuation_len == B - 4, "short-read continuation length 12");
-    check(orig0.has_value() && cont4.has_value() && orig0->completion == cont4->completion &&
-              cont4->buffer == orig0->buffer + 4,
-          "short-read continuation reuses the same slot buffer and completion");
+    check(orig0.has_value() && cont4.has_value() && cont4->buffer == orig0->buffer + 4,
+          "short-read continuation reuses the same slot buffer");
     check(sc.ctrl->complete_bytes(r4, B - 4), "short-read continuation completes");
 
     const std::uint64_t w0 = sc.ctrl->wait_completable_at(detail::OperationKind::write, 0);
@@ -405,9 +383,8 @@ bool partial_write_advance() {
     const auto cont_w = sc.ctrl->op_view(w7);
     std::size_t continuation_len = cont_w.has_value() ? cont_w->len : 0;
     check(continuation_len == B - 7, "short-write continuation length 9");
-    check(orig_w.has_value() && cont_w.has_value() && orig_w->completion == cont_w->completion &&
-              cont_w->buffer == orig_w->buffer + 7,
-          "short-write continuation reuses the same slot buffer and completion");
+    check(orig_w.has_value() && cont_w.has_value() && cont_w->buffer == orig_w->buffer + 7,
+          "short-write continuation reuses the same slot buffer");
     check(sc.ctrl->complete_bytes(w7, B - 7), "short-write continuation completes");
 
     sc.ctrl->drive_to_end(B * 2, sc.copy_published);
@@ -671,9 +648,9 @@ bool bounded_reuse_multiround() {
     check(sc.open_files(), "multiround opens");
     sc.start(B, DEPTH, SyncPolicy::none);
 
-    std::set<void*> slot_ids;
+    std::set<std::byte*> slot_ids;
     std::set<std::byte*> buffer_bases;
-    std::map<void*, std::set<std::uint64_t>> slot_offsets;
+    std::map<std::byte*, std::set<std::uint64_t>> slot_offsets;
     std::vector<std::uint64_t> write_offsets;
 
     const auto deadline = std::chrono::steady_clock::now() + kDriveBound;
@@ -681,9 +658,9 @@ bool bounded_reuse_multiround() {
         bool staged_any = false;
         for (const ScriptedOpView& op : sc.ctrl->completable_ops()) {
             if (op.kind == detail::OperationKind::read) {
-                slot_ids.insert(op.completion);
+                slot_ids.insert(op.buffer);
                 buffer_bases.insert(op.buffer - static_cast<std::ptrdiff_t>(op.offset % B));
-                slot_offsets[op.completion].insert(op.offset);
+                slot_offsets[op.buffer].insert(op.offset);
                 staged_any = sc.ctrl->complete_bytes(op.submit_id,
                                                      op.offset >= TOTAL ? 0 : op.len) ||
                              staged_any;
@@ -772,6 +749,84 @@ bool throwing_backend_submit_surfaces_error() {
     check(sc.copy_result.has_value() && !sc.copy_result->has_value(), "throwing errors");
     check(sc.copy_result->error().code == IoError::Code::backend_error, "throwing error code");
     return sc.copy_result.has_value() && !sc.copy_result->has_value();
+}
+
+bool exception_cleanup_waits_for_held_borrow() {
+    CopyScenario sc;
+    check(sc.open_files(), "exception-held opens");
+    sc.start(16, 2, SyncPolicy::none);
+    check(sc.ctrl->wait_completable(detail::OperationKind::read, 2), "exception-held read window");
+    auto other = sc.ctrl->wait_completable_at(detail::OperationKind::read, 16);
+    check(sc.ctrl->hold_staged(other).has_value(), "exception-held borrow gated");
+    sc.ctrl->throw_next_submit(detail::OperationKind::write);
+    auto first = sc.ctrl->wait_completable_at(detail::OperationKind::read, 0);
+    check(sc.ctrl->complete_bytes(first, 16), "exception-held first read completes");
+    check(sc.ctrl->wait_cancel_attempt(), "exception-held scope requests cleanup cancel");
+    check(!sc.published(), "exception-held cannot return before borrow retires");
+    check(sc.ctrl->borrow_live_count(detail::OperationKind::read) == 1,
+          "exception-held borrow still live after cancel attempt");
+    check(sc.ctrl->release_held(other, 16), "exception-held borrow retirement released");
+    sc.drain_and_join();
+    check(sc.copy_result.has_value() && !sc.copy_result->has_value() &&
+              sc.copy_result->error().code == IoError::Code::backend_error,
+          "exception-held maps exception after cleanup");
+    check(sc.ctrl->pending_empty(), "exception-held no accepted work abandoned");
+    check(sc.ctrl->protocol_violation().empty(), "exception-held protocol sound");
+    return sc.copy_result.has_value() && !sc.copy_result->has_value() && sc.ctrl->pending_empty();
+}
+
+bool canceled_result_settles_held_readahead() {
+    CopyScenario sc;
+    check(sc.open_files(), "canceled-held opens");
+    sc.start(16, 2, SyncPolicy::none);
+    check(sc.ctrl->wait_completable(detail::OperationKind::read, 2), "canceled-held read window");
+    auto other = sc.ctrl->wait_completable_at(detail::OperationKind::read, 16);
+    check(sc.ctrl->hold_staged(other).has_value(), "canceled-held borrow gated");
+    auto first = sc.ctrl->wait_completable_at(detail::OperationKind::read, 0);
+    check(sc.ctrl->complete_error(first, IoError{IoError::Code::canceled}), "canceled-held terminal");
+    check(sc.ctrl->borrow_live_count(detail::OperationKind::read) == 1,
+          "canceled-held cancellation is not retirement");
+    check(sc.ctrl->release_held(other, 16), "canceled-held readahead retires");
+    sc.drain_and_join();
+    check(sc.copy_result.has_value() && !sc.copy_result->has_value() &&
+              sc.copy_result->error().code == IoError::Code::canceled,
+          "canceled-held retains primary cancellation");
+    check(sc.ctrl->pending_empty(), "canceled-held all work settled");
+    check(sc.ctrl->accepted(detail::OperationKind::write) == 0, "canceled-held no writes");
+    return sc.copy_result.has_value() && !sc.copy_result->has_value() && sc.ctrl->pending_empty();
+}
+
+bool real_uring_pipeline_content_and_sync() {
+#if defined(SLUICE_HAS_LIBURING)
+    CopyScenario sc;
+    check(sc.open_files(), "real-uring opens");
+    sc.joined = true;
+    std::vector<std::byte> bytes(16 * 11 + 7);
+    for (std::size_t i = 0; i < bytes.size(); ++i)
+        bytes[i] = seed_byte(i);
+    int fd = ::open(sc.src_path.c_str(), O_WRONLY);
+    check(fd >= 0, "real-uring source writable");
+    check(::write(fd, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()),
+          "real-uring seed written");
+    ::close(fd);
+    auto result = run_pipelined_copy_with_backend(
+        *sc.src, NativeFileRef{*sc.dst}, 16, 4, 1, SyncPolicy::all,
+        std::make_unique<UringAsyncBackend>(64));
+    check(result.has_value(), "real-uring canonical pipeline succeeds");
+    if (!result.has_value())
+        return false;
+    check(result.value().bytes_copied == bytes.size(), "real-uring byte tally");
+    fd = ::open(sc.dst_path.c_str(), O_RDONLY);
+    std::vector<std::byte> actual(bytes.size());
+    check(::read(fd, actual.data(), actual.size()) == static_cast<ssize_t>(actual.size()),
+          "real-uring destination length");
+    ::close(fd);
+    check(actual == bytes, "real-uring byte identity");
+    return actual == bytes;
+#else
+    std::puts("real-uring not built in noliburing profile");
+    return true;
+#endif
 }
 
 bool invalid_arguments_rejected_synchronously() {
@@ -941,6 +996,9 @@ int main() {
         {"bounded_reuse_multiround", bounded_reuse_multiround},
         {"slot_not_recycled_before_write_completes", slot_not_recycled_before_write_completes},
         {"throwing_backend_submit_surfaces_error", throwing_backend_submit_surfaces_error},
+        {"exception_cleanup_waits_for_held_borrow", exception_cleanup_waits_for_held_borrow},
+        {"canceled_result_settles_held_readahead", canceled_result_settles_held_readahead},
+        {"real_uring_pipeline_content_and_sync", real_uring_pipeline_content_and_sync},
         {"invalid_arguments_rejected_synchronously", invalid_arguments_rejected_synchronously},
         {"watchdog_selftest_child", watchdog_selftest_child},
         {"watchdog_selftest_bounded", watchdog_selftest_bounded},

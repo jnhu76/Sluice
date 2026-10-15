@@ -29,39 +29,25 @@ bool parse_unsigned_decimal(const char* s, std::size_t& out) {
 }
 
 int usage(const char* prog) {
-    std::fprintf(stderr,
-                 "usage: %s [options] <pattern> <file>...\n"
-                 "  -n                      prefix each match with its 1-based line number\n"
-                 "  --buffer-size <bytes>   read buffer (default 1 MiB; %zu..%zu)\n"
-                 "  --max-line-bytes <n>    cap for a retained line; longer lines are\n"
-                 "                          reported and skipped, not matched (default\n"
-                 "                          %zu; <= %zu)\n"
-                 "  --workers <count>       runtime workers (default 1; <= %u)\n"
-                 "  --help                  show this help\n"
-                 "\n"
-                 "Literal byte-oriented substring search (no regex). Exit codes follow\n"
-                 "grep tradition: 0 = match found, 1 = no match, 2 = error.\n",
-                 prog, static_cast<std::size_t>(kMinBufferSize),
-                 static_cast<std::size_t>(kMaxBufferSize),
-                 static_cast<std::size_t>(kDefaultMaxLineBytes),
-                 static_cast<std::size_t>(kMaxMaxLineBytes), static_cast<unsigned>(kMaxWorkers));
+    std::fprintf(
+        stderr,
+        "usage: %s [options] <pattern> <file>...\n"
+        "  -n                      prefix each match with its 1-based line number\n"
+        "  --buffer-size <bytes>   read buffer (default 1 MiB; %zu..%zu)\n"
+        "  --max-line-bytes <n>    cap for a retained line; longer lines are\n"
+        "                          reported and skipped, not matched (default\n"
+        "                          %zu; <= %zu)\n"
+        "  --help                  show this help\n"
+        "\n"
+        "Literal byte-oriented substring search (no regex). Exit codes follow\n"
+        "grep tradition: 0 = match found, 1 = no match, 2 = error.\n",
+        prog, static_cast<std::size_t>(kMinBufferSize), static_cast<std::size_t>(kMaxBufferSize),
+        static_cast<std::size_t>(kDefaultMaxLineBytes), static_cast<std::size_t>(kMaxMaxLineBytes));
     return 2;
 }
 
 bool parse_size(const char* s, std::size_t& out) {
     return parse_unsigned_decimal(s, out);
-}
-
-bool parse_workers(const char* s, unsigned& out) {
-    std::size_t v = 0;
-    if (!parse_unsigned_decimal(s, v))
-        return false;
-    if (v > std::numeric_limits<unsigned>::max())
-        return false;
-    if (v > static_cast<std::size_t>(kMaxWorkers))
-        return false;
-    out = static_cast<unsigned>(v);
-    return true;
 }
 
 int parse_args(int argc, char** argv, CliArgs& args) {
@@ -88,10 +74,11 @@ int parse_args(int argc, char** argv, CliArgs& args) {
             const char* v = next("--max-line-bytes");
             if (!v || !parse_size(v, args.max_line_bytes))
                 return usage(argv[0]);
-        } else if (a == "--workers") {
-            const char* v = next("--workers");
-            if (!v || !parse_workers(v, args.workers))
-                return usage(argv[0]);
+        } else if (a == "--workers" || a.starts_with("--workers=")) {
+            std::fprintf(stderr,
+                         "%s: --workers has been removed; omit it to use direct execution\n",
+                         argv[0]);
+            return usage(argv[0]);
         } else if (a.size() > 1 && a[0] == '-') {
             std::fprintf(stderr, "%s: unknown option %s\n", argv[0], a.c_str());
             return usage(argv[0]);
@@ -116,6 +103,8 @@ int parse_args(int argc, char** argv, CliArgs& args) {
                      argv[0]);
         return 2;
     }
+    if (!valid_config(args.buffer_size, args.max_line_bytes))
+        return usage(argv[0]);
     return 0;
 }
 

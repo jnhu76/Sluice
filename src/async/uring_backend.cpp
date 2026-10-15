@@ -41,31 +41,28 @@ UringAsyncBackend::UringAsyncBackend(unsigned queue_depth) : available_(false) {
 
 UringAsyncBackend::~UringAsyncBackend() = default;
 
-Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp, Completion<std::size_t>*) {
+Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_write(WriteOp, Completion<std::size_t>*) {
+Result<detail::RequestKey> UringAsyncBackend::submit_write(WriteOp) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp, Completion<void>*) {
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp, Completion<void>*) {
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_file_info(FileInfoOp, Completion<FileInfo>*) {
+Result<detail::RequestKey> UringAsyncBackend::submit_file_info(FileInfoOp) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp, Completion<FileSize>*) {
+Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp) {
     return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
 }
 
 std::size_t UringAsyncBackend::poll() {
     return 0;
 }
-void UringAsyncBackend::cancel(Completion<std::size_t>&) {}
-void UringAsyncBackend::cancel(Completion<void>&) {}
-
 void UringAsyncBackend::close_admission() {}
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
@@ -131,47 +128,6 @@ template <class Op> Result<void> UringAsyncBackend::validate_op(const Op& op) no
     } else {
         return validate_sync(op);
     }
-}
-
-void UringAsyncBackend::publish_size_ready(void* completion,
-                                           const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<std::size_t> result =
-        outcome.succeeded
-            ? Result<std::size_t>{static_cast<std::size_t>(outcome.effect.confirmed_bytes)}
-            : make_unexpected<std::size_t>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<std::size_t>*>(completion), std::move(result));
-}
-
-void UringAsyncBackend::publish_void_ready(void* completion,
-                                           const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<void> result = outcome.succeeded ? Result<void>{} : make_unexpected<void>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<void>*>(completion), std::move(result));
-}
-
-void UringAsyncBackend::publish_file_info_ready(void* completion,
-                                                const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<FileInfo> result = outcome.succeeded
-                                  ? Result<FileInfo>{payload.metadata}
-                                  : make_unexpected<FileInfo>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<FileInfo>*>(completion), std::move(result));
-}
-
-void UringAsyncBackend::publish_size_value_ready(
-    void* completion, const detail::PublicationPayload& payload) noexcept {
-    const sluice::detail::IoOutcome& outcome = payload.outcome;
-    Result<FileSize> result = outcome.succeeded
-                                  ? Result<FileSize>{FileSize{payload.metadata.size}}
-                                  : make_unexpected<FileSize>(outcome.error);
-    AsyncBackend::publish(*static_cast<Completion<FileSize>*>(completion), std::move(result));
-}
-
-void UringAsyncBackend::publish_request_ready(void* completion,
-                                              const detail::PublicationPayload& payload) noexcept {
-    (void)completion;
-    (void)payload;
 }
 
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
@@ -453,9 +409,8 @@ bool UringAsyncBackend::injected_opcode_probe_failure() noexcept {
 
 #endif
 
-template <class Op, class Comp>
-Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
-                                                             detail::OperationKind kind,
+template <class Op>
+Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
                                                              detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -480,12 +435,16 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
 
     const auto reservation = core_->reserve();
     if (!reservation.ok()) {
+#if defined(SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY)
+        const IoError::Code code = IoError::Code::would_block;
+#else
         const IoError::Code code = reservation.status == detail::ReserveStatus::admission_closed
                                        ? IoError::Code::invalid_state
                                        : IoError::Code::would_block;
+#endif
         return make_unexpected<detail::RequestKey>(IoError{code});
     }
-    const detail::SlotHandle h{reservation.reservation.slot, reservation.reservation.generation};
+    const detail::RequestReservation h{reservation.reservation.slot, reservation.reservation.generation};
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
@@ -518,9 +477,6 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         DeliveryRecord& record = delivery_[h.slot.value];
-        record.completion = c;
-        record.publish =
-            c != nullptr ? publish_thunk<Comp>() : &UringAsyncBackend::publish_request_ready;
         record.kind = kind;
         record.event_owed = false;
         record.owed_key = {};
@@ -536,25 +492,12 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
     wait_pre_accept_commit_pause_();
 #endif
 
-    if (c != nullptr && !begin_binding(*c)) {
-        (void)core_->rollback(reservation.reservation);
-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
-    }
-
     const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
     const detail::BorrowFacts borrow{op.file.fd, buffer_of(op), length};
     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
     if (!accepted.ok()) {
-        if (c != nullptr) {
-            rollback_binding_before_accept(*c);
-        }
         (void)core_->rollback(reservation.reservation);
         return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
-    }
-
-    if (c != nullptr) {
-        install_core_binding(*c, core_, accepted.id);
-        commit_binding(*c);
     }
 
     if (descriptor.zero_op) {
@@ -569,30 +512,29 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, Comp* c,
     return accepted.id;
 }
 
-Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp op, Completion<std::size_t>* c) {
-    return submit_request(op, c, detail::OperationKind::read, detail::RequestOp::read);
+Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp op) {
+    return submit_request(op, detail::OperationKind::read, detail::RequestOp::read);
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_write(WriteOp op, Completion<std::size_t>* c) {
-    return submit_request(op, c, detail::OperationKind::write, detail::RequestOp::write);
+Result<detail::RequestKey> UringAsyncBackend::submit_write(WriteOp op) {
+    return submit_request(op, detail::OperationKind::write, detail::RequestOp::write);
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp op, Completion<void>* c) {
-    return submit_request(op, c, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_data(SyncDataOp op) {
+    return submit_request(op, detail::OperationKind::sync_data, detail::RequestOp::sync_data);
 }
-Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp op, Completion<void>* c) {
-    return submit_request(op, c, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
-}
-
-Result<detail::RequestKey> UringAsyncBackend::submit_file_info(FileInfoOp op,
-                                                               Completion<FileInfo>* c) {
-    return submit_request(op, c, detail::OperationKind::file_info, detail::RequestOp::file_info);
+Result<detail::RequestKey> UringAsyncBackend::submit_sync_all(SyncAllOp op) {
+    return submit_request(op, detail::OperationKind::sync_all, detail::RequestOp::sync_all);
 }
 
-Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp op, Completion<FileSize>* c) {
-    return submit_request(op, c, detail::OperationKind::size, detail::RequestOp::size);
+Result<detail::RequestKey> UringAsyncBackend::submit_file_info(FileInfoOp op) {
+    return submit_request(op, detail::OperationKind::file_info, detail::RequestOp::file_info);
+}
+
+Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp op) {
+    return submit_request(op, detail::OperationKind::size, detail::RequestOp::size);
 }
 
 void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
-                                               detail::SlotHandle h) noexcept {
+                                               detail::RequestReservation h) noexcept {
     if (!core_->acquire_control(id)) {
         detail::uring_core_handoff_fail_fast();
     }
@@ -600,20 +542,19 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
     if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
         detail::uring_core_handoff_fail_fast();
     }
-    DeliveryRecord& record = delivery_[h.slot.value];
-    record.publish(record.completion, payload);
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
         detail::uring_core_handoff_fail_fast();
     }
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        DeliveryRecord& record = delivery_[h.slot.value];
         record.event_owed = true;
         record.owed_key = id;
     }
     signal_ready_progress();
 }
 
-void UringAsyncBackend::publish_one(detail::SlotHandle h) {
+void UringAsyncBackend::publish_one(detail::RequestReservation h) {
     const detail::RequestKey key{core_->context(), h.slot, h.generation};
     detail::PublicationPayload payload;
     if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
@@ -624,7 +565,6 @@ void UringAsyncBackend::publish_one(detail::SlotHandle h) {
     // complete_publication the slot may be reclaimed and re-initialized
     // concurrently, so no record field may be read past that point.
     const detail::OperationKind kind = record.kind;
-    record.publish(record.completion, payload);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_publication_epilogue_pause_();
@@ -648,7 +588,7 @@ std::size_t UringAsyncBackend::poll() {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         if (!fatal_error_.has_value()) {
             while (!dispatch_->empty()) {
-                detail::SlotHandle h = dispatch_->front();
+                detail::RequestReservation h = dispatch_->front();
                 if (!dispatch_one_locked(h))
                     break;
             }
@@ -671,7 +611,7 @@ std::size_t UringAsyncBackend::poll() {
     // Same pass boundary as the reap: entries pushed during this pass are the
     // next pass's immediate work.
     for (std::size_t n = 0; n < pass_bound; ++n) {
-        detail::SlotHandle h{};
+        detail::RequestReservation h{};
         bool have = false;
         {
             std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -726,38 +666,6 @@ std::size_t UringAsyncBackend::outstanding() const noexcept {
 
 bool UringAsyncBackend::available() const noexcept {
     return available_;
-}
-
-Result<RequestHandleState> UringAsyncBackend::resolve_identity_state(
-    std::uint64_t ctx, std::uint32_t slot, std::uint64_t gen) const {
-    if (core_ == nullptr) {
-        return RequestHandleState::not_found;
-    }
-    const detail::RequestKey key{detail::ContextIdentity{ctx}, detail::SlotIndex{slot},
-                                 detail::Generation{gen}};
-    switch (core_->lookup(key)) {
-    case detail::PublicLookup::outstanding:
-        return RequestHandleState::outstanding;
-    case detail::PublicLookup::published:
-        return RequestHandleState::completion_ready;
-    case detail::PublicLookup::not_found:
-        return RequestHandleState::not_found;
-    }
-    return RequestHandleState::not_found;
-}
-
-void UringAsyncBackend::cancel(Completion<std::size_t>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value())
-        return;
-    (void)cancel_key(*key);
-}
-
-void UringAsyncBackend::cancel(Completion<void>& c) {
-    auto key = core_binding(c);
-    if (!key.has_value())
-        return;
-    (void)cancel_key(*key);
 }
 
 detail::PublicCancel UringAsyncBackend::cancel_identity(detail::RequestKey key) {

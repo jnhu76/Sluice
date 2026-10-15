@@ -1,10 +1,8 @@
 #pragma once
 
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_key.hpp>
-#include <sluice/async/detail/request_slot.hpp>
 #include <sluice/detail/posix_retry.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
@@ -19,11 +17,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-#include <sluice/async/detail/submit_transaction.hpp>
-#endif
 
 namespace sluice::async {
 
@@ -43,29 +36,21 @@ class ThreadPoolBackend : public AsyncBackend {
     ThreadPoolBackend(const ThreadPoolBackend&) = delete;
     ThreadPoolBackend& operator=(const ThreadPoolBackend&) = delete;
 
-    bool supports_request_identity() const noexcept override { return true; }
-
     bool signals_physical_progress() const noexcept override { return true; }
 
   private:
-    Result<detail::RequestKey> submit_read(ReadOp op, Completion<std::size_t>* c) override;
-    Result<detail::RequestKey> submit_write(WriteOp op, Completion<std::size_t>* c) override;
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp op, Completion<void>* c) override;
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp op, Completion<void>* c) override;
-    Result<detail::RequestKey> submit_file_info(FileInfoOp op, Completion<FileInfo>* c) override;
-    Result<detail::RequestKey> submit_size(SizeOp op, Completion<FileSize>* c) override;
-
-    Result<RequestHandleState> resolve_identity_state(std::uint64_t ctx, std::uint32_t slot,
-                                                      std::uint64_t gen) const override;
+    Result<detail::RequestKey> submit_read(ReadOp op) override;
+    Result<detail::RequestKey> submit_write(WriteOp op) override;
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp op) override;
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp op) override;
+    Result<detail::RequestKey> submit_file_info(FileInfoOp op) override;
+    Result<detail::RequestKey> submit_size(SizeOp op) override;
 
     detail::PublicCancel cancel_identity(detail::RequestKey key) override;
 
   public:
     std::size_t poll() override;
     ProgressPass poll_progress() override;
-
-    void cancel(Completion<std::size_t>& c) override;
-    void cancel(Completion<void>& c) override;
 
     std::size_t outstanding() const noexcept override;
 
@@ -90,8 +75,6 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t active_workers_for_test() const;
     std::size_t dispatch_size_for_test() const;
     std::uint64_t syscall_count_for_test() const noexcept;
-    std::optional<detail::RequestKey> request_key_for_test(const Completion<std::size_t>& c) const;
-    std::optional<detail::RequestKey> request_key_for_test(const Completion<void>& c) const;
     detail::RequestCore* request_core_for_test() const noexcept { return core_; }
     std::size_t publication_pending_size_for_test() const;
     bool event_owed_for_test(std::uint32_t slot) const noexcept;
@@ -146,9 +129,6 @@ class ThreadPoolBackend : public AsyncBackend {
     // transitions already taken under it. Workers never touch delivery
     // records, and completion/on_ready callbacks never run under the lock.
     struct DeliveryRecord {
-        void* completion = nullptr;
-        void (*publish)(void* completion,
-                        const detail::PublicationPayload& payload) noexcept = nullptr;
         detail::OperationKind kind = detail::OperationKind::read;
         // event_owed pairs with one core control ref on owed_key: the ref is
         // acquired before this flag is set and released after delivery.
@@ -163,14 +143,14 @@ class ThreadPoolBackend : public AsyncBackend {
         bool empty() const noexcept { return size_ == 0; }
         std::size_t size() const noexcept { return size_; }
 
-        void push_back(detail::SlotHandle h) noexcept;
+        void push_back(detail::RequestReservation h) noexcept;
 
-        bool pop_front(detail::SlotHandle& out) noexcept;
+        bool pop_front(detail::RequestReservation& out) noexcept;
 
-        bool remove_exact(detail::SlotHandle h) noexcept;
+        bool remove_exact(detail::RequestReservation h) noexcept;
 
       private:
-        std::vector<detail::SlotHandle> storage_;
+        std::vector<detail::RequestReservation> storage_;
         std::size_t head_ = 0;
         std::size_t size_ = 0;
         std::size_t capacity_;
@@ -195,38 +175,15 @@ class ThreadPoolBackend : public AsyncBackend {
         }
     }
 
-    template <class Comp> static auto publish_thunk() noexcept {
-        if constexpr (std::is_same_v<Comp, Completion<std::size_t>>) {
-            return &ThreadPoolBackend::publish_size_ready;
-        } else if constexpr (std::is_same_v<Comp, Completion<FileInfo>>) {
-            return &ThreadPoolBackend::publish_file_info_ready;
-        } else if constexpr (std::is_same_v<Comp, Completion<FileSize>>) {
-            return &ThreadPoolBackend::publish_size_value_ready;
-        } else {
-            return &ThreadPoolBackend::publish_void_ready;
-        }
-    }
-
-    template <class Op, class Comp>
-    Result<detail::RequestKey> submit_request(Op op, Comp* c, detail::OperationKind kind,
+    template <class Op>
+    Result<detail::RequestKey> submit_request(Op op, detail::OperationKind kind,
                                               detail::RequestOp core_op);
 
-    void dispatch_after_accept(detail::SlotHandle h) noexcept;
-    void publish_zero_op_inline(detail::RequestKey id, detail::SlotHandle h) noexcept;
-    void publish_one(detail::SlotHandle h);
+    void dispatch_after_accept(detail::RequestReservation h) noexcept;
+    void publish_zero_op_inline(detail::RequestKey id, detail::RequestReservation h) noexcept;
+    void publish_one(detail::RequestReservation h);
     void deliver_event(detail::RequestKey key, detail::OperationKind kind);
     detail::PublicCancel cancel_key(detail::RequestKey key);
-
-    static void publish_size_ready(void* completion,
-                                   const detail::PublicationPayload& payload) noexcept;
-    static void publish_void_ready(void* completion,
-                                   const detail::PublicationPayload& payload) noexcept;
-    static void publish_file_info_ready(void* completion,
-                                        const detail::PublicationPayload& payload) noexcept;
-    static void publish_size_value_ready(void* completion,
-                                         const detail::PublicationPayload& payload) noexcept;
-    static void publish_request_ready(void* completion,
-                                      const detail::PublicationPayload& payload) noexcept;
 
     static sluice::detail::IoOutcome run_syscall(const PreparedBlockingOp& p,
                                                  sluice::FileInfo* metadata_out) noexcept;

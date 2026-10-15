@@ -110,8 +110,7 @@ bool tail_engine_lines_zero_emits_nothing() {
     const auto result = engine.wait();
     if (!result.has_value())
         return false;
-    return !result.value().error.has_value() && result.value().lines_emitted == 0 &&
-           lines.empty();
+    return !result.value().error.has_value() && result.value().lines_emitted == 0 && lines.empty();
 }
 
 bool tail_engine_start_rejects_invalid_options() {
@@ -124,7 +123,7 @@ bool tail_engine_start_rejects_invalid_options() {
         return false;
 
     TailOptions options;
-    options.workers = 0;
+    options.buffer_size = 0;
 
     std::vector<std::string> lines;
     TailEngine engine(std::move(opened).value(), options,
@@ -190,9 +189,9 @@ bool tail_engine_follow_detects_truncation() {
     options.follow = true;
     options.poll_interval_ms = 50;
 
-    TailEngine engine(std::move(opened).value(), options,
-                      [&](std::string_view l) { lines.emplace_back(l); },
-                      [&](std::string_view m) { diag.append(m); });
+    TailEngine engine(
+        std::move(opened).value(), options, [&](std::string_view l) { lines.emplace_back(l); },
+        [&](std::string_view m) { diag.append(m); });
     if (!engine.start().has_value()) {
         ::unlink(path.c_str());
         return false;
@@ -224,6 +223,105 @@ bool tail_engine_follow_detects_truncation() {
     return saw_reborn;
 }
 
+} // namespace
+
+bool failed_start_keeps_engine_unstarted() {
+    struct ThrowingCopySink {
+        bool* fail;
+        int* emitted;
+        ThrowingCopySink(bool& failure, int& count) : fail(&failure), emitted(&count) {}
+        ThrowingCopySink(const ThrowingCopySink& other) : fail(other.fail), emitted(other.emitted) {
+            if (*fail)
+                throw std::bad_alloc();
+        }
+        void operator()(std::string_view) const { ++*emitted; }
+    };
+    const std::string path = make_temp_file("retry\n");
+    auto opened = File::open(path);
+    ::unlink(path.c_str());
+    if (!opened.has_value())
+        return false;
+    bool fail = false;
+    int emitted = 0;
+    TailEngine engine(std::move(opened).value(), TailOptions{}, ThrowingCopySink(fail, emitted));
+    fail = true;
+    const auto start = engine.start();
+    if (start.has_value() || start.error().code != sluice::IoError::Code::no_space || emitted != 0)
+        return false;
+    const auto early = engine.wait();
+    if (early.has_value() || early.error().code != sluice::IoError::Code::invalid_state)
+        return false;
+    engine.request_stop();
+    fail = false;
+    if (!engine.start().has_value())
+        return false;
+    const auto result = engine.wait();
+    return result.has_value() && !result.value().error.has_value() && emitted == 1 &&
+           !result.value().stopped_by_cancel;
+}
+
+bool last_n_scan_boundary_and_long_lines() {
+    const std::string path =
+        make_temp_file("prefix\n" + std::string(5000, 'x') + "\nlast\npartial");
+    auto opened = File::open(path);
+    ::unlink(path.c_str());
+    if (!opened.has_value())
+        return false;
+    TailOptions options;
+    options.lines = 3;
+    options.buffer_size = 4096;
+    options.max_line_bytes = 16;
+    std::vector<std::string> lines;
+    std::string diag;
+    TailEngine engine(
+        std::move(opened).value(), options,
+        [&](std::string_view line) { lines.emplace_back(line); },
+        [&](std::string_view message) { diag += message; });
+    if (!engine.start().has_value())
+        return false;
+    auto result = engine.wait();
+    return result.has_value() && !result.value().error.has_value() &&
+           result.value().dropped_long_lines && result.value().lines_emitted == 2 &&
+           lines == std::vector<std::string>{"last", "partial"} &&
+           diag == "line longer than --max-line-bytes skipped\n";
+}
+
+bool initial_scan_stop_between_reads() {
+    const std::string line(4095, 'x');
+    const std::string path = make_temp_file(line + "\n" + line + "\n" + line + "\n");
+    auto opened = File::open(path);
+    ::unlink(path.c_str());
+    if (!opened.has_value())
+        return false;
+    TailOptions options;
+    options.lines = 3;
+    options.buffer_size = 4096;
+    TailEngine* current = nullptr;
+    std::size_t emitted = 0;
+    TailEngine engine(std::move(opened).value(), options, [&](std::string_view got) {
+        if (got == line)
+            ++emitted;
+        current->request_stop();
+    });
+    current = &engine;
+    if (!engine.start().has_value())
+        return false;
+    auto result = engine.wait();
+    return result.has_value() && !result.value().error.has_value() &&
+           result.value().stopped_by_cancel && result.value().lines_emitted == 1 && emitted == 1;
+}
+
+bool repeated_start_is_rejected() {
+    const std::string path = make_temp_file("one\n");
+    auto opened = File::open(path);
+    ::unlink(path.c_str());
+    if (!opened.has_value())
+        return false;
+    TailEngine engine(std::move(opened).value(), TailOptions{}, nullptr);
+    if (!engine.start().has_value() || !engine.wait().has_value())
+        return false;
+    const auto again = engine.start();
+    return !again.has_value() && again.error().code == sluice::IoError::Code::invalid_state;
 }
 
 int main() {
@@ -232,12 +330,14 @@ int main() {
         bool (*fn)();
     };
     const NamedTest tests[] = {
+        {"failed_start_keeps_engine_unstarted", failed_start_keeps_engine_unstarted},
+        {"last_n_scan_boundary_and_long_lines", last_n_scan_boundary_and_long_lines},
+        {"initial_scan_stop_between_reads", initial_scan_stop_between_reads},
+        {"repeated_start_is_rejected", repeated_start_is_rejected},
         {"tail_engine_emits_last_lines", tail_engine_emits_last_lines},
         {"tail_engine_lines_zero_emits_nothing", tail_engine_lines_zero_emits_nothing},
-        {"tail_engine_start_rejects_invalid_options",
-         tail_engine_start_rejects_invalid_options},
-        {"tail_engine_follow_stops_on_request_stop",
-         tail_engine_follow_stops_on_request_stop},
+        {"tail_engine_start_rejects_invalid_options", tail_engine_start_rejects_invalid_options},
+        {"tail_engine_follow_stops_on_request_stop", tail_engine_follow_stops_on_request_stop},
         {"tail_engine_follow_detects_truncation", tail_engine_follow_detects_truncation},
     };
 
@@ -247,7 +347,6 @@ int main() {
             return 1;
         }
     }
-    std::printf("all %zu app tail consumption tests passed\n",
-                sizeof(tests) / sizeof(tests[0]));
+    std::printf("all %zu app tail consumption tests passed\n", sizeof(tests) / sizeof(tests[0]));
     return 0;
 }

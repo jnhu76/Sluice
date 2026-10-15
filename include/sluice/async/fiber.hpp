@@ -61,13 +61,6 @@ class Fiber {
     }
 
   private:
-    friend class Scheduler;
-    void set_execution_tag(void* tag) noexcept { execution_tag_ = tag; }
-
-    void set_completion_wait_outcome(CompletionWaitOutcome o) noexcept {
-        completion_wait_outcome_ = o;
-    }
-
     std::atomic<FiberState> state_{FiberState::created};
     Entry entry_{};
     CancelToken token_{};

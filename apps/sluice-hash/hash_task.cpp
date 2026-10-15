@@ -2,14 +2,11 @@
 
 #include "sha256.hpp"
 
-#include <sluice/async/await_op_helpers.hpp>
-#include <sluice/async/file.hpp>
-#include <sluice/async/task_result.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/blocking/file.hpp>
 
-#include <cstring>
 #include <limits>
-#include <memory>
+#include <new>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -17,8 +14,20 @@ namespace sluice_hash {
 
 namespace {
 
-using namespace sluice::async;
 using sluice::IoError;
+
+IoError current_exception_error() noexcept {
+    try {
+        throw;
+    } catch (const std::bad_alloc&) {
+        return IoError{IoError::Code::no_space};
+    } catch (const std::system_error& error) {
+        const int native = error.code().value();
+        return IoError{sluice::detail::canonical_error_code(native), native};
+    } catch (...) {
+        return IoError{IoError::Code::backend_error};
+    }
+}
 
 void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out, IoError err) {
     out.reserve(inputs.size());
@@ -30,28 +39,22 @@ void fail_all(std::vector<HashInput>& inputs, std::vector<FileHash>& out, IoErro
     }
 }
 
-struct HashTask {
+struct HashScan {
     std::vector<HashInput> inputs;
     std::vector<std::uint8_t> buffer;
 
-    void hash_one(RuntimeTaskContext& ctx, const HashInput& in, std::vector<FileHash>& results) {
+    void hash_one(const HashInput& in, std::vector<FileHash>& results) {
         FileHash out;
         out.path = in.path;
 
         Sha256 hasher;
         std::uint8_t digest[Sha256::kDigestBytes];
-        Completion<std::size_t> rc;
 
         std::uint64_t offset = 0;
         for (;;) {
-            if (ctx.cancel_token().is_requested()) {
-                out.error = IoError{IoError::Code::canceled};
-                break;
-            }
-            auto rr = await_read_at(
-                in.file, ctx, offset,
-                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()),
-                rc);
+            auto rr = sluice::blocking::read_at(
+                in.file, offset,
+                std::span<std::byte>(reinterpret_cast<std::byte*>(buffer.data()), buffer.size()));
             if (!rr.has_value()) {
                 out.error = rr.error();
                 break;
@@ -74,78 +77,38 @@ struct HashTask {
         }
         results.push_back(std::move(out));
     }
-
-    void operator()(RuntimeTaskContext& ctx,
-                    TaskResultSlot<sluice::Result<std::vector<FileHash>>>& slot) {
-        std::vector<FileHash> results;
-        results.reserve(inputs.size());
-
-        try {
-            for (std::size_t i = 0; i < inputs.size(); ++i) {
-                if (ctx.cancel_token().is_requested()) {
-                    FileHash out;
-                    out.path = inputs[i].path;
-                    out.error = IoError{IoError::Code::canceled};
-                    results.push_back(std::move(out));
-                    continue;
-                }
-                hash_one(ctx, inputs[i], results);
-            }
-        } catch (...) {
-            auto translated = translate_task_exception<std::vector<FileHash>>();
-            IoError err = translated.error();
-            for (std::size_t i = results.size(); i < inputs.size(); ++i) {
-                FileHash out;
-                out.path = inputs[i].path;
-                out.error = err;
-                results.push_back(std::move(out));
-            }
-        }
-        slot.publish(std::move(results));
-    }
 };
 
-std::vector<FileHash> run_hash_engine(std::vector<HashInput> inputs, std::size_t buffer_size,
-                                      unsigned workers, std::unique_ptr<AsyncBackend> backend) {
-    if (buffer_size < kMinBufferSize || buffer_size > kMaxBufferSize || workers == 0 ||
-        workers > kMaxWorkers || !backend) {
-        std::vector<FileHash> out;
-        fail_all(inputs, out, IoError{IoError::Code::invalid_state});
-        return out;
-    }
+}
 
+std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size) {
+    std::vector<FileHash> results;
+    if (!valid_config(buffer_size)) {
+        fail_all(inputs, results, IoError{IoError::Code::invalid_state});
+        return results;
+    }
     std::vector<std::uint8_t> buffer;
     try {
         buffer.assign(buffer_size, 0);
     } catch (const std::bad_alloc&) {
-        std::vector<FileHash> out;
-        fail_all(inputs, out, IoError{IoError::Code::no_space});
-        return out;
+        fail_all(inputs, results, IoError{IoError::Code::no_space});
+        return results;
     }
-
-    HashTask task{std::move(inputs), std::move(buffer)};
-
-    auto result = run_task_to_result<std::vector<FileHash>>(workers, std::move(backend), task);
-    if (!result.has_value()) {
-        std::vector<FileHash> out;
-        fail_all(task.inputs, out, result.error());
-        return out;
+    HashScan scan{std::move(inputs), std::move(buffer)};
+    results.reserve(scan.inputs.size());
+    try {
+        for (const auto& input : scan.inputs)
+            scan.hash_one(input, results);
+    } catch (...) {
+        const IoError error = current_exception_error();
+        for (std::size_t i = results.size(); i < scan.inputs.size(); ++i) {
+            FileHash out;
+            out.path = scan.inputs[i].path;
+            out.error = error;
+            results.push_back(std::move(out));
+        }
     }
-    return std::move(result.value());
-}
-
-}
-
-std::vector<FileHash> hash_files(std::vector<HashInput> inputs, std::size_t buffer_size,
-                                 unsigned workers) {
-    return run_hash_engine(std::move(inputs), buffer_size, workers,
-                           std::make_unique<ThreadPoolBackend>());
-}
-
-std::vector<FileHash>
-hash_files_with_backend(std::vector<HashInput> inputs, std::size_t buffer_size, unsigned workers,
-                        std::unique_ptr<sluice::async::AsyncBackend> backend) {
-    return run_hash_engine(std::move(inputs), buffer_size, workers, std::move(backend));
+    return results;
 }
 
 }

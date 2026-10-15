@@ -1,0 +1,145 @@
+BASELINE=c94c7770335e4e01e4f1f5876740cb0e792a4f88 debug liburing=yes
+RUN: c++ -std=c++20 -DSLUICE_HAS_LIBURING -Iinclude -Iapps/sluice-copy -MM /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/cli_parse.cpp
+cli_parse.o: \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/cli_parse.cpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/cli_parse.hpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/copy_task.hpp \
+ include/sluice/async/async_io_context.hpp \
+ include/sluice/async/completion.hpp \
+ include/sluice/async/detail/fail_fast.hpp \
+ include/sluice/async/detail/request_arena.hpp \
+ include/sluice/async/detail/ready_sink.hpp \
+ include/sluice/async/detail/request_key.hpp \
+ include/sluice/async/detail/request_slot.hpp include/sluice/error.hpp \
+ include/sluice/async/request_handle.hpp include/sluice/result.hpp \
+ include/sluice/async/detail/request_core.hpp \
+ include/sluice/async/detail/observer_protocol.hpp \
+ include/sluice/detail/file_semantics.hpp include/sluice/effect.hpp \
+ include/sluice/file_resource.hpp \
+ include/sluice/async/detail/progress_source.hpp \
+ include/sluice/async/request.hpp include/sluice/measurement.hpp \
+ include/sluice/async/threadpool_backend.hpp \
+ include/sluice/async/detail/reference_ready_sink.hpp \
+ include/sluice/detail/posix_retry.hpp
+
+RUN: c++ -std=c++20 -DSLUICE_HAS_LIBURING -Iinclude -Iapps/sluice-copy -MM /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/copy_task.cpp
+copy_task.o: \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/copy_task.cpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/copy_task.hpp \
+ include/sluice/async/async_io_context.hpp \
+ include/sluice/async/completion.hpp \
+ include/sluice/async/detail/fail_fast.hpp \
+ include/sluice/async/detail/request_arena.hpp \
+ include/sluice/async/detail/ready_sink.hpp \
+ include/sluice/async/detail/request_key.hpp \
+ include/sluice/async/detail/request_slot.hpp include/sluice/error.hpp \
+ include/sluice/async/request_handle.hpp include/sluice/result.hpp \
+ include/sluice/async/detail/request_core.hpp \
+ include/sluice/async/detail/observer_protocol.hpp \
+ include/sluice/detail/file_semantics.hpp include/sluice/effect.hpp \
+ include/sluice/file_resource.hpp \
+ include/sluice/async/detail/progress_source.hpp \
+ include/sluice/async/request.hpp include/sluice/measurement.hpp \
+ include/sluice/async/threadpool_backend.hpp \
+ include/sluice/async/detail/reference_ready_sink.hpp \
+ include/sluice/detail/posix_retry.hpp \
+ include/sluice/async/request_scope.hpp
+
+RUN: c++ -std=c++20 -DSLUICE_HAS_LIBURING -Iinclude -Iapps/sluice-copy -MM /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/file_domain.cpp
+file_domain.o: \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/file_domain.cpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/file_domain.hpp \
+ include/sluice/error.hpp include/sluice/file_resource.hpp \
+ include/sluice/result.hpp
+
+RUN: c++ -std=c++20 -DSLUICE_HAS_LIBURING -Iinclude -Iapps/sluice-copy -MM /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/main.cpp
+main.o: \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/main.cpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/cli_parse.hpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/copy_task.hpp \
+ include/sluice/async/async_io_context.hpp \
+ include/sluice/async/completion.hpp \
+ include/sluice/async/detail/fail_fast.hpp \
+ include/sluice/async/detail/request_arena.hpp \
+ include/sluice/async/detail/ready_sink.hpp \
+ include/sluice/async/detail/request_key.hpp \
+ include/sluice/async/detail/request_slot.hpp include/sluice/error.hpp \
+ include/sluice/async/request_handle.hpp include/sluice/result.hpp \
+ include/sluice/async/detail/request_core.hpp \
+ include/sluice/async/detail/observer_protocol.hpp \
+ include/sluice/detail/file_semantics.hpp include/sluice/effect.hpp \
+ include/sluice/file_resource.hpp \
+ include/sluice/async/detail/progress_source.hpp \
+ include/sluice/async/request.hpp include/sluice/measurement.hpp \
+ include/sluice/async/threadpool_backend.hpp \
+ include/sluice/async/detail/reference_ready_sink.hpp \
+ include/sluice/detail/posix_retry.hpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/file_domain.hpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/safe_output.hpp
+
+RUN: c++ -std=c++20 -DSLUICE_HAS_LIBURING -Iinclude -Iapps/sluice-copy -MM /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/safe_output.cpp
+safe_output.o: \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/safe_output.cpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/safe_output.hpp \
+ /home/jnhu/Source/Sluice-copy-matrix-debug-y/apps/sluice-copy/copy_task.hpp \
+ include/sluice/async/async_io_context.hpp \
+ include/sluice/async/completion.hpp \
+ include/sluice/async/detail/fail_fast.hpp \
+ include/sluice/async/detail/request_arena.hpp \
+ include/sluice/async/detail/ready_sink.hpp \
+ include/sluice/async/detail/request_key.hpp \
+ include/sluice/async/detail/request_slot.hpp include/sluice/error.hpp \
+ include/sluice/async/request_handle.hpp include/sluice/result.hpp \
+ include/sluice/async/detail/request_core.hpp \
+ include/sluice/async/detail/observer_protocol.hpp \
+ include/sluice/detail/file_semantics.hpp include/sluice/effect.hpp \
+ include/sluice/file_resource.hpp \
+ include/sluice/async/detail/progress_source.hpp \
+ include/sluice/async/request.hpp include/sluice/measurement.hpp \
+ include/sluice/async/threadpool_backend.hpp \
+ include/sluice/async/detail/reference_ready_sink.hpp \
+ include/sluice/detail/posix_retry.hpp
+
+RUN: nm -C /home/jnhu/Source/Sluice-copy-matrix-debug-y/build-debug-y/.objs/sluice-copy/linux/x86_64/debug/apps/sluice-copy/copy_task.cpp.o; scan legacy symbols
+LEGACY SYMBOL MATCHES=0
+RUN: nm -C /home/jnhu/Source/Sluice-copy-matrix-debug-y/build-debug-y/linux/x86_64/debug/sluice-copy; scan legacy symbols
+LEGACY SYMBOL MATCHES=0
+RUN: ar t /home/jnhu/Source/Sluice-copy-matrix-debug-y/build-debug-y/linux/x86_64/debug/libsluice_async.a
+application_runtime.cpp.o
+async_io_context.cpp.o
+await_op_helpers.cpp.o
+batch.cpp.o
+cancel.cpp.o
+fail_fast.cpp.o
+fiber.cpp.o
+fiber_ctx.cpp.o
+file.cpp.o
+group.cpp.o
+mutex_test_seam.cpp.o
+op_helpers.cpp.o
+queue_port.cpp.o
+queue_test_seam.cpp.o
+request_handle.cpp.o
+request_scope.cpp.o
+scheduler.cpp.o
+scheduler_condition.cpp.o
+scheduler_event.cpp.o
+scheduler_fe2_test_seam.cpp.o
+scheduler_mutex.cpp.o
+scheduler_park_wake.cpp.o
+scheduler_queue.cpp.o
+scheduler_rwlock.cpp.o
+scheduler_semaphore.cpp.o
+scheduler_timer.cpp.o
+select.cpp.o
+select_event.cpp.o
+select_timer.cpp.o
+stackful_io_host.cpp.o
+threadpool_backend.cpp.o
+uring_backend.cpp.o
+uring_completion.cpp.o
+uring_transport.cpp.o
+wait_policy.cpp.o
+context_identity.cpp.o
+request_core.cpp.o
+PASS: COPY has no legacy host dependency; shared SDK archive retained

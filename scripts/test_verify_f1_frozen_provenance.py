@@ -28,7 +28,8 @@ class FrozenBaselineProvenanceTests(unittest.TestCase):
         self.git("init", "-q", "-b", "master", "repo", cwd=self._tmp.name)
 
     def git(self, *args, cwd=None):
-        r = subprocess.run(["git", *args], cwd=str(cwd or self.repo),
+        r = subprocess.run(["git", "-c", "maintenance.auto=false",
+                            "-c", "gc.auto=0", *args], cwd=str(cwd or self.repo),
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, f"git {' '.join(args)}: {r.stderr}")
         return r.stdout.strip()
@@ -61,6 +62,8 @@ class FrozenBaselineProvenanceTests(unittest.TestCase):
         local_head = self.commit("docs/readme.md", "v2\n", "docs ahead of baseline")
         origin = Path(self._tmp.name) / "origin.git"
         self.git("clone", "-q", "--bare", str(self.repo), str(origin))
+        self.git("config", "--file", str(origin / "config"),
+                 "receive.autogc", "false")
         self.commit("docs/notes.md", "only on origin\n", "origin moves on")
         self.git("push", "-q", str(origin), "master")
         self.git("reset", "-q", "--hard", local_head)
@@ -123,6 +126,8 @@ class FrozenBaselineProvenanceTests(unittest.TestCase):
         local_head = self.commit("docs/readme.md", "v2\n", "docs ahead of baseline")
         origin = Path(self._tmp.name) / "origin.git"
         self.git("clone", "-q", "--bare", str(self.repo), str(origin))
+        self.git("config", "--file", str(origin / "config"),
+                 "receive.autogc", "false")
         self.commit("docs/notes.md", "only on origin\n", "origin moves on")
         self.git("push", "-q", str(origin), "master")
         self.git("reset", "-q", "--hard", local_head)

@@ -1,6 +1,4 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/completion.hpp>
-#include <sluice/async/file.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/file_resource.hpp>
@@ -172,27 +170,27 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;
         }
-        Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+        Result<detail::RequestKey> submit_read(ReadOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+        Result<detail::RequestKey> submit_write(WriteOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+        Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+        Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+        Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+        Result<detail::RequestKey> submit_size(SizeOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
@@ -357,27 +355,27 @@ bool backend_destructor_runs_while_progress_source_lives() {
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;
         }
-        Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+        Result<detail::RequestKey> submit_read(ReadOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+        Result<detail::RequestKey> submit_write(WriteOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+        Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+        Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+        Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+        Result<detail::RequestKey> submit_size(SizeOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
@@ -421,27 +419,27 @@ bool constructor_unwind_destroys_backend_before_progress_source() {
         detail::PublicCancel cancel_identity(detail::RequestKey) override {
             return detail::PublicCancel::not_found;
         }
-        Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+        Result<detail::RequestKey> submit_read(ReadOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+        Result<detail::RequestKey> submit_write(WriteOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+        Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+        Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+        Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }
-        Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+        Result<detail::RequestKey> submit_size(SizeOp) override {
             return sluice::make_unexpected<detail::RequestKey>(
                 IoError{IoError::Code::not_supported});
         }

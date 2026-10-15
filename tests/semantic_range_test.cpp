@@ -1,5 +1,6 @@
+#include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
-#include <sluice/file.hpp>
+#include <sluice/file_resource.hpp>
 
 #include <cstdio>
 #include <cstdint>
@@ -116,8 +117,8 @@ bool native_transfer_limit_is_a_range_rejection() {
     return rejection.has_value() && rejection->code == IoError::Code::invalid_argument;
 }
 
-bool legacy_positional_io_reports_invalid_argument() {
-    char path[] = "/tmp/sluice_range_legacy_XXXXXX";
+bool canonical_positional_io_reports_invalid_argument() {
+    char path[] = "/tmp/sluice_range_canonical_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return false;
@@ -131,27 +132,37 @@ bool legacy_positional_io_reports_invalid_argument() {
     bool ok = true;
     std::vector<std::byte> dst(4, std::byte{0});
     {
-        sluice::FileReader reader(path);
-        if (!reader.opened()) {
+        auto opened = sluice::File::open(
+            path,
+            sluice::FileOpen{sluice::FileAccess::read_only,
+                             sluice::FileExistence::open_existing,
+                             sluice::FileInitialContents::preserve});
+        if (!opened.has_value()) {
             ::unlink(path);
             return false;
         }
-        auto result = reader.read_at(kMaxNativeOffset + 1, std::span<std::byte>(dst));
+        auto file = std::move(opened).value();
+        auto result = sluice::blocking::read_at(file, kMaxNativeOffset + 1,
+                                                std::span<std::byte>(dst));
         ok = ok && !result.has_value() &&
              result.error().code == IoError::Code::invalid_argument;
-        (void)reader.close();
     }
     {
-        sluice::FileWriter writer(path);
-        if (!writer.opened()) {
+        auto opened = sluice::File::open(
+            path,
+            sluice::FileOpen{sluice::FileAccess::write_only,
+                             sluice::FileExistence::open_existing,
+                             sluice::FileInitialContents::preserve});
+        if (!opened.has_value()) {
             ::unlink(path);
             return false;
         }
+        auto file = std::move(opened).value();
         const std::vector<std::byte> src(4, std::byte{0});
-        auto result = writer.write_at(kMaxNativeOffset + 1, std::span<const std::byte>(src));
+        auto result = sluice::blocking::write_at(file, kMaxNativeOffset + 1,
+                                                 std::span<const std::byte>(src));
         ok = ok && !result.has_value() &&
              result.error().code == IoError::Code::invalid_argument;
-        (void)writer.close();
     }
     ::unlink(path);
     return ok;
@@ -171,8 +182,8 @@ int main() {
         {"size_bound_holds", size_bound_holds},
         {"checked_offset_reports_invalid_argument", checked_offset_reports_invalid_argument},
         {"native_transfer_limit_is_a_range_rejection", native_transfer_limit_is_a_range_rejection},
-        {"legacy_positional_io_reports_invalid_argument",
-         legacy_positional_io_reports_invalid_argument},
+        {"canonical_positional_io_reports_invalid_argument",
+         canonical_positional_io_reports_invalid_argument},
     };
 
     for (const NamedTest& t : tests) {

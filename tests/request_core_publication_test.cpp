@@ -67,7 +67,7 @@ bool happy_path_publication_is_ordered(Tracker& t) {
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
     t.check(driver.lookup(accepted.id) == PublicLookup::published,
             "published lookup after epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released, "released");
     t.check(!target.publisher_touched_after_ready() && !target.seal_followed_ready(),
             "publisher never touches the caller target after the ready store");
     t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::free,
@@ -88,7 +88,7 @@ bool terminal_known_while_execution_retirement_delayed(Tracker& t) {
     t.check(driver.publish_to(accepted.id, target) == PublicationGrant::not_eligible,
             "publication refused while an execution obligation remains");
     t.check(!target.acquire_ready(), "nothing visible during the delay");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::not_visible_yet,
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::not_visible_yet,
             "binding not releasable before a visible terminal");
     t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
             "delayed retirement arrives");
@@ -96,7 +96,7 @@ bool terminal_known_while_execution_retirement_delayed(Tracker& t) {
             "publication eligible after the delay");
     t.check(target.acquire_ready(), "result visible");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released, "released");
     t.check(core.snapshot().accepted_live == 0, "reclaimed");
     driver.settle_all();
     return t.failures == 0;
@@ -116,7 +116,7 @@ bool delayed_control_retirement_after_publication(Tracker& t) {
     t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted,
             "control-only ref does not block publication");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released, "released");
     t.check(core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::accepted,
             "delayed control retirement still pins the slot");
     t.check(driver.retire_control(accepted.id) ==
@@ -145,7 +145,7 @@ bool duplicate_terminal_before_publication_changes_nothing(Tracker& t) {
     t.check(target.acquired_payload().outcome.effect.confirmed_bytes == 16,
             "published result is the canonical winner");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released, "released");
     t.check(driver.offer_physical_success(accepted.id, 16) == TerminalVerdict::rejected_stale,
             "late duplicate after publication changes nothing");
     t.check(core.snapshot().accepted_live == 0, "reclaimed");
@@ -165,7 +165,7 @@ bool stale_events_after_slot_reuse_miss_everywhere(Tracker& t) {
     PublicationTarget& target = driver.make_target();
     t.check(driver.publish_to(old_id.id, target) == PublicationGrant::granted, "published");
     t.check(driver.finish_publication(old_id.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(old_id.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(old_id.id) == BindingRelease::released, "released");
     t.check(core.observe_slot(old_id.id.slot)->phase == RequestCore::SlotPhase::free, "freed");
 
     ReserveAttempt second = driver.reserve();
@@ -177,7 +177,7 @@ bool stale_events_after_slot_reuse_miss_everywhere(Tracker& t) {
             "stale generation epilogue rejected");
     t.check(driver.retire_execution(old_id.id) == ExecutionRelease::stale,
             "stale generation execution release rejected");
-    t.check(driver.release_public_binding(old_id.id) == BindingRelease::stale,
+    t.check(driver.discard_public_result(old_id.id) == BindingRelease::stale,
             "stale generation binding release rejected");
     t.check(!core.observe_slot(reused.id.slot)->published,
             "reused request unaffected by stale events");
@@ -193,7 +193,7 @@ bool public_release_before_publication_is_refused(Tracker& t) {
     t.check(driver.cancel(accepted.id) == PublicCancel::won_before_execution, "cancel wins");
     t.check(driver.retire_execution(accepted.id) == ExecutionRelease::borrow_touch_fully_retired,
                 "won cancel retires the pending dispatch obligation");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::not_visible_yet,
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::not_visible_yet,
             "release before any publication is refused");
     auto observation = core.observe_slot(accepted.id.slot);
     t.check(observation->binding_live, "binding still live after refused release");
@@ -202,7 +202,7 @@ bool public_release_before_publication_is_refused(Tracker& t) {
     t.check(driver.publish_to(accepted.id, target) == PublicationGrant::granted,
             "publication proceeds normally after refused release");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released,
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released,
             "release accepted once visible");
     t.check(core.snapshot().accepted_live == 0, "reclaimed");
     driver.settle_all();
@@ -220,8 +220,8 @@ bool release_racing_publication_epilogue_is_safe(Tracker& t) {
     PublicationPayload payload;
     t.check(driver.begin_publication(accepted.id, &payload) == PublicationGrant::granted,
             "publication begins");
-    bool released_during_epilogue = false;
-    bool lookup_invalidated = false;
+    bool refused_during_epilogue = false;
+    bool lookup_outstanding = false;
     bool slot_pinned_during_window = false;
     bool publisher_clean = false;
     {
@@ -232,9 +232,9 @@ bool release_racing_publication_epilogue_is_safe(Tracker& t) {
         t.check(target.acquire_ready(), "consumer acquires ready");
         t.check(target.acquired_payload().outcome.is_canceled(), "canceled result delivered");
         target.destroy();
-        released_during_epilogue =
-            driver.release_public_binding(accepted.id) == BindingRelease::released;
-        lookup_invalidated = driver.lookup(accepted.id) == PublicLookup::not_found;
+        refused_during_epilogue =
+            driver.discard_public_result(accepted.id) == BindingRelease::not_visible_yet;
+        lookup_outstanding = driver.lookup(accepted.id) == PublicLookup::outstanding;
         slot_pinned_during_window =
             core.observe_slot(accepted.id.slot)->publication_inflight &&
             core.observe_slot(accepted.id.slot)->phase == RequestCore::SlotPhase::accepted;
@@ -242,12 +242,15 @@ bool release_racing_publication_epilogue_is_safe(Tracker& t) {
                           !target.used_after_destroy();
     }
     t.check(publisher_clean, "ready store was the publisher's last target access");
-    t.check(released_during_epilogue, "release during epilogue accepted");
-    t.check(lookup_invalidated, "public id invalid immediately");
+    t.check(refused_during_epilogue,
+            "a release racing the epilogue is refused until the result is visible");
+    t.check(lookup_outstanding, "the public id stays outstanding through the epilogue");
     t.check(slot_pinned_during_window, "publication pin prevented premature reuse");
     t.check(core.snapshot().accepted_live == 1, "slot still occupied before epilogue");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed,
             "epilogue completes after target destruction");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released,
+            "the post-epilogue release is the one that reclaims");
     t.check(core.snapshot().accepted_live == 0,
             "reclaim driven by the epilogue without touching the destroyed target");
     driver.settle_all();
@@ -308,7 +311,7 @@ bool final_blocking_release_drives_each_reclaim_variant(Tracker& t) {
         PublicationTarget& target = driver.make_target();
         t.check(driver.publish_to(ids[0], target) == PublicationGrant::granted, "published 0");
         t.check(driver.finish_publication(ids[0]) == PublicationCompletion::completed, "epilogue 0");
-        t.check(driver.release_public_binding(ids[0]) == BindingRelease::released, "binding last");
+        t.check(driver.discard_public_result(ids[0]) == BindingRelease::released, "binding last");
         t.check(core.observe_slot(ids[0].slot)->phase == RequestCore::SlotPhase::free,
                 "binding release alone reclaims when it is the final pin");
     }
@@ -317,7 +320,7 @@ bool final_blocking_release_drives_each_reclaim_variant(Tracker& t) {
         PublicationTarget& target = driver.make_target();
         t.check(driver.publish_to(ids[1], target) == PublicationGrant::granted, "published 1");
         t.check(driver.finish_publication(ids[1]) == PublicationCompletion::completed, "epilogue 1");
-        t.check(driver.release_public_binding(ids[1]) == BindingRelease::released, "release 1");
+        t.check(driver.discard_public_result(ids[1]) == BindingRelease::released, "release 1");
         t.check(core.observe_slot(ids[1].slot)->phase == RequestCore::SlotPhase::accepted,
                 "control pin defers reclaim");
         t.check(driver.retire_control(ids[1]) ==
@@ -329,14 +332,16 @@ bool final_blocking_release_drives_each_reclaim_variant(Tracker& t) {
     {
         PublicationTarget& target = driver.make_target();
         t.check(driver.publish_to(ids[2], target) == PublicationGrant::granted, "published 2");
-        t.check(driver.release_public_binding(ids[2]) == BindingRelease::released,
-                "release during in-flight publication");
+        t.check(driver.discard_public_result(ids[2]) == BindingRelease::not_visible_yet,
+                "a release during in-flight publication is refused");
         t.check(core.observe_slot(ids[2].slot)->phase == RequestCore::SlotPhase::accepted,
                 "publication pin defers reclaim");
         t.check(driver.finish_publication(ids[2]) == PublicationCompletion::completed,
                 "epilogue last");
+        t.check(driver.discard_public_result(ids[2]) == BindingRelease::released,
+                "the post-epilogue release reclaims");
         t.check(core.observe_slot(ids[2].slot)->phase == RequestCore::SlotPhase::free,
-                "final epilogue release reclaims");
+                "release after the epilogue reclaims");
     }
     t.check(core.snapshot().free_slots == 3, "all three slots reusable with no unrelated work");
     driver.settle_all();
@@ -364,7 +369,7 @@ bool post_accept_dispatch_failure_publishes_through_terminal(Tracker& t) {
                 payload.outcome.effect.remaining == sluice::detail::EffectCertainty::unknown,
             "failed initiation does not claim a zero-byte effect");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released, "released");
     t.check(core.snapshot().accepted_live == 0, "reclaimed");
     driver.settle_all();
     return t.failures == 0;
@@ -381,7 +386,7 @@ bool zero_op_publication_needs_no_execution(Tracker& t) {
     t.check(target.acquire_ready() && target.acquired_payload().outcome.succeeded,
             "zero-op result visible");
     t.check(driver.finish_publication(accepted.id) == PublicationCompletion::completed, "epilogue");
-    t.check(driver.release_public_binding(accepted.id) == BindingRelease::released, "released");
+    t.check(driver.discard_public_result(accepted.id) == BindingRelease::released, "released");
     t.check(core.snapshot().accepted_live == 0, "reclaimed");
     driver.settle_all();
     return t.failures == 0;

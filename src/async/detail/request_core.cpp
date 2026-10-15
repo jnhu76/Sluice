@@ -266,22 +266,6 @@ PublicCancel RequestCore::cancel(RequestKey id) noexcept {
     return PublicCancel::won_before_execution;
 }
 
-BindingRelease RequestCore::release_public_binding(RequestKey id) noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    Slot* slot = resolve_public_(id);
-    if (slot == nullptr) {
-        return BindingRelease::stale;
-    }
-    const bool visible = slot->terminal_chosen && slot->execution_refs == 0 &&
-                         (slot->publication_inflight || slot->published);
-    if (!visible) {
-        return BindingRelease::not_visible_yet;
-    }
-    slot->binding_live = false;
-    try_reclaim_(*slot, id.slot.value);
-    return BindingRelease::released;
-}
-
 BindingRelease RequestCore::discard_public_result(RequestKey id) noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     Slot* slot = resolve_public_(id);

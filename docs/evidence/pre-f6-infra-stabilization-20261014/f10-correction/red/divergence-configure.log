@@ -1,0 +1,8 @@
+$ C_INCLUDE_PATH=/tmp/f10-red-capture/stub-good/include
+$ CPATH=
+$ CPLUS_INCLUDE_PATH=
+$ LIBRARY_PATH=/tmp/f10-red-capture/fakelib
+$ /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/f10-red-capture/build-divergence
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+checking for liburing capability ... ok (/tmp/f10-red-capture/stub-good/include/liburing.h + /tmp/f10-red-capture/fakelib/liburing.so)
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m

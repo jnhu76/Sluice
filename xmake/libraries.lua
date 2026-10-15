@@ -11,10 +11,7 @@ target("sluice_core")
     set_kind("static")
     add_includedirs(R .. "include", {public = true})
     add_files(core_sources())
-    -- Installed header set. include/sluice/experimental/ is deliberately absent:
-    -- the install rule isolates the experimental uring write surface instead of
-    -- shipping it (docs/review/f1-clean-room-package-baseline.md §1); do not
-    -- widen these globs to include it.
+    -- Installed header set: the canonical core closure only.
     add_headerfiles(R .. "include/(sluice/*.hpp)",
                     R .. "include/(sluice/blocking/*.hpp)",
                     R .. "include/(sluice/detail/*.hpp)")
@@ -40,11 +37,13 @@ target("sluice_async")
     add_includedirs(R .. "include", {public = true})
     add_deps("sluice_core")
     add_files(R .. "src/async/*.cpp")
-    -- Installed header set (see the sluice_core note): the current public
-    -- closure reaches detail/ substrates from public headers, so the installed
-    -- package must carry them until the boundary contraction lands.
+    -- Installed header set: the canonical request closure plus the
+    -- OPTIONAL_CANDIDATE stackful-host closure. detail/context_identity.hpp is
+    -- private to library translation units (no installed header includes it)
+    -- and stays out of the package.
     add_headerfiles(R .. "include/(sluice/async/*.hpp)",
                     R .. "include/(sluice/async/detail/*.hpp)")
+    remove_headerfiles(R .. "include/sluice/async/detail/context_identity.hpp")
     -- The non-recursive glob above misses src/async/detail/. The context
     -- identity domain and the RequestCore substrate that the context owns are
     -- production now, so they are listed explicitly.
@@ -59,8 +58,20 @@ target("sluice_async")
     -- guarded layout the library was compiled with, or the ODR is violated.
     -- Public define + public link propagate both from this single config
     -- point; consumers must not hand-copy the macro.
+    add_defines(sluice_liburing_profile_define(), {public = true})
     if has_config("liburing") then
         add_defines("SLUICE_HAS_LIBURING", {public = true})
+        -- The resolved dependency identity is written to the saved config by
+        -- the capability check (xmake/uring.lua). Bind its directories
+        -- publicly only when plain toolchain resolution is
+        -- environment-dependent; otherwise every consumer resolves the same
+        -- files without the extra -I/-L reorder.
+        if get_config("__sluice_liburing_bind_includes") then
+            add_includedirs(get_config("__sluice_liburing_header_dir"), {public = true})
+        end
+        if get_config("__sluice_liburing_bind_linkdirs") then
+            add_linkdirs(get_config("__sluice_liburing_library_dir"), {public = true})
+        end
         add_links("uring", {public = true})
     end
     -- CPP-STATIC-1: Clang TSA gate.

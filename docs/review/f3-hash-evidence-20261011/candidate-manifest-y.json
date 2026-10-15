@@ -1,0 +1,183 @@
+{
+  "PROFILE": "P2-liburing",
+  "PROFILE_NOTE": "tiers are packaging labels; the F0 policy classes ride inside them: P0/P1/P3 carry the CANONICAL surfaces, P1 carries the OPTIONAL_CANDIDATE host closure (H-30/H-31 rows: cancel.hpp + fiber.hpp + fiber_ctx.hpp) and the COMPATIBILITY/INTERNAL/TEST_ONLY headers that the current public closure reaches; no OPTIONAL_SUPPORTED claim exists",
+  "PRODUCTION_BASELINE_SHA": "22606ae281faca3acd2d59087f942de2971e4b0d",
+  "PRODUCTION_DIFF_EMPTY": true,
+  "ORIGIN_MASTER_TIP": "22606ae281faca3acd2d59087f942de2971e4b0d",
+  "VERIFICATION_HEAD": "498589416c9854e5fdff9c5f3b70e09c3952d35c",
+  "VERIFICATION_HEAD_DIRTY": false,
+  "GENERATED_UTC": "2026-10-10T21:06:45.685041+00:00",
+  "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+  "ARCH": "x86_64",
+  "KERNEL": "7.2.9-200.fc44.x86_64",
+  "FILESYSTEM_SOURCE_TREE": "btrfs",
+  "FILESYSTEM_SCRATCH_PREFIX": "tmpfs",
+  "FILESYSTEM_CONSUMER_BUILD": "tmpfs",
+  "BUILD_MODE": "release",
+  "LIBURING": "/tmp/sluice-f3-hash-evidence-20261011/uring-prefix",
+  "LIBURING_VERSION": "",
+  "PREFIX_LAYOUT": {
+    "include": 79,
+    "lib": [
+      "lib/libsluice_async.a",
+      "lib/libsluice_core.a"
+    ]
+  },
+  "HEADERS": [
+    "sluice/async/application_runtime.hpp",
+    "sluice/async/async_io_context.hpp",
+    "sluice/async/async_mutex.hpp",
+    "sluice/async/async_queue.hpp",
+    "sluice/async/async_rwlock.hpp",
+    "sluice/async/await_op_helpers.hpp",
+    "sluice/async/batch.hpp",
+    "sluice/async/cancel.hpp",
+    "sluice/async/completion.hpp",
+    "sluice/async/condition.hpp",
+    "sluice/async/detail/context_identity.hpp",
+    "sluice/async/detail/fail_fast.hpp",
+    "sluice/async/detail/mutex_test_seam.hpp",
+    "sluice/async/detail/observer_protocol.hpp",
+    "sluice/async/detail/progress_source.hpp",
+    "sluice/async/detail/queue_item.hpp",
+    "sluice/async/detail/queue_port.hpp",
+    "sluice/async/detail/queue_test_seam.hpp",
+    "sluice/async/detail/ready_sink.hpp",
+    "sluice/async/detail/reference_ready_sink.hpp",
+    "sluice/async/detail/request_arena.hpp",
+    "sluice/async/detail/request_core.hpp",
+    "sluice/async/detail/request_key.hpp",
+    "sluice/async/detail/request_slot.hpp",
+    "sluice/async/detail/select_port.hpp",
+    "sluice/async/detail/select_registration.hpp",
+    "sluice/async/detail/submit_transaction.hpp",
+    "sluice/async/event.hpp",
+    "sluice/async/evented_wait_policy.hpp",
+    "sluice/async/fiber.hpp",
+    "sluice/async/fiber_ctx.hpp",
+    "sluice/async/file.hpp",
+    "sluice/async/future.hpp",
+    "sluice/async/group.hpp",
+    "sluice/async/lock_guard.hpp",
+    "sluice/async/mutex.hpp",
+    "sluice/async/op_helpers.hpp",
+    "sluice/async/request.hpp",
+    "sluice/async/request_handle.hpp",
+    "sluice/async/request_scope.hpp",
+    "sluice/async/scheduler.hpp",
+    "sluice/async/select.hpp",
+    "sluice/async/select_fwd.hpp",
+    "sluice/async/semaphore.hpp",
+    "sluice/async/stackful_io_host.hpp",
+    "sluice/async/task_result.hpp",
+    "sluice/async/thread_annotations.hpp",
+    "sluice/async/threadpool_backend.hpp",
+    "sluice/async/timer_registration.hpp",
+    "sluice/async/uring_backend.hpp",
+    "sluice/async/wait_node.hpp",
+    "sluice/async/wait_policy.hpp",
+    "sluice/async/wait_queue.hpp",
+    "sluice/blocking/file.hpp",
+    "sluice/blocking_io_pool.hpp",
+    "sluice/buffer.hpp",
+    "sluice/buffered_readable.hpp",
+    "sluice/copy.hpp",
+    "sluice/copy_strategy.hpp",
+    "sluice/detail/blocking_io_pool_impl.hpp",
+    "sluice/detail/file_semantics.hpp",
+    "sluice/detail/posix_retry.hpp",
+    "sluice/detail/uring_submit.hpp",
+    "sluice/effect.hpp",
+    "sluice/error.hpp",
+    "sluice/fault.hpp",
+    "sluice/file.hpp",
+    "sluice/file_resource.hpp",
+    "sluice/io_context.hpp",
+    "sluice/iovec.hpp",
+    "sluice/limit.hpp",
+    "sluice/measurement.hpp",
+    "sluice/memory_io_context.hpp",
+    "sluice/observed.hpp",
+    "sluice/reader.hpp",
+    "sluice/result.hpp",
+    "sluice/sync.hpp",
+    "sluice/wal.hpp",
+    "sluice/writer.hpp"
+  ],
+  "STANDALONE_HEADER_TOTAL": 79,
+  "STANDALONE_DIRECT_HEADER_COMPILES": 78,
+  "STANDALONE_FRAGMENT_EXCEPTIONS": [
+    {
+      "header": "sluice/detail/blocking_io_pool_impl.hpp",
+      "included_by": [
+        "sluice/blocking_io_pool.hpp"
+      ],
+      "included_by_standalone_ok": [
+        "sluice/blocking_io_pool.hpp"
+      ]
+    }
+  ],
+  "LIBRARIES": [
+    "lib/libsluice_async.a",
+    "lib/libsluice_core.a"
+  ],
+  "ARCHIVE_BASELINE": {
+    "file": "/tmp/sluice-f3-hash-evidence-20261011/candidate-archive-y.json",
+    "sha256": "7da1c0caa8d24488b31ba8d210a34d1c20ab215ed097e7f333b996269b681740",
+    "archives": 2,
+    "objects": 50,
+    "defined_symbols": 1400,
+    "external_undefined_symbols": 109
+  },
+  "PUBLIC_DEFINES": [
+    "SLUICE_HAS_LIBURING"
+  ],
+  "PUBLIC_INCLUDE_PATHS": [
+    "<prefix>/include"
+  ],
+  "PUBLIC_LINK_FLAGS": [
+    "-L<prefix>/lib"
+  ],
+  "PUBLIC_LINK_LIBS": [
+    "sluice_async",
+    "sluice_core",
+    "uring"
+  ],
+  "CONFIG_REQUIREMENTS": [
+    "C++20",
+    "thread support: no separate -pthread measured on this toolchain (glibc >= 2.34 merged libpthread); other toolchains may need -pthread for sluice_async consumers",
+    "sanitizer ODR discipline: installed headers embed fiber_ctx layout by value (stackful_io_host.hpp, scheduler.hpp), so consumer TUs must be compiled with the same sanitizer configuration (ASan/TSan autodetect) as the installed archive",
+    "installed headers contain SLUICE_ASYNC_INTERNAL_TESTING and SLUICE_*_MUTANT_* guarded regions; package consumers must NEVER define these macros (under liburing the combination also includes an uninstalled src/-only header and fails)",
+    "liburing headers/lib at /tmp/sluice-f3-hash-evidence-20261011/uring-prefix (ODR: every TU must see SLUICE_HAS_LIBURING identical to the archive build)"
+  ],
+  "EXPECTED_EXTERNAL_WORKLOADS": [
+    "w01_direct",
+    "w02_pipeline",
+    "w03_external_loop_threadpool",
+    "w03_external_loop_uring",
+    "w04_stackful_candidate",
+    "contract_request_lifetime",
+    "contract_admission",
+    "contract_cancel_effect",
+    "contract_observer",
+    "contract_progress",
+    "contract_shutdown",
+    "contract_durability",
+    "contract_backend_availability",
+    "odr_two_tu"
+  ],
+  "NEGATIVE_PROBES": [
+    "experimental_headers_not_installed",
+    "async_symbols_not_in_core_archive",
+    "link_without_uring_fails",
+    "odr_divergent_macro_views_detected"
+  ],
+  "ODR_DISCRIMINATOR": {
+    "uring_backend_bytes": 304,
+    "macro_view": 1,
+    "same_specializations": [
+      "Result<std::size_t>",
+      "Request<std::size_t>"
+    ]
+  }
+}

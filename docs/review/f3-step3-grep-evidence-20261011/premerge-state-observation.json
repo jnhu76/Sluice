@@ -1,0 +1,42 @@
+[
+  {
+    "app": "grep",
+    "profile": "debug-n",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/grep-debug-n-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "PASS"
+  },
+  {
+    "app": "grep",
+    "profile": "debug-y",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/grep-debug-y-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "PASS"
+  },
+  {
+    "app": "grep",
+    "profile": "release-n",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/grep-release-n-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "PASS"
+  },
+  {
+    "app": "grep",
+    "profile": "release-y",
+    "short17": 294,
+    "eof": 1,
+    "trace": "/home/jnhu/Source/sluice-evidence/f3-step3-20261011/premerge-state-7cZZWYF3/grep-release-y-short.trace",
+    "sha256": "99f93a720c805c8ec03bcb02133788f515afd4d3899ffcff83b399320d9dcbec",
+    "unshim_negative": "PASS",
+    "grep_consumption_10": "PASS"
+  }
+]

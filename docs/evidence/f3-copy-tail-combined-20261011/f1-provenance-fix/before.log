@@ -1,0 +1,21 @@
++ git cat-file -e 9a81378cb80cc0a1438031be83bdc8a8917d3e60^{commit}
++ git merge-base --is-ancestor 9a81378cb80cc0a1438031be83bdc8a8917d3e60 HEAD
++ git diff --name-only 9a81378cb80cc0a1438031be83bdc8a8917d3e60..HEAD -- src include
+.+ git merge-base HEAD origin/master
+...+ git cat-file -e 9a81378cb80cc0a1438031be83bdc8a8917d3e60^{commit}
++ git merge-base --is-ancestor 9a81378cb80cc0a1438031be83bdc8a8917d3e60 HEAD
++ git diff --name-only 9a81378cb80cc0a1438031be83bdc8a8917d3e60..HEAD -- src include
+.+ git cat-file -e 40747469c4dfc751e255457538cfed77fe063927^{commit}
++ git merge-base --is-ancestor 40747469c4dfc751e255457538cfed77fe063927 HEAD
+.+ git cat-file -e 0000000000000000000000000000000000000000^{commit}
+..+ git cat-file -e 40747469c4dfc751e255457538cfed77fe063927^{commit}
++ git merge-base --is-ancestor 40747469c4dfc751e255457538cfed77fe063927 HEAD
++ git diff --name-only 40747469c4dfc751e255457538cfed77fe063927..HEAD -- src include
+.+ git cat-file -e 40747469c4dfc751e255457538cfed77fe063927^{commit}
++ git merge-base --is-ancestor 40747469c4dfc751e255457538cfed77fe063927 HEAD
++ git diff --name-only 40747469c4dfc751e255457538cfed77fe063927..HEAD -- src include
+.
+----------------------------------------------------------------------
+Ran 10 tests in 0.650s
+
+OK

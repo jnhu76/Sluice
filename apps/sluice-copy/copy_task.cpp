@@ -1,13 +1,12 @@
 #include "copy_task.hpp"
 
-#include <sluice/async/await_op_helpers.hpp>
-#include <sluice/async/task_result.hpp>
+#include <sluice/async/request_scope.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 
-#include <cstring>
+#include <chrono>
 #include <limits>
 #include <memory>
-#include <span>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -24,6 +23,18 @@ constexpr bool add_would_overflow(std::uint64_t a, std::uint64_t b) noexcept {
     return a > std::numeric_limits<std::uint64_t>::max() - b;
 }
 
+Result<CopyStats> copy_exception() noexcept {
+    try {
+        throw;
+    } catch (const std::bad_alloc&) {
+        return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
+    } catch (const std::system_error& e) {
+        return make_unexpected<CopyStats>(sluice::from_errno_value(e.code().value()));
+    } catch (...) {
+        return make_unexpected<CopyStats>(IoError{IoError::Code::backend_error});
+    }
+}
+
 enum class SlotState : std::uint8_t {
     idle,
     reading,
@@ -34,8 +45,7 @@ enum class SlotState : std::uint8_t {
 
 struct PipelineSlot {
     std::vector<std::byte> buffer;
-    Completion<std::size_t> read_c;
-    Completion<std::size_t> write_c;
+    ScopeTicket<std::size_t> ticket;
     std::uint64_t chunk_offset = 0;
     std::size_t filled = 0;
     std::size_t written = 0;
@@ -52,104 +62,93 @@ struct PipelinedCopyTask {
     std::size_t pipeline_depth;
     SyncPolicy sync;
     std::vector<std::unique_ptr<PipelineSlot>> slots;
-    Completion<void> sync_c;
 
-    void operator()(RuntimeTaskContext& ctx, TaskResultSlot<Result<CopyStats>>& slot) {
-        slot.publish(run_body(ctx));
-    }
-
-    Result<void> submit_slot_read(RuntimeTaskContext& ctx, PipelineSlot& s) {
+    Result<void> submit_slot_read(RequestScope& scope, PipelineSlot& s) {
         std::uint64_t off = s.chunk_offset + s.filled;
         std::byte* dst = s.buffer.data() + s.filled;
         std::size_t len = buffer_size - s.filled;
-        auto rsr = ctx.submit_read(ReadOp{*src_file, dst, len, off}, s.read_c);
+        auto rsr = scope.submit_read(ReadOp{*src_file, dst, len, off});
         if (!rsr.has_value())
-            return rsr;
+            return make_unexpected<void>(rsr.error());
+        s.ticket = rsr.value();
         s.state = SlotState::reading;
         return {};
     }
 
-    Result<void> submit_slot_write(RuntimeTaskContext& ctx, PipelineSlot& s) {
+    Result<void> submit_slot_write(RequestScope& scope, PipelineSlot& s) {
         std::uint64_t off = s.chunk_offset + s.written;
         const std::byte* src = s.buffer.data() + s.written;
         std::size_t len = s.filled - s.written;
-        auto wsr = ctx.submit_write(WriteOp{dst, src, len, off}, s.write_c);
+        auto wsr = scope.submit_write(WriteOp{dst, src, len, off});
         if (!wsr.has_value())
-            return wsr;
+            return make_unexpected<void>(wsr.error());
+        s.ticket = wsr.value();
         s.state = SlotState::writing;
         return {};
     }
 
-    Result<void> await_slot_read(RuntimeTaskContext& ctx, PipelineSlot& s, CopyStats& stats,
-                                 bool& saw_eof) {
-        const std::size_t remaining = buffer_size - s.filled;
-        AwaitOpTally tally;
-        auto first = await_take(ctx, s.read_c);
-        if (!first.has_value())
-            return make_unexpected<void>(first.error());
-        ++tally.ops;
-        if (first.value() < remaining)
-            ++tally.short_ops;
-
-        if (first.value() == 0) {
-            stats.read_ops += tally.ops;
-            s.eof = true;
-            saw_eof = true;
-            s.state = (s.filled == 0) ? SlotState::done : SlotState::read_done;
-            return {};
+    template <class T>
+    Result<T> wait_take(RequestScope& scope, AsyncIoContext& ctx, ScopeTicket<T> ticket) {
+        for (;;) {
+            auto waited = scope.wait_for(ticket, std::chrono::nanoseconds::max());
+            if (!waited.has_value())
+                return make_unexpected<T>(waited.error());
+            if (waited.value() == ScopeWaitStatus::ready)
+                return scope.take(ticket).result;
+            if (waited.value() == ScopeWaitStatus::interrupted) {
+                ctx.acknowledge_progress_control();
+                continue;
+            }
+            return make_unexpected<T>(IoError{IoError::Code::backend_error});
         }
-        s.filled += first.value();
-        if (s.filled >= buffer_size) {
-            stats.read_ops += tally.ops;
-            s.state = SlotState::read_done;
-            return {};
-        }
-
-        auto fr = await_read_fill(
-            ctx, *src_file,
-            std::span<std::byte>(s.buffer.data() + s.filled, buffer_size - s.filled),
-            s.chunk_offset + s.filled, s.read_c, &tally);
-        if (!fr.has_value())
-            return make_unexpected<void>(fr.error());
-        stats.read_ops += tally.ops;
-        std::size_t n = fr.value();
-        s.filled += n;
-        if (n < buffer_size - (s.filled - n)) {
-            s.eof = true;
-            saw_eof = true;
-        }
-        s.state = (s.filled == 0) ? SlotState::done : SlotState::read_done;
-        return {};
     }
 
-    Result<void> await_slot_write(RuntimeTaskContext& ctx, PipelineSlot& s, CopyStats& stats) {
-        AwaitOpTally tally;
-        auto first = await_take(ctx, s.write_c);
-        if (!first.has_value())
-            return make_unexpected<void>(first.error());
-        ++tally.ops;
-        if (first.value() == 0) {
-            return make_unexpected<void>(IoError{IoError::Code::backend_error});
+    Result<void> await_slot_read(RequestScope& scope, AsyncIoContext& ctx, PipelineSlot& s,
+                                 CopyStats& stats, bool& saw_eof) {
+        for (;;) {
+            auto read = wait_take(scope, ctx, s.ticket);
+            if (!read.has_value())
+                return make_unexpected<void>(read.error());
+            ++stats.read_ops;
+            if (read.value() == 0) {
+                s.eof = true;
+                saw_eof = true;
+                s.state = s.filled == 0 ? SlotState::done : SlotState::read_done;
+                return {};
+            }
+            s.filled += read.value();
+            if (s.filled == buffer_size) {
+                s.state = SlotState::read_done;
+                return {};
+            }
+            auto submitted = submit_slot_read(scope, s);
+            if (!submitted.has_value())
+                return submitted;
         }
-        const std::size_t remaining_before = s.filled - s.written;
-        if (first.value() < remaining_before)
-            ++tally.short_ops;
-        s.written += first.value();
-        if (s.written < s.filled) {
-            auto wr = await_write_exact(
-                ctx, dst,
-                std::span<const std::byte>(s.buffer.data() + s.written, s.filled - s.written),
-                s.chunk_offset + s.written, s.write_c, &tally);
-            if (!wr.has_value())
-                return make_unexpected<void>(wr.error());
-            s.written = s.filled;
-        }
-        stats.write_ops += tally.ops;
-        stats.short_writes += tally.short_ops;
-        return {};
     }
 
-    Result<CopyStats> run_body(RuntimeTaskContext& ctx) {
+    Result<void> await_slot_write(RequestScope& scope, AsyncIoContext& ctx, PipelineSlot& s,
+                                  CopyStats& stats) {
+        for (;;) {
+            auto written = wait_take(scope, ctx, s.ticket);
+            if (!written.has_value())
+                return make_unexpected<void>(written.error());
+            if (written.value() == 0)
+                return make_unexpected<void>(IoError{IoError::Code::backend_error});
+            ++stats.write_ops;
+            if (written.value() < s.filled - s.written)
+                ++stats.short_writes;
+            s.written += written.value();
+            stats.bytes_copied += written.value();
+            if (s.written == s.filled)
+                return {};
+            auto submitted = submit_slot_write(scope, s);
+            if (!submitted.has_value())
+                return submitted;
+        }
+    }
+
+    Result<CopyStats> run_body(RequestScope& scope, AsyncIoContext& ctx) {
         CopyStats stats{};
         stats.sync = sync;
 
@@ -166,12 +165,8 @@ struct PipelinedCopyTask {
         for (std::size_t i = 0; i < pipeline_depth; ++i) {
             if (eof_seen)
                 break;
-            if (ctx.cancel_token().is_requested()) {
-                fail(IoError{IoError::Code::canceled});
-                break;
-            }
             auto& s = slots[i];
-            auto rsr = submit_slot_read(ctx, *s);
+            auto rsr = submit_slot_read(scope, *s);
             if (!rsr.has_value()) {
                 fail(rsr.error());
                 break;
@@ -179,10 +174,6 @@ struct PipelinedCopyTask {
         }
 
         while (!primary_error.has_value()) {
-            if (ctx.cancel_token().is_requested()) {
-                fail(IoError{IoError::Code::canceled});
-                break;
-            }
 
             PipelineSlot* read_slot = nullptr;
             for (auto& s : slots) {
@@ -193,7 +184,7 @@ struct PipelinedCopyTask {
             }
 
             if (read_slot != nullptr) {
-                auto r = await_slot_read(ctx, *read_slot, stats, eof_seen);
+                auto r = await_slot_read(scope, ctx, *read_slot, stats, eof_seen);
                 if (!r.has_value()) {
                     fail(r.error());
                     break;
@@ -201,10 +192,6 @@ struct PipelinedCopyTask {
             }
 
             for (;;) {
-                if (ctx.cancel_token().is_requested()) {
-                    fail(IoError{IoError::Code::canceled});
-                    break;
-                }
 
                 PipelineSlot* ws = nullptr;
                 for (auto& s : slots) {
@@ -220,17 +207,16 @@ struct PipelinedCopyTask {
                     ws->state = SlotState::done;
                     continue;
                 }
-                auto wsr = submit_slot_write(ctx, *ws);
+                auto wsr = submit_slot_write(scope, *ws);
                 if (!wsr.has_value()) {
                     fail(wsr.error());
                     break;
                 }
-                auto wr = await_slot_write(ctx, *ws, stats);
+                auto wr = await_slot_write(scope, ctx, *ws, stats);
                 if (!wr.has_value()) {
                     fail(wr.error());
                     break;
                 }
-                stats.bytes_copied += ws->filled;
 
                 if (ws->eof || eof_seen) {
                     ws->state = SlotState::done;
@@ -244,11 +230,7 @@ struct PipelinedCopyTask {
                     ws->written = 0;
                     ws->eof = false;
                     ws->state = SlotState::idle;
-                    if (ctx.cancel_token().is_requested()) {
-                        fail(IoError{IoError::Code::canceled});
-                        break;
-                    }
-                    auto rsr = submit_slot_read(ctx, *ws);
+                    auto rsr = submit_slot_read(scope, *ws);
                     if (!rsr.has_value()) {
                         eof_seen = true;
                         ws->state = SlotState::done;
@@ -270,39 +252,30 @@ struct PipelinedCopyTask {
                 break;
         }
 
-        for (auto& s : slots) {
-            if (s->read_c.outstanding() || s->read_c.ready()) {
-                auto dr = await_drain(ctx, s->read_c);
-                if (!dr.has_value())
-                    return make_unexpected<CopyStats>(dr.error());
-            }
-            if (s->write_c.outstanding() || s->write_c.ready()) {
-                auto dr = await_drain(ctx, s->write_c);
-                if (!dr.has_value())
-                    return make_unexpected<CopyStats>(dr.error());
-            }
+        if (primary_error.has_value()) {
+            (void)scope.finish();
+            return make_unexpected<CopyStats>(*primary_error);
         }
 
-        if (primary_error.has_value())
-            return make_unexpected<CopyStats>(primary_error.value());
-
         if (sync == SyncPolicy::data) {
-            auto ssr = ctx.submit_sync_data(SyncDataOp{dst}, sync_c);
+            auto ssr = scope.submit_sync_data(SyncDataOp{dst});
             if (!ssr.has_value())
                 return make_unexpected<CopyStats>(ssr.error());
-            auto sr = await_take(ctx, sync_c);
+            auto sr = wait_take(scope, ctx, ssr.value());
             if (!sr.has_value())
                 return make_unexpected<CopyStats>(sr.error());
         } else if (sync == SyncPolicy::all) {
-            auto ssr = ctx.submit_sync_all(SyncAllOp{dst}, sync_c);
+            auto ssr = scope.submit_sync_all(SyncAllOp{dst});
             if (!ssr.has_value())
                 return make_unexpected<CopyStats>(ssr.error());
-            auto sr = await_take(ctx, sync_c);
+            auto sr = wait_take(scope, ctx, ssr.value());
             if (!sr.has_value())
                 return make_unexpected<CopyStats>(sr.error());
         }
 
-        sync_c.reset();
+        auto settled = scope.finish();
+        if (!settled.has_value())
+            return make_unexpected<CopyStats>(settled.error());
 
         return stats;
     }
@@ -318,8 +291,15 @@ Result<CopyStats> run_sequential_copy(const File& src_file, const NativeFileRef&
 Result<CopyStats> run_pipelined_copy(const File& src_file, const NativeFileRef& dst,
                                      std::size_t buffer_size, std::size_t pipeline_depth,
                                      unsigned workers, SyncPolicy sync) {
-    return run_pipelined_copy_with_backend(src_file, dst, buffer_size, pipeline_depth, workers,
-                                           sync, std::make_unique<ThreadPoolBackend>());
+    if (!valid_config(buffer_size, pipeline_depth, workers))
+        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
+    try {
+        return run_pipelined_copy_with_backend(
+            src_file, dst, buffer_size, pipeline_depth, workers, sync,
+            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{64, workers}));
+    } catch (...) {
+        return copy_exception();
+    }
 }
 
 Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const NativeFileRef& dst,
@@ -327,19 +307,8 @@ Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const Na
                                                   std::size_t pipeline_depth, unsigned workers,
                                                   SyncPolicy sync,
                                                   std::unique_ptr<AsyncBackend> backend) {
-    if (buffer_size == 0 || pipeline_depth == 0 || workers == 0 || !backend) {
+    if (!valid_config(buffer_size, pipeline_depth, workers) || !backend)
         return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
-    }
-    if (buffer_size > kMaxBufferSize || pipeline_depth > kMaxPipelineDepth ||
-        workers > kMaxWorkers) {
-        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
-    }
-    if (buffer_size > std::numeric_limits<std::size_t>::max() / pipeline_depth) {
-        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
-    }
-    if (buffer_size * pipeline_depth > kMaxPipelineBytes) {
-        return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
-    }
 
     std::vector<std::unique_ptr<PipelineSlot>> slots;
     try {
@@ -353,9 +322,29 @@ Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const Na
         return make_unexpected<CopyStats>(IoError{IoError::Code::no_space});
     }
 
-    PipelinedCopyTask task{&src_file, dst, buffer_size, pipeline_depth, sync, std::move(slots), {}};
+    PipelinedCopyTask task{&src_file, dst, buffer_size, pipeline_depth, sync, std::move(slots)};
 
-    return run_task_to_result<CopyStats>(workers, std::move(backend), task);
+    try {
+        AsyncIoContext ctx(std::move(backend));
+        auto result = [&]() -> Result<CopyStats> {
+            try {
+                RequestScope scope(ctx, pipeline_depth, ScopeCleanupPolicy::cancel_then_drain);
+                return task.run_body(scope, ctx);
+            } catch (...) {
+                return copy_exception();
+            }
+        }();
+        auto shutdown = ctx.shutdown(ShutdownPolicy::drain);
+        if (result.has_value()) {
+            if (!shutdown.has_value())
+                return make_unexpected<CopyStats>(shutdown.error());
+            if (shutdown.value() != ShutdownOutcome::completed)
+                return make_unexpected<CopyStats>(IoError{IoError::Code::backend_error});
+        }
+        return result;
+    } catch (...) {
+        return copy_exception();
+    }
 }
 
 Result<CopyStats> run_sequential_copy_with_backend(const File& src_file, const NativeFileRef& dst,

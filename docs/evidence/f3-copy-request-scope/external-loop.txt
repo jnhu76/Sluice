@@ -1,0 +1,35 @@
+BASELINE=c94c7770335e4e01e4f1f5876740cb0e792a4f88 liburing=yes debug GCC16.2.1
+RUN: timeout 60 /home/jnhu/Source/Sluice-copy-matrix-debug-y/build-debug-y/linux/x86_64/debug/threadpool_external_loop_test
+ok external_poll_loop_threadpool_w03
+ok coalesced_signals_delivered_through_one_wake
+ok spurious_wake_is_harmless_and_completions_survive
+ok saturated_notification_preserves_wake
+ok host_acknowledgement_racing_new_signal_never_strands
+ok host_stop_settle_detach_retires_registration
+ok stale_detached_registration_cannot_authorize_a_new_context
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+ok contract_violations_fail_fast
+ok pinned_context_rejects_foreign_drivers
+ok first_drive_attaches_a_fixed_owner
+ok deadline_expiry_does_not_cancel_or_settle
+ok idle_and_control_outcomes_are_distinct_and_sticky
+ok control_before_wait_and_across_notification_ack_survives
+ok acknowledging_observed_control_keeps_a_later_control
+ok injected_health_failure_is_sticky_and_distinguishable
+ok batch_await_stops_on_health_failure
+ok competing_concurrent_drives_cannot_both_succeed
+ok nested_drive_from_delivery_hook_is_rejected
+ok zero_work_helpers_skip_owner_acquisition
+all 19 threadpool external loop tests passed
+RUN: timeout 60 /home/jnhu/Source/Sluice-copy-matrix-debug-y/build-debug-y/linux/x86_64/debug/uring_external_loop_test
+ok external_poll_loop_uring_w03
+ok kernel_completions_delivered_without_stranding
+ok external_host_sees_userspace_publication_wake
+ok saturation_with_real_kernel_completion_preserves_wake
+ok external_retryable_transport_does_not_strand
+all 5 uring external loop tests passed

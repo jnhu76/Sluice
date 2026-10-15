@@ -66,7 +66,7 @@ int main(int argc, char** argv) {
     auto sink = [&](const std::string& path, std::uint64_t line_no, std::string_view line) {
         if (prefix_name)
             std::fwrite(path.data(), 1, path.size(), stdout);
-        if (prefix_name && args.line_numbers)
+        if (prefix_name)
             std::fputc(':', stdout);
         if (args.line_numbers)
             std::printf("%llu:", static_cast<unsigned long long>(line_no));
@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
     };
 
     auto results = sluice_grep::grep_files(args.pattern, std::move(inputs), args.buffer_size,
-                                           args.max_line_bytes, args.workers, sink);
+                                           args.max_line_bytes, sink);
     std::fflush(stdout);
 
     bool any_error = false;

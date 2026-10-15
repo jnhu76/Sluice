@@ -4,6 +4,55 @@
 **Starting implementation baseline:** `c64f005e6e59e791f26a7ab4a594c33954f096dd`.
 **Purpose:** track implementation and evidence, not add or relax contracts.
 
+## LIVE STATUS PIN — F2/F3/F5 CLOSED, F4 ADOPTED_SCOPED, F6 closeout in final acceptance (2026-10-15)
+
+Current contracted installed surface (post-F5 contraction, re-derived by the F6
+audit and the F5 B-01 v7 post-merge capture): **15 library objects / 13 async
+archive members / 25 installed headers**. Phase states: F2 **CLOSED** (#516,
+`27a5041a`), F3 **CLOSED** (#513 merge `f4a97234`, #515, #474 CLOSED), F4
+**ADOPTED_SCOPED** (#514, #505/#506 CLOSED), F5 **CLOSED** (`f99acbc3`,
+post-merge verified on actual master `573d616c`), pre-F6 infra #519/#520/#521
+CLOSED as FIXED_VERIFIED (#522). F6's technical audit is complete
+(`docs/evidence/f6-final-correspondence-20261014/`, frozen content
+`821c489f`; P0=0/P1=0) and its closeout — evidence adoption, 18/18 finding
+disposition, independent closeout review — is recorded in
+`docs/evidence/f6-final-closeout-20261015/`; final owner acceptance and #402
+closure follow that record. `OPTIONAL_W04_SUPPORTED=NO` (W-04 conditional N/A
+with negative package/support-claim proof, not PASS); external use of retired
+surfaces UNKNOWN; `F3_FULL_CLOSEOUT=DONE`; `V1_RELEASE_READY=NO`. #390
+remains open under its own release gates.
+
+## Historical live status pin — 2026-10-12 (superseded 2026-10-15)
+
+The numbers and issue states below are the pre-F5-contraction snapshot kept
+verbatim as a dated historical record; they are not the current surface.
+
+[Phase M → F live handoff index](phase-m-f-live-handoff-20261012.md) is the
+current **status-only** index; the detailed, dated M/F candidate sections below
+remain historical evidence and are not rewritten. #458 Phase M is
+**CLOSED/ADOPTED** (seven families, twelve adopted decisions, no unowned census
+edges); [#491](https://github.com/jnhu76/Sluice/pull/491) is its authoritative
+terminal decision packet. This does **not** mean F2/F3/F4/F5/F6 is complete.
+
+At master `432b65cb9df481b99e3a91c2a8d9fba698429a64`, #501/#502/#500/#503/#504
+are merged, #498 is **CLOSED as scoped execution**, and F3's actual master
+B-01 v3/v4 package cuts are adopted: **46 library objects / 33 async archive
+members / 73 installed headers** in both fresh profiles.
+[Actual v4 capture](../evidence/f3-part-c-b01-v4-adopted-20261012/REPRODUCE.md)
+retains historic frozen evidence. #475 Future/WaitPolicy and necessary
+Completion/Scheduler/Fiber/host substrate remain real obligations, not
+accidental survivors.
+
+**Current issue ownership:** #474 is **OPEN F3 closeout** (including TAIL inert
+`--workers`); adopted M-F and M-A1 ruling carriers #461/#462 are closed after
+handoff to **#505 F4 legacy File/stream** and **#506 F4 BlockingIoPool**.
+Remaining M-A3 D-13 test-double seams and M-A4 experimental final-tree disposition
+remain #402 F4/F5 responsibilities, not tasks silently completed by #505/#506.
+#402 F2/F3/F4/F5/F6, #390 v1 roadmap, and final package/external risk gates
+remain open. `OPTIONAL_W04_SUPPORTED=NO`; if unsupported, W-04 is a conditional
+N/A requiring negative package/support-claim proof, not W-04 PASS.
+`F3_FULL_CLOSEOUT=PENDING`, `V1_RELEASE_READY=NO`.
+
 This ledger starts a new assessment. Previous architecture CLOSED/CONFORMANT
 labels do not transfer. PR #389 changes documentation only; it does not implement
 RequestCore, new Request APIs, progress integration, or shutdown behavior.
@@ -50,6 +99,51 @@ acceptance remains required before physical removal. F2/F3/F4 own independent
 family gates; affected shared seams serialize locally; F5 follows their final
 dispositions. #402's separately tracked F5 optional-W04 shorthand is a downstream
 acceptance correction, not an extra M exit gate. `V1_RELEASE_READY=NO`.
+
+## F3 #498 canonical test migration — 2026-10-12 candidate
+
+Status: RECORD (implementation candidate, adoption/review pending). Seven
+legacy Runtime/File test TUs migrate their byte/offset, short-I/O, access/error,
+sync, native-provenance, cancellation and settlement observations to canonical
+File + owned RequestScope/Request paths. Two include-only wrapper edges retire.
+[Exact case and oracle mapping](../review/f3-498-pr-a-test-migration.md) records
+old/new ownership, negative controls, preserved controlled interleavings and
+adapter-only observations. No production or installed API is removed; package
+counts remain 50 objects / 37 async members / 79 headers in all four fresh
+remote profiles. [Remote receipt](../evidence/f3-498-pr-a-20261012/REPRODUCE.md)
+records code `3f846afa`, 40/52 targets per n/y profile, ASan/UBSan 13/13 and
+TSan twelve static suites plus shared-runtime scope 25/25; exact runtime
+configuration, original failures and negative controls remain explicit. External-risk/F5 approval and B-01 contraction remain
+separate downstream gates; runtime waiter and COPY test consumers remain.
+
+## F3 HASH default-path migration — 2026-10-11
+
+Scoped `VERIFIED` evidence for the HASH default path at production49858941 /
+fixed-test14758dcd: workers=1 uses canonical blocking File; workers2..64 and
+injected backends retain their explicit legacy bridge under the owner's task
+approval. D-H2 app-local shared validation rejects illegal CLI bounds before
+opening inputs (usage exit1). See [implementation/evidence](../review/f3-hash-direct-20261011.md)
+for exact SHAs, four remote profiles, early-FIFO negative control, three-path
+error isolation, clone traces, current dual-profile SDK comparison and unavailable
+sanitizer runtimes. HASH main/parser header closures each contract34→3.
+
+This is partial F3 execution for #474/#402, not family retirement. SDK headers79,
+core/async archive members13/37 and symbol inventories are unchanged; runtime
+sources/install closure remain because retained consumers still need them.
+`Legacy and compatibility retirement` remains `NOT_ASSESSED`; optional W04
+support and `V1_RELEASE_READY` remain NO. No historical frozen manifest is reused
+as proof of this changed app. Final PR HEAD attestation is recorded on #492.
+
+
+### F3 Step 3 HASH legacy exit (2026-10-11 candidate)
+
+VERIFIED for this bounded candidate: app-local runtime engine and injected seam
+removed; app and consumption targets require only sluice_core. Owner approved
+complete --workers removal on 2026-10-11; removed-option errors preserve this
+application's exit contract. Four server configurations, direct semantic/error
+oracles, canonical backends and package equivalence pass. W-01/W-02/W-03,
+D-H1/D-H2 and MIG-01 obligations are scoped in [the review receipt](../review/f3-step3-hash-legacy-exit-20261011.md).
+SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.
 
 ## Status vocabulary
 
@@ -1873,3 +1967,537 @@ that).
 | Requirement mapping | VERIFY-01 build/public-boundary evidence class satisfied by the standalone consumer matrix; V-case/S/L correspondences in `f1-requirement-evidence-matrix.md`; ledger oracles cited per row with their owning-slice records |
 | Known limitations | Layer-A probes cannot deterministically manufacture V04/V05/V15/V17/V21/V22/V24/V13 (kept on their Layer B/C/D evidence; nothing weakened to make them external); V23's stale-wake discriminator stays internal (M11); W-04 H3/H6 discrimination stays with D2; uring D-layer evidence remains the E1/E2 real-kernel records |
 | CI note | The recurring `backend_conformance_e1_threadpool_test` stall (#454 §4.2) did not reproduce during F1's runs; the standing rerun protocol applies unchanged |
+
+## F3 Step 2 — GREP default direct execution (2026-10-11)
+
+| Field | Scoped evidence |
+|---|---|
+| Requirements / adoption | PROD-03, W-01, ARCH-02, INV-01, SEM-02..05, ERR-01, LIFE-01, CANCEL-01/02, VERIFY-01, MIG-01/02; adopted D-H1/D-H2/D-H5; #402/#474 |
+| Implementation | Default workers=1 uses canonical File + blocking::read_at; one shared matcher/scan loop. workers=2..64 and injected AsyncBackend remain explicitly isolated runtime/Completion consumers |
+| Status | VERIFIED for the default execution and D-H1/D-H2 observations in the recorded server scope; no F3 family/runtime-retirement or W-04 PASS |
+| Evidence | [GREP slice record](../review/f3-grep-direct-20261011.md); production head 11dbc1b4386534ec8c1d5f7d3a90df99367f6135: four isolated Debug/Release × noliburing/real-liburing profiles, consumption/direct W-01/primitive/runtime waiter targets and 51 real CLI+trace checks per profile. Supplemental allocation/sink exception oracle at 7a997129f82d55709ccf76b502ad442440bebd15 passed all four profiles with production inputs unchanged |
+| Contraction / package | Default runtime execution removed; legacy completion/await/cancel/backend/scheduler still required for named compatibility consumers. SDK inputs unchanged; limited dual-profile object/symbol/link and installed-header equivalence, no old F1 manifest rewritten |
+| Limitations / next owner | GCC sanitizer unavailable (missing libasan); no exhaustive OOM or new in-flight cancellation proof. #474/#402 own HASH_GREP_COMPAT_EXIT, T2-08 and remaining physical runtime/package contraction |
+
+### F3 Step 3 GREP legacy exit (2026-10-11 candidate)
+
+VERIFIED for this bounded candidate: app-local runtime engine and injected seam
+removed; app and consumption targets require only sluice_core. Owner approved
+complete --workers removal on 2026-10-11; removed-option errors preserve this
+application's exit contract. Four server configurations, direct semantic/error
+oracles, canonical backends and package equivalence pass. W-01/W-02/W-03,
+D-H1/D-H2 and MIG-01 obligations are scoped in [the review receipt](../review/f3-step3-grep-legacy-exit-20261011.md).
+SDK ApplicationRuntime remains; this is neither adoption nor full F3 retirement.
+
+
+### F3 COPY canonical RequestScope adoption (2026-10-11)
+
+| Slice / owner | Root / app obligations | Status | Exact evidence and remaining gate |
+| --- | --- | --- | --- |
+| F3_COPY_CANONICAL_REQUEST_SCOPE; #474/#402 | REQ-01..06, HANDLE-01, LIFE-01/02, HOST-02/03, PROG-01/02/04, SHUT-01..04; T2-08, OB-1/2, D-H3/5 | VERIFIED for bounded candidate | Production `5c6bc4f9`, final production/test `c94c7770335e4e01e4f1f5876740cb0e792a4f88`; 24 pipeline oracles + consumption + DirFsync in Debug/Release × noliburing/real liburing, Clang22 ASan/UBSan and four controlled TSan cases, six success/two write-failure CLI subprocess scenarios. [Review/evidence receipt](../review/f3-copy-request-scope-20261011.md). Final head `88eeb0a5` independently approved technically; PR #496 adopted at merge `3530890b2147db38daa9b5813de002c158343090`. GitHub owner review #5483211887 is COMMENTED with an explicit APPROVE technical verdict. No whole-family or installed/archive retirement claim. |
+
+COPY production owns canonical RequestScope settlement and context progress;
+ApplicationRuntime, Scheduler task context, TaskResultSlot and per-operation
+Completion bindings are removed from this consumer. `--workers` now configures
+physical ThreadPool backend workers, retaining its accepted bounds/default;
+this D-H5 compatibility decision is explicit in the review receipt. Legacy SDK
+and test-only runtime self-test consumers remain. F3 physical deletion and F5
+installed-header approval are separate gates. W-04 OPTIONAL_SUPPORTED=NO and
+V1_RELEASE_READY=NO remain unchanged.
+
+### F3 Step 4 TAIL app-owned execution adoption (2026-10-11)
+
+VERIFIED at prior final head `64058ca9`; combined integration `f717e170331df8e098634fe60462b7dd256f8d7b` verified in four isolated configurations (72 target executions, four COPY CLI suites); Final narrow independent technical review APPROVE; PR #497 adopted at merge 0d365624661b2b6569dd4bfa68fe095f8cd59ece. GitHub owner review #5483212164 remains COMMENTED with conditional technical approval; explicit user owner merge authorization and the actual merge establish adoption.
+TAIL uses canonical direct File operations in one application-owned thread with
+condition-variable EOF wake, explicit stop and join before File/buffer destruction.
+Existing Result<TailResult> separates join/wait failure from task failure and
+preserves one-shot wait. No ApplicationRuntime/Scheduler/TaskResultSlot/Completion
+consumer remains in this application's source/object/link closure. Four isolated
+remote configurations and Clang ASan+UBSan/TSan pass; direct TAIL execution does
+not use liburing even in the enabled profile. See [TAIL slice record](../review/f3-tail-owned-driver-20261011.md)
+for exact SHA, controlled borrow/stop evidence, contraction justification and
+external progress assumptions. No installed runtime removal or W-04 support claim.
+
+TAIL `--workers=1..64` is validated but inert compatibility state. #474/#475 F3/F5 owns a deliberate removal/rejection or meaningful-semantics decision before the final F3/F5 release boundary; this migration does not authorize CLI removal.
+
+
+### F3 Part C postmerge package audit and physical execution entry (2026-10-11)
+
+At exact master 0d365624661b2b6569dd4bfa68fe095f8cd59ece (COPY #496
+merge 3530890b2147db38daa9b5813de002c158343090; TAIL #497 merge above),
+actual isolated Debug liburing=n/y library/app builds and installed consumer
+audits pass. Each retains 50 core+async objects, 37 async archive members and
+79 installed headers. Four unstripped app links and the installed host link
+reach no legacy runtime facade/Scheduler symbols; SDK adapters, task-result
+convenience and nine semantic test TUs remain real consumers. Completion
+canonical backend/context and Fiber/fiber_ctx optional-host obligations remain.
+[Exact audit, classifications and dated package evidence](../review/f3-runtime-postmerge-audit-20261011.md)
+assess the affected installed/build closure without claiming physical retirement.
+[Physical execution entry #498](https://github.com/jnhu76/Sluice/issues/498)
+names five source/eight header candidates, nine test migration/re-ownership
+obligations and the optional first File-wrapper batch. RETIRE_ELIGIBLE=0;
+PHYSICAL_CONTRACTION_AUTHORIZED=NO under F0 §1.7 and pending F5 external risk.
+Current #475 A=BOUNDED_HOLD, B/C=KEEP_INSTALLED_COMPAT remain effective for
+their enumerated surfaces. A new B-01 package cut is a future deletion gate.
+COPY workers retain real backend-worker meaning; TAIL inert validated workers
+remain F3/F5 exit debt. OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO.
+
+### F3 #498 PR B draft paired async File wrapper candidate
+
+IMPLEMENTED_UNVERIFIED pending independent final review; DRAFT_NONADOPTED.
+Snapshot41fc1b45 on PR A plus supplements3f846afa removes only async/file.hpp
+and src/async/file.cpp together. SEM-01/03/04/05/06, ERR, REQ/LIFE/PROG/SHUT/HOST
+observations remain owned by canonical File/Request tests. Debug/Release n/y
+40/40 and52/52 each; Clang22 ASanUBSan13/13; static TSan12 targets PASS with scope static link
+unavailable due strong allocation overrides, plus separately executed shared
+TSan scope25/25 assertions PASS (no oracle or instrumentation weakened). Initial failed
+build rows and exact corrected-input reruns remain visible. Installed candidate
+n/y contracts79→78 headers,50→49 library objects,37→36 async members, with
+clean canonical/host consumers and real-uring/negative link controls. See
+[final receipt](../review/f3-498-pr-b-final-receipt.md) for exact source mapping,
+repeatable evidence and limitations. Per-surface UNKNOWN_EXTERNAL_USE remains
+UNKNOWN, EXTERNAL_RISK_PENDING, F5_PENDING; PHYSICAL_CONTRACTION_ADOPTED=NO,
+OPTIONAL_W04_SUPPORTED=NO and V1_RELEASE_READY=NO. Original F1/B01 untouched.
+
+### F3 #498 scoped decision submission — 2026-10-12
+
+[Owner decision record](../review/f3-498-owner-decision.md): human-submitted ACCEPT_SCOPED_EXTERNAL_BREAKAGE for async/file.hpp and exactly await_read_at, await_write_at, await_sync_data and await_sync_all; conditional authorization of the paired versioned package contraction. CONFIRMED_EFFECTIVE after the designated owner explicitly confirmed their role and activation in the execution conversation. No additional bounded deprecation window; external use remains UNKNOWN. Existing package/test captures remain candidate evidence; historical F1/B-01 assets are unchanged. Exact final HEAD review, cumulative CI and explicit merge authorization remain adoption gates. PHYSICAL_CONTRACTION_ADOPTED=NO; F3_FULL_RETIREMENT=NO; OPTIONAL_W04_SUPPORTED=NO; V1_RELEASE_READY=NO. #500 and all excluded surfaces remain independent.
+
+### F3 #498 authorized merge pipeline and B-01 v3 cut — 2026-10-12
+
+The designated owner explicitly authorized sequential #501/#502 merges after the stated gates. #501 merge: f527456b5eaa10a74e872ee1d23b9dd6413f1f1d. #502 cumulative source: ecf7286f1eea8b22739f95b50edfcd94c2dace7b; production deletion remains exactly async/file.cpp and async/file.hpp, with unchanged tests/build inputs relative to the verified candidate. [Versioned B-01 v3 cut](../evidence/f3-498-b01-package-cut-v3/REPRODUCE.md) freshly rebuilds both profiles and records 49 library objects / 36 async archive members / 78 installed headers, clean-room positive/negative probes and package hashes. Historical F1/B-01 assets remain unchanged. Adoption is conditional on final exact-HEAD review, four cumulative CI passes and authorized #502 merge; actual postmerge master measurement remains mandatory. No full F3 retirement, optional W04 support or V1 release readiness.
+### F3 #498 remaining pipeline selftest preparation (2026-10-12)
+
+| Slice / owner | Root obligations | Status | Exact evidence and remaining gate |
+| --- | --- | --- | --- |
+| F3_REMAINING_COPY_TEST_PREP; #498 | REQ-01/03/05/06, HANDLE-01/02/03, LIFE-01/02, HOST-02, PROG-01/02 | VERIFIED for test consumer slice | Tested source 5e1be4232bc59a2e397cc6f6fe0c218beb200917. Two legacy write-borrow metric phases now use canonical RequestScope; all assertions retained. Four detached source/config/build worktrees with compiler cache disabled pass 24/24 pipeline cases each; two additional independent Clang22 ASan/UBSan and TSan worktrees pass three controlled cases each with linked sanitizer symbols. Supplemental metric-cap and stale-release negative controls fail the intended assertions, restored selftest passes. [Exact receipt and source provenance](../review/f3-remaining-test-prep-20261012.md), [isolated raw evidence](../evidence/f3-remaining-test-prep-20261011/). No production authority, header or archive changes. All five runtime_waiter_observer_test host cases remain with their exact evidence ownership/dependency map; their facade migration is an unresolved physical-retirement gate. Documentation-only evidence correction preserves all tested source/build tree IDs. No PR C, F5, W-04 or release readiness claim. |
+
+### F3 Part C Scheduler waiter re-ownership candidate — 2026-10-12
+
+OBS-01..04, REQ-03/05/06, HANDLE-03, LIFE-01, HOST-01, SHUT-04: VERIFIED for
+the five retained Scheduler/Fiber host oracles at code 60d4ee99. Direct local
+Fiber/stack ownership replaces only ApplicationRuntime test convenience.
+Four isolated complete matrices: n 53/53, y 67/67 targets in Debug and Release;
+final waiter 5/5 also in Clang ASan/UBSan and TSan. Exact single delivery/route,
+cancel-with-held-borrow, no-switch ready edge, capacity-before-attach and pinned
+delivery cancellation remain independently observed. No new production state
+or removable production mechanism. [Narrow receipt and DAG](../review/f3-part-c-waiter-reownership-20261012.md).
+Technical isolated review APPROVE is not formal GitHub APPROVED. Candidate
+test-edge closure does not authorize C2 installed/source removal, F5 adoption,
+supported W-04 or release readiness; no merge authorized.
+
+### F3 Part C facade physical candidate — 2026-10-12
+
+IMPLEMENTED_UNVERIFIED until independent final exact-HEAD review; DRAFT_NONADOPTED.
+PROD-02/03, MIG-01/02, HOST-01: three facade source files and five headers
+physically absent in candidate; canonical, Scheduler/Fiber/host, Completion
+and #475 Future/WaitPolicy retained. B-01 v4 candidate: actual n/y
+49/36/78 -> 46/33/73, retained compiler closure equality and installed probes;
+real ring UNAVAILABLE n, executed y. Four complete server matrices 53/53 n,
+67/67 y; Clang ASan/UBSan and shared TSan six risk targets each PASS.
+[Receipt](../review/f3-part-c-facade-final-receipt-20261012.md);
+[per-surface decision packet](../review/f3-part-c-facade-risk-decision-20261012.md).
+F0 per-surface ACCEPT/no extra window and F5 scoped package authorization
+CONFIRMED_EFFECTIVE: [owner record](../review/f3-part-c-owner-decision-20261012.md).
+Formal F5 adoption NOT_ADOPTED, no merge authorized, master unchanged 49/36/78.
+No F3_FULL_RETIREMENT, optional W-04 support or V1_RELEASE_READY claim.
+
+### F3 Part C scoped physical adoption and actual master verification — 2026-10-12
+
+VERIFIED for ApplicationRuntime facade retirement only; scoped F5/B-01 v4
+ADOPTED. PROD-02/03, MIG-01/02, HOST-01, OBS-01..04 and retained REQ/LIFE/SHUT:
+#500 merged9572bd25, #503 mergeda04044a6, #504 mergede123d42a after exact final
+technical review, normal CI and explicit sequential owner authorization.
+Actual master e123d42a freshly passes four complete server matrices n53/53 and
+y67/67 in Debug/Release, plus Clang ASan/UBSan and shared TSan six risk targets
+each. Fresh two-profile package/source/object/archive/header/symbol and installed
+positive/negative probes measure master46/33/73; these are actual master products,
+not candidate counts. Completion, canonical requests/context/backends,
+Scheduler/Fiber/host and #475 Future/WaitPolicy/default_wait_policy remain.
+All five waiter obligations remain owned/executable, runtime test edges zero.
+[Adopted scoped cut and immutable raw/provenance evidence](../evidence/f3-part-c-b01-v4-adopted-20261012/REPRODUCE.md).
+Earlier candidate statuses above are dated preparation records superseded for
+this exact slice. Whole F3/F5, optional supported W-04 and release readiness
+remain incomplete; F3_FULL_RETIREMENT=NO, V1_RELEASE_READY=NO.
+
+### F4 installed retirement experiment — 2026-10-12 (candidate)
+
+[#512](https://github.com/jnhu76/Sluice/pull/512) adds versioned 17-interface
+installed-prefix retirement evidence for #508/#510. Root PROD-03,
+W-01–W-03 and MIG-01/02/03 remain the authority; F0 §1.7/1.8 and #475
+remain gates. See [exact library identities and raw evidence](../evidence/f4-retirement-20261012/README.md).
+All four current library trees pass dual-profile Debug/Release installed
+consumers and retirement probes. Combined tree `07c1a3d5c40207e1a519592b9d2e10333674f2ed`
+has core 2 / async 33 / headers 56, measured at
+`ab2cea2784db05be8b05b5a776c757856beb4395`, never represented as merged master.
+Clang ASan+UBSan/TSan pass with the #511 W-02 consumer lifetime correction;
+the original failing consumer diagnostics are retained. External use stays
+UNKNOWN; both scoped human owner approvals are PENDING. This technical
+candidate evidence does not complete F4/F5 or authorize removal/merge/release.
+Historical frozen manifests remain unchanged and W-04 support remains NO.
+
+### F4 merged-master closeout package — 2026-10-12 (candidate)
+
+Fresh merged-master `c29523d0c54c7bc85e2d5e7db73887acb991308c` evidence is
+[the scoped postmerge receipt](../evidence/f4-postmerge-master-b01-20261012/REPRODUCE.md),
+separate from the prior experimental combined tree. Four configurations have
+core 2 / async 33 / headers 56, 17 independent retired-interface verdicts,
+11 absent source files, retained installed W01/W02/W03 and actual dual-profile
+Clang ASanUBSan/TSan. The 17-interface Clean Break is already owner-directed;
+external use remains UNKNOWN. The new receipt stays CANDIDATE until its own
+review/merge/postmerge recheck; F5 full alignment and F6 remain PENDING.
+Phase M is CLOSED_ADOPTED / TERMINAL (7/7), not a new blocker. F3 #474 has
+its separate TAIL CLI owner decision and app/host closeout gate. Optional W04
+support remains NO and V1_RELEASE_READY remains NO.
+
+## 2026-10-12 scoped final closeout overlay
+
+F4=ADOPTED_SCOPED at actual merged-master de551ed09555b8ad4d118a250baf373062a01d0e; fresh four-profile recheck and independent technical acceptance, #514/#506. F3 app-host candidate #513 has actual four-configuration evidence at613f9205308ecbcc7635f946fe0061f57b862e71; TAIL CLI human decision PENDING, #474 OPEN. W04 optional support NO; F2/F5/F6 PENDING; V1 release ready NO. See docs/evidence/f3-app-host-closeout-20261012.
+
+## 2026-10-13 F3 actual-master exit receipt
+
+This dated receipt supersedes2026-10-12 candidate-owner-PENDING overlays. Active human CLI approval bound PR513HEAD350e789810f16078d528e572a0b124e71bd6da97; merged/tested masterf4a9723410539025cffa3422c5f6841ef795c755 has fresh four app/package configurations, dual native-Clang sanitizers and four successful CI jobs. See docs/evidence/f3-postmerge-closeout-20261013; independent scoped technical acceptance gates #474 closure. F4 ADOPTED_SCOPED/#505/#506 CLOSED. F3 technical exit has complete evidence; optionalW04support NO, conditional N/A audit. PhaseM CLOSED_ADOPTED, #402 OPEN for F2/F5 then F6 final audit; V1_RELEASE_READY NO. Documentation-only receipt commits do not relabel the actual tested master SHA.
+
+## 2026-10-13 F2 authority contraction candidate — #402
+
+Candidate slice on branch `f2-clean-authority` (draft PR #516), unmerged: the
+installed/public API break still needs the owner's separate decision. Master and
+the F3/F4 closure records above are unchanged by this section.
+
+| Field | Value |
+|---|---|
+| Slice | #402 F2, Request/Result/Identity authority contraction (clean break) |
+| Baseline | `0ed16588b7101f108aa7282074ba3d568f9d34e9` (F3 and F4 closed) |
+| Head | the branch head recorded in `docs/evidence/f2-authority-contraction-20261013/gates.json` |
+| Requirements | MIG-02 rows for caller-owned `Completion<T>`, `RequestArena`, `RequestHandle` and the busy-poll helpers; MIG-01 slice/gate order; MIG-03 evidence shape; PROD-03 scope; GOV-02 statuses |
+| Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations; the W-03 external-loop stall blocker was closed at the corrected head with a deterministic regression and a test-only corrective diff (`docs/evidence/f2-authority-contraction-20261013/w03-root-cause.md`) |
+| Removed | 7 installed headers (`completion.hpp`, `request_handle.hpp`, `batch.hpp`, `op_helpers.hpp`, `detail/request_arena.hpp`, `detail/request_slot.hpp`, `detail/submit_transaction.hpp`), 3 compiled objects (`request_handle.cpp`, `batch.cpp`, `op_helpers.cpp`), the `RequestHandle`/`RequestHandleState` identity mapping, `Batch`/`BatchResult`, the busy-poll helpers, 16 arena/completion fail-fast diagnostics, and `RequestCore::release_public_binding` (a second release edge retired during review) |
+| Canonical after | `RequestCore` owns acceptance/terminal/publication/binding release/reclaim; `submit_*(Op) -> Result<Request<T>>`; backend vtable `submit_*(Op) -> Result<detail::RequestKey>`; `RequestId` + `AsyncIoContext::lookup`; `attach_observer`/`cancel_observer`/`await_request`/`cancel_waiter` on `RequestId` |
+| Evidence | `docs/evidence/f2-authority-contraction-20261013/` — six configuration profiles (Debug/Release x no-ring/real-ring, native Clang ASan+UBSan and TSan scopes), B-01 v5 dual-profile clean-room package capture with negative link probes and retained-consumer rows, installed-header standalone compile plus cross-TU link/ODR probes with a before-prefix control, the 64-mutant campaign against the baseline kill set (identical kill set; one survivor and one timing-flaky mutant on every tree including the baseline), the TLA+ gate (170 of 171 configurations PASS, none FAIL, `rcore-live` outstanding at a documented ≈18.5 h / ≈40-48 GB configuration on a model this slice does not change — recorded as INCOMPLETE, never as a pass), GitHub CI, and the load-attribution record for the one restructured scenario |
+| Retained obligations | publication acquire/release pin, execution (borrow) and control references with their separate retirement edges, observer claim/retire protocol, nonterminal-release fail fast (verified present in the release archive), slot reclamation predicate, notification epoch freshness |
+| Limitations | installed-surface break pending the owner decision (`installed-surface-risk-disposition.md`); the W-03 external-loop stall (10/40 two-core failures at the captured head versus 0/40 baseline) was root-caused as an application-handoff defect in the scenario's own loop protocol and closed by a test-only fix with a deterministic reproducer, negative and positive witnesses, and a three-tree differential campaign (0/80 baseline, 17/80 pre-fix at the final-head rerun, 0/80 corrected; an intermediate corrected-head campaign measured 13/80 pre-fix) — gates re-run at the corrected head (`w03-root-cause.md`); the TLA `rcore-live` configuration is outstanding; optional W-04 remains NO; F5 and F6 not started; the pre-existing io_uring poison-versus-dispatch window is unchanged from baseline and remains open |
+| Not claimed | no F2/F3/F4/F5/F6 family completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no `V1_RELEASE_READY`, no pass for the one outstanding TLA configuration |
+| Review | Two independent adversarial reviews (production; evidence and coverage). One HIGH production finding (the await refusal mapping) fixed with a biting regression; a second release edge retired; the R14 oracle's dropped half restored; the evidence package rebound and re-captured at one head; two pre-existing gaps recorded as such. Verdicts and per-finding dispositions: `docs/evidence/f2-authority-contraction-20261013/independent-review.md` |
+
+### 2026-10-13 F2 W-03 stall root-cause closure — #402 amendment
+
+The candidate's open blocker (stall of `external_poll_loop_threadpool_w03`
+under two-core starvation) was closed at corrected implementation head
+`25734314f70401472067250e68a1f9227093b7eb` (test-only commits `359155e6`
+deterministic reproducer, `b63a532e` application handoff eventfd, `25734314`
+write-result portability fix; production
+diff empty). Root cause: the zero-op's RequestCore publication and progress
+notification both occur inside `submit_read`, while the application handle
+becomes observable only afterwards; the scenario's host parked on the context
+notification fd across that boundary, so a consumed notification left a
+parked host with no owed wake — an application-handoff defect, not a library
+notification defect (classification A; options B/C excluded by the causal
+witness: delivered=1, exactly one progress epoch, fd quiescent at the forced
+pause). Evidence: deterministic three-phase regression
+(`late_handoff_wake_is_application_owned`) with pre-fix negative and post-fix
+positive witnesses; three-tree differential campaign `taskset -c 0,1`, ten
+concurrent copies, 80 runs per tree — baseline `0ed16588` 0 failures, pre-fix
+`996f434f` 17 failures at the final-head rerun (13 in the intermediate
+campaign; all the recorded stall mode), corrected 0 failures; six-profile
+matrix, B-01 package capture, installed probes and GitHub CI re-run at the
+same head, with the empty production diff (`git diff 996f434f 25734314 --
+include/ src/ apps/ xmake/`) and matching package inventories as the
+changed-input comparison (package tar hashes are not bit-reproducible across
+capture runs); TLA gate retained unchanged, `rcore-live` INCOMPLETE. One new
+pre-existing gap was measured during the closure matrix re-run (the E1
+conformance `GateGuard` teardown race flaking under ASan at both the
+corrected and captured pre-fix heads) and recorded as
+`known-preexisting-gaps.md` §3, not caused by this closure.
+PR516 remains Draft pending the installed-surface owner decision. Full
+record: `docs/evidence/f2-authority-contraction-20261013/w03-root-cause.md`.
+
+
+### 2026-10-13 F2 final corrective round — #402 amendment
+
+Final candidate implementation head
+`093332ba1b40b667763d1202200ee899962454ae` (commits `8689a720` io_uring
+poison × post-accept retirement, `e974988c` E1 pause-gate teardown lifetime,
+`0bcfda01` moved-from `retire_delivery` rejection, `093332ba` rcore-live
+reuse reconciliation). All three `known-preexisting-gaps.md` entries are
+CORRECTED with deterministic RED/GREEN receipts; the E1 fix and the W-03
+closure are test-only, the uring and context fixes are production corrections
+that add no runtime state (authority-contraction audit recorded in the
+execution record). W-03 is CLOSED as an application handoff defect with an
+empty production diff (`POSTFIX_STRESS` 0/80 at `25734314`, re-confirmed 0
+failures in the final focused campaign). Validation re-run at the head and
+bound in `gates.json`: six-profile matrix clean (debug-n 53/53, debug-y
+67/67, release-n 53/53, release-y 67/67, asanubsan-n 18/18, tsan-n 17/18
+with the recorded link exclusion; the one load-contaminated tsan attempt is
+preserved separately, identical binary 10/10 idle, serial re-run clean);
+B-01 v5 dual-profile package capture PASS (56→49 installed headers, 35→32
+objects, 33→30 archive members); installed probes clean with the negative
+control; focused differential stress vs baseline `0ed16588` under
+`taskset -c 0,1` 240/240; GitHub CI `38397035018` all four jobs success.
+TLA status: `CURRENT_RCORE_LIVE_EXECUTION = INCOMPLETE`,
+`HISTORICAL_RCORE_LIVE_PROOF = VERIFIED_REUSABLE`,
+`F2_FORMAL_ACCEPTANCE = ACCEPTED_BY_REUSE` (exact input identity:
+`git diff eb7bf055..HEAD -- formal/tla/ scripts/verify_tla.sh` empty;
+historical E2 attempt 2 all 171 jobs PASS). Status remains CANDIDATE:
+PR516 stays Draft and unmerged pending the owner's explicit scope-bound
+decision on the installed-surface break (seven headers, three objects,
+external use UNKNOWN, no shims). Full record:
+`docs/evidence/f2-authority-contraction-20261013/` (execution record,
+corrective-round section).
+
+### 2026-10-13 F2 closeout — #402 amendment
+
+The owner issued the explicit scope-bound decision on the installed-surface
+break: **ACCEPT_BREAKAGE_NOW** (recorded in
+`docs/evidence/f2-authority-contraction-20261013/installed-surface-risk-disposition.md`;
+it covers only the reviewed F2 deletion scope of PR #516 and accepts UNKNOWN
+external use), and authorized the merge once the final SHA consistency check,
+the independent technical acceptance and the CI gates were satisfied — all
+three recorded in the evidence directory (consistency: `gates.json` binding at
+`093332ba` with the branch tip and CI heads agreeing; acceptance: the final
+corrective-round review in `independent-review.md`, verdict "none requiring
+change"; CI: `38402996519` success at the decision-record head `acbd1a73`).
+PR #516 was marked Ready and merged as
+`27a5041a17ed02e8a2c9396fedfa34600fb35378` (merge of the unmoved baseline
+`0ed16588` with branch head `acbd1a73`, merged by `jnhu76`). Post-merge
+re-verification at the actual master SHA: the merged tree is byte-identical to
+`acbd1a73`, so every capture bound to `093332ba` applies verbatim, and GitHub
+CI `38403388160` on the merge commit passed all four jobs. **Status: CLOSED**
+— F2 executed and merged. #402 remains OPEN for the remaining phases; F5 is
+the next phase; F6 and v1 release readiness are not claimed.
+
+## 2026-10-13 F5 final package & public surface contraction candidate — #402
+
+Candidate slice on branch `f5-final-package`, unmerged: the installed/public
+break needs the owner's separate decision (the packet below), so nothing in
+this section is an authorized removal. Master and the F2/F3/F4 closure records
+above are unchanged by this section.
+
+| Field | Value |
+|---|---|
+| Slice | #402 F5, final installed/public surface and package closure contraction |
+| Baseline | `14a27a83821a94e6fc5a9684b48fcd296d7de891` (F2 final exit master) |
+| Head | `a23a94cdfbfa90f6ad6aff2d1b6706c305a4245c` (implementation head; later branch commits are documentation-only) |
+| Requirements | MIG-02 dormant public sync primitives / Group-Future-WaitPolicy / legacy multi-worker runtime / experimental-isolation rows; HOST-01; MIG-01 phase order; PROD-03; W-01–W-03 canonical; W-04 conditional; GOV-02 statuses; #475 adopted A/B/C policies with T1–T4/E1–E5 |
+| Package delta | Installed headers 49 → 25 (23 removed from the tree, 1 de-installed private header); library objects 32 → 15 (2 core + 30 → 13 async); `libsluice_async.a` members 30 → 13; identical in both ring profiles |
+| Removed | #475 Family A (`condition.hpp`, `semaphore.hpp`, `async_queue.hpp`), Family B (`future.hpp`, `wait_policy.hpp` + TU), Family C and the scheduler/select substrate (`scheduler.hpp`, `async_mutex.hpp`, `async_rwlock.hpp`, `event.hpp`, `wait_queue.hpp`, `wait_node.hpp`, `timer_registration.hpp`, `mutex.hpp`, `lock_guard.hpp`, `thread_annotations.hpp`, `select*.hpp`, `detail/{queue_item,queue_port,select_registration,select_port}.hpp` and the matching 14 runtime TUs), the D-13 test seams (2 headers + 3 TUs, zero defined symbols in both profiles), `runtime_waiter_observer_test`, the 21 retired fail-fast diagnostics, and the never-installed `include/sluice/experimental/` + `src/experimental/` tree (M-A4 disposition) |
+| Retained | W-01/W-02/W-03 canonical closure, `RequestCore` boundary, `RequestScope`, the optional W-04 host closure (`stackful_io_host.hpp` + `cancel.hpp`/Fiber/FiberCtx, verified to depend only on those), and the 15 canonical fail-fast diagnostics |
+| Evidence | `docs/evidence/f5-final-package-contraction-20261013/` — closure manifest with per-member role audit and #475 trigger assessment, six-profile matrix (debug/release × no-ring/ring 52/66/52/66, `asanubsan-n` 52/52, `tsan-n` 51/51 with the recorded `request_scope_test` link exclusion), B-01 v6 four-configuration clean-room package capture (`F5_B01_V6_CANDIDATE_FRESH_PACKAGE_PASS`, 32/30/49 → 15/13/25 with 23 removed-header compile negatives and 10 old-entry relink negatives plus before-prefix controls), installed-header standalone compile + cross-TU ODR/link probes in both macro views with before-prefix control, and the execution record binding every F5 gate to raw evidence |
+| Status | `IMPLEMENTED_UNVERIFIED` at master (no merge); candidate evidence VERIFIED for the recorded configurations; per-surface decisions, the #475 T4/E1 external-use decision and merge authorization PENDING in `installed-surface-risk-disposition.md` |
+| Not claimed | no F5/F6 completion, no `SAFE_TO_UNINSTALL`/`SAFE_TO_DELETE_FROM_TREE`, no W-04 support, no `V1_RELEASE_READY`; external use remains UNKNOWN, not zero |
+
+Independent adversarial review: two reviews (production correctness; evidence and honesty) run against the candidate head, with findings dispositioned and re-verified; both final verdicts `none-requiring-change` at the reviewed content head `ad81eea8` (final verification recorded there; record: `docs/evidence/f5-final-package-contraction-20261013/independent-review.md`).
+
+The F5 documentation slice corrects the #402 CURRENT overlay in place
+(2026-10-13): the earlier `2 core / 33 async / 56 headers` wording was the F4
+combined experimental tree (`07c1a3d5`, never merged master); the measured
+inventory after F2 is `2 core / 30 async / 49 headers`, and this candidate
+further contracts it to `2 core / 13 async / 25 headers` (all measured, never
+inferred). The overlay now carries the per-tree inventory history and the F5
+candidate state (draft PR #518) with the owner decision PENDING.
+
+## 2026-10-14 pre-F6 infrastructure stabilization candidate — #520 #519 #521
+
+Candidate slice on branch `codex/pre-f6-infra-520-519-521`, unmerged. A
+post-F5 infrastructure change (F5 evidence directories are untouched
+history): no production semantic change, no installed-surface change.
+
+| Field | Value |
+|---|---|
+| Slice | #520 same-directory ring-profile switch safety; #519 Clang build of the D1 mutation targets; #521 RequestScope zero-allocation oracle under TSan |
+| Baseline | `f99acbc3` (post-F5 origin/master; F5 = PR #518 merged) |
+| Head | code head `cdb2ca0f` (`5d611b28` #520 → `7f9d43c7` #519 → `cdb2ca0f` #521, each independently revertable; every executed gate ran at this content); the later branch commits are the evidence, the ledger and review dispositions, including two disclosed no-op hygiene removals (an unmatched `liburing.so.3` candidate and a dead driver helper) that cannot affect any recorded gate. Review round 2 (F-10, 2026-10-14) re-heads the #520 dependency-identity mechanism at `9e04d3b5` (`70bf3e15` regression oracle + RED capture → `9e04d3b5` resolution fix); every F-10 gate ran at that content |
+| Public delta | One new public compile definition `SLUICE_LIBURING_PROFILE=on\|off` on `sluice_async` and the stackful seam targets, unconditional, configuration identity at a fixed flag position (no layout statement); `SLUICE_HAS_LIBURING` unchanged as the only public usage requirement, still defined only in the enabled branch; `SLUICE_TSAN_TESTING` is test-target-local, never installed |
+| Behavior | `--liburing=n` honest stub / `--liburing=y` real ring unchanged; a same-directory switch now recompiles the affected target and consumers (xmake's depend check compares flag lists index by index and was blind to the tail-appended conditional define — the root cause); `--liburing=y` additionally passes a configure-time compile+link capability probe (24 functions + 12 constants, no binary execution; kernel ring/opcode/statx capability stays in the `UringAsyncBackend` path). After the F-10 correction the probe's resolved identity is what the toolchain itself opens (`g++ -E -H` header trace, `-Wl,--trace` library trace, pin-equality re-trace), the candidate scan and top-level-prefix refusal are removed, and version-different-but-compatible installations are accepted: cleared-environment resolution that selects the same pair binds nothing, a different pair binds the resolved directories publicly on `sluice_async`; unverifiable identity (unresolvable header/library, pin re-trace disagreement) refuses at configure time, while a resolvable pin-consistent pair is accepted regardless of the directories it spans |
+| Evidence | `docs/evidence/pre-f6-infra-stabilization-20261014/` — RED captures at `f99acbc3` (no switch in either direction recompiles anything; the stub archive is retained under `--liburing=y` and the ring consumer link fails; per-phase object hashes recorded; Clang `-Wunused-private-field` full-build failure); green same-dir n→y→n→y cycle with depend fingerprints, per-switch object-hash change and 52/52+66/66 tests at `cdb2ca0f`; four fault-injection negatives through real `xmake f` (missing header → declaration layer, missing library → link layer, incompatible required API → declaration layer, conflicting prefixes → prefix refusal); six-profile matrix at `cdb2ca0f` (debug/release × n/y 52/66/52/66, clang `asanubsan-n` 52/52, clang `tsan-n` **52/52 with `request_scope_test` executed for real**, superseding F5's 51-with-exclusion going forward); mutation killers M4 exit 134 / M6 exit 1 on their recorded named killers; request-scope case counts 25/25 non-TSan (oracle included) vs 24/24 TSan (seam compiled out, zero seam symbols); B-01 v7 dual-profile package capture (`--before 14a27a83 --after cdb2ca0f`, harness verbatim): installed headers stay 25 and `libsluice_async.a` keeps 13 members in both ring profiles, W-01/W-02/W-03 consumers link and run from the fresh prefixes; installed-header standalone compile + ODR probes in both macro views with the 49-header before-prefix control. F-10 correction at `9e04d3b5` (`f10-correction/`): RED divergence counterexample at `5ab32ae7` (`C_INCLUDE_PATH` + `LIBRARY_PATH` make the round-1 probe print files the toolchain never opens, `F10_PROBE_PRODUCTION_IDENTITY_DIVERGENCE`); GREEN identity regression + re-baselined switch negatives (missing header → include-resolution layer, empty library files → symbol layer, reduced CPATH API → declaration layer, `#include_next` chain → accepted-and-bound), six-profile matrix, B-01 v7 capture (`--after 9e04d3b5`) and installed probes re-run green; #519 mutation killers and #521 partition not re-run (surfaces untouched, `tsan-n` re-executed `request_scope_test`) |
+| Status | `IMPLEMENTED_VERIFIED` for the recorded configurations at the recorded heads. Owner-authorized and merged 2026-10-14 as merge commit `573d616cc1ee79ec7a3b3876351799708237db3a` (pre-merge drift check: local == remote == PR head `7077c4d2`, content diff vs merge empty, CI run `38570608942` 4/4 success at that exact head); every gate re-executed green on the real post-merge master at `573d616c` (`postmerge/` — identity, switch cycle + negatives, six-profile matrix, B-01 v7 capture with the 15/13/25 surface, installed probes both macro views) |
+| Not claimed | no F6 start, no new capability framework, no runtime-probe changes, no W-04 change, no `V1_RELEASE_READY`; external use remains UNKNOWN |
+
+Notes: the M4 kill fires first at
+`destructor_cleanup_preserves_the_original_exception_and_still_releases`;
+the ledger's recorded killer `destructor_settles_on_early_return_with_drain_policy`
+was proven to kill by an isolation run (recorded in the evidence). The
+configure-time probes re-run on every `--liburing=y` configure by design;
+`lib.detect.check_cxxsnippets` reads links only from its `configs`
+argument, which the probes honor explicitly.
+
+## 2026-10-14 F5 post-merge closeout — #402
+
+`F5 = CLOSED`. Owner authorization was recorded pre-merge at the F5 branch
+tip `5ef4f801` (`ACCEPT_BREAKAGE_NOW` + the scoped #518 merge authorization);
+the merge is `f99acbc3` ("Merge PR #518", parents `14a27a83` F2-exit master +
+`5ef4f801`). Gate-content continuity: the F5 gates ran at implementation head
+`a23a94cd` and `git diff a23a94cd 5ef4f801 -- src include xmake.lua xmake
+apps tests scripts` is empty, so the merged code content is the executed gate
+content. Post-merge verification on actual master `573d616c` (PR #522's
+post-merge receipt, `b01-v7/` + `installed-probes/`): B-01 v7 capture
+`F5_B01_V6_CANDIDATE_FRESH_PACKAGE_PASS 14a27a83… 573d616c…` — 25 installed
+headers, 13 archive members, 15 library objects in both ring profiles;
+removed headers absent (`removed_present` 0) with the 49-header pre-F5
+control; W-01/W-02/W-03 consumers link and run from the fresh prefixes; the
+F5-era `tsan-n` exclusion is superseded going forward by #521's fix
+(`request_scope_test` executes under TSan, 52/52). Receipt:
+`docs/evidence/f5-final-package-contraction-20261013/postmerge-closeout-20261014.md`.
+Issue #402 carries the receipt and remains open solely for the F6 final-audit
+tail recorded by the PhaseM row.
+
+## 2026-10-14 F6 entry — evidence-only audit
+
+F6 is entered as an evidence-only audit; no production or build changes are
+in scope. Frozen master SHA at entry: `821c489fb081308d5ef95b13a14cc6435ac78d41`
+(this ledger row is docs-only on top of it and changes no audited surface).
+State at freeze: F2 CLOSED (actual-master exit recorded), F3 CLOSED
+(actual-master exit recorded, #515), F4 ADOPTED_SCOPED (#514/#506), F5 CLOSED
+(`f99acbc3`, closeout at 2026-10-14), pre-F6 infrastructure slice merged
+(`573d616c`, post-merge verified), #519/#520/#521 closed as
+FIXED_VERIFIED post-merge, W-04 optional support NO, `V1_RELEASE_READY` NO,
+external use UNKNOWN.
+
+## 2026-10-15 F6 final closeout — evidence adoption and status closure
+
+The F6 technical audit (P0=0/P1=0; 113/113 identifiers, 26/26 formal assets,
+16/16 #402 gates with `W04_EXTERNAL=N/A_WITH_NEGATIVE_PACKAGE_PROOF`) was
+adopted by the closeout recorded in
+`docs/evidence/f6-final-closeout-20261015/`: original audit commit `99d2d4b1`
+recovered verbatim (it had been local-only) and published; all 18 findings
+dispositioned (5 doc-corrected in this record, 10 transferred to #524/#525/
+#526/#527/#528, 1 superseded by the F6 matrix, 1 deferred-with-scope, 0
+blocked); the E1 residuals adjudicated (submit path shares the direct path's
+semantic oracle — no divergent errno table; `bad_alloc`/slot-capacity →
+`no_space` conflation confined to the unsupported W-04 candidate host, a
+mandatory precondition in #526 before any supported W-04); an independent
+closeout review passed. `F6 = CLOSED_ACCEPTED` takes effect with the merge of
+this record; the post-merge receipt is completed on actual master in
+`docs/evidence/f6-final-closeout-20261015/final-acceptance-decision.md`.
+
+Scope note (F6-F12, OBS-04): the adapter-level post-accept failure oracle is
+historical (E1-era adapter seams); current OBS-04 correspondence is at the
+request seam (fault paths in `request_core_protocol_test` + contract observer
+arms), which is sufficient for the clause.
+
+`SCOPED_LOCALLY_IRREDUCIBLE` and `GLOBALLY_MINIMAL_SURFACE` are not claimed;
+`sufficient contracted surface` is established. `V1_RELEASE_READY=NO`; no
+release action taken; #390 remains open under its own gates; external use of
+retired surfaces remains UNKNOWN (owner decision at release planning).
+
+## 2026-10-15 Post-F6 deferred debt: request-path error-domain re-diff (#526)
+
+Executes the F6-F10 work item only (F6-F11 stays deferred as a mandatory
+precondition of any W-04 support promotion). This is verification-completeness
+debt retirement on the already-adjudicated E1 residual — not a reopened F6 gap;
+`F6 = CLOSED_ACCEPTED` stands.
+
+New oracle `tests/request_error_domain_test.cpp` (both backends, production
+shape — no internal-testing seam), covering the two previously-unasserted
+edges plus the domain-boundary cross-check:
+
+- Request-path terminals from real kernel errno: an accepted write to
+  `/dev/full` settles `no_space` with `os_errno == ENOSPC`; an accepted read
+  positioned on a directory settles `backend_error` with `os_errno == EISDIR`;
+  each matches the direct path's spelling for the same fault (request-path
+  errno re-diff previously did not exist; `/dev/full` appeared only on the
+  direct path, EISDIR in no test).
+- Admission-closed submissions spell `invalid_state` with `os_errno == 0` for
+  all six operation kinds (previously asserted for `submit_read` only —
+  threadpool consumer probe `contract_admission.cpp` and the uring seam
+  cutover — without the native-detail pin or mutant enforcement).
+- A closed resource is a rejection on both paths and never a settled request.
+
+Named mutation builds (executed manually, never regular tests), renamed to
+the `SLUICE_ERR01_MUTANT_*` prefix so the #400 E1 mutant inventory stays
+closed: `ADMISSION_CLOSE_REPORTS_CAPACITY` (admission-closed conflated with
+capacity, both backends) killed by the six admission-spelling assertions;
+`PHYSICAL_ERRNO_UNMAPPED` (physical errno bypassing the canonical table at
+`run_syscall`/ring completion, both backends) killed by both terminal re-diff
+assertions. The canonical error table and `stackful_io_host.cpp` are
+untouched.
+
+Matrix at the slice head: liburing=y 68/68, liburing=n 53/53; all four mutant
+builds red with the named assertions; the restructured
+`SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED` write arm rebuilt and its E1 kill
+re-verified. PR #531 (review: APPROVE code after the PR-description evidence
+correction recorded there).
+
+Review round 2 on PR #531: the four non-byte operations (`sync_data`,
+`sync_all`, `file_info`, `size`) previously pinned only the code, not the
+native detail; all six kinds now carry the `os_errno == 0` pin, so the
+six-kind claim above is fully code-supported. A missing `/dev/full` now
+prints a summary line that names the skipped injection (`NOT RUN: ENOSPC
+fault injection`) instead of folding into the passed line, following the
+`semantic_errno_mapping_test.cpp` attempted-case precedent. Matrix re-run at
+the corrected head: liburing=y 68/68, liburing=n 53/53, both mutant kinds
+red on both profiles (six admission failures / two terminal failures).
+
+## 2026-10-15 Post-F6 deferred debt: LIFE-01 move oracle and THREAD-01 concurrent-submit corner (#527)
+
+Executes both #527 work items (F6-F13, F6-F14). Neither is a conformance
+gap: both clauses' closure evidence stands from the F6 requirements matrix;
+these strengthen evidence directness only. `F6 = CLOSED_ACCEPTED` stands.
+
+`tests/file_move_borrow_test.cpp` (both backends, production shape) drives
+the legal interleavings of the borrow contract's move clause: a read accepted
+before the owner move-constructs settles the stored payload through the moved
+descriptor and the new owner closes only after acquired terminal; a second
+submission initiated through the moved owner at its new address settles its
+own region beside the still-outstanding first borrow. Illegal interleavings
+(close/move-assign over the borrowed object) stay caller obligations and are
+deliberately not driven. Mutation build `SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE`
+closes the native descriptor only at the two moves the oracle performs with an
+outstanding accepted borrow (the suite arms a mutant-only flag around exactly
+those statements, so `File::open` and acceptance run normally). The kill lands
+on post-move observations: deterministically on "second read accepted through
+the moved owner" — the closed moved-to owner rejects before any syscall — and
+on the pool profile additionally on the settling-payload arms whenever the
+worker's pread resolves after the close. After the named kills the production
+fail-fast aborts (exit 134) on the abandoned accepted borrow at teardown, a
+second, independent detection. A kernel-ring variant is offered as well: its
+payload arm stays unobservable there by construction (the kernel holds its own
+file reference for an already-submitted ring op, so the outstanding read keeps
+settling), while the deterministic second-submission arm still kills.
+
+`tests/submit_concurrency_test.cpp` (both backends, internal-testing seam for
+the submit pause gates and core snapshot) pins the concurrency matrix's
+concurrent-submission corner: a reserve-window discriminator (a second
+submitter can neither reserve nor complete inside another submitter's
+reserve-to-accept window, observed via the core snapshot with the public
+consequences asserted after release), a four-thread barrier corner (all
+submissions accepted, identities pairwise distinct while simultaneously live,
+each settling exactly its own region, stats exact), and a saturated capacity
+corner (with no driver publishing, exactly the capacity accepts and every
+other concurrent submission reads `would_block` with no other spelling).
+No sleep-based synchronization: pause gates, start barriers and bounded
+progress observation only. The second submitter's arrival at its submission
+call is witnessed before the window is judged — a scheduler that never runs
+it converts to an explicit precondition failure instead of a vacuous pass —
+and under the mutation the second reservation parks at the same gate, so the
+violated snapshot is stable and the bounded poll cannot miss it; the only
+remaining nondeterminism is the arrival wall-time, which the witness bound
+turns into that precondition failure. This is a witnessed bounded
+discriminator, not a scheduler-independent proof that the second submitter
+must block (that would require mutex instrumentation and is not claimed).
+Mutation build `SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED` (drops the
+acceptance serialization in the context submit path) is killed by the
+reserve-window discriminator on both profiles (10/10 pool, 5/5 ring runs,
+arrival precondition never false-failing); TSan additionally reports the
+unserialized AsyncStats writes as a data race under it, while the correct
+code is TSan-clean.
+
+Matrix at the slice head: liburing=y 70/70, liburing=n 54/54; mutant builds
+red with the named assertions; TSan clean on correct code and racing under
+the mutant (clang 22 — the host lacks the gcc libtsan runtime); ASan+UBSan
+clean on both new suites; 20 consecutive runs of each concurrent test stable.
+PR #532 (review: REQUEST_CHANGES resolved by the corrected named killer
+recorded above and this ledger row).
+
+Review round 2 on PR #532: the LIFE-01 mutation previously fired inside the
+move that `File::open` performs into its Result, so every obtained File
+arrived closed and the kill landed on acceptance assertions rather than the
+adjudicated "borrow accepted, then owner moves" scenario. The mutation is now
+armed at exactly the two target moves (mutant-only flag, zero production
+footprint outside the mutation define), the kill arms are as recorded above,
+and a ring mutant variant was added since the deterministic arm is now
+observable there. The THREAD-01 window case gained the arrival witness
+described above, so an unscheduled second submitter can no longer produce a
+vacuous pass. Matrix re-run at the corrected head: liburing=y 70/70,
+liburing=n 54/54; both mutants red on both profiles with the named arms;
+20/20 stability per profile re-confirmed; TSan, ASan and UBSan re-run clean
+on the updated suites (clang — the host lacks the gcc sanitizer runtimes).

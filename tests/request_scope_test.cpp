@@ -58,6 +58,11 @@ struct Tracker {
     }
 };
 
+// The zero-allocation oracle observes allocation through strong global
+// operator new/delete replacements, which collide with the TSan runtime's
+// own interceptors at link time. Under SLUICE_TSAN_TESTING the seam is
+// compiled out and the oracle is owned by every non-TSan profile instead.
+#if !defined(SLUICE_TSAN_TESTING)
 std::atomic<std::size_t> g_allocations{0};
 
 }
@@ -70,7 +75,7 @@ std::atomic<std::size_t> g_allocations{0};
 #pragma GCC diagnostic ignored "-Wmismatched-new-delete"
 #endif
 
-void* operator new(std::size_t n) {
+[[gnu::noinline]] void* operator new(std::size_t n) {
     const int saved = errno;
     g_allocations.fetch_add(1, std::memory_order_relaxed);
     errno = saved;
@@ -81,23 +86,23 @@ void* operator new(std::size_t n) {
     return p;
 }
 
-void* operator new[](std::size_t n) {
+[[gnu::noinline]] void* operator new[](std::size_t n) {
     return ::operator new(n);
 }
 
-void operator delete(void* p) noexcept {
+[[gnu::noinline]] void operator delete(void* p) noexcept {
     std::free(p);
 }
 
-void operator delete[](void* p) noexcept {
+[[gnu::noinline]] void operator delete[](void* p) noexcept {
     std::free(p);
 }
 
-void operator delete(void* p, std::size_t) noexcept {
+[[gnu::noinline]] void operator delete(void* p, std::size_t) noexcept {
     ::operator delete(p);
 }
 
-void operator delete[](void* p, std::size_t) noexcept {
+[[gnu::noinline]] void operator delete[](void* p, std::size_t) noexcept {
     ::operator delete[](p);
 }
 
@@ -116,6 +121,7 @@ struct AllocationProbe {
         return g_allocations.load(std::memory_order_relaxed) - before;
     }
 };
+#endif
 
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
 
@@ -799,27 +805,27 @@ class ThrowingSubmitBackend final : public AsyncBackend {
         return 4;
     }
 
-    Result<detail::RequestKey> submit_read(ReadOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_read(ReadOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_write(WriteOp, Completion<std::size_t>*) override {
+    Result<detail::RequestKey> submit_write(WriteOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_sync_data(SyncDataOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_data(SyncDataOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_sync_all(SyncAllOp, Completion<void>*) override {
+    Result<detail::RequestKey> submit_sync_all(SyncAllOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_file_info(FileInfoOp, Completion<sluice::FileInfo>*) override {
+    Result<detail::RequestKey> submit_file_info(FileInfoOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
-    Result<detail::RequestKey> submit_size(SizeOp, Completion<sluice::FileSize>*) override {
+    Result<detail::RequestKey> submit_size(SizeOp) override {
         throw std::runtime_error("pre-accept submission throw");
     }
 
@@ -957,7 +963,6 @@ bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
         std::vector<std::byte> buffer(4, std::byte{0});
-        std::optional<ScopeTicket<std::size_t>> ticket;
         std::thread canceler([&] {
             wait_threadpool_gate_paused(gate);
             const auto paused_slot = core.observe_slot(SlotIndex{0});
@@ -1300,6 +1305,7 @@ bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
 
 #endif
 
+#if !defined(SLUICE_TSAN_TESTING)
 bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
     auto file = open_temp_file(t, "sluice d1 alloc\n");
     if (!file.has_value())
@@ -1333,6 +1339,7 @@ bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
     t.check(core_is_idle(core.snapshot()), "the allocation probe pipeline reclaimed");
     return true;
 }
+#endif
 
 struct NamedTest {
     const char* name;
@@ -1398,8 +1405,10 @@ int main() {
         {"health_failure_during_cleanup_fails_fast_instead_of_returning",
          health_failure_during_cleanup_fails_fast_instead_of_returning},
 #endif
+#if !defined(SLUICE_TSAN_TESTING)
         {"submit_path_allocates_nothing_after_acceptance",
          submit_path_allocates_nothing_after_acceptance},
+#endif
     };
     int failed = 0;
     int passed = 0;
