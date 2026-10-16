@@ -2,13 +2,13 @@
 
 | Document field | Value |
 |---|---|
-| Revision | v2-c4 (candidate revision 4; see the revision record in §24) |
-| Status | **PROPOSED — not adopted.** This document becomes the sole normative root only when its adopting PR merges into `master`; see GOV-05. Three independent review rounds returned findings (DESIGN_READY_WITH_FINDINGS, then two REVISE_BEFORE_ADOPTION rounds); this revision addresses the third round's corrections; see §24 |
-| Role | Proposed successor normative root for Sluice product scope, public behavior, responsibility boundaries, lifetime rules, and acceptance obligations |
+| Revision | v2-r1 (first adopted revision; see the revision record in §24) |
+| Status | **Adopted on merge.** This revision becomes the sole normative root when its adopting PR merges into `master`; see GOV-05. Until that merge completes, it is the adoption candidate under review and v1-r4 remains the adopted root. Editing this file, opening the PR, or approving it does not by itself make this revision adopted. The v2-c4 candidate beneath this revision cleared three independent review rounds (DESIGN_READY_WITH_FINDINGS, then two REVISE_BEFORE_ADOPTION rounds); v2-r1 adds only the owner's adoption decisions; see §24 |
+| Role | Normative root for Sluice product scope, public behavior, responsibility boundaries, lifetime rules, and acceptance obligations |
 | Canonical source | `jnhu76/Sluice` / `docs/explicit-io-contract.md` |
-| Supersedes on adoption | `docs/explicit-io-v1-final-decision.md` (v1-r4), which becomes superseded history under GOV-03 |
-| Implementation baseline | The C++ described here is `master` at `b870a7c0` (PR #536's G1 optimization squash-merged as `dd83595d`, then PR #543's io_uring owed-delivery report fix; #536's one-time evidence directories are not in the tree). §23.1 records which obligations the baseline meets and which remain open |
-| Conformance | Not established by this document. This is a design freeze; implementation and evidence live in the conformance ledger, which must be re-based onto this document at adoption |
+| Supersedes | `docs/explicit-io-v1-final-decision.md` (v1-r4) — superseded with this revision's adoption; the adopting PR removes that file from the active tree (no archive copy is created; Git history retains it). ADR-0003 is likewise superseded with no surviving design or implementation authority (§16). The v1 conformance ledger and v1 formal evidence map are replaced by the v2 conformance ledger (GOV-03) |
+| Implementation baseline | The C++ described here is `master` at `b870a7c0` (PR #536's G1 optimization squash-merged as `dd83595d`, then PR #543's io_uring owed-delivery report fix; #536's one-time evidence directories are not in the tree). The adopting PR's base `c001bb1e` differs from `b870a7c0` by documentation changes only, so the implementation facts below are unchanged by adoption. §23.1 records which obligations the baseline meets and which remain open |
+| Conformance | Tracked by the v2 conformance ledger, `docs/roadmap/v2-conformance.md`, established by the same adopting PR. This root defines targets; the ledger records implementation and evidence state against them |
 
 This document is a **replacement architecture and contract**, not a rename of v1.
 It re-derives the Sluice contract from the code and evidence that now exist,
@@ -81,13 +81,15 @@ last status.
 
 | Earlier source | Status |
 |---|---|
-| `docs/explicit-io-v1-final-decision.md` (v1-r4) | Superseded **on adoption of this document**. Until then it remains the adopted root and this document is a PR candidate under GOV-05. Its migration-phase machinery (MIG-01/02/03, F0 §1.7 admission procedure) is historical record; its semantic requirement text is carried forward into sections 5–19 with stable IDs. |
+| `docs/explicit-io-v1-final-decision.md` (v1-r4) | Superseded by this revision's adoption. The adopting PR deletes the file from the active tree and does not recreate it under `docs/archive/`; its text remains recoverable from Git history (adopted via PR #488 and its predecessor revisions). v1-r4 and earlier contracts no longer define the product: no v1 migration gate, phase requirement, or historical compatibility rule can constrain the v2 product or override this root. Their carried semantic requirements live on in sections 5–19 with stable IDs |
+| `docs/roadmap/v1-conformance.md` (v1 conformance ledger) | Superseded: the adopting PR replaces it with `docs/roadmap/v2-conformance.md`. Its phase records are dated campaign evidence retained in Git history; none of its statuses transfers to v2 without the new ledger's correspondence checks |
+| `docs/roadmap/v1-formal-evidence-map.md` | Superseded as an active governance entrypoint: the adopting PR removes it from the active tree. Living-model scope and coverage limits now live in VERIFY-06 and the v2 ledger's formal-evidence group; its per-asset dispositions are dated evidence |
 | ADR-0001, ADR-0002 and its visual companion | Historical rationale; superseded as normative architecture |
-| ADR-0003 (narrow stackful host, DESIGN_AUTHORITY_ONLY) | Remains the design record for the optional host candidate; under this document that candidate is outside the normative surface (section 16, W-04) |
-| ADR-0004 (shutdown state contract) | Carried forward: its state contract is restated in section 17 |
+| ADR-0003 (narrow stackful host) | Superseded by owner decision D1 (§23.4): the stackful host bundle is outside v2 and is physically removed by PR B. The ADR file is retired from the active tree with the adoption; Git history is its provenance. It grants no surviving design or implementation authorization; re-introducing a host requires a fresh root amendment (§16), not resurrection of this ADR |
+| ADR-0004 (shutdown state contract) | Carried forward as a subordinate implementation decision: its state contract is restated in section 17; it derives from this root and adds no scope |
 | `docs/archive/**` | Superseded history; retained for traceability under their own banners |
-| v1-era conformance roadmap slices and Phase F/G gate records | Historical evidence for the convergence campaign; they do not bind v2 except where this document cites them as evidence for a carried requirement |
-| Earlier revisions of this file | Replaced by the current committed revision; Git preserves decision history |
+| v1-era conformance roadmap slices, Phase M/F/G gate records, issues #390–#543 process records | Historical evidence for the convergence campaign; they do not bind v2 except where this document cites them as evidence for a carried requirement |
+| Earlier revisions of this file (v2-c1..v2-c4) | Replaced by the current committed revision; Git preserves decision history |
 
 Historical documents keep their old text under an explicit supersession
 banner. No historical clause is silently incorporated by reference. If a rule
@@ -156,7 +158,7 @@ remains deterministic.
 | ThreadPool request execution | Required | Complete required operation set and progress integration |
 | io_uring request execution | Required supported backend, conditional on runtime availability | Full shared contract when construction succeeds; explicit unavailable outcome otherwise |
 | External Linux event-loop integration | Required | Non-busy, pollable progress source for each usable request backend |
-| Stackful single-owner I/O host and cooperative-cancel kit | **Out of normative scope.** See section 16 and W-04 | Not installable as a supported surface; no core dependency on it |
+| Stackful single-owner I/O host and cooperative-cancel kit | **Outside v2; physically removed by PR B** (owner decision D1). See section 16 and W-04 | Not installable, not shipped, not retained in-tree as an inactive experiment; no core dependency on it |
 | Windows, macOS, multi-worker task host, coroutine adapter, user-authored backends | Unsupported | No portability or correctness claim inferred from Linux evidence |
 
 A release must list tested compiler, architecture, kernel/liburing and
@@ -245,11 +247,14 @@ condition variable alone is insufficient.
 
 ## W-04 Sequential I/O host — **UNSUPPORTED**
 
-The optional stackful host is not a supported v2 configuration and W-04 is
-not a v2 workload (section 16 records the disposition and re-admission
-conditions). No configuration may be documented, packaged, or measured as
-fulfilling W-04. Sequential-looking task execution over file I/O is achieved
-with the direct form (W-01) or the explicit request forms (W-02/W-03).
+The stackful host is outside v2: W-04 is not a v2 workload and not a required
+release workload, the host bundle is physically removed from the repository by
+PR B, and no inactive or non-installed experimental host implementation is
+retained for potential future use (section 16 records the disposition and
+re-admission conditions). No configuration may be documented, packaged, or
+measured as fulfilling W-04. Sequential-looking task execution over file I/O
+is achieved with the direct form (W-01) or the explicit request forms
+(W-02/W-03).
 
 # 4. Architecture and authorities
 
@@ -1155,28 +1160,35 @@ promises, and their details may change within a reviewed commit:
   feature probes;
 - test seams, fault-injection hooks, and mutation defines.
 
-# 16. Optional host — out of normative scope
+# 16. Optional host — outside v2, hard-removed
 
-v2 ships no stackful/coroutine host in its normative surface. The former
-optional host bundle (stackful I/O host, fiber runtime and context-switch
-layer, cooperative-cancel kit) is recorded as an **unsupported candidate**:
-the code and its design record (ADR-0003) remain available for a future
-proposal, but nothing in the v2 surface depends on it, nothing may document
-it as supported, and the W-04 workload is not a v2 workload (W-04).
+Stackful I/O Host, fiber context switching and the associated cooperative
+Cancel kit are outside v2. By owner decision D1 (section 23.4) their physical
+implementation is deleted from the repository by PR B; no inactive or
+non-installed experimental host implementation is retained merely for
+potential future use. ADR-0003 is superseded and grants no surviving design
+or implementation authorization. The W-04 workload is not a v2 workload and
+not a required release workload (W-04).
 
 Disposition obligations:
 
-- the bundle must not be presented, packaged, or installed as a supported
-  surface; its removal from the default install set is a required adoption
-  follow-up (Appendix B);
-- removal must respect its in-tree consumers (its own tests and seams) and
-  record the consumer/external-use audit like any retirement;
-- re-admission requires a root amendment with the full W-04 acceptance
-  evidence: task failure while another I/O task is outstanding, stop during
-  suspension, observer setup failure, cleanup after wait timeout, and closure
-  of the recorded `bad_alloc`→`no_space` conflation debt — the conditions
-  ADR-0003 and the v1 D2/F6 records attached to supported status;
+- nothing may document, package, install, or measure the bundle as a
+  supported surface; between this root's adoption and PR B's merge, the
+  remaining bundle code is uncontracted tree residue pending deletion, not a
+  retained option, and documentation must not describe it as available;
+- PR B's deletion must retire the bundle's in-tree consumers (its own tests
+  and seams) and record the consumer/external-use audit like any retirement;
+- re-introducing a host requires a fresh root amendment with new
+  justification and the full W-04 acceptance evidence: task failure while
+  another I/O task is outstanding, stop during suspension, observer setup
+  failure, cleanup after wait timeout, and closure of the recorded
+  `bad_alloc`→`no_space` conflation debt. ADR-0003 and the v1-era D2/F6
+  records do not resurrect automatically; they may serve only as prior art
+  for a new proposal;
 - a core-only build must compile/link without the host's headers or objects.
+
+The hard-removal choice does not relax RequestScope W-02 or the cancellation
+obligations of retained request execution: those live in their own sections.
 
 Scoped bounded pipelines remain a required capability through the owned-driver
 request scope (W-02): it owns accepted Requests and a preallocated tracking
@@ -1575,7 +1587,7 @@ report fix.
 |---|---|---|---|---|---|---|
 | File resource authority | `sluice::File` sole RAII owner (`file_resource.hpp`); `NativeFileRef` borrow only | SEM/LIFE | KEEP — single authority; no second File type exists | None | A1/A2 records; F1 clean-room probes | None known |
 | Direct vs request boundary | `sluice::blocking::*` + direct path without context | INV-01 | KEEP | None | W-01 VERIFIED (A2, F1) | None |
-| Shared semantic layer | `detail/file_semantics.hpp` shared by blocking and request paths | SEM | KEEP semantics; header reclassified internal (Appendix B) | Install-surface only | semantic conformance 0 divergences | Install contraction slice |
+| Shared semantic layer | `detail/file_semantics.hpp` shared by blocking and request paths | SEM | KEEP semantics; header reclassified internal (Appendix B) | Install-surface only | semantic conformance 0 divergences | Install contraction executes in PR B |
 | RequestCore authority | acceptance/terminal/publication/reclaim in `detail/request_core.*`; the derived `outstanding_summary()` merged in `dd83595d`; `occupancy()` is the settlement/teardown authority in both states | REQ | KEEP; the derived `outstanding_summary()` is non-authoritative where it exists; `occupancy()` is the settlement/teardown authority in both states | None | RequestCore TLC safety+liveness PASS (re-run at `64e3241b`; the modeled sources are byte-identical in `dd83595d`); C2 A/B; PR #536 reviewer finding C5 | Identity-domain debt (uring enforces, core/TP admission does not) carried as standing ledger item |
 | Request<T> / RequestId | `request.hpp` move-only handle | HANDLE/REQ-01 | KEEP | None | B2 records; public_request 13/13 | None |
 | Observer lifecycle | generation-armed at-most-one registration | OBS | KEEP | None | ObserverCore model + C1 campaign | None |
@@ -1583,8 +1595,8 @@ report fix.
 | Progress pass | ThreadPool: entry-snapshot publications + entry-snapshot owed deliveries + bounded store, merged in `dd83595d`; io_uring: bounded phases with full-capacity delivery sweep, owed-delivery residue report merged by PR #543 | PROG-01 (now explicit) | KEEP with generalized finite-bound + honest residue requirement | None | PR #536 negative/positive oracles (pre-fix failures recorded); `threadpool_progress_pass_bound_test` at the baseline; `tests/uring_owed_residue_test.cpp` merged in `b870a7c0` | Bound and residue honesty met by both shipped backends at the baseline |
 | ThreadPool backend | merged-lock pass, bounded rings, delivery records | BACKEND | KEEP mechanism; details non-contract (BACKEND-04) | None | G1 A/B + full suite + mutation campaign | ThreadPool evidence does not extend to other backends (scoped by record); owed-event residue is reported by both shipped backends at the baseline |
 | io_uring backend | ring + eventfd registration, transport/completion split; owed-delivery report fix merged by PR #543 | BACKEND-02/03 | KEEP mechanism; conditional availability; details non-contract | None | E1/B1-C/C2-C records; real-kernel WSL2 evidence; `tests/uring_owed_residue_test.cpp` at the baseline | The LeakSanitizer report on the poisoned-shutdown path (`tests/shutdown_lifecycle_test.cpp`, `poison_with_in_flight_cqe`) is a known test-side finding whose classification rests on the #536 commit records — recorded as release-validation debt, not a v2 specification design defect and not a regression of the merged residue fix; before the first v2 release it must be either fixed or granted a formal exception |
-| Backend extensibility | public `AsyncBackend` + 7 installed detail headers as de-facto contract | BACKEND-01 (stated internal, shipped public) | SIMPLIFY — seam closed to shipped backends; detail headers reclassified implementation (uninstall = follow-up slice) | Install-surface break for hypothetical external backend authors; unknown external use flagged, not assumed absent | F1 package records; consumer census | Install contraction slice + external-use disclosure at adoption |
-| Optional stackful host + cancel kit | shipped + tested, `IMPLEMENTED_UNVERIFIED`, W-04 unsupported | PROD-02 optional profile | REMOVE from normative surface (UNSUPPORTED candidate); uninstall in follow-up; hard code-removal = owner decision | Public headers `fiber/fiber_ctx/stackful_io_host/cancel` leave install set | D2 record; F6 `N/A_WITH_NEGATIVE_PACKAGE_PROOF`; consumers = host tests only | Owner decision: hard remove vs non-installed retention |
+| Backend extensibility | public `AsyncBackend` + 7 installed detail headers as de-facto contract | BACKEND-01 (stated internal, shipped public) | SIMPLIFY — seam closed to shipped backends; detail headers reclassified internal; install contraction to the 11-header target executes in PR B (owner decision D2) | Install-surface break for hypothetical external backend authors; unknown external use flagged, not assumed absent | F1 package records; consumer census | PR B contraction slice + external-use disclosure in release documentation |
+| Optional stackful host + cancel kit | shipped + tested, `IMPLEMENTED_UNVERIFIED`, W-04 unsupported | PROD-02 optional profile | REMOVE — outside v2; hard removal (owner decision D1): PR B deletes the code and its in-tree consumers; no experimental retention; ADR-0003 superseded | Public headers `fiber/fiber_ctx/stackful_io_host/cancel` leave install set by deletion | D2 record; F6 `N/A_WITH_NEGATIVE_PACKAGE_PROOF`; consumers = host tests only | PR B executes the physical removal |
 | RequestScope (W-02) | owned-driver bounded scope | HOST-02 substance without the host | KEEP | None | D1 record, six killed mutants | None |
 | measurement/effect/result/error vocabulary | shipped, diagnostic + ERR vocabulary | ERR/BOUND | KEEP as non-authoritative diagnostics | None | F1 classification | None |
 | Legacy surfaces | absent from tree | MIG-02 | Completed retirement; no re-admission without amendment | Already broken in v1 campaign | F2–F6 records | External use of retired surfaces UNKNOWN (standing disclosure) |
@@ -1597,9 +1609,10 @@ report fix.
    oracle, not a second owner.
 2. **Ownerless compatibility facade:** none found in code (the retired
    surfaces are gone). Two adjacent items are dispositioned: the optional
-   host bundle (candidate pending owner decision) and a stale
-   `libraries.lua` comment referencing retired symbols (cleanup item, no
-   semantic weight).
+   host bundle (outside v2; physical deletion owned by PR B under owner
+   decision D1) and a stale `libraries.lua` comment referencing retired
+   symbols (cleanup item with no semantic weight, assigned to PR B/C under
+   owner decision D6).
 3. **RequestCore vs backend duplicate state authority:** none. The core is
    the sole logical authority; backend queues are physical mechanisms;
    `occupancy()` is the settlement/teardown authority in every state. The
@@ -1617,8 +1630,8 @@ report fix.
    suppression, ring depths/probes, derived outstanding summaries, test
    seams/mutation defines (BACKEND-04).
 6. **W-04:** **UNSUPPORTED.** `OPTIONAL_W04_SUPPORTED=NO`; F6 gate
-   `W04_EXTERNAL=N/A_WITH_NEGATIVE_PACKAGE_PROOF`. No v2 document may claim
-   otherwise.
+   `W04_EXTERNAL=N/A_WITH_NEGATIVE_PACKAGE_PROOF`; the bundle is physically
+   removed by PR B (owner decision D1). No v2 document may claim otherwise.
 7. **Formal model coverage:** exactly the VERIFY-06 table — bounded protocol
    instances of core/observer/progress/shutdown. No model proves C++ memory
    ordering, unbounded domains, kernel behavior, or wall-clock progress. The
@@ -1644,24 +1657,35 @@ report fix.
 | Backend seam | `AsyncBackend` + `threadpool_backend.*`, `uring_*.cpp` | cutover suites; E1 conformance; `ShutdownCore.tla` |
 | Shutdown lifecycle | `src/async/async_io_context.cpp` | `shutdown_lifecycle_test` (9 TP / 17 uring scenarios); `ShutdownCore.tla` |
 
-## 23.4 Unresolved owner decisions
+## 23.4 Owner decisions — resolved
 
-This candidate assumes no authority it was not given. The following decisions
-belong to the repository owner; until each is answered, the candidate's
-disposition for the affected mechanism is the conservative one stated here.
+The v2-c1..c4 candidates carried an unresolved owner-decision table whose
+items happened to be labeled D1–D6. The repository owner has now decided all
+six; the table below records each binding decision, its disposition, and the
+earlier open question it settles. No item remains owner-pending, and the old
+conservative defaults (keep-installed host headers, ledger stays on v1-r4,
+no install change by the document alone) are expired by these decisions.
+Today's D1–D6 are the owner decisions recorded here; they are **not** the
+same-numbered unresolved questions of v2-c4, whose mapping onto these
+decisions is the rightmost column.
 
-| # | Decision | Conservative default in force | Why it is not the author's to decide |
+| # | Owner decision (binding) | Disposition | Execution |
 |---|---|---|---|
-| D1 | Optional stackful I/O host bundle: hard code removal vs non-installed retention | Keep the code in the tree; the four host/cancel headers (`fiber`, `fiber_ctx`, `stackful_io_host`, `cancel`) are CURRENT_INSTALLED and remain installed until the D2 contraction slice executes — their uninstalled state is that slice's TARGET_UNINSTALLED outcome, not a present fact; W-04 stays UNSUPPORTED in the normative surface | Removing shipped code can break unknown external users; PROD-03 requires disclosure, not silent deletion |
-| D2 | Install-surface contraction slice (which of the 10 SIMPLIFY headers become internal, and when the 4 host-bundle REMOVE headers leave the install set, in which PR) | Classification is recorded in Appendix B; no install set is changed by this document | Changing the install set is a compatibility action that must be sequenced with the ledger and release policy |
-| D3 | External-use disclosure for the headers queued for contraction | Treat existing installed use as possible; none may be removed on this document alone | Only the owner can confirm the external-consumer population |
-| D4 | Adoption of this candidate (GOV-05) and the PR that performs it | v1-r4 remains the sole adopted root | Adoption is an owner act; a candidate PR cannot adopt itself |
-| D5 | Conformance-ledger re-base onto this root (the ledger still references v1-r4 IDs, including the original VERIFY-04 meaning) | The ledger keeps its v1-r4 status | The ledger is adopted-process evidence; re-basing it is an adoption follow-up, not a candidate act |
-| D6 | Cleanup of the stale `xmake/libraries.lua` comments that still describe Reader/Writer-era and pre-#524 surfaces | Left in place; recorded here as a no-semantic-weight cleanup item | Comment edits to build rules belong with the install-contraction slice (D2) so the file is touched once |
+| D1 `HARD_REMOVE` | Stackful/Fiber/Cancel optional-host implementation is deleted | The host bundle (Stackful I/O Host, fiber context switching, cooperative Cancel kit) is outside v2; PR B deletes the code and its in-tree consumers; no inactive or non-installed experimental retention; ADR-0003 is superseded and retired from the active tree. Settles old-D1 (hard removal vs non-installed retention) in favor of hard removal; W-02 scope and retained-request cancellation obligations are unaffected (§16) | PR B |
+| D2 `CONTRACT_TO_V2` | Target exactly 11 installed public headers | The 11 KEEP headers of Appendix B are the target public surface; every other installed header is internalized or removed; the public `AsyncBackend` seam and internal-type leakage close; `AsyncBackend` is not a public extension protocol, and backend selection must not require the caller to construct an internal backend object or include an internal detail header. Selection remains an explicit caller choice; the factory spelling is deliberately not frozen before the implementation review. The current install surface is 25 headers — a recorded fact, distinct from the target; nothing claims 11 headers are already installed. Settles old-D2 (which SIMPLIFY headers internalize and when the host headers leave) — all of them, in PR B | PR B |
+| D3 `ACCEPT_BREAKING_CHANGE` | No v1 compatibility obligations | The v2 adoption authorizes the breaking changes required to converge on this contract. No compatibility layer, legacy forwarding wrapper, type alias, hidden bridge, or double public API is required for v1 users. External use of old installed headers may be unknown: that uncertainty is disclosed rather than assumed absent, and it is not a veto on this owner-approved change. Authorization to break is not permission to break builds: internal consumers are removed safely, and the newly supported API is verified. The compatibility impact is recorded for the release documentation. Settles old-D3 (external-use disclosure) — disclose and proceed | PR B (execution); release notes (disclosure) |
+| D4 `ADOPT_V2_ONLY` | This document is the sole normative specification | Effective when the adopting PR merges (GOV-05). v1-r4 and earlier contracts are superseded; historical PRs, commits, issues, and evidence are provenance only; no v1 migration gate or historical compatibility rule can constrain the v2 product; ADRs and tests are subordinate to this root. Settles old-D4 (adoption of the candidate) | This PR |
+| D5 `REBASE_AND_REPLACE` | One compact, evidence-backed v2 conformance ledger | The v1 ledger is deleted and replaced by `docs/roadmap/v2-conformance.md`, organized around v2 obligations with statuses re-derived under GOV-02 and no historical status inflation; the v1 formal evidence map ceases to be an active governance entrypoint (living-model scope moves to VERIFY-06 and the ledger). Settles old-D5 (ledger re-base) — replaced, not rebased in place | This PR |
+| D6 `REMOVE_STALE_SURFACE` | Stale v1/R0/H1-era active references removed | Active navigation and working instructions point only to v2 after the adopting PR; v1/R0/H1 and Phase M/F/G are no longer the current development process and no phase gate carries forward. Repository-wide code/build/historical cleanup — including the stale `libraries.lua` comments (old-D6) — belongs to PR B/C with this root as the only contract | PR B/C |
 
-Answers recorded as "no external consumers, proceed" make D1–D3 actionable in a
-follow-up implementation slice; answers recorded as "retain" leave Appendix B's
-KEEP rows for those headers.
+**Breaking-change disclosure (D3).** Consumers of the retired v1-era surfaces
+and of headers leaving the install set (the four host/cancel headers, the
+seven seam/detail headers being internalized, `sluice/detail/*`) may exist
+outside this repository; the repository cannot enumerate them. The first v2
+release notes must state the removed/internalized headers, the closed
+extension seam, and the absence of compatibility shims, so external consumers
+can pin a v1 release or migrate. This disclosure is an obligation on release
+documentation, not a rollback lever: owner decision D3 stands.
 
 ## Appendix B — Installed-surface classification (25 installed headers at baseline `b870a7c0`)
 
@@ -1681,10 +1705,10 @@ KEEP rows for those headers.
 | `sluice/async/request_scope.hpp` | KEEP installed (W-02) |
 | `sluice/async/threadpool_backend.hpp` | KEEP installed (backend selection API) |
 | `sluice/async/uring_backend.hpp` | KEEP installed (backend selection API) |
-| `sluice/async/cancel.hpp` | REMOVE from install set with the host bundle (only consumer) |
-| `sluice/async/fiber.hpp` | REMOVE from install set with the host bundle |
-| `sluice/async/fiber_ctx.hpp` | REMOVE from install set with the host bundle |
-| `sluice/async/stackful_io_host.hpp` | REMOVE from install set with the host bundle |
+| `sluice/async/cancel.hpp` | REMOVE — physically deleted with the host bundle by PR B (D1; only consumers are the bundle's own tests/seams) |
+| `sluice/async/fiber.hpp` | REMOVE — physically deleted with the host bundle by PR B (D1) |
+| `sluice/async/fiber_ctx.hpp` | REMOVE — physically deleted with the host bundle by PR B (D1) |
+| `sluice/async/stackful_io_host.hpp` | REMOVE — physically deleted with the host bundle by PR B (D1) |
 | `sluice/async/detail/request_key.hpp` | SIMPLIFY → internal (seam type) |
 | `sluice/async/detail/ready_sink.hpp` | SIMPLIFY → internal (seam type) |
 | `sluice/async/detail/reference_ready_sink.hpp` | SIMPLIFY → internal (seam type) |
@@ -1703,12 +1727,15 @@ installed header includes it, so it is entirely internal already and needs no
 disposition row.
 
 Target install surface: **11 headers** — the 11 KEEP rows (6 core, counting
-`blocking/file.hpp`, plus 5 async public). The physical contraction is a
-post-adoption slice: it requires the seam-type refactor for
-`AsyncIoContext`/backend signatures, the host-bundle uninstall decision, an
-installed-header/build audit, and the external-use disclosure. Until that
-slice, the current 25 installed headers remain, with the `detail/` headers
-documented as implementation surface rather than contract.
+`blocking/file.hpp`, plus 5 async public). The current install surface is the
+table's 25 rows: that count is a recorded as-built fact, not a target claim,
+and nothing in this appendix asserts the 11-header target is already
+installed. The physical contraction executes in PR B under owner decision D2:
+it requires the seam-type refactor for `AsyncIoContext`/backend signatures,
+deletion of the host bundle (owner decision D1), an installed-header/build
+audit, and the external-use disclosure (D3). Until PR B merges, the 25
+installed headers remain installed, with the `detail/` headers and the host
+bundle documented as implementation surface, not contract.
 
 # 24. Revision record
 
@@ -1717,7 +1744,8 @@ documented as implementation surface rather than contract.
 | v2-c1 (PROPOSED) | Re-derives the contract as a steady-state root: carries forward all proven semantic/lifetime/progress/shutdown requirements with stable IDs; retires v1 migration machinery; declares W-04 and the stackful-host bundle UNSUPPORTED/out-of-surface; closes the backend seam and classifies all 25 installed headers; codifies progress-pass bounding, suppression rules, and derived-summary non-authority learned from PR #536; adds V28 and the formal-evidence scope table | No adopted behavior changes by itself. On adoption: install surface changes require the recorded follow-up slices; documentation must not describe the host bundle or user backends as supported; the ledger re-base onto this root is an adoption obligation |
 | v2-c2 (PROPOSED) | Independent-review response: §23.1 states the two baselines and annotates the rows whose obligation only the open PR #536 carries; PROG-01's rationale is corrected (bounded-but-rescanning pass that absorbed produced work and allocated in-pass, not an "unbounded" pass); OBS-04 gets an explicit retirement row with its substance mapped to live owners; GOV-05's shortening, PROD-01's wording and PROD-02's Deferred→Unsupported change get §22 rows; VERIFY-04's ProgressSource row states the equivalence argument instead of claiming a suppression action; the 71/72 record's location and this candidate's non-coverage of it are named; the VERIFY-04/05 renumbering is disclosed with v1's disclaimer restated; Appendix B's target count corrected to 11; §23.4 gains D5 and D6 | No requirement is added or removed beyond v2-c1 except OBS-04's explicit retirement (whose substance is restated) and the newly recorded PROD-01/PROD-02 wording. The review's blocker-class finding was the baseline-honesty one, now stated in §23.1 |
 | v2-c3 (PROPOSED) | Second independent-review response: implementation baseline updated to `dd83595d` (#536 merged), removing all "PR #536 candidate only" annotations; PROG-01 generalized from a mandated entry-snapshot algorithm to a finite-bound + honest-residue invariant that explicitly covers owed delivery events; BOUND-01 generalized from setup-time allocation to a resource-bound + owned-allocation-failure requirement; VERIFY-04 restored to v1's meaning (named acceptance scenarios), the formal-evidence scope table moves to VERIFY-06, and V29 is added; the io_uring owed-residue report gap is discriminated by `tests/uring_owed_residue_test.cpp` on the open `codex/uring-owed-residue-report` branch; the known LeakSanitizer finding on the uring poisoned-shutdown path is reproduced at `dd83595d` and recorded as a standing adoption item; `docs/performance/methodology.md` is corrected to allow non-authoritative derived runtime state | No requirement is added or removed beyond v2-c2. The owed-residue fix is a behavior refinement on a shipped backend that the v2 root already obliges; it closes the uring residue-report gap identified in §23.1. The LSan finding remains an open adoption item, not a new regression |
-| v2-c4 (this revision, PROPOSED) | Third independent-review response: implementation baseline moved to `b870a7c0` — PR #543's uring owed-delivery residue report and its discriminator `tests/uring_owed_residue_test.cpp` are merged, no obligation of this document rides an open branch, and `dd83595d` remains only the #536 freeze-evidence SHA (§23.1 preamble and rows, §22, §23.3, Appendix B); TERM-01's progress pass boundary is redefined as the finite execution budget plus cutoff condition, naming the entry snapshot as one backend implementation rather than the definition; V28's oracle is aligned with PROG-01 — per-pass finite bound, no lost delivery, continued driving completes obligations — with the exact entry-snapshot delivery expectation moved to the ThreadPool discriminator; PROG-01's residue classification now distinguishes dispatch/retry work the progress owner must perform from work already handed to an autonomous execution resource, which is pending accepted work; §23.4 D1 states the four host/cancel headers as CURRENT_INSTALLED with uninstalled as the contraction slice's target; `docs/performance/methodology.md` joins the continuously maintained documents in `docs/README.md`; the uring LeakSanitizer report is recorded as a known test-side finding and release-validation debt that must be fixed or formally excepted before the first v2 release | No requirement is added or removed beyond v2-c3. The revision closes the factual staleness and cross-section contradictions the third review found (baseline state, TERM-01/PROG-01/V28 budget-and-delivery alignment, dispatch-residue classification); it changes no merged behavior and creates no new obligation |
+| v2-c4 (PROPOSED) | Third independent-review response: implementation baseline moved to `b870a7c0` — PR #543's uring owed-delivery residue report and its discriminator `tests/uring_owed_residue_test.cpp` are merged, no obligation of this document rides an open branch, and `dd83595d` remains only the #536 freeze-evidence SHA (§23.1 preamble and rows, §22, §23.3, Appendix B); TERM-01's progress pass boundary is redefined as the finite execution budget plus cutoff condition, naming the entry snapshot as one backend implementation rather than the definition; V28's oracle is aligned with PROG-01 — per-pass finite bound, no lost delivery, continued driving completes obligations — with the exact entry-snapshot delivery expectation moved to the ThreadPool discriminator; PROG-01's residue classification now distinguishes dispatch/retry work the progress owner must perform from work already handed to an autonomous execution resource, which is pending accepted work; §23.4 D1 states the four host/cancel headers as CURRENT_INSTALLED with uninstalled as the contraction slice's target; `docs/performance/methodology.md` joins the continuously maintained documents in `docs/README.md`; the uring LeakSanitizer report is recorded as a known test-side finding and release-validation debt that must be fixed or formally excepted before the first v2 release | No requirement is added or removed beyond v2-c3. The revision closes the factual staleness and cross-section contradictions the third review found (baseline state, TERM-01/PROG-01/V28 budget-and-delivery alignment, dispatch-residue classification); it changes no merged behavior and creates no new obligation |
+| v2-r1 (this revision — first adopted revision) | Adopts the reviewed v2-c4 candidate as the sole normative root together with the owner's six binding decisions (§23.4: D1 `HARD_REMOVE`, D2 `CONTRACT_TO_V2`, D3 `ACCEPT_BREAKING_CHANGE`, D4 `ADOPT_V2_ONLY`, D5 `REBASE_AND_REPLACE`, D6 `REMOVE_STALE_SURFACE`; the mapping onto v2-c4's same-numbered unresolved questions is recorded there). §16 and W-04 restate the host bundle as hard-removed by PR B with ADR-0003 superseded and retired from the active tree; PROD-02's host row follows; Appendix B assigns the 25→11 install contraction to PR B and keeps the current surface distinct from the target; breaking changes are authorized with no v1 compatibility layer and an explicit external-use disclosure obligation (D3); GOV-03 records the v1 root, v1 ledger, and v1 formal evidence map as superseded and removed from the active tree by this adopting PR, which also establishes `docs/roadmap/v2-conformance.md`. Adoption is effective on the merge of this PR (GOV-05); the adopting PR is documentation-only | No requirement of v2-c4 is added, removed, or weakened: S1–S10, L1–L5, and V01–V29 are unchanged, and sections 5–15, 17–22 are unchanged text. Changes are confined to the host disposition (§16, W-04, one PROD-02 row), governance and decision records (GOV-03, §23, Appendix B framing), and this revision record. The implementation baseline is unchanged: the C++ at the adopting PR's base is identical to `b870a7c0` |
 
 Subsequent entries identify specific changed requirement IDs; the full
 before/after remains in Git.
