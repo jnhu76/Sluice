@@ -37,8 +37,11 @@ sufficient to reproduce the claim.
   or weakened to keep a number.
 - Results from different machines are not comparable, including nominally
   identical hardware. Only paired runs on one host decide.
-- An optimization must not introduce new semantic authority, runtime state or
-  public behavior; it stays inside the mechanism-justification rules.
+- An optimization must not introduce new semantic authority, unproved
+  independent runtime state, or new public behavior; it stays inside the
+  mechanism-justification rules. A non-authoritative derived summary whose
+  owner, invariant and failure boundary are documented is allowed, as is
+  test-only instrumentation.
 - No merged PR may claim a library-wide improvement from workload-local
   measurements; regressions in any measured scenario are disclosed in the PR.
 
