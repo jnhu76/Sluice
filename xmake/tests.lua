@@ -434,6 +434,8 @@ do
                         R .. "tests/threadpool_progress_race_test.cpp")
     c2b_progress_target("progress_notification_suppression_test",
                         R .. "tests/progress_notification_suppression_test.cpp")
+    c2b_progress_target("threadpool_progress_pass_bound_test",
+                        R .. "tests/threadpool_progress_pass_bound_test.cpp")
     c2b_progress_target("threadpool_external_loop_test",
                         R .. "tests/threadpool_external_loop_test.cpp")
 end
