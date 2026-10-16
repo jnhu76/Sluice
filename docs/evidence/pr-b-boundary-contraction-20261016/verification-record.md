@@ -33,6 +33,12 @@ App oracles (copy pipeline, tail lifecycle/CLI) are part of the test group
 and ran in every cell; the four app binaries (`sluice-copy`, `sluice-hash`,
 `sluice-grep`, `sluice-tail`) additionally build in both release cells.
 
+Re-run at the review-fix head (commits `b3de9262`..`51dc830f`): all eight
+cells reconfigured and rebuilt from the fix tree with the recorded argv;
+the table is unchanged, `matrix.json` carries the fresh exit codes and log
+digests, and `asanubsan-y-rg1-lsan-disposition.txt` gains the fix-head
+capture (same scenario, same site and byte counts as the PR-head capture).
+
 ### asanubsan-y disposition (pre-existing RG1, not a PR B regression)
 
 `shutdown_lifecycle_uring_test` fails only under LeakSanitizer with a leak
@@ -49,32 +55,48 @@ claimed here.
 
 ## 2. Clean-room v2 package verification
 
-`scripts/verify_v2_package.py`, both profiles, all gates PASS at committed
-heads; manifests and archive/object/symbol baselines recorded next to this
-file:
+`scripts/verify_v2_package.py`, both profiles, all 49 gates PASS at the
+review-fix head; manifests and archive/object/symbol baselines recorded
+next to this file:
 
 - `v2-package-manifest-noliburing.json` — 11-header exact-set prefix,
   11/11 sole-include compiles, workloads and micro-contracts on the public
   factories, `w03 uring` reports the explicit `not_supported` outcome
-  (exit 2), ODR probe agrees across opposite macro views, all negative
-  surface probes fail as required.
+  (exit 2), ODR probe agrees across opposite macro views, the seam
+  negatives compile the real installed headers with pinned diagnostics,
+  and the installed mutation regions match the pinned D1 template seams.
 - `v2-package-manifest-liburing.json` — same surface, real io_uring
   selection (`w03 uring` exit 0), archive carries the io_uring external
   references and the `make_uring_context` symbol.
 
+The verifier's own behavior is self-tested
+(`scripts/test_verify_v2_package.py`, 14 tests): the seam gate must fail
+when an installed header re-exposes the backend definition, a probe
+failing without its expected diagnostic must not count as the negative
+result, and an injected installed mutant region must be flagged.
+
 ## 3. Mutation spot-check (`mutation/`)
 
 The two B2 release-edge mutants whose code moved with the seam
-internalization still die on their named oracles (built at debug-n, gcc):
+internalization still die on their named oracles. Re-killed at the
+review-fix head (gcc release profile, direct binary invocation):
 
-- `public_request_mut_release_forgets_binding` (mutant stayed inline in
-  `request.hpp`): killed by `discard_releases_the_published_binding` —
-  the discarded binding stays live, the slot never re-admits, and teardown
-  hits the outstanding-bindings diagnostic (rc 255).
-- `public_request_mut_nonterminal_release_detaches` (mutant moved to
+- `public_request_mut_release_forgets_binding`: the review fix moved this
+  mutation out of installed `request.hpp` into
+  `detail::RequestBridge::discard` in `request_core.cpp` so no installed
+  header changes consumer compilation. The moved mutant is killed by
+  `discard_releases_the_published_binding`: the discarded binding stays
+  live, the slot never re-admits, and teardown hits the outstanding-
+  bindings diagnostic.
+- `public_request_mut_nonterminal_release_detaches` (mutant already in
   `request_core.cpp` with the bridge): killed by
   `destroy_nonterminal_request` — "the always-on diagnostic did not
-  terminate" (rc 255).
+  terminate".
+
+The remaining installed mutation regions are the two D1 function-template
+seams in `request_scope.hpp` (they cannot leave the header); the package
+verifier pins that exact set, so any new or removed installed region fails
+`NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED`.
 
 ## 4. Formal-model correspondence preservation
 
@@ -91,13 +113,20 @@ action, guard, interleaving or fairness assumption changed:
   passes in all 8 matrix cells and both release-edge mutants above are
   killed through the moved code.
 - **ObserverCore.tla** (target: request_core observer delivery state):
-  the observer state machine is unchanged; `AsyncIoContext` now maps its
-  outcomes onto public enums 1:1 (armed/duplicate/already_terminal/
-  admission_closed/not_found; retired/delivery_in_progress/
-  not_registered/not_found). The clean-room `contract_observer` consumer
-  reproduces the OBS-01..03 discriminators (atomic resolution, at-most-once
-  delivery via retirement, cancel/retry, duplicate) through the public
-  vocabulary alone.
+  after the review fix the correspondence is literal. The model's
+  `ProcessDelivery` runs the `delivering → retired` edge (incrementing
+  `delivery_retires`, freeing the host record) as the delivery owner
+  processes the returned hook; the C++ previously let any caller acquire
+  that edge through the public `retire_delivery`, which no modeled action
+  performed. `deliver_event` in both backends now retires after its hook
+  returns, and the public surface exposes only the retirement query
+  (`delivery_retired`), matching the model's retirement finality: a
+  delivering registration is never retirable from outside. The
+  deterministic interleaving on the delivery-claimed pause gate (RED at
+  `e34965a5`, GREEN at `b3de9262`) is the executable witness; the
+  clean-room `contract_observer` consumer checks atomic resolution,
+  cancellation, the retirement query after the terminal, duplicate and
+  unknown-id dispositions through the public vocabulary alone.
 - **ProgressSource.tla** (target: progress source + notification fd): no
   mechanism change; `AsyncBackend::ProgressPass` was renamed/moved to the
   public `ProgressPass` in `async_io_context.hpp` (same fields, same
@@ -124,3 +153,21 @@ value type; no per-request heap allocation was added — the bridge calls are
 plain out-of-line calls), and the installed-surface ODR probe pins the new
 layouts across TUs and macro views. `AsyncIoContext` (96) and `RequestId`
 sizes are unchanged from baseline.
+
+## 6. Review-fix record (2026-10-16)
+
+An external review of PR #545 at `e34965a5` raised two P1 and two P2
+findings; this section records the fixes and their evidence at the
+review-fix head.
+
+| Finding | Fix | Evidence |
+|---|---|---|
+| P1: the observer retirement authority sat with whichever caller reached the core; `retire_delivery` granted `delivering → retired` while the pipeline hook was still on the stack, and a delivered registration pinned its slot forever without a public acquire call | Delivery owner retires after its hook returns in both backends; the public surface only queries (`delivery_retired`); `RequestCore::observer_retirement_acquired` is a read of the existing phase authority | RED counterexample at `e34965a5` on the delivery-claimed pause gate (`review-fix/observer-retirement-red.log`: mid-hook retirement granted, post-completion query false); fix commit `b3de9262`; GREEN seam suites (`threadpool_core_cutover_test` 17/17 incl. the new interleaving: query false mid-hook, cancellation in-progress, hook-runs-once, owner-side retirement, slot reclaims with no public acquire); 74/74 full group (liburing=y) |
+| P1: the seam negative probes hand-wrote an incomplete `AsyncBackend` and any nonzero exit counted as the expected failure, so the gate could not detect a re-exposed backend | Probes include the real installed headers and pin diagnostics (`incomplete type`, `private`); the missing-file probes pin theirs; the gate is extracted for mutation self-testing | Commit `d8c57cd5`; self-tests compile a mutated staged install: re-exposing the backend definition fails the gate because the probe compiles, and a diagnostic mismatch is rejected (14 tests total) |
+| P2: each P1 consumer ran twice (gate decided by one run, return code echoed from another) | Single execution with the return code captured for both the gate and the recorded detail | Commit `47a58e87` |
+| P2: `SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING` lived in installed `request.hpp`, so a consumer define changed Request destruction | Mutation moved to `detail::RequestBridge::discard` in `request_core.cpp`; the mutant skip keeps the same externally observable failure | Commit `3bace3d4`; both release mutants re-killed with refreshed logs. The verifier now pins the complete installed mutation-region set (`NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED`, commit `51dc830f`), whose first run surfaced the two D1 template seams still in `request_scope.hpp` |
+
+Re-verification at the fix head: full 8-cell matrix rerun (§1), both
+package profiles re-verified with 49 gates (§2), the observer model
+correspondence restated (§4), the moved B2 mutants re-killed (§3), and the
+RED counterexample retained as the regression's origin record.
