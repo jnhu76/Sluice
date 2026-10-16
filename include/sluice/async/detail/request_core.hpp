@@ -228,6 +228,7 @@ class RequestCore {
     ObserverDeliveryClaim claim_observer_delivery(RequestKey id) noexcept;
     ObserverCancellation cancel_observer(RequestKey id) noexcept;
     ObserverDeliveryRetirement retire_observer_delivery(RequestKey id) noexcept;
+    bool observer_retirement_acquired(RequestKey id) noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

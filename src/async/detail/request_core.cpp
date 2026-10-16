@@ -595,6 +595,12 @@ ObserverDeliveryRetirement RequestCore::retire_observer_delivery(RequestKey id) 
     return ObserverDeliveryRetirement::retired;
 }
 
+bool RequestCore::observer_retirement_acquired(RequestKey id) noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    Slot* slot = resolve_internal_(id);
+    return slot != nullptr && slot->observer_phase == ObserverPhase::retired;
+}
+
 bool RequestCore::reclaimable_(const Slot& slot) const noexcept {
     return slot.phase == SlotPhase::accepted && slot.published && !slot.binding_live &&
            slot.execution_refs == 0 && slot.control_refs == 0 && !slot.publication_inflight &&

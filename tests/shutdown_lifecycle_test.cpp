@@ -668,15 +668,15 @@ bool observer_delivery_episode_settles_at_shutdown(Tracker& t) {
     t.check(observed.ready(), "the observed read publishes");
 
     const auto episode = core.observe_slot(detail::SlotIndex{0});
-    t.check(episode.has_value() && episode->observer_phase == detail::ObserverPhase::delivering,
-            "the delivery episode is claimed and stays deferred without a consumer");
+    t.check(episode.has_value() && episode->observer_phase == detail::ObserverPhase::retired,
+            "the delivery episode retires with the publication pass, without a consumer");
 
     const auto closed = ctx.shutdown(ShutdownPolicy::drain);
     t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
-            "the shutdown settles the deferred delivery episode");
+            "the shutdown completes with a retired delivery episode");
     const auto settled = core.observe_slot(detail::SlotIndex{0});
     t.check(settled.has_value() && settled->observer_phase == detail::ObserverPhase::retired,
-            "the delivery episode is retired after the shutdown");
+            "the delivery episode stays retired after the shutdown");
     auto consumed = observed.take_result();
     t.check(consumed.result.has_value(), "the observed result stays intact");
     return true;

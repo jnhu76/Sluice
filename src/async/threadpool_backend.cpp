@@ -379,6 +379,7 @@ void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationK
     wait_delivery_claimed_pause_();
 #endif
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+    (void)core_->retire_observer_delivery(key);
 }
 
 void ThreadPoolBackend::worker_loop() {

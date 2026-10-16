@@ -588,6 +588,7 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
 void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
     (void)core_->claim_observer_delivery(key);
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+    (void)core_->retire_observer_delivery(key);
 }
 
 std::size_t UringAsyncBackend::poll() {

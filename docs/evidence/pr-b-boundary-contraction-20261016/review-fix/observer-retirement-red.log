@@ -1,0 +1,3 @@
+FAIL [retirement_waits_for_the_delivery_hook_to_return] retirement is not granted while the delivery hook is still running
+FAIL [retirement_waits_for_the_delivery_hook_to_return] the retirement query reports the completed delivery while the binding is live
+1 of 17 threadpool core cutover tests failed

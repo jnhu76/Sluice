@@ -1135,9 +1135,10 @@ bool observer_registration_rides_publication(Tracker& t) {
 
     t.check(raw->sink_deliveries() == 1 && raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the ready event rides the publication as a host-neutral keyed event");
-    t.check(core.observe_slot(SlotIndex{0})->observer_phase == detail::ObserverPhase::delivering,
-            "the delivery is claimed before the event");
-    t.check(ctx.retire_delivery(attached.request), "delivery retirement acquires the registration fact");
+    t.check(core.observe_slot(SlotIndex{0})->observer_phase == detail::ObserverPhase::retired,
+            "the delivery owner retires once the hook has returned");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery");
     (void)c.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();

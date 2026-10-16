@@ -55,7 +55,7 @@ directory.
 | `contract_request_lifetime.cpp` | REQ-01/HANDLE-01..03: ready-unconsumed, try/take, move/self-move, stale identity, release+resubmit |
 | `contract_admission.cpp` | SEM-03/ERR-01: precedence, zero-op request, full table, admission close |
 | `contract_cancel_effect.cpp` | CANCEL-01/ERR-02: cancel dispositions, effect preservation |
-| `contract_observer.cpp` | OBS-01..03: attachment resolution, delivery retirement (observed through the public retirement outcome, not a callback), cancellation, duplicate, unknown id |
+| `contract_observer.cpp` | OBS-01..03: attachment resolution, cancellation, the public retirement query (`delivery_retired`, true only after the driver-owned delivery completes), duplicate, unknown id |
 | `contract_progress.cpp` | PROG-01..04: no-lost-wake through epoll, wake-on-submit, fd re-borrow |
 | `contract_shutdown.cpp` | SHUT-01..03: retained results survive execution close, idempotent re-shutdown |
 | `contract_durability.cpp` | SEM-06/07: request-path metadata ops, resize coverage through request sync |

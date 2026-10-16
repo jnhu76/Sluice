@@ -186,7 +186,7 @@ bool move_transfers_the_same_core(Tracker& t) {
     RequestCore* moved_core = detail::TestAccess::context_core(moved);
     CoreCaseCleanup cleanup{moved_core};
     t.check(detail::TestAccess::context_core(ctx) == nullptr, "the moved-from context holds no second core");
-    t.check(!ctx.retire_delivery(detail::TestAccess::request_id_of(id)),
+    t.check(!ctx.delivery_retired(detail::TestAccess::request_id_of(id)),
             "the moved-from context reports nothing retired without a core dereference");
     t.check(moved_core == core, "the moved-to context holds the same core object");
     if (moved_core != core)

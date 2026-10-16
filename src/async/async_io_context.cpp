@@ -809,7 +809,7 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const Reque
 
 
 
-bool AsyncIoContext::retire_delivery(RequestId id) {
+bool AsyncIoContext::delivery_retired(const RequestId& id) const {
     if (!id.valid()) {
         return false;
     }
@@ -820,7 +820,7 @@ bool AsyncIoContext::retire_delivery(RequestId id) {
     const detail::RequestKey key{detail::ContextIdentity{id.context_},
                                  detail::SlotIndex{id.slot_},
                                  detail::Generation{id.generation_}};
-    return core_->retire_observer_delivery(key) == detail::ObserverDeliveryRetirement::retired;
+    return core_->observer_retirement_acquired(key);
 }
 
 std::size_t AsyncIoContext::outstanding() const noexcept {

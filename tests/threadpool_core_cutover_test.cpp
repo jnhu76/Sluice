@@ -671,14 +671,13 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
 
     const auto pinned_slot = core.observe_slot(SlotIndex{0});
     t.check(pinned_slot.has_value() &&
-                pinned_slot->observer_phase == sluice::async::detail::ObserverPhase::delivering,
-            "the publication queued and claimed the delivery before the event");
-    const auto mid_cancel = ctx.cancel_observer(observed_id);
-    t.check(mid_cancel.in_progress(),
-            "cancelling while the delivery is claimed reports in-progress, not retired");
-    t.check(ctx.retire_delivery(attached.request), "delivery retirement acquires the registration fact");
-    t.check(!ctx.retire_delivery(attached.request),
-            "delivery retirement of an unclaimed request reports no live delivery");
+                pinned_slot->observer_phase == sluice::async::detail::ObserverPhase::retired,
+            "the delivery owner retires the registration once the hook has returned");
+    const auto post_cancel = ctx.cancel_observer(observed_id);
+    t.check(post_cancel.status == AsyncIoContext::ObserverCancelStatus::not_registered,
+            "cancelling a retired registration reports no live registration");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery while the binding is live");
 
     t.check(c.ready(), "an attach after publication observes the published result");
     t.check(ctx.attach_observer(observed_id).status ==
@@ -733,13 +732,14 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
     t.check(raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the pending publication delivers to the armed observer");
     t.check(core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot)->observer_phase ==
-                sluice::async::detail::ObserverPhase::delivering,
-            "the delivered registration stays claimed until delivery retirement");
-    t.check(ctx.retire_delivery(attached.request), "delivery retirement acquires the registration fact");
+                sluice::async::detail::ObserverPhase::retired,
+            "the delivered registration retires once the hook returns");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery");
     (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
-            "the slot reclaims after retirement and release");
+            "the slot reclaims after owner-side retirement and release");
     return true;
 }
 
@@ -790,13 +790,89 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
     t.check(raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the driven publication delivered the armed observer's key");
     t.check(core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot)->observer_phase ==
-                sluice::async::detail::ObserverPhase::delivering,
-            "the wake chain queued and claimed the delivery");
-    t.check(ctx.retire_delivery(attached.request), "delivery retirement completes the protocol");
+                sluice::async::detail::ObserverPhase::retired,
+            "the wake chain delivered and the owner retired the registration");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery");
     (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
-            "the slot reclaims after delivery retirement and release");
+            "the slot reclaims after owner-side retirement and release");
+    return true;
+}
+
+bool retirement_waits_for_the_delivery_hook_to_return(Tracker& t) {
+    auto file = open_temp_file(t, "sluice pr-b hook retirement\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate worker_gate;
+    raw->set_worker_claimed_pause_gate(&worker_gate);
+    GateGuard worker_guard{worker_gate};
+    ThreadPoolBackend::DeliveryClaimedPauseGate delivery_gate;
+    raw->set_delivery_claimed_pause_gate(&delivery_gate);
+    GateGuard delivery_guard{delivery_gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
+    wait_threadpool_gate_paused(worker_gate);
+
+    const auto attached = ctx.attach_observer(observed_id);
+    t.check(attached.armed(), "the observer arms on the outstanding request");
+
+    resume_threadpool_gate(worker_gate);
+    wait_threadpool_gate_exited(worker_gate);
+    worker_guard.rearmed = true;
+    rearm_threadpool_gate(worker_gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    std::thread driver([&] {
+        while (!c.ready())
+            (void)ctx.poll();
+    });
+
+    wait_threadpool_gate_paused(delivery_gate);
+    const auto claimed_slot = core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot);
+    t.check(claimed_slot.has_value() &&
+                claimed_slot->observer_phase == sluice::async::detail::ObserverPhase::delivering,
+            "the delivery is claimed before the hook runs");
+    t.check(raw->sink_deliveries() == 0, "the delivery hook has not run while the claim is paused");
+    t.check(ctx.cancel_observer(observed_id).in_progress(),
+            "cancelling a claimed delivery reports in-progress, not retired");
+    t.check(!ctx.delivery_retired(attached.request),
+            "retirement is not granted while the delivery hook is still running");
+
+    resume_threadpool_gate(delivery_gate);
+    wait_threadpool_gate_exited(delivery_gate);
+    delivery_guard.rearmed = true;
+    rearm_threadpool_gate(delivery_gate);
+    raw->set_delivery_claimed_pause_gate(nullptr);
+
+    driver.join();
+    bool retired = false;
+    for (int i = 0; i < 500000 && !retired; ++i) {
+        const auto slot = core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot);
+        retired = raw->sink_deliveries() == 1 && slot.has_value() &&
+                  slot->observer_phase == sluice::async::detail::ObserverPhase::retired;
+        std::this_thread::yield();
+    }
+    t.check(raw->sink_deliveries() == 1, "the hook ran exactly once for the registration");
+    t.check(retired, "the delivery owner retires once the hook has returned");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery while the binding is live");
+
+    (void)c.take_result();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after the owner-side retirement and the release");
     return true;
 }
 
@@ -905,6 +981,8 @@ int main() {
          attach_after_terminal_choice_rides_the_pending_publication},
         {"armed_delivery_survives_a_parked_progress_owner",
          armed_delivery_survives_a_parked_progress_owner},
+        {"retirement_waits_for_the_delivery_hook_to_return",
+         retirement_waits_for_the_delivery_hook_to_return},
         {"stale_identity_does_not_resolve_after_slot_reuse",
          stale_identity_does_not_resolve_after_slot_reuse},
         {"bounded_workers_execute_the_syscalls_not_the_submitter",

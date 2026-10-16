@@ -1,7 +1,8 @@
-// Clean-room micro-contract probe: observer attachment, delivery retirement
-// and cancellation through the copied RequestId identity. Delivery is
-// observed through the public retirement outcome, not a callback: an armed
-// observer's delivery has completed exactly when retire_delivery succeeds.
+// Clean-room micro-contract probe: observer attachment, cancellation and
+// the public retirement query, driven through the copied RequestId
+// identity. The terminal notification runs on the driver-owned hook; an
+// external consumer observes the terminal itself through polling and the
+// completed delivery as a retirement that already reports acquired.
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
@@ -79,9 +80,11 @@ int main() {
     }
 
     // Attach on an accepted-not-yet-published request: armed, exactly one
-    // future terminal delivery, and the delivery's completion is observable
-    // as a successful retirement; the attachment resolves atomically so a
-    // request that published first reports already_terminal instead.
+    // future terminal delivery. The driver runs and retires that delivery
+    // on the pass that publishes the terminal, so once polling observes the
+    // terminal the retirement query already reports acquired; the
+    // attachment resolves atomically so a request that published first
+    // reports already_terminal instead.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -98,16 +101,14 @@ int main() {
         if (attachment.status == AsyncIoContext::ObserverStatus::armed) {
             CHECK(attachment.armed());
             CHECK(attachment.request == request.id());
-            bool retired = ctx.retire_delivery(attachment.request);
+            bool retired = ctx.delivery_retired(attachment.request);
             for (int i = 0; i < 100 && !retired; ++i) {
                 (void)ctx.poll();
-                retired = ctx.retire_delivery(attachment.request);
+                retired = ctx.delivery_retired(attachment.request);
             }
             CHECK(retired);
-            // At most once: after a successful retirement the same delivery
-            // never reports again.
             (void)ctx.poll();
-            CHECK(!ctx.retire_delivery(attachment.request));
+            CHECK(ctx.delivery_retired(attachment.request));
         }
         CHECK(request.take_result().result.has_value());
     }
@@ -177,10 +178,10 @@ int main() {
         CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::not_found);
     }
 
-    // Binding release while a delivery remains: the result is consumed (public
-    // binding released) while the delivery bookkeeping is still retiring; the
-    // delivery cannot consume the released result and the retirement still
-    // completes.
+    // Binding release after a delivered registration: the retirement is
+    // acquired while the binding is still live, and consuming the result
+    // afterwards is legal; the released identity may stop resolving once the
+    // slot reclaims.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -194,14 +195,14 @@ int main() {
               attachment.status == AsyncIoContext::ObserverStatus::already_terminal);
         while (!request.ready())
             (void)ctx.poll();
-        CHECK(request.take_result().result.has_value());
         bool retired = false;
         for (int i = 0; i < 100 && !retired; ++i) {
-            retired = ctx.retire_delivery(attachment.request);
+            retired = ctx.delivery_retired(attachment.request);
             if (!retired)
                 (void)ctx.poll();
         }
         CHECK(retired);
+        CHECK(request.take_result().result.has_value());
     }
 
     CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());

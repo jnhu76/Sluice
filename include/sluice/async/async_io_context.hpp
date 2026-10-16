@@ -260,7 +260,12 @@ class AsyncIoContext {
 
     ObserverCancelResult cancel_observer(const RequestId& id);
 
-    bool retire_delivery(RequestId id);
+    // Retirement query: reports whether the registration's delivery
+    // retirement has been acquired. The driver retires a delivered
+    // registration once its terminal hook has returned; a cancellation
+    // retires an armed or queued one. While a delivery is in progress this
+    // reports false and the caller must retain its observer state.
+    bool delivery_retired(const RequestId& id) const;
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }
