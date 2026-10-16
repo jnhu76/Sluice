@@ -1,9 +1,11 @@
 # ADR-0002：Explicit File API 与执行架构
 
-> **Current v1 status: HISTORICAL / SUPERSEDED.**
+> **Current status: HISTORICAL / SUPERSEDED.**
 >
-> The sole normative authority for Sluice v1 is
-> [`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md).
+> The sole normative authority for Sluice is the
+> [v2 Architecture and Contract](../explicit-io-contract.md) (v2-r1). The v1
+> root that superseded this ADR is itself superseded and removed from the
+> active tree; Git history retains it.
 >
 > This ADR is retained only as historical design rationale and decision provenance.
 > Accepted File semantics are restated in SEM, ERR and LIFE requirements;
@@ -15,7 +17,7 @@
 
 - **当前状态**：Historical / Superseded for v1（原状态：Accepted / Architecture Frozen）
 - **范围**：Sluice 的文件 I/O 公共语义、API 分层与执行模型
-- **当前 v1 权威**：[`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md)
+- **当前 v1 权威**：已被 [v2 Architecture and Contract](../explicit-io-contract.md)（v2-r1）取代
 - **基线**：本 ADR 起草时为 `baa6c91ce240b0890bfb3e6c12e917ba619be700`
 - **历史上位约束（当时）**：[`0001-explicit-io-design-doctrine.md`](0001-explicit-io-design-doctrine.md) 与原 `docs/mission.md`（[归档副本](../archive/architecture/mission.md)）
 - **历史实现处置（当时）**：原 `docs/roadmap/explicit-file-conformance.md`（[归档副本](../archive/explicit-file-roadmap/explicit-file-conformance.md)）Phase A；最终架构符合性审计为 roadmap A8

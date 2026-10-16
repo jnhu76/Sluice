@@ -1,6 +1,9 @@
 # ADR-0004: E2 Shutdown State Contract and Public Spelling (#401 / #452)
 
 - **Status**: ADOPTED (merged via PR #453 at master `eb7bf055`; human final review APPROVE)
+- **Authority**: Subordinate to the [v2 Architecture and Contract](../explicit-io-contract.md)
+  (GOV-03): the state contract this ADR freezes is restated in the root's
+  section 17; this ADR derives from the root and adds no scope
 - **Parent requirements**: SHUT-01, SHUT-02, SHUT-03, SHUT-04, PROG-04,
   THREAD-01, REQ-02/REQ-05/REQ-06, BACKEND-01/BACKEND-03, OBS-02, HANDLE-03,
   BOUND-02, VERIFY-04 (V20–V23, V26)
@@ -13,8 +16,9 @@
 
 ## 1. Public spelling (context lifecycle operations)
 
-On `sluice::async::AsyncIoContext` (the v1 owning context class; the root's
-`IoContext` name maps to it until the F-phase rename):
+On `sluice::async::AsyncIoContext` (the owning context class; the root's
+conceptual `IoContext` maps to it — exact public spelling is delegated by the
+root's ADR-01):
 
 ```cpp
 enum class ShutdownPolicy : std::uint8_t {

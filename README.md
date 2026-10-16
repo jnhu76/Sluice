@@ -1,30 +1,33 @@
 # Sluice
 
-Sluice is a C++20 explicit file-I/O library, converging toward one File contract,
-explicit direct/request execution, and optional I/O control-flow hosts.
+Sluice is a C++20 explicit file-I/O library: one File contract, explicit
+direct and request execution, bounded progress, and no host runtime in the
+supported surface.
 
 [中文说明](README.zh-CN.md)
 
 ## Design authority
 
-**[Sluice v1 Architecture and Contract Reference](docs/explicit-io-v1-final-decision.md)**
-is the sole normative root for the v1 target. It defines the vocabulary, File
-semantics, invocation forms, request and observer lifetime, progress, shutdown,
-threading, resource bounds and acceptance criteria.
+**[Sluice v2 Architecture and Contract](docs/explicit-io-contract.md)**
+(revision v2-r1) is the sole normative root. It defines the vocabulary, File
+semantics, invocation forms, request and observer lifetime, progress,
+shutdown, threading, resource bounds and acceptance criteria. The former v1
+root and its ledger are superseded; Git history retains them.
 
 ADRs derive implementation choices from its requirement IDs. Code establishes
-current behavior; tests and models establish scoped evidence. None independently
-changes the target contract.
+current behavior; tests and models establish scoped evidence. None
+independently changes the target contract.
 
-- [v1 conformance ledger](docs/roadmap/v1-conformance.md) — implementation gaps,
-  phase gates and evidence; adopting the specification does not certify the code.
+- [v2 conformance ledger](docs/roadmap/v2-conformance.md) — implementation
+  state and evidence against the v2 root, with the open items and release
+  gate. Adopting the specification does not certify the code.
 - [docs/README.md](docs/README.md) — documentation map: active records versus
   `docs/archive/` historical records.
 - [AGENTS.md](AGENTS.md) — repository working rules.
-- [Interactive v1 architecture walkthrough](visuals/sluice-v1/) — derived,
-  non-normative target-contract visualization; published to GitHub Pages.
+- [Interactive v1 architecture walkthrough](visuals/sluice-v1/) — dated
+  v1-era visualization, retained for provenance; not the current contract.
 - [Current-code architecture snapshot](docs/archive/architecture/architecture.md) — dated historical
-  implementation view, not a v1 target diagram.
+  implementation view, not a v2 target diagram.
 - [Retained research conclusions](research/RESULTS.md) — rationale and evidence.
 
 The principles remain: minimal necessary semantics, clear boundaries, explicit
@@ -33,22 +36,26 @@ authority, named bounds, replaceable execution and minimum justified mechanism.
 ## Target architecture
 
 A canonical `File` owns the native resource and access facts. Shared operation
-semantics apply to direct completed-return calls, explicit outstanding requests,
-and supported host-completed calls.
+semantics apply to direct completed-return calls and explicit outstanding
+requests.
 
 Direct execution needs no request table or runtime. An explicit `IoContext`
-owns a bounded RequestCore, backend and progress source; a move-only Request
-represents outstanding responsibility. Scheduler/Fiber, when supported, is an
-optional host above that core. Backend code does not route Scheduler waiters.
+owns a bounded RequestCore, one backend and a progress source; a move-only
+Request represents outstanding responsibility. The backend seam is internal:
+v2 ships exactly the ThreadPool and io_uring backends, and user-authored
+backends are not a supported configuration. The stackful host and its
+fiber/cancel kit are outside v2 (PR B deletes them); bounded
+pipelines use the owned-driver `RequestScope` instead.
 
 Request publication, result consumption and slot reclamation are separate.
 Wait cancellation does not end a buffer borrow. Execution shutdown retains
-unconsumed results, and context destruction requires public bindings to be gone.
-See the root specification for the complete contracts and Linux v1 scope.
+unconsumed results, and context destruction requires public bindings to be
+gone. See the root specification for the complete contracts and Linux scope.
 
-The diagram below is an informative view of the adopted v1-r3 architecture. It
-mirrors `ARCH-01` / `ARCH-02` / `HOST-02` / `PROG`; if wording here ever differs
-from the root specification, the root specification wins.
+The diagram below is an informative view of the v2 architecture. It mirrors
+`ARCH-01` / `ARCH-02` / `PROG` and the owned-driver scope of the root's
+section 16; if wording here ever differs from the root specification, the
+root specification wins.
 
 ```mermaid
 flowchart TB
@@ -58,7 +65,7 @@ flowchart TB
     DIRECT["Direct adapter · 直接完成返回"]
     REQUEST["Request&lt;T&gt; · 唯一 public result / settlement responsibility"]
     SCOPE["RequestScope · W-02 owned-driver scope<br/>预分配 tracking · 持有并 settle Requests"]
-    HOST["Progress owner / Host<br/>每个 context 一个 fixed active owner · v1 无 live transfer"]
+    HOST["Progress owner / Host<br/>每个 context 一个 fixed active owner · 无 live transfer"]
     OS["Linux regular-file I/O"]
 
     subgraph CTX["IoContext · 请求执行域"]
@@ -108,15 +115,18 @@ flowchart TB
 
 The current tree contains the canonical File/blocking operations, the
 Request/AsyncIoContext request core with ThreadPool and io_uring backends,
-RequestScope for W-02, and the optional stackful-host candidate. The legacy
-multi-worker Scheduler runtime and its public synchronization surface are
-retired. Migration and evidence follow phases A–G in the root and the
-conformance ledger.
+and the RequestScope for W-02. The optional stackful-host candidate is
+outside v2 and awaits physical deletion by PR B (owner decision D1); until
+then it is uncontracted tree residue, not a retained
+option. Implementation state, open gaps and the release gate are tracked in
+the [v2 conformance ledger](docs/roadmap/v2-conformance.md); the v1
+convergence campaign (phases M/F) is completed history and binds nothing.
 
 The previous mission, ADR-0001/0002, visual companion and
 [old conformance roadmap](docs/archive/explicit-file-roadmap/explicit-file-conformance.md) are superseded
-as v1 authorities. Their earlier CLOSED/CONFORMANT claims apply only to the
-baselines and contracts they originally examined.
+historical records. Their earlier CLOSED/CONFORMANT claims apply only to the
+baselines and contracts they originally examined; the same now holds for the
+superseded v1 root and its ledger.
 
 ## Applications
 
@@ -137,7 +147,7 @@ xmake
 ```
 
 `xmake.lua` and `xmake/` define the targets that currently exist. A successful
-build is not evidence that every v1 target configuration has been implemented.
+build is not evidence that every v2 target configuration has been implemented.
 
 ## License
 

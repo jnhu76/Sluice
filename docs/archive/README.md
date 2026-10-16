@@ -8,13 +8,13 @@ They are retained for provenance and evidence only.
 They do not override:
 
 ```text
-docs/explicit-io-v1-final-decision.md     sole normative root for the v1 target
-docs/roadmap/v1-conformance.md            current implementation/evidence ledger
+docs/explicit-io-contract.md              sole normative root (v2-r1)
+docs/roadmap/v2-conformance.md            current implementation/evidence ledger
 ```
 
-No archived clause is incorporated by reference into the v1 target. If a rule
-must govern v1, it appears in the root specification. Nothing in this archive
-certifies v1 conformance, architecture ownership, or a current work item.
+No archived clause is incorporated by reference into the v2 target. If a rule
+must govern the product, it appears in the root specification. Nothing in this
+archive certifies v2 conformance, architecture ownership, or a current work item.
 Historical CLOSED/CONFORMANT/PROVED labels are scoped to the baseline and
 contract each record examined; Git history preserves the exact text and the
 decision trail for every file below.
@@ -53,7 +53,7 @@ supersession banner. They are historical rationale only.
 | `architecture/sluice-architecture.svg` | Sluice Architecture — overview diagram | ADR-0002 / mission era | historical asset | — | root ARCH-01 views + README Mermaid view |
 | `audits/code-reality-audit.md` | Code-First Architecture Reality Audit (SLUICE-CODE-FIRST-ARCHITECTURE-REALITY-AUDIT-1) | `7f5a3f59515911fabc3c41a3846b0bad3bef1688` (audit 2026-09-13) | `ARCHITECTURE_MATCH_WITH_CORRECTIVES` against ADR-0002 | issues #373 / #374 | v1 root GOV-03 (dated evidence; claims require source/scope checks) |
 | `audits/io-architecture-gap-1.md` | SLUICE-IO-ARCH-GAP-AUDIT-1 — capability/gap audit | `baa6c91ce240b0890bfb3e6c12e917ba619be700` (PR #324 era) | FROZEN, verdict `IO_ARCH_GAP_AUDIT_COMPLETE` | PR #324 chain | ADR-0002-era decisions; v1 root |
-| `explicit-file-roadmap/explicit-file-conformance.md` | Explicit File Architecture Conformance Roadmap | `d7511349990cbb3ef340e158c7816fe3296b0575` | superseded ledger (CLOSED/CONFORMANT scoped to ADR-0002) | old roadmap A1–A8 | v1 root GOV-03; `roadmap/v1-conformance.md` |
+| `explicit-file-roadmap/explicit-file-conformance.md` | Explicit File Architecture Conformance Roadmap | `d7511349990cbb3ef340e158c7816fe3296b0575` | superseded ledger (CLOSED/CONFORMANT scoped to ADR-0002) | old roadmap A1–A8 | v1 root GOV-03; then `roadmap/v1-conformance.md` (both superseded — final successor: v2 root + `roadmap/v2-conformance.md`) |
 | `explicit-file-roadmap/explicit-file-app-consumer-census.md` | Explicit File App Consumer Census | `d7511349990cbb3ef340e158c7816fe3296b0575` | census record (non-authority by its own terms) | old roadmap A2 / issue #342 | v1 root; consumer audit re-owned by #402 |
 | `explicit-file-roadmap/explicit-file-legacy-surface-audit.md` | Explicit File Legacy Surface Audit (§14 dispositions) | `ff916c37c6bab0f9a2bc7555a19bd8a2080af639` | 29 DELETE / 1 CONVERGE | issue #355 | v1 root MIG-02 / #402 |
 | `explicit-file-roadmap/explicit-file-legacy-surface-audit-final-review.md` | Final human review addendum to the legacy surface audit | same proof root; PR #368 review | `PASS_WITH_2_MINOR_CORRECTIVES` | issue #355 | v1 root MIG-02 / #402 |

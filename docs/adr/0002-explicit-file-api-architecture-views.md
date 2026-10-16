@@ -1,13 +1,15 @@
 # ADR-0002 Visual Companion — Explicit File Architecture Views
 
-> **Current v1 status: HISTORICAL / SUPERSEDED.**
+> **Current status: HISTORICAL / SUPERSEDED.**
 >
-> The sole normative authority for Sluice v1 is
-> [`docs/explicit-io-v1-final-decision.md`](../explicit-io-v1-final-decision.md).
+> The sole normative authority for Sluice is the
+> [v2 Architecture and Contract](../explicit-io-contract.md) (v2-r1). The v1
+> root that superseded this companion is itself superseded and removed from
+> the active tree; Git history retains it.
 >
 > This file is the visual companion of the superseded ADR-0002. All diagrams below
-> are historical ADR-era views. They are **not** the current v1 architecture
-> diagrams. The current v1 target architecture is defined by the root
+> are historical ADR-era views. They are **not** the current architecture
+> diagrams. The current target architecture is defined by the root
 > specification; `README.md` contains only an informative mirror of that target.
 >
 > Terms such as "normative", "frozen", "authority", "must", or "decision" in the

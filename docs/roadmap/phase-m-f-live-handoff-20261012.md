@@ -1,6 +1,6 @@
 # Phase M → Phase F live handoff index — 2026-10-12
 
-> **Status-only bookkeeping; derived/non-normative.** Source of authority is [v1-r4](../explicit-io-v1-final-decision.md) with adopted ADRs and F0/F1 gates. This index does not grant breakage, retirement, package or merge authorization, revise historical frozen evidence or certify release readiness. Historical dated M/F candidate entries remain valid records *of their time*, not the current tree.
+> **Status-only bookkeeping; derived/non-normative.** Source of authority at the time was v1-r4 (superseded; removed from the active tree, [view at `c001bb1e`](https://github.com/jnhu76/Sluice/blob/c001bb1eb21f19c045e57558e13e5487335e1e86/docs/explicit-io-v1-final-decision.md)) with adopted ADRs and F0/F1 gates; the current root is [v2](../explicit-io-contract.md). This index does not grant breakage, retirement, package or merge authorization, revise historical frozen evidence or certify release readiness. Historical dated M/F candidate entries remain valid records *of their time*, not the current tree.
 
 ## Decision completion versus code/package completion
 

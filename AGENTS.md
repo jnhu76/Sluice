@@ -1,40 +1,43 @@
 # Sluice Agent Guide
 
 This file gives repository working rules. Technical target authority is the
-[v1 Architecture and Contract Reference](docs/explicit-io-v1-final-decision.md).
+[v2 Architecture and Contract](docs/explicit-io-contract.md) (revision
+v2-r1, adopted on the merge of its adopting PR).
 
 ## Authority and reading order
 
-1. Read the root specification's relevant requirement IDs and glossary.
-2. Read the [v1 conformance ledger](docs/roadmap/v1-conformance.md) for the affected slice.
+1. Read the v2 root specification's relevant requirement IDs and glossary.
+2. Read the [v2 conformance ledger](docs/roadmap/v2-conformance.md) for the
+   affected obligation group, open items and release gate.
 3. Inspect `include/`, `src/`, `apps/`, `xmake.lua` and `xmake/` to establish current behavior.
 4. Inspect the tests/models and exact configurations supporting the affected claim.
 
-The root specifies what v1 must do. C++ establishes what a particular commit
+The root specifies what Sluice must do. C++ establishes what a particular commit
 currently does. A mismatch is a conformance gap, not permission to rewrite the
 contract from the code. ADRs derive local decisions from root requirement IDs;
 they cannot independently override product scope or public behavior.
 
-Mission/ADR-0001/ADR-0002, their old conformance roadmap and historical issues
-are rationale or dated evidence under their supersession notices. Their old
-FROZEN/CLOSED labels do not establish v1 conformance. Use Git history or archived
-assets only when a current task needs their evidence, not as automatic authority.
+The superseded v1 root, its ledger and formal evidence map, Mission/ADR-0001/
+ADR-0002, their old conformance roadmap and the Phase M/F campaign records
+are rationale or dated evidence in Git history under their supersession
+notices. Their old FROZEN/CLOSED labels do not establish v2 conformance. Use
+Git history or archived assets only when a current task needs their evidence,
+not as automatic authority.
 
 ## Engineering order
 
-1. Identify the workload, requirement IDs and current-to-target gap.
-2. If public behavior or responsibility must change beyond the root, amend the
-   root before or together with implementation; record compatibility and evidence.
-3. Add the semantic oracle, deterministic regression or protocol model needed by
-   this slice before or together with changing the code.
-4. Implement one reviewable slice while keeping retained consumers usable.
-5. Verify the affected paths and update the conformance ledger with exact evidence.
-6. Retire replaced mechanisms only after consumer/migration obligations are met.
-7. Optimize measured hotspots while preserving the same contracts.
+1. Identify the v2 workload and relevant requirement IDs.
+2. Inspect current C++ and its authority/ownership DAG.
+3. Identify the independently observable oracle and failure modes.
+4. Select the smallest mechanism or removal satisfying the contract.
+5. Implement a reviewable change with appropriate tests/models.
+6. Update the v2 Ledger with exact evidence.
+7. Independently review the change before merge.
+8. Do not introduce new compatibility or runtime authority without root amendment.
 
-Follow MIG-01's dependency order and phase gates. Do not postpone lifetime,
-publication or teardown verification until after a structural rewrite. Tests
-that merely repeat current implementation behavior are not a normative oracle.
+Do not postpone lifetime, publication or teardown verification until after a
+structural rewrite. Tests that merely repeat current implementation behavior
+are not a normative oracle.
 
 ## Testing discipline
 
@@ -96,9 +99,9 @@ weakened assertions.
 
 ## Mechanism justification
 
-For v1 convergence work, apply the Mechanism Justification Gate recorded by the
-roadmap (#390); issue #419 is the supporting audit/contraction inventory, not a
-semantic authority.
+The Mechanism Justification Gate continues under the v2 root (its derived-
+summary and mechanism-not-contract rules are root terms: TERM-01, BACKEND-04).
+The v1-era roadmap issues that hosted the gate are provenance, not authority.
 
 For every new runtime state, flag, counter, token, lease, capability probe or
 defensive guard, answer:
@@ -125,12 +128,12 @@ because another state correlates with it. Derived does not imply delete; cached
 summaries may remain useful but must stay non-authoritative semantic sources of
 truth.
 
-Every migration slice must include an authority-contraction audit: identify which
-legacy states, guards, tokens, leases, counters or capability representations
-became redundant after authority moved, and which apparently redundant mechanisms
-must remain because they protect a real legal interleaving or physical obligation.
-A slice that moves no production authority may record that no existing mechanism
-is yet eligible for removal.
+Every slice that moves production authority must include an authority-contraction
+audit: identify which legacy states, guards, tokens, leases, counters or
+capability representations became redundant after authority moved, and which
+apparently redundant mechanisms must remain because they protect a real legal
+interleaving or physical obligation. A slice that moves no production authority
+may record that no existing mechanism is yet eligible for removal.
 
 ## Evidence and documentation
 
