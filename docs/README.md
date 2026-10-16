@@ -24,8 +24,10 @@ Repository working rules              AGENTS.md
   PROPOSED successor under the root's GOV-05. It is **not adopted** and carries
   no normative force until its adopting PR merges; until then the v1 root above
   remains the sole adopted authority and the candidate must be cited as a PR
-  candidate. It is a design-drift-free replacement target, not evidence about a
-  commit, and it does not move the option to merge or close any PR.
+  candidate. It states a replacement target and the v1→v2 differences; whether
+  that target is better is a review question this map does not answer. It is
+  not evidence about a commit, and it does not move the option to merge or
+  close any PR.
 - **[v1 conformance ledger](roadmap/v1-conformance.md)** tracks which
   requirements have evidence and which do not. Adopting the target does not
   certify the code; nothing in this repository is VERIFIED without a recorded
