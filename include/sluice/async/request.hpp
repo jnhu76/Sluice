@@ -175,12 +175,6 @@ template <class T> class Request {
         : core_(core), backend_(backend), id_(id) {}
 
     void release_responsibility_() noexcept {
-#if defined(SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING)
-        core_ = nullptr;
-        backend_ = nullptr;
-        id_ = RequestId{};
-        return;
-#endif
         if (core_ == nullptr) {
             return;
         }

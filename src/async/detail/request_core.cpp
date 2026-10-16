@@ -763,6 +763,11 @@ RequestReadiness RequestBridge::consume(RequestCore* core, const RequestId& id,
 }
 
 void RequestBridge::discard(RequestCore* core, const RequestId& id) noexcept {
+#if defined(SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING)
+    (void)core;
+    (void)id;
+    return;
+#endif
     const BindingRelease released = core->discard_public_result(RequestBridge::key_of(id));
 #if defined(SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES)
     if (released == BindingRelease::stale) {
