@@ -1,9 +1,9 @@
 {
   "FORMAT": "v2-package-manifest-v1",
   "PROFILE": "v2-liburing",
-  "VERIFICATION_HEAD": "33a132d8ee459320e098243fd34e0f0f91bd67dc",
+  "VERIFICATION_HEAD": "86e74c14433a05af44d7214352019f091207e358",
   "VERIFICATION_HEAD_DIRTY": false,
-  "GENERATED_UTC": "2026-10-16T15:46:47.637882+00:00",
+  "GENERATED_UTC": "2026-10-16T16:23:14.084141+00:00",
   "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
   "ARCH": "x86_64",
   "KERNEL": "7.2.9-201.fc44.x86_64",
@@ -29,10 +29,10 @@
   ],
   "ARCHIVE_BASELINE": {
     "file": "docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-liburing-archive-baseline.json",
-    "sha256": "49408921cb03b01608d5d1bea99f7f0cbc56fd49a19bb962745792af398b0d5a",
+    "sha256": "6439cc2f6f3db98c23172bdc1bba1183be7bd6f15db4d78418b14482e0dffb0f",
     "archives": 2,
     "objects": 11,
-    "defined_symbols": 470,
+    "defined_symbols": 472,
     "external_undefined_symbols": 69
   },
   "PUBLIC_DEFINES": [],
