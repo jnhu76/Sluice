@@ -1,2 +1,0 @@
-safety-rc=0
-liveness-rc=0

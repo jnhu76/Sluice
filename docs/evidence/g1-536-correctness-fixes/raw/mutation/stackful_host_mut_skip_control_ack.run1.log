@@ -1,4 +1,0 @@
-sluice::async::StackfulIoHost: destroying the host while tasks are spawned but not retired discards suspended stacks and is a contract violation
-terminate called without an active exception
-FAIL: control-ack: no stale control reaches the next owner
-FAIL: external_control_acknowledged_before_next_owner

@@ -1,2 +1,0 @@
-FAIL: no second reservation or completion lands inside another submitter's window
-submit concurrency oracle: 1 failure(s)

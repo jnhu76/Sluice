@@ -1,4 +1,0 @@
-FAIL [attach_after_publication_returns_already_terminal] attach after publication returns the already-terminal disposition
-FAIL [attach_after_publication_returns_already_terminal] an already-terminal attach installs no registration
-FAIL [attach_after_publication_returns_already_terminal] the slot reclaims with no observer pin installed
-terminate called without an active exception

@@ -1,5 +1,0 @@
-FAIL: the settled count matches the stored payload length
-FAIL: the settled payload matches the stored bytes through the moved descriptor
-FAIL: second read accepted through the moved owner
-sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
-terminate called without an active exception

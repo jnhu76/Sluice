@@ -1,4 +1,0 @@
-FAIL [cancel_then_drain_shutdown_cancels_pending_without_fabricated_success] the pending request settles on its real kernel outcome, not a fabricated cancel terminal
-FAIL [cancel_then_drain_shutdown_cancels_pending_without_fabricated_success] the terminal stays consumable after execution close
-sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
-terminate called without an active exception

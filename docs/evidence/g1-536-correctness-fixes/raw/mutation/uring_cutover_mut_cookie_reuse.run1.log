@@ -1,6 +1,0 @@
-FAIL [stale_cookie_cannot_reach_a_reused_slot] request A consumed one monotonic cookie
-FAIL [stale_cookie_cannot_reach_a_reused_slot] the kernel cookie is never reused across requests
-FAIL [stale_cookie_cannot_reach_a_reused_slot] a stale cookie's CQE cannot affect the reused request
-FAIL [stale_cookie_cannot_reach_a_reused_slot] request B completes with its own outcome
-sluice::async::UringAsyncBackend: Class-A recovery lost identity (invariant violation)
-terminate called without an active exception

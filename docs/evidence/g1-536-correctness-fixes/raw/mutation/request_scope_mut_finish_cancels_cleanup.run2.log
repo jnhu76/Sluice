@@ -1,6 +1,0 @@
-FAIL [explicit_finish_does_not_invoke_the_cleanup_cancel] explicit finish under cancel_then_drain is a normal exit: the held operation settles naturally instead of being canceled
-FAIL [explicit_finish_does_not_invoke_the_cleanup_cancel] both accepted operations executed; the dispatch-held read was not canceled before execution
-FAIL [explicit_finish_does_not_invoke_the_cleanup_cancel] the second read's borrow acquired its publication
-sluice::async::RequestScope: progress health failed while accepted scope work remains unsettled; failing fast instead of returning with live borrows
-terminate called without an active exception
-1 of 25 request scope tests failed

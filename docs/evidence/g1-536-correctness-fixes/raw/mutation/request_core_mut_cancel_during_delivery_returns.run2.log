@@ -1,5 +1,0 @@
-FAIL [cancel_during_delivery_is_distinguishable_and_delivery_completes] cancellation during delivery reports in-progress, not retired
-FAIL [cancel_during_delivery_is_distinguishable_and_delivery_completes] the in-progress report did not retire the registration
-FAIL [cancel_during_delivery_is_distinguishable_and_delivery_completes] repeated cancellation stays in-progress
-FAIL [cancel_during_delivery_is_distinguishable_and_delivery_completes] the retained delivery completes and retires
-1 of 46 request core protocol tests failed
