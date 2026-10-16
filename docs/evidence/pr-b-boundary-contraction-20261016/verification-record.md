@@ -13,8 +13,10 @@ which carries a static sanitizer runtime. The F5-era gcc sanitizer runs
 
 ## 1. Deterministic matrix (`matrix/`)
 
-`scripts/run_pr_b_matrix.py --out matrix` (logs, per-cell `xmake.conf`,
-sha256 digests, `matrix.json`):
+Per-cell configure/build/test logs, `xmake.conf`, sha256 digests and
+`matrix.json` (which records the exact `argv` of every configure, build,
+test and app-build command — the reproduction recipe; no runner script is
+retained, matching the F5 matrix precedent):
 
 | Cell | Toolchain | Tests | Result |
 |---|---|---|---|
