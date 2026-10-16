@@ -140,7 +140,9 @@ class SeamNegativeProbeTests(unittest.TestCase):
     def test_installed_mutant_define_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             prefix = stage_installed_headers(tmp)
-            self.assertEqual(verifier.installed_mutant_define_findings(prefix), [])
+            self.assertEqual(verifier.installed_mutant_define_findings(prefix), [],
+                             "the allowlisted D1 template seams are the only "
+                             "installed mutation regions")
             installed = prefix / "include" / "sluice" / "async" / "request.hpp"
             installed.write_text(
                 installed.read_text()

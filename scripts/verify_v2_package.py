@@ -409,14 +409,27 @@ def run_seam_negative_probes(build_dir, prefix, command_log):
     return failures
 
 
+INSTALLED_MUTANT_SEAM_ALLOWLIST = {
+    "sluice/async/request_scope.hpp:SLUICE_D1_MUTANT_COMMIT_DROPS_REQUEST",
+    "sluice/async/request_scope.hpp:SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT",
+}
+
+
 def installed_mutant_define_findings(prefix):
-    """Mutation injection points belong to internal TUs; no installed header
-    may change consumer behavior through a SLUICE_*_MUTANT_* define."""
-    findings = []
+    """Mutation injection points belong to internal TUs. The two D1 seams in
+    request_scope.hpp sit inside function templates, which cannot leave the
+    header; they are pinned here as the complete set, so any new installed
+    mutation region (or a removed one) forces an explicit decision. No
+    installed non-template path carries a region."""
+    found = set()
     for rel in EXPECTED_V2_HEADERS:
         text = (prefix / "include" / rel).read_text()
-        if re.search(r"SLUICE_\w*MUTANT", text):
-            findings.append(f"{rel} carries a SLUICE_*_MUTANT_* region")
+        for macro in re.findall(r"SLUICE_\w*MUTANT\w*", text):
+            found.add(f"{rel}:{macro}")
+    findings = [f"unexpected mutation region {x}"
+                for x in sorted(found - INSTALLED_MUTANT_SEAM_ALLOWLIST)]
+    findings += [f"allowlisted mutation region missing: {x}"
+                 for x in sorted(INSTALLED_MUTANT_SEAM_ALLOWLIST - found)]
     return findings
 
 
@@ -597,9 +610,10 @@ def main():
             "installed headers read no build-profile macro: consumer TUs need "
             "no SLUICE_HAS_LIBURING define and may hold any view without "
             "layout divergence (V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT)",
-            "installed headers carry no SLUICE_*_MUTANT_* region: mutation "
-            "injection points live in internal TUs, so consumer compilation "
-            "cannot change library behavior through a define "
+            "installed mutation regions are pinned exactly: the two D1 "
+            "function-template seams in request_scope.hpp; the B2 release "
+            "path guard moved to an internal TU, and any new or removed "
+            "installed region fails "
             "(NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED)",
         ],
         "EXPECTED_EXTERNAL_WORKLOADS": P0_CONSUMERS + P1_CONSUMERS + [
