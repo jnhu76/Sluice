@@ -68,6 +68,43 @@ void operator delete[](void* p, std::size_t) noexcept {
     std::free(p);
 }
 
+// Over-aligned allocations take the aligned overloads, not the plain ones;
+// counting only the plain set would miss a container of over-aligned elements.
+void* allocate_counted_aligned(std::size_t n, std::size_t alignment) {
+    const std::size_t rounded =
+        alignment == 0 ? n : ((n + alignment - 1) / alignment) * alignment;
+    void* p = std::aligned_alloc(alignment == 0 ? 1 : alignment,
+                                 rounded == 0 ? (alignment == 0 ? 1 : alignment) : rounded);
+    if (p == nullptr)
+        throw std::bad_alloc();
+    g_allocation_events.fetch_add(1, std::memory_order_relaxed);
+    return p;
+}
+
+void* operator new(std::size_t n, std::align_val_t alignment) {
+    return allocate_counted_aligned(n, static_cast<std::size_t>(alignment));
+}
+
+void* operator new[](std::size_t n, std::align_val_t alignment) {
+    return allocate_counted_aligned(n, static_cast<std::size_t>(alignment));
+}
+
+void operator delete(void* p, std::align_val_t) noexcept {
+    std::free(p);
+}
+
+void operator delete[](void* p, std::align_val_t) noexcept {
+    std::free(p);
+}
+
+void operator delete(void* p, std::size_t, std::align_val_t) noexcept {
+    std::free(p);
+}
+
+void operator delete[](void* p, std::size_t, std::align_val_t) noexcept {
+    std::free(p);
+}
+
 #endif // !PB_ALLOC_COUNTER_DISABLED
 
 namespace {
@@ -86,6 +123,14 @@ AsyncIoContext make_pool_context(std::size_t capacity, std::size_t workers,
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{capacity, workers});
     *raw_out = backend.get();
     return AsyncIoContext(std::move(backend));
+}
+
+bool fail_at(const char* case_name, const char* what, long long got = -1, long long want = -1) {
+    if (got < 0 && want < 0)
+        std::fprintf(stderr, "%s: %s\n", case_name, what);
+    else
+        std::fprintf(stderr, "%s: %s (got %lld, want %lld)\n", case_name, what, got, want);
+    return false;
 }
 
 bool bounded_spin(const std::function<bool()>& ready) {
@@ -140,33 +185,42 @@ bool progress_pass_performs_no_dynamic_allocation() {
         (void)probe;
         return g_allocation_events.load(std::memory_order_relaxed) != before;
     };
+#if defined(PB_ALLOC_COUNTER_DISABLED)
+    std::fprintf(stderr,
+                 "case0: allocation counter disabled on this runtime (the sanitizer runtime "
+                 "defines the replaceable operators); allocation invariant not exercised\n");
+#else
     if (!counter_probe())
-        std::fprintf(stderr,
-                     "case0: allocation counter unavailable on this runtime; "
-                     "allocation invariant not exercised\n");
+        return fail_at("case0", "the allocation counter is inert although it is compiled in");
+#endif
 
     const unsigned long long before = g_allocation_events.load(std::memory_order_relaxed);
     const auto pass = ctx.poll_progress();
     const unsigned long long after = g_allocation_events.load(std::memory_order_relaxed);
 
     if (!pass.has_value())
-        return false;
+        return fail_at("case0", "progress pass reported an error");
     if (pass.value().completed != 4)
-        return false;
+        return fail_at("case0", "pass completed the wrong number of events",
+                       static_cast<long long>(pass.value().completed), 4);
     if (after != before)
-        return false;
+        return fail_at("case0", "pass allocated after accepted work was published",
+                       static_cast<long long>(after - before), 0);
     if (!read_req.value().ready())
-        return false;
+        return fail_at("case0", "the published request is not ready after the pass");
     for (const auto& r : zero_ops) {
         if (!r.ready())
-            return false;
+            return fail_at("case0", "a seeded zero-op request is not ready after the pass");
     }
     if (raw->sink_deliveries() != 4)
-        return false;
+        return fail_at("case0", "delivery count mismatch",
+                       static_cast<long long>(raw->sink_deliveries()), 4);
     read_req.value().discard();
     for (auto& r : zero_ops)
         r.discard();
-    return raw->outstanding() == 0 && raw->internal_work_retired();
+    if (raw->outstanding() != 0 || !raw->internal_work_retired())
+        return fail_at("case0", "the pass left accepted work unsettled");
+    return true;
 }
 
 // A pass must deliver exactly its entry snapshot and return: completion
@@ -246,7 +300,7 @@ bool pass_delivers_exactly_the_entry_snapshot() {
 
     const auto first = ctx.poll_progress();
     if (!first.has_value())
-        return false;
+        return fail_at("case1", "progress pass reported an error");
     // The snapshot oracle: the pass delivers the eight seeded events, not
     // the eight events its own deliveries created, and reports the residue
     // as immediate work instead of absorbing it.
@@ -259,37 +313,43 @@ bool pass_delivers_exactly_the_entry_snapshot() {
         rv.cv.notify_all();
     }
     producer.join();
+    if (first.value().completed != static_cast<std::size_t>(kSeed))
+        return fail_at("case1", "first pass absorbed events produced during its own deliveries",
+                       static_cast<long long>(first.value().completed), kSeed);
     if (!first_ok)
-        return false;
+        return fail_at("case1", "first pass reported no residual work after the entry snapshot");
 
     std::size_t total = first.value().completed;
     for (int n = 0; n < 16; ++n) {
         const auto pass = ctx.poll_progress();
         if (!pass.has_value())
-            return false;
+            return fail_at("case1", "follow-up progress pass reported an error");
         total += pass.value().completed;
         if (pass.value().completed == 0 && !pass.value().immediate_work_remains &&
             !pass.value().accepted_work_remains)
             break;
     }
     if (total != static_cast<std::size_t>(kSeed + kProduced))
-        return false;
+        return fail_at("case1", "follow-up passes did not deliver the deferred events",
+                       static_cast<long long>(total), kSeed + kProduced);
     for (const auto& r : seeded) {
         if (!r.ready())
-            return false;
+            return fail_at("case1", "a seeded request is not ready after the passes");
     }
     for (const auto& r : sink.produced_requests) {
         if (!r.ready())
-            return false;
+            return fail_at("case1", "a produced request is not ready after the passes");
     }
     if (raw->outstanding() != 0 || !raw->internal_work_retired())
-        return false;
+        return fail_at("case1", "the passes left accepted work unsettled");
 
     for (auto& r : seeded)
         r.discard();
     for (auto& r : sink.produced_requests)
         r.discard();
-    return raw->outstanding() == 0;
+    if (raw->outstanding() != 0)
+        return fail_at("case1", "a discarded request left the backend occupied");
+    return true;
 }
 
 } // namespace
