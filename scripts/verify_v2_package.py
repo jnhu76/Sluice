@@ -753,6 +753,13 @@ def main():
     command_log_path.write_text("\n".join(command_log) + "\n")
     print(f"consumer build command log: {command_log_path}")
 
+    # Gate verdicts belong in the manifest: the manifest is written before
+    # the negative probes and the firewall, so without this final rewrite its
+    # existence would not imply any of those gates ran.
+    manifest["GATES"] = [{"name": name, "ok": ok, "detail": detail}
+                         for name, ok, detail in results]
+    manifest_out.write_text(json.dumps(manifest, indent=2) + "\n")
+
     print("\n== v2 package gate summary ==")
     for name, ok, detail in results:
         print(f"  {'PASS' if ok else 'FAIL'}  {name}")

@@ -114,9 +114,10 @@ int main() {
     }
 
     // Cancel registration before publication: delivery is suppressed and the
-    // registration retires. A delivery already claimed stays in progress
-    // until the driver finishes it; the caller then acquires retirement by
-    // re-cancelling.
+    // cancellation retires the registration. A delivery already claimed
+    // stays in progress; the delivery owner then retires it, which the
+    // retirement query reports once the request is terminal. Both outcomes
+    // end in a retired registration while the binding is still live.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -128,21 +129,22 @@ int main() {
         const auto attachment = ctx.attach_observer(request.id());
         CHECK(attachment.status == AsyncIoContext::ObserverStatus::armed ||
               attachment.status == AsyncIoContext::ObserverStatus::already_terminal);
-        auto cancelled = ctx.cancel_observer(request.id());
-        CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::retired ||
-              cancelled.status == AsyncIoContext::ObserverCancelStatus::delivery_in_progress);
+        const auto cancelled = ctx.cancel_observer(request.id());
         CHECK(cancelled.request == request.id());
-        for (int i = 0;
-             i < 100 && cancelled.status == AsyncIoContext::ObserverCancelStatus::delivery_in_progress;
-             ++i) {
-            (void)ctx.poll();
-            const auto retry = ctx.cancel_observer(request.id());
-            if (retry.status == AsyncIoContext::ObserverCancelStatus::retired)
-                cancelled.status = retry.status;
+        if (attachment.status == AsyncIoContext::ObserverStatus::armed) {
+            CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::retired ||
+                  cancelled.status == AsyncIoContext::ObserverCancelStatus::delivery_in_progress);
+        } else {
+            CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::not_registered);
         }
-        CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::retired);
         while (!request.ready())
             (void)ctx.poll();
+        bool retired = ctx.delivery_retired(request.id());
+        for (int i = 0; i < 100 && !retired; ++i) {
+            (void)ctx.poll();
+            retired = ctx.delivery_retired(request.id());
+        }
+        CHECK(retired);
         CHECK(request.take_result().result.has_value());
     }
 

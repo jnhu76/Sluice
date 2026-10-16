@@ -1,1 +1,6 @@
+# Config: gcc release profile (xmake -m release --liburing=y), direct binary invocation
+#   xmake build -y public_request_mut_nonterminal_release_detaches
+#   ./build/linux/x86_64/release/public_request_mut_nonterminal_release_detaches
+# Recorded at the review-fix head.
+
 FAIL [destroy_nonterminal_request] the always-on diagnostic did not terminate

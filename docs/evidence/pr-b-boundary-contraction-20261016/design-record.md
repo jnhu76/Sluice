@@ -97,7 +97,7 @@ progress_source, ready_sink, reference_ready_sink, request_core, request_key}.hp
 | `detail::RequestCore` + `detail::IoOutcome` via `request.hpp` | inline `Request<T>` ops | Out-of-line non-template bridge functions declared in `request.hpp` (public vocabulary signatures only), defined in `src/async/detail/request_core.cpp`; B2 release-edge mutants move with the logic, same kill oracles |
 | `detail::ProgressSource` nested types (context test seams) | progress race/loop tests | Removed from installed header; internal `detail/TestAccess` hooks header |
 | `set_ready_sink(detail::SynchronousReadySink*)` | 2 internal tests + 1 package consumer | Removed from public API (no public callback framework under v2); internal `TestAccess` hook; package consumer keeps the OBS-01..03 oracle without the sink |
-| observer `detail::*` enums/keys in `ObserverAttachment`/`ObserverCancelResult`/`retire_delivery` | 5 test files + 1 package consumer | Public `ObserverStatus`/`ObserverCancelStatus` enums + `RequestId`-based struct/method signatures; library maps 1:1 |
+| observer `detail::*` enums/keys in `ObserverAttachment`/`ObserverCancelResult` | 5 test files + 1 package consumer | Public `ObserverStatus`/`ObserverCancelStatus` enums + `RequestId`-based struct/method signatures; library maps 1:1. The public retirement form is the query `delivery_retired` (final surface; the pre-review-fix acquisition spelling `retire_delivery` is superseded by the review-fix record) |
 
 ## 4. Retained consumer migration table (summary)
 

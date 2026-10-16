@@ -55,9 +55,10 @@ claimed here.
 
 ## 2. Clean-room v2 package verification
 
-`scripts/verify_v2_package.py`, both profiles, all 49 gates PASS at the
-review-fix head; manifests and archive/object/symbol baselines recorded
-next to this file:
+`scripts/verify_v2_package.py`, both profiles, every gate PASS at the
+review-fix head (24 gates per profile run); manifests and
+archive/object/symbol baselines recorded next to this file, with the
+manifest now rewritten after the last gate so it records every verdict:
 
 - `v2-package-manifest-noliburing.json` — 11-header exact-set prefix,
   11/11 sole-include compiles, workloads and micro-contracts on the public
@@ -162,12 +163,37 @@ review-fix head.
 
 | Finding | Fix | Evidence |
 |---|---|---|
-| P1: the observer retirement authority sat with whichever caller reached the core; `retire_delivery` granted `delivering → retired` while the pipeline hook was still on the stack, and a delivered registration pinned its slot forever without a public acquire call | Delivery owner retires after its hook returns in both backends; the public surface only queries (`delivery_retired`); `RequestCore::observer_retirement_acquired` is a read of the existing phase authority | RED counterexample at `e34965a5` on the delivery-claimed pause gate (`review-fix/observer-retirement-red.log`: mid-hook retirement granted, post-completion query false); fix commit `b3de9262`; GREEN seam suites (`threadpool_core_cutover_test` 17/17 incl. the new interleaving: query false mid-hook, cancellation in-progress, hook-runs-once, owner-side retirement, slot reclaims with no public acquire); 74/74 full group (liburing=y) |
+| P1: the observer retirement authority sat with whichever caller reached the core; `retire_delivery` granted `delivering → retired` while the pipeline hook was still on the stack, and a delivered registration pinned its slot forever without a public acquire call | Delivery owner retires after its hook returns in both backends; the public surface only queries (`delivery_retired`); `RequestCore::observer_retirement_acquired` is a read of the existing phase authority | RED counterexample at `e34965a5` on the delivery-claimed pause gate (`review-fix/observer-retirement-red.log`: mid-hook retirement granted, post-completion query false); fix commit `b3de9262`; GREEN seam suites (`threadpool_core_cutover_test` 17/17 incl. the new interleaving: query false while the delivery is claimed and the hook has not run, cancellation in-progress, hook-runs-once, owner-side retirement, slot reclaims with no public acquire; log captured in `review-fix/cutover-17-of-17.log`); 74/74 full group (liburing=y) |
 | P1: the seam negative probes hand-wrote an incomplete `AsyncBackend` and any nonzero exit counted as the expected failure, so the gate could not detect a re-exposed backend | Probes include the real installed headers and pin diagnostics (`incomplete type`, `private`); the missing-file probes pin theirs; the gate is extracted for mutation self-testing | Commit `d8c57cd5`; self-tests compile a mutated staged install: re-exposing the backend definition fails the gate because the probe compiles, and a diagnostic mismatch is rejected (14 tests total) |
 | P2: each P1 consumer ran twice (gate decided by one run, return code echoed from another) | Single execution with the return code captured for both the gate and the recorded detail | Commit `47a58e87` |
 | P2: `SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING` lived in installed `request.hpp`, so a consumer define changed Request destruction | Mutation moved to `detail::RequestBridge::discard` in `request_core.cpp`; the mutant skip keeps the same externally observable failure | Commit `3bace3d4`; both release mutants re-killed with refreshed logs. The verifier now pins the complete installed mutation-region set (`NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED`, commit `51dc830f`), whose first run surfaced the two D1 template seams still in `request_scope.hpp` |
 
 Re-verification at the fix head: full 8-cell matrix rerun (§1), both
-package profiles re-verified with 49 gates (§2), the observer model
+package profiles re-verified with all 24 gates passing (§2), the observer model
 correspondence restated (§4), the moved B2 mutants re-killed (§3), and the
 RED counterexample retained as the regression's origin record.
+
+### Independent review (round 2) dispositions
+
+Two independent subagent reviews of the fix range (`e34965a5..21b09ec9`)
+returned APPROVE-WITH-NITS with no critical findings and no counterexample
+interleaving in non-mutant builds; their actionable findings are applied:
+
+- The `delivery_retired` contract now states its precondition (query while
+  the binding is retained; after reclaim the identity stops resolving) —
+  the conservative direction of error is retained (never premature release).
+- The package consumer's cancel-retirement idiom no longer re-cancels for
+  an already-retired registration: it asserts the cancel disposition and
+  waits for the retirement query, and the already-terminal attach branch
+  expects `not_registered` from a cancel with no registration.
+- The `RequestCore` retirement query is `const` like its sibling queries.
+- Evidence honesty: the gate count is stated per profile (24, manifests
+  now recording every verdict), the RED log carries its reproduction recipe
+  (worktree at `e34965a5` plus the scenario spelling the pre-fix API), the
+  cutover 17/17 run is captured (`review-fix/cutover-17-of-17.log`), the
+  mutant kill logs carry their configuration and command, and the
+  interleaving wording states the observed window (delivery claimed, hook
+  not yet run) rather than "mid-hook".
+- Authority contraction (AGENTS mechanism gate): the dead
+  `retire_delivered_episodes` sweep removed; the shutdown settlement keeps
+  its owed-delivery drain and registration-convergence obligation.

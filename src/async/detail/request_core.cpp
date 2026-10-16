@@ -100,22 +100,6 @@ void RequestCore::collect_outstanding(std::vector<RequestKey>& out) const noexce
     }
 }
 
-std::size_t RequestCore::retire_delivered_episodes() noexcept {
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::size_t retired = 0;
-    for (std::size_t i = 0; i < slots_.size(); ++i) {
-        Slot& slot = slots_[i];
-        if (slot.phase != SlotPhase::accepted ||
-            slot.observer_phase != ObserverPhase::delivering) {
-            continue;
-        }
-        slot.observer_phase = ObserverPhase::retired;
-        try_reclaim_(slot, i);
-        ++retired;
-    }
-    return retired;
-}
-
 RequestCore::Slot* RequestCore::resolve_reserved_(RequestReservation reservation) noexcept {
     if (reservation.slot.value >= capacity_)
         return nullptr;
@@ -595,9 +579,9 @@ ObserverDeliveryRetirement RequestCore::retire_observer_delivery(RequestKey id) 
     return ObserverDeliveryRetirement::retired;
 }
 
-bool RequestCore::observer_retirement_acquired(RequestKey id) noexcept {
+bool RequestCore::observer_retirement_acquired(RequestKey id) const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
-    Slot* slot = resolve_internal_(id);
+    const Slot* slot = resolve_internal_(id);
     return slot != nullptr && slot->observer_phase == ObserverPhase::retired;
 }
 

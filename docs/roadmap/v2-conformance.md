@@ -117,7 +117,7 @@ correspondence-before record), and production evidence lives in G1–G7 rows.
 | Appendix B install surface (D2) | `xmake/libraries.lua` | 11 installed public headers (precise allowlist for both targets) | 11 installed public headers | **VERIFIED (PR B)** | Allowlist in `xmake/libraries.lua` at PR B head; clean-room exact-set prefix gate + sole-include compiles in `docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-{noliburing,liburing}.json` (all gates PASS, both profiles) | — | — |
 | Host bundle removal (D1, §16) | deleted: `src/async/{stackful_io_host,fiber,fiber_ctx,cancel}.cpp`, 4 public headers, host test + w04 consumer + F4 probe | Bundle physically deleted; no dormant retention; core-only build unaffected | Physically deleted, core-only build unaffected | **VERIFIED (PR B)** | Commit `7d97e010` (bundle + exclusive consumers); archive members 13→9; full matrix green both profiles (8 cells, `verification-record.md` §1); deleted-header absence asserted by the package verifier negative probe | — | — |
 | Internal-type leakage / `AsyncBackend` seam (D2, BACKEND-01) | `include/sluice/async/detail/{async_backend,threadpool_backend,uring_backend,test_access}.hpp` (uninstalled) | Backend classes, seam and test hooks internal; public factories `make_threadpool_context` / `make_uring_context` (`Result`, `not_supported`); observer vocabulary on public enums; `AsyncIoContext(unique_ptr<AsyncBackend>)` gone | No public extension protocol; selection explicit without constructing internal backend objects or including detail headers | **VERIFIED (PR B)** | Commits `d0a3a52e`/`f873ba23`; negative seam probes reworked at the review fix to compile the REAL installed headers with pinned diagnostics (commit `d8c57cd5`), mutation self-tested (an installed header re-exposing the backend definition fails the gate); macro-view-independent ODR probe in both package manifests; design record `docs/evidence/pr-b-boundary-contraction-20261016/design-record.md` | — | — |
-| Installed-consumer compile/link under target surface (VERIFY-01 build row) | package rules (`scripts/verify_v2_package.py`) | Clean-room consumers on the 11-header surface: core-only P0, async workloads + micro-contracts, both profiles; each consumer executed once (review fix, commit `47a58e87`) | Standalone consumer compile/link incl. core-only on the contracted surface | **VERIFIED (PR B)** | `v2-package-manifest-{noliburing,liburing}.json` all 49 gates PASS at the review-fix head; verifier behavior self-tested (`scripts/test_verify_v2_package.py`, 14 tests); clean-room firewall gates over the recorded command stream | — | — |
+| Installed-consumer compile/link under target surface (VERIFY-01 build row) | package rules (`scripts/verify_v2_package.py`) | Clean-room consumers on the 11-header surface: core-only P0, async workloads + micro-contracts, both profiles; each consumer executed once (review fix, commit `47a58e87`) | Standalone consumer compile/link incl. core-only on the contracted surface | **VERIFIED (PR B)** | `v2-package-manifest-{noliburing,liburing}.json` every gate PASS at the review-fix head (24 per profile; the manifest records every verdict); verifier behavior self-tested (`scripts/test_verify_v2_package.py`, 14 tests); clean-room firewall gates over the recorded command stream | — | — |
 
 ### G10 External event loop W-03 and release acceptance
 
@@ -182,10 +182,15 @@ are recorded in the verification record §6:
 
 - Observer retirement authority moved to the delivery owner
   (`b3de9262`): both backends retire after their hook returns, the public
-  form is the retirement query `delivery_retired`, and the G4 OBS row
-  above is re-based with the RED→GREEN interleaving oracle. This is a
-  correspondence restoration, not a representation change: the C++ now
-  executes `ObserverCore.ProcessDelivery`'s edge by the modeled owner.
+  form is the retirement query `delivery_retired` (authoritative while the
+  Request binding is retained), and the G4 OBS row above is re-based with
+  the RED→GREEN interleaving oracle. This is a correspondence restoration,
+  not a representation change: the C++ now executes
+  `ObserverCore.ProcessDelivery`'s edge by the modeled owner. Authority
+  contraction: the shutdown delivering-phase sweep
+  (`RequestCore::retire_delivered_episodes`) became unreachable and was
+  removed with the slice; settlement keeps its owed-delivery drain and
+  registration convergence.
 - Package verifier hardened (`d8c57cd5`, `47a58e87`, `51dc830f`): seam
   negatives compile the real installed headers with pinned diagnostics
   and are mutation self-tested; each consumer runs once; the installed

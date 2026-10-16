@@ -497,7 +497,6 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
         }
         const detail::ProgressSource::Token token = progress_->snapshot();
         const ProgressPass pass = run_progress_pass_();
-        (void)core_->retire_delivered_episodes();
 
         if (settlement_converged_()) {
 #if defined(SLUICE_E2_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
