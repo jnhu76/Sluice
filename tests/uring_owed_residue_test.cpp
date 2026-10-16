@@ -98,8 +98,9 @@ bool drive_until_delivered(OwedResidueFixture& fx, std::size_t& delivered) {
     DriverClaim claim{fx.ctx};
     for (int i = 0; i < 2000 && fx.raw->sink_deliveries() == 0; ++i) {
         const auto pass = fx.ctx.poll_progress();
-        if (pass.has_value())
-            delivered += pass.value().completed;
+        if (!pass.has_value())
+            return false;
+        delivered += pass.value().completed;
         if (fx.raw->sink_deliveries() == 0)
             std::this_thread::sleep_for(std::chrono::microseconds(200));
     }
