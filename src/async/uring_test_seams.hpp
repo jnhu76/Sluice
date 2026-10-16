@@ -52,6 +52,12 @@ struct UringAsyncBackend::PublicationEpiloguePauseGate {
     std::atomic<bool> exited{true};
 };
 
+struct UringAsyncBackend::DeliverySweepEpiloguePauseGate {
+    std::atomic<bool> paused{false};
+    std::atomic<bool> resume{false};
+    std::atomic<bool> exited{true};
+};
+
 struct UringAsyncBackend::DispatchFailureInjection {
     std::atomic<bool> armed{false};
     std::atomic<std::size_t> fired{0};
@@ -120,6 +126,11 @@ UringAsyncBackend::set_accepted_pre_dispatch_pause_gate(AcceptedPreDispatchPause
 inline void
 UringAsyncBackend::set_publication_epilogue_pause_gate(PublicationEpiloguePauseGate* gate) noexcept {
     publication_epilogue_gate_.store(gate, std::memory_order_release);
+}
+
+inline void UringAsyncBackend::set_delivery_sweep_epilogue_pause_gate(
+    DeliverySweepEpiloguePauseGate* gate) noexcept {
+    delivery_sweep_epilogue_gate_.store(gate, std::memory_order_release);
 }
 
 inline void
