@@ -1,5 +1,8 @@
-// Clean-room micro-contract probe: observer attachment, delivery and
-// cancellation through the copied RequestId identity.
+// Clean-room micro-contract probe: observer attachment, delivery retirement
+// and cancellation through the copied RequestId identity. Delivery is
+// observed through the public retirement outcome, not a callback: an armed
+// observer's delivery has completed exactly when retire_delivery succeeds.
+#include <sluice/async/async_io_context.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
@@ -26,7 +29,7 @@ int g_failures = 0;
     } while (0)
 
 std::string make_temp_path() {
-    char path[] = "/tmp/sluice_f1_cobs_XXXXXX";
+    char path[] = "/tmp/sluice_v2_cobs_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -40,13 +43,6 @@ sluice::FileOpen create_read_write() {
     mode.existence = sluice::FileExistence::create_if_missing;
     return mode;
 }
-
-struct RecordingSink : sluice::async::detail::SynchronousReadySink {
-    std::vector<sluice::async::detail::ReadyEvent> events;
-    void on_ready(sluice::async::detail::ReadyEvent event) noexcept override {
-        events.push_back(event);
-    }
-};
 
 } // namespace
 
@@ -63,32 +59,29 @@ int main() {
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-    AsyncIoContext ctx(
-        std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                              .worker_count = 1}));
-    RecordingSink sink;
-    ctx.set_ready_sink(&sink);
+    AsyncIoContext ctx = make_threadpool_context(
+        ThreadPoolConfig{.request_capacity = 4, .worker_count = 1});
 
     // Terminal before attach: the attachment resolves atomically as
-    // already-terminal; the notification is never lost.
+    // already_terminal; the notification is never lost.
     {
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
                                                 .dst = nullptr,
                                                 .len = 0,
                                                 .offset = 0});
         CHECK(submitted.has_value());
-        Request<std::size_t> request = std::move(submitted.value());
+        Request<std::size_t> request = std::move(submitted).value();
         while (!request.ready())
             (void)ctx.poll();
         const auto attachment = ctx.attach_observer(request.id());
-        CHECK(attachment.status == sluice::async::detail::ObserverRegistration::already_terminal);
+        CHECK(attachment.status == AsyncIoContext::ObserverStatus::already_terminal);
         CHECK(request.take_result().result.has_value());
     }
 
     // Attach on an accepted-not-yet-published request: armed, exactly one
-    // future terminal event, delivered by the driver's progress pass; the
-    // attachment resolves atomically so a request that published first
-    // reports already-terminal instead.
+    // future terminal delivery, and the delivery's completion is observable
+    // as a successful retirement; the attachment resolves atomically so a
+    // request that published first reports already_terminal instead.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -96,33 +89,33 @@ int main() {
                                                 .len = buf.size(),
                                                 .offset = 0});
         CHECK(submitted.has_value());
-        Request<std::size_t> request = std::move(submitted.value());
+        Request<std::size_t> request = std::move(submitted).value();
         const auto attachment = ctx.attach_observer(request.id());
-        CHECK(attachment.status == sluice::async::detail::ObserverRegistration::armed ||
-              attachment.status ==
-                  sluice::async::detail::ObserverRegistration::already_terminal);
-        const std::size_t events_before = sink.events.size();
+        CHECK(attachment.status == AsyncIoContext::ObserverStatus::armed ||
+              attachment.status == AsyncIoContext::ObserverStatus::already_terminal);
         while (!request.ready())
             (void)ctx.poll();
-        if (attachment.status == sluice::async::detail::ObserverRegistration::armed) {
-            // Delivery rides the driver's progress pass; it may already have
-            // fired in the pass that published the terminal.
-            bool delivered = sink.events.size() > events_before;
-            for (int i = 0; i < 100 && !delivered; ++i) {
+        if (attachment.status == AsyncIoContext::ObserverStatus::armed) {
+            CHECK(attachment.armed());
+            CHECK(attachment.request == request.id());
+            bool retired = ctx.retire_delivery(attachment.request);
+            for (int i = 0; i < 100 && !retired; ++i) {
                 (void)ctx.poll();
-                delivered = sink.events.size() > events_before;
+                retired = ctx.retire_delivery(attachment.request);
             }
-            CHECK(delivered);
-            const auto retirement = ctx.retire_delivery(attachment.key);
-            CHECK(retirement);
+            CHECK(retired);
+            // At most once: after a successful retirement the same delivery
+            // never reports again.
+            (void)ctx.poll();
+            CHECK(!ctx.retire_delivery(attachment.request));
         }
         CHECK(request.take_result().result.has_value());
     }
 
     // Cancel registration before publication: delivery is suppressed and the
-    // registration retires. A delivery already claimed stays
-    // in progress until the driver finishes it; the caller then acquires
-    // retirement by re-cancelling.
+    // registration retires. A delivery already claimed stays in progress
+    // until the driver finishes it; the caller then acquires retirement by
+    // re-cancelling.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -130,31 +123,30 @@ int main() {
                                                 .len = buf.size(),
                                                 .offset = 0});
         CHECK(submitted.has_value());
-        Request<std::size_t> request = std::move(submitted.value());
+        Request<std::size_t> request = std::move(submitted).value();
         const auto attachment = ctx.attach_observer(request.id());
-        CHECK(attachment.status == sluice::async::detail::ObserverRegistration::armed ||
-              attachment.status ==
-                  sluice::async::detail::ObserverRegistration::already_terminal);
+        CHECK(attachment.status == AsyncIoContext::ObserverStatus::armed ||
+              attachment.status == AsyncIoContext::ObserverStatus::already_terminal);
         auto cancelled = ctx.cancel_observer(request.id());
-        CHECK(cancelled.status == sluice::async::detail::ObserverCancellation::retired ||
-              cancelled.status ==
-                  sluice::async::detail::ObserverCancellation::delivery_in_progress);
+        CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::retired ||
+              cancelled.status == AsyncIoContext::ObserverCancelStatus::delivery_in_progress);
+        CHECK(cancelled.request == request.id());
         for (int i = 0;
-             i < 100 &&
-             cancelled.status == sluice::async::detail::ObserverCancellation::delivery_in_progress;
+             i < 100 && cancelled.status == AsyncIoContext::ObserverCancelStatus::delivery_in_progress;
              ++i) {
             (void)ctx.poll();
             const auto retry = ctx.cancel_observer(request.id());
-            if (retry.status == sluice::async::detail::ObserverCancellation::retired)
+            if (retry.status == AsyncIoContext::ObserverCancelStatus::retired)
                 cancelled.status = retry.status;
         }
+        CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::retired);
         while (!request.ready())
             (void)ctx.poll();
         CHECK(request.take_result().result.has_value());
     }
 
     // One registration per request: a second attachment reports duplicate
-    // occupied disposition.
+    // disposition.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -162,23 +154,33 @@ int main() {
                                                 .len = buf.size(),
                                                 .offset = 0});
         CHECK(submitted.has_value());
-        Request<std::size_t> request = std::move(submitted.value());
-        auto first = ctx.attach_observer(request.id());
-        auto second = ctx.attach_observer(request.id());
-        CHECK(first.status == sluice::async::detail::ObserverRegistration::armed ||
-              first.status ==
-                  sluice::async::detail::ObserverRegistration::already_terminal);
-        CHECK(second.status == sluice::async::detail::ObserverRegistration::duplicate);
+        Request<std::size_t> request = std::move(submitted).value();
+        const auto first = ctx.attach_observer(request.id());
+        const auto second = ctx.attach_observer(request.id());
+        CHECK(first.status == AsyncIoContext::ObserverStatus::armed ||
+              first.status == AsyncIoContext::ObserverStatus::already_terminal);
+        CHECK(second.status == AsyncIoContext::ObserverStatus::duplicate);
+        CHECK(!second.armed());
         (void)ctx.cancel_observer(request.id());
         while (!request.ready())
             (void)ctx.poll();
         CHECK(request.take_result().result.has_value());
     }
 
+    // Unknown identity: an id that was never registered (or already retired)
+    // reports not_found without disturbing live registrations.
+    {
+        RequestId unknown{};
+        const auto attachment = ctx.attach_observer(unknown);
+        CHECK(attachment.status == AsyncIoContext::ObserverStatus::not_found);
+        const auto cancelled = ctx.cancel_observer(unknown);
+        CHECK(cancelled.status == AsyncIoContext::ObserverCancelStatus::not_found);
+    }
+
     // Binding release while a delivery remains: the result is consumed (public
     // binding released) while the delivery bookkeeping is still retiring; the
-    // delivery cannot consume the released result and the state stays
-    // queryable until retired.
+    // delivery cannot consume the released result and the retirement still
+    // completes.
     {
         std::vector<std::byte> buf(4, std::byte{0});
         auto submitted = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
@@ -186,19 +188,22 @@ int main() {
                                                 .len = buf.size(),
                                                 .offset = 0});
         CHECK(submitted.has_value());
-        Request<std::size_t> request = std::move(submitted.value());
+        Request<std::size_t> request = std::move(submitted).value();
         const auto attachment = ctx.attach_observer(request.id());
-        CHECK(attachment.status == sluice::async::detail::ObserverRegistration::armed ||
-              attachment.status ==
-                  sluice::async::detail::ObserverRegistration::already_terminal);
+        CHECK(attachment.status == AsyncIoContext::ObserverStatus::armed ||
+              attachment.status == AsyncIoContext::ObserverStatus::already_terminal);
         while (!request.ready())
             (void)ctx.poll();
         CHECK(request.take_result().result.has_value());
-        for (int i = 0; i < 100 && !ctx.retire_delivery(attachment.key); ++i)
-            (void)ctx.poll();
+        bool retired = false;
+        for (int i = 0; i < 100 && !retired; ++i) {
+            retired = ctx.retire_delivery(attachment.request);
+            if (!retired)
+                (void)ctx.poll();
+        }
+        CHECK(retired);
     }
 
-    ctx.set_ready_sink(nullptr);
     CHECK(ctx.shutdown(ShutdownPolicy::drain).has_value());
     file.close();
     ::unlink(path.c_str());

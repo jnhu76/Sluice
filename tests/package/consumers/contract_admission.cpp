@@ -56,9 +56,9 @@ int main() {
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-    AsyncIoContext ctx(
-        std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 2,
-                                                              .worker_count = 1}));
+    AsyncIoContext ctx = make_threadpool_context(
+        ThreadPoolConfig{.request_capacity = 2,
+        .worker_count = 1});
 
     // Invalid resource (negative fd): rejected at submission, no retained
     // borrow, no background effect.
@@ -85,6 +85,7 @@ int main() {
                                           .src = bytes.data(),
                                           .len = bytes.size(),
                                           .offset = 0});
+
         CHECK(!r.has_value());
         CHECK(r.error().code == IoError::Code::invalid_argument);
         CHECK(ctx.outstanding() == 0);

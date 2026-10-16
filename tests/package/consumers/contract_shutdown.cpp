@@ -58,9 +58,9 @@ int main() {
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-    AsyncIoContext ctx(
-        std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                              .worker_count = 1}));
+    AsyncIoContext ctx = make_threadpool_context(
+        ThreadPoolConfig{.request_capacity = 4,
+        .worker_count = 1});
 
     // Ready-but-unconsumed results survive execution close.
     std::vector<std::byte> buf(payload.size(), std::byte{0});
@@ -68,6 +68,7 @@ int main() {
                                     .dst = buf.data(),
                                     .len = buf.size(),
                                     .offset = 0});
+
     CHECK(r.has_value());
     while (!r.value().ready())
         (void)ctx.poll();
@@ -96,9 +97,9 @@ int main() {
     // Driving shutdown refuses while a host notification interest is live;
     // after the ordered detach the same call completes.
     {
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         auto owner = ctx.claim_progress_owner();
         CHECK(owner.has_value());
         const int borrowed = ctx.progress_notification_fd();

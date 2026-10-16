@@ -2,7 +2,10 @@
 // application owns the loop and the progress owner, integrates the context's
 // pollable notification fd through epoll, submits and reaps bounded work,
 // handles interruption, and shuts down without Scheduler/Fiber or busy polling.
+// Backend selection goes through the named factories only: an unavailable
+// io_uring profile is the explicit not_supported outcome, never a fallback.
 // Usage: w03_external_loop <threadpool|uring>
+#include <sluice/async/async_io_context.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/async/uring_backend.hpp>
 #include <sluice/blocking/file.hpp>
@@ -11,7 +14,9 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <string>
 #include <thread>
 #include <vector>
@@ -62,28 +67,6 @@ int main(int argc, char** argv) {
     }
     const bool want_uring = std::strcmp(argv[1], "uring") == 0;
 
-    std::unique_ptr<AsyncBackend> backend;
-    if (want_uring) {
-#if defined(SLUICE_HAS_LIBURING)
-        try {
-            backend = std::make_unique<UringAsyncBackend>(64u);
-        } catch (const std::exception& error) {
-            // Explicit unavailable outcome: constructing the named backend
-            // fails loudly; nothing silently falls back to ThreadPool.
-            std::printf("w03_uring: UNAVAILABLE (%s)\n", error.what());
-            return EXIT_UNAVAILABLE;
-        }
-#else
-        // Without the liburing profile the installed shell is abstract: the
-        // named backend is not constructible from any external TU.
-        std::printf("w03_uring: UNAVAILABLE (io_uring profile not built into this package)\n");
-        return EXIT_UNAVAILABLE;
-#endif
-    } else {
-        backend = std::make_unique<ThreadPoolBackend>(
-            ThreadPoolConfig{.request_capacity = 8, .worker_count = 2});
-    }
-
     const std::string path = make_temp_path();
     auto opened = File::open(path, create_read_write());
     CHECK(opened.has_value());
@@ -93,7 +76,25 @@ int main(int argc, char** argv) {
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = [&]() -> AsyncIoContext {
+        if (!want_uring)
+            return make_threadpool_context(
+                ThreadPoolConfig{.request_capacity = 8, .worker_count = 2});
+        try {
+            auto selected =
+                make_uring_context(UringConfig{.request_capacity = 8, .queue_depth = 64});
+            if (selected.has_value())
+                return std::move(selected).value();
+        } catch (const std::exception& error) {
+            // Explicit runtime unavailability: ring setup fails loudly;
+            // nothing silently falls back to ThreadPool.
+            std::printf("w03_uring: UNAVAILABLE (%s)\n", error.what());
+            std::exit(EXIT_UNAVAILABLE);
+        }
+        // Explicit profile absence: the factory reports not_supported.
+        std::printf("w03_uring: UNAVAILABLE (io_uring profile not built into this package)\n");
+        std::exit(EXIT_UNAVAILABLE);
+    }();
 
     // The host registers the borrowed notification fd with its own epoll loop.
     const int epoll_fd = ::epoll_create1(0);

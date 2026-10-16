@@ -1,17 +1,20 @@
-# tests/package — clean-room external consumers (F1)
+# tests/package — clean-room external consumers (v2)
 
-This directory holds the F1 clean-room package baseline (#402 Phase F1). The
-consumers here are **not** registered with the xmake test graph: they must
-never build against the repository `include/`, `src/` or `build/` trees. They
-are compiled and run only by `scripts/verify_f1_package.py`, against an
-installed prefix produced by `xmake install`.
+This directory holds the clean-room package consumers for the v2 contracted
+surface (PR B). The consumers here are **not** registered with the xmake test
+graph: they must never build against the repository `include/`, `src/` or
+`build/` trees. They are compiled and run only by
+`scripts/verify_v2_package.py`, against an installed prefix produced by
+`xmake install`.
 
-- `docs/review/f1-clean-room-package-baseline.md` — the F1 record (gates,
-  installed-set decisions, audit results, adversarial review).
-- `docs/review/f1-requirement-evidence-matrix.md` — requirement → observation →
-  probe → internal evidence → formal asset mapping.
-- `docs/review/f1-package-manifest-{noliburing,liburing}.json` — frozen
-  machine-readable manifests (before-contraction baseline for F2–F5).
+- [v2 Architecture and Contract](../../docs/explicit-io-contract.md) — the
+  authority for the 11-header install surface (Appendix B).
+- [v2 conformance ledger](../../docs/roadmap/v2-conformance.md) — the release
+  gate this evidence feeds.
+- `docs/review/f1-*` — the superseded F1 clean-room baseline (25-header
+  pre-contraction surface). Frozen records are retained as history; they are
+  not v2 evidence and must not be reproduced with the retired
+  `--check-frozen` protocol.
 
 ## Clean-room rules
 
@@ -23,69 +26,51 @@ installed prefix produced by `xmake install`.
    into the repository. Consumer builds run with a whitelisted environment,
    and an include/library path variable (`CPATH`, `LIBRARY_PATH`, …) pointing
    into the repository aborts the run.
-3. The macro view (`SLUICE_HAS_LIBURING`) is supplied by the verifier from the
-   manifest so every consumer TU sees the same layout the archive was built
-   with (ODR rule).
-
-Profile tiers are packaging labels: P0/P1/P3 carry the CANONICAL surfaces,
-P1 additionally carries the OPTIONAL_CANDIDATE host closure (the H-30/H-31
-rows: `cancel.hpp` + `fiber.hpp` + `fiber_ctx.hpp`) and the
-COMPATIBILITY/INTERNAL/TEST_ONLY headers the current public closure reaches.
-No OPTIONAL_SUPPORTED claim exists anywhere in F1.
+3. No macro view is imposed on consumers: the installed v2 headers read no
+   build-profile macro, and the ODR probe proves public layouts agree across
+   opposite `SLUICE_HAS_LIBURING` views.
 
 ## Running
 
 ```sh
-python3 scripts/verify_f1_package.py \
-    --manifest-out docs/review/f1-package-manifest-noliburing.json \
-    --archive-baseline-out docs/review/f1-archive-baseline-noliburing.json
-python3 scripts/verify_f1_package.py --liburing \
+python3 scripts/verify_v2_package.py \
+    --manifest-out docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-noliburing.json
+python3 scripts/verify_v2_package.py --liburing \
     --uring-prefix /path/to/liburing/prefix \
-    --profile-name P2-liburing \
-    --manifest-out docs/review/f1-package-manifest-liburing.json \
-    --archive-baseline-out docs/review/f1-archive-baseline-liburing.json
+    --manifest-out docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-liburing.json
 ```
 
-Each run writes the manifest and the archive/object/symbol baseline to the
-recorded paths and prints the gate summary; exit status 0 = all gates PASS.
-`--check-frozen` reproduces a frozen manifest at the current head (the full
-verification reruns, then the fresh manifest must match the frozen one outside
-the volatile provenance/timestamp fields and the archive-baseline sha256 must
-match):
-
-```sh
-python3 scripts/verify_f1_package.py \
-    --check-frozen docs/review/f1-package-manifest-noliburing.json \
-    --manifest-out /tmp/f1-check-manifest.json \
-    --archive-baseline-out /tmp/f1-check-baseline.json
-```
-
-A freeze run requires a clean worktree at start: the recorded
-`VERIFICATION_HEAD` must identify the exact content that was built, installed
-and probed.
+Each run writes the manifest (and an archive/object/symbol baseline next to
+it) and prints the gate summary; exit status 0 = all gates PASS. Evidence for
+a v2 claim is a fresh manifest per run, recorded under the PR B evidence
+directory.
 
 ## Consumer map
 
-| Consumer | Profile | Exercises |
-|---|---|---|
-| `w01_direct.cpp` | P0 (core lib only) | W-01 workload + V25 clean-room firewall (async types stay incomplete) |
-| `w02_pipeline.cpp` | P1 | W-02 workload: bounded positional ops, short I/O, capacity exhaustion, second-submit failure, exception/early-return cleanup, best-effort cancel |
-| `w03_external_loop.cpp` | P1/P2 (argv: `threadpool\|uring`) | W-03 workload: application-owned epoll loop, notification fd, interruption, ordered teardown; uring reports explicit UNAVAILABLE when the profile is absent |
-| `w04_stackful_candidate.cpp` | P1 (+P2) | W-04 candidate host (OPTIONAL_CANDIDATE only): sequential-looking tasks, H1/H2/H4/H5 externally observable paths |
-| `contract_request_lifetime.cpp` | P1 | REQ-01/HANDLE-01..03: ready-unconsumed, try/take, move/self-move, stale identity, release+resubmit |
-| `contract_admission.cpp` | P1 | SEM-03/ERR-01: precedence, zero-op request, full table, admission close |
-| `contract_cancel_effect.cpp` | P1 | CANCEL-01/ERR-02: cancel dispositions, effect preservation |
-| `contract_observer.cpp` | P1 | OBS-01..03: attachment resolution, delivery, cancellation, duplicate, V08 subset |
-| `contract_progress.cpp` | P1 | PROG-01..04: no-lost-wake through epoll, wake-on-submit, fd re-borrow (V23 subset) |
-| `contract_shutdown.cpp` | P1 | SHUT-01..03: retained results survive execution close, idempotent re-shutdown |
-| `contract_durability.cpp` | P1 | SEM-06/07: request-path metadata ops, resize coverage through request sync (V27) |
-| `contract_backend_availability.cpp` | P1/P2 | PROD-02/BACKEND-02: named construction, explicit unavailability, no silent fallback |
-| `odr_two_tu_{a,b}.cpp` | P1/P2 | ODR discriminator: two TUs observe the SAME `Result<std::size_t>`/`Request<std::size_t>` specializations plus the macro-sensitive `UringAsyncBackend` layout under one shared macro view; the binary cross-checks both TUs' facts |
-| `negative_odr_view_{a,b,main}.cpp` | negative (P2) | two TUs compiled with OPPOSITE `SLUICE_HAS_LIBURING` views must report a divergent `sizeof(UringAsyncBackend)`; the binary fails (deterministically) when it observes the mismatch |
-| `negative_async_symbols_in_core.cpp` | negative | link against core lib only MUST fail (async symbols are not in the core archive) |
+| Consumer | Exercises |
+|---|---|
+| `w01_direct.cpp` | P0 (core lib only): W-01 workload + async types stay incomplete from core headers |
+| `w02_pipeline.cpp` | W-02 workload: bounded positional ops, short I/O, capacity exhaustion, second-submit failure, exception/early-return cleanup, best-effort cancel |
+| `w03_external_loop.cpp` (argv: `threadpool\|uring`) | W-03 workload: application-owned epoll loop, notification fd, interruption, ordered teardown; uring selection reports the explicit `not_supported` outcome when the profile is absent |
+| `contract_request_lifetime.cpp` | REQ-01/HANDLE-01..03: ready-unconsumed, try/take, move/self-move, stale identity, release+resubmit |
+| `contract_admission.cpp` | SEM-03/ERR-01: precedence, zero-op request, full table, admission close |
+| `contract_cancel_effect.cpp` | CANCEL-01/ERR-02: cancel dispositions, effect preservation |
+| `contract_observer.cpp` | OBS-01..03: attachment resolution, delivery retirement (observed through the public retirement outcome, not a callback), cancellation, duplicate, unknown id |
+| `contract_progress.cpp` | PROG-01..04: no-lost-wake through epoll, wake-on-submit, fd re-borrow |
+| `contract_shutdown.cpp` | SHUT-01..03: retained results survive execution close, idempotent re-shutdown |
+| `contract_durability.cpp` | SEM-06/07: request-path metadata ops, resize coverage through request sync |
+| `contract_backend_availability.cpp` | PROD-02/BACKEND-02: factory selection, capacity through admission, explicit invalid-config failure, `not_supported` uring absence with no fallback |
+| `odr_two_tu_{a,b}.cpp` | ODR discriminator: the verifier compiles TU-B with the OPPOSITE `SLUICE_HAS_LIBURING` view; every public type layout must agree across TUs and views |
+| `negative_async_symbols_in_core.cpp` | link against core lib only MUST fail (async symbols are not in the core archive) |
 
-Evidence layering (F1 §18 of the phase brief): these consumers are Layer A
-(public observable contract). Race/fault discrimination that cannot be made
-deterministic from outside stays with the internal deterministic tests and
-fault seams (Layer B) and the TLA+ models (Layer C); the requirement matrix
-records the correspondence per row.
+Synthesized negative probes (no consumer source): every uninstalled in-tree
+header (the 14 that left the install set plus the new internal seam headers)
+must fail to compile from the prefix; the deleted host headers must be absent
+from tree and prefix; deriving/constructing `AsyncBackend` or constructing
+`AsyncIoContext` from a `unique_ptr<AsyncBackend>` must fail — the backend
+seam is not installable surface.
+
+Evidence layering: these consumers are Layer A (public observable contract).
+Race/fault discrimination that cannot be made deterministic from outside
+stays with the internal deterministic tests and fault seams (Layer B) and the
+TLA+ models (Layer C).

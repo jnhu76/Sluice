@@ -60,8 +60,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Frozen-baseline provenance discriminators
-        run: python3 scripts/test_verify_f1_frozen_provenance.py
+      - name: Package verifier surface discriminators
+        run: python3 scripts/test_verify_v2_package.py
 
   linux-build:
     name: Linux ${{ matrix.mode }} build + tests
