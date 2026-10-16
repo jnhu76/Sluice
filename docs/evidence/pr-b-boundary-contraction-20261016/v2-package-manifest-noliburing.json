@@ -1,9 +1,9 @@
 {
   "FORMAT": "v2-package-manifest-v1",
   "PROFILE": "v2-noliburing",
-  "VERIFICATION_HEAD": "8f451a391da65a0ed729a1354d1aac2ed95c7648",
+  "VERIFICATION_HEAD": "51dc830fa345eb284ec7c56ab086151401c6a123",
   "VERIFICATION_HEAD_DIRTY": false,
-  "GENERATED_UTC": "2026-10-16T17:42:23.250235+00:00",
+  "GENERATED_UTC": "2026-10-16T17:48:23.447127+00:00",
   "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
   "ARCH": "x86_64",
   "KERNEL": "7.2.9-201.fc44.x86_64",
@@ -49,7 +49,7 @@
   "CONFIG_REQUIREMENTS": [
     "C++20",
     "installed headers read no build-profile macro: consumer TUs need no SLUICE_HAS_LIBURING define and may hold any view without layout divergence (V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT)",
-    "installed headers contain SLUICE_*_MUTANT_* guarded regions; package consumers must NEVER define these macros"
+    "installed mutation regions are pinned exactly: the two D1 function-template seams in request_scope.hpp; the B2 release path guard moved to an internal TU, and any new or removed installed region fails (NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED)"
   ],
   "EXPECTED_EXTERNAL_WORKLOADS": [
     "w01_direct",
@@ -69,6 +69,7 @@
   "NEGATIVE_PROBES": [
     "removed_and_internal_headers_unavailable",
     "backend_seam_unavailable",
+    "mutant_defines_not_installed",
     "async_symbols_not_in_core_archive"
   ],
   "ODR_DISCRIMINATOR": {
