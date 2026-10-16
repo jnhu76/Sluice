@@ -158,7 +158,7 @@ remains deterministic.
 | ThreadPool request execution | Required | Complete required operation set and progress integration |
 | io_uring request execution | Required supported backend, conditional on runtime availability | Full shared contract when construction succeeds; explicit unavailable outcome otherwise |
 | External Linux event-loop integration | Required | Non-busy, pollable progress source for each usable request backend |
-| Stackful single-owner I/O host and cooperative-cancel kit | **Outside v2; physically removed by PR B** (owner decision D1). See section 16 and W-04 | Not installable, not shipped, not retained in-tree as an inactive experiment; no core dependency on it |
+| Stackful single-owner I/O host and cooperative-cancel kit | **Outside v2; physically removed by PR B** (owner decision D1). See section 16 and W-04 | Target disposition: not installable, not shipped, not retained in-tree as an inactive experiment; until PR B the residual bundle is uncontracted tree residue (§16); no core dependency on it |
 | Windows, macOS, multi-worker task host, coroutine adapter, user-authored backends | Unsupported | No portability or correctness claim inferred from Linux evidence |
 
 A release must list tested compiler, architecture, kernel/liburing and
