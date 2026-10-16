@@ -1,0 +1,6 @@
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/main.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/grep_task.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/matcher.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/cli_parse.cpp[0m
+[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<sluice-grep>[0m [38;5;5;1mlinking.release sluice-grep[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.106s[0m

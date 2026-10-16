@@ -1,0 +1,370 @@
+[
+  {
+    "profile": "debug-n",
+    "mode": "debug",
+    "liburing": "n",
+    "builddir": "/tmp/pr-b-build-debug-n",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "debug",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/pr-b-build-debug-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n-configure.log",
+      "log_sha256": "e96b32d36c5b6ef025086ef3463e67ba8b294c356dbea30358328cb12b8169d0"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 56,
+      "failed": 0,
+      "log": "debug-n.log",
+      "log_sha256": "b11a8a235c1351af63c03147c297f067f44333358e0c1c943b3c85c08d3ab8bd"
+    }
+  },
+  {
+    "profile": "debug-y",
+    "mode": "debug",
+    "liburing": "y",
+    "builddir": "/tmp/pr-b-build-debug-y",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "debug",
+        "--liburing=y",
+        "--ccache=n",
+        "-o",
+        "/tmp/pr-b-build-debug-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y-configure.log",
+      "log_sha256": "3642ae1515f35a227f223ce436798590982611fb8eec5434ef4a979aee591db1"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 74,
+      "failed": 0,
+      "log": "debug-y.log",
+      "log_sha256": "a4759a6d7d2e488b805c55b8d3289edd83878bc32026c3eb28e024259a8892eb"
+    }
+  },
+  {
+    "profile": "release-n",
+    "mode": "release",
+    "liburing": "n",
+    "builddir": "/tmp/pr-b-build-release-n",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "release",
+        "--liburing=n",
+        "--ccache=n",
+        "-o",
+        "/tmp/pr-b-build-release-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-n-configure.log",
+      "log_sha256": "e96b32d36c5b6ef025086ef3463e67ba8b294c356dbea30358328cb12b8169d0"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 56,
+      "failed": 0,
+      "log": "release-n.log",
+      "log_sha256": "54a7a1dd4386870e7adba31324406bc18a7045ba5d5436056bcfba38e39af1f3"
+    },
+    "apps": {
+      "sluice-copy": 0,
+      "sluice-hash": 0,
+      "sluice-grep": 0,
+      "sluice-tail": 0
+    }
+  },
+  {
+    "profile": "release-y",
+    "mode": "release",
+    "liburing": "y",
+    "builddir": "/tmp/pr-b-build-release-y",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "release",
+        "--liburing=y",
+        "--ccache=n",
+        "-o",
+        "/tmp/pr-b-build-release-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "release-y-configure.log",
+      "log_sha256": "3642ae1515f35a227f223ce436798590982611fb8eec5434ef4a979aee591db1"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 74,
+      "failed": 0,
+      "log": "release-y.log",
+      "log_sha256": "179ee53c8678df2b2e4e6ae6c6efd93f44339eb17c9373cd5fdb7754e9c45bf9"
+    },
+    "apps": {
+      "sluice-copy": 0,
+      "sluice-hash": 0,
+      "sluice-grep": 0,
+      "sluice-tail": 0
+    }
+  },
+  {
+    "profile": "asanubsan-n",
+    "mode": "asanubsan",
+    "liburing": "n",
+    "builddir": "/tmp/pr-b-build-asanubsan-n",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "asanubsan",
+        "--liburing=n",
+        "--ccache=n",
+        "--toolchain=clang",
+        "-o",
+        "/tmp/pr-b-build-asanubsan-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n-configure.log",
+      "log_sha256": "e96b32d36c5b6ef025086ef3463e67ba8b294c356dbea30358328cb12b8169d0"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 56,
+      "failed": 0,
+      "log": "asanubsan-n.log",
+      "log_sha256": "fc7f3e973edcb187445c77d1f25a5672a7228f433b9bcff122e657da1c5e6eea"
+    }
+  },
+  {
+    "profile": "asanubsan-y",
+    "mode": "asanubsan",
+    "liburing": "y",
+    "builddir": "/tmp/pr-b-build-asanubsan-y",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "asanubsan",
+        "--liburing=y",
+        "--ccache=n",
+        "--toolchain=clang",
+        "-o",
+        "/tmp/pr-b-build-asanubsan-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-y-configure.log",
+      "log_sha256": "16cd3b17507aa59fda501617e1eb358fb214c6b587b71608efea362194a6e408"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 255,
+      "tests": 74,
+      "failed": 1,
+      "log": "asanubsan-y.log",
+      "log_sha256": "b3c5da16e673d82545f280f68ad96917b01abb2280e7bc4b0232c008014643b0"
+    }
+  },
+  {
+    "profile": "tsan-n",
+    "mode": "tsan",
+    "liburing": "n",
+    "builddir": "/tmp/pr-b-build-tsan-n",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "tsan",
+        "--liburing=n",
+        "--ccache=n",
+        "--toolchain=clang",
+        "-o",
+        "/tmp/pr-b-build-tsan-n",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n-configure.log",
+      "log_sha256": "e96b32d36c5b6ef025086ef3463e67ba8b294c356dbea30358328cb12b8169d0"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 56,
+      "failed": 0,
+      "log": "tsan-n.log",
+      "log_sha256": "d883858133f21ebcac2a01394abf4098482959a819f014d2ff0596fac6bbd92c"
+    }
+  },
+  {
+    "profile": "tsan-y",
+    "mode": "tsan",
+    "liburing": "y",
+    "builddir": "/tmp/pr-b-build-tsan-y",
+    "configure": {
+      "argv": [
+        "xmake",
+        "f",
+        "-m",
+        "tsan",
+        "--liburing=y",
+        "--ccache=n",
+        "--toolchain=clang",
+        "-o",
+        "/tmp/pr-b-build-tsan-y",
+        "-y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-y-configure.log",
+      "log_sha256": "16cd3b17507aa59fda501617e1eb358fb214c6b587b71608efea362194a6e408"
+    },
+    "build": {
+      "argv": [
+        "xmake",
+        "build",
+        "-y",
+        "-g",
+        "test"
+      ],
+      "exit_code": 0
+    },
+    "test": {
+      "argv": [
+        "xmake",
+        "test",
+        "-y"
+      ],
+      "exit_code": 0,
+      "tests": 74,
+      "failed": 0,
+      "log": "tsan-y.log",
+      "log_sha256": "646caa5b102c8d4db88db00c2d00117a9d33354309cf87370b0f44f0d9582ba5"
+    }
+  }
+]
