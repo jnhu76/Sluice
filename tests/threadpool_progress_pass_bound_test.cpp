@@ -179,17 +179,17 @@ bool progress_pass_performs_no_dynamic_allocation() {
         zero_ops.push_back(std::move(r));
     }
 
+#if defined(PB_ALLOC_COUNTER_DISABLED)
+    std::fprintf(stderr,
+                 "case0: allocation counter disabled on this runtime (the sanitizer runtime "
+                 "defines the replaceable operators); allocation invariant not exercised\n");
+#else
     const auto counter_probe = [] {
         const unsigned long long before = g_allocation_events.load(std::memory_order_relaxed);
         std::vector<int> probe(4, 0);
         (void)probe;
         return g_allocation_events.load(std::memory_order_relaxed) != before;
     };
-#if defined(PB_ALLOC_COUNTER_DISABLED)
-    std::fprintf(stderr,
-                 "case0: allocation counter disabled on this runtime (the sanitizer runtime "
-                 "defines the replaceable operators); allocation invariant not exercised\n");
-#else
     if (!counter_probe())
         return fail_at("case0", "the allocation counter is inert although it is compiled in");
 #endif
