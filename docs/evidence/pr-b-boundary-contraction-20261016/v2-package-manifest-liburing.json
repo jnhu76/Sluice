@@ -1,9 +1,9 @@
 {
   "FORMAT": "v2-package-manifest-v1",
   "PROFILE": "v2-liburing",
-  "VERIFICATION_HEAD": "86e74c14433a05af44d7214352019f091207e358",
+  "VERIFICATION_HEAD": "727e0774b22f9cdc8297cdfceabda4564285156e",
   "VERIFICATION_HEAD_DIRTY": false,
-  "GENERATED_UTC": "2026-10-16T16:23:14.084141+00:00",
+  "GENERATED_UTC": "2026-10-16T17:49:09.516714+00:00",
   "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
   "ARCH": "x86_64",
   "KERNEL": "7.2.9-201.fc44.x86_64",
@@ -29,10 +29,10 @@
   ],
   "ARCHIVE_BASELINE": {
     "file": "docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-liburing-archive-baseline.json",
-    "sha256": "6439cc2f6f3db98c23172bdc1bba1183be7bd6f15db4d78418b14482e0dffb0f",
+    "sha256": "2012b9417012884674b61e08f370aa1c67b498e2ea85bf7f116ec928051d1720",
     "archives": 2,
     "objects": 11,
-    "defined_symbols": 472,
+    "defined_symbols": 474,
     "external_undefined_symbols": 69
   },
   "PUBLIC_DEFINES": [],
@@ -50,7 +50,7 @@
   "CONFIG_REQUIREMENTS": [
     "C++20",
     "installed headers read no build-profile macro: consumer TUs need no SLUICE_HAS_LIBURING define and may hold any view without layout divergence (V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT)",
-    "installed headers contain SLUICE_*_MUTANT_* guarded regions; package consumers must NEVER define these macros"
+    "installed mutation regions are pinned exactly: the two D1 function-template seams in request_scope.hpp; the B2 release path guard moved to an internal TU, and any new or removed installed region fails (NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED)"
   ],
   "EXPECTED_EXTERNAL_WORKLOADS": [
     "w01_direct",
@@ -70,6 +70,7 @@
   "NEGATIVE_PROBES": [
     "removed_and_internal_headers_unavailable",
     "backend_seam_unavailable",
+    "mutant_defines_not_installed",
     "async_symbols_not_in_core_archive"
   ],
   "ODR_DISCRIMINATOR": {
