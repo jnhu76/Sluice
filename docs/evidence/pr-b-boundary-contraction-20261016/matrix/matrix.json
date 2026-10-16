@@ -40,7 +40,7 @@
       "tests": 56,
       "failed": 0,
       "log": "debug-n.log",
-      "log_sha256": "24f17df99f565b888dabeaa970ea9f4c19e95f56fdd248b03b90a8ed04bc516e"
+      "log_sha256": "6bdf4b1a8264bbbc386f637d0f8c346e987ff34ef4c88d2711935454d8b6a7a2"
     }
   },
   {
@@ -84,7 +84,7 @@
       "tests": 74,
       "failed": 0,
       "log": "debug-y.log",
-      "log_sha256": "0f9a4339540630bcdbbf46d0e9c73bfe098c204ce6bcfa3a5c44619ab06de567"
+      "log_sha256": "2fb38ea17d3f6b0815f3666a26b12611a8860be8f742493342364148ce940578"
     }
   },
   {
@@ -128,13 +128,7 @@
       "tests": 56,
       "failed": 0,
       "log": "release-n.log",
-      "log_sha256": "3fa9f20b2004b7b29452c9614144e15841c8f0bfbfe9115340f5d8d1f880e43a"
-    },
-    "apps": {
-      "sluice-copy": 0,
-      "sluice-hash": 0,
-      "sluice-grep": 0,
-      "sluice-tail": 0
+      "log_sha256": "d19844b09a78dc5d0850e2b022143d368aede21a614fa3fc90771c9f7c0352e3"
     }
   },
   {
@@ -178,13 +172,7 @@
       "tests": 74,
       "failed": 0,
       "log": "release-y.log",
-      "log_sha256": "dff0b0c76191b8ceb3bf72aeb84e1f562208707a2928ad038555d6a4eea4ebcb"
-    },
-    "apps": {
-      "sluice-copy": 0,
-      "sluice-hash": 0,
-      "sluice-grep": 0,
-      "sluice-tail": 0
+      "log_sha256": "3ab67159a9261ce4be3b67eaeb05585bf6379bb80fc961c64ccf8f7e6f72752f"
     }
   },
   {
@@ -229,7 +217,7 @@
       "tests": 56,
       "failed": 0,
       "log": "asanubsan-n.log",
-      "log_sha256": "6f26c15a84b6cd006c2ee48830bc4f9d386b56ed54f3a4e58422516f69a40be5"
+      "log_sha256": "d707aa02d9758398ebe1cec0a080380cc248908dfcf2b6e07e100fd4d3a28671"
     }
   },
   {
@@ -274,7 +262,7 @@
       "tests": 74,
       "failed": 1,
       "log": "asanubsan-y.log",
-      "log_sha256": "791d6739d0762a8aec4442e473dcdaa6003bacac036307f4abd4020f0cbd6bc6"
+      "log_sha256": "165e501d9b0c40a4e536ae6690a89428f7dcbc8a919fb6aacef10b817e8490fc"
     }
   },
   {
@@ -319,7 +307,7 @@
       "tests": 56,
       "failed": 0,
       "log": "tsan-n.log",
-      "log_sha256": "8b3bbe2dd02fc48ff355fa436f191c0b10c76cbf2d3353d033e777ed3487a9a1"
+      "log_sha256": "035280d9e7fcd9d3d4398bdba237be3159eb296d87398fe5e0bfe7e10c485313"
     }
   },
   {
@@ -364,7 +352,7 @@
       "tests": 74,
       "failed": 0,
       "log": "tsan-y.log",
-      "log_sha256": "417dca7337e61d70ee9641ab07b95ba99a26e180adc0ef54026528fc32009898"
+      "log_sha256": "b1eb075e25af32cb839fbcaa4fc79e785597343eb07a1a8b8f2af87ada0ca531"
     }
   }
 ]
