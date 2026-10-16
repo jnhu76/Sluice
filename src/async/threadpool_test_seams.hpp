@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

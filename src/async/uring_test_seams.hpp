@@ -1,6 +1,6 @@
 #pragma once
 
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 
 #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

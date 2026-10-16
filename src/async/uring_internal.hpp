@@ -4,7 +4,8 @@
 // units (uring_backend.cpp, uring_transport.cpp, uring_completion.cpp). It
 // must not be installed or included outside src/async.
 
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
+#include <sluice/detail/file_semantics.hpp>
 #include <sluice/measurement.hpp>
 
 #if defined(SLUICE_HAS_LIBURING)

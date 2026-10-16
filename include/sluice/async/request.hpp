@@ -1,8 +1,8 @@
 #pragma once
 
-#include <sluice/async/detail/fail_fast.hpp>
-#include <sluice/async/detail/request_core.hpp>
+#include <sluice/effect.hpp>
 #include <sluice/error.hpp>
+#include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #include <cstddef>
@@ -15,6 +15,17 @@ namespace sluice::async {
 class AsyncBackend;
 class AsyncIoContext;
 
+namespace detail {
+class RequestCore;
+struct RequestKey;
+struct TestAccess;
+
+// Out-of-line operations of the public Request<T> template, defined in the
+// library so installed consumers need no internal header. RequestResultData
+// carries the terminal payload in public vocabulary.
+struct RequestBridge;
+}
+
 class RequestId {
   public:
     constexpr RequestId() noexcept = default;
@@ -26,6 +37,8 @@ class RequestId {
   private:
     friend class AsyncIoContext;
     template <class T> friend class Request;
+    friend struct detail::RequestBridge;
+    friend struct detail::TestAccess;
 
     constexpr RequestId(std::uint64_t context, std::uint32_t slot,
                         std::uint64_t generation) noexcept
@@ -56,6 +69,35 @@ template <class T> struct RequestObservation {
     sluice::EffectReport effect{};
 };
 
+struct RequestResultData {
+    bool succeeded = false;
+    IoError error{};
+    sluice::EffectReport effect{};
+    sluice::FileInfo metadata{};
+};
+
+namespace detail {
+
+struct RequestBridge {
+    static RequestKey key_of(const RequestId& id) noexcept;
+
+    static RequestReadiness ready(const RequestCore* core, const RequestId& id) noexcept;
+
+    // Pending leaves the handle unchanged; stale never returns (fail-fast).
+    static RequestReadiness observe(const RequestCore* core, const RequestId& id,
+                                    RequestResultData* out) noexcept;
+
+    static RequestReadiness consume(RequestCore* core, const RequestId& id,
+                                    RequestResultData* out) noexcept;
+
+    // Releases the public binding; nonterminal and stale releases fail fast.
+    static void discard(RequestCore* core, const RequestId& id) noexcept;
+
+    static CancelDisposition cancel(AsyncBackend* backend, const RequestId& id) noexcept;
+};
+
+}
+
 template <class T> class Request {
   public:
     using value_type = T;
@@ -67,14 +109,14 @@ template <class T> class Request {
 
     Request(Request&& other) noexcept
         : core_(std::exchange(other.core_, nullptr)),
-          backend_(std::exchange(other.backend_, nullptr)), key_(std::exchange(other.key_, {})) {}
+          backend_(std::exchange(other.backend_, nullptr)), id_(std::exchange(other.id_, RequestId{})) {}
 
     Request& operator=(Request&& other) noexcept {
         if (this != &other) {
             release_responsibility_();
             core_ = std::exchange(other.core_, nullptr);
             backend_ = std::exchange(other.backend_, nullptr);
-            key_ = std::exchange(other.key_, {});
+            id_ = std::exchange(other.id_, RequestId{});
         }
         return *this;
     }
@@ -83,126 +125,98 @@ template <class T> class Request {
 
     constexpr bool valid() const noexcept { return core_ != nullptr; }
 
-    constexpr RequestId id() const noexcept {
-        return core_ != nullptr ? RequestId{key_.context.value, key_.slot.value,
-                                            key_.generation.value}
-                                : RequestId{};
-    }
+    constexpr RequestId id() const noexcept { return id_; }
 
     bool ready() const noexcept {
-        return core_ != nullptr && core_->lookup(key_) == detail::PublicLookup::published;
+        return core_ != nullptr && detail::RequestBridge::ready(core_, id_) == RequestReadiness::ready;
     }
 
     RequestObservation<T> try_result() const noexcept {
         if (core_ == nullptr) {
             return {};
         }
-        sluice::detail::IoOutcome outcome;
-        sluice::FileInfo metadata;
-        const detail::PublicObservation observed =
-            core_->observe_public_result(key_, &outcome, &metadata);
-        if (observed == detail::PublicObservation::pending) {
+        RequestResultData data;
+        const RequestReadiness readiness = detail::RequestBridge::observe(core_, id_, &data);
+        if (readiness == RequestReadiness::pending) {
             return {RequestReadiness::pending};
         }
-        if (observed == detail::PublicObservation::stale) {
-            detail::request_binding_invariant_fail_fast();
-        }
-        return {RequestReadiness::ready, result_of_(outcome, metadata), effect_of_(outcome)};
+        return {RequestReadiness::ready, result_of_(data), data.effect};
     }
 
     RequestObservation<T> take_result() noexcept {
         if (core_ == nullptr) {
             return {};
         }
-        sluice::detail::IoOutcome outcome;
-        sluice::FileInfo metadata;
-        const detail::PublicConsumption consumed =
-            core_->consume_public_result(key_, &outcome, &metadata);
-        if (consumed == detail::PublicConsumption::pending) {
+        RequestResultData data;
+        const RequestReadiness readiness = detail::RequestBridge::consume(core_, id_, &data);
+        if (readiness == RequestReadiness::pending) {
             return {RequestReadiness::pending};
-        }
-        if (consumed == detail::PublicConsumption::stale) {
-            detail::request_binding_invariant_fail_fast();
         }
         core_ = nullptr;
         backend_ = nullptr;
-        key_ = {};
-        return {RequestReadiness::ready, result_of_(outcome, metadata), effect_of_(outcome)};
+        id_ = RequestId{};
+        return {RequestReadiness::ready, result_of_(data), data.effect};
     }
 
     void discard() noexcept { release_responsibility_(); }
 
-    Result<CancelDisposition> cancel();
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    detail::RequestKey key_for_test() const noexcept { return key_; }
-#endif
+    Result<CancelDisposition> cancel() {
+        if (backend_ == nullptr) {
+            return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
+        }
+        return detail::RequestBridge::cancel(backend_, id_);
+    }
 
   private:
     friend class AsyncIoContext;
+    friend struct detail::TestAccess;
 
-    Request(detail::RequestCore* core, AsyncBackend* backend, detail::RequestKey key) noexcept
-        : core_(core), backend_(backend), key_(key) {}
+    Request(detail::RequestCore* core, AsyncBackend* backend, RequestId id) noexcept
+        : core_(core), backend_(backend), id_(id) {}
 
     void release_responsibility_() noexcept {
 #if defined(SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING)
         core_ = nullptr;
         backend_ = nullptr;
-        key_ = {};
+        id_ = RequestId{};
         return;
 #endif
         if (core_ == nullptr) {
             return;
         }
-        const detail::BindingRelease released = core_->discard_public_result(key_);
-#if defined(SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES)
-        if (released == detail::BindingRelease::stale) {
-#else
-        if (released == detail::BindingRelease::not_visible_yet) {
-#endif
-            detail::request_nonterminal_release_fail_fast();
-        }
-        if (released == detail::BindingRelease::stale) {
-            detail::request_binding_invariant_fail_fast();
-        }
+        detail::RequestBridge::discard(core_, id_);
         core_ = nullptr;
         backend_ = nullptr;
-        key_ = {};
+        id_ = RequestId{};
     }
 
-    static Result<T> result_of_(const sluice::detail::IoOutcome& outcome,
-                                const sluice::FileInfo& metadata) noexcept {
+    static Result<T> result_of_(const RequestResultData& data) noexcept {
         if constexpr (std::is_void_v<T>) {
-            if (outcome.succeeded) {
+            if (data.succeeded) {
                 return {};
             }
-            return make_unexpected<T>(outcome.error);
+            return make_unexpected<T>(data.error);
         } else if constexpr (std::is_same_v<T, sluice::FileInfo>) {
-            if (outcome.succeeded) {
-                return Result<T>{metadata};
+            if (data.succeeded) {
+                return Result<T>{data.metadata};
             }
-            return make_unexpected<T>(outcome.error);
+            return make_unexpected<T>(data.error);
         } else if constexpr (std::is_same_v<T, sluice::FileSize>) {
-            if (outcome.succeeded) {
-                return Result<T>{FileSize{metadata.size}};
+            if (data.succeeded) {
+                return Result<T>{FileSize{data.metadata.size}};
             }
-            return make_unexpected<T>(outcome.error);
+            return make_unexpected<T>(data.error);
         } else {
-            if (outcome.succeeded) {
-                return Result<T>{static_cast<T>(outcome.effect.confirmed_bytes)};
+            if (data.succeeded) {
+                return Result<T>{static_cast<T>(data.effect.confirmed_bytes)};
             }
-            return make_unexpected<T>(outcome.error);
+            return make_unexpected<T>(data.error);
         }
-    }
-
-    static sluice::EffectReport effect_of_(const sluice::detail::IoOutcome& outcome) noexcept {
-        return sluice::EffectReport{outcome.effect.confirmed_bytes, outcome.effect.remaining};
     }
 
     detail::RequestCore* core_ = nullptr;
     AsyncBackend* backend_ = nullptr;
-    detail::RequestKey key_{};
+    RequestId id_{};
 };
 
 }

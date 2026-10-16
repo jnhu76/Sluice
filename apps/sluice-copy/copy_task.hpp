@@ -46,9 +46,9 @@ sluice::Result<CopyStats> run_sequential_copy(const sluice::File& src_file,
                                               std::size_t buffer_size, unsigned workers,
                                               SyncPolicy sync);
 
-sluice::Result<CopyStats> run_sequential_copy_with_backend(
+sluice::Result<CopyStats> run_sequential_copy_with_context(
     const sluice::File& src_file, const sluice::async::NativeFileRef& dst, std::size_t buffer_size,
-    unsigned workers, SyncPolicy sync, std::unique_ptr<sluice::async::AsyncBackend> backend);
+    unsigned workers, SyncPolicy sync, sluice::async::AsyncIoContext ctx);
 
 sluice::Result<CopyStats> run_pipelined_copy(const sluice::File& src_file,
                                              const sluice::async::NativeFileRef& dst,
@@ -56,9 +56,9 @@ sluice::Result<CopyStats> run_pipelined_copy(const sluice::File& src_file,
                                              unsigned workers, SyncPolicy sync);
 
 sluice::Result<CopyStats>
-run_pipelined_copy_with_backend(const sluice::File& src_file,
+run_pipelined_copy_with_context(const sluice::File& src_file,
                                 const sluice::async::NativeFileRef& dst, std::size_t buffer_size,
                                 std::size_t pipeline_depth, unsigned workers, SyncPolicy sync,
-                                std::unique_ptr<sluice::async::AsyncBackend> backend);
+                                sluice::async::AsyncIoContext ctx);
 
 } // namespace sluice_copy

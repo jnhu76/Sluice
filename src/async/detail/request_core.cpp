@@ -1,5 +1,10 @@
 #include <sluice/async/detail/request_core.hpp>
 
+#include <sluice/async/detail/async_backend.hpp>
+#include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/request.hpp>
+
+#include <cstdio>
 #include <exception>
 #include <limits>
 
@@ -10,6 +15,26 @@ namespace {
 [[noreturn]] void request_core_invariant_fail_fast() noexcept { std::terminate(); }
 
 }  // namespace
+
+// Defined here rather than in fail_fast.cpp so the RequestCore substrate
+// target (which compiles only this TU) links the Request release-edge
+// diagnostics the bridge calls.
+[[noreturn]] void request_nonterminal_release_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::Request: destroying or overwriting a nonterminal "
+                 "request responsibility is a contract violation\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
+[[noreturn]] void request_binding_invariant_fail_fast() noexcept {
+    std::fprintf(stderr,
+                 "sluice::async::Request: public binding reached a protocol-"
+                 "unreachable state (invariant violation)\n");
+    std::fflush(stderr);
+    std::terminate();
+}
+
 
 RequestCore::RequestCore(ContextIdentity context, std::size_t request_capacity)
     : context_(context), capacity_(request_capacity), slots_(request_capacity) {
@@ -680,5 +705,85 @@ void RequestCore::force_generation_for_testing(SlotIndex slot, Generation genera
 }
 
 #endif
+
+
+RequestKey RequestBridge::key_of(const RequestId& id) noexcept {
+    return RequestKey{ContextIdentity{id.context_}, SlotIndex{id.slot_},
+                      Generation{id.generation_}};
+}
+
+RequestReadiness RequestBridge::ready(const RequestCore* core, const RequestId& id) noexcept {
+    return core->lookup(RequestBridge::key_of(id)) == PublicLookup::published
+               ? RequestReadiness::ready
+               : RequestReadiness::pending;
+}
+
+RequestReadiness RequestBridge::observe(const RequestCore* core, const RequestId& id,
+                                        RequestResultData* out) noexcept {
+    IoOutcome outcome;
+    sluice::FileInfo metadata;
+    const PublicObservation observed =
+        core->observe_public_result(RequestBridge::key_of(id), &outcome, &metadata);
+    if (observed == PublicObservation::pending) {
+        return RequestReadiness::pending;
+    }
+    if (observed == PublicObservation::stale) {
+        request_binding_invariant_fail_fast();
+    }
+    out->succeeded = outcome.succeeded;
+    out->error = outcome.error;
+    out->effect = outcome.effect;
+    out->metadata = metadata;
+    return RequestReadiness::ready;
+}
+
+RequestReadiness RequestBridge::consume(RequestCore* core, const RequestId& id,
+                                        RequestResultData* out) noexcept {
+    IoOutcome outcome;
+    sluice::FileInfo metadata;
+    const PublicConsumption consumed =
+        core->consume_public_result(RequestBridge::key_of(id), &outcome, &metadata);
+    if (consumed == PublicConsumption::pending) {
+        return RequestReadiness::pending;
+    }
+    if (consumed == PublicConsumption::stale) {
+        request_binding_invariant_fail_fast();
+    }
+    out->succeeded = outcome.succeeded;
+    out->error = outcome.error;
+    out->effect = outcome.effect;
+    out->metadata = metadata;
+    return RequestReadiness::ready;
+}
+
+void RequestBridge::discard(RequestCore* core, const RequestId& id) noexcept {
+    const BindingRelease released = core->discard_public_result(RequestBridge::key_of(id));
+#if defined(SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES)
+    if (released == BindingRelease::stale) {
+#else
+    if (released == BindingRelease::not_visible_yet) {
+#endif
+        request_nonterminal_release_fail_fast();
+    }
+    if (released == BindingRelease::stale) {
+        request_binding_invariant_fail_fast();
+    }
+}
+
+CancelDisposition RequestBridge::cancel(AsyncBackend* backend, const RequestId& id) noexcept {
+    switch (backend->cancel_identity(RequestBridge::key_of(id))) {
+    case PublicCancel::won_before_execution:
+        return CancelDisposition::won_before_execution;
+    case PublicCancel::requested:
+        return CancelDisposition::requested;
+    case PublicCancel::already_terminal:
+        return CancelDisposition::already_terminal;
+    case PublicCancel::not_found:
+        return CancelDisposition::not_found;
+    case PublicCancel::physical_interruption_unsupported:
+        return CancelDisposition::physical_interruption_unsupported;
+    }
+    return CancelDisposition::not_found;
+}
 
 }  // namespace sluice::async::detail

@@ -1,5 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
 
+#include <sluice/async/detail/async_backend.hpp>
 #include <sluice/async/detail/context_identity.hpp>
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/request_core.hpp>
@@ -39,6 +40,10 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
     if (backend_) {
         backend_->core_ = core_.get();
     }
+}
+
+AsyncIoContext detail::make_context(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats) {
+    return AsyncIoContext(std::move(backend), stats);
 }
 
 ProgressOwner::ProgressOwner(ProgressOwner&& other) noexcept : context_(other.context_) {
@@ -251,7 +256,9 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<std::size_t>>(r.error());
-    return Request<std::size_t>{core_.get(), backend_.get(), r.value()};
+    return Request<std::size_t>{core_.get(), backend_.get(),
+                          RequestId{r.value().context.value, r.value().slot.value,
+                                    r.value().generation.value}};
 }
 
 Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
@@ -267,7 +274,9 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<std::size_t>>(r.error());
-    return Request<std::size_t>{core_.get(), backend_.get(), r.value()};
+    return Request<std::size_t>{core_.get(), backend_.get(),
+                          RequestId{r.value().context.value, r.value().slot.value,
+                                    r.value().generation.value}};
 }
 
 Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
@@ -283,7 +292,9 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<void>>(r.error());
-    return Request<void>{core_.get(), backend_.get(), r.value()};
+    return Request<void>{core_.get(), backend_.get(),
+                          RequestId{r.value().context.value, r.value().slot.value,
+                                    r.value().generation.value}};
 }
 
 Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
@@ -299,7 +310,9 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<void>>(r.error());
-    return Request<void>{core_.get(), backend_.get(), r.value()};
+    return Request<void>{core_.get(), backend_.get(),
+                          RequestId{r.value().context.value, r.value().slot.value,
+                                    r.value().generation.value}};
 }
 
 Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
@@ -315,7 +328,9 @@ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<FileInfo>>(r.error());
-    return Request<FileInfo>{core_.get(), backend_.get(), r.value()};
+    return Request<FileInfo>{core_.get(), backend_.get(),
+                          RequestId{r.value().context.value, r.value().slot.value,
+                                    r.value().generation.value}};
 }
 
 Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
@@ -331,7 +346,9 @@ Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
     update_max_outstanding(stats_, backend_->outstanding());
     if (!r.has_value())
         return make_unexpected<Request<FileSize>>(r.error());
-    return Request<FileSize>{core_.get(), backend_.get(), r.value()};
+    return Request<FileSize>{core_.get(), backend_.get(),
+                          RequestId{r.value().context.value, r.value().slot.value,
+                                    r.value().generation.value}};
 }
 
 
@@ -392,10 +409,10 @@ Result<std::size_t> AsyncIoContext::poll() {
     return pass.value().completed;
 }
 
-AsyncBackend::ProgressPass AsyncIoContext::run_progress_pass_() {
+ProgressPass AsyncIoContext::run_progress_pass_() {
     if (stats_)
         ++stats_->poll_calls;
-    AsyncBackend::ProgressPass pass = backend_->poll_progress();
+    ProgressPass pass = backend_->poll_progress();
     pass.health_failed = pass.health_failed || core_->health_failed() ||
                          progress_->wait_health_failed();
     if (stats_)
@@ -404,7 +421,7 @@ AsyncBackend::ProgressPass AsyncIoContext::run_progress_pass_() {
     return pass;
 }
 
-Result<AsyncIoContext::ProgressPass> AsyncIoContext::poll_progress() {
+Result<ProgressPass> AsyncIoContext::poll_progress() {
     if (!drive_entry_admitted_()) {
         return make_unexpected<ProgressPass>(IoError{IoError::Code::invalid_state});
     }
@@ -474,7 +491,7 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
             cancel_outstanding_for_stop_();
         }
         const detail::ProgressSource::Token token = progress_->snapshot();
-        const AsyncBackend::ProgressPass pass = run_progress_pass_();
+        const ProgressPass pass = run_progress_pass_();
         (void)core_->retire_delivered_episodes();
 
         if (settlement_converged_()) {
@@ -575,7 +592,7 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     for (;;) {
         const detail::ProgressSource::Token token = progress_->snapshot();
 
-        const AsyncBackend::ProgressPass pass = run_progress_pass_();
+        const ProgressPass pass = run_progress_pass_();
         if (pass.completed > 0) {
             return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress, pass.completed};
         }
@@ -646,7 +663,7 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
                 continue;
             }
             {
-                const AsyncBackend::ProgressPass final_pass = run_progress_pass_();
+                const ProgressPass final_pass = run_progress_pass_();
                 if (final_pass.completed > 0) {
                     return ProgressWaitOutcome{ProgressWaitOutcome::Kind::progress,
                                                final_pass.completed};
@@ -675,68 +692,6 @@ void AsyncIoContext::acknowledge_progress_control() {
     }
 }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-detail::ProgressSource::Token AsyncIoContext::progress_token_for_test() const noexcept {
-    if (progress_ != nullptr) {
-        return progress_->snapshot();
-    }
-    return detail::ProgressSource::Token{};
-}
-
-void AsyncIoContext::set_progress_prepark_counter_for_test(std::atomic<int>* counter) noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_prepark_counter_for_test(counter);
-    }
-}
-
-void AsyncIoContext::set_progress_prerevalidate_pause_gate_for_test(
-    detail::ProgressSource::PauseGate* gate) noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_prerevalidate_pause_gate_for_test(gate);
-    }
-}
-
-void AsyncIoContext::set_progress_prepark_pause_gate_for_test(
-    detail::ProgressSource::PauseGate* gate) noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_prepark_pause_gate_for_test(gate);
-    }
-}
-
-void AsyncIoContext::set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_progress_epoch_for_test(epoch);
-    }
-}
-
-void AsyncIoContext::set_control_epoch_for_test(std::uint64_t epoch) noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_control_epoch_for_test(epoch);
-    }
-}
-
-void AsyncIoContext::set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_control_exhaustion_for_test(exhaustion);
-    }
-}
-
-void AsyncIoContext::set_wait_health_failed_for_test() noexcept {
-    if (progress_ != nullptr) {
-        progress_->set_wait_health_failed_for_test();
-    }
-}
-
-void AsyncIoContext::saturate_progress_notification_for_test() noexcept {
-    if (progress_ != nullptr) {
-        progress_->saturate_notification_for_test();
-    }
-}
-
-bool AsyncIoContext::progress_exhausted_for_test() const noexcept {
-    return progress_ != nullptr && progress_->exhausted();
-}
-#endif
 
 bool AsyncIoContext::has_split_wait_capability() const noexcept {
     return backend_ && backend_->signals_physical_progress();
@@ -777,12 +732,6 @@ void AsyncIoContext::detach_progress_host() noexcept {
 }
 
 
-void AsyncIoContext::set_ready_sink(detail::SynchronousReadySink* sink) {
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (backend_)
-        backend_->attach_ready_sink(sink);
-}
-
 AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(const RequestId& id) {
     if (!id.valid()) {
         return {};
@@ -794,7 +743,26 @@ AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(const Request
     const detail::RequestKey key{detail::ContextIdentity{id.context_},
                                  detail::SlotIndex{id.slot_},
                                  detail::Generation{id.generation_}};
-    return {core_->register_observer(key), key};
+    ObserverAttachment attachment;
+    attachment.request = id;
+    switch (core_->register_observer(key)) {
+    case detail::ObserverRegistration::armed:
+        attachment.status = ObserverStatus::armed;
+        break;
+    case detail::ObserverRegistration::duplicate:
+        attachment.status = ObserverStatus::duplicate;
+        break;
+    case detail::ObserverRegistration::already_terminal:
+        attachment.status = ObserverStatus::already_terminal;
+        break;
+    case detail::ObserverRegistration::admission_closed:
+        attachment.status = ObserverStatus::admission_closed;
+        break;
+    case detail::ObserverRegistration::not_found:
+        attachment.status = ObserverStatus::not_found;
+        break;
+    }
+    return attachment;
 }
 
 AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const RequestId& id) {
@@ -808,7 +776,23 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const Reque
     const detail::RequestKey key{detail::ContextIdentity{id.context_},
                                  detail::SlotIndex{id.slot_},
                                  detail::Generation{id.generation_}};
-    return {core_->cancel_observer(key), key};
+    ObserverCancelResult result;
+    result.request = id;
+    switch (core_->cancel_observer(key)) {
+    case detail::ObserverCancellation::retired:
+        result.status = ObserverCancelStatus::retired;
+        break;
+    case detail::ObserverCancellation::delivery_in_progress:
+        result.status = ObserverCancelStatus::delivery_in_progress;
+        break;
+    case detail::ObserverCancellation::not_registered:
+        result.status = ObserverCancelStatus::not_registered;
+        break;
+    case detail::ObserverCancellation::not_found:
+        result.status = ObserverCancelStatus::not_found;
+        break;
+    }
+    return result;
 }
 
 
@@ -816,11 +800,17 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const Reque
 
 
 
-bool AsyncIoContext::retire_delivery(detail::RequestKey key) {
+bool AsyncIoContext::retire_delivery(RequestId id) {
+    if (!id.valid()) {
+        return false;
+    }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!core_) {
         return false;
     }
+    const detail::RequestKey key{detail::ContextIdentity{id.context_},
+                                 detail::SlotIndex{id.slot_},
+                                 detail::Generation{id.generation_}};
     return core_->retire_observer_delivery(key) == detail::ObserverDeliveryRetirement::retired;
 }
 

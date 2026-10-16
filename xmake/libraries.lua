@@ -2,7 +2,7 @@
 
 local R = SLUICE_ROOT
 
--- Core static library: Reader/Writer abstractions + wrappers.
+-- Core static library: File resource, shared semantics and direct execution.
 core_sources = function()
     return { R .. "src/*.cpp" }
 end
@@ -11,10 +11,15 @@ target("sluice_core")
     set_kind("static")
     add_includedirs(R .. "include", {public = true})
     add_files(core_sources())
-    -- Installed header set: the canonical core closure only.
-    add_headerfiles(R .. "include/(sluice/*.hpp)",
-                    R .. "include/(sluice/blocking/*.hpp)",
-                    R .. "include/(sluice/detail/*.hpp)")
+    -- Installed header set: the exact v2 public core surface (root Appendix
+    -- B). The allowlist is deliberate: no glob can install a future internal
+    -- header by accident.
+    add_headerfiles(R .. "include/(sluice/effect.hpp)",
+                    R .. "include/(sluice/error.hpp)",
+                    R .. "include/(sluice/file_resource.hpp)",
+                    R .. "include/(sluice/measurement.hpp)",
+                    R .. "include/(sluice/result.hpp)",
+                    R .. "include/(sluice/blocking/file.hpp)")
     -- Reproducible archives (#489): binutils built without
     -- --enable-deterministic-archives embeds each member's real mtime/uid/gid,
     -- so identical objects archive to different bytes on those toolchains and
@@ -26,10 +31,8 @@ target("sluice_core")
         add_arflags("-D", {force = true})
     end
 
--- Async runtime library (sluice-CORE-017+). OPT-IN, namespace sluice::async.
--- Built alongside the core but kept a separate static lib so the blocking
--- default (sluice_core) carries no async surface. ADR §A6: async is opt-in and
--- BlockingIoContext/Reader/Writer are untouched.
+-- Async runtime library. OPT-IN, namespace sluice::async: kept a separate
+-- static lib so the blocking default (sluice_core) carries no async surface.
 target("sluice_async")
     set_kind("static")
     set_default(false)
@@ -37,12 +40,15 @@ target("sluice_async")
     add_includedirs(R .. "include", {public = true})
     add_deps("sluice_core")
     add_files(R .. "src/async/*.cpp")
-    -- Installed header set: the canonical request closure.
-    -- detail/context_identity.hpp is private to library translation units (no
-    -- installed header includes it) and stays out of the package.
-    add_headerfiles(R .. "include/(sluice/async/*.hpp)",
-                    R .. "include/(sluice/async/detail/*.hpp)")
-    remove_headerfiles(R .. "include/sluice/async/detail/context_identity.hpp")
+    -- Installed header set: the exact v2 public async surface (root Appendix
+    -- B) — backend selection headers carry configs and named factories only;
+    -- the backend classes, the seam and all detail headers stay internal to
+    -- the library TUs and the isolated seam tests via -I include.
+    add_headerfiles(R .. "include/(sluice/async/async_io_context.hpp)",
+                    R .. "include/(sluice/async/request.hpp)",
+                    R .. "include/(sluice/async/request_scope.hpp)",
+                    R .. "include/(sluice/async/threadpool_backend.hpp)",
+                    R .. "include/(sluice/async/uring_backend.hpp)")
     -- The non-recursive glob above misses src/async/detail/. The context
     -- identity domain and the RequestCore substrate that the context owns are
     -- production now, so they are listed explicitly.
