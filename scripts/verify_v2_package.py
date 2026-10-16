@@ -612,9 +612,10 @@ def main():
     ok = compile_consumer(build_dir, prefix, [CONSUMERS / "w01_direct.cpp"],
                           build_dir / "w01_direct", [[]], ["-lsluice_core"],
                           command_log)
-    ran = ok and run([build_dir / "w01_direct"]).returncode == 0
-    gate("P0_W01_CORE_ONLY_CLEAN_ROOM", ran,
-         "compile+link+run against installed prefix; -lsluice_core only")
+    r_w01 = run([build_dir / "w01_direct"], capture_output=True, text=True) if ok else None
+    gate("P0_W01_CORE_ONLY_CLEAN_ROOM", ok and r_w01.returncode == 0,
+         f"rc={r_w01.returncode} (compile+link+run against installed prefix; "
+         "-lsluice_core only)" if ok else "build-failed")
 
     # 6. P1 consumers. No macro view is supplied: the v2 surface is
     # macro-view independent, which the ODR probe proves directly below.
@@ -698,31 +699,14 @@ def main():
     gate("NEGATIVE_V2_REMOVED_HEADERS_UNAVAILABLE", not unavailable_failures,
          str(unavailable_failures[:4]))
 
-    seam_probes = {
-        "derive_backend": "namespace sluice::async { class AsyncBackend; }\n"
-                          "struct B : sluice::async::AsyncBackend {};\n"
-                          "int main() { return 0; }\n",
-        "construct_backend": "namespace sluice::async { class AsyncBackend; }\n"
-                             "int main() { sluice::async::AsyncBackend* p =\n"
-                             "    new sluice::async::AsyncBackend; (void)p;"
-                             " return 0; }\n",
-        "unique_ptr_ctor": "#include <sluice/async/async_io_context.hpp>\n"
-                           "#include <memory>\n"
-                           "namespace sluice::async { class AsyncBackend; }\n"
-                           "int main() { sluice::async::AsyncIoContext ctx"
-                           "(std::unique_ptr<sluice::async::AsyncBackend>{});"
-                           " (void)ctx; return 0; }\n",
-    }
-    seam_failures = [name for name, text in seam_probes.items()
-                     if not expect_compile_failure(build_dir, prefix, name, text,
-                                                   command_log)]
-    # The internal detail::make_context factory must not be taught by the
-    # installed headers: an exported mangled symbol can always be reached by
-    # a hand-written declaration, so the boundary claim is that no installed
-    # header carries the spelling.
-    for rel in EXPECTED_V2_HEADERS:
-        if "make_context" in (prefix / "include" / rel).read_text():
-            seam_failures.append(f"{rel} declares detail::make_context")
+    # The seam probes compile the REAL installed headers; the boundary
+    # claim is that deriving from or constructing the backend, or invoking
+    # the unique_ptr constructor, fails there with the pinned diagnostics.
+    # The internal detail::make_context factory must additionally not be
+    # taught by any installed header: an exported mangled symbol can always
+    # be reached by a hand-written declaration, so the claim is that no
+    # installed header carries the spelling.
+    seam_failures = run_seam_negative_probes(build_dir, prefix, command_log)
     gate("NEGATIVE_V2_SEAM_UNAVAILABLE", not seam_failures, str(seam_failures))
 
     ok, why = expect_link_failure(build_dir, prefix,
