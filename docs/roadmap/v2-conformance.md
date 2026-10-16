@@ -40,7 +40,7 @@ Evidence (SHA/config) · Missing proof or gap · Next owner.
 
 | Requirement IDs | C++ owner | Current state | Target | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|---|
-| SEM-01..04, ERR-01 (shared oracle, open/close, precedence, offsets) | `detail/file_semantics.hpp`, `file_resource.*`, `blocking/file.hpp`, `src/blocking_file.cpp` | Shared oracle serves direct and both request paths; 0 recorded divergences | Root §6/§7 | VERIFIED (carried) | v1 campaign semantic suites at `dd83595d`/`b870a7c0` (Git history `c001bb1e`); in-tree `semantic_*` suite; request-path errno re-diff `request_error_domain_test` (#531 matrix liburing=y 68/68, liburing=n 53/53) | Header `detail/file_semantics.hpp` still installed until PR B (G9) | PR B (install only) |
+| SEM-01..04, ERR-01 (shared oracle, open/close, precedence, offsets) | `detail/file_semantics.hpp`, `file_resource.*`, `blocking/file.hpp`, `src/blocking_file.cpp` | Shared oracle serves direct and both request paths; 0 recorded divergences | Root §6/§7 | VERIFIED (carried) | v1 campaign semantic suites at `dd83595d`/`b870a7c0` (Git history `c001bb1e`); in-tree `semantic_*` suite; request-path errno re-diff `request_error_domain_test` (#531 matrix liburing=y 68/68, liburing=n 53/53) | `detail/file_semantics.hpp` left the install set with PR B (G9 row below: uninstalled-header negative probe) | — |
 | SEM-05 short I/O / EOF / composition | `blocking/file.hpp` (read_exact/write_all), request primitives | Direct compositions + short-count rules on both backends | Root §6 SEM-05 | VERIFIED (carried) | A2 record (v1 ledger, Git history); `semantic_short_io_reference_test` in tree | — | — |
 | SEM-06 durability | blocking + request sync paths | sync_data/sync_all incl. resize coverage (V27) on direct and request paths | Root §6 SEM-06 | VERIFIED (carried) | F6 requirements matrix (`docs/evidence/f6-final-correspondence-20261014/`); `semantic_durability_reference_test` in tree | Durability claims rest on documented OS/filesystem guarantees; release matrix enumeration outstanding (G10) | Release gate |
 | SEM-07 metadata/identity | `file_resource.*`, request `file_info`/`size` | kind/size/identity incl. request-path statx ops | Root §6 SEM-07 | VERIFIED (carried) | A2 + E1 records; `semantic_reference_case_test`, e1 uring suite | — | — |
@@ -114,10 +114,10 @@ correspondence-before record), and production evidence lives in G1–G7 rows.
 
 | Requirement IDs | C++ owner | Current state | Target | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|---|
-| Appendix B install surface (D2) | `xmake/libraries.lua` | 25 headers installed (incl. 4 host/cancel, 7 seam/detail, 3 core detail) | 11 installed public headers | **GAP (contraction pending)** | Install rules at `c001bb1e` (verified against Appendix B rows) | Physical 25→11 contraction + installed-header/build audit | PR B |
-| Host bundle removal (D1, §16) | `src/async/stackful_io_host.cpp` etc., 4 public headers, host tests | Bundle still present in tree (uncontracted residue pending deletion) | Physically deleted, core-only build unaffected | **GAP (removal pending)** | Tree at `c001bb1e`; consumers = host tests/seams (D2 record, F6 negative package proof) | PR B deletes code + consumers and records the audit | PR B |
-| Internal-type leakage / `AsyncBackend` seam (D2, BACKEND-01) | `include/sluice/async/async_io_context.hpp` | `AsyncBackend` public abstract class (line 63 area); context ctor takes caller-constructed `unique_ptr<AsyncBackend>`; `detail::` types appear in installed headers | No public extension protocol; selection explicit without constructing internal backend objects or including detail headers; factory spelling unfrozen pending implementation review | **GAP (seam contraction pending)** | Headers at `c001bb1e` | Seam-type refactor in PR B; `AsyncBackend` not installable after | PR B |
-| Installed-consumer compile/link under target surface (VERIFY-01 build row) | package rules | Clean-room consumer builds exist only for the 25-header era at recorded commits | Standalone consumer compile/link incl. core-only on the contracted surface | NOT_ASSESSED (surface does not exist yet) | F1 records (v1 ledger, Git history; 79-header era) + F5 25-header captures | Re-establish after PR B on the 11-header surface | PR B |
+| Appendix B install surface (D2) | `xmake/libraries.lua` | 11 installed public headers (precise allowlist for both targets) | 11 installed public headers | **VERIFIED (PR B)** | Allowlist in `xmake/libraries.lua` at PR B head; clean-room exact-set prefix gate + sole-include compiles in `docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-{noliburing,liburing}.json` (all gates PASS, both profiles) | — | — |
+| Host bundle removal (D1, §16) | deleted: `src/async/{stackful_io_host,fiber,fiber_ctx,cancel}.cpp`, 4 public headers, host test + w04 consumer + F4 probe | Bundle physically deleted; no dormant retention; core-only build unaffected | Physically deleted, core-only build unaffected | **VERIFIED (PR B)** | Commit `7d97e010` (bundle + exclusive consumers); archive members 13→9; full matrix green both profiles (8 cells, `verification-record.md` §1); deleted-header absence asserted by the package verifier negative probe | — | — |
+| Internal-type leakage / `AsyncBackend` seam (D2, BACKEND-01) | `include/sluice/async/detail/{async_backend,threadpool_backend,uring_backend,test_access}.hpp` (uninstalled) | Backend classes, seam and test hooks internal; public factories `make_threadpool_context` / `make_uring_context` (`Result`, `not_supported`); observer vocabulary on public enums; `AsyncIoContext(unique_ptr<AsyncBackend>)` gone | No public extension protocol; selection explicit without constructing internal backend objects or including detail headers | **VERIFIED (PR B)** | Commits `d0a3a52e`/`f873ba23`; negative seam probes (derive / construct / unique_ptr-construct fail from the prefix) + macro-view-independent ODR probe in both package manifests; design record `docs/evidence/pr-b-boundary-contraction-20261016/design-record.md` | — | — |
+| Installed-consumer compile/link under target surface (VERIFY-01 build row) | package rules (`scripts/verify_v2_package.py`) | Clean-room consumers on the 11-header surface: core-only P0, async workloads + micro-contracts, both profiles | Standalone consumer compile/link incl. core-only on the contracted surface | **VERIFIED (PR B)** | `v2-package-manifest-{noliburing,liburing}.json` all gates PASS at committed heads; clean-room firewall gates over the recorded command stream | — | — |
 
 ### G10 External event loop W-03 and release acceptance
 
@@ -133,9 +133,9 @@ for the first v2 release:
 
 | Gate | Requirement | Condition |
 |---|---|---|
-| RG1 | G7 LSan row | The LeakSanitizer finding on the uring poisoned-shutdown path is fixed with a regression oracle, or granted a formal owner-approved exception with recorded reasoning |
-| RG2 | D1/D2 (root §23.4) | PR B merged: host bundle deleted; install surface contracted 25→11; installed-header/build audit recorded |
-| RG3 | VERIFY-01 build row | Standalone consumer compile/link (core-only and async) passes on the contracted 11-header surface |
+| RG1 | G7 LSan row | The LeakSanitizer finding on the uring poisoned-shutdown path is fixed with a regression oracle, or granted a formal owner-approved exception with recorded reasoning. (PR B's wider matrix surfaces it under asanubsan-y; pre-existence at `5c1b14db` recorded in `docs/evidence/pr-b-boundary-contraction-20261016/matrix/asanubsan-y-rg1-lsan-disposition.txt`.) |
+| RG2 | D1/D2 (root §23.4) | PR B substance complete at the PR B head (G9 rows VERIFIED; audits recorded under `docs/evidence/pr-b-boundary-contraction-20261016/`); gate closes when the PR merges |
+| RG3 | VERIFY-01 build row | Substance complete: clean-room core-only and async consumer compile/link/run recorded on the 11-header surface in both profiles (`v2-package-manifest-*.json`); gate closes when the PR merges |
 | RG4 | REQ-01 | Request identity-domain enforcement or proved equivalence, with exhaustion evidence, recorded in this ledger |
 | RG5 | PROG-02 | io_uring settlement-notification evidence beyond the structural argument (deterministic oracle or reviewed equivalence) |
 | RG6 | PROD-02 | Release evidence enumerates tested compiler/architecture/kernel/liburing/filesystem configurations; W-01/W-02/W-03 pass on ThreadPool and io_uring in that matrix |
@@ -151,3 +151,26 @@ on. They establish their stated properties at their stated commits and
 configurations — nothing broader. A carried claim is re-based (re-run or
 correspondence-reargued) when the code it names changes; PR B will
 invalidate every row whose owner it touches.
+
+### Dated PR B re-basing (2026-10-16)
+
+PR B (boundary contraction) touched the owners of the G9 rows and the
+representation under several carried rows. Dispositions, recorded in full in
+`docs/evidence/pr-b-boundary-contraction-20261016/` (design record,
+verification record, package manifests, matrix, mutation kills):
+
+- G9: all four rows VERIFIED at the PR B head (above).
+- Carried rows whose owner changed only in representation (public factories
+  replacing direct construction; out-of-line `RequestBridge` calls replacing
+  inline template bodies; public observer enums replacing `detail::`
+  vocabulary; `ProgressPass` rename) were re-run, not correspondence-argued
+  alone: the full deterministic suite passed in all eight matrix cells
+  (debug/release/asanubsan/tsan x liburing n/y), and both moved B2
+  release-edge mutants still die on their named oracles. Model
+  correspondence for RequestCore/ObserverCore/ProgressSource/ShutdownCore is
+  representation-only per the verification record §4.
+- `Request<std::size_t>` grew 40→48 bytes (stored identity is the public
+  `RequestId`); an allowed breaking API change under D2, no added
+  allocation, ODR-pinned by the package probe.
+- RG1's LSan finding is unchanged from baseline (disposition recorded);
+  RG4–RG7 remain open and untouched by PR B.
