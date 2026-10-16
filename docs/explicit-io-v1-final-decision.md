@@ -9,6 +9,12 @@
 | Adoption | Replaces the earlier PR #389 target; merging adopts this revision in the repository |
 | Conformance | Not established by adoption; implementation and evidence belong in the [v1 conformance ledger](roadmap/v1-conformance.md) |
 
+> **Proposed successor (not yet adopted):** a v2 architecture and contract
+> candidate is PROPOSED at [`docs/explicit-io-contract.md`](explicit-io-contract.md).
+> This document remains the sole adopted normative root until that candidate's
+> adopting PR merges (GOV-05); on adoption it becomes superseded history under
+> the successor's GOV-03.
+
 This document is the design scaffold, contract dictionary, and decision reference for subsequent ADRs, C++ changes, tests, and formal models. It specifies the target rather than claiming that current code already implements it. A production bug does not amend this specification; a specification defect is repaired explicitly, with its affected requirements and evidence identified.
 
 ## Reading and lookup
