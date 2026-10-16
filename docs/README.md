@@ -71,7 +71,7 @@ conclusions; it is evidence and rationale, not an authority.
 ADR-0004 derives from the root and adds no scope. ADR-0003 (narrow stackful
 I/O host) was superseded and retired from the active tree by the v2 adoption
 (owner decision D1: the host bundle is outside v2 and is physically removed by
-the implementation PR); its Git history and the root's GOV-03 table record the
+PR B); its Git history and the root's GOV-03 table record the
 supersession, and it grants no surviving design or implementation authority.
 
 ## Historical ADRs
