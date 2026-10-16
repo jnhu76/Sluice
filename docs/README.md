@@ -8,7 +8,8 @@ an authority document. Only the root specification is normative.
 ## Current authority
 
 ```text
-Target architecture / contract        docs/explicit-io-v1-final-decision.md   (sole normative root, v1-r3)
+Target architecture / contract        docs/explicit-io-v1-final-decision.md   (sole normative root, v1-r4)
+Proposed successor (NOT adopted)      docs/explicit-io-contract.md             (v2 candidate, open PR)
 Implementation conformance            docs/roadmap/v1-conformance.md
 Execution roadmap                     GitHub issue #390 → tickets #391–#403
 Repository working rules              AGENTS.md
@@ -19,6 +20,14 @@ Repository working rules              AGENTS.md
   rules, and acceptance obligations. Every other document is derived from it or
   is evidence about a particular commit. No other document is a normative
   authority, and none stands as a peer of the root.
+- **[v2 architecture and contract candidate](explicit-io-contract.md)** is a
+  PROPOSED successor under the root's GOV-05. It is **not adopted** and carries
+  no normative force until its adopting PR merges; until then the v1 root above
+  remains the sole adopted authority and the candidate must be cited as a PR
+  candidate. It states a replacement target and the v1→v2 differences; whether
+  that target is better is a review question this map does not answer. It is
+  not evidence about a commit, and it does not move the option to merge or
+  close any PR.
 - **[v1 conformance ledger](roadmap/v1-conformance.md)** tracks which
   requirements have evidence and which do not. Adopting the target does not
   certify the code; nothing in this repository is VERIFIED without a recorded
@@ -49,11 +58,13 @@ same PR.
 | Path | Purpose |
 |---|---|
 | `docs/explicit-io-v1-final-decision.md` | Sole normative root (v1-r4) |
+| `docs/explicit-io-contract.md` | v2 architecture and contract candidate — PROPOSED, not adopted |
 | `docs/roadmap/v1-conformance.md` | Implementation/evidence ledger |
 | `docs/roadmap/v1-formal-evidence-map.md` | Non-normative formal evidence map (issue #391) |
+| `docs/performance/methodology.md` | Performance-measurement methodology (living rules for reproducible claims) |
 | `docs/README.md` | This navigation page |
 
-These four are the only current records under `docs/`. Everything else under
+These six are the only current records under `docs/`. Everything else under
 `docs/` is a retained historical record or a retired one kept for provenance.
 
 `research/RESULTS.md` (repository root, outside `docs/`) holds retained research
