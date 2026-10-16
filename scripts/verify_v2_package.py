@@ -361,9 +361,12 @@ def main():
     status_out = run(["git", "status", "--porcelain"], capture_output=True,
                      text=True, cwd=REPO).stdout
     dirty = [line for line in status_out.splitlines() if line.strip()]
-    declared_outputs = {str(Path(args.manifest_out).resolve())}
-    if args.archive_baseline_out:
-        declared_outputs.add(str(Path(args.archive_baseline_out).resolve()))
+    derived_baseline = Path(args.manifest_out).with_name(
+        Path(args.manifest_out).stem + "-archive-baseline.json")
+    baseline_out_path = (Path(args.archive_baseline_out) if args.archive_baseline_out
+                         else derived_baseline)
+    declared_outputs = {str(Path(args.manifest_out).resolve()),
+                        str(baseline_out_path.resolve())}
     dirty = [d for d in dirty
              if str(Path(d[3:].split(" -> ", 1)[-1]).resolve()) not in declared_outputs]
     worktree_clean = not dirty
@@ -431,9 +434,7 @@ def main():
     baseline_scratch = build_dir / "archive-baseline"
     baseline_scratch.mkdir(parents=True, exist_ok=True)
     baseline = build_archive_baseline(prefix, profile, baseline_scratch)
-    baseline_path = (Path(args.archive_baseline_out) if args.archive_baseline_out
-                     else Path(args.manifest_out).with_name(
-                         Path(args.manifest_out).stem + "-archive-baseline.json"))
+    baseline_path = baseline_out_path
     baseline_path.parent.mkdir(parents=True, exist_ok=True)
     baseline_path.write_text(json.dumps(baseline, indent=2) + "\n")
     baseline_sha = sha256_bytes(baseline_path.read_bytes())
