@@ -1,9 +1,9 @@
 {
   "FORMAT": "v2-package-manifest-v1",
   "PROFILE": "v2-noliburing",
-  "VERIFICATION_HEAD": "6f9058f2222ed8e7e2e1c7b766f907e9bb5eaa6e",
+  "VERIFICATION_HEAD": "7d565fc1a29c6a775db531c42e36c558cc003ebe",
   "VERIFICATION_HEAD_DIRTY": false,
-  "GENERATED_UTC": "2026-10-16T15:43:45.960580+00:00",
+  "GENERATED_UTC": "2026-10-16T16:22:15.088637+00:00",
   "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
   "ARCH": "x86_64",
   "KERNEL": "7.2.9-201.fc44.x86_64",
@@ -29,10 +29,10 @@
   ],
   "ARCHIVE_BASELINE": {
     "file": "docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-noliburing-archive-baseline.json",
-    "sha256": "415f59e7334991c8f18737a1a5da86eeeadc8b612f2c32bf76609001af5f3080",
+    "sha256": "10746b2fdbd97f121a8d52472003605a959614cf493de7e11324c14d222240b5",
     "archives": 2,
     "objects": 11,
-    "defined_symbols": 389,
+    "defined_symbols": 391,
     "external_undefined_symbols": 58
   },
   "PUBLIC_DEFINES": [],

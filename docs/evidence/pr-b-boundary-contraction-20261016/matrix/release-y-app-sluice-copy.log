@@ -4,4 +4,4 @@
 [0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/file_domain.cpp[0m
 [0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/safe_output.cpp[0m
 [0m[38;5;2;1m[ 87%]:[0m [38;5;5;1m<sluice-copy>[0m [38;5;5;1mlinking.release sluice-copy[0m
-[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.115s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.352s[0m
