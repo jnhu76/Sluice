@@ -2,10 +2,14 @@
 
 **Owning issue:** #394 (slice B1-1 only). **Design authorization:** #417
 (`B1_DESIGN_READY_WITH_CORRECTIONS` / `AUTHORIZE_B1_1_WITH_CORRECTIONS`).
-**Target authority:** the
-[v1 Architecture and Contract Reference](../explicit-io-v1-final-decision.md)
-(v1-r3) and the [v1 formal evidence map](v1-formal-evidence-map.md); the
-[v1 conformance ledger](v1-conformance.md) carries the ledger-facing record.
+**Target authority at the time:** the v1 Architecture and Contract Reference
+(v1-r3) and the v1 formal evidence map — both superseded and removed from the
+active tree ([v1 root at `c001bb1e`](https://github.com/jnhu76/Sluice/blob/c001bb1eb21f19c045e57558e13e5487335e1e86/docs/explicit-io-v1-final-decision.md),
+[evidence map at `c001bb1e`](https://github.com/jnhu76/Sluice/blob/c001bb1eb21f19c045e57558e13e5487335e1e86/docs/roadmap/v1-formal-evidence-map.md));
+the ledger-facing record lived in the
+[v1 conformance ledger at `c001bb1e`](https://github.com/jnhu76/Sluice/blob/c001bb1eb21f19c045e57558e13e5487335e1e86/docs/roadmap/v1-conformance.md).
+The current root is [v2](../explicit-io-contract.md) with the
+[v2 ledger](v2-conformance.md).
 **Branch:** `feat/394-b1-1-request-core-substrate`.
 
 > **Supersession (2026-10-15, #524).** This is a dated B1-1 slice record: its
@@ -19,8 +23,8 @@
 > mutation row, and the `ReleaseBind` entry in the MODEL ACTIONS mapping)
 > describe the pre-#524 model. Current authority:
 > [issue-524 evidence](../evidence/issue-524-requestcore-convergence-20261015/INDEX.md)
-> and the dated #524 section of the
-> [v1 conformance ledger](v1-conformance.md).
+> and the dated #524 section of the v1 conformance ledger
+> ([at `c001bb1e`](https://github.com/jnhu76/Sluice/blob/c001bb1eb21f19c045e57558e13e5487335e1e86/docs/roadmap/v1-conformance.md)).
 
 This note is the substrate's evidence record: the deterministic C++ evidence,
 the TLA+ safety/liveness results, the mutation campaign, the C++/TLA+

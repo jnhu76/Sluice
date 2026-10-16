@@ -8,13 +8,13 @@ They are retained for provenance and evidence only.
 They do not override:
 
 ```text
-docs/explicit-io-v1-final-decision.md     sole normative root for the v1 target
-docs/roadmap/v1-conformance.md            current implementation/evidence ledger
+docs/explicit-io-contract.md              sole normative root (v2-r1)
+docs/roadmap/v2-conformance.md            current implementation/evidence ledger
 ```
 
-No archived clause is incorporated by reference into the v1 target. If a rule
-must govern v1, it appears in the root specification. Nothing in this archive
-certifies v1 conformance, architecture ownership, or a current work item.
+No archived clause is incorporated by reference into the v2 target. If a rule
+must govern the product, it appears in the root specification. Nothing in this
+archive certifies v2 conformance, architecture ownership, or a current work item.
 Historical CLOSED/CONFORMANT/PROVED labels are scoped to the baseline and
 contract each record examined; Git history preserves the exact text and the
 decision trail for every file below.
