@@ -61,9 +61,10 @@ same PR.
 | `docs/explicit-io-contract.md` | v2 architecture and contract candidate — PROPOSED, not adopted |
 | `docs/roadmap/v1-conformance.md` | Implementation/evidence ledger |
 | `docs/roadmap/v1-formal-evidence-map.md` | Non-normative formal evidence map (issue #391) |
+| `docs/performance/methodology.md` | Performance-measurement methodology (living rules for reproducible claims) |
 | `docs/README.md` | This navigation page |
 
-These five are the only current records under `docs/`. Everything else under
+These six are the only current records under `docs/`. Everything else under
 `docs/` is a retained historical record or a retired one kept for provenance.
 
 `research/RESULTS.md` (repository root, outside `docs/`) holds retained research

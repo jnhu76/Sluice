@@ -2,12 +2,12 @@
 
 | Document field | Value |
 |---|---|
-| Revision | v2-c3 (candidate revision 3; see the revision record in §24) |
-| Status | **PROPOSED — not adopted.** This document becomes the sole normative root only when its adopting PR merges into `master`; see GOV-05. Two independent review rounds returned findings (DESIGN_READY_WITH_FINDINGS, then REVISE_BEFORE_ADOPTION); this revision addresses both; see §24 |
+| Revision | v2-c4 (candidate revision 4; see the revision record in §24) |
+| Status | **PROPOSED — not adopted.** This document becomes the sole normative root only when its adopting PR merges into `master`; see GOV-05. Three independent review rounds returned findings (DESIGN_READY_WITH_FINDINGS, then two REVISE_BEFORE_ADOPTION rounds); this revision addresses the third round's corrections; see §24 |
 | Role | Proposed successor normative root for Sluice product scope, public behavior, responsibility boundaries, lifetime rules, and acceptance obligations |
 | Canonical source | `jnhu76/Sluice` / `docs/explicit-io-contract.md` |
 | Supersedes on adoption | `docs/explicit-io-v1-final-decision.md` (v1-r4), which becomes superseded history under GOV-03 |
-| Implementation baseline | The C++ described here is `master` at `dd83595d` (PR #536's G1 optimization merged by squash; its one-time evidence directories are not in the tree). §23.1 records which obligations the baseline meets and which ride the open residue-fix branch |
+| Implementation baseline | The C++ described here is `master` at `b870a7c0` (PR #536's G1 optimization squash-merged as `dd83595d`, then PR #543's io_uring owed-delivery report fix; #536's one-time evidence directories are not in the tree). §23.1 records which obligations the baseline meets and which remain open |
 | Conformance | Not established by this document. This is a design freeze; implementation and evidence live in the conformance ledger, which must be re-based onto this document at adoption |
 
 This document is a **replacement architecture and contract**, not a rename of v1.
@@ -211,7 +211,7 @@ this root.
 | Progress available | Driver has work or control state to inspect | Any particular request terminal |
 | Progress owner | Exclusive active driver of one context | The only thread allowed to submit |
 | Progress pass | One bounded nonblocking drive step with a post-pass factual report | A completion guarantee or a wait |
-| Progress pass boundary | The entry snapshot that bounds what one pass may process | A lock state or a queue identity |
+| Progress pass boundary | The finite execution budget and cutoff condition that bound what one pass, or one bounded phase of it, may process | A lock state, a queue identity, or any single mandated algorithm; an entry snapshot is one backend's implementation of the boundary, not its definition |
 | Shutdown complete | Execution resources quiescent/closed, accepted operations settled | All public results discarded or context destroyed |
 | Context destruction | Release context and slot storage after all external bindings end | Safe survival of stale handle objects |
 | Deadline | Time bound on waiting, unless another contract explicitly says otherwise | Bound on physical cancellation/settlement |
@@ -844,9 +844,14 @@ delivery sweep — provided every phase's work is finite at the moment that
 phase begins. Work a producer creates while the pass runs may be delivered
 by that pass or deferred to a later one; the return must never wait on it.
 The post-pass report must state actionable residue honestly: work the
-pass's boundary left behind — queued publications, queued dispatch, and a
-published result whose delivery event is still owed — is immediate work,
-and the report MUST NOT depend on periodic polling to surface it.
+pass's boundary left behind — queued publications, a published result
+whose delivery event is still owed, and dispatch or retry work the
+progress owner itself must perform — is immediate work, and the report
+MUST NOT depend on periodic polling to surface it. Work already handed
+to an autonomous execution resource (for example a worker draining its
+dispatch queue) is pending accepted work, not immediate driver work: it
+is reported through the accepted-work fact, and classifying it as
+immediate would have the owner spin on work it cannot advance.
 
 Progress available and request public-terminal are different events. Waking
 the driver is not a completion guarantee. A health/control event also wakes
@@ -1420,7 +1425,7 @@ HANDLE-03 precondition.
 | V25 | Core-only standalone consumer | No host-candidate link or include dependency |
 | V26 | Request handles released but final control pin retires later | Slot reclaim progresses without unrelated new I/O |
 | V27 | Completed direct resize, then successful sync without conflicting mutation | File-size change covered on direct and request sync paths; resize alone grants no durability |
-| V28 | Continuous zero-op submission against a driving owner | Each progress pass returns within its stated bound; produced work is delivered by later passes; no lost delivery and no lost control-reference retirement |
+| V28 | Continuous zero-op submission against a driving owner | Every pass returns within its stated finite bound while new work keeps arriving; continued driving delivers every produced event and retires every control reference — no lost delivery, no residue that only periodic polling would surface. Which pass delivers concurrently produced work is a backend scheduling choice under PROG-01; the exact entry-snapshot delivery oracle is the ThreadPool discriminator (`threadpool_progress_pass_bound_test`), not a cross-backend requirement |
 | V29 | Zero-op publication lands after the pass's delivery sweep, before its report | The pass report lists the owed delivery as immediate work; a wait spanning the landing serves the delivery instead of returning a zero-completion progress verdict over it; the standing notification alone is not a sufficient report |
 
 ## VERIFY-06 Formal evidence scope
@@ -1518,9 +1523,9 @@ and keeps the V01–V27 set otherwise unchanged, but drops v1's disclaimer
 that the scenarios are named acceptance targets rather than existing tests
 — the disclaimer is load-bearing and is restated here: V28's discriminator
 exists at the baseline (`threadpool_progress_pass_bound_test`, merged in
-`dd83595d`), V29's exists on the open residue-fix branch
-(`codex/uring-owed-residue-report`), and no other V-scenario test is
-claimed to exist at the baseline.
+`dd83595d`), V29's exists at the baseline (`tests/uring_owed_residue_test.cpp`,
+merged with the report fix by PR #543 in `b870a7c0`), and no other
+V-scenario test is claimed to exist at the baseline.
 
 Changed or new:
 
@@ -1533,7 +1538,7 @@ Changed or new:
 | PROD-02 | Stackful host = optional build profile; W-04 conditional | Host bundle out of normative surface; W-04 UNSUPPORTED | `OPTIONAL_W04_SUPPORTED=NO` with the F6 negative package proof; keeping an unsupported optional profile installed invites misdocumentation |
 | PROD-02 | — | User-authored backends explicitly unsupported | Closes the de-facto installed extension surface (BACKEND-01) |
 | TERM-01 | — | Adds progress pass / pass boundary / backend seam / derived summary | Names for rules this document now states explicitly |
-| PROG-01 | "reports whether immediate work remains…" (informal) | Adds the finite pass bound and honest post-pass residue reporting as requirements, with the bounded algorithm left to the backend | Codifies the pass-boundary discipline whose defects PR #536 found on one backend and the second review generalized: the pass bound is a budget requirement, not one mandated algorithm, and residue honesty explicitly includes published-but-undelivered events (V29), whose uring omission the deterministic oracle on `codex/uring-owed-residue-report` confirmed and the minimal report fix closes |
+| PROG-01 | "reports whether immediate work remains…" (informal) | Adds the finite pass bound and honest post-pass residue reporting as requirements, with the bounded algorithm left to the backend | Codifies the pass-boundary discipline whose defects PR #536 found on one backend and the second review generalized: the pass bound is a budget requirement, not one mandated algorithm, and residue honesty explicitly includes published-but-undelivered events (V29), whose uring omission the deterministic oracle now named `tests/uring_owed_residue_test.cpp` confirmed and the minimal report fix (merged by PR #543 at `b870a7c0`) closed |
 | PROG-02 | Coalescing/spurious allowed | Adds the suppression rule: a suppressed physical wake is allowed only while a pending unread wake stands; never a second drain authority | Codifies the C1 mechanism boundary proven by PR #536 |
 | BOUND-01 | Named budgets | Adds the resource-bounded progress-storage requirement with owned allocation-failure outcomes | Codifies the budget requirement behind the PR #536 publication-batch fix without freezing the allocation scheme |
 | GOV-05 | Snapshot provenance rules (commit-over-timestamp, sidecar placement, byte-preserving copies, repair procedure) | Keeps the self-identification and UTF-8 rules; drops the distribution-hygiene detail | The dropped text regulates how snapshots are distributed, not product behavior; an adopter who needs it should re-import it in the same amendment as the install contraction |
@@ -1544,7 +1549,7 @@ Changed or new:
 | §20 MIG | Phase A–G sequence, current-to-target map, release gate | Completed-retirement record; steady-state evolution | The map's work is done; the release gate's substance lives in VERIFY and the ledger |
 | VERIFY-06 | (none — evidence map lived outside the root) | In-root formal evidence scope table with explicit non-coverage | Prevents model-scope overclaim |
 | V28 | — | New: continuous zero-op adversarial pass bound | The discriminator that distinguishes bounded from unbounded passes; implemented by `threadpool_progress_pass_bound_test` at the baseline |
-| V29 | — | New: zero-op publication after the delivery sweep | The discriminator that distinguishes an honest immediate residue from a false quiescence report; implemented by `tests/uring_owed_residue_test.cpp` on the open `codex/uring-owed-residue-report` branch |
+| V29 | — | New: zero-op publication after the delivery sweep | The discriminator that distinguishes an honest immediate residue from a false quiescence report; implemented by `tests/uring_owed_residue_test.cpp`, merged with the report fix by PR #543 at the baseline |
 | OBS-04 | Post-accept adapter failure: a completed-return adapter reserves observation/cleanup resources before acceptance or retains the accepted request on a guaranteed settlement path; it cannot return a wait/allocation error or throw while hiding accepted borrowed work, and fallback settlement cannot secretly block an external event loop | **Retired ID**, with its substance restated under live owners: OBS-01 ("resource failure leaves the accepted request owned and observable by polling"), BOUND-01 (bounded recovery for observer metadata/delivery records; no post-acceptance re-allocation on the progress path), §16 (the bounded scope settles every request it accepts) and S7 (observer-failure orphaning) | Its subjects were *adapter* invocation contracts, and the adapters it constrained were the host bundle's. With the host out of the normative surface, the adapter-side property has no live subject; the surviving obligations are restated above rather than left implicit, and no live requirement is removed by retiring the ID |
 
 # 23. Decision tables
@@ -1552,19 +1557,19 @@ Changed or new:
 ## 23.1 Domain decisions
 
 **Reading the "Current code" column.** The C++ described there is `master` at
-the document's implementation baseline `dd83595d` (the squashed merge of PR
-#536). The C1 notification-suppression bit, the bounded entry-snapshot
+the document's implementation baseline `b870a7c0` (PR #536's G1 optimization
+squash-merged as `dd83595d`, then PR #543's io_uring owed-delivery report
+fix). The C1 notification-suppression bit, the bounded entry-snapshot
 progress pass for the ThreadPool backend, and the derived
-`outstanding_summary()` all merged in that commit. One obligation remains on
-an open follow-up branch: the io_uring backend's post-pass report of owed
-delivery events, which the deterministic oracle on
-`codex/uring-owed-residue-report` confirmed and the minimal report fix closes.
-That branch is explicitly named in the ThreadPool, io_uring, and formal
-evidence rows below. PROG-01's pass bound, PROG-02's suppression rule, and
-BOUND-01's resource-bound requirement are met at the baseline by the merged
-ThreadPool implementation; the uring backend satisfies the generalized bound
-through separately bounded phases and will satisfy the owed-residue honesty
-requirement once the open branch merges.
+`outstanding_summary()` all merged in `dd83595d`; the io_uring backend's
+post-pass report of owed delivery events — whose omission the deterministic
+oracle now named `tests/uring_owed_residue_test.cpp` confirmed — merged in
+PR #543. No obligation of this document rides an open branch: PROG-01's
+pass bound, PROG-02's suppression rule, and BOUND-01's resource-bound
+requirement are met at the baseline by the ThreadPool implementation, and
+the uring backend satisfies the generalized bound through separately
+bounded phases and the owed-residue honesty requirement through the merged
+report fix.
 
 | Domain | Current code | v1 rule | v2 decision | Breaking change | Evidence | Remaining gap |
 |---|---|---|---|---|---|---|
@@ -1574,16 +1579,16 @@ requirement once the open branch merges.
 | RequestCore authority | acceptance/terminal/publication/reclaim in `detail/request_core.*`; the derived `outstanding_summary()` merged in `dd83595d`; `occupancy()` is the settlement/teardown authority in both states | REQ | KEEP; the derived `outstanding_summary()` is non-authoritative where it exists; `occupancy()` is the settlement/teardown authority in both states | None | RequestCore TLC safety+liveness PASS (re-run at `64e3241b`; the modeled sources are byte-identical in `dd83595d`); C2 A/B; PR #536 reviewer finding C5 | Identity-domain debt (uring enforces, core/TP admission does not) carried as standing ledger item |
 | Request<T> / RequestId | `request.hpp` move-only handle | HANDLE/REQ-01 | KEEP | None | B2 records; public_request 13/13 | None |
 | Observer lifecycle | generation-armed at-most-one registration | OBS | KEEP | None | ObserverCore model + C1 campaign | None |
-| ProgressSource | eventfd, saturating epochs; the C1 suppression bit merged in `dd83595d` | PROG | KEEP; suppression formalized in PROG-02; fd never a second drain authority | None | C1 negative-oracle classes N1–N6; ProgressSource model (its correspondence header pins the pre-#536 implementation, so the suppression rule's model coverage is the equivalence argument in PROG-02, not a new model action) | io_uring settlement-notification oracle remains structural-only (standing ledger debt) until the owed-residue fix on `codex/uring-owed-residue-report` lands; suppression rule met at the baseline |
-| Progress pass | ThreadPool: entry-snapshot publications + entry-snapshot owed deliveries + bounded store, merged in `dd83595d`; io_uring: bounded phases with full-capacity delivery sweep | PROG-01 (now explicit) | KEEP with generalized finite-bound + honest residue requirement | None | PR #536 negative/positive oracles (pre-fix failures recorded); `threadpool_progress_pass_bound_test` at the baseline; `tests/uring_owed_residue_test.cpp` on `codex/uring-owed-residue-report` | Bound met at the baseline; residue honesty met by ThreadPool, pending the io_uring owed-residue fix on `codex/uring-owed-residue-report` |
-| ThreadPool backend | merged-lock pass, bounded rings, delivery records | BACKEND | KEEP mechanism; details non-contract (BACKEND-04) | None | G1 A/B + full suite + mutation campaign | ThreadPool evidence does not extend to other backends (scoped by record); owed-event residue is reported by ThreadPool only until the io_uring report fix on `codex/uring-owed-residue-report` lands |
-| io_uring backend | ring + eventfd registration, transport/completion split; owed-delivery report fix pending on `codex/uring-owed-residue-report` | BACKEND-02/03 | KEEP mechanism; conditional availability; details non-contract | None | E1/B1-C/C2-C records; real-kernel WSL2 evidence; `tests/uring_owed_residue_test.cpp` on `codex/uring-owed-residue-report` | The LeakSanitizer finding on the poisoned-shutdown path is reproduced at `dd83595d` under the ASan+UBSan suite (`tests/shutdown_lifecycle_test.cpp`, `poison_with_in_flight_cqe`) and remains a standing adoption-time item; it is not introduced by the owed-residue fix |
+| ProgressSource | eventfd, saturating epochs; the C1 suppression bit merged in `dd83595d` | PROG | KEEP; suppression formalized in PROG-02; fd never a second drain authority | None | C1 negative-oracle classes N1–N6; ProgressSource model (its correspondence header pins the pre-#536 implementation, so the suppression rule's model coverage is the equivalence argument in PROG-02, not a new model action) | io_uring settlement-notification oracle remains structural-only (standing ledger debt); suppression rule met at the baseline |
+| Progress pass | ThreadPool: entry-snapshot publications + entry-snapshot owed deliveries + bounded store, merged in `dd83595d`; io_uring: bounded phases with full-capacity delivery sweep, owed-delivery residue report merged by PR #543 | PROG-01 (now explicit) | KEEP with generalized finite-bound + honest residue requirement | None | PR #536 negative/positive oracles (pre-fix failures recorded); `threadpool_progress_pass_bound_test` at the baseline; `tests/uring_owed_residue_test.cpp` merged in `b870a7c0` | Bound and residue honesty met by both shipped backends at the baseline |
+| ThreadPool backend | merged-lock pass, bounded rings, delivery records | BACKEND | KEEP mechanism; details non-contract (BACKEND-04) | None | G1 A/B + full suite + mutation campaign | ThreadPool evidence does not extend to other backends (scoped by record); owed-event residue is reported by both shipped backends at the baseline |
+| io_uring backend | ring + eventfd registration, transport/completion split; owed-delivery report fix merged by PR #543 | BACKEND-02/03 | KEEP mechanism; conditional availability; details non-contract | None | E1/B1-C/C2-C records; real-kernel WSL2 evidence; `tests/uring_owed_residue_test.cpp` at the baseline | The LeakSanitizer report on the poisoned-shutdown path (`tests/shutdown_lifecycle_test.cpp`, `poison_with_in_flight_cqe`) is a known test-side finding whose classification rests on the #536 commit records — recorded as release-validation debt, not a v2 specification design defect and not a regression of the merged residue fix; before the first v2 release it must be either fixed or granted a formal exception |
 | Backend extensibility | public `AsyncBackend` + 7 installed detail headers as de-facto contract | BACKEND-01 (stated internal, shipped public) | SIMPLIFY — seam closed to shipped backends; detail headers reclassified implementation (uninstall = follow-up slice) | Install-surface break for hypothetical external backend authors; unknown external use flagged, not assumed absent | F1 package records; consumer census | Install contraction slice + external-use disclosure at adoption |
 | Optional stackful host + cancel kit | shipped + tested, `IMPLEMENTED_UNVERIFIED`, W-04 unsupported | PROD-02 optional profile | REMOVE from normative surface (UNSUPPORTED candidate); uninstall in follow-up; hard code-removal = owner decision | Public headers `fiber/fiber_ctx/stackful_io_host/cancel` leave install set | D2 record; F6 `N/A_WITH_NEGATIVE_PACKAGE_PROOF`; consumers = host tests only | Owner decision: hard remove vs non-installed retention |
 | RequestScope (W-02) | owned-driver bounded scope | HOST-02 substance without the host | KEEP | None | D1 record, six killed mutants | None |
 | measurement/effect/result/error vocabulary | shipped, diagnostic + ERR vocabulary | ERR/BOUND | KEEP as non-authoritative diagnostics | None | F1 classification | None |
 | Legacy surfaces | absent from tree | MIG-02 | Completed retirement; no re-admission without amendment | Already broken in v1 campaign | F2–F6 records | External use of retired surfaces UNKNOWN (standing disclosure) |
-| Formal evidence | 4 living TLA+ models + mutation mirrors | (evidence map, non-root) | KEEP as scoped evidence; VERIFY-06 scope table is normative honesty | None | G1 formal receipts; 171-gate shutdown run | Full campaign is campaign-scale, not per-commit; the 71/72 mutation record and the owed-residue oracle both rest on the merged #536 code plus the open `codex/uring-owed-residue-report` branch |
+| Formal evidence | 4 living TLA+ models + mutation mirrors | (evidence map, non-root) | KEEP as scoped evidence; VERIFY-06 scope table is normative honesty | None | G1 formal receipts; 171-gate shutdown run | Full campaign is campaign-scale, not per-commit; the 71/72 mutation record and the owed-residue oracle rest on code merged at the baseline (`dd83595d` and `b870a7c0` respectively) |
 
 ## 23.2 Special checks (mission-mandated)
 
@@ -1635,7 +1640,7 @@ requirement once the open branch merges.
 | Bounded scope (W-02) | `include/sluice/async/request_scope.hpp` | scope/pipeline oracles; V18/V19 |
 | Observation protocol | core observer phases + `observer_protocol.hpp` | `ObserverCore.tla`; C1 campaign |
 | Progress authority | `include/sluice/async/detail/progress_source.hpp` | `ProgressSource.tla`; progress ownership suites; no-lost-wake matrices |
-| Pass bound + suppression mechanism | `src/async/threadpool_backend.cpp`, `uring_backend.cpp` | PR #536 oracles merged in `dd83595d`; suppression test; V28 discriminator at the baseline; V29 discriminator on `codex/uring-owed-residue-report` |
+| Pass bound + suppression mechanism | `src/async/threadpool_backend.cpp`, `uring_backend.cpp` | PR #536 oracles merged in `dd83595d`; suppression test; V28 discriminator at the baseline; V29 discriminator (`tests/uring_owed_residue_test.cpp`) merged by PR #543 |
 | Backend seam | `AsyncBackend` + `threadpool_backend.*`, `uring_*.cpp` | cutover suites; E1 conformance; `ShutdownCore.tla` |
 | Shutdown lifecycle | `src/async/async_io_context.cpp` | `shutdown_lifecycle_test` (9 TP / 17 uring scenarios); `ShutdownCore.tla` |
 
@@ -1647,8 +1652,8 @@ disposition for the affected mechanism is the conservative one stated here.
 
 | # | Decision | Conservative default in force | Why it is not the author's to decide |
 |---|---|---|---|
-| D1 | Optional stackful I/O host bundle: hard code removal vs non-installed retention | Keep the code in the tree, uninstalled from `include/`; W-04 stays UNSUPPORTED in the normative surface | Removing shipped code can break unknown external users; PROD-03 requires disclosure, not silent deletion |
-| D2 | Install-surface contraction slice (which of the 10 SIMPLIFY headers become internal, in which PR) | Classification is recorded in Appendix B; no install set is changed by this document | Changing the install set is a compatibility action that must be sequenced with the ledger and release policy |
+| D1 | Optional stackful I/O host bundle: hard code removal vs non-installed retention | Keep the code in the tree; the four host/cancel headers (`fiber`, `fiber_ctx`, `stackful_io_host`, `cancel`) are CURRENT_INSTALLED and remain installed until the D2 contraction slice executes — their uninstalled state is that slice's TARGET_UNINSTALLED outcome, not a present fact; W-04 stays UNSUPPORTED in the normative surface | Removing shipped code can break unknown external users; PROD-03 requires disclosure, not silent deletion |
+| D2 | Install-surface contraction slice (which of the 10 SIMPLIFY headers become internal, and when the 4 host-bundle REMOVE headers leave the install set, in which PR) | Classification is recorded in Appendix B; no install set is changed by this document | Changing the install set is a compatibility action that must be sequenced with the ledger and release policy |
 | D3 | External-use disclosure for the headers queued for contraction | Treat existing installed use as possible; none may be removed on this document alone | Only the owner can confirm the external-consumer population |
 | D4 | Adoption of this candidate (GOV-05) and the PR that performs it | v1-r4 remains the sole adopted root | Adoption is an owner act; a candidate PR cannot adopt itself |
 | D5 | Conformance-ledger re-base onto this root (the ledger still references v1-r4 IDs, including the original VERIFY-04 meaning) | The ledger keeps its v1-r4 status | The ledger is adopted-process evidence; re-basing it is an adoption follow-up, not a candidate act |
@@ -1658,7 +1663,7 @@ Answers recorded as "no external consumers, proceed" make D1–D3 actionable in 
 follow-up implementation slice; answers recorded as "retain" leave Appendix B's
 KEEP rows for those headers.
 
-## Appendix B — Installed-surface classification (25 installed headers at baseline `dd83595d`)
+## Appendix B — Installed-surface classification (25 installed headers at baseline `b870a7c0`)
 
 | Header | v2 disposition |
 |---|---|
@@ -1711,7 +1716,8 @@ documented as implementation surface rather than contract.
 |---|---|---|
 | v2-c1 (PROPOSED) | Re-derives the contract as a steady-state root: carries forward all proven semantic/lifetime/progress/shutdown requirements with stable IDs; retires v1 migration machinery; declares W-04 and the stackful-host bundle UNSUPPORTED/out-of-surface; closes the backend seam and classifies all 25 installed headers; codifies progress-pass bounding, suppression rules, and derived-summary non-authority learned from PR #536; adds V28 and the formal-evidence scope table | No adopted behavior changes by itself. On adoption: install surface changes require the recorded follow-up slices; documentation must not describe the host bundle or user backends as supported; the ledger re-base onto this root is an adoption obligation |
 | v2-c2 (PROPOSED) | Independent-review response: §23.1 states the two baselines and annotates the rows whose obligation only the open PR #536 carries; PROG-01's rationale is corrected (bounded-but-rescanning pass that absorbed produced work and allocated in-pass, not an "unbounded" pass); OBS-04 gets an explicit retirement row with its substance mapped to live owners; GOV-05's shortening, PROD-01's wording and PROD-02's Deferred→Unsupported change get §22 rows; VERIFY-04's ProgressSource row states the equivalence argument instead of claiming a suppression action; the 71/72 record's location and this candidate's non-coverage of it are named; the VERIFY-04/05 renumbering is disclosed with v1's disclaimer restated; Appendix B's target count corrected to 11; §23.4 gains D5 and D6 | No requirement is added or removed beyond v2-c1 except OBS-04's explicit retirement (whose substance is restated) and the newly recorded PROD-01/PROD-02 wording. The review's blocker-class finding was the baseline-honesty one, now stated in §23.1 |
-| v2-c3 (this revision, PROPOSED) | Second independent-review response: implementation baseline updated to `dd83595d` (#536 merged), removing all "PR #536 candidate only" annotations; PROG-01 generalized from a mandated entry-snapshot algorithm to a finite-bound + honest-residue invariant that explicitly covers owed delivery events; BOUND-01 generalized from setup-time allocation to a resource-bound + owned-allocation-failure requirement; VERIFY-04 restored to v1's meaning (named acceptance scenarios), the formal-evidence scope table moves to VERIFY-06, and V29 is added; the io_uring owed-residue report gap is discriminated by `tests/uring_owed_residue_test.cpp` on the open `codex/uring-owed-residue-report` branch; the known LeakSanitizer finding on the uring poisoned-shutdown path is reproduced at `dd83595d` and recorded as a standing adoption item; `docs/performance/methodology.md` is corrected to allow non-authoritative derived runtime state | No requirement is added or removed beyond v2-c2. The owed-residue fix is a behavior refinement on a shipped backend that the v2 root already obliges; it closes the uring residue-report gap identified in §23.1. The LSan finding remains an open adoption item, not a new regression |
+| v2-c3 (PROPOSED) | Second independent-review response: implementation baseline updated to `dd83595d` (#536 merged), removing all "PR #536 candidate only" annotations; PROG-01 generalized from a mandated entry-snapshot algorithm to a finite-bound + honest-residue invariant that explicitly covers owed delivery events; BOUND-01 generalized from setup-time allocation to a resource-bound + owned-allocation-failure requirement; VERIFY-04 restored to v1's meaning (named acceptance scenarios), the formal-evidence scope table moves to VERIFY-06, and V29 is added; the io_uring owed-residue report gap is discriminated by `tests/uring_owed_residue_test.cpp` on the open `codex/uring-owed-residue-report` branch; the known LeakSanitizer finding on the uring poisoned-shutdown path is reproduced at `dd83595d` and recorded as a standing adoption item; `docs/performance/methodology.md` is corrected to allow non-authoritative derived runtime state | No requirement is added or removed beyond v2-c2. The owed-residue fix is a behavior refinement on a shipped backend that the v2 root already obliges; it closes the uring residue-report gap identified in §23.1. The LSan finding remains an open adoption item, not a new regression |
+| v2-c4 (this revision, PROPOSED) | Third independent-review response: implementation baseline moved to `b870a7c0` — PR #543's uring owed-delivery residue report and its discriminator `tests/uring_owed_residue_test.cpp` are merged, no obligation of this document rides an open branch, and `dd83595d` remains only the #536 freeze-evidence SHA (§23.1 preamble and rows, §22, §23.3, Appendix B); TERM-01's progress pass boundary is redefined as the finite execution budget plus cutoff condition, naming the entry snapshot as one backend implementation rather than the definition; V28's oracle is aligned with PROG-01 — per-pass finite bound, no lost delivery, continued driving completes obligations — with the exact entry-snapshot delivery expectation moved to the ThreadPool discriminator; PROG-01's residue classification now distinguishes dispatch/retry work the progress owner must perform from work already handed to an autonomous execution resource, which is pending accepted work; §23.4 D1 states the four host/cancel headers as CURRENT_INSTALLED with uninstalled as the contraction slice's target; `docs/performance/methodology.md` joins the continuously maintained documents in `docs/README.md`; the uring LeakSanitizer report is recorded as a known test-side finding and release-validation debt that must be fixed or formally excepted before the first v2 release | No requirement is added or removed beyond v2-c3. The revision closes the factual staleness and cross-section contradictions the third review found (baseline state, TERM-01/PROG-01/V28 budget-and-delivery alignment, dispatch-residue classification); it changes no merged behavior and creates no new obligation |
 
 Subsequent entries identify specific changed requirement IDs; the full
 before/after remains in Git.
