@@ -137,6 +137,20 @@ class SeamNegativeProbeTests(unittest.TestCase):
                 ok, "a probe failing for another reason must not count as the "
                     "expected negative result")
 
+    def test_installed_mutant_define_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = stage_installed_headers(tmp)
+            self.assertEqual(verifier.installed_mutant_define_findings(prefix), [])
+            installed = prefix / "include" / "sluice" / "async" / "request.hpp"
+            installed.write_text(
+                installed.read_text()
+                + "\n#if defined(SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING)\n"
+                  "#endif\n")
+            findings = verifier.installed_mutant_define_findings(prefix)
+            self.assertEqual(len(findings), 1,
+                             f"a mutant-guarded installed header must be flagged, "
+                             f"got {findings}")
+
 
 if __name__ == "__main__":
     unittest.main()

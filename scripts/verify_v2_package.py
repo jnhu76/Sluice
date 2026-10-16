@@ -409,6 +409,17 @@ def run_seam_negative_probes(build_dir, prefix, command_log):
     return failures
 
 
+def installed_mutant_define_findings(prefix):
+    """Mutation injection points belong to internal TUs; no installed header
+    may change consumer behavior through a SLUICE_*_MUTANT_* define."""
+    findings = []
+    for rel in EXPECTED_V2_HEADERS:
+        text = (prefix / "include" / rel).read_text()
+        if re.search(r"SLUICE_\w*MUTANT", text):
+            findings.append(f"{rel} carries a SLUICE_*_MUTANT_* region")
+    return findings
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="release", choices=["release", "debug"])
@@ -586,8 +597,10 @@ def main():
             "installed headers read no build-profile macro: consumer TUs need "
             "no SLUICE_HAS_LIBURING define and may hold any view without "
             "layout divergence (V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT)",
-            "installed headers contain SLUICE_*_MUTANT_* guarded regions; "
-            "package consumers must NEVER define these macros",
+            "installed headers carry no SLUICE_*_MUTANT_* region: mutation "
+            "injection points live in internal TUs, so consumer compilation "
+            "cannot change library behavior through a define "
+            "(NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED)",
         ],
         "EXPECTED_EXTERNAL_WORKLOADS": P0_CONSUMERS + P1_CONSUMERS + [
             "w03_external_loop_threadpool", "w03_external_loop_uring", "odr_two_tu",
@@ -595,6 +608,7 @@ def main():
         "NEGATIVE_PROBES": [
             "removed_and_internal_headers_unavailable",
             "backend_seam_unavailable",
+            "mutant_defines_not_installed",
             "async_symbols_not_in_core_archive",
         ],
     }
@@ -708,6 +722,10 @@ def main():
     # installed header carries the spelling.
     seam_failures = run_seam_negative_probes(build_dir, prefix, command_log)
     gate("NEGATIVE_V2_SEAM_UNAVAILABLE", not seam_failures, str(seam_failures))
+
+    mutant_findings = installed_mutant_define_findings(prefix)
+    gate("NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED", not mutant_findings,
+         str(mutant_findings))
 
     ok, why = expect_link_failure(build_dir, prefix,
                                   CONSUMERS / "negative_async_symbols_in_core.cpp",
