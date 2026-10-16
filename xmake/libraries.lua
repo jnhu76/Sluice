@@ -57,12 +57,12 @@ target("sluice_async")
     if is_plat("linux") then
         add_arflags("-D", {force = true})
     end
-    -- The uring public class definition (include/sluice/async/uring_backend.hpp)
-    -- is #if-guarded on SLUICE_HAS_LIBURING, so the macro is part of the
-    -- library's public usage requirement: every consumer TU must see the same
-    -- guarded layout the library was compiled with, or the ODR is violated.
-    -- Public define + public link propagate both from this single config
-    -- point; consumers must not hand-copy the macro.
+    -- SLUICE_HAS_LIBURING propagates the build profile's io_uring
+    -- availability to xmake consumers from this single config point. The
+    -- installed headers read no build-profile macro (the v2 package ODR
+    -- probe verifies public layouts are macro-view independent), so the
+    -- define carries availability, not a layout constraint. Consumers must
+    -- not hand-copy it.
     add_defines(sluice_liburing_profile_define(), {public = true})
     if has_config("liburing") then
         add_defines("SLUICE_HAS_LIBURING", {public = true})

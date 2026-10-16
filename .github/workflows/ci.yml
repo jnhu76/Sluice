@@ -50,8 +50,8 @@ jobs:
       - name: Scan C++ comments
         run: python3 scripts/check_cpp_comment_authority.py .
 
-  f1-verifier-selftests:
-    name: F1 verifier provenance self-tests
+  package-verifier-selftests:
+    name: Package verifier surface self-tests
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -17,19 +17,14 @@
 
 namespace sluice::async {
 
-// Internal seam type: defined only in uninstalled implementation headers.
-// Installing a backend is not a supported external operation (BACKEND-01).
 class AsyncBackend;
 class AsyncIoContext;
 
 namespace detail {
 class RequestCore;
 class ProgressSource;
+struct ContextFactory;
 struct TestAccess;
-
-// Internal construction pathway shared by the named backend factories and the
-// isolated seam tests; not installed-surface API.
-AsyncIoContext make_context(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats = nullptr);
 }
 
 struct NativeFileRef {
@@ -271,7 +266,7 @@ class AsyncIoContext {
     const AsyncStats* stats() const noexcept { return stats_; }
 
   private:
-    friend AsyncIoContext detail::make_context(std::unique_ptr<AsyncBackend>, AsyncStats*);
+    friend struct detail::ContextFactory;
     friend struct detail::TestAccess;
 
     explicit AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats = nullptr);

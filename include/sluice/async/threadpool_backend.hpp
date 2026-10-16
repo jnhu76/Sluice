@@ -11,9 +11,8 @@ struct ThreadPoolConfig {
     std::size_t worker_count = 4;
 };
 
-// Explicit ThreadPool selection (INV-01). Invalid capacities are
-// std::invalid_argument; setup failures throw as documented for the backend.
-// There is no fallback to another execution.
+// Invalid capacities are std::invalid_argument; setup failures throw as
+// documented for the backend. There is no fallback to another execution.
 AsyncIoContext make_threadpool_context(ThreadPoolConfig config = ThreadPoolConfig{},
                                        AsyncStats* stats = nullptr);
 

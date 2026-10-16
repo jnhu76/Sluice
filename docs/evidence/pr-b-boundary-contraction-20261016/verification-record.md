@@ -37,12 +37,13 @@ and ran in every cell; the four app binaries (`sluice-copy`, `sluice-hash`,
 in `poison_with_in_flight_cqe` — the uring poisoned-shutdown path that
 release gate RG1 already tracks. F5's matrix never ran an asanubsan-y cell,
 so PR B's wider matrix surfaces the recorded finding for the first time.
-`matrix/asanubsan-y-rg1-lsan-disposition.txt` holds both captures: the
-identical report fires at the baseline commit `5c1b14db` (same scenario,
-same allocation site, one-line source offset from the test migration), so
-PR B neither introduced nor changed the finding. The same test passes in
-every other cell including tsan-y. RG1 remains a blocking release gate; no
-exception is claimed here.
+`matrix/asanubsan-y-rg1-lsan-disposition.txt` holds both captures: the same
+scenario and allocation site report at the baseline commit `5c1b14db`
+(one-line source offset from the test migration; the leaked byte count
+differs only by the recorded `Request` layout growth — §5), so PR B neither
+introduced nor changed the finding. The same test passes in every other
+cell including tsan-y. RG1 remains a blocking release gate; no exception is
+claimed here.
 
 ## 2. Clean-room v2 package verification
 

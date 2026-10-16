@@ -42,8 +42,13 @@ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats
     }
 }
 
-AsyncIoContext detail::make_context(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats) {
+AsyncIoContext detail::ContextFactory::make(std::unique_ptr<AsyncBackend> backend,
+                                             AsyncStats* stats) {
     return AsyncIoContext(std::move(backend), stats);
+}
+
+AsyncIoContext detail::make_context(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats) {
+    return ContextFactory::make(std::move(backend), stats);
 }
 
 ProgressOwner::ProgressOwner(ProgressOwner&& other) noexcept : context_(other.context_) {
@@ -738,7 +743,9 @@ AsyncIoContext::ObserverAttachment AsyncIoContext::attach_observer(const Request
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!core_) {
-        return {};
+        ObserverAttachment inert;
+        inert.request = id;
+        return inert;
     }
     const detail::RequestKey key{detail::ContextIdentity{id.context_},
                                  detail::SlotIndex{id.slot_},
@@ -771,7 +778,9 @@ AsyncIoContext::ObserverCancelResult AsyncIoContext::cancel_observer(const Reque
     }
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (!core_) {
-        return {};
+        ObserverCancelResult inert;
+        inert.request = id;
+        return inert;
     }
     const detail::RequestKey key{detail::ContextIdentity{id.context_},
                                  detail::SlotIndex{id.slot_},

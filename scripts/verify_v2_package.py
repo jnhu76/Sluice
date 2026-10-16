@@ -633,6 +633,13 @@ def main():
     seam_failures = [name for name, text in seam_probes.items()
                      if not expect_compile_failure(build_dir, prefix, name, text,
                                                    command_log)]
+    # The internal detail::make_context factory must not be taught by the
+    # installed headers: an exported mangled symbol can always be reached by
+    # a hand-written declaration, so the boundary claim is that no installed
+    # header carries the spelling.
+    for rel in EXPECTED_V2_HEADERS:
+        if "make_context" in (prefix / "include" / rel).read_text():
+            seam_failures.append(f"{rel} declares detail::make_context")
     gate("NEGATIVE_V2_SEAM_UNAVAILABLE", not seam_failures, str(seam_failures))
 
     ok, why = expect_link_failure(build_dir, prefix,

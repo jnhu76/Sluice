@@ -14,12 +14,8 @@
 
 namespace sluice::async {
 
-// Internal backend seam (BACKEND-01): the request core provides validated
-// prepared operations and internal request keys; backends provide physical
-// outcomes, retirement facts, capability/health information and progress
-// availability. This header is not installed and is not an extension
-// surface: the two shipped backends and the isolated seam tests are its only
-// consumers.
+// Uninstalled seam: the shipped backends, the library TUs and the isolated
+// seam tests are the only consumers.
 class AsyncBackend {
   public:
     virtual ~AsyncBackend() = default;
@@ -106,5 +102,18 @@ class AsyncBackend {
     // or clear it, and the backend retires before the core storage does.
     detail::RequestCore* core_ = nullptr;
 };
+
+namespace detail {
+
+// Internal construction pathway shared by the named backend factories and
+// the isolated seam tests; befriended by AsyncIoContext.
+struct ContextFactory {
+    static AsyncIoContext make(std::unique_ptr<AsyncBackend> backend,
+                               AsyncStats* stats = nullptr);
+};
+
+AsyncIoContext make_context(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats = nullptr);
+
+}
 
 }

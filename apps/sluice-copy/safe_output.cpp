@@ -1,7 +1,5 @@
 #include "safe_output.hpp"
 
-#include <sluice/detail/posix_retry.hpp>
-
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -177,7 +175,10 @@ sluice::Result<void> commit_atomic_copy(SafeOpenOutcome& o, const std::string& d
         }
         ScopedFd dir_guard(dir_fd);
 
-        int rc = sluice::detail::retry_on_eintr([&] { return directory_fsync(dir_fd); });
+        int rc = 0;
+        do {
+            rc = directory_fsync(dir_fd);
+        } while (rc < 0 && errno == EINTR);
         if (rc != 0) {
             if (stage)
                 *stage = SafeCommitStage::dir_sync;
