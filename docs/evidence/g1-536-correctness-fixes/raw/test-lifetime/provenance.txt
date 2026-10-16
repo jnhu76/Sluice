@@ -1,0 +1,13 @@
+# test-lifetime oracle: open/close syscall census of the suppression test
+question: does the test hold every descriptor it creates?
+method: strace -f -c -e trace=openat,open,close on each binary
+started=2026-10-16T13:36:42+08:00
+prefix_source=54631b5f (old test body: fileno(tmpfile()) per submit, FILE* dropped)
+fixed_source=64e3241b (TmpFile RAII + open_fd_count() assertion)
+prefix_test_sha256=15d2ecf8e9436693347ec926aba2c8cf928caacd6c7254744424c15600622392
+fixed_test_sha256=31e3a5bbb4483883aba002421238c5cf6df3d31ff63688074e6bd34cd9c154ec
+;; prefix binary
+prefix_rc=0
+;; fixed binary
+fixed_rc=0
+finished=2026-10-16T13:36:42+08:00

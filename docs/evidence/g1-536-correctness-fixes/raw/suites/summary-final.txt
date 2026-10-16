@@ -1,0 +1,20 @@
+# #536 suite runs
+started=2026-10-16T14:12:42+08:00
+git_head=a6e72521bd6b3e6eb19d3bae2f4d2624d2f82755
+git_status_porcelain_lines=9
+gcc=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+clang=clang version 22.1.8 (Fedora 22.1.8-4.fc44)
+kernel=7.2.9-201.fc44.x86_64
+clang_asan_runtime=/usr/lib/clang/22/lib/x86_64-redhat-linux-gnu/libclang_rt.asan.so
+clang_tsan_runtime=/usr/lib/clang/22/lib/x86_64-redhat-linux-gnu/libclang_rt.tsan.so
+clang_ubsan_runtime=/usr/lib/clang/22/lib/x86_64-redhat-linux-gnu/libclang_rt.ubsan_standalone.so
+gcc_asan_shared=/usr/lib/gcc/x86_64-redhat-linux/16/libasan.so
+gcc_tsan_shared=/usr/lib/gcc/x86_64-redhat-linux/16/libtsan.so
+liburing=2.13
+ring-release-final rc=0 seconds=7 log=/home/jnhu/Source/Sluice-g1/docs/evidence/g1-536-correctness-fixes/raw/suites/ring-release-final.log
+noring-release-final rc=0 seconds=5 log=/home/jnhu/Source/Sluice-g1/docs/evidence/g1-536-correctness-fixes/raw/suites/noring-release-final.log
+ring-debug-final rc=0 seconds=8 log=/home/jnhu/Source/Sluice-g1/docs/evidence/g1-536-correctness-fixes/raw/suites/ring-debug-final.log
+asanubsan-ring-final rc=0 seconds=7 log=/home/jnhu/Source/Sluice-g1/docs/evidence/g1-536-correctness-fixes/raw/suites/asanubsan-ring-final.log
+tsan-ring-final rc=0 seconds=8 log=/home/jnhu/Source/Sluice-g1/docs/evidence/g1-536-correctness-fixes/raw/suites/tsan-ring-final.log
+targeted-leak-check log=/home/jnhu/Source/Sluice-g1/docs/evidence/g1-536-correctness-fixes/raw/suites/targeted-leak-check-final.log
+finished=2026-10-16T14:13:20+08:00

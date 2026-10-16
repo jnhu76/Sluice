@@ -1,0 +1,10 @@
+FAIL [observer_registration_pins_reclaim_until_retirement] the pin is the queued registration itself
+FAIL [observer_registration_pins_reclaim_until_retirement] the driver claims the queued delivery exclusively
+FAIL [observer_registration_pins_reclaim_until_retirement] the delivering phase is distinguishable before retirement
+FAIL [observer_registration_pins_reclaim_until_retirement] delivery retirement releases the registration
+FAIL [observer_registration_pins_reclaim_until_retirement] delivery retirement itself drives reclaim
+FAIL [observer_registration_pins_reclaim_until_retirement] the retired slot is reusable
+FAIL [observer_registration_pins_reclaim_until_retirement] reuse installs no registration residue
+FAIL [observer_registration_pins_reclaim_until_retirement] the retired identity cannot retire again after reuse
+FAIL [observer_registration_pins_reclaim_until_retirement] reuse probe rolled back
+terminate called without an active exception

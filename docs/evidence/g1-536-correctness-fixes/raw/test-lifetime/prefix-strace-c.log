@@ -1,0 +1,12 @@
+strace: Process 46589 attached
+strace: Process 46590 attached
+strace: Process 46591 attached
+strace: Process 46592 attached
+strace: Process 46593 attached
+strace: Process 46594 attached
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 91.63    0.000230          17        13           openat
+  8.37    0.000021           3         7           close
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000251          12        20           total

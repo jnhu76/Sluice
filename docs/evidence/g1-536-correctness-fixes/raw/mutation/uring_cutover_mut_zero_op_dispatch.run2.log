@@ -1,0 +1,6 @@
+FAIL [zero_op_publishes_at_acceptance_without_dispatch] the zero-op is published at acceptance, before any poll
+FAIL [zero_op_publishes_at_acceptance_without_dispatch] the zero-op succeeds with 0
+FAIL [zero_op_publishes_at_acceptance_without_dispatch] no data SQE, cookie or ledger entry was ever created
+FAIL [zero_op_publishes_at_acceptance_without_dispatch] the deferred ready event pins the slot with a core control ref
+sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
+terminate called without an active exception

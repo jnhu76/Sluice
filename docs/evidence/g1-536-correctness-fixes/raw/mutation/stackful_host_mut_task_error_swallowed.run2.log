@@ -1,0 +1,3 @@
+FAIL: run reports the task error
+FAIL: error maps ENOENT to not_found
+FAIL: task_failure_while_other_io_outstanding

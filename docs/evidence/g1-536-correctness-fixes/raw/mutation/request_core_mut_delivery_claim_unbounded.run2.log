@@ -1,0 +1,4 @@
+FAIL [delivery_claim_is_exclusive_and_at_most_once] an armed-but-unpublished registration owes no claimable delivery yet
+FAIL [delivery_claim_is_exclusive_and_at_most_once] publication moved the registration to queued
+FAIL [delivery_claim_is_exclusive_and_at_most_once] a second claim is refused (at most once per registration generation)
+1 of 46 request core protocol tests failed

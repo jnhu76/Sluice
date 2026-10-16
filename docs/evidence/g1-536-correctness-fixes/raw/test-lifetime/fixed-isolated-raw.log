@@ -1,0 +1,31 @@
+63819 openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/lib64/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/lib64/libm.so.6", O_RDONLY|O_CLOEXEC) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/lib64/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/lib64/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/proc/self/fd", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 4
+63819 close(4)                          = 0
+63820 +++ exited with 0 +++
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/proc/self/fd", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/proc/self/fd", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 3
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 4
+63822 +++ exited with 0 +++
+63823 +++ exited with 0 +++
+63824 +++ exited with 0 +++
+63825 +++ exited with 0 +++
+63819 close(4)                          = 0
+63821 +++ exited with 0 +++
+63819 close(3)                          = 0
+63819 openat(AT_FDCWD, "/proc/self/fd", O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_DIRECTORY) = 3
+63819 close(3)                          = 0
+63819 +++ exited with 0 +++

@@ -1,0 +1,11 @@
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release tests/backend_conformance_e1_test.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m cache compiling.release src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 83%]:[0m [38;5;5;1m<e1_conformance_mut_opcode_probe_ignored>[0m [38;5;5;1mlinking.release e1_conformance_mut_opcode_probe_ignored[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.48s[0m

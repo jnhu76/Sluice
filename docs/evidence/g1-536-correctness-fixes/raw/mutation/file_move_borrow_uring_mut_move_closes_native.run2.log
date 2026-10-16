@@ -1,0 +1,3 @@
+FAIL: second read accepted through the moved owner
+sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
+terminate called without an active exception

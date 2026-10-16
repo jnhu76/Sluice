@@ -1,0 +1,7 @@
+FAIL: suspended request reached a public terminal
+FAIL: stop did not cancel the accepted request
+FAIL: task observed the stop token
+FAIL: task storage retired
+FAIL: await link retired with the task
+sluice::async::StackfulIoHost: destroying the host while tasks are spawned but not retired discards suspended stacks and is a contract violation
+terminate called without an active exception

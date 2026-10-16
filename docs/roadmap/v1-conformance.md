@@ -2689,3 +2689,92 @@ head; full-suite run logs not retained in the evidence tree; the missing
 ledger entry (closed by this section); one borderline authority-adjacent
 comment retained deliberately as a settlement-misuse guard; a label typo in
 the review request. The G1 PR remains unmerged per #403 process.
+
+## G1-C correctness-fix record — PR #536 review risks (2026-10-16)
+
+Scope: the three correctness risks found in the independent review of the G1
+native-optimization slice (PR #536). Requirement owners touched: PROG-01
+(driver contract: bounded pass, honest residue), PROG-02 (no-lost-wake:
+suppression boundary), BOUND-01 (named budgets: pass storage), REQ-02/REQ-04
+(acceptance/publication handoff), REQ-05/REQ-06 (reclaim and settlement
+liveness), plus the test-hygiene obligation that test evidence must not itself
+leak process resources. No public behavior, semantic authority, or root
+requirement changes; the pass bound and the suppression rule are properties the
+root's PROG-01/PROG-02 already require, made explicit and verified here.
+
+Commits (branch `codex/403-g1-native-optimization`, review base `54631b5f`):
+`b88750e3` bounds the ThreadPool progress pass at its entry snapshot and moves
+its snapshot stores to construction time; `64e3241b` gives the suppression
+test's temporary file an explicit RAII lifetime plus a descriptor-neutrality
+assertion; `16e5d96a` strengthens the new oracle (over-aligned allocation
+counting, named failing assertions, inert-counter failure) and `a6e72521` keeps
+its counter probe inside the sanitizer guard. Head `a6e72521`.
+
+Status: VERIFIED for the three named risks at `a6e72521`, in the exercised
+configurations (VERIFIED never means universal correctness). The performance
+claims of the G1 section above keep their status at their own commits and are
+additionally checked for retention here.
+
+Evidence: `docs/evidence/g1-536-correctness-fixes/` — `FREEZE.md` (frozen
+configuration, hashes, protocol), `correspondence.md` (formal correspondence),
+`RECEIPT.md` (claims, matrices, limitations), `ab-s1-b0-vs-fixed/`,
+`ab-s2-prefix-vs-fixed/`, `ab-s3-noring/` (paired interleaved A/B against the
+frozen baseline and against the frozen pre-fix arm), `raw/negative-oracle/` and
+`raw/positive-oracle/` (the same test file against the pre-fix and fixed
+sources: 5/5 failing with named defects vs 8/8 passing), `raw/test-lifetime/`
+(the descriptor assertion run against the leaking test body: 3/3 failures; plus
+open/close censuses), `raw/suites/` (five configurations at the head),
+`raw/mutation/` (campaign at the head), `formal/` (TLC re-run).
+
+Discriminating evidence: the pre-fix implementation reports "pass allocated
+after accepted work was published (got 1, want 0)" and "first pass absorbed
+events produced during its own deliveries (got 16, want 8)"; the fixed
+implementation performs the pass with a zero allocation delta and delivers
+exactly its entry snapshot. The descriptor assertion fails "case 0 leaked
+descriptors (6 -> 10)" against the pre-fix test body.
+
+Gates at the head: ring release 74/74; no-ring release 57/57; ring debug
+74/74; clang 22.1.8 ASan+UBSan 74/74; clang 22.1.8 TSan 74/74 with no reports;
+targeted LeakSanitizer (`detect_leaks=1`) clean on the four progress suites;
+mutation campaign reproduced at the head (72 mutants, 0 build failures, 71
+killed, 1 survived — the frozen record's documented
+`uring_cutover_mut_drop_outcome` survivor, so 71/72, not 72/72; per-mutant exit
+codes in `raw/mutation/campaign.tsv`); TLC `RequestCore.cfg` safety PASS rc=0 and
+`RequestCoreLive.cfg` liveness PASS rc=0 with counters identical to the #524
+record (31,289,609 generated / 5,359,732 distinct / depth 53; 12/12 temporal
+branches, 64,316,784 total distinct), on byte-identical model assets
+(`RequestCore.tla` `4ad6dbe5…`, `RequestCore.cfg` `82c31d61…`,
+`RequestCoreLive.cfg` `062c8c3e…`, pinned jar `936a2620…`).
+
+Performance retention (paired interleaved A/B, same host, frozen runner and
+spec): W02-tp-w4 1.1557 ring / 1.1570 no-ring (frozen 1.1934), saturate 1.1277 /
+1.1870 (1.1464), W03-tp-w4 1.2385 / 1.3506 (1.2946), io_uring controls inside
+the recorded noise band; the fixes' isolated effect is within the session's own
+null control (W01, byte-identical binaries, 1.0290). The disclosed W02-tp-w1
+regression remains (0.9313 ring / 0.9238 no-ring vs the frozen 0.8898); these
+fixes neither cause nor repair it. No number in the frozen `ab/final` record
+was rewritten, and the frozen evidence directory is byte-identical.
+
+Independent review verdict (reviewer separate from the implementer, different
+worktree): `APPROVE_WITH_FINDINGS`, all contracts supported, with four recorded
+findings that are not defects of these commits: the pre-existing test-side
+LeakSanitizer finding in `shutdown_lifecycle_uring_test` (3,992 bytes / 19
+allocations, rooted in the test's own `poison_with_in_flight_cqe`, reproduced
+before these fixes existed and out of scope here); the two backends are not
+identical on residue reporting (the uring backend reports publications plus
+physical work, and the owed event's own notification keeps a parker live);
+`retire_notification()` leaves the suppression bit set after close (inert);
+and `owed_batch_` indexing depends on the three stores sharing
+`config.request_capacity` (a constraint on any future capacity refactor). The
+reviewer's major finding — that the first positive-oracle capture's provenance
+did not match the binary it hashed — is resolved by re-capturing both sides
+with isolated build directories, recorded binary hashes and an in-binary check
+for the diagnostic strings.
+
+Remaining limitations: the sanitizer matrix runs on clang 22.1.8 because the
+default GCC toolchain cannot link ASan/TSan on this host
+(`/usr/lib64/libasan.so.8.0.0` and `libtsan.so.2.0.0` absent — the G1
+`PERMISSION_REQUIRED` finding reproduced, with both attempts retained); the A/B
+sessions' provenance headers record a worktree with untracked build
+directories; the mutation tally is a campaign statement with its documented
+survivor, not a proof; PR #536 remains unmerged and #403 open.

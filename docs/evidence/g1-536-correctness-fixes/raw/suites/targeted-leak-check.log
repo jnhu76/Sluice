@@ -1,0 +1,79 @@
+# targeted LeakSanitizer check (detect_leaks=1, clang asan+ubsan) on the suites this slice touches
+binaries: /home/jnhu/Source/Sluice-g1/build-536-asanubsan/linux/x86_64/asanubsan
+== threadpool_progress_pass_bound_test ==
+case0: allocation counter unavailable on this runtime; allocation invariant not exercised
+rc=0
+== threadpool_progress_race_test ==
+ok r1_signal_before_wait_is_serviced_without_parking
+ok r2_signal_between_token_and_ack_is_revalidation_caught
+ok r3_signal_after_ack_wakes_poll_before_next_snapshot
+ok r4_worker_completion_signal_before_final_recheck_is_caught
+ok r5_postdrain_signal_readiness_persists_into_poll
+ok r8_empty_pass_signal_immediately_before_poll_entry
+ok r9_signal_while_blocked_in_poll_wakes_owner
+ok r10_multiple_signals_coalesce_into_one_readiness
+ok r11_spurious_wake_with_zero_completions_is_harmless
+ok r11b_stale_readiness_drained_at_park_without_fabrication
+ok r12_control_wake_racing_park_boundary
+ok r13_delayed_reclaim_obligation_is_serviced_without_new_io
+ok r15_saturated_signal_between_pass_and_revalidation_is_not_drained
+ok control_exhaustion_saturates_without_alias_and_wakes_interrupted
+ok control_outer_exhaustion_is_terminal_and_never_aliases
+ok token_exhaustion_saturates_without_alias_and_closes_admission
+ok owner_parked_at_saturated_epoch_wakes_and_reparks
+ok saturated_notification_still_wakes_parked_owner
+ok coalesced_prearmed_signals_are_all_discoverable_in_one_pass
+ok f1_publication_pass_is_entry_bounded
+ok record_handoff_survives_submit_racing_owner_sweep
+all 21 threadpool progress race tests passed
+rc=0
+== progress_notification_suppression_test ==
+rc=0
+== threadpool_external_loop_test ==
+ok coalesced_signals_delivered_through_one_wake
+ok spurious_wake_is_harmless_and_completions_survive
+ok saturated_notification_preserves_wake
+ok host_acknowledgement_racing_new_signal_never_strands
+ok host_stop_settle_detach_retires_registration
+ok stale_detached_registration_cannot_authorize_a_new_context
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+ok contract_violations_fail_fast
+ok pinned_context_rejects_foreign_drivers
+ok first_drive_attaches_a_fixed_owner
+ok deadline_expiry_does_not_cancel_or_settle
+ok idle_and_control_outcomes_are_distinct_and_sticky
+ok control_before_wait_and_across_notification_ack_survives
+ok acknowledging_observed_control_keeps_a_later_control
+ok injected_health_failure_is_sticky_and_distinguishable
+ok wait_one_stops_on_health_failure_and_releases_owner
+ok competing_concurrent_drives_cannot_both_succeed
+ok nested_drive_from_delivery_hook_is_rejected
+ok zero_length_requests_skip_driving
+all 20 threadpool external loop tests passed
+rc=0
+== shutdown_lifecycle_test (LeakSanitizer expected; pre-existing uring lifecycle path) ==
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+TIMEOUT [withheld_completion_fails_by_deadline_and_late_completion_passes] the withheld read stays pending after 588698 poll passes (no failed poll: polls healthy)
+PASS [shutdown_completes_and_retained_results_stay_consumable]
+PASS [destruction_with_pending_live_binding_fails_fast]
+PASS [destruction_with_live_host_interest_fails_fast]
+PASS [shutdown_retires_the_notification_fd_and_reuse_is_inert]
+PASS [observer_delivery_episode_settles_at_shutdown]
+PASS [observer_attach_after_admission_close_is_refused]
+PASS [shutdown_refuses_while_host_interest_is_live]
+PASS [shutdown_from_non_owner_after_execution_close_is_refused]
+PASS [zero_op_internal_pin_retires_at_shutdown]
+PASS [withheld_completion_fails_by_deadline_and_late_completion_passes]
+rc=0
+== TSan: the five progress-family suites, report count ==
+threadpool_progress_pass_bound_test rc=0 tsan_reports=0
+threadpool_progress_race_test rc=0 tsan_reports=0
+progress_notification_suppression_test rc=0 tsan_reports=0
+threadpool_external_loop_test rc=0 tsan_reports=0
+shutdown_lifecycle_test rc=0 tsan_reports=0

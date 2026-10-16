@@ -1,0 +1,4 @@
+sluice::async::StackfulIoHost: destroying the host while tasks are spawned but not retired discards suspended stacks and is a contract violation
+terminate called without an active exception
+FAIL: run-reuse run2 succeeds: run1's error does not persist
+FAIL: run_failure_does_not_poison_the_next_run

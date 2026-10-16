@@ -1,0 +1,25 @@
+FAIL [cancel_cqe_first_never_becomes_the_terminal] the control CQE retires only the control obligation, never the borrow
+FAIL [cancel_cqe_first_never_becomes_the_terminal] the late original CQE canonicalizes the real outcome on the same slot
+FAIL [cancel_cqe_first_never_becomes_the_terminal] the final publication carries the physical byte count
+INFO [real_kernel_normal_completion_and_cancel] real-kernel cancel terminal: success (8 bytes)
+ok pre_accept_failure_leaves_no_core_residue
+ok range_precedes_health_and_capacity
+ok accepted_pre_submit_work_has_a_core_owner
+ok pre_submit_cancel_wins_with_zero_transport
+ok original_cqe_first_defers_until_control_retires
+ok cancel_racing_completion_keeps_the_confirmed_count
+ok cancel_racing_short_write_keeps_confirmed_count
+ok stale_cookie_cannot_reach_a_reused_slot
+ok stale_identity_does_not_resolve_after_reuse
+ok zero_op_publishes_at_acceptance_without_dispatch
+ok zero_op_event_survives_release_before_poll
+ok submit_stage_failures_rollback_completely
+ok dispatch_failure_converges_through_the_terminal
+ok post_accept_submit_failure_poison_converges
+ok poison_with_running_cancel_keeps_the_real_completion
+ok publication_visibility_waits_for_the_epilogue
+ok observer_registration_rides_publication
+ok concurrent_submissions_all_publish_and_reclaim
+ok real_kernel_normal_completion_and_cancel
+ok real_kernel_slot_reuse
+20 of 21 uring core cutover tests passed, 0 not run

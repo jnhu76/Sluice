@@ -1,0 +1,27 @@
+46612 openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+46612 close(3)                          = 0
+46612 openat(AT_FDCWD, "/lib64/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = 3
+46612 close(3)                          = 0
+46612 openat(AT_FDCWD, "/lib64/libm.so.6", O_RDONLY|O_CLOEXEC) = 3
+46612 close(3)                          = 0
+46612 openat(AT_FDCWD, "/lib64/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+46612 close(3)                          = 0
+46612 openat(AT_FDCWD, "/lib64/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+46612 close(3)                          = 0
+46612 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 4
+46612 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 5
+46612 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 6
+46612 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 7
+46613 +++ exited with 0 +++
+46612 close(3)                          = 0
+46615 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 8
+46616 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 9
+46615 +++ exited with 0 +++
+46617 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 10
+46616 +++ exited with 0 +++
+46617 +++ exited with 0 +++
+46618 openat(AT_FDCWD, "/tmp", O_RDWR|O_EXCL|O_TMPFILE, 0600) = 11
+46618 +++ exited with 0 +++
+46614 +++ exited with 0 +++
+46612 close(3)                          = 0
+46612 +++ exited with 0 +++

@@ -1,0 +1,10 @@
+# #536 mutation campaign
+started=2026-10-16T14:14:38+08:00
+git_head=a6e72521bd6b3e6eb19d3bae2f4d2624d2f82755
+git_status_porcelain_lines=10
+mutant_list=/tmp/mutants.txt (72 entries)
+build_dir=build-536-mut (release, ring)
+gcc=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+rule: run twice; a mutant dies if either run exits nonzero; build failures are counted separately
+finished=2026-10-16T14:17:38+08:00
+TOTAL=72 BUILD_FAILURES=0 KILLED=71 SURVIVED=1

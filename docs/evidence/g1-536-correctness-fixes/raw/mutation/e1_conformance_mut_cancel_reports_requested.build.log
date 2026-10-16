@@ -1,0 +1,8 @@
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m cache compiling.release tests/backend_conformance_e1_test.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<e1_conformance_mut_cancel_reports_requested>[0m [38;5;5;1mlinking.release e1_conformance_mut_cancel_reports_requested[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.439s[0m

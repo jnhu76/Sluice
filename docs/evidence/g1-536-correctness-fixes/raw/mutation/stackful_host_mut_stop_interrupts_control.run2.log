@@ -1,0 +1,4 @@
+sluice::async::StackfulIoHost: destroying the host while tasks are spawned but not retired discards suspended stacks and is a contract violation
+terminate called without an active exception
+FAIL: control-plane: host stop writes nothing to the notification domain
+FAIL: host_stop_does_not_plant_context_control

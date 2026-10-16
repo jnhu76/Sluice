@@ -1,0 +1,4 @@
+FAIL [pre_accept_throw_rolls_back_the_reservation] the reservation rolled back: a leaked slot would answer would_block before the backend is reached again
+sluice::async::RequestScope: progress health failed while accepted scope work remains unsettled; failing fast instead of returning with live borrows
+terminate called without an active exception
+1 of 25 request scope tests failed

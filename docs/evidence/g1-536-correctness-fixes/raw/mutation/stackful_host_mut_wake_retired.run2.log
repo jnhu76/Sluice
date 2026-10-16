@@ -1,0 +1,11 @@
+FAIL: tracer no await links after run
+FAIL: no await links
+FAIL: await link retired with the task
+FAIL: await state retired
+FAIL: no delivery touches retired storage
+sluice::async::StackfulIoHost: destroying the host while tasks are spawned but not retired discards suspended stacks and is a contract violation
+terminate called without an active exception
+FAIL: undispatched-stop await links retired
+sluice::async::StackfulIoHost: progress health failed while driving tasks with accepted work; failing fast instead of returning with live borrows
+terminate called without an active exception
+FAIL: 6 assertion(s)

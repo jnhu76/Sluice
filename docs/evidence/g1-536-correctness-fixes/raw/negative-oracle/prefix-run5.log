@@ -1,0 +1,4 @@
+case0: pass allocated after accepted work was published (got 1, want 0)
+threadpool_progress_pass_bound_test: case 0 (progress_pass_performs_no_dynamic_allocation) failed
+case1: first pass absorbed events produced during its own deliveries (got 16, want 8)
+threadpool_progress_pass_bound_test: case 1 (pass_delivers_exactly_the_entry_snapshot) failed

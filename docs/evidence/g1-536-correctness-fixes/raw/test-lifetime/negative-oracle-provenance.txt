@@ -1,0 +1,9 @@
+# descriptor-neutrality assertion against the PRE-FIX test body (which leaks)
+worktree=/tmp/sluice-prefix
+source_under_test=54631b5f
+test_body=pre-fix body (fileno(tmpfile()) per submit, FILE* dropped) + the fixed assertion copied verbatim
+test_file_sha256=616f0a476f39a6fe9ebe38328027cde716e63cce530ab1204bc54a6b2d539144
+binary_sha256=8f7bd39b8abdbf47b3a7f346ee578c4d95aa53978bcfd20eeceee3a29b82f9a8
+run 1 rc=1
+run 2 rc=1
+run 3 rc=1

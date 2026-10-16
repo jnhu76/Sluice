@@ -1,0 +1,5 @@
+FAIL [post_accept_submit_failure_poison_converges] the never-visible request converged through the terminal path
+FAIL [post_accept_submit_failure_poison_converges] the kernel-visible request completes with its real physical outcome
+FAIL [post_accept_submit_failure_poison_converges] no accepted request became ownerless through the poison
+sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
+terminate called without an active exception

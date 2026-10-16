@@ -1,0 +1,1158 @@
+# g1 A/B run provenance
+started=2026-10-16T13:31:26+08:00
+git_head=64e3241b743563443ba51d90981d6c1dfe29715f
+git_status_dirty=3
+b0_dir=build-bench-noring arm_dir=build-bench-fixhead-noring
+b0_w02_ring=b41b6ec058e2954db0186fd9e3940d4073fd10c0e82e99d7f4ef50ffd2dcac44
+arm_w02_ring=bd135229771154d1e88096ce4f7f26c1f6b757a24687ebfaa7b16c0f498fede6
+b0_w03_ring=69218c3c6f926e405c55f04f755a1e576fafc3d5f8f16c1f8bbdd9dffc0282ff
+arm_w03_ring=aef0d22f1c5b2c49828b6bc86a04543c6d58eca6b2324418f7cd31d41017c66b
+b0_w01_noring=9cb468d3080420e939bf3fe11cea45b62f589007f4d2693f38c8b49bbd60d6f2
+arm_w01_noring=9cb468d3080420e939bf3fe11cea45b62f589007f4d2693f38c8b49bbd60d6f2
+ 13:31:26 up  2:49,  1 user,  load average: 2.81, 1.97, 1.17
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0821s 243646 ops/s 951.7 MiB/s cpu=0.277s util=338.0% | lat p50=56832 p95=74559 p99=82312 max=141089 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0705s 283558 ops/s 1107.6 MiB/s cpu=0.241s util=342.4% | lat p50=57738 p95=79937 p99=90284 max=115788 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=0 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0672s 297452 ops/s 1161.9 MiB/s cpu=0.220s util=327.1% | lat p50=50556 p95=67187 p99=76387 max=166591 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0649s 308298 ops/s 1204.3 MiB/s cpu=0.217s util=334.6% | lat p50=48212 p95=63988 p99=71863 max=89844 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=0 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0768s 260263 ops/s 1016.7 MiB/s cpu=0.258s util=336.3% | lat p50=52378 p95=73771 p99=89017 max=140851 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0688s 290864 ops/s 1136.2 MiB/s cpu=0.241s util=350.5% | lat p50=54274 p95=72815 p99=82280 max=141989 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=1 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0821s 243604 ops/s 951.6 MiB/s cpu=0.275s util=334.6% | lat p50=58600 p95=78600 p99=87455 max=156577 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0816s 245015 ops/s 957.1 MiB/s cpu=0.276s util=338.6% | lat p50=68417 p95=91187 p99=102836 max=171591 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=1 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0786s 254509 ops/s 994.2 MiB/s cpu=0.260s util=331.2% | lat p50=60327 p95=79623 p99=89327 max=168532 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0806s 248030 ops/s 968.9 MiB/s cpu=0.276s util=341.8% | lat p50=63865 p95=83897 p99=94207 max=158897 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=2 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0736s 271736 ops/s 1061.5 MiB/s cpu=0.246s util=333.7% | lat p50=56269 p95=74044 p99=84067 max=168116 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0739s 270764 ops/s 1057.7 MiB/s cpu=0.244s util=330.7% | lat p50=47447 p95=62277 p99=68773 max=89651 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=2 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0717s 278975 ops/s 1089.7 MiB/s cpu=0.236s util=329.2% | lat p50=56552 p95=74917 p99=84948 max=166970 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0709s 281999 ops/s 1101.6 MiB/s cpu=0.232s util=327.5% | lat p50=49939 p95=66113 p99=73659 max=94631 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=3 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0878s 227822 ops/s 889.9 MiB/s cpu=0.297s util=338.3% | lat p50=61316 p95=80828 p99=90081 max=150095 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0820s 243931 ops/s 952.9 MiB/s cpu=0.277s util=337.9% | lat p50=60438 p95=81444 p99=91355 max=116545 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=3 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0846s 236484 ops/s 923.8 MiB/s cpu=0.288s util=340.8% | lat p50=58642 p95=78314 p99=90697 max=160826 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0797s 250937 ops/s 980.2 MiB/s cpu=0.271s util=339.5% | lat p50=62352 p95=82416 p99=91351 max=113535 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=4 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0770s 259667 ops/s 1014.3 MiB/s cpu=0.253s util=327.9% | lat p50=57382 p95=76625 p99=86809 max=143176 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0667s 299800 ops/s 1171.1 MiB/s cpu=0.224s util=335.3% | lat p50=49759 p95=65787 p99=73375 max=88676 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=4 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0750s 266769 ops/s 1042.1 MiB/s cpu=0.246s util=328.6% | lat p50=50940 p95=66599 p99=75047 max=158619 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0666s 300235 ops/s 1172.8 MiB/s cpu=0.223s util=335.2% | lat p50=47936 p95=63612 p99=71465 max=97335 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=5 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0749s 267101 ops/s 1043.4 MiB/s cpu=0.257s util=343.8% | lat p50=55971 p95=74527 p99=83492 max=148390 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0718s 278728 ops/s 1088.8 MiB/s cpu=0.249s util=347.2% | lat p50=56272 p95=75067 p99=84026 max=125811 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=5 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0788s 253954 ops/s 992.0 MiB/s cpu=0.264s util=335.2% | lat p50=59775 p95=78119 p99=86527 max=147571 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0756s 264698 ops/s 1034.0 MiB/s cpu=0.257s util=340.1% | lat p50=54369 p95=71598 p99=80204 max=104399 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=6 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0669s 298922 ops/s 1167.7 MiB/s cpu=0.224s util=335.2% | lat p50=54653 p95=76672 p99=87089 max=148393 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0676s 295640 ops/s 1154.8 MiB/s cpu=0.233s util=344.5% | lat p50=54600 p95=70308 p99=78064 max=95429 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=6 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0679s 294586 ops/s 1150.7 MiB/s cpu=0.223s util=329.1% | lat p50=49976 p95=66624 p99=75707 max=149877 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0666s 300383 ops/s 1173.4 MiB/s cpu=0.222s util=332.9% | lat p50=49030 p95=65017 p99=73181 max=96757 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=7 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0853s 234400 ops/s 915.6 MiB/s cpu=0.303s util=354.9% | lat p50=60419 p95=80188 p99=92148 max=169958 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0771s 259240 ops/s 1012.7 MiB/s cpu=0.260s util=336.7% | lat p50=60719 p95=80746 p99=91051 max=136570 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=7 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0882s 226714 ops/s 885.6 MiB/s cpu=0.314s util=355.9% | lat p50=56404 p95=74507 p99=84169 max=146882 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0739s 270702 ops/s 1057.4 MiB/s cpu=0.254s util=344.4% | lat p50=56070 p95=74675 p99=83179 max=102970 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=8 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0668s 299419 ops/s 1169.6 MiB/s cpu=0.224s util=334.8% | lat p50=48793 p95=64849 p99=73388 max=139500 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0649s 308308 ops/s 1204.3 MiB/s cpu=0.218s util=336.0% | lat p50=49207 p95=65600 p99=74094 max=91416 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=8 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0650s 307587 ops/s 1201.5 MiB/s cpu=0.221s util=339.1% | lat p50=49294 p95=67335 p99=77870 max=156377 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0632s 316328 ops/s 1235.7 MiB/s cpu=0.213s util=336.4% | lat p50=48426 p95=64424 p99=71886 max=89378 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=9 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0776s 257681 ops/s 1006.6 MiB/s cpu=0.263s util=338.3% | lat p50=60220 p95=79130 p99=89146 max=154982 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0758s 263854 ops/s 1030.7 MiB/s cpu=0.258s util=340.7% | lat p50=60515 p95=80530 p99=90667 max=117896 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=9 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0859s 232900 ops/s 909.8 MiB/s cpu=0.290s util=337.2% | lat p50=62954 p95=82616 p99=94062 max=160183 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0787s 254022 ops/s 992.3 MiB/s cpu=0.278s util=353.4% | lat p50=55836 p95=74506 p99=82966 max=113258 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=10 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0738s 270842 ops/s 1058.0 MiB/s cpu=0.243s util=329.2% | lat p50=50239 p95=66395 p99=75740 max=147668 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0670s 298559 ops/s 1166.2 MiB/s cpu=0.223s util=332.4% | lat p50=59353 p95=79679 p99=90046 max=118144 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=10 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0749s 266973 ops/s 1042.9 MiB/s cpu=0.247s util=329.1% | lat p50=58296 p95=80231 p99=89830 max=156304 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0720s 277897 ops/s 1085.5 MiB/s cpu=0.239s util=331.6% | lat p50=55800 p95=73424 p99=82334 max=103640 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=11 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0854s 234192 ops/s 914.8 MiB/s cpu=0.289s util=338.2% | lat p50=64164 p95=86537 p99=99058 max=163556 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0812s 246368 ops/s 962.4 MiB/s cpu=0.267s util=328.5% | lat p50=67178 p95=91759 p99=103338 max=139321 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=11 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0865s 231132 ops/s 902.9 MiB/s cpu=0.294s util=339.6% | lat p50=64765 p95=85228 p99=96482 max=165936 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0855s 234029 ops/s 914.2 MiB/s cpu=0.288s util=337.3% | lat p50=65475 p95=85585 p99=94487 max=121995 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=12 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0722s 276866 ops/s 1081.5 MiB/s cpu=0.231s util=319.5% | lat p50=55073 p95=72851 p99=82355 max=153379 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0739s 270767 ops/s 1057.7 MiB/s cpu=0.244s util=329.7% | lat p50=57085 p95=76199 p99=85227 max=109347 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=12 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0746s 267998 ops/s 1046.9 MiB/s cpu=0.247s util=330.7% | lat p50=56502 p95=74878 p99=84690 max=158690 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0705s 283506 ops/s 1107.4 MiB/s cpu=0.231s util=328.0% | lat p50=58056 p95=77881 p99=89313 max=115171 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=13 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0922s 217025 ops/s 847.8 MiB/s cpu=0.292s util=316.7% | lat p50=64304 p95=84894 p99=95363 max=186603 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0838s 238784 ops/s 932.7 MiB/s cpu=0.284s util=338.9% | lat p50=65488 p95=85980 p99=95381 max=114416 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=13 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0878s 227916 ops/s 890.3 MiB/s cpu=0.290s util=330.5% | lat p50=66654 p95=87728 p99=97644 max=153054 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0847s 236023 ops/s 922.0 MiB/s cpu=0.292s util=344.2% | lat p50=64193 p95=84448 p99=94579 max=145082 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=14 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0685s 291847 ops/s 1140.0 MiB/s cpu=0.229s util=334.8% | lat p50=52761 p95=72100 p99=82249 max=150673 ns (n=20000)
+  [W02-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0657s 304187 ops/s 1188.2 MiB/s cpu=0.220s util=333.9% | lat p50=49654 p95=67105 p99=76810 max=107898 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4 rep=14 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0890s 224675 ops/s 877.6 MiB/s cpu=0.166s util=186.7% | lat p50=67907 p95=95563 p99=109993 max=179004 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0878s 227907 ops/s 890.3 MiB/s cpu=0.156s util=178.3% | lat p50=61101 p95=94220 p99=115241 max=212882 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=0 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0956s 209161 ops/s 817.0 MiB/s cpu=0.166s util=173.1% | lat p50=72552 p95=94492 p99=104950 max=158795 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0980s 204135 ops/s 797.4 MiB/s cpu=0.159s util=162.7% | lat p50=45471 p95=62997 p99=72109 max=123554 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=0 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0943s 211995 ops/s 828.1 MiB/s cpu=0.163s util=172.4% | lat p50=68967 p95=91329 p99=103050 max=176042 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0872s 229311 ops/s 895.7 MiB/s cpu=0.148s util=169.9% | lat p50=55146 p95=77459 p99=88699 max=196327 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=1 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0931s 214790 ops/s 839.0 MiB/s cpu=0.170s util=182.5% | lat p50=66576 p95=97148 p99=118689 max=216244 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0856s 233758 ops/s 913.1 MiB/s cpu=0.150s util=175.5% | lat p50=65371 p95=95665 p99=109848 max=160531 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=1 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0970s 206135 ops/s 805.2 MiB/s cpu=0.181s util=186.6% | lat p50=74430 p95=94630 p99=115004 max=227030 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0890s 224719 ops/s 877.8 MiB/s cpu=0.166s util=186.1% | lat p50=64300 p95=93170 p99=110429 max=247922 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=2 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.1002s 199691 ops/s 780.0 MiB/s cpu=0.169s util=169.1% | lat p50=74162 p95=100229 p99=113204 max=192947 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0944s 211892 ops/s 827.7 MiB/s cpu=0.156s util=164.8% | lat p50=72978 p95=97633 p99=110751 max=206403 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=2 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0985s 202976 ops/s 792.9 MiB/s cpu=0.161s util=163.6% | lat p50=69841 p95=96751 p99=110790 max=185512 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0752s 265945 ops/s 1038.8 MiB/s cpu=0.130s util=173.4% | lat p50=74648 p95=101027 p99=118305 max=174545 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=3 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0861s 232375 ops/s 907.7 MiB/s cpu=0.155s util=180.0% | lat p50=65151 p95=96792 p99=121651 max=227690 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0789s 253359 ops/s 989.7 MiB/s cpu=0.144s util=182.6% | lat p50=61752 p95=90820 p99=109502 max=156907 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=3 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0897s 222971 ops/s 871.0 MiB/s cpu=0.166s util=185.0% | lat p50=71062 p95=94183 p99=119586 max=220473 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0885s 226011 ops/s 882.9 MiB/s cpu=0.164s util=185.2% | lat p50=66386 p95=97142 p99=116594 max=210695 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=4 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0698s 286357 ops/s 1118.6 MiB/s cpu=0.125s util=178.7% | lat p50=63610 p95=90518 p99=102381 max=191470 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0825s 242298 ops/s 946.5 MiB/s cpu=0.142s util=172.1% | lat p50=70262 p95=92649 p99=105027 max=183699 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=4 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0975s 205162 ops/s 801.4 MiB/s cpu=0.161s util=164.9% | lat p50=70406 p95=93301 p99=105571 max=155582 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0912s 219373 ops/s 856.9 MiB/s cpu=0.152s util=166.7% | lat p50=73215 p95=96461 p99=112781 max=215564 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=5 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0858s 233220 ops/s 911.0 MiB/s cpu=0.155s util=181.3% | lat p50=65446 p95=92382 p99=108501 max=155479 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0804s 248728 ops/s 971.6 MiB/s cpu=0.145s util=179.8% | lat p50=65861 p95=96546 p99=113048 max=227264 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=5 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0904s 221154 ops/s 863.9 MiB/s cpu=0.168s util=185.7% | lat p50=68334 p95=88864 p99=106424 max=162895 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0870s 229988 ops/s 898.4 MiB/s cpu=0.160s util=184.5% | lat p50=63812 p95=98533 p99=121932 max=261928 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=6 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0945s 211574 ops/s 826.5 MiB/s cpu=0.163s util=172.8% | lat p50=70987 p95=92445 p99=101951 max=166625 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0932s 214525 ops/s 838.0 MiB/s cpu=0.153s util=164.2% | lat p50=65800 p95=85796 p99=93659 max=108735 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=6 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0898s 222686 ops/s 869.9 MiB/s cpu=0.152s util=169.5% | lat p50=63245 p95=92118 p99=106048 max=187778 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0907s 220620 ops/s 861.8 MiB/s cpu=0.152s util=167.8% | lat p50=77915 p95=103212 p99=117711 max=197776 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=7 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0852s 234797 ops/s 917.2 MiB/s cpu=0.155s util=181.8% | lat p50=65545 p95=90911 p99=104458 max=227441 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0867s 230788 ops/s 901.5 MiB/s cpu=0.153s util=176.7% | lat p50=63895 p95=91232 p99=107771 max=215246 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=7 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0793s 252165 ops/s 985.0 MiB/s cpu=0.147s util=184.9% | lat p50=69376 p95=91471 p99=108517 max=256567 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.1140s 175501 ops/s 685.6 MiB/s cpu=0.195s util=171.3% | lat p50=65780 p95=93929 p99=109739 max=152628 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=8 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0972s 205833 ops/s 804.0 MiB/s cpu=0.164s util=169.1% | lat p50=74635 p95=99178 p99=116222 max=166759 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0898s 222774 ops/s 870.2 MiB/s cpu=0.149s util=165.7% | lat p50=50746 p95=90224 p99=108894 max=215192 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=8 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0877s 227990 ops/s 890.6 MiB/s cpu=0.152s util=173.3% | lat p50=75137 p95=103946 p99=118343 max=186420 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0944s 211756 ops/s 827.2 MiB/s cpu=0.155s util=164.1% | lat p50=68914 p95=91858 p99=102507 max=190661 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=9 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0953s 209935 ops/s 820.1 MiB/s cpu=0.178s util=187.2% | lat p50=65482 p95=95857 p99=112892 max=223777 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0816s 244972 ops/s 956.9 MiB/s cpu=0.149s util=182.6% | lat p50=68840 p95=101373 p99=123256 max=267304 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=9 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0836s 239124 ops/s 934.1 MiB/s cpu=0.152s util=181.7% | lat p50=66905 p95=89572 p99=104868 max=151945 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0834s 239681 ops/s 936.3 MiB/s cpu=0.149s util=178.3% | lat p50=65717 p95=91984 p99=106065 max=167567 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=10 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0930s 214976 ops/s 839.7 MiB/s cpu=0.154s util=165.3% | lat p50=68981 p95=91049 p99=102354 max=144510 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0929s 215267 ops/s 840.9 MiB/s cpu=0.153s util=164.9% | lat p50=71046 p95=94082 p99=105845 max=174773 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=10 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0928s 215573 ops/s 842.1 MiB/s cpu=0.161s util=173.1% | lat p50=68660 p95=93657 p99=106363 max=158731 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0928s 215625 ops/s 842.3 MiB/s cpu=0.160s util=172.5% | lat p50=68594 p95=90338 p99=101735 max=185128 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=11 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0886s 225628 ops/s 881.4 MiB/s cpu=0.159s util=179.7% | lat p50=65965 p95=94425 p99=109864 max=153674 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0857s 233404 ops/s 911.7 MiB/s cpu=0.151s util=176.2% | lat p50=66504 p95=97449 p99=115816 max=238690 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=11 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0910s 219764 ops/s 858.5 MiB/s cpu=0.166s util=182.8% | lat p50=62987 p95=92180 p99=111194 max=208052 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0825s 242336 ops/s 946.6 MiB/s cpu=0.152s util=183.7% | lat p50=62954 p95=97101 p99=122539 max=234851 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=12 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0970s 206084 ops/s 805.0 MiB/s cpu=0.163s util=167.9% | lat p50=73279 p95=99004 p99=112358 max=152648 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0961s 208043 ops/s 812.7 MiB/s cpu=0.158s util=164.2% | lat p50=64461 p95=85970 p99=95176 max=122335 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=12 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0848s 235801 ops/s 921.1 MiB/s cpu=0.150s util=177.0% | lat p50=70381 p95=186731 p99=218352 max=264200 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0974s 205310 ops/s 802.0 MiB/s cpu=0.165s util=169.5% | lat p50=64586 p95=89478 p99=100133 max=120853 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=13 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0872s 229280 ops/s 895.6 MiB/s cpu=0.155s util=177.9% | lat p50=66398 p95=94231 p99=111118 max=205840 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0869s 230103 ops/s 898.8 MiB/s cpu=0.152s util=175.0% | lat p50=66564 p95=95813 p99=114723 max=216442 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=13 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.0915s 218633 ops/s 854.0 MiB/s cpu=0.171s util=186.7% | lat p50=67847 p95=100056 p99=118730 max=241896 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0820s 243777 ops/s 952.3 MiB/s cpu=0.147s util=178.9% | lat p50=66263 p95=95863 p99=111076 max=202502 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=14 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w1 rep=0 warmup] ops=20000 wall=0.1003s 199411 ops/s 778.9 MiB/s cpu=0.171s util=170.5% | lat p50=74290 p95=97178 p99=109117 max=192830 ns (n=20000)
+  [W02-threadpool-4k-d16-w1 rep=0] ops=20000 wall=0.0958s 208771 ops/s 815.5 MiB/s cpu=0.157s util=164.1% | lat p50=73935 p95=100495 p99=122665 max=232498 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w1 rep=14 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0110s 291050 ops/s 1136.9 MiB/s cpu=0.038s util=342.9% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0112s 284657 ops/s 1111.9 MiB/s cpu=0.039s util=343.0% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=0 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0119s 269433 ops/s 1052.5 MiB/s cpu=0.039s util=329.3% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0111s 288110 ops/s 1125.4 MiB/s cpu=0.036s util=323.6% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=0 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0113s 282881 ops/s 1105.0 MiB/s cpu=0.037s util=330.4% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0104s 306359 ops/s 1196.7 MiB/s cpu=0.033s util=320.3% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=1 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0130s 246488 ops/s 962.8 MiB/s cpu=0.044s util=340.0% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0125s 257014 ops/s 1004.0 MiB/s cpu=0.041s util=332.4% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=1 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0132s 242243 ops/s 946.3 MiB/s cpu=0.045s util=342.1% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0125s 256209 ops/s 1000.8 MiB/s cpu=0.042s util=335.0% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=2 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0110s 291307 ops/s 1137.9 MiB/s cpu=0.037s util=335.3% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0105s 304110 ops/s 1187.9 MiB/s cpu=0.036s util=338.7% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=2 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0107s 298922 ops/s 1167.7 MiB/s cpu=0.036s util=339.2% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0105s 305346 ops/s 1192.8 MiB/s cpu=0.034s util=323.3% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=3 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0129s 248821 ops/s 972.0 MiB/s cpu=0.044s util=340.6% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0126s 253539 ops/s 990.4 MiB/s cpu=0.042s util=333.6% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=3 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0128s 250929 ops/s 980.2 MiB/s cpu=0.044s util=344.9% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0122s 262343 ops/s 1024.8 MiB/s cpu=0.043s util=355.3% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=4 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0116s 276063 ops/s 1078.4 MiB/s cpu=0.039s util=334.9% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0113s 284110 ops/s 1109.8 MiB/s cpu=0.037s util=326.1% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=4 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0115s 278841 ops/s 1089.2 MiB/s cpu=0.039s util=340.5% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0109s 294243 ops/s 1149.4 MiB/s cpu=0.036s util=330.1% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=5 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0133s 239975 ops/s 937.4 MiB/s cpu=0.045s util=340.3% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0133s 240427 ops/s 939.2 MiB/s cpu=0.043s util=324.2% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=5 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0134s 238956 ops/s 933.4 MiB/s cpu=0.045s util=336.4% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0133s 241026 ops/s 941.5 MiB/s cpu=0.043s util=325.4% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=6 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w4-saturate rep=0 warmup] ops=3200 wall=0.0120s 267553 ops/s 1045.1 MiB/s cpu=0.039s util=329.4% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+  [W02-threadpool-4k-d16-w4-saturate rep=0] ops=3200 wall=0.0118s 271173 ops/s 1059.3 MiB/s cpu=0.038s util=317.8% | lat p50=0 p95=0 p99=0 max=0 ns (n=0)
+
+=== W-02 complete, failing repetitions=0 ===
+W02-threadpool-4k-d16-w4-saturate rep=6 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1148s 174141 ops/s 680.2 MiB/s cpu=0.383s util=333.6% | lat p50=77181 p95=120068 p99=139693 max=217244 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1301s 153707 ops/s 600.4 MiB/s cpu=0.425s util=326.9% | lat p50=62812 p95=98089 p99=112589 max=190675 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=0 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0962s 207849 ops/s 811.9 MiB/s cpu=0.308s util=320.2% | lat p50=46870 p95=73739 p99=85087 max=118360 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0904s 221347 ops/s 864.6 MiB/s cpu=0.297s util=328.8% | lat p50=45109 p95=73429 p99=86753 max=121167 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=0 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0860s 232511 ops/s 908.2 MiB/s cpu=0.287s util=333.2% | lat p50=41506 p95=67538 p99=78271 max=130023 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0804s 248734 ops/s 971.6 MiB/s cpu=0.269s util=334.9% | lat p50=43894 p95=70447 p99=80679 max=118199 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=1 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0971s 205987 ops/s 804.6 MiB/s cpu=0.323s util=332.8% | lat p50=73044 p95=109411 p99=125628 max=189359 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1310s 152615 ops/s 596.2 MiB/s cpu=0.418s util=318.8% | lat p50=68930 p95=105872 p99=120788 max=256024 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=1 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1135s 176194 ops/s 688.3 MiB/s cpu=0.375s util=330.1% | lat p50=74633 p95=113801 p99=132305 max=238783 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1294s 154507 ops/s 603.5 MiB/s cpu=0.418s util=322.7% | lat p50=80734 p95=122138 p99=140393 max=176729 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=2 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0977s 204720 ops/s 799.7 MiB/s cpu=0.308s util=315.4% | lat p50=52894 p95=84598 p99=98101 max=157426 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0936s 213678 ops/s 834.7 MiB/s cpu=0.297s util=317.6% | lat p50=46747 p95=75334 p99=87895 max=128134 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=2 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0872s 229414 ops/s 896.2 MiB/s cpu=0.283s util=324.9% | lat p50=45877 p95=75313 p99=89131 max=169877 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0812s 246156 ops/s 961.5 MiB/s cpu=0.260s util=319.5% | lat p50=43705 p95=70329 p99=80410 max=104248 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=3 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0934s 214172 ops/s 836.6 MiB/s cpu=0.322s util=344.5% | lat p50=60691 p95=92359 p99=105457 max=184071 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1006s 198823 ops/s 776.7 MiB/s cpu=0.328s util=326.5% | lat p50=51841 p95=83499 p99=95305 max=131640 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=3 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1071s 186824 ops/s 729.8 MiB/s cpu=0.363s util=339.2% | lat p50=59391 p95=94376 p99=109695 max=153954 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1214s 164747 ops/s 643.5 MiB/s cpu=0.389s util=320.5% | lat p50=79062 p95=122768 p99=137959 max=171840 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=4 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0928s 215505 ops/s 841.8 MiB/s cpu=0.301s util=324.2% | lat p50=41983 p95=66040 p99=77030 max=132405 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0826s 242251 ops/s 946.3 MiB/s cpu=0.278s util=337.3% | lat p50=49244 p95=78062 p99=89749 max=143677 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=4 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0894s 223755 ops/s 874.0 MiB/s cpu=0.297s util=332.3% | lat p50=51376 p95=83826 p99=99715 max=191550 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0976s 204947 ops/s 800.6 MiB/s cpu=0.310s util=317.8% | lat p50=51639 p95=82106 p99=94218 max=122614 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=5 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1110s 180179 ops/s 703.8 MiB/s cpu=0.369s util=332.7% | lat p50=76473 p95=112618 p99=129030 max=199643 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1268s 157721 ops/s 616.1 MiB/s cpu=0.410s util=323.4% | lat p50=80743 p95=124216 p99=141161 max=189402 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=5 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1106s 180904 ops/s 706.7 MiB/s cpu=0.362s util=327.1% | lat p50=68636 p95=105240 p99=124155 max=224898 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1274s 156970 ops/s 613.2 MiB/s cpu=0.401s util=314.7% | lat p50=69687 p95=105241 p99=119408 max=158695 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=6 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0952s 210125 ops/s 820.8 MiB/s cpu=0.317s util=333.0% | lat p50=53422 p95=85890 p99=98324 max=170518 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0941s 212592 ops/s 830.4 MiB/s cpu=0.299s util=317.7% | lat p50=52430 p95=84368 p99=95530 max=133762 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=6 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0971s 205871 ops/s 804.2 MiB/s cpu=0.308s util=317.2% | lat p50=52445 p95=84107 p99=97432 max=160556 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0945s 211629 ops/s 826.7 MiB/s cpu=0.304s util=322.2% | lat p50=53189 p95=83674 p99=98254 max=127667 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=7 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1232s 162359 ops/s 634.2 MiB/s cpu=0.419s util=340.2% | lat p50=74293 p95=112879 p99=126802 max=232374 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1276s 156695 ops/s 612.1 MiB/s cpu=0.403s util=315.8% | lat p50=72813 p95=112460 p99=130844 max=186344 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=7 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1089s 183678 ops/s 717.5 MiB/s cpu=0.358s util=328.4% | lat p50=64405 p95=101320 p99=119616 max=186976 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1224s 163355 ops/s 638.1 MiB/s cpu=0.397s util=324.6% | lat p50=79306 p95=122184 p99=137897 max=176009 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=8 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0958s 208689 ops/s 815.2 MiB/s cpu=0.303s util=316.0% | lat p50=56910 p95=94208 p99=113290 max=177757 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0966s 207064 ops/s 808.8 MiB/s cpu=0.310s util=321.1% | lat p50=57300 p95=92656 p99=114291 max=162541 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=8 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0963s 207640 ops/s 811.1 MiB/s cpu=0.309s util=320.9% | lat p50=50048 p95=78773 p99=89666 max=152508 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0968s 206647 ops/s 807.2 MiB/s cpu=0.302s util=311.9% | lat p50=44840 p95=71264 p99=82434 max=104490 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=9 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0939s 212889 ops/s 831.6 MiB/s cpu=0.315s util=335.6% | lat p50=50608 p95=80078 p99=93675 max=156802 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0987s 202567 ops/s 791.3 MiB/s cpu=0.327s util=331.2% | lat p50=72107 p95=105809 p99=118536 max=162574 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=9 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1121s 178369 ops/s 696.8 MiB/s cpu=0.365s util=325.9% | lat p50=81838 p95=122905 p99=139598 max=192702 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1558s 128349 ops/s 501.4 MiB/s cpu=0.479s util=307.2% | lat p50=78977 p95=120322 p99=137182 max=199703 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=10 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0893s 223882 ops/s 874.5 MiB/s cpu=0.291s util=325.5% | lat p50=40844 p95=64745 p99=75206 max=127637 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0764s 261928 ops/s 1023.2 MiB/s cpu=0.258s util=337.7% | lat p50=42146 p95=69006 p99=79584 max=104665 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=10 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0937s 213472 ops/s 833.9 MiB/s cpu=0.300s util=320.0% | lat p50=48370 p95=78638 p99=90806 max=163160 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0960s 208417 ops/s 814.1 MiB/s cpu=0.305s util=317.8% | lat p50=51234 p95=82642 p99=98284 max=130869 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=11 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1184s 168984 ops/s 660.1 MiB/s cpu=0.388s util=328.1% | lat p50=84461 p95=131028 p99=154303 max=259517 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1461s 136906 ops/s 534.8 MiB/s cpu=0.457s util=312.7% | lat p50=77435 p95=120314 p99=137818 max=613942 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=11 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1135s 176159 ops/s 688.1 MiB/s cpu=0.377s util=331.6% | lat p50=72223 p95=112539 p99=127244 max=189764 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0997s 200682 ops/s 783.9 MiB/s cpu=0.334s util=335.3% | lat p50=69126 p95=105220 p99=118938 max=155462 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=12 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0978s 204505 ops/s 798.8 MiB/s cpu=0.314s util=321.0% | lat p50=51602 p95=82780 p99=95408 max=154369 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0971s 205883 ops/s 804.2 MiB/s cpu=0.313s util=322.3% | lat p50=53185 p95=84108 p99=97853 max=126229 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=12 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0957s 209072 ops/s 816.7 MiB/s cpu=0.313s util=327.4% | lat p50=54984 p95=88601 p99=104904 max=142362 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0884s 226188 ops/s 883.5 MiB/s cpu=0.283s util=320.4% | lat p50=41125 p95=66169 p99=76507 max=104315 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=13 side=arm rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1103s 181318 ops/s 708.3 MiB/s cpu=0.367s util=333.0% | lat p50=63756 p95=96057 p99=109323 max=177885 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1131s 176880 ops/s 690.9 MiB/s cpu=0.368s util=325.4% | lat p50=68495 p95=105886 p99=119837 max=157766 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=13 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.1136s 176097 ops/s 687.9 MiB/s cpu=0.372s util=327.5% | lat p50=73564 p95=112212 p99=130790 max=242378 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.1259s 158919 ops/s 620.8 MiB/s cpu=0.400s util=318.2% | lat p50=84206 p95=126695 p99=148170 max=280239 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=14 side=b0 rc=0 measured_reps=1
+io_uring backend unavailable: io_uring backend not present in this build profile
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=1
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0971s 205893 ops/s 804.3 MiB/s cpu=0.317s util=325.8% | lat p50=52345 p95=86765 p99=103125 max=136629 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0976s 204911 ops/s 800.4 MiB/s cpu=0.309s util=316.8% | lat p50=50047 p95=80623 p99=92276 max=163366 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===
+W03-threadpool-4k-d16-w4 rep=14 side=arm rc=0 measured_reps=1
+finished=2026-10-16T13:32:25+08:00
+failures=0

@@ -1,0 +1,23 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 17 and seed -4392665547422635605 with 16 workers on 20 cores with 49152MB heap and 64MB offheap memory [pid: 45859] (Linux 7.2.9-201.fc44.x86_64 amd64, Red Hat, Inc. 25.0.4.1 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /home/jnhu/Source/Sluice-g1/formal/tla/RequestCore.tla
+Parsing file /tmp/Naturals.tla
+Parsing file /tmp/Sequences.tla
+Semantic processing of module Naturals
+Semantic processing of module Sequences
+Semantic processing of module RequestCore
+Starting... (2026-10-16 13:32:50)
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-10-16 13:32:51.
+Progress(24) at 2026-10-16 13:32:54: 1,620,851 states generated (1,620,851 s/min), 304,380 distinct states found (304,380 ds/min), 58,365 states left on queue.
+Model checking completed. No error has been found.
+  Estimates of the probability that TLC did not check all reachable states
+  because two distinct states had the same fingerprint:
+  calculated (optimistic):  val = 7.5E-6
+  based on the actual fingerprints:  val = 1.2E-5
+31289609 states generated, 5359732 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 53.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 11 and the 95th percentile is 3).
+Finished in 48s at (2026-10-16 13:33:38)

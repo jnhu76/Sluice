@@ -1,0 +1,3 @@
+FAIL [accepted_request_pends_until_publication] try_result reports pending before publication
+FAIL [publication_inflight_window_keeps_the_request_nonterminal] try_result reports pending during the publication window
+2 of 13 public request tests failed

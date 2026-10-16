@@ -1,0 +1,11 @@
+# descriptor census, repeated with isolated builds and recorded binary hashes
+method: strace -f -e trace=openat,close -o <raw>; opens/closes tabulated below
+started=2026-10-16T14:09:14+08:00
+prefix_binary_sha256=ad50ce20d70a36bcc94450b299f8ee222af387d3e74d6cdb6323c3825a228fbf  (54631b5f test body, opens a tmpfile per submit, closes none)
+fixed_binary_sha256=2b186f488b5bc2b15964fb9cf4a2e6883797bfe7d68fef82cb47c0cddbc84a4b   (16e5d96a test body, one TmpFile per case + descriptor assertion)
+prefix_rc=0
+fixed_rc=0
+;; /tmp (O_TMPFILE) opens and close() counts, per binary:
+prefix-original  tmpfile_opens=8 openat_total=13 close_total=7
+fixed-isolated   tmpfile_opens=2 openat_total=11 close_total=13
+finished=2026-10-16T14:09:15+08:00

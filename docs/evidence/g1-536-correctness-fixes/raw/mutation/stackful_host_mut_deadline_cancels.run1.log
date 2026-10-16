@@ -1,0 +1,2 @@
+FAIL: deadline expiry did not cancel: real result returned
+FAIL: deadline_expiry_does_not_cancel

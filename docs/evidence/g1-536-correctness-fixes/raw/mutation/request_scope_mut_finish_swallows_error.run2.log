@@ -1,0 +1,5 @@
+FAIL [finish_reports_an_unconsumed_operation_error] explicit finish reports the unconsumed operation error instead of discarding it
+FAIL [explicit_finish_reports_an_externally_canceled_terminal] explicit finish reports an externally canceled terminal instead of suppressing it through the construction policy
+sluice::async::RequestScope: progress health failed while accepted scope work remains unsettled; failing fast instead of returning with live borrows
+terminate called without an active exception
+2 of 25 request scope tests failed

@@ -1,0 +1,10 @@
+FAIL [attach_during_publication_window_arms_for_that_publication] attach inside the publication window arms rather than reporting already-terminal
+FAIL [attach_during_publication_window_arms_for_that_publication] publication queues the armed registration as the pending delivery
+FAIL [attach_during_publication_window_arms_for_that_publication] the pending delivery pins the slot past binding release
+FAIL [attach_during_publication_window_arms_for_that_publication] the driver claims the pending delivery
+FAIL [attach_during_publication_window_arms_for_that_publication] delivery retirement releases the pending delivery
+FAIL [attach_on_terminal_choice_before_publication_still_arms] attach after terminal choice but before publication arms for the pending delivery
+FAIL [attach_on_terminal_choice_before_publication_still_arms] the pending-delivery registration still enforces the occupied disposition
+FAIL [attach_on_terminal_choice_before_publication_still_arms] the registration rides the publication as the one owed delivery
+FAIL [attach_on_terminal_choice_before_publication_still_arms] cancellation suppresses the queued delivery
+2 of 46 request core protocol tests failed
