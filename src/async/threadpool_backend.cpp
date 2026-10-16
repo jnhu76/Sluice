@@ -89,7 +89,8 @@ bool ThreadPoolBackend::BoundedHandleRing::remove_exact(detail::RequestReservati
 ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
     : capacity_(config.request_capacity), prepared_ops_(config.request_capacity),
       delivery_(config.request_capacity), dispatch_(config.request_capacity),
-      publication_pending_(config.request_capacity) {
+      publication_pending_(config.request_capacity),
+      publish_batch_(config.request_capacity), owed_batch_(config.request_capacity) {
     if (config.request_capacity == 0 || config.worker_count == 0) {
         throw std::invalid_argument("ThreadPoolConfig fields must be > 0");
     }
@@ -538,41 +539,44 @@ std::size_t ThreadPoolBackend::poll() {
 
 AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
     std::size_t published = 0;
-    std::size_t pass_bound = 0;
+    // The entry snapshot is the pass boundary and bounds the pass: at most
+    // capacity_ queued publications plus at most capacity_ owed events are
+    // taken here; completions and owed events produced afterwards stay
+    // queued for later passes and are reported honestly below, never
+    // absorbed into this invocation. Both snapshot stores are sized once at
+    // construction, so the pass performs no dynamic allocation that could
+    // throw after accepted work left the publication queue.
+    std::size_t owed_bound = 0;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
-        pass_bound = publication_pending_.size();
-    }
-    // The entry snapshot is the pass boundary: completions a worker posts
-    // during this pass are the next pass's immediate work, reported honestly
-    // below, never absorbed into this invocation.
-    for (std::size_t n = 0; n < pass_bound; ++n) {
-        detail::RequestReservation h{};
-        bool have = false;
-        {
-            std::lock_guard<std::mutex> lk(work_mtx_);
-            have = publication_pending_.pop_front(h);
+        const std::size_t pass_bound = publication_pending_.size();
+        for (std::size_t n = 0; n < pass_bound; ++n) {
+            detail::RequestReservation h{};
+            if (!publication_pending_.pop_front(h))
+                break;
+            publish_batch_.push_back(h);
         }
-        if (!have)
-            break;
-        publish_one(h);
-        ++published;
-    }
-    for (std::uint32_t i = 0; i < capacity_; ++i) {
-        detail::RequestKey owed{};
-        detail::OperationKind owed_kind = detail::OperationKind::read;
-        {
-            std::lock_guard<std::mutex> lk(work_mtx_);
+        owed_bound = 0;
+        for (std::uint32_t i = 0; i < capacity_; ++i) {
             DeliveryRecord& record = delivery_[i];
             if (!record.event_owed)
                 continue;
             record.event_owed = false;
-            owed = record.owed_key;
+            owed_batch_[owed_bound] = OwedEvent{record.owed_key, record.kind};
             record.owed_key = {};
-            owed_kind = record.kind;
+            ++owed_bound;
         }
-        deliver_event(owed, owed_kind);
-        if (core_->release_control(owed) != detail::ControlRelease::released) {
+    }
+    for (;;) {
+        detail::RequestReservation h{};
+        if (!publish_batch_.pop_front(h))
+            break;
+        publish_one(h);
+        ++published;
+    }
+    for (std::size_t n = 0; n < owed_bound; ++n) {
+        deliver_event(owed_batch_[n].key, owed_batch_[n].kind);
+        if (core_->release_control(owed_batch_[n].key) != detail::ControlRelease::released) {
             detail::threadpool_core_handoff_fail_fast();
         }
         ++published;
@@ -582,9 +586,10 @@ AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
     pass.completed = published;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
-        pass.immediate_work_remains = !publication_pending_.empty();
+        pass.immediate_work_remains =
+            !publication_pending_.empty() || any_event_owed_locked_();
     }
-    pass.accepted_work_remains = core_ != nullptr && core_->occupancy().outstanding != 0;
+    pass.accepted_work_remains = core_ != nullptr && core_->outstanding_summary() != 0;
     return pass;
 }
 
@@ -771,7 +776,7 @@ detail::PublicCancel ThreadPoolBackend::cancel_identity(detail::RequestKey key) 
 }
 
 std::size_t ThreadPoolBackend::outstanding() const noexcept {
-    return core_ != nullptr ? core_->occupancy().outstanding : 0;
+    return core_ != nullptr ? core_->outstanding_summary() : 0;
 }
 
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {

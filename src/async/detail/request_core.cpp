@@ -58,6 +58,11 @@ CoreOccupancy RequestCore::occupancy() const noexcept {
     return occupancy;
 }
 
+std::size_t RequestCore::outstanding_summary() const noexcept {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return outstanding_;
+}
+
 void RequestCore::collect_outstanding(std::vector<RequestKey>& out) const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     for (std::size_t i = 0; i < slots_.size(); ++i) {
@@ -194,6 +199,7 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
     slot->descriptor = descriptor;
     slot->borrow = borrow;
     slot->execution_refs = 1;
+    ++outstanding_;
     if (descriptor.zero_op) {
         slot->zero_op = true;
         slot->terminal_chosen = true;
@@ -463,6 +469,7 @@ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept 
     }
     slot->publication_inflight = false;
     slot->published = true;
+    --outstanding_;
 #if defined(SLUICE_C1_MUTANT_PUBLICATION_SKIPS_QUEUE)
     const bool queue_armed_observer = false;
 #else

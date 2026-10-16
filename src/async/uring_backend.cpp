@@ -661,7 +661,7 @@ void UringAsyncBackend::close_admission() {
 }
 
 std::size_t UringAsyncBackend::outstanding() const noexcept {
-    return core_ != nullptr ? core_->occupancy().outstanding : 0;
+    return core_ != nullptr ? core_->outstanding_summary() : 0;
 }
 
 bool UringAsyncBackend::available() const noexcept {

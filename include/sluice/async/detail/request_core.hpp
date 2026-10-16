@@ -177,6 +177,11 @@ class RequestCore {
 
     CoreOccupancy occupancy() const noexcept;
 
+    // Derived summary of occupancy().outstanding, updated inside the same
+    // critical sections as the accepted/published transitions it summarizes;
+    // occupancy() stays the authority for settlement and diagnostics.
+    std::size_t outstanding_summary() const noexcept;
+
     ReserveAttempt reserve();
     AcceptAttempt accept(RequestReservation reservation, const RequestDescriptor& descriptor,
                          BorrowFacts borrow) noexcept;
@@ -287,6 +292,7 @@ class RequestCore {
     std::vector<Slot> slots_;
     std::vector<std::uint32_t> free_slots_;
     std::size_t retired_count_ = 0;
+    std::size_t outstanding_ = 0;
     bool admission_open_ = true;
     bool health_failed_ = false;
     mutable std::mutex mutex_;

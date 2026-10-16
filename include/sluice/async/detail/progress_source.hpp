@@ -406,6 +406,7 @@ class ProgressSource {
                     continue;
                 }
                 if (errno == EAGAIN) {
+                    notification_pending_ = false;
                     return;
                 }
             }
@@ -415,8 +416,11 @@ class ProgressSource {
 
     // Caller holds mtx_; a retired source (execution closed) has no waiter
     // that could miss the wake, so the write is skipped instead of failing.
+    // A pending unread byte already wakes every poller, so the write is
+    // skipped while notification_pending_ stands; the bit is only cleared on
+    // the EAGAIN above, where the counter is provably zero.
     void wake_notification_nolock_() noexcept {
-        if (notification_fd_ < 0) {
+        if (notification_fd_ < 0 || notification_pending_) {
             return;
         }
         const std::uint64_t one = 1;
@@ -424,6 +428,7 @@ class ProgressSource {
             errno = 0;
             const ssize_t n = ::write(notification_fd_, &one, sizeof(one));
             if (n == static_cast<ssize_t>(sizeof(one))) {
+                notification_pending_ = true;
                 return;
             }
             if (n < 0 && errno == EINTR) {
@@ -432,6 +437,7 @@ class ProgressSource {
             // Saturation leaves read-readiness asserted, so EAGAIN is an
             // already-pending wake rather than a lost one.
             if (n < 0 && errno == EAGAIN) {
+                notification_pending_ = true;
                 return;
             }
             wait_domain_fail_fast_("write", errno);
@@ -456,6 +462,7 @@ class ProgressSource {
     bool health_failed_ = false;
 
     int notification_fd_ = -1;
+    bool notification_pending_ = false;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};

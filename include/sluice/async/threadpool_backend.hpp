@@ -136,6 +136,11 @@ class ThreadPoolBackend : public AsyncBackend {
         detail::RequestKey owed_key{};
     };
 
+    struct OwedEvent {
+        detail::RequestKey key{};
+        detail::OperationKind kind = detail::OperationKind::read;
+    };
+
     class BoundedHandleRing {
       public:
         explicit BoundedHandleRing(std::size_t capacity)
@@ -225,6 +230,8 @@ class ThreadPoolBackend : public AsyncBackend {
     std::condition_variable work_cv_;
     BoundedHandleRing dispatch_;
     BoundedHandleRing publication_pending_;
+    BoundedHandleRing publish_batch_;
+    std::vector<OwedEvent> owed_batch_;
     std::size_t active_workers_ = 0;
     bool stopping_ = false;
 
