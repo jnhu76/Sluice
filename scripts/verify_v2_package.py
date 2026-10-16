@@ -375,8 +375,13 @@ def main():
     # ways: a stale cached profile would poison the archive identity.
     configure = ["xmake", "f", "-m", args.mode, "-y",
                  f"--liburing={'y' if args.liburing else 'n'}"]
+    # A dedicated liburing prefix must be exported to the toolchain (and its
+    # lib exported at consumer runtime); the system root resolves on the
+    # default search paths and exporting /usr/include would corrupt g++'s
+    # include_next chain.
+    system_uring = uring_prefix == Path("/usr")
     env = dict(os.environ)
-    if args.liburing:
+    if args.liburing and not system_uring:
         env["CPLUS_INCLUDE_PATH"] = str(uring_prefix / "include")
         env["LIBRARY_PATH"] = str(uring_prefix / "lib")
         os.environ["LD_LIBRARY_PATH"] = (
@@ -409,11 +414,12 @@ def main():
     libs = sorted(str(p.relative_to(prefix)) for p in (prefix / "lib").iterdir())
     uring_version = ""
     if args.liburing:
-        pc = uring_prefix / "lib" / "pkgconfig" / "liburing.pc"
-        if pc.exists():
-            for line in pc.read_text().splitlines():
-                if line.startswith("Version:"):
-                    uring_version = line.split(":", 1)[1].strip()
+        for libdir in ("lib", "lib64"):
+            pc = uring_prefix / libdir / "pkgconfig" / "liburing.pc"
+            if pc.exists():
+                for line in pc.read_text().splitlines():
+                    if line.startswith("Version:"):
+                        uring_version = line.split(":", 1)[1].strip()
 
     gate("V2_B_PACKAGE_PREFIX_READY",
          headers == EXPECTED_V2_HEADERS and len(libs) == 2,
@@ -530,7 +536,8 @@ def main():
 
     # 6. P1 consumers. No macro view is supplied: the v2 surface is
     # macro-view independent, which the ODR probe proves directly below.
-    uring_link = [f"-L{uring_prefix}/lib", "-luring"] if args.liburing else []
+    uring_link = (["-luring"] if args.liburing and system_uring
+                  else [f"-L{uring_prefix}/lib", "-luring"] if args.liburing else [])
     async_link = ["-lsluice_async", "-lsluice_core", *uring_link]
     for name in P1_CONSUMERS:
         ok = compile_consumer(build_dir, prefix, [CONSUMERS / f"{name}.cpp"],
