@@ -451,14 +451,17 @@ def main():
     else:
         has_uring_refs = any("io_uring" in s
                              for s in async_archive["undefined_references"])
-        has_uring_backend = any("UringAsyncBackend" in s
+        has_uring_factory = any("make_uring_context" in s
                                 for o in async_archive["objects"]
                                 for s in o["defined_symbols"])
-        expected = has_uring_refs and has_uring_backend if args.liburing \
-            else not has_uring_refs and not has_uring_backend
+        # The no-liburing stub still defines UringAsyncBackend members (the
+        # throwing shell), so the profile identity is the external io_uring
+        # reference set plus the public factory symbol, which must exist in
+        # both profiles with different behavior.
+        expected = has_uring_factory and (has_uring_refs == args.liburing)
         gate("V2_E_ARCHIVE_MATCHES_PROFILE", expected,
              f"(async archive io_uring refs={has_uring_refs}, "
-             f"UringAsyncBackend symbols={has_uring_backend}, "
+             f"make_uring_context defined={has_uring_factory}, "
              f"profile liburing={args.liburing})")
 
     manifest = {
