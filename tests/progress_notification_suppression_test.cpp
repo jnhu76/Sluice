@@ -4,7 +4,9 @@
 #include <sluice/result.hpp>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdio>
+#include <dirent.h>
 #include <mutex>
 #include <poll.h>
 #include <thread>
@@ -34,11 +36,29 @@ struct HostInterest {
     ~HostInterest() { ctx.detach_progress_host(); }
 };
 
-Request<std::size_t> submit_zero_op(AsyncIoContext& ctx) {
-    std::vector<std::byte> buffer(4, std::byte{0});
-    auto submitted =
-        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), sluice::FileAccess::read_only),
-                               buffer.data(), 0, 0});
+struct TmpFile {
+    ::FILE* file = std::tmpfile();
+    ~TmpFile() {
+        if (file != nullptr)
+            std::fclose(file);
+    }
+    int fd() const { return ::fileno(file); }
+};
+
+std::size_t open_fd_count() {
+    ::DIR* dir = ::opendir("/proc/self/fd");
+    if (dir == nullptr)
+        return 0;
+    std::size_t n = 0;
+    while (::readdir(dir) != nullptr)
+        ++n;
+    ::closedir(dir);
+    return n;
+}
+
+Request<std::size_t> submit_zero_op(AsyncIoContext& ctx, int fd, std::byte* buffer) {
+    auto submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(fd, sluice::FileAccess::read_only), buffer, 0, 0});
     if (!submitted.has_value())
         return {};
     return std::move(submitted).value();
@@ -75,10 +95,14 @@ bool coalesce_then_acknowledge_round_trip() {
     HostInterest interest(ctx);
     if (interest.fd < 0)
         return false;
+    TmpFile file;
+    if (file.file == nullptr)
+        return false;
+    std::vector<std::byte> buffer(4, std::byte{0});
 
     std::vector<Request<std::size_t>> requests;
     for (int n = 0; n < 3; ++n) {
-        auto r = submit_zero_op(ctx);
+        auto r = submit_zero_op(ctx, file.fd(), buffer.data());
         if (!r.valid()) {
             std::fprintf(stderr, "case0: submit %d invalid\n", n);
             return false;
@@ -94,7 +118,7 @@ bool coalesce_then_acknowledge_round_trip() {
     if (notification_fd_readable(interest.fd))
         return false;
 
-    auto again = submit_zero_op(ctx);
+    auto again = submit_zero_op(ctx, file.fd(), buffer.data());
     if (!again.valid())
         return false;
     requests.push_back(std::move(again));
@@ -117,6 +141,10 @@ bool concurrent_producers_never_strand_a_completion() {
     HostInterest interest(ctx);
     if (interest.fd < 0)
         return false;
+    TmpFile file;
+    if (file.file == nullptr)
+        return false;
+    std::vector<std::byte> buffer(4, std::byte{0});
 
     constexpr int kProducers = 4;
     std::vector<Request<std::size_t>> requests;
@@ -125,7 +153,7 @@ bool concurrent_producers_never_strand_a_completion() {
         std::vector<std::thread> producers;
         for (int n = 0; n < kProducers; ++n) {
             producers.emplace_back([&] {
-                auto r = submit_zero_op(ctx);
+                auto r = submit_zero_op(ctx, file.fd(), buffer.data());
                 std::lock_guard<std::mutex> lk(produce_mtx);
                 if (r.valid())
                     requests.push_back(std::move(r));
@@ -154,9 +182,18 @@ int main() {
         concurrent_producers_never_strand_a_completion,
     };
     for (std::size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        const std::size_t fds_before = open_fd_count();
         if (!cases[i]()) {
             std::fprintf(stderr, "progress_notification_suppression_test: case %zu failed\n",
                          i);
+            return 1;
+        }
+        const std::size_t fds_after = open_fd_count();
+        if (fds_before != fds_after) {
+            std::fprintf(stderr,
+                         "progress_notification_suppression_test: case %zu leaked "
+                         "descriptors (%zu -> %zu)\n",
+                         i, fds_before, fds_after);
             return 1;
         }
     }
