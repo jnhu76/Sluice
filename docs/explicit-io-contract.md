@@ -1640,13 +1640,22 @@ KEEP rows for those headers.
 | `sluice/async/detail/request_core.hpp` | SIMPLIFY → internal (seam type) |
 | `sluice/async/detail/progress_source.hpp` | SIMPLIFY → internal (seam type) |
 
-Target install surface: **13 headers** (6 core + 5 async public + blocking/file
-+ measurement counted in core). The physical contraction is a post-adoption
-slice: it requires the seam-type refactor for `AsyncIoContext`/backend
-signatures, the host-bundle uninstall decision, an installed-header/build
-audit, and the external-use disclosure. Until that slice, the current 25
-installed headers remain, with the detail headers documented as
-implementation surface rather than contract.
+The table's 25 rows are the headers the two install rules actually ship
+(`sluice/*.hpp`, `sluice/blocking/*.hpp` and `sluice/detail/*.hpp` from
+`sluice_core`; `sluice/async/*.hpp` and `sluice/async/detail/*.hpp` from
+`sluice_async`, minus the explicitly removed `context_identity.hpp`). A 26th
+header exists in the tree, `sluice/async/detail/context_identity.hpp`, and is
+deliberately not installed (`remove_headerfiles` in `xmake/libraries.lua`): no
+installed header includes it, so it is entirely internal already and needs no
+disposition row.
+
+Target install surface: **11 headers** — the 11 KEEP rows (6 core, counting
+`blocking/file.hpp`, plus 5 async public). The physical contraction is a
+post-adoption slice: it requires the seam-type refactor for
+`AsyncIoContext`/backend signatures, the host-bundle uninstall decision, an
+installed-header/build audit, and the external-use disclosure. Until that
+slice, the current 25 installed headers remain, with the `detail/` headers
+documented as implementation surface rather than contract.
 
 # 24. Revision record
 
