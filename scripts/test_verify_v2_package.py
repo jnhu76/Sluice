@@ -2,6 +2,7 @@
 """Unit tests for the pure gates of scripts/verify_v2_package.py."""
 
 import importlib.util
+import shutil
 import sys
 import tempfile
 import unittest
@@ -83,6 +84,58 @@ class CleanRoomCommandTests(unittest.TestCase):
         violations = verifier.check_clean_room(
             ["g++ -I/tmp/prefix/include -c x.cpp -o x.o"], "/tmp/prefix")
         self.assertEqual(violations, [])
+
+
+def stage_installed_headers(tmp):
+    prefix = Path(tmp) / "prefix"
+    for rel in verifier.EXPECTED_V2_HEADERS:
+        dst = prefix / "include" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO / "include" / rel, dst)
+    return prefix
+
+
+@unittest.skipUnless(shutil.which("g++"), "g++ is required for probe compiles")
+class SeamNegativeProbeTests(unittest.TestCase):
+    def test_healthy_headers_pass_the_seam_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = stage_installed_headers(tmp)
+            build = Path(tmp) / "build"
+            build.mkdir()
+            failures = verifier.run_seam_negative_probes(build, prefix, [])
+            self.assertEqual(failures, [])
+
+    def test_reexposed_backend_definition_is_killed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = stage_installed_headers(tmp)
+            shutil.copytree(REPO / "include" / "sluice",
+                            prefix / "include" / "sluice",
+                            dirs_exist_ok=True)
+            installed = prefix / "include" / "sluice" / "async" / "async_io_context.hpp"
+            installed.write_text(
+                installed.read_text()
+                + "\n#include <sluice/async/detail/async_backend.hpp>\n")
+            build = Path(tmp) / "build"
+            build.mkdir()
+            failures = verifier.run_seam_negative_probes(build, prefix, [])
+            killed = [f for f in failures if "compiled against the installed headers" in f]
+            self.assertTrue(
+                killed,
+                f"re-exposing the backend definition must fail the seam gate, "
+                f"got {failures}")
+
+    def test_unexpected_failure_reason_does_not_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prefix = stage_installed_headers(tmp)
+            build = Path(tmp) / "build"
+            build.mkdir()
+            ok = verifier.expect_compile_failure(
+                build, prefix, "bogus_diagnostic",
+                verifier.seam_probes()["derive_backend"][0], [],
+                expect_diagnostics=("a diagnostic fragment that never appears",))
+            self.assertFalse(
+                ok, "a probe failing for another reason must not count as the "
+                    "expected negative result")
 
 
 if __name__ == "__main__":

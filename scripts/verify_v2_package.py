@@ -315,16 +315,98 @@ def standalone_compile_headers(build_dir, prefix, headers, command_log):
     return {"total": len(headers), "failed": failed}
 
 
-def expect_compile_failure(build_dir, prefix, name, text, command_log):
-    """Negative probe: the TU must FAIL to compile against the prefix."""
+def expect_compile_failure(build_dir, prefix, name, text, command_log,
+                           expect_diagnostics=()):
+    """Negative probe: the TU must FAIL to compile against the prefix, and
+    the failure must carry every expected diagnostic fragment (matched
+    case-insensitively) so an unrelated compile error cannot masquerade as
+    the expected negative result."""
     cxx = "g++"
     src = build_dir / f"neg_{name}.cpp"
     src.write_text(text)
     obj = src.with_suffix(".o")
     cmd = [cxx, "-std=c++20", f"-I{prefix}/include", "-c", src, "-o", obj]
     command_log.append(" ".join(str(c) for c in cmd))
-    r = run(cmd, capture_output=True)
-    return r.returncode != 0
+    r = run(cmd, capture_output=True, text=True)
+    if r.returncode == 0:
+        return False
+    if expect_diagnostics:
+        stderr = (r.stderr or "").lower()
+        missing = [frag for frag in expect_diagnostics if frag.lower() not in stderr]
+        if missing:
+            print(f"  negative probe {name} failed for an unexpected reason "
+                  f"(missing {missing})")
+            return False
+    return True
+
+
+SEAM_PROBE_INCLUDES = (
+    "#include <sluice/async/async_io_context.hpp>\n"
+    "#include <sluice/async/threadpool_backend.hpp>\n"
+    "#include <sluice/async/uring_backend.hpp>\n"
+)
+
+
+def seam_probes():
+    """Probes compiled against the REAL installed headers: if any installed
+    header re-exposed the backend seam, these would compile and the gate
+    fails. Each probe pins the expected diagnostic so the failure must come
+    from the seam being closed, not from an unrelated error."""
+    return {
+        "derive_backend": (
+            SEAM_PROBE_INCLUDES
+            + "struct Derived : sluice::async::AsyncBackend {};\n"
+              "int main() { return 0; }\n",
+            ("incomplete type",),
+        ),
+        "construct_backend": (
+            SEAM_PROBE_INCLUDES
+            + "#include <memory>\n"
+              "int main() {\n"
+              "    std::unique_ptr<sluice::async::AsyncBackend> backend(\n"
+              "        new sluice::async::AsyncBackend);\n"
+              "    (void)backend;\n"
+              "    return 0;\n"
+              "}\n",
+            ("incomplete type",),
+        ),
+        "unique_ptr_ctor": (
+            SEAM_PROBE_INCLUDES
+            + "#include <memory>\n"
+              "int main() {\n"
+              "    sluice::async::AsyncIoContext ctx(\n"
+              "        std::unique_ptr<sluice::async::AsyncBackend>{});\n"
+              "    (void)ctx;\n"
+              "    return 0;\n"
+              "}\n",
+            ("private",),
+        ),
+    }
+
+
+def run_seam_negative_probes(build_dir, prefix, command_log):
+    """Returns a list of seam-closure failures; empty means the seam gate
+    holds. A probe that COMPILES is reported as 'compiled against the
+    installed headers'; a failure without the expected diagnostic is
+    reported as an unexpected reason."""
+    failures = []
+    for name, (text, diagnostics) in seam_probes().items():
+        src = build_dir / f"neg_{name}.cpp"
+        src.write_text(text)
+        cmd = ["g++", "-std=c++20", f"-I{prefix}/include",
+               "-c", src, "-o", src.with_suffix(".o")]
+        command_log.append(" ".join(str(c) for c in cmd))
+        r = run(cmd, capture_output=True, text=True)
+        if r.returncode == 0:
+            failures.append(f"{name} compiled against the installed headers")
+            continue
+        stderr = (r.stderr or "").lower()
+        if any(frag.lower() not in stderr for frag in diagnostics):
+            failures.append(f"{name} failed for an unexpected reason")
+    for rel in EXPECTED_V2_HEADERS:
+        if "make_context" in (prefix / "include" / rel).read_text():
+            failures.append(f"{rel} declares detail::make_context")
+    return failures
 
 
 def main():
@@ -542,9 +624,9 @@ def main():
     for name in P1_CONSUMERS:
         ok = compile_consumer(build_dir, prefix, [CONSUMERS / f"{name}.cpp"],
                               build_dir / name, [[]], async_link, command_log)
-        ran = ok and run([build_dir / name]).returncode == 0
-        gate(f"P1_{name}", ran,
-             f"rc={run([build_dir / name]).returncode if ok else 'build-failed'}")
+        r = run([build_dir / name], capture_output=True, text=True) if ok else None
+        gate(f"P1_{name}", ok and r.returncode == 0,
+             f"rc={r.returncode}" if ok else "build-failed")
 
     # 7. W-03 both variants.
     ok = compile_consumer(build_dir, prefix, [CONSUMERS / "w03_external_loop.cpp"],
@@ -599,13 +681,14 @@ def main():
     manifest_out.write_text(json.dumps(manifest, indent=2) + "\n")
 
     # 9. Negative probes: every uninstalled in-tree header must fail to
-    # compile from the prefix, and the deleted host headers must be absent
-    # from both the tree and the prefix.
+    # compile from the prefix with a missing-file diagnostic, and the
+    # deleted host headers must be absent from both the tree and the prefix.
     unavailable_failures = []
     for rel in UNINSTALLED_TREE_HEADERS:
         if not expect_compile_failure(build_dir, prefix, rel.replace("/", "_"),
                                       f"#include <{rel}>\nint main() {{}}\n",
-                                      command_log):
+                                      command_log,
+                                      expect_diagnostics=("no such file",)):
             unavailable_failures.append(rel)
     for rel in DELETED_HEADERS:
         present_in_tree = (REPO / "include" / rel).exists()
