@@ -1,0 +1,94 @@
+{
+  "FORMAT": "v2-package-manifest-v1",
+  "PROFILE": "v2-liburing",
+  "VERIFICATION_HEAD": "33a132d8ee459320e098243fd34e0f0f91bd67dc",
+  "VERIFICATION_HEAD_DIRTY": false,
+  "GENERATED_UTC": "2026-10-16T15:46:47.637882+00:00",
+  "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+  "ARCH": "x86_64",
+  "KERNEL": "7.2.9-201.fc44.x86_64",
+  "BUILD_MODE": "release",
+  "LIBURING": "/usr",
+  "LIBURING_VERSION": "2.13",
+  "HEADERS": [
+    "sluice/async/async_io_context.hpp",
+    "sluice/async/request.hpp",
+    "sluice/async/request_scope.hpp",
+    "sluice/async/threadpool_backend.hpp",
+    "sluice/async/uring_backend.hpp",
+    "sluice/blocking/file.hpp",
+    "sluice/effect.hpp",
+    "sluice/error.hpp",
+    "sluice/file_resource.hpp",
+    "sluice/measurement.hpp",
+    "sluice/result.hpp"
+  ],
+  "LIBRARIES": [
+    "lib/libsluice_async.a",
+    "lib/libsluice_core.a"
+  ],
+  "ARCHIVE_BASELINE": {
+    "file": "docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-liburing-archive-baseline.json",
+    "sha256": "49408921cb03b01608d5d1bea99f7f0cbc56fd49a19bb962745792af398b0d5a",
+    "archives": 2,
+    "objects": 11,
+    "defined_symbols": 470,
+    "external_undefined_symbols": 69
+  },
+  "PUBLIC_DEFINES": [],
+  "PUBLIC_INCLUDE_PATHS": [
+    "<prefix>/include"
+  ],
+  "PUBLIC_LINK_FLAGS": [
+    "-L<prefix>/lib"
+  ],
+  "PUBLIC_LINK_LIBS": [
+    "sluice_async",
+    "sluice_core",
+    "uring"
+  ],
+  "CONFIG_REQUIREMENTS": [
+    "C++20",
+    "installed headers read no build-profile macro: consumer TUs need no SLUICE_HAS_LIBURING define and may hold any view without layout divergence (V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT)",
+    "installed headers contain SLUICE_*_MUTANT_* guarded regions; package consumers must NEVER define these macros"
+  ],
+  "EXPECTED_EXTERNAL_WORKLOADS": [
+    "w01_direct",
+    "w02_pipeline",
+    "contract_request_lifetime",
+    "contract_admission",
+    "contract_cancel_effect",
+    "contract_observer",
+    "contract_progress",
+    "contract_shutdown",
+    "contract_durability",
+    "contract_backend_availability",
+    "w03_external_loop_threadpool",
+    "w03_external_loop_uring",
+    "odr_two_tu"
+  ],
+  "NEGATIVE_PROBES": [
+    "removed_and_internal_headers_unavailable",
+    "backend_seam_unavailable",
+    "async_symbols_not_in_core_archive"
+  ],
+  "ODR_DISCRIMINATOR": {
+    "context_bytes": 96,
+    "views": [
+      "no-define",
+      "-DSLUICE_HAS_LIBURING"
+    ],
+    "agreed_types": [
+      "AsyncIoContext",
+      "RequestId",
+      "Request<std::size_t>",
+      "Result<std::size_t>",
+      "RequestResultData",
+      "ProgressPass",
+      "UringConfig",
+      "ThreadPoolConfig",
+      "ObserverAttachment",
+      "ObserverCancelResult"
+    ]
+  }
+}
