@@ -130,11 +130,13 @@ class UringAsyncBackend : public AsyncBackend {
     struct PreAcceptCommitPauseGate;
     struct AcceptedPreDispatchPauseGate;
     struct PublicationEpiloguePauseGate;
+    struct DeliverySweepEpiloguePauseGate;
 
     void set_submit_entry_pause_gate(SubmitEntryPauseGate* gate) noexcept;
     void set_pre_accept_commit_pause_gate(PreAcceptCommitPauseGate* gate) noexcept;
     void set_accepted_pre_dispatch_pause_gate(AcceptedPreDispatchPauseGate* gate) noexcept;
     void set_publication_epilogue_pause_gate(PublicationEpiloguePauseGate* gate) noexcept;
+    void set_delivery_sweep_epilogue_pause_gate(DeliverySweepEpiloguePauseGate* gate) noexcept;
 
     struct DispatchFailureInjection;
     struct SubmitStageFailureInjection;
@@ -249,6 +251,8 @@ class UringAsyncBackend : public AsyncBackend {
 
     void reap_cqes() noexcept;
 
+    bool any_event_owed_locked_() const noexcept;
+
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 
     void finalize_operation_terminal_(RouterEntry& route, std::size_t router_index,
@@ -270,6 +274,7 @@ class UringAsyncBackend : public AsyncBackend {
     void wait_pre_accept_commit_pause_() noexcept;
     void wait_accepted_pre_dispatch_pause_() noexcept;
     void wait_publication_epilogue_pause_() noexcept;
+    void wait_delivery_sweep_epilogue_pause_() noexcept;
 
     using SubmitStage = detail::SubmitStage;
 
@@ -311,6 +316,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::atomic<PreAcceptCommitPauseGate*> pre_accept_commit_gate_{nullptr};
     std::atomic<AcceptedPreDispatchPauseGate*> accepted_pre_dispatch_gate_{nullptr};
     std::atomic<PublicationEpiloguePauseGate*> publication_epilogue_gate_{nullptr};
+    std::atomic<DeliverySweepEpiloguePauseGate*> delivery_sweep_epilogue_gate_{nullptr};
 
     std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
     std::atomic<SubmitStageFailureInjection*> submit_stage_failure_injection_{nullptr};

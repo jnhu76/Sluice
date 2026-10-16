@@ -476,6 +476,8 @@ if has_config("liburing") then
                               R .. "tests/uring_external_loop_test.cpp")
     c2c_uring_progress_target("uring_registration_lifecycle_test",
                               R .. "tests/uring_registration_lifecycle_test.cpp")
+    c2c_uring_progress_target("uring_owed_residue_test",
+                              R .. "tests/uring_owed_residue_test.cpp")
 
     -- C2-C corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of

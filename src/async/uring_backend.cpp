@@ -282,12 +282,24 @@ bool UringAsyncBackend::has_immediate_physical_work() const noexcept {
     return ::io_uring_cq_has_overflow(&ring_state_->ring);
 }
 
+bool UringAsyncBackend::any_event_owed_locked_() const noexcept {
+    for (const DeliveryRecord& record : delivery_) {
+        if (record.event_owed) {
+            return true;
+        }
+    }
+    return false;
+}
+
 AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
     ProgressPass pass;
     pass.completed = poll();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    wait_delivery_sweep_epilogue_pause_();
+#endif
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        pass.immediate_work_remains = !publication_pending_->empty();
+        pass.immediate_work_remains = !publication_pending_->empty() || any_event_owed_locked_();
 #if defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
         pass.dispatch_retry_remains = false;
 #else
@@ -320,13 +332,7 @@ UringAsyncBackend::~UringAsyncBackend() {
         const bool ledger_quiescent =
             transport_ledger_ == nullptr || transport_ledger_->empty() ||
             (fatal_error_.has_value() && transport_ledger_->all_class_a_recovery_retired());
-        bool event_owed = false;
-        for (const DeliveryRecord& record : delivery_) {
-            if (record.event_owed) {
-                event_owed = true;
-                break;
-            }
-        }
+        const bool event_owed = any_event_owed_locked_();
         // Published slots with live public bindings may remain: they are
         // retained results; every other accepted fact here is unsettled work.
         if (!dispatch_->empty() || !publication_pending_->empty() ||
@@ -349,13 +355,7 @@ bool UringAsyncBackend::internal_work_retired() const noexcept {
     const bool ledger_quiescent =
         transport_ledger_ == nullptr || transport_ledger_->empty() ||
         (fatal_error_.has_value() && transport_ledger_->all_class_a_recovery_retired());
-    bool event_owed = false;
-    for (const DeliveryRecord& record : delivery_) {
-        if (record.event_owed) {
-            event_owed = true;
-            break;
-        }
-    }
+    const bool event_owed = any_event_owed_locked_();
     return dispatch_->empty() && publication_pending_->empty() && !event_owed &&
            live_cookies_.load(std::memory_order_relaxed) == 0 &&
            live_control_sqes_.load(std::memory_order_relaxed) == 0 && ledger_quiescent;
@@ -712,6 +712,18 @@ void UringAsyncBackend::wait_accepted_pre_dispatch_pause_() noexcept {
 
 void UringAsyncBackend::wait_publication_epilogue_pause_() noexcept {
     auto* g = publication_epilogue_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void UringAsyncBackend::wait_delivery_sweep_epilogue_pause_() noexcept {
+    auto* g = delivery_sweep_epilogue_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);
