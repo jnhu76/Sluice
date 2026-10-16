@@ -18,12 +18,6 @@ namespace sluice::async::detail {
 
 [[noreturn]] void request_scope_settlement_health_fail_fast() noexcept;
 
-[[noreturn]] void stackful_host_suspend_invariant_fail_fast() noexcept;
-
-[[noreturn]] void stackful_host_drive_health_fail_fast() noexcept;
-
-[[noreturn]] void stackful_host_live_task_fail_fast() noexcept;
-
 [[noreturn]] void threadpool_non_quiescent_destruction_fail_fast() noexcept;
 
 [[noreturn]] void threadpool_core_handoff_fail_fast() noexcept;

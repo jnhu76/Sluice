@@ -37,10 +37,9 @@ target("sluice_async")
     add_includedirs(R .. "include", {public = true})
     add_deps("sluice_core")
     add_files(R .. "src/async/*.cpp")
-    -- Installed header set: the canonical request closure plus the
-    -- OPTIONAL_CANDIDATE stackful-host closure. detail/context_identity.hpp is
-    -- private to library translation units (no installed header includes it)
-    -- and stays out of the package.
+    -- Installed header set: the canonical request closure.
+    -- detail/context_identity.hpp is private to library translation units (no
+    -- installed header includes it) and stays out of the package.
     add_headerfiles(R .. "include/(sluice/async/*.hpp)",
                     R .. "include/(sluice/async/detail/*.hpp)")
     remove_headerfiles(R .. "include/sluice/async/detail/context_identity.hpp")

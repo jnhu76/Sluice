@@ -44,7 +44,7 @@ owns a bounded RequestCore, one backend and a progress source; a move-only
 Request represents outstanding responsibility. The backend seam is internal:
 v2 ships exactly the ThreadPool and io_uring backends, and user-authored
 backends are not a supported configuration. The stackful host and its
-fiber/cancel kit are outside v2 (PR B deletes them); bounded
+fiber/cancel kit are outside v2 and physically removed; bounded
 pipelines use the owned-driver `RequestScope` instead.
 
 Request publication, result consumption and slot reclamation are separate.
@@ -115,10 +115,10 @@ flowchart TB
 
 The current tree contains the canonical File/blocking operations, the
 Request/AsyncIoContext request core with ThreadPool and io_uring backends,
-and the RequestScope for W-02. The optional stackful-host candidate is
-outside v2 and awaits physical deletion by PR B (owner decision D1); until
-then it is uncontracted tree residue, not a retained
-option. Implementation state, open gaps and the release gate are tracked in
+and the RequestScope for W-02. The optional stackful-host candidate was
+outside v2 and has been physically removed (owner decision D1); no host
+runtime exists in the tree. Implementation state, open gaps and the release
+gate are tracked in
 the [v2 conformance ledger](docs/roadmap/v2-conformance.md); the v1
 convergence campaign (phases M/F) is completed history and binds nothing.
 
