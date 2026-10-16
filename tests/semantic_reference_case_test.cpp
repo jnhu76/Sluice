@@ -1,4 +1,5 @@
 #include "semantic_path_probes.hpp"
+#include <sluice/async/detail/threadpool_backend.hpp>
 
 #include <sluice/blocking/file.hpp>
 #include <sluice/detail/file_semantics.hpp>
@@ -104,7 +105,7 @@ void v03_zero_request_with_full_table_is_admission_rejected() {
     check(sluice::blocking::read_at(*file, 0, std::span<std::byte>()).value_or(1) == 0,
           "V03 direct: zero-length read returns 0");
 
-    sluice::async::AsyncIoContext ctx(
+    sluice::async::AsyncIoContext ctx = sluice::async::detail::make_context(
         std::make_unique<sluice::async::ThreadPoolBackend>(
             sluice::async::ThreadPoolConfig{1, 1}));
     const sluice::async::NativeFileRef ref{*file};

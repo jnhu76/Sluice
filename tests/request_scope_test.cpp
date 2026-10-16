@@ -1,13 +1,14 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/async/request_scope.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 #include <atomic>
@@ -200,8 +201,8 @@ bool scope_construction_requires_a_claimable_progress_owner(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     bool threw_when_external_owner_holds_authority = false;
     {
@@ -255,8 +256,8 @@ bool scope_construction_requires_a_claimable_progress_owner(Tracker& t) {
 
 bool zero_capacity_is_a_setup_error(Tracker& t) {
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     bool threw = false;
     try {
@@ -282,8 +283,8 @@ bool submit_commits_accepted_responsibility(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
     t.check(scope.capacity() == 2, "the scope reports its chosen tracking capacity");
 
@@ -324,8 +325,8 @@ bool v18a_scope_capacity_exhaustion_rejects_before_submission(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
     std::vector<std::byte> first(4, std::byte{0});
@@ -378,8 +379,8 @@ bool v18b_second_submission_rejection_keeps_first_owned(Tracker& t) {
     }
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
 
     std::vector<std::byte> first_buffer(4, std::byte{0});
@@ -416,8 +417,8 @@ bool take_consumes_and_releases_the_slot_for_reuse(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
     auto first = scope.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
@@ -453,8 +454,8 @@ bool retained_ready_results_occupy_scope_capacity(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
 
     auto a = scope.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
@@ -505,8 +506,8 @@ bool finish_is_idempotent_and_rejects_late_submissions(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
 
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -532,8 +533,8 @@ bool w02_tracer_bounded_pipeline(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 3, ScopeCleanupPolicy::drain);
 
     std::vector<std::byte> destination(8, std::byte{0});
@@ -592,8 +593,8 @@ bool destructor_settles_on_early_return_with_drain_policy(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(6, std::byte{0});
     {
@@ -617,8 +618,8 @@ bool destructor_cleanup_uses_the_selected_policy(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(6, std::byte{0});
     {
@@ -640,8 +641,8 @@ bool finish_reports_an_unconsumed_operation_error(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
     const NativeFileRef unwritable{file->native_handle(), sluice::FileAccess::read_write};
@@ -670,8 +671,8 @@ bool destructor_cleanup_preserves_the_original_exception_and_still_releases(Trac
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     bool original_survived = false;
     try {
@@ -700,8 +701,8 @@ bool near_max_wait_bound_stays_well_defined(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
     std::vector<std::byte> first(8, std::byte{0});
@@ -749,8 +750,8 @@ bool v18c_exception_unwind_settles_and_preserves_the_exception(Tracker& t) {
     bool settled_before_catch = false;
     {
         auto backend = make_backend(4);
-        AsyncIoContext ctx(std::move(backend));
-        RequestCore& core = *ctx.context_core_for_test();
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
+        RequestCore& core = *detail::TestAccess::context_core(ctx);
 
         File& file_storage = *file;
         LifetimeProbe file_probe{&destruction_order, 'f'};
@@ -857,8 +858,8 @@ bool v19_timeout_preserves_responsibility_until_cleanup(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     {
         Backend::WorkerClaimedPauseGate gate;
@@ -907,7 +908,7 @@ bool wait_for_reports_sticky_control_interruption(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     {
         Backend::WorkerClaimedPauseGate gate;
@@ -939,7 +940,7 @@ bool wait_for_reports_sticky_control_interruption(Tracker& t) {
         resume_threadpool_gate(gate);
         wait_threadpool_gate_exited(gate);
         t.check(scope.finish().has_value(), "explicit finish reports no unconsumed failure");
-        t.check(core_is_idle(ctx.context_core_for_test()->snapshot()),
+        t.check(core_is_idle(detail::TestAccess::context_core(ctx)->snapshot()),
                 "the interrupted pipeline still settled");
     }
     raw->set_worker_claimed_pause_gate(nullptr);
@@ -953,8 +954,8 @@ bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     {
         Backend::AcceptedPreDispatchPauseGate gate;
@@ -1007,8 +1008,8 @@ bool pre_accept_throw_rolls_back_the_reservation(Tracker& t) {
         return false;
 
     auto backend = std::make_unique<ThrowingSubmitBackend>();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -1043,8 +1044,8 @@ bool near_max_bound_waits_out_a_stalled_operation(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     {
         Backend::WorkerClaimedPauseGate gate;
@@ -1091,8 +1092,8 @@ bool explicit_finish_does_not_invoke_the_cleanup_cancel(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     {
         Backend::WorkerClaimedPauseGate gate;
@@ -1147,8 +1148,8 @@ bool destructor_cleanup_cancels_undispatched_work_before_execution(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> held(6, std::byte{0});
     std::vector<std::byte> canary(6, std::byte{0xAA});
@@ -1207,8 +1208,8 @@ bool explicit_finish_reports_an_externally_canceled_terminal(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     {
         Backend::WorkerClaimedPauseGate gate;
@@ -1281,7 +1282,7 @@ bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
 
             auto backend = make_backend(2);
             Backend* raw = backend.get();
-            AsyncIoContext ctx(std::move(backend));
+            AsyncIoContext ctx = detail::make_context(std::move(backend));
 
             Backend::WorkerClaimedPauseGate gate;
             raw->set_worker_claimed_pause_gate(&gate);
@@ -1292,7 +1293,7 @@ bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
             if (!ticket.has_value())
                 std::_Exit(2);
             wait_threadpool_gate_paused(gate);
-            ctx.set_wait_health_failed_for_test();
+            detail::TestAccess::context_set_wait_health_failed(ctx);
             (void)scope.finish();
             std::_Exit(0);
         }
@@ -1312,8 +1313,8 @@ bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
         return false;
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
 
     AllocationProbe probe;

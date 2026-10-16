@@ -1,12 +1,12 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 #include <atomic>
@@ -92,7 +92,7 @@ void destroy_nonterminal_request() {
     File file = std::move(opened.value());
 
     auto backend = make_backend();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted =
@@ -117,9 +117,9 @@ void move_assign_over_nonterminal_request() {
     File file = std::move(opened.value());
 
     auto pending_backend = make_backend();
-    AsyncIoContext pending_ctx(std::move(pending_backend));
+    AsyncIoContext pending_ctx = detail::make_context(std::move(pending_backend));
     auto ready_backend = make_backend();
-    AsyncIoContext ready_ctx(std::move(ready_backend));
+    AsyncIoContext ready_ctx = detail::make_context(std::move(ready_backend));
 
     std::vector<std::byte> pending_buffer(8, std::byte{0});
     std::vector<std::byte> buffer(8, std::byte{0});
@@ -149,7 +149,7 @@ void destroy_context_with_live_public_binding() {
     File file = std::move(opened.value());
 
     auto backend = make_backend();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted =
@@ -183,7 +183,7 @@ void discard_request_during_publication_inflight() {
 
     auto backend = make_backend();
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     Backend::PublicationEpiloguePauseGate gate;
     raw->set_publication_epilogue_pause_gate(&gate);

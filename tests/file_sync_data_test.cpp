@@ -1,5 +1,5 @@
 #include "canonical_request_test_support.hpp"
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 
 #include <cerrno>
@@ -69,7 +69,7 @@ bool sync_data_after_write_succeeds() {
 
     const std::string src_str = "XYZ";
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto wr_admitted = scope.submit_write(
             WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
@@ -103,7 +103,7 @@ bool sync_data_successive_requests_settle() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r1_admitted = scope.submit_sync_data(SyncDataOp{file});
         if (!r1_admitted.has_value())
@@ -132,7 +132,7 @@ bool sync_data_on_read_only_file_succeeds() {
     File file = std::move(File::open(path).value());
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
         if (!r_admitted.has_value())
@@ -160,7 +160,7 @@ bool sync_data_on_write_only_file_succeeds() {
     File file = std::move(File::open(path, mode).value());
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
         if (!r_admitted.has_value())
@@ -187,7 +187,7 @@ bool sync_data_after_close_reports_invalid_state() {
         return false;
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
         if (r_admitted.has_value() || ctx.outstanding() != 0)
@@ -208,7 +208,7 @@ bool sync_data_on_device_reports_backend_error() {
         return false;
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_sync_data(SyncDataOp{file});
         if (!r_admitted.has_value())

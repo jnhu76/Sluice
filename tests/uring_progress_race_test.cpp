@@ -1,6 +1,7 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -19,6 +20,7 @@
 
 #include <cerrno>
 #include <csignal>
+#include <sluice/async/detail/progress_source.hpp>
 
 namespace {
 
@@ -203,7 +205,7 @@ TimedWait wait_one_timed(AsyncIoContext& ctx, std::chrono::nanoseconds bound) {
 // the deadline. No unrelated future I/O is submitted after the release write.
 bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -213,22 +215,22 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
 
     wait_gate_paused(gate);
-    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
     read.release_bytes(1);
     if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = is_progress(driver.value, 1) && prepark.load() == 1 &&
                     driver.elapsed_ms < 1000 && read.request.ready();
@@ -243,7 +245,7 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
 // able to repark and service a later real completion.
 bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -253,14 +255,14 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prepark_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prepark_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     const std::uint64_t one = 1;
     const ssize_t n = ::write(interest.fd, &one, sizeof(one));
@@ -275,7 +277,7 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
 
     read.release_bytes(1);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = no_fabrication && is_progress(result, 1) &&
                     prepark.load() == 2 && read.request.ready();
@@ -289,7 +291,7 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
 // poll(2), persists as eventfd readiness and wakes the park.
 bool k5_k6_cqe_after_final_recheck_wakes_poll() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -299,21 +301,21 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prepark_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prepark_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     read.release_bytes(1);
     if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = is_progress(result, 1) && prepark.load() == 1 &&
                     read.request.ready();
@@ -328,7 +330,7 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
 // hence the bounded wait must return well inside the deadline.
 bool k7_cqe_while_blocked_in_poll_wakes_owner() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
     drain.track_pipe(read);
@@ -337,7 +339,7 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
         return false;
 
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
@@ -346,7 +348,7 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
 
     read.release_bytes(1);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = is_progress(driver.value, 1) &&
                     driver.elapsed_ms < 1000 && prepark.load() == 1 && read.request.ready();
@@ -361,7 +363,7 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
 // already posted before the owner resumes; the oracle is the count itself.
 bool k8_multiple_cqes_coalesce_into_one_wake() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     constexpr int kCoalesced = 4;
     std::vector<BlockedPipeRead> reads(kCoalesced);
@@ -373,14 +375,14 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
     }
 
     PauseGate gate;
-    ctx.set_progress_prepark_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prepark_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     for (auto& r : reads)
         r.release_bytes(1);
@@ -389,7 +391,7 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     bool ok = is_progress(result, static_cast<std::size_t>(kCoalesced)) &&
               prepark.load() == 1;
@@ -406,7 +408,7 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
 // completion arrives.
 bool k9_spurious_notification_zero_cqes_is_harmless() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -416,7 +418,7 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
         return false;
 
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
@@ -433,7 +435,7 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
 
     read.release_bytes(1);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = no_fabrication && is_progress(result, 1) &&
                     prepark.load() == 2 && read.request.ready();
@@ -448,7 +450,7 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
 // control survives the reap and the next wait observes it.
 bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -458,14 +460,14 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
     ctx.interrupt_progress_waiters();
     read.release_bytes(1);
@@ -473,7 +475,7 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
         return false;
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     // The coalesced wake reaps the kernel completion (pass before control
     // observation); the sticky control is not erased by that reap and the
@@ -494,7 +496,7 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
 // wait instead of being erased by the reap.
 bool k10b_control_signal_racing_kernel_cq_before_poll() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -504,14 +506,14 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prepark_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prepark_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     ctx.interrupt_progress_waiters();
     read.release_bytes(1);
@@ -519,7 +521,7 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
         return false;
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     // The interrupted wake re-runs the pass first, reaping the CQE without
     // fabricating an extra completion; the sticky control survives the reap
@@ -540,7 +542,7 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
 // obligation — well inside the deadline.
 bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -550,22 +552,22 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
-    ctx.saturate_progress_notification_for_test();
+    detail::TestAccess::context_saturate_progress_notification(ctx);
     read.release_bytes(1);
     if (!wait_notification_readable(interest))
         return false;
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = is_progress(driver.value, 1) && prepark.load() == 1 &&
                     driver.elapsed_ms < 1000 && read.request.ready();
@@ -579,7 +581,7 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
 // it. Saturation never erases the CQ obligation.
 bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -589,16 +591,16 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prepark_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prepark_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
-    ctx.saturate_progress_notification_for_test();
+    detail::TestAccess::context_saturate_progress_notification(ctx);
     resume_gate(gate);
     if (!wait_counter_reaches(prepark, 2))
         return false;
@@ -606,7 +608,7 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
 
     read.release_bytes(1);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = drained_before_release && is_progress(result, 1) &&
                     prepark.load() == 2 && read.request.ready();
@@ -620,7 +622,7 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
 // is allowed to prepare to park; the kernel completion wakes it.
 bool u1_accepted_true_immediate_false_reports_and_parks() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
     drain.track_pipe(read);
@@ -637,7 +639,7 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
     }
 
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     if (!wait_counter_reaches(prepark, 1))
@@ -645,7 +647,7 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
 
     read.release_bytes(1);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = is_progress(result, 1) && prepark.load() == 1 &&
                     read.request.ready();
@@ -659,7 +661,7 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
 // retire every completion without any unrelated future I/O.
 bool k13_cq_overflow_completions_are_not_stranded() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     constexpr int kOverflowed = 3;
     std::vector<BlockedPipeRead> reads(kOverflowed);
@@ -671,11 +673,11 @@ bool k13_cq_overflow_completions_are_not_stranded() {
     }
 
     PauseGate gate;
-    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
     std::optional<AsyncIoContext::ProgressWaitOutcome> owner_result;
     std::thread owner([&] { DriverClaim claim{ctx}; owner_result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(gate);
-    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
     for (auto& r : reads)
         r.release_bytes(1);
@@ -724,7 +726,7 @@ int poison_submit_hook(void* context, ::io_uring* ring) noexcept {
 // stranding to the deadline.
 bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     BlockedPipeRead read;
     RequestPublicationDrain drain{ctx};
@@ -734,15 +736,15 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
         return false;
 
     PauseGate gate;
-    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
 
     wait_gate_paused(gate);
-    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
     read.release_bytes(1);
     if (!wait_notification_readable(interest))
@@ -757,7 +759,7 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
 
     resume_gate(gate);
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const bool ok = peer_rejected && is_progress(driver.value, 1) &&
                     driver.elapsed_ms < 1000 && read.request.ready();
@@ -778,7 +780,7 @@ bool poison_transition_wakes_parked_owner() {
     hooks.context = &state;
     hooks.submit = &poison_submit_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 2}, hooks);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<BlockedPipeRead> blocked(2);
     RequestPublicationDrain drain{ctx};
@@ -789,7 +791,7 @@ bool poison_transition_wakes_parked_owner() {
     }
 
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
@@ -806,7 +808,7 @@ bool poison_transition_wakes_parked_owner() {
                                                    : Request<std::size_t>{};
 
     owner.join();
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     const auto poisoned_observation = poisoned.try_result();
     const bool poisoned_failed_with_backend_error =
@@ -861,7 +863,7 @@ bool u2_k15_retryable_submit_failure_does_not_strand_owner() {
     hooks.context = &state;
     hooks.submit = &eagain_submit_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{}, hooks);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     // Arm the retryable failure before the acceptance: the dispatch-time
     // submit is the first transport attempt.
@@ -904,18 +906,18 @@ bool u2_k15_retryable_submit_failure_does_not_strand_owner() {
 bool u2b_accepted_dispatch_wakes_parked_owner() {
     auto raw_backend = std::make_unique<UringAsyncBackend>();
     auto* backend_ptr = raw_backend.get();
-    AsyncIoContext ctx(std::move(raw_backend));
+    AsyncIoContext ctx = detail::make_context(std::move(raw_backend));
     BlockedPipeRead first;
     if (!first.arm(ctx, 4))
         return false;
     {
         auto claim = ctx.claim_progress_owner();
-        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+        if (ctx.poll_progress().value_or(ProgressPass{}).completed != 0)
             return false;
     }
 
     PauseGate gate;
-    ctx.set_progress_prerevalidate_pause_gate_for_test(&gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
     wait_gate_paused(gate);
@@ -930,7 +932,7 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
         return false;
     const bool peer_acceptance_entered_kernel = backend_ptr->sq_ready_for_test() == 0;
 
-    ctx.set_progress_prerevalidate_pause_gate_for_test(nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
     first.release_bytes(1);
     second.release_bytes(1);
     resume_gate(gate);
@@ -979,7 +981,7 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     hooks.context = &state;
     hooks.get_events = &flush_failure_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 1}, hooks);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<BlockedPipeRead> reads(3);
     RequestPublicationDrain drain{ctx};
@@ -990,7 +992,7 @@ bool overflow_flush_failure_becomes_observable_health_event() {
     }
     {
         auto claim = ctx.claim_progress_owner();
-        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+        if (ctx.poll_progress().value_or(ProgressPass{}).completed != 0)
             return false;
     }
 
@@ -1077,7 +1079,7 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     hooks.context = &state;
     hooks.get_events = &flush_failure_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 1}, hooks);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<BlockedPipeRead> reads(4);
     RequestPublicationDrain drain{ctx};
@@ -1088,7 +1090,7 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
     }
     {
         auto claim = ctx.claim_progress_owner();
-        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+        if (ctx.poll_progress().value_or(ProgressPass{}).completed != 0)
             return false;
     }
 
@@ -1178,7 +1180,7 @@ bool f1_publication_pass_is_entry_bounded() {
     hooks.submit = &eagain_submit_hook;
     auto raw_backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 1}, hooks);
     auto* backend_ptr = raw_backend.get();
-    AsyncIoContext ctx(std::move(raw_backend));
+    AsyncIoContext ctx = detail::make_context(std::move(raw_backend));
     HostInterest interest(ctx);
 
     struct PipeRead {
@@ -1225,7 +1227,7 @@ bool f1_publication_pass_is_entry_bounded() {
 
     {
         auto claim = ctx.claim_progress_owner();
-        if (ctx.poll_progress().value_or(AsyncBackend::ProgressPass{}).completed != 0)
+        if (ctx.poll_progress().value_or(ProgressPass{}).completed != 0)
             return false;
     }
     const auto cancel_c = c.request.cancel();
@@ -1235,7 +1237,7 @@ bool f1_publication_pass_is_entry_bounded() {
     UringAsyncBackend::PublicationEpiloguePauseGate epilogue;
     backend_ptr->set_publication_epilogue_pause_gate(&epilogue);
 
-    std::optional<AsyncBackend::ProgressPass> first;
+    std::optional<ProgressPass> first;
     std::thread driver([&] {
         DriverClaim claim{ctx};
         const auto r = ctx.poll_progress();
@@ -1299,7 +1301,7 @@ bool f2_backend_poison_reaches_owner_health_verdict() {
     hooks.context = &state;
     hooks.submit = &poison_submit_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4}, hooks);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
 
     BlockedPipeRead read;
@@ -1365,7 +1367,7 @@ bool post_poison_accept_push_retires_through_failure_terminal() {
     hooks.submit = &poison_submit_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 4}, hooks);
     UringAsyncBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
 
     BlockedPipeRead inkernel;
@@ -1395,7 +1397,7 @@ bool post_poison_accept_push_retires_through_failure_terminal() {
     // control entry and the next submit attempt fails non-retryably.
     state.fail_next.store(true, std::memory_order_release);
     const detail::PublicCancel cancel_disposition =
-        raw->cancel_key_for_test(inkernel.request.key_for_test());
+        raw->cancel_key_for_test(detail::TestAccess::request_key(inkernel.request));
     (void)raw->poll();
     const bool poisoned = cancel_disposition == detail::PublicCancel::requested &&
                           !state.fail_next.load(std::memory_order_acquire);
@@ -1405,7 +1407,7 @@ bool post_poison_accept_push_retires_through_failure_terminal() {
     // source-level acknowledge is the drain authority; a raw read of the fd
     // would desynchronize the notification-pending summary from the counter
     // and suppress the retirement wake.
-    ctx.progress_source_for_test()->acknowledge_notification();
+    detail::TestAccess::context_progress_source(ctx)->acknowledge_notification();
 
     resume_backend_gate(gate);
     submitter.join();
@@ -1479,7 +1481,7 @@ bool post_poison_accept_push_retires_through_failure_terminal() {
 bool record_handoff_survives_submit_racing_owner_sweep() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{4, 1});
     UringAsyncBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
 
     UringAsyncBackend::PreAcceptCommitPauseGate gate;

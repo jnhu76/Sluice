@@ -1,5 +1,5 @@
 #include "canonical_request_test_support.hpp"
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 
 #include <cerrno>
@@ -92,7 +92,7 @@ bool multiple_outstanding_ops_on_one_canonical_file() {
     std::vector<std::byte> tail(5);
     const std::string patch = "XYZ";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 3, ScopeCleanupPolicy::drain);
         auto r1 = scope.submit_read(ReadOp{file, head.data(), head.size(), 0});
         if (!r1.has_value())
@@ -140,7 +140,7 @@ bool explicit_native_ref_over_raw_fd() {
 
     std::vector<std::byte> dst(7);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(
             ReadOp{NativeFileRef{raw_fd, FileAccess::read_only}, dst.data(), dst.size(), 8});
@@ -170,7 +170,7 @@ bool cancel_through_file_referenced_op_reaches_terminal() {
 
     std::vector<std::byte> dst(4);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (!admitted.has_value())
@@ -213,7 +213,7 @@ bool file_derived_ref_rejected_at_submit_on_wrong_access() {
 
     std::vector<std::byte> dst(3);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (admitted.has_value()) {
@@ -241,7 +241,7 @@ bool file_derived_write_ref_rejected_at_submit_on_read_only_file() {
 
     const std::byte payload{0x21};
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(WriteOp{file, &payload, 1, 0});
         if (admitted.has_value()) {
@@ -271,7 +271,7 @@ bool closed_file_derived_ref_rejected_as_invalid_state() {
 
     std::vector<std::byte> dst(3);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (admitted.has_value()) {
@@ -298,7 +298,7 @@ bool zero_length_op_succeeds_before_offset_validation() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =
             scope.submit_read(ReadOp{file, nullptr, 0, std::numeric_limits<std::uint64_t>::max()});
@@ -326,7 +326,7 @@ bool interop_declared_access_is_a_claim_not_validation() {
 
     const std::byte payload{0x7E};
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(
             WriteOp{NativeFileRef{raw_fd, FileAccess::read_write}, &payload, 1, 0});

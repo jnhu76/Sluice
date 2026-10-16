@@ -6,8 +6,9 @@
 // must be exact. Interleavings are forced with the backend submit pause
 // gates and start barriers; no synchronization relies on sleeps.
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/measurement.hpp>
 #include <sluice/result.hpp>
@@ -22,7 +23,7 @@
 #include <vector>
 
 #if defined(SLUICE_HAS_LIBURING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 namespace {
@@ -155,7 +156,7 @@ bool acceptance_window_excludes_a_second_submitter() {
     std::unique_ptr<Backend> backend = make_backend(8);
     Backend::PreAcceptCommitPauseGate gate;
     backend->set_pre_accept_commit_pause_gate(&gate);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> low_buffer(kRegion, std::byte{0});
     std::vector<std::byte> high_buffer(kRegion, std::byte{0});
@@ -182,7 +183,7 @@ bool acceptance_window_excludes_a_second_submitter() {
     bool second_inside_window = false;
     for (int i = 0; i < 1000000; ++i) {
         if (second_done.load(std::memory_order_acquire) ||
-            ctx.context_core_for_test()->snapshot().reserved >= 2) {
+            detail::TestAccess::context_core(ctx)->snapshot().reserved >= 2) {
             second_inside_window = true;
             break;
         }
@@ -244,7 +245,7 @@ bool concurrent_submitters_get_distinct_settling_requests() {
     constexpr std::size_t kCapacity = 64;
 
     sluice::AsyncStats stats;
-    AsyncIoContext ctx(make_backend(kCapacity), &stats);
+    AsyncIoContext ctx = detail::make_context(make_backend(kCapacity), &stats);
 
     std::atomic<int> waiting{0};
     std::atomic<bool> go{false};
@@ -356,7 +357,7 @@ bool concurrent_capacity_boundary_is_exact() {
     constexpr std::size_t kExpectedRejections = kThreads - kCapacity;
 
     sluice::AsyncStats stats;
-    AsyncIoContext ctx(make_backend(kCapacity), &stats);
+    AsyncIoContext ctx = detail::make_context(make_backend(kCapacity), &stats);
 
     std::atomic<int> waiting{0};
     std::atomic<bool> go{false};

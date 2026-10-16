@@ -1,5 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/test_access.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -142,7 +143,7 @@ class ExternalLoopHost {
             retry_deadline_ = std::chrono::steady_clock::now() + kHostRetryInterval;
     }
 
-    void reconcile_retry_schedule(const AsyncBackend::ProgressPass& pass) {
+    void reconcile_retry_schedule(const ProgressPass& pass) {
 #if defined(SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY)
         (void)pass;
 #else
@@ -222,7 +223,7 @@ bool fd_readable(int fd) {
 // fd, no periodic timer.
 bool external_poll_loop_uring_w03() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 8});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (host.nfd() < 0)
         return false;
@@ -387,7 +388,7 @@ bool external_poll_loop_uring_w03() {
 // returns to quiet after one settling round.
 bool kernel_completions_delivered_without_stranding() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 8});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
 
     const int source = temp_file_fd(std::string(256, 'a'));
@@ -452,7 +453,7 @@ bool kernel_completions_delivered_without_stranding() {
 // external host services it with no ring involvement.
 bool external_host_sees_userspace_publication_wake() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -481,10 +482,10 @@ bool external_host_sees_userspace_publication_wake() {
 // the completions survive, and one settling round returns the fd to quiet.
 bool saturation_with_real_kernel_completion_preserves_wake() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
 
-    ctx.saturate_progress_notification_for_test();
+    detail::TestAccess::context_saturate_progress_notification(ctx);
     if (!fd_readable(host.nfd()))
         return false;
 
@@ -564,7 +565,7 @@ bool external_retryable_transport_does_not_strand() {
     hooks.context = &state;
     hooks.submit = &persistent_eagain_submit_hook;
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 8}, hooks);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (host.nfd() < 0)
         return false;

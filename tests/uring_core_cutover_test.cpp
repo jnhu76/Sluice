@@ -1,7 +1,8 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
@@ -138,8 +139,8 @@ struct FakeSubmitBackend {
         auto owned = std::make_unique<UringAsyncBackend>(UringConfig{capacity, 8}, hooks);
         FakeSubmitBackend made;
         made.backend = owned.get();
-        made.ctx = std::make_unique<AsyncIoContext>(std::move(owned));
-        made.core = made.ctx->context_core_for_test();
+        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
+        made.core = detail::TestAccess::context_core(*made.ctx);
         return made;
     }
 
@@ -227,8 +228,8 @@ bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::byte buffer{std::byte{0}};
     auto rejected =
@@ -438,7 +439,7 @@ bool original_cqe_first_defers_until_control_retires(Tracker& t) {
     t.check(submitted.has_value(), "the read is accepted");
     Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const detail::RequestKey key = c.key_for_test();
+    const detail::RequestKey key = detail::TestAccess::request_key(c);
     const auto live_slot = core.observe_slot(SlotIndex{0});
     t.check(live_slot.has_value() && key.slot == SlotIndex{0} &&
                 key.generation == live_slot->generation,
@@ -498,7 +499,7 @@ bool cancel_cqe_first_never_becomes_the_terminal(Tracker& t) {
     t.check(submitted.has_value(), "the read is accepted");
     Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const detail::RequestKey key = c.key_for_test();
+    const detail::RequestKey key = detail::TestAccess::request_key(c);
     const auto cookie = live_cookie(made, 0);
     t.check(c.valid() && cookie.has_value(), "the request key and cookie resolve");
     if (!cookie.has_value())
@@ -554,7 +555,7 @@ bool cancel_racing_completion_keeps_the_confirmed_count(Tracker& t) {
     t.check(submitted.has_value(), "the read is accepted");
     Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const detail::RequestKey key = c.key_for_test();
+    const detail::RequestKey key = detail::TestAccess::request_key(c);
     const auto cookie = live_cookie(made, 0);
     if (!cookie.has_value())
         return false;
@@ -599,7 +600,7 @@ bool cancel_racing_short_write_keeps_confirmed_count(Tracker& t) {
     t.check(submitted.has_value(), "the write is accepted");
     Request<std::size_t> c = std::move(submitted.value());
     (void)ctx.poll();
-    const detail::RequestKey key = c.key_for_test();
+    const detail::RequestKey key = detail::TestAccess::request_key(c);
     const auto cookie = live_cookie(made, 0);
     if (!cookie.has_value())
         return false;
@@ -657,7 +658,7 @@ bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
     auto second = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
     t.check(second.has_value(), "request B reuses the slot");
     Request<std::size_t> b = std::move(second.value());
-    const detail::RequestKey key_b = b.key_for_test();
+    const detail::RequestKey key_b = detail::TestAccess::request_key(b);
     t.check(key_b.slot == SlotIndex{0} && key_b.generation.value == 1,
             "request B occupies the same slot at generation+1");
     const auto cookie_b = live_cookie(made, 0);
@@ -993,7 +994,7 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
     t.check(first.has_value(), "request A is accepted");
     Request<std::size_t> a = std::move(first.value());
     (void)ctx.poll();
-    const detail::RequestKey key_a = a.key_for_test();
+    const detail::RequestKey key_a = detail::TestAccess::request_key(a);
     t.check(raw->cancel_key_for_test(key_a) == PublicCancel::requested,
             "cancel records intent on the kernel-visible request");
 
@@ -1121,7 +1122,7 @@ bool observer_registration_rides_publication(Tracker& t) {
 
     const auto attached = ctx.attach_observer(observed_id);
     t.check(attached.armed(), "the observer arms on the outstanding request");
-    t.check(ctx.attach_observer(observed_id).status == detail::ObserverRegistration::duplicate,
+    t.check(ctx.attach_observer(observed_id).status == AsyncIoContext::ObserverStatus::duplicate,
             "a second registration on the same request returns the occupied disposition");
     const auto observed = core.observe_slot(SlotIndex{0});
     t.check(observed.has_value() &&
@@ -1132,11 +1133,11 @@ bool observer_registration_rides_publication(Tracker& t) {
     for (int i = 0; i < 64 && !c.ready(); ++i)
         (void)ctx.poll();
 
-    t.check(raw->sink_deliveries() == 1 && raw->sink_last_key() == attached.key,
+    t.check(raw->sink_deliveries() == 1 && raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the ready event rides the publication as a host-neutral keyed event");
     t.check(core.observe_slot(SlotIndex{0})->observer_phase == detail::ObserverPhase::delivering,
             "the delivery is claimed before the event");
-    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
+    t.check(ctx.retire_delivery(attached.request), "delivery retirement acquires the registration fact");
     (void)c.take_result();
     for (int i = 0; i < 64 && core.snapshot().accepted_live != 0; ++i)
         (void)ctx.poll();
@@ -1216,8 +1217,8 @@ bool real_kernel_normal_completion_and_cancel(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto read_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 8, 0});
@@ -1274,8 +1275,8 @@ bool real_kernel_slot_reuse(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     for (int round = 0; round < 6; ++round) {

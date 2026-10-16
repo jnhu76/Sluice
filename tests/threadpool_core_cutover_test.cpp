@@ -1,7 +1,8 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
@@ -98,8 +99,8 @@ bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
         return false;
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::byte buffer{std::byte{0}};
     auto rejected = ctx.submit_read(
@@ -121,8 +122,8 @@ bool range_precedes_capacity_under_saturation(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{1, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -168,8 +169,8 @@ bool accepted_pre_dispatch_work_has_a_core_owner(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::AcceptedPreDispatchPauseGate gate;
     raw->set_accepted_pre_dispatch_pause_gate(&gate);
@@ -220,8 +221,8 @@ bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t)
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::AcceptedPreDispatchPauseGate gate;
     raw->set_accepted_pre_dispatch_pause_gate(&gate);
@@ -273,8 +274,8 @@ bool post_accept_dispatch_failure_is_a_terminal_not_a_rejection(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::DispatchFailureInjection injection;
     injection.armed.store(true, std::memory_order_release);
@@ -310,8 +311,8 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -363,8 +364,8 @@ bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::WorkerOutcomePreTerminalPauseGate gate;
     raw->set_worker_outcome_pre_terminal_pause_gate(&gate);
@@ -410,8 +411,8 @@ bool publication_visibility_waits_for_the_epilogue_and_release_reclaims(Tracker&
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::PublicationEpiloguePauseGate gate;
     raw->set_publication_epilogue_pause_gate(&gate);
@@ -423,7 +424,7 @@ bool publication_visibility_waits_for_the_epilogue_and_release_reclaims(Tracker&
     t.check(submitted.has_value(), "the request is accepted");
     Request<std::size_t> c = std::move(submitted.value());
     const RequestId handle = c.id();
-    const RequestKey key = c.key_for_test();
+    const RequestKey key = detail::TestAccess::request_key(c);
 
     while (raw->publication_pending_size_for_test() == 0)
         std::this_thread::yield();
@@ -480,8 +481,8 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     const std::uint64_t syscalls_before = raw->syscall_count_for_test();
     auto submitted =
@@ -515,8 +516,8 @@ bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{1, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     const std::uint64_t syscalls_before = raw->syscall_count_for_test();
 
@@ -528,7 +529,7 @@ bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
     t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
                 published.result.value() == 0,
             "the zero-op is published at acceptance");
-    const RequestKey key = c.key_for_test();
+    const RequestKey key = detail::TestAccess::request_key(c);
     const auto published_live = core.observe_slot(SlotIndex{0});
     t.check(published_live.has_value() && published_live->published &&
                 published_live->binding_live && published_live->control_refs == 1,
@@ -589,8 +590,8 @@ bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& 
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::PreAcceptCommitPauseGate gate;
     raw->set_pre_accept_commit_pause_gate(&gate);
@@ -633,8 +634,8 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -650,7 +651,7 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
     const auto attached = ctx.attach_observer(observed_id);
     t.check(attached.armed(), "the observer arms on the outstanding request");
     t.check(ctx.attach_observer(observed_id).status ==
-                sluice::async::detail::ObserverRegistration::duplicate,
+                sluice::async::AsyncIoContext::ObserverStatus::duplicate,
             "a second registration on the same request returns the occupied disposition");
     const auto registered_slot = core.observe_slot(SlotIndex{0});
     t.check(registered_slot.has_value() &&
@@ -665,7 +666,7 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
 
     while (!c.ready())
         (void)ctx.poll();
-    t.check(raw->sink_deliveries() >= 1 && raw->sink_last_key() == attached.key,
+    t.check(raw->sink_deliveries() >= 1 && raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the publication delivers a host-neutral ready event keyed by the request");
 
     const auto pinned_slot = core.observe_slot(SlotIndex{0});
@@ -675,13 +676,13 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
     const auto mid_cancel = ctx.cancel_observer(observed_id);
     t.check(mid_cancel.in_progress(),
             "cancelling while the delivery is claimed reports in-progress, not retired");
-    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
-    t.check(!ctx.retire_delivery(attached.key),
+    t.check(ctx.retire_delivery(attached.request), "delivery retirement acquires the registration fact");
+    t.check(!ctx.retire_delivery(attached.request),
             "delivery retirement of an unclaimed request reports no live delivery");
 
     t.check(c.ready(), "an attach after publication observes the published result");
     t.check(ctx.attach_observer(observed_id).status ==
-                sluice::async::detail::ObserverRegistration::already_terminal,
+                sluice::async::AsyncIoContext::ObserverStatus::already_terminal,
             "a fresh attach after publication returns the already-terminal disposition");
     (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
@@ -697,8 +698,8 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -729,12 +730,12 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
 
     while (!c.ready())
         (void)ctx.poll();
-    t.check(raw->sink_last_key() == attached.key,
+    t.check(raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the pending publication delivers to the armed observer");
-    t.check(core.observe_slot(attached.key.slot)->observer_phase ==
+    t.check(core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot)->observer_phase ==
                 sluice::async::detail::ObserverPhase::delivering,
             "the delivered registration stays claimed until delivery retirement");
-    t.check(ctx.retire_delivery(attached.key), "delivery retirement acquires the registration fact");
+    t.check(ctx.retire_delivery(attached.request), "delivery retirement acquires the registration fact");
     (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
@@ -749,15 +750,15 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
     GateGuard guard{gate};
 
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::vector<std::byte> buffer(9, std::byte{0});
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 9, 0});
@@ -782,16 +783,16 @@ bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
     guard.rearmed = true;
     rearm_threadpool_gate(gate);
     raw->set_worker_claimed_pause_gate(nullptr);
-    ctx.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
     driver.join();
     t.check(c.ready(), "the progress signal woke the parked owner and drove the publication");
-    t.check(raw->sink_last_key() == attached.key,
+    t.check(raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
             "the driven publication delivered the armed observer's key");
-    t.check(core.observe_slot(attached.key.slot)->observer_phase ==
+    t.check(core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot)->observer_phase ==
                 sluice::async::detail::ObserverPhase::delivering,
             "the wake chain queued and claimed the delivery");
-    t.check(ctx.retire_delivery(attached.key), "delivery retirement completes the protocol");
+    t.check(ctx.retire_delivery(attached.request), "delivery retirement completes the protocol");
     (void)c.take_result();
     const CoreSnapshot snap = core.snapshot();
     t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
@@ -805,8 +806,8 @@ bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
         return false;
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto first_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
@@ -840,8 +841,8 @@ bool bounded_workers_execute_the_syscalls_not_the_submitter(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 3});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::vector<std::byte>> buffers;
     std::vector<Request<std::size_t>> requests;

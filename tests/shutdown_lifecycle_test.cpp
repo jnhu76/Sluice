@@ -1,12 +1,13 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #if defined(SLUICE_SHUTDOWN_URING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 #include <atomic>
@@ -170,8 +171,8 @@ struct FictionBackend {
         auto owned = std::make_unique<UringAsyncBackend>(UringConfig{capacity, 8}, hooks);
         FictionBackend made;
         made.backend = owned.get();
-        made.ctx = std::make_unique<AsyncIoContext>(std::move(owned));
-        made.core = made.ctx->context_core_for_test();
+        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
+        made.core = detail::TestAccess::context_core(*made.ctx);
         return made;
     }
 
@@ -258,7 +259,7 @@ void destroy_context_with_pending_live_binding() {
     auto backend = make_backend();
     if (backend == nullptr)
         std::_Exit(2);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted =
@@ -276,7 +277,7 @@ void destroy_context_with_live_host_interest() {
     auto backend = make_backend();
     if (backend == nullptr)
         std::_Exit(2);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto owner = ctx.claim_progress_owner();
     if (!owner.has_value())
         std::_Exit(2);
@@ -295,7 +296,7 @@ bool shutdown_completes_and_retained_results_stay_consumable(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> first(16, std::byte{0});
     std::vector<std::byte> second(16, std::byte{0});
@@ -355,7 +356,7 @@ bool stop_upgrade_during_parked_shutdown_converges(Tracker& t) {
         auto backend = make_backend();
         if (backend == nullptr)
             std::_Exit(3);
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
 
         int fds[2];
         if (::pipe(fds) != 0)
@@ -429,7 +430,7 @@ bool shutdown_blocks_new_notification_interest_after_drive_linearization(Tracker
             std::_Exit(3);
         int code = 1;
         {
-            AsyncIoContext ctx(std::move(backend));
+            AsyncIoContext ctx = detail::make_context(std::move(backend));
 
             int fds[2];
             if (::pipe(fds) != 0)
@@ -590,7 +591,7 @@ bool shutdown_retires_the_notification_fd_and_reuse_is_inert(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const int notification_fd = ctx.progress_notification_fd();
     t.check(notification_fd >= 0, "the context exposes a progress notification fd");
@@ -648,8 +649,8 @@ bool observer_delivery_episode_settles_at_shutdown(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(16, std::byte{0});
     auto submitted =
@@ -691,7 +692,7 @@ bool observer_attach_after_admission_close_is_refused(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> buffer(16, std::byte{0});
     auto first =
@@ -710,7 +711,7 @@ bool observer_attach_after_admission_close_is_refused(Tracker& t) {
     t.check(!ctx.admission_open(), "admission is closed");
 
     const auto refused = ctx.attach_observer(late.id());
-    t.check(refused.status == detail::ObserverRegistration::admission_closed,
+    t.check(refused.status == AsyncIoContext::ObserverStatus::admission_closed,
             "an observer attach after the admission close is refused");
 
     (void)poll_until_ready(ctx, std::chrono::milliseconds(10000),
@@ -832,7 +833,7 @@ bool shutdown_refuses_while_host_interest_is_live(Tracker& t) {
         t.skip("io_uring is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     // A live notification registration refuses the shutdown outright.
     const int fd = ctx.progress_notification_fd();
@@ -865,7 +866,7 @@ bool shutdown_from_non_owner_after_execution_close_is_refused(Tracker& t) {
         t.skip("the backend is unavailable on this host");
         return true;
     }
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const auto closed = ctx.shutdown(ShutdownPolicy::drain);
     t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
@@ -896,8 +897,8 @@ bool zero_op_internal_pin_retires_at_shutdown(Tracker& t) {
         return true;
 
     auto backend = make_backend();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
     if (!submitted.has_value()) {
@@ -1138,7 +1139,7 @@ bool withheld_completion_fails_by_deadline_and_late_completion_passes(Tracker& t
 
     auto backend = make_backend();
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     Backend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);

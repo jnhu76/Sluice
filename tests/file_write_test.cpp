@@ -1,5 +1,5 @@
 #include "canonical_request_test_support.hpp"
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 
 #include <cerrno>
@@ -89,7 +89,7 @@ bool write_replaces_bytes_at_offset() {
 
     const std::string src_str = "XYZ";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(
             WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 2});
@@ -118,7 +118,7 @@ bool write_can_extend_file() {
 
     const std::string src_str = "Z";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(
             WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 5});
@@ -149,7 +149,7 @@ bool write_empty_buffer_returns_zero_without_data_effect() {
     File file = std::move(File::open(path, writable_mode()).value());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_write(WriteOp{file, nullptr, 0, 0});
         if (!r_admitted.has_value())
@@ -185,7 +185,7 @@ bool write_after_close_reports_invalid_state() {
 
     const std::string src_str = "X";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_write(
             WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
@@ -209,7 +209,7 @@ bool write_with_read_only_access_fails() {
 
     const std::string src_str = "X";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_write(
             WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
@@ -238,7 +238,7 @@ bool write_result_reports_bytes_written() {
 
     const std::string src_str = "HELLO";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(
             WriteOp{file, as_bytes(src_str).data(), as_bytes(src_str).size(), 0});
@@ -267,7 +267,7 @@ bool write_keeps_resource_and_buffer_valid_until_terminal() {
 
     const std::string src_str = "XYZ";
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =
             scope.submit_write(WriteOp{file, as_bytes(src_str).data(), src_str.size(), 2});

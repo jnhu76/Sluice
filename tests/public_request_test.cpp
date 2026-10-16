@@ -1,12 +1,13 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 #include <atomic>
@@ -177,8 +178,8 @@ bool pre_accept_rejection_returns_no_request(Tracker& t) {
     (void)closed.close();
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::byte buffer{std::byte{0}};
     auto rejected = ctx.submit_read(ReadOp{NativeFileRef{closed}, &buffer, 1, 0});
@@ -194,8 +195,8 @@ bool accepted_request_pends_until_publication(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted =
@@ -255,8 +256,8 @@ bool post_accept_failure_converges_on_the_returned_request(Tracker& t) {
         return true;
     }
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     Backend::DispatchFailureInjection injection;
     injection.armed.store(true, std::memory_order_release);
@@ -292,8 +293,8 @@ bool post_accept_failure_converges_on_the_returned_request(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     Backend::DispatchFailureInjection injection;
     injection.armed.store(true, std::memory_order_release);
@@ -329,7 +330,7 @@ bool zero_op_request_publishes_at_acceptance(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
     t.check(submitted.has_value(), "the zero-length request is accepted");
@@ -360,8 +361,8 @@ bool cancel_wins_before_dispatch_and_converges(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     Backend::AcceptedPreDispatchPauseGate gate;
     raw->set_accepted_pre_dispatch_pause_gate(&gate);
@@ -422,8 +423,8 @@ bool consumed_result_with_a_live_control_ref_pins_the_slot(Tracker& t) {
         return false;
 
     auto backend = make_backend(1);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
     t.check(submitted.has_value(), "the zero-op request is accepted");
@@ -473,8 +474,8 @@ bool retained_published_result_pins_capacity_while_execution_is_quiescent(Tracke
 
     auto backend = make_backend(1);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto submitted =
@@ -525,8 +526,8 @@ bool discard_releases_the_published_binding(Tracker& t) {
         return false;
 
     auto backend = make_backend(1);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto submitted =
@@ -559,8 +560,8 @@ bool publication_inflight_window_keeps_the_request_nonterminal(Tracker& t) {
 
     auto backend = make_backend(2);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     Backend::PublicationEpiloguePauseGate gate;
     raw->set_publication_epilogue_pause_gate(&gate);
@@ -620,8 +621,8 @@ bool move_transfers_responsibility_without_duplicating_it(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto first = ctx.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
@@ -696,8 +697,8 @@ bool context_move_preserves_bound_requests(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore* core = ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore* core = detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto submitted =
@@ -710,7 +711,7 @@ bool context_move_preserves_bound_requests(Tracker& t) {
     const RequestId id = request.id();
 
     AsyncIoContext moved(std::move(ctx));
-    t.check(moved.context_core_for_test() == core,
+    t.check(detail::TestAccess::context_core(moved) == core,
             "the context move transfers the same core");
     while (!request.ready())
         (void)moved.poll();
@@ -719,7 +720,7 @@ bool context_move_preserves_bound_requests(Tracker& t) {
     auto consumed = request.take_result();
     t.check(consumed.result.has_value() && consumed.result.value() == 4,
             "the request consumes through the moved context's core");
-    t.check(core_is_idle(moved.context_core_for_test()->snapshot()),
+    t.check(core_is_idle(detail::TestAccess::context_core(moved)->snapshot()),
             "the moved context reclaims the slot");
     return true;
 }
@@ -730,7 +731,7 @@ bool sync_request_returns_result_void(Tracker& t) {
         return false;
 
     auto backend = make_backend(2);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto submitted = ctx.submit_sync_all(SyncAllOp{NativeFileRef{*file}});
     t.check(submitted.has_value(), "the sync request is accepted");

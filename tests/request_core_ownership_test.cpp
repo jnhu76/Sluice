@@ -1,12 +1,13 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/context_identity.hpp>
 #include <sluice/async/detail/request_core.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
 #if defined(SLUICE_HAS_LIBURING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 #include <atomic>
@@ -156,9 +157,9 @@ class CoreCaseCleanup {
 bool move_transfers_the_same_core(Tracker& t) {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
-    RequestCore* core = ctx.context_core_for_test();
+    RequestCore* core = detail::TestAccess::context_core(ctx);
     t.check(core != nullptr, "the context owns a core");
     if (core == nullptr)
         return false;
@@ -182,10 +183,10 @@ bool move_transfers_the_same_core(Tracker& t) {
     const RequestKey id = accepted.id;
 
     AsyncIoContext moved(std::move(ctx));
-    RequestCore* moved_core = moved.context_core_for_test();
+    RequestCore* moved_core = detail::TestAccess::context_core(moved);
     CoreCaseCleanup cleanup{moved_core};
-    t.check(ctx.context_core_for_test() == nullptr, "the moved-from context holds no second core");
-    t.check(!ctx.retire_delivery(id),
+    t.check(detail::TestAccess::context_core(ctx) == nullptr, "the moved-from context holds no second core");
+    t.check(!ctx.retire_delivery(detail::TestAccess::request_id_of(id)),
             "the moved-from context reports nothing retired without a core dereference");
     t.check(moved_core == core, "the moved-to context holds the same core object");
     if (moved_core != core)
@@ -218,14 +219,14 @@ bool backend_slot_table_carries_the_context_identity(Tracker& t) {
 
     ThreadPoolBackend* first_raw = first_backend.get();
     ThreadPoolBackend* second_raw = second_backend.get();
-    AsyncIoContext first(std::move(first_backend));
-    AsyncIoContext second(std::move(second_backend));
+    AsyncIoContext first = detail::make_context(std::move(first_backend));
+    AsyncIoContext second = detail::make_context(std::move(second_backend));
 
-    const ContextIdentity first_identity = first.context_core_for_test()->context();
-    const ContextIdentity second_identity = second.context_core_for_test()->context();
-    t.check(first_raw->request_core_for_test() == first.context_core_for_test(),
+    const ContextIdentity first_identity = detail::TestAccess::context_core(first)->context();
+    const ContextIdentity second_identity = detail::TestAccess::context_core(second)->context();
+    t.check(first_raw->request_core_for_test() == detail::TestAccess::context_core(first),
             "the first backend drives its context's core");
-    t.check(second_raw->request_core_for_test() == second.context_core_for_test(),
+    t.check(second_raw->request_core_for_test() == detail::TestAccess::context_core(second),
             "the second backend drives its context's core");
     t.check(first_raw->request_core_for_test()->context() == first_identity,
             "the first driven core carries its context identity");
@@ -241,8 +242,8 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
         return false;
 
     auto first_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
-    AsyncIoContext first(std::move(first_backend));
-    AsyncIoContext foreign(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
+    AsyncIoContext first = detail::make_context(std::move(first_backend));
+    AsyncIoContext foreign = detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
 
     std::vector<std::byte> scratch(16);
     auto submitted =
@@ -261,7 +262,7 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
             "an empty identity resolves nowhere");
 
     AsyncIoContext moved(std::move(first));
-    CoreCaseCleanup cleanup{moved.context_core_for_test()};
+    CoreCaseCleanup cleanup{detail::TestAccess::context_core(moved)};
     t.check(resolves_as(moved.lookup(handle), RequestReadiness::pending),
             "the identity still resolves after a context move");
 
@@ -270,7 +271,7 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
     }
     auto consumed = request.take_result();
     t.check(consumed.result.has_value(), "the request completed on the core authority");
-    t.check(moved.context_core_for_test()->occupancy().accepted_live == 0,
+    t.check(detail::TestAccess::context_core(moved)->occupancy().accepted_live == 0,
             "consuming the result released the core slot");
     t.check(resolves_as(moved.lookup(handle), RequestReadiness::empty),
             "a released identity stops resolving");
@@ -284,8 +285,8 @@ bool production_request_is_request_core_owned(Tracker& t) {
 
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore* core = ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore* core = detail::TestAccess::context_core(ctx);
     t.check(core == raw->request_core_for_test(), "the backend drives the context-owned core");
     t.check(core_is_idle(core->snapshot()), "the context core starts idle");
 
@@ -379,9 +380,9 @@ bool capacity_handshake_happens_once_at_context_construction(Tracker& t) {
     RecordingBackend* raw = backend.get();
     t.check(raw->capacity_queries == 0, "constructing a backend serves no context");
 
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     t.check(raw->capacity_queries == 1, "the context reads the slot capacity once");
-    RequestCore* core = ctx.context_core_for_test();
+    RequestCore* core = detail::TestAccess::context_core(ctx);
     t.check(core != nullptr, "the context owns a core");
     if (core == nullptr)
         return false;
@@ -391,7 +392,7 @@ bool capacity_handshake_happens_once_at_context_construction(Tracker& t) {
     const CoreSnapshot handshake = core->snapshot();
     AsyncIoContext moved(std::move(ctx));
     t.check(raw->capacity_queries == 1, "the context move reads no capacity");
-    t.check(same_core_facts(moved.context_core_for_test()->snapshot(), handshake),
+    t.check(same_core_facts(detail::TestAccess::context_core(moved)->snapshot(), handshake),
             "the capacity handshake and the move change no canonical core fact");
     return true;
 }
@@ -399,13 +400,13 @@ bool capacity_handshake_happens_once_at_context_construction(Tracker& t) {
 bool domain_identities_are_not_reused_across_contexts(Tracker& t) {
     std::vector<std::unique_ptr<AsyncIoContext>> contexts;
     for (int i = 0; i < 8; ++i) {
-        contexts.push_back(std::make_unique<AsyncIoContext>(std::make_unique<RecordingBackend>()));
+        contexts.push_back(std::make_unique<AsyncIoContext>(detail::make_context(std::make_unique<RecordingBackend>())));
     }
     for (std::size_t i = 0; i < contexts.size(); ++i) {
-        const ContextIdentity left = contexts[i]->context_core_for_test()->context();
+        const ContextIdentity left = detail::TestAccess::context_core(*contexts[i])->context();
         t.check(left.value != 0, "every context holds a nonzero identity");
         for (std::size_t j = i + 1; j < contexts.size(); ++j) {
-            t.check(left != contexts[j]->context_core_for_test()->context(),
+            t.check(left != detail::TestAccess::context_core(*contexts[j])->context(),
                     "two live contexts never share an identity");
         }
     }
@@ -437,11 +438,11 @@ bool identity_domain_terminates_at_exhaustion(Tracker& t) {
 bool move_assignment_transfers_the_same_core(Tracker& t) {
     auto source_backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* source_raw = source_backend.get();
-    AsyncIoContext source(std::move(source_backend));
-    AsyncIoContext destination(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
+    AsyncIoContext source = detail::make_context(std::move(source_backend));
+    AsyncIoContext destination = detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
 
-    const ContextIdentity destination_identity = destination.context_core_for_test()->context();
-    RequestCore* core = source.context_core_for_test();
+    const ContextIdentity destination_identity = detail::TestAccess::context_core(destination)->context();
+    RequestCore* core = detail::TestAccess::context_core(source);
     const ContextIdentity identity = core->context();
     t.check(identity.value != 0, "the source context holds a domain identity");
     t.check(identity != destination_identity, "the two contexts started in different identities");
@@ -461,9 +462,9 @@ bool move_assignment_transfers_the_same_core(Tracker& t) {
     const RequestKey id = accepted.id;
 
     destination = std::move(source);
-    RequestCore* assigned_core = destination.context_core_for_test();
+    RequestCore* assigned_core = detail::TestAccess::context_core(destination);
     CoreCaseCleanup cleanup{assigned_core};
-    t.check(source.context_core_for_test() == nullptr,
+    t.check(detail::TestAccess::context_core(source) == nullptr,
             "the move-assigned source holds no second core");
     t.check(assigned_core == core, "the move-assigned destination holds the same core object");
     if (assigned_core != core)
@@ -512,8 +513,8 @@ bool uring_context_carries_the_context_identity(Tracker& t) {
         return true;
     }
     UringAsyncBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore* core = ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore* core = detail::TestAccess::context_core(ctx);
     CoreCaseCleanup cleanup{core};
     t.check(core->capacity() == raw->slot_capacity(),
             "the core slot budget is the backend slot table capacity");

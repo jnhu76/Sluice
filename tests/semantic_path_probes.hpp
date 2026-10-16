@@ -3,6 +3,7 @@
 #include "semantic_oracle_harness.hpp"
 
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/async_backend.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
@@ -78,7 +79,7 @@ inline bool request_drivable(const Input& input) {
 class RequestProbe {
   public:
     explicit RequestProbe(std::unique_ptr<sluice::async::AsyncBackend> backend)
-        : ctx_(std::move(backend)) {}
+        : ctx_(sluice::async::detail::make_context(std::move(backend))) {}
 
     sluice::async::AsyncIoContext& context() { return ctx_; }
 
