@@ -49,3 +49,6 @@ Direct leak of 96 byte(s) in 1 object(s) allocated from:
 Direct leak of 112 byte(s) in 1 object(s) allocated from:
     #2 0x00000050a115 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:1009:18
 Indirect leak of 1024 byte(s) in 1 object(s) allocated via (anonymous namespace)::PoisonedState (shutdown_lifecycle_test.cpp:1009); same scenario, same allocation site and same byte counts as the 7d565fc1 capture above.
+
+# Round-2 matrix re-run (after the acff36ab contraction): asanubsan-y again fails only
+# shutdown_lifecycle_uring_test at the same poison_with_in_flight_cqe site; unchanged.

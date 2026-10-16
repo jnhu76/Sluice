@@ -33,11 +33,13 @@ App oracles (copy pipeline, tail lifecycle/CLI) are part of the test group
 and ran in every cell; the four app binaries (`sluice-copy`, `sluice-hash`,
 `sluice-grep`, `sluice-tail`) additionally build in both release cells.
 
-Re-run at the review-fix head (commits `b3de9262`..`51dc830f`): all eight
-cells reconfigured and rebuilt from the fix tree with the recorded argv;
-the table is unchanged, `matrix.json` carries the fresh exit codes and log
-digests, and `asanubsan-y-rg1-lsan-disposition.txt` gains the fix-head
-capture (same scenario, same site and byte counts as the PR-head capture).
+Re-run twice: at the review-fix head (`b3de9262`..`51dc830f`) and again
+after the round-2 contraction (`acff36ab`), each time reconfiguring,
+rebuilding and rerunning all eight cells from the tree with the recorded
+argv. The table is unchanged both times, `matrix.json` carries the final
+exit codes and log digests, and
+`asanubsan-y-rg1-lsan-disposition.txt` records the fix-head capture (same
+scenario, same site and byte counts as the PR-head capture).
 
 ### asanubsan-y disposition (pre-existing RG1, not a PR B regression)
 
