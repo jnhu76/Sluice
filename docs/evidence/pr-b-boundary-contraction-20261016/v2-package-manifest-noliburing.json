@@ -1,9 +1,9 @@
 {
   "FORMAT": "v2-package-manifest-v1",
   "PROFILE": "v2-noliburing",
-  "VERIFICATION_HEAD": "51dc830fa345eb284ec7c56ab086151401c6a123",
+  "VERIFICATION_HEAD": "dcf35c521c333da3ce8d18f6374fcfbaf093fec0",
   "VERIFICATION_HEAD_DIRTY": false,
-  "GENERATED_UTC": "2026-10-16T17:48:23.447127+00:00",
+  "GENERATED_UTC": "2026-10-16T18:11:35.965130+00:00",
   "COMPILER": "g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)",
   "ARCH": "x86_64",
   "KERNEL": "7.2.9-201.fc44.x86_64",
@@ -29,10 +29,10 @@
   ],
   "ARCHIVE_BASELINE": {
     "file": "docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-noliburing-archive-baseline.json",
-    "sha256": "3fd30f896a56a2285e3c87b8a5c61c62abc276d82d63af6585a9ced6590e8203",
+    "sha256": "e27f75210ee257ecec16160134eec1e380e4139d1ff40f9b096ce8e8af1dd85f",
     "archives": 2,
     "objects": 11,
-    "defined_symbols": 393,
+    "defined_symbols": 391,
     "external_undefined_symbols": 58
   },
   "PUBLIC_DEFINES": [],
@@ -90,5 +90,127 @@
       "ObserverAttachment",
       "ObserverCancelResult"
     ]
-  }
+  },
+  "GATES": [
+    {
+      "name": "V2_B_PACKAGE_PREFIX_READY",
+      "ok": true,
+      "detail": "(11 headers vs contracted 11, 2 libs; extra=[], missing=[])"
+    },
+    {
+      "name": "V2_B_PROVENANCE_RECORDED",
+      "ok": true,
+      "detail": "(head dcf35c521c33, worktree_clean=True, non-output dirt=[])"
+    },
+    {
+      "name": "V2_E_STANDALONE_HEADER_COMPILES",
+      "ok": true,
+      "detail": "(11/11 sole-include compiles; failed=[])"
+    },
+    {
+      "name": "V2_E_ARCHIVE_BASELINE_RECORDED",
+      "ok": true,
+      "detail": "(2 archives, 11 objects, 391 defined symbols -> docs/evidence/pr-b-boundary-contraction-20261016/v2-package-manifest-noliburing-archive-baseline.json)"
+    },
+    {
+      "name": "V2_E_ARCHIVE_MATCHES_PROFILE",
+      "ok": true,
+      "detail": "(async archive io_uring refs=False, make_uring_context defined=True, profile liburing=False)"
+    },
+    {
+      "name": "CLEAN_ROOM_CONSUMER_INCLUDES_ANGLE_BRACKET_ONLY",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "P0_W01_CORE_ONLY_CLEAN_ROOM",
+      "ok": true,
+      "detail": "rc=0 (compile+link+run against installed prefix; -lsluice_core only)"
+    },
+    {
+      "name": "P1_w02_pipeline",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_request_lifetime",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_admission",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_cancel_effect",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_observer",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_progress",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_shutdown",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_durability",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_contract_backend_availability",
+      "ok": true,
+      "detail": "rc=0"
+    },
+    {
+      "name": "P1_W03_EXTERNAL_LOOP_THREADPOOL",
+      "ok": true,
+      "detail": "(rc=0)"
+    },
+    {
+      "name": "V2_P1_URING_EXPLICIT_NOT_SUPPORTED",
+      "ok": true,
+      "detail": "(rc=2: w03_uring: UNAVAILABLE (io_uring profile not built into this package))"
+    },
+    {
+      "name": "V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT",
+      "ok": true,
+      "detail": "(public layouts agree across opposite macro views; context_bytes=96)"
+    },
+    {
+      "name": "NEGATIVE_V2_REMOVED_HEADERS_UNAVAILABLE",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "NEGATIVE_V2_SEAM_UNAVAILABLE",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE",
+      "ok": true,
+      "detail": "link against core-only must fail with undefined async symbols"
+    },
+    {
+      "name": "CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY",
+      "ok": true,
+      "detail": "[]"
+    }
+  ]
 }

@@ -4,8 +4,8 @@
   "ARCHIVES": [
     {
       "path": "lib/libsluice_async.a",
-      "bytes": 200358,
-      "sha256": "ec8217e928791194d18401fc757219ae01680fb822e94aef091552393a43d335",
+      "bytes": 199402,
+      "sha256": "725f9c57f8e8a97034bab6ee109156bb13cab16bbd86a74d210c1423edfe42c0",
       "objects": [
         {
           "member": "request_scope.cpp.o",
@@ -86,8 +86,8 @@
         },
         {
           "member": "async_io_context.cpp.o",
-          "bytes": 54680,
-          "sha256": "f1d5b967dbeea4e1d6f92cf9315f3c789c8c50d28a0d0bc601b4b40f0b2c621d",
+          "bytes": 54552,
+          "sha256": "b0feddaf3840b4bd8ea67f5642a7eca61d40f0beec1a33c9f43cbbde1ff60e3c",
           "defined_symbols": [
             "_ZN6sluice5async12AsyncBackend13poll_progressEv",
             "_ZN6sluice5async12AsyncBackend14stop_executionEv",
@@ -345,8 +345,8 @@
         },
         {
           "member": "request_core.cpp.o",
-          "bytes": 33600,
-          "sha256": "d5fc1c555a7c65b30fa2a88417d72f46661f65e26d6bf6e26c3c53f6cfbf1913",
+          "bytes": 32840,
+          "sha256": "f0ba15368d7ca8a4245b1e30b360443fc90d59e897138057f3837419b4515cd1",
           "defined_symbols": [
             "_ZN6sluice5async6detail11RequestCore12try_reclaim_ERNS2_4SlotEm",
             "_ZN6sluice5async6detail11RequestCore12try_reclaim_ERNS2_4SlotEm.cold",
@@ -387,10 +387,6 @@
             "_ZN6sluice5async6detail11RequestCore23claim_observer_deliveryENS1_10RequestKeyE.cold",
             "_ZN6sluice5async6detail11RequestCore24retire_observer_deliveryENS1_10RequestKeyE",
             "_ZN6sluice5async6detail11RequestCore24retire_observer_deliveryENS1_10RequestKeyE.cold",
-            "_ZN6sluice5async6detail11RequestCore25retire_delivered_episodesEv",
-            "_ZN6sluice5async6detail11RequestCore25retire_delivered_episodesEv.cold",
-            "_ZN6sluice5async6detail11RequestCore28observer_retirement_acquiredENS1_10RequestKeyE",
-            "_ZN6sluice5async6detail11RequestCore28observer_retirement_acquiredENS1_10RequestKeyE.cold",
             "_ZN6sluice5async6detail11RequestCore6acceptENS1_18RequestReservationERKNS1_17RequestDescriptorENS1_11BorrowFactsE",
             "_ZN6sluice5async6detail11RequestCore6acceptENS1_18RequestReservationERKNS1_17RequestDescriptorENS1_11BorrowFactsE.cold",
             "_ZN6sluice5async6detail11RequestCore6cancelENS1_10RequestKeyE",
@@ -430,6 +426,8 @@
             "_ZNK6sluice5async6detail11RequestCore19outstanding_summaryEv.cold",
             "_ZNK6sluice5async6detail11RequestCore21observe_public_resultENS1_10RequestKeyEPNS_6detail9IoOutcomeEPNS_8FileInfoE",
             "_ZNK6sluice5async6detail11RequestCore21observe_public_resultENS1_10RequestKeyEPNS_6detail9IoOutcomeEPNS_8FileInfoE.cold",
+            "_ZNK6sluice5async6detail11RequestCore28observer_retirement_acquiredENS1_10RequestKeyE",
+            "_ZNK6sluice5async6detail11RequestCore28observer_retirement_acquiredENS1_10RequestKeyE.cold",
             "_ZNK6sluice5async6detail11RequestCore6lookupENS1_10RequestKeyE",
             "_ZNK6sluice5async6detail11RequestCore6lookupENS1_10RequestKeyE.cold",
             "_ZNK6sluice5async6detail11RequestCore7contextEv",
@@ -464,8 +462,6 @@
         "_ZN6sluice5async6detail11RequestCore20complete_publicationENS1_10RequestKeyE",
         "_ZN6sluice5async6detail11RequestCore23claim_observer_deliveryENS1_10RequestKeyE",
         "_ZN6sluice5async6detail11RequestCore24retire_observer_deliveryENS1_10RequestKeyE",
-        "_ZN6sluice5async6detail11RequestCore25retire_delivered_episodesEv",
-        "_ZN6sluice5async6detail11RequestCore28observer_retirement_acquiredENS1_10RequestKeyE",
         "_ZN6sluice5async6detail11RequestCore6acceptENS1_18RequestReservationERKNS1_17RequestDescriptorENS1_11BorrowFactsE",
         "_ZN6sluice5async6detail11RequestCore6cancelENS1_10RequestKeyE",
         "_ZN6sluice5async6detail11RequestCore7reserveEv",
@@ -491,6 +487,7 @@
         "_ZNK6sluice5async6detail11RequestCore14admission_openEv",
         "_ZNK6sluice5async6detail11RequestCore19collect_outstandingERSt6vectorINS1_10RequestKeyESaIS4_EE",
         "_ZNK6sluice5async6detail11RequestCore19outstanding_summaryEv",
+        "_ZNK6sluice5async6detail11RequestCore28observer_retirement_acquiredENS1_10RequestKeyE",
         "_ZNK6sluice5async6detail11RequestCore6lookupENS1_10RequestKeyE",
         "_ZNK6sluice5async6detail11RequestCore7contextEv",
         "_ZNK6sluice5async6detail11RequestCore9occupancyEv",
