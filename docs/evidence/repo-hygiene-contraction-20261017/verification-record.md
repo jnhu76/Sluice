@@ -3,18 +3,27 @@
 Executed at the hygiene head (branch `repo-hygiene`), host: WSL2 Linux
 6.18.54.1-microsoft-standard, xmake 2.9.7, gcc 15 (system), liburing
 /dev present (`/usr/include/liburing.h`), OpenJDK 25. Base `9845cee1`.
+Content-verification head: `628968a9` (commits after it are docs-only);
+the TLA gate ran at `a645baed` with its script diff-verified comment/echo-only
+since (see below).
 
 ## Build and test matrix (all commands from the repository root)
 
+Final full-matrix re-run at `628968a9` (the content head; every cell names
+its liburing flag explicitly — an `xmake f` without the flag carries the
+previous cell's setting over):
+
 | Cell | Command | Result |
 |---|---|---|
-| debug, liburing=n | `xmake f -m debug -y && xmake test -v` | 56/56 passed, exit 0 |
-| release, liburing=n | `xmake f -m release -y && xmake test -v` | 56/56 passed, exit 0 |
+| debug, liburing=n | `xmake f -m debug -y --liburing=n && xmake test -v` | 56/56 passed, exit 0 |
+| release, liburing=n | `xmake f -m release -y --liburing=n && xmake test` | 56/56 passed, exit 0 |
 | debug, liburing=y | `xmake f -m debug -y --liburing=y && xmake test -v` | 74/74 passed, exit 0 |
 | release, liburing=y | `xmake f -m release -y --liburing=y && xmake test` | 74/74 passed, exit 0 |
 
-Re-run after the final build-graph fix (`uring_request_core_integration_test`
-target name): debug+liburing=y 74/74 again, exit 0.
+An earlier full matrix at the same content state first ran the liburing=n
+cells without an explicit flag and is superseded by the re-run above. A
+debug+liburing=y re-run after the final build-graph fix
+(`uring_request_core_integration_test` target name) was 74/74, exit 0.
 
 Base-comparison control: at `9845cee1` in a separate worktree the same
 matrix cells were run to falsify two rename-induced regressions found
@@ -36,7 +45,7 @@ nonzero (killed by its oracle). Per-target results:
 
 | Gate | Command | Result |
 |---|---|---|
-| ProgressSource model | `./scripts/verify_progress_source_model.sh` | PASS — "all expected outcomes reproduced", exit 0 (21 configurations) |
+| ProgressSource model | `./scripts/verify_progress_source_model.sh` | PASS — "ProgressSource model: all expected outcomes reproduced.", exit 0 (21 configurations); re-run at `628968a9` after the message rewording |
 | RequestCore/ObserverCore/ShutdownCore models | `./scripts/verify_tla.sh` | PASS — 55/55 expected verdicts; full run on the build server (details below) |
 
 ### verify_tla.sh server run (2026-10-17)
@@ -73,10 +82,10 @@ the ones in force at this branch's head.
 
 | Gate | Command | Result |
 |---|---|---|
-| Verifier self-test | `python3 scripts/test_verify_v2_package.py` | Ran 14 tests, OK, exit 0 |
+| Verifier self-test | `python3 scripts/test_verify_v2_package.py` | Ran 14 tests, OK, exit 0 (re-run at `628968a9` after the comment rewording) |
 | Comment-guard self-test + scan | `python3 scripts/test_check_cpp_comment_authority.py && python3 scripts/check_cpp_comment_authority.py .` | OK, exit 0 |
-| Clean-room noliburing | `python3 scripts/verify_v2_package.py --manifest-out <fresh>` | PASS — all gates, exit 0, re-run on the committed clean head `4d80cdd3` (the mid-round 46/47 run failed only the dirty-worktree provenance gate) |
-| Clean-room liburing | `python3 scripts/verify_v2_package.py --liburing --uring-prefix /usr --manifest-out <fresh>` | PASS — all gates, exit 0, same clean head |
+| Clean-room noliburing | `python3 scripts/verify_v2_package.py --manifest-out /tmp/pkg-manifest-noliburing-628968a9.json` | PASS — all gates, exit 0 at the committed clean head `628968a9` (an earlier clean run at `4d80cdd3` also passed; the mid-round 46/47 run failed only the dirty-worktree provenance gate) |
+| Clean-room liburing | `python3 scripts/verify_v2_package.py --liburing --uring-prefix /usr --manifest-out /tmp/pkg-manifest-liburing-628968a9.json` | PASS — all gates, exit 0, same clean head |
 
 ## Naming and reference integrity
 
