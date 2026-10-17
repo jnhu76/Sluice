@@ -60,14 +60,20 @@ its witness.
   `f6-final-correspondence-20261014` (G1 SEM-06),
   `f2-authority-contraction-20261013` (G8 71/72 record),
   `g0-403-performance-baseline-20261015` (bench reference baseline).
-  Known cosmetic residue inside kept frozen records: three textual pointers
-  to now-deleted sibling records (f6 -> docs/review/f1-matrix,
-  f6 -> f3-postmerge-closeout, issue-524 -> f6-final-closeout); left
-  unmodified under the no-silent-rewrite rule.
+  Known cosmetic residue inside kept frozen records: seven textual pointers
+  to assets removed in this round — f6 -> docs/review/f1-matrix,
+  f6 -> f3-postmerge-closeout, issue-524 -> f6-final-closeout,
+  f6 `authority-dag.md` (two places) and f6 `gates.json` ->
+  `tests/package/f4_retirement/probes/`, pr-b `design-record.md` ->
+  `probes/retained.cpp`; left unmodified under the no-silent-rewrite rule.
+- `review/ui-review.md`: its only consumers were
+  `visuals/sluice-v1/README.md` and a `docs/review/f0-role-profile-census.md`
+  row, both removed in the same round; no active-tree reference remains.
 - `docs/roadmap/phase-m-f-live-handoff-20261012.md`: only `docs/README.md`
   listed it (index updated). `b1-1-request-core-evidence.md` retained —
   `formal/tla/RequestCore.tla` and kept issue-524 records cite it.
-- Retired formal corpora (124 TLA+ files, 15 Lean files): ledger G8 row
+- Retired formal corpora (124 TLA-family files: 116 `.cfg` + 8 `.tla`;
+  12 Lean files): ledger G8 row
   records the removal; Git history `c001bb1e`/`9845cee1` retains them.
 
 ## Test fixtures

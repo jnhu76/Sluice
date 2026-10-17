@@ -24,12 +24,13 @@ and the suites pass again.
 
 ## Mutation kills
 
-All 49 renamed mutant targets rebuilt and executed at the head; every one
-exited nonzero (killed by its oracle). Enumeration and per-target result
-were generated from the target lists in `xmake/tests.lua`; see
-`test-retention.md`. Two audit-list typos (a `_uring` suffix and a
-`settles`/`settle` spelling) were corrected against the actual target
-declarations before concluding.
+The mutation set is 59 manual targets over 53 injection defines at base
+and head; the rename touched 18 target names and 49 defines, while 4
+defines (backing 8 targets) are byte-identical at base and head — the
+decomposition is in `test-retention.md`. All 59 targets were rebuilt and
+executed at `9217609f` (debug, liburing=y); every one exited
+nonzero (killed by its oracle). Per-target results:
+`mutant-kill-matrix.txt` in this directory.
 
 ## Formal gates
 
@@ -60,7 +61,11 @@ truncated the shared log, so the exact start was not preserved; on the
 local 2-worker lane the same model projects 60-80 minutes). Raw
 captured log: `tla-server-run-20261017.log` in this directory.
 Reproduce with `./scripts/verify_tla.sh` at the recorded head; the
-bootstrap re-verifies the pinned jar checksum.
+bootstrap re-verifies the pinned jar checksum. Commits after `a645baed`
+on this branch touch `scripts/verify_tla.sh` only in comments and echo
+labels (diff-verified: zero non-comment/echo changed lines), so the
+dispatch set, expected verdicts and jar pinning of the recorded run are
+the ones in force at this branch's head.
 
 `verify_formal.sh` is retired with the Lean corpus it gated.
 
@@ -77,6 +82,16 @@ bootstrap re-verifies the pinned jar checksum.
 
 - Stage-token file paths under active dirs (`src include tests apps bench
   scripts formal .github`): 30 at base -> 0 at head.
+- Campaign-labeled test-side `/tmp` template strings and the negative-probe
+  symbol added to the sweep by the review round (16 strings with `b1a`,
+  `b2`, `d1`, `f1`, `tail_e4` prefixes): 16 at base -> 0 at head; the
+  affected suites re-run green in the final matrix.
+- Campaign vocabulary in gate-script and build-graph prose (catalogue
+  comments in `xmake/tests.lua`, stage-labeled echo headers in
+  `scripts/verify_tla.sh`, residual "D1/B2/F1/PR B" phrasing in
+  `scripts/verify_v2_package.py`, duplicated campaign phrasing in
+  `scripts/verify_progress_source_model.sh`): removed in the review round;
+  only pointers to dated campaign records (Git history) remain.
 - Stage-prefixed mutant define families (`SLUICE_{E1,B1C,C1,C2E,E2,B2,D1}_MUTANT*`):
   7 at base -> 0 at head.
 - Script filenames carrying stage labels: 7 at base -> 0 at head.

@@ -70,6 +70,28 @@ b1c_cutover,e2_shutdown,e2_death}_XXXXXX` templates became
 shutdown_death}_XXXXXX`. One read-back assertion updated with the tag:
 `memcmp(buffer, "sluice b", 8)` -> `"sluice u", 8` (commit `9387af2e`).
 
+## Review-round additions (2026-10-17)
+
+The independent review swept wider token sets; the following moved in the
+fix commits, same mechanical class (no assertion or oracle change):
+
+- Test-side `/tmp` templates: `/tmp/sluice_{b1a_ownership,b2_request,
+  b2_violation,d1_scope,tail_e4,tail_e4_cli,tail_e4_child}_XXXXXX` ->
+  `/tmp/sluice_{core_ownership,public_request,public_violation,
+  request_scope,tail_lifecycle,tail_cli,tail_child}_XXXXXX`;
+  `/tmp/sluice_f1_{cce,cshut,cadm,cprog,crl,cdur,w01,w02,w03}_XXXXXX` ->
+  the same suffixes without the `f1_` token.
+- `tests/package/consumers/negative_async_symbols_in_core.cpp`:
+  `sluice_f1_negative_use_async` -> `sluice_negative_use_async` (the gate
+  is the failing link, not the symbol name).
+- Build-graph and gate-script prose: catalogue comments in
+  `xmake/tests.lua` and stage-labeled echo headers in
+  `scripts/verify_tla.sh` reworded to behavior descriptions; residual
+  "D1/B2/F1/PR B" phrasing in `scripts/verify_v2_package.py` and
+  duplicated campaign phrasing in `scripts/verify_progress_source_model.sh`
+  collapsed. Pointers to dated campaign records (Git history) remain the
+  traceability pattern.
+
 ## Bench tooling
 
 `G0_{WARMUP,MEASURED,JSONL,BIN_DIR,CASE_FILTER,TMP_DIR,DISK_DIR,SKIP_DISK,

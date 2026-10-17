@@ -6,7 +6,7 @@ and no mutation target. Counts at base and head:
 | Measure | Base `9845cee1` | Head |
 |---|---|---|
 | xmake test targets (binaries incl. shim) | 134 | 134 |
-| Registered tests (`add_tests`) | 74 (60 default + 14 liburing-gated) | 74 |
+| Registered tests (`add_tests`) | 74 (56 default + 18 liburing-gated) | 74 |
 | Mutation targets (manual builds) | 59 | 59 |
 | Mutation define families | 12 | 12 (spellings updated for 9 stage-prefixed families) |
 
@@ -37,21 +37,28 @@ and no mutation target. Counts at base and head:
 
 ## Mutation kills re-verified at the hygiene head
 
-All 49 stage-renamed mutant targets were rebuilt and executed; each must
-EXIT NONZERO (its oracle detects the injected defect). Result: 49/49 killed
-(48 in the batch runs + `progress_source_uring_mut_close_admission_always_signals`
-and `request_scope_mut_destructor_skips_settle` re-run after fixing two
-enumeration typos in the audit list — the target names are
-`..._uring_mut_...` and `..._skips_settle`). Command shape:
+The mutation set is 59 manual targets over 53 injection defines, identical
+in size at base and head. The rename touched 18 target names and 49 of the
+53 defines; 4 defines are byte-identical at base and head
+(`SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED`,
+`SLUICE_ERR01_MUTANT_ADMISSION_CLOSE_REPORTS_CAPACITY`,
+`SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE`,
+`SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED`) and each backs two targets
+(the `request_error_domain_*`, `file_move_borrow_*` and
+`submit_concurrency_*` suites build two targets per define), so 8 targets
+are entirely unchanged by the round.
+
+All 59 targets were rebuilt and executed at the review-fix head (debug,
+liburing=y); each must EXIT NONZERO — its oracle detects the injected
+defect. Result: 59/59 killed. Per-target results are committed as
+`mutant-kill-matrix.txt` in this directory (one `KILLED` /
+`BUILD_FAIL` / `NOT_KILLED` line per target). Command shape:
 
 ```sh
-xmake -y <mutant-target> && ! ./build/linux/x86_64/debug/<mutant-target>
+xmake f -m debug -y --liburing=y
+xmake build -y <mutant-target> && xmake run -y <mutant-target>
 ```
 
-Families covered: `request_core_mut_*` (5), `progress_source_mut_*` (2),
-`shutdown_mut_m*` (9), `public_request_mut_*` (6), `request_scope_mut_*` (6),
-`backend_contract_conformance_mut_*` (10), `uring_core_integration_mut_*` (8),
-`uring_progress_race_mut_*` (4 per target set), `uring_external_loop_mut_*`.
 The shutdown M6/M7/M8 kills additionally rest on the ShutdownCore TLA+
-mirrors in `scripts/verify_tla.sh` (unchanged stage), which this round's
-fresh gate run re-confirms.
+mirrors in `scripts/verify_tla.sh`, which this round's fresh gate run
+re-confirms.
