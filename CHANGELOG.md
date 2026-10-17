@@ -71,16 +71,14 @@ obligation, not a rollback lever.
   instead of `detail::` vocabulary; consumers matching on the internal
   enumerators must rename.
 - **Tested environment range (first v2 release).** Validated on Linux
-  x86_64 (Fedora 44, kernel 7.2.9) with GCC 16.2.1, xmake 3.0.9 and system
+  x86_64 (Fedora 44, kernel 7.2.9) with GCC 16.2.1 (primary; also carries
+  the TSan runs), clang 22.1.8 (ASan+UBSan runs), xmake 3.0.9 and system
   liburing 2.13, across debug/release builds, liburing-disabled and
   liburing-enabled configurations, ASan+UBSan and TSan sanitizer runs, the
   ThreadPool and io_uring backends, and the four reference applications.
   The full matrix with per-cell commands and exit codes is recorded in
   `docs/evidence/v2-release-acceptance-20261017/`; configurations outside
   that record are untested by this release.
-
-### Changed
-
 - **Repository hygiene contraction** — stage-labeled test/target/mutant
   names renamed to behavior-describing names; closed-campaign verification
   scripts, the retired formal corpora and dated-only evidence records moved
@@ -88,6 +86,13 @@ obligation, not a rollback lever.
   M-R disposition guard workflow removed. No product behavior, public API
   or supported-surface change; details in
   `docs/evidence/repo-hygiene-contraction-20261017/`.
+
+- **Changelog restructured** — the changelog now lives at the repository
+  root (`CHANGELOG.md`) in Keep a Changelog 2.0.0 format, and the version
+  history starts at the `v0.0.1` reference baseline. The pre-v0.0.1 record
+  (the v0.1.0 era) moved to Git history with a Historical banner;
+  `scripts/changelog/generate.py` (with `--self-test`) was added then and
+  has since been retired.
 
 ### Fixed
 
@@ -102,16 +107,6 @@ obligation, not a rollback lever.
   Test-only internal-testing vocabulary; production behavior, layout, and
   public API unchanged. The compliance gate record for the repair lands
   with PR #231 (record in Git history).
-
-### Changed
-
-- **Changelog restructured** — the changelog now lives at the repository
-  root (`CHANGELOG.md`) in Keep a Changelog 2.0.0 format, and the version
-  history starts at the `v0.0.1` reference baseline. The pre-v0.0.1 record
-  (the v0.1.0 era) moved to Git history with a Historical banner;
-  `scripts/changelog/generate.py` (with `--self-test`) was added then and
-  has since been retired.
-
 ## [0.0.1] - 2026-08-26
 
 `v0.0.1` is the explicit-I/O reference baseline (`a38df5e`), frozen as the

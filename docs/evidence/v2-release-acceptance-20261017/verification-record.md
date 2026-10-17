@@ -34,12 +34,22 @@ P0/P1 findings were fixed directly and re-verified:
   `lsan-poisoned-shutdown-disposition.md`).
 - **io_uring Progress & Protocol** (RG5 `6411cff3`+`5fd8e109`):
   APPROVE-WITH-FIXES, no P0; the oracle, bound, staging and mutant were
-  independently re-verified (23/23 runs, 8/8 under 20-thread load, mutant
-  re-killed). Fixed: coverage-table discipline column relabeled to the
+  independently re-verified (the reviewer reproduced 23/23 oracle passes
+  in release and re-killed the mutant; the artifact-backed stress figures
+  are the defect-note's release 10/10, debug 10/10, ASan+UBSan 5/5 under
+  concurrent model-checker load, plus the matrix cells). Fixed: coverage-table discipline column relabeled to the
   real ring/staging mechanisms (P1, doc), oracle count 24→23 and kill-log
   path (P2, doc + ledger G6 row), defect-note mislabel (P2, doc).
-- **Release Evidence & Compatibility** (RG6/RG7, full PR): see the
-  review note in this directory.
+- **Release Evidence & Compatibility** (RG6/RG7, full PR):
+  APPROVE-WITH-FIXES, no P0; independently re-verified all matrix
+  digests/exit codes/test counts, the 24/24 package manifests, the TLA
+  verdicts, the 36/36 consumer extraction, and the D3 disclosure against
+  the tree. Fixed: three ledger rows still citing the G10 matrix as
+  outstanding, the stale header overall-status, the RG1 cell attribution
+  (liburing=y only), the VERIFIED_AT_PR_HEAD vocabulary definition, the
+  TLA detail attribution, the W-02/W-03 label, the reviewer-2 figure
+  attribution, and CHANGELOG/doc nits — all in the final review-fix
+  commit.
 
 Per-gate records in this directory:
 
@@ -50,6 +60,9 @@ Per-gate records in this directory:
 - RG7: CHANGELOG.md `[Unreleased]`
 
 ## 1. Release acceptance matrix (PROD-02, gate RG6)
+
+Matrix head: the content head `72acc209` recorded in `environment.txt`
+(the evidence commits themselves do not change code).
 
 Eight cells, recorded per cell with configure/build/test argv, exit codes,
 log digests and `xmake.conf` in `matrix/matrix.json`; the driver commands
@@ -78,9 +91,10 @@ Toolchain notes (honest configuration record):
   performs no such check, so the TSan cells run on the default GCC
   toolchain and pass.
 - RG1's LSan scenario (`shutdown_lifecycle_uring_test`,
-  `poison_with_in_flight_cqe`) passes leak-free in `asanubsan-y` — the
-  finding was fixed by `ff7d6dde` before the matrix and passes in every
-  sanitizer cell.
+  `poison_with_in_flight_cqe`) passes leak-free in `asanubsan-y`. The
+  scenario's test target is compiled only under `SLUICE_SHUTDOWN_URING`,
+  so it exists only in the liburing=y cells; the liburing=n sanitizer
+  cells cover the ThreadPool shutdown suite instead.
 
 Matrix round 0 (at `6411cff3`, before `5fd8e109`) failed exactly one
 oracle — the RG5 cancel-race test's transient observation — in debug-y and
@@ -156,11 +170,13 @@ catalogue). Results: `VERIFY_TLA: PASS` (exit 0) and `ProgressSource
 model: all expected outcomes reproduced.` (exit 0).
 
 RequestCore liveness (`rcore-live`, the largest gate): complete space
-31,289,609 states generated / 5,359,732 distinct / depth 53 / 0 left on
-queue, then 12 temporal branches over the complete space (64,316,784 =
-12 × 5,359,732) — byte-identical to the counts recorded in the #524
-convergence evidence, re-confirming the carried G8 row against the
-current tree. Runner configuration for this campaign:
+31,289,609 states generated / 5,359,732 distinct / 0 left on queue —
+byte-identical to the counts recorded in the #524 convergence evidence,
+re-confirming the carried G8 row against the current tree. Depth 53 and
+the 12-branch complete-space figure (64,316,784 = 12 × 5,359,732) are
+attributed to the #524 record: this campaign's script prints only the
+verdict and final state lines per gate, not the temporal-checking
+summary line. Runner configuration for this campaign:
 `SLUICE_TLA_JOBS=2 SLUICE_TLA_WORKERS=8` with the machine otherwise idle.
 Note for future runs: an earlier attempt at `nice 19` concurrent with the
 release matrix stalled in the liveness phase (no progress for ~50 min at

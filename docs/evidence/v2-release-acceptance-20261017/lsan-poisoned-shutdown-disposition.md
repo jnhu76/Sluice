@@ -43,14 +43,17 @@ borrow not released early, fail-fast destruction guards untouched.
   the LSan report naming the scenario and allocation site —
   `lsan-red-capture/rg1-lsan-red-stderr.txt` (direct leak `PoisonedState`
   at the witness construction; 19 allocations / 4016-byte summary
-  region), matching the PR B baseline capture byte-for-byte in site and
-  shape. GREEN and control captures are in the same directory with a
+  region), matching the PR B-head capture (`7d565fc1`) in site and shape; the
+  earlier `5c1b14db` capture differs only in the recorded line/byte
+  offsets, as the PR B disposition file itself notes. GREEN and control captures are in the same directory with a
   provenance README.
 - GREEN (post-fix): `shutdown_lifecycle_uring_test` passes under
-  ASan+LSan+UBSan in the recorded matrix cells `asanubsan-n` and
-  `asanubsan-y` (clang static runtime, leak detection on), and in every
-  other cell; the full suite is green in all eight cells of
-  `matrix/matrix.json`.
+  ASan+LSan+UBSan in the recorded matrix cell `asanubsan-y` (clang static
+  runtime, leak detection on) and in the other liburing=y cells. The
+  scenario's test target is compiled only under `SLUICE_SHUTDOWN_URING`,
+  so no liburing=n cell can run it; those cells cover the ThreadPool
+  shutdown suite instead, and the full suite is green in all eight cells
+  of `matrix/matrix.json`.
 - No suppressions, no `detect_leaks=0`, no test removal: the scenario and
   its assertions are intact; only the process isolation changed.
 

@@ -48,7 +48,7 @@ check makes the armed wait return — k5_k6/k7/k8/k13/cancel-race.
 
 ## Discrimination (mutant kill)
 
-`正确实现 GREEN → 目标 mutant RED`:
+`correct implementation GREEN -> target mutant RED`:
 
 - Correct implementation: `uring_progress_race_test` exits 0 — all 23
   registered oracles pass (post-fix head; runs recorded in the matrix cells

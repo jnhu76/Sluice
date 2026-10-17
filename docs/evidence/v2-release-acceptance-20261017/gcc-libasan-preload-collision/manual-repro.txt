@@ -1,1 +1,8 @@
-LD_PRELOAD=/tmp/rg6-build-asanubsan-n/linux/x86_64/asanubsan/libtail_pread_shim.so  -n 2 /tmp/t5.txt  → ==ASan runtime does not come first in initial library list; exit=1
+# Minimal reproduction of the GCC shared-libasan x LD_PRELOAD collision
+# (binary and shim from the GCC -m asanubsan, --liburing=n cell build)
+TAIL=/tmp/rg6-build-asanubsan-n/linux/x86_64/asanubsan/sluice-tail   # GCC asanubsan cell binary
+SHIM=/tmp/rg6-build-asanubsan-n/linux/x86_64/asanubsan/libtail_pread_shim.so
+LD_PRELOAD=$SHIM $TAIL -n 2 /tmp/t5.txt
+# output: ==<pid>==ASan runtime does not come first in initial library
+#         list; you should either link runtime to your application or
+#         manually preload it with LD_PRELOAD.  -- exit=1
