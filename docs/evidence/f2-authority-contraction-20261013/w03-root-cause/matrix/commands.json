@@ -1,0 +1,4393 @@
+[
+  {
+    "profile": "debug-n",
+    "stage": "configure",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "f",
+      "-m",
+      "debug",
+      "--liburing=n",
+      "--ccache=n",
+      "-o",
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build",
+      "-y"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/config.log",
+    "log_sha256": "cf0e6b3b493121e9080e57bdc0148a85d7d5ccaf564f106f2e2655ad33a185f3",
+    "seconds": 0.57
+  },
+  {
+    "profile": "debug-n",
+    "stage": "build",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "-a"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build.log",
+    "log_sha256": "66e1dff0ddf8f55a257e03de81338e0b6f159bdeba210b2bbeee0a0bef467753",
+    "seconds": 6.23
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_copy_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_copy_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_copy_consumption_test.run.log",
+    "log_sha256": "699d560c5be547f50ef168a466e414e2f4f3c4853293cc36abdb8e042f1f231b",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_copy_dir_fsync_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_copy_dir_fsync_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_copy_dir_fsync_test.run.log",
+    "log_sha256": "61cd55b456695f8cf266f4318991e54822960b6042983893035cfa56eb2cea1a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_copy_pipeline_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_copy_pipeline_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_copy_pipeline_oracle_test.run.log",
+    "log_sha256": "cd3de0351f5fc00c99a77b3b38383e66baedcf836bae231fa2e2df35a86bd0d4",
+    "seconds": 2.67
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_grep_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_grep_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_grep_consumption_test.run.log",
+    "log_sha256": "112f0efed3cfd41ae59386c950ca159786d5eb7da904624187d9e9566463e02a",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_hash_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_hash_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_hash_consumption_test.run.log",
+    "log_sha256": "d4472a7db4b713c6c42d56da5892cbd4b19ffe4c8159d6b5a53476868aa36bfe",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_tail_cli_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_tail_cli_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_tail_cli_oracle_test.run.log",
+    "log_sha256": "f8a4196f74af4f3c911ffb9e3f60dbcb3202ccd15da454a9aa58436d692b368c",
+    "seconds": 2.62
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_tail_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_tail_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_tail_consumption_test.run.log",
+    "log_sha256": "6e955240b14b4d6105458bdd83f5b9f5bd01a99ef543fbd1a1b505f53bb66311",
+    "seconds": 0.62
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "app_tail_lifecycle_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/app_tail_lifecycle_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/app_tail_lifecycle_oracle_test.run.log",
+    "log_sha256": "17ce4d63fc8d9f3b799222f432483d43763e856694efc78ab8dd6f4bdae71d21",
+    "seconds": 2.52
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "async_sync_admission_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/async_sync_admission_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/async_sync_admission_test.run.log",
+    "log_sha256": "e59f83986c6e4440a81dfe896dffe5c577d23d976c2875424015c3d1fd087871",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/backend_conformance_e1_threadpool_test.run.log",
+    "log_sha256": "4d9ec7be4afd81eda967cd8d7536fc34eeeca82055bbe6fd9ca1a1567c18034f",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "blocking_file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/blocking_file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/blocking_file_read_test.run.log",
+    "log_sha256": "ec4ddfc6691eae7759ddf09cbfb0046c7ac6eb730aafbfd1af4e082944cdf49b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "blocking_file_sequential_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/blocking_file_sequential_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/blocking_file_sequential_test.run.log",
+    "log_sha256": "817e4cc7dc43a13366c091ce3c9e87bfd667a77199f23d33c2da24130730ab1c",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "blocking_file_state_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/blocking_file_state_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/blocking_file_state_test.run.log",
+    "log_sha256": "b114d1b8cb665c50031344e779baec54687d5d75484387b25ece8d535821ad5c",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "blocking_file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/blocking_file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/blocking_file_sync_all_test.run.log",
+    "log_sha256": "58f7d84669bf9d758416f2145b15ebcae3d5552f120b6d5def844ec4dcb60132",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "blocking_file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/blocking_file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/blocking_file_sync_data_test.run.log",
+    "log_sha256": "4f7224d58e6dbad7c550e2634862aab5caefb2d0e908f229084c755b1f88a5a8",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "blocking_file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/blocking_file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/blocking_file_write_test.run.log",
+    "log_sha256": "c4803b3b9162e2bacc388eccc477abadf2a295614260c40172fa05302656f802",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "direct_composition_fault_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/direct_composition_fault_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/direct_composition_fault_test.run.log",
+    "log_sha256": "9da15be16639f25b8898d0066daf5a3d32ae95d9bdb4a0c578ba729cf804b11a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "direct_composition_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/direct_composition_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/direct_composition_test.run.log",
+    "log_sha256": "d29b294c8042ddae3d1e5bcef4361ee013e206041ac0d5f4668792493f38a991",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "direct_cursor_position_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/direct_cursor_position_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/direct_cursor_position_test.run.log",
+    "log_sha256": "139be6c8893cc4dd66ffbe5f0f8bd0ec5bede670a1adbd55921ffe7da79485c6",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "direct_w01_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/direct_w01_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/direct_w01_consumer_probe.run.log",
+    "log_sha256": "2a3f6264efef7edea91c67d49c52d608cf8c17ef8c1a2a13ca01d600d78342b2",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/explicit_file_ref_test.run.log",
+    "log_sha256": "6c56159448fcfc9022f03ee9e49ed7841a8d7a20552e366e75d56c2bf8b962c6",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_access_precedence_test.run.log",
+    "log_sha256": "e6b540db1b99dff11743aba07badf41d79ac3439083bcb7b24bad3c7fb959f75",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_close_semantics_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_close_semantics_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_close_semantics_test.run.log",
+    "log_sha256": "fd1738a337ae91b1e5dc88c36024ea428819db8e6b32f5436769a5d1a2f93ad1",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_info_identity_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_info_identity_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_info_identity_test.run.log",
+    "log_sha256": "26ac73290ee13287fca862d5d63befd2155faf992836f8c3296eef9257c9e8fb",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_open_contract_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_open_contract_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_open_contract_test.run.log",
+    "log_sha256": "6d128a3dabdf9e73c10aa3b2eb40e80c788cbe5b163c5f47ef1cc0c6b7138ebd",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_read_test.run.log",
+    "log_sha256": "4a39f783adb8b6634398001ceafe67c25aa8403781198567edc017836567cb84",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_resource_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_resource_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_resource_test.run.log",
+    "log_sha256": "43d52671ef20fedbe2ba8c923fe12e75754fb5d75a19e9a02bf9039a2e9f8bcd",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_sync_all_test.run.log",
+    "log_sha256": "525e29daddc88adcd9290e5b7f0550e7d0f453079bb85dd677fd3f4136b40ca8",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_sync_data_test.run.log",
+    "log_sha256": "b4c32d20133c4d36cc034699e6b2122ec6322a8172b3035d3da33ff4a4b11a09",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/file_write_test.run.log",
+    "log_sha256": "2f7f61a1c75082a3dc681314c2236196d3d2e68fa2b2573648b0c358dc161198",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/progress_source_ownership_test.run.log",
+    "log_sha256": "7ff454bf4894b5c0de634490d150492fa71dfa0b45302ccf3cd8ee421dee21b5",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/public_request_release_violation_test.run.log",
+    "log_sha256": "f0e5d70a249f8a5b1a9955c3d6914d3eeb692e665f12a5b09ed1516799761ea9",
+    "seconds": 0.77
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/public_request_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/public_request_test.run.log",
+    "log_sha256": "6ddd2b773a7f3577a22b5770e4325f72c2c665b51173fcd2492d21f7b3c84c77",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "request_core_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/request_core_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/request_core_consumer_probe.run.log",
+    "log_sha256": "b43eb6ddaf76d9f9805076f4fe148fc97dc524fd2c59a869827650d5a87110e3",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "request_core_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/request_core_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/request_core_ownership_test.run.log",
+    "log_sha256": "fa54a2b52664b78ae46161be3d0455146053b129b665c03532cc7fb5acac41e5",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/request_core_protocol_test.run.log",
+    "log_sha256": "1d3d04e14c81423507c88d5e3934382ea98c11602e1e9d3b6c45be2494f47c00",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/request_core_publication_test.run.log",
+    "log_sha256": "5b2fa517589748fa5204111f6c9e3b674c9faac2cc09fbf84cd671dca461abb9",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/request_scope_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/request_scope_test.run.log",
+    "log_sha256": "8bb6968efaf669f7e07159c70fad883fb9ef28bb5bb27149352793d55c58280c",
+    "seconds": 0.67
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/runtime_waiter_observer_test.run.log",
+    "log_sha256": "44197f22605a38827f2cc63b001b985c962312eba4ce0001be74dd1626c4c7be",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_durability_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_durability_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_durability_reference_test.run.log",
+    "log_sha256": "bbe3f91d28b1e45beeb4cbae9e0cedf90db05fa974959b5f9bfecc626ae13e1c",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_effect_outcome_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_effect_outcome_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_effect_outcome_test.run.log",
+    "log_sha256": "579d7781e6bc5578300846f031e1919ba056db4a4f8cff5db64e91abc72d5646",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_errno_mapping_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_errno_mapping_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_errno_mapping_test.run.log",
+    "log_sha256": "3ca49cfb395e508f5d6d241f9073f3348d325503f628ca754518c4b8c91ae62e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_open_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_open_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_open_test.run.log",
+    "log_sha256": "5a9d821cfca55e35645da61eb01325cf3ef879d6bf0683164b25ac6e9ab7fb6a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_range_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_range_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_range_test.run.log",
+    "log_sha256": "d5fb658039d8985dcf15ff8591776c6f00cdd68591b51b3cb4521d1c0eb114bb",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_reference_case_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_reference_case_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_reference_case_test.run.log",
+    "log_sha256": "ad7fb58bb5840808e71e5aa3205dd5f52025fdac1e3f2eee4ac3b65254309f7f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_short_io_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_short_io_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_short_io_reference_test.run.log",
+    "log_sha256": "cda630afe5fd7330dc6676ad0617fb5199f4a6877fd123238c1b40bac9ee0ad2",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "semantic_validation_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/semantic_validation_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/semantic_validation_precedence_test.run.log",
+    "log_sha256": "7a0b46436f857e7d90e8ddd47a95e25983ffd7dfe3775c0b390c1a2ac8465656",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/shutdown_lifecycle_test.run.log",
+    "log_sha256": "90c8de4fd5e1b343e5057654a1ac43674474bc4072602f47a8afdf93ae538f86",
+    "seconds": 1.87
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "stackful_host_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/stackful_host_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/stackful_host_test.run.log",
+    "log_sha256": "64441ebf646e2fcd41b7578427dfec8375dd0b526d08e500cc6adc9f88c048ee",
+    "seconds": 0.82
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/threadpool_core_cutover_test.run.log",
+    "log_sha256": "bc53cea19bc650a15d9ec014c057fc948e565c2b97b151c07b2d2214c2ce7053",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/threadpool_external_loop_test.run.log",
+    "log_sha256": "6102d4371e885f79bc4a95aad02717ed7e550924c04066ca3a3efb7864348fb9",
+    "seconds": 1.77
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/threadpool_progress_race_test.run.log",
+    "log_sha256": "e4252e672887a22749a52cadcb74a81a725c89652d851b037c7b3831a4735ae3",
+    "seconds": 0.02
+  },
+  {
+    "profile": "debug-n",
+    "stage": "run",
+    "target": "uring_submit_boundary_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/build/linux/x86_64/debug/uring_submit_boundary_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/uring_submit_boundary_test.run.log",
+    "log_sha256": "3e0aad18dfc1ce7b9b4ab18dd81a45ea603cf727688b0779423b754f45222e20",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-n",
+    "stage": "xmake-test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "test",
+      "-v"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-n/xmake-test.log",
+    "log_sha256": "a99b563e1de19a79448d4899dc4a7f54b14198eed40fa86fba451121a9ae5f92",
+    "seconds": 3.72
+  },
+  {
+    "profile": "debug-y",
+    "stage": "configure",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "f",
+      "-m",
+      "debug",
+      "--liburing=y",
+      "--ccache=n",
+      "-o",
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build",
+      "-y"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/config.log",
+    "log_sha256": "2c887dfe8cb18f56b8daa207adc0fc6e9740a6dc9f95d684d3da9b349865f09c",
+    "seconds": 0.72
+  },
+  {
+    "profile": "debug-y",
+    "stage": "build",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "-a"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build.log",
+    "log_sha256": "4487de0d9b0636ff677f84bd559cd741f1fffdc8a8f7fbccf5f00ba6b8711f29",
+    "seconds": 8.85
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_copy_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_copy_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_copy_consumption_test.run.log",
+    "log_sha256": "f5b75bab2327f10e05a2647f784babfabba6498772e9c28d7ea65aba1547f15c",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_copy_dir_fsync_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_copy_dir_fsync_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_copy_dir_fsync_test.run.log",
+    "log_sha256": "426443045371631ecb4b864ec2ad3c87123ea8d386b5483ef5d5277c233270e7",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_copy_pipeline_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_copy_pipeline_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_copy_pipeline_oracle_test.run.log",
+    "log_sha256": "1baae09e7257e15310202d75e496da3d588449e50043a11eb066da3d66235a05",
+    "seconds": 2.67
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_grep_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_grep_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_grep_consumption_test.run.log",
+    "log_sha256": "1f1a1f94f0d3a64cc8d28092a4ba820dee69cc99fef5a5790f0a32c4169733a9",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_hash_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_hash_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_hash_consumption_test.run.log",
+    "log_sha256": "43f9095af7cc76b64818646df69a3f87fa47438628878a0fa8a63c8534855a9f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_tail_cli_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_tail_cli_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_tail_cli_oracle_test.run.log",
+    "log_sha256": "3af07c85b3ebc3c802d61458921cd2ed626cfce3b7512c333b00a9e69766c5cb",
+    "seconds": 2.62
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_tail_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_tail_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_tail_consumption_test.run.log",
+    "log_sha256": "eec9a93f9c2e9b52d386eea721f5687cb2eb66a5dac5b20c9e83ed400c79f698",
+    "seconds": 0.62
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "app_tail_lifecycle_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/app_tail_lifecycle_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/app_tail_lifecycle_oracle_test.run.log",
+    "log_sha256": "2148ee5c30a248295c586dc0985ede9bc032cfead4617cad55d6d2650dc3c4d7",
+    "seconds": 2.52
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "async_sync_admission_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/async_sync_admission_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/async_sync_admission_test.run.log",
+    "log_sha256": "9b57b255a5615fc841eabe3926b36e5b1f82c4184a2b4fe3af0f0112d1259c3a",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/backend_conformance_e1_threadpool_test.run.log",
+    "log_sha256": "49ab85778d978ecd04a0f963d9db6ce64253dacf4b94ad7e7e3073d885b05c2b",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "backend_conformance_e1_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/backend_conformance_e1_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/backend_conformance_e1_uring_test.run.log",
+    "log_sha256": "d13a2068f8c3ec6b6b8c76afa542c2747d7455500822ece0ade5b24e14db8d12",
+    "seconds": 0.02
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "blocking_file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/blocking_file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/blocking_file_read_test.run.log",
+    "log_sha256": "09c77ae6a25798760db5d42ca991aec8765bf2f593b7e4861662f1f94e05ef1e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "blocking_file_sequential_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/blocking_file_sequential_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/blocking_file_sequential_test.run.log",
+    "log_sha256": "280a8299ca61d6a5d39cd959e38f84d3ea87693dee225910624a3365768d4736",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "blocking_file_state_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/blocking_file_state_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/blocking_file_state_test.run.log",
+    "log_sha256": "71d10e69cab156bdacf4959dde701ffd923655d4aec29474156577f42cb7f1c7",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "blocking_file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/blocking_file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/blocking_file_sync_all_test.run.log",
+    "log_sha256": "95492c0e4a436a8401b7401117a2b6029a9c4b6eb34533aebe4cb1803a4ff97f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "blocking_file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/blocking_file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/blocking_file_sync_data_test.run.log",
+    "log_sha256": "6095ee96398c724fd4a7ff48df56e4fd8b8ff638f420009afd05cd6a681d6d3a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "blocking_file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/blocking_file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/blocking_file_write_test.run.log",
+    "log_sha256": "14ffeaaa79577f7c50381a13170b8a18814bc03f2192b434fb3e18c18b6a85b4",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "direct_composition_fault_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/direct_composition_fault_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/direct_composition_fault_test.run.log",
+    "log_sha256": "d55373f1bb46852c3074f0794e1b60e33af4cdce630aef1af62ba8b7c2c9a11b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "direct_composition_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/direct_composition_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/direct_composition_test.run.log",
+    "log_sha256": "2821cf5e4d14e01018616f30a159fd44af903659360b1107f3e5c70a87c35a8a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "direct_cursor_position_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/direct_cursor_position_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/direct_cursor_position_test.run.log",
+    "log_sha256": "e30b7398ea7cb291f7f366fe15a4986fc624a4b78f297aab2bb7b6be2a86b36d",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "direct_w01_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/direct_w01_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/direct_w01_consumer_probe.run.log",
+    "log_sha256": "1c7b2743a28eb77553aa08afb3fb098741908be7f7c2f47e15546806bd80830f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/explicit_file_ref_test.run.log",
+    "log_sha256": "fdbf0a8a6e87ef20933f9de5836d76b8d56f00e6f969aacf02fb1dd5256cc5bd",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_access_precedence_test.run.log",
+    "log_sha256": "e9a9dcc758e9a376ec98463bf330f3d00bb1ab3cd31ce30fef9196ab0f4a6098",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_close_semantics_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_close_semantics_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_close_semantics_test.run.log",
+    "log_sha256": "3a73b58e7b2224c370cc8b7761222b0289237b97485ef48dc0eecd742067e8df",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_info_identity_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_info_identity_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_info_identity_test.run.log",
+    "log_sha256": "de87145908d4a36279c56fb399ac6ec2a6a364afc9c902b262b2ab1109fa639f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_open_contract_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_open_contract_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_open_contract_test.run.log",
+    "log_sha256": "aaa5a2d6140eda7adb1c0478d215dc8b4b677276756599ea666f911a48d230f3",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_read_test.run.log",
+    "log_sha256": "bde6ed26a34214ccb9527f13c65ae5b8b2fdfae554dfa2a28de7c6d60b5a72e8",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_resource_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_resource_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_resource_test.run.log",
+    "log_sha256": "418dce9401c613ce6e7fe3ff952c23757c10afbbcd77e2811fcbc8f56aee1eea",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_sync_all_test.run.log",
+    "log_sha256": "65996e24bf671f078840a6cb29b93face60b08709b7b51fa48d5c24fcd329e93",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_sync_data_test.run.log",
+    "log_sha256": "ce1c3f4349b5542e0ced16ce11e12113a8874aab75deaf44bb9d3502bbf7944f",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/file_write_test.run.log",
+    "log_sha256": "735611fd7fef11412a2fa27910a19ed3983e89d0e4b82607e34643f189120506",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/progress_source_ownership_test.run.log",
+    "log_sha256": "8661d32263250d20d832fd5ffbceba61841f65c0fc9d1e7e3d0ad102603aebeb",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "progress_source_ownership_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/progress_source_ownership_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/progress_source_ownership_uring_test.run.log",
+    "log_sha256": "e0b9366c32a211ad53425c7a4fe5af83996b759e720aebdf1e052058d7010185",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/public_request_release_violation_test.run.log",
+    "log_sha256": "1b6865972829a37cfd1be351280102228dcb91ee6f069892f5eabc55fcda96d0",
+    "seconds": 0.77
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "public_request_release_violation_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/public_request_release_violation_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/public_request_release_violation_uring_test.run.log",
+    "log_sha256": "6d685275296fdbef7efbab13f2302c2128dac2c45a1e1c6212b45d344b28190d",
+    "seconds": 0.67
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/public_request_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/public_request_test.run.log",
+    "log_sha256": "e5371be3464d3c9c3a986ce1726da529880e464d8a17b34e41601fd64fbb9d95",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "public_request_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/public_request_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/public_request_uring_test.run.log",
+    "log_sha256": "64841e168238ff9971cc487c664444c0fa3879fed770a9545f6fda01fdbf390b",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_core_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_core_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_core_consumer_probe.run.log",
+    "log_sha256": "c3cd1733d5be01e38020305c0809c125fd1d85edf7b0840313937d515cd4a9ec",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_core_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_core_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_core_ownership_test.run.log",
+    "log_sha256": "945f998ed9d2dcf29a24a97d6128111df2936a0d8a487eaaa8282036cea4c54a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_core_ownership_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_core_ownership_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_core_ownership_uring_test.run.log",
+    "log_sha256": "0386c2b0ba9a264707ec420f7e2ef980c9de5265cc137b9f60fbf42c9f82c793",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_core_protocol_test.run.log",
+    "log_sha256": "408371be006874aa9611e194bdcc2a4a6e33a12b513d2cb8bb8dd7d2dc73ee31",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_core_publication_test.run.log",
+    "log_sha256": "f822ee57a1308579ac32fddf40496cd471e79d12bf13dc94dcfb79576cc16387",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_scope_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_scope_test.run.log",
+    "log_sha256": "24ad18d84671cde856fe526f53ded791d264fb6a14ed2374402aa91f89c72dc3",
+    "seconds": 0.67
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "request_scope_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/request_scope_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/request_scope_uring_test.run.log",
+    "log_sha256": "f1b905ade8a99ae0a256804afc24cdcb913bdee4da590a49df0d562d84fa9422",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/runtime_waiter_observer_test.run.log",
+    "log_sha256": "7bc2918024c899dae02761ca86a1f1619579555a29379adf83426674b37e18e8",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_backend_conformance_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_backend_conformance_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_backend_conformance_test.run.log",
+    "log_sha256": "2e042ff77a0be9f32facef3606dd11246f16c5b8f452aa464994f366e044edca",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_durability_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_durability_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_durability_reference_test.run.log",
+    "log_sha256": "baee7e5d86da93603f8ed41ee07c03843926698021fd8808851d10cb807e15d9",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_effect_outcome_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_effect_outcome_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_effect_outcome_test.run.log",
+    "log_sha256": "fd96ab5ddeafd3367988bd889a0d165b93d978f0f493a73887cf09916b6b11fd",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_errno_mapping_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_errno_mapping_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_errno_mapping_test.run.log",
+    "log_sha256": "246e254aaa2ebb4cefec05cc7d74bd9fe64464aeb746e5c01b2c390be48c55cc",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_open_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_open_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_open_test.run.log",
+    "log_sha256": "89dce73a08fa97416103bc965c8898a907c3a714952aae190556c18a6f477cc6",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_range_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_range_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_range_test.run.log",
+    "log_sha256": "03e10a3995d6e6eb9eb2993cbb12dd834c1c253b9f483d3d1a0747d6bfdb5848",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_reference_case_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_reference_case_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_reference_case_test.run.log",
+    "log_sha256": "941bd89c4af5d6d528d741860b1f8d0224ecd7a4778b65b48a9d4dc18a3aabbe",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_short_io_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_short_io_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_short_io_reference_test.run.log",
+    "log_sha256": "fa094d60aa6516185c9fc7381b864ec62f8dc6838019e1250a378004525bd1d1",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "semantic_validation_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/semantic_validation_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/semantic_validation_precedence_test.run.log",
+    "log_sha256": "35a3ec117704e18749de3c2c9ddda4483af36c0a726ca4d69a4650680d2c1f36",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/shutdown_lifecycle_test.run.log",
+    "log_sha256": "ef75d2c85f1e4d933a69b5ea812c53e3967b3ab524c3323d78bd731cd4bbd6bc",
+    "seconds": 1.87
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "shutdown_lifecycle_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/shutdown_lifecycle_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/shutdown_lifecycle_uring_test.run.log",
+    "log_sha256": "fddbd8b07c88d0d0fbaa3a21b64df505b32edcdd0db119d64e24b872e81fb023",
+    "seconds": 0.52
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "stackful_host_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/stackful_host_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/stackful_host_test.run.log",
+    "log_sha256": "f25db54be31af298a766b6872006e6bd16ccc2782ab943ae0e86f853fa960c17",
+    "seconds": 0.77
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/threadpool_core_cutover_test.run.log",
+    "log_sha256": "1bd59cb81a6452b039baeb6809bca08e5d9059d7540f0491c74d77954c1cddd9",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/threadpool_external_loop_test.run.log",
+    "log_sha256": "81956c8bbb53474730b74b8608dbcbb43900620e8a83b7e90e70bf24d098109a",
+    "seconds": 1.92
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/threadpool_progress_race_test.run.log",
+    "log_sha256": "205187e64a03cdc524f9b520aec2ead8714738fd6d46f27d3f53086b11f7c728",
+    "seconds": 0.02
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_backend_smoke_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_backend_smoke_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_backend_smoke_test.run.log",
+    "log_sha256": "1522e733b586e1576ac16aa75d84919b04832d55caeb2555e0c5fb353657cc60",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_core_cutover_test.run.log",
+    "log_sha256": "e9f76a6f79860e36c136a42fac2e713d1e68cd770e21403326dc7a02902f83eb",
+    "seconds": 0.01
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_external_loop_test.run.log",
+    "log_sha256": "91eeac73ff084b8943e5278406cc93e442843bffca29c2690eb2b8e55c52356a",
+    "seconds": 0.52
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_progress_race_test.run.log",
+    "log_sha256": "14fa613de947659c76b6237990d05d81f4669d51602f1d3f3399d5a2e9b25045",
+    "seconds": 0.32
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_public_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_public_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_public_consumer_probe.run.log",
+    "log_sha256": "e4311295b8445cb6727b1cd6a469b892b2333591b9b64e97e4d64934b7158d84",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_registration_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_registration_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_registration_lifecycle_test.run.log",
+    "log_sha256": "df72e385c70aa832714e222e8e4fd9d9e41e91a8ce6f72941715ee919d972f38",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "run",
+    "target": "uring_submit_boundary_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/build/linux/x86_64/debug/uring_submit_boundary_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/uring_submit_boundary_test.run.log",
+    "log_sha256": "11407c8e84578114f2e0b5e5cabeb7021b09d74baf4b58e2a175adc07a2d7d05",
+    "seconds": 0.0
+  },
+  {
+    "profile": "debug-y",
+    "stage": "xmake-test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "test",
+      "-v"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/debug-y/xmake-test.log",
+    "log_sha256": "c8fef65ebaf8e76a3928ae13239ff0ad04806f5988bf74900156d043e929a671",
+    "seconds": 3.92
+  },
+  {
+    "profile": "release-n",
+    "stage": "configure",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "f",
+      "-m",
+      "release",
+      "--liburing=n",
+      "--ccache=n",
+      "-o",
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build",
+      "-y"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/config.log",
+    "log_sha256": "a29939aae935cf3fdbdb1b4f106531cf991c546436a8d51616af597deabd6da3",
+    "seconds": 0.62
+  },
+  {
+    "profile": "release-n",
+    "stage": "build",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "-a"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build.log",
+    "log_sha256": "cb384a8d63cdc4ada6040ac23462d130e3d0b877291a382ac3422d0954216627",
+    "seconds": 6.08
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_copy_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_copy_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_copy_consumption_test.run.log",
+    "log_sha256": "f32537fcc192d6e5b4e67780326aa0c4776b158c5812d203d314b20048408845",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_copy_dir_fsync_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_copy_dir_fsync_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_copy_dir_fsync_test.run.log",
+    "log_sha256": "47cd44159c8d4153dd44b54e27d65a937fa46c10fd6b4bda46a0b46ed856fca2",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_copy_pipeline_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_copy_pipeline_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_copy_pipeline_oracle_test.run.log",
+    "log_sha256": "ec2ebf336ce451db36ddc6eea211f187d664101e2fcf31334f01f9699afd8552",
+    "seconds": 2.67
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_grep_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_grep_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_grep_consumption_test.run.log",
+    "log_sha256": "23ebf8a11c3c8e92cf07adffe018d2abfdee84967c12f1ae58efa26ebb260c08",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_hash_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_hash_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_hash_consumption_test.run.log",
+    "log_sha256": "d03c9031eb2404c8782dcc794b7138c2de220d173ac21228a5af9ef822b12117",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_tail_cli_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_tail_cli_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_tail_cli_oracle_test.run.log",
+    "log_sha256": "d5eff819ca93d3ccde3351cc8bc142f4dd7c8b56ae0a29c3b4f290f1d4195b90",
+    "seconds": 2.62
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_tail_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_tail_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_tail_consumption_test.run.log",
+    "log_sha256": "4895ce7bd2974944b8613f3cbcd912a1e90537c76e7c82f90b5a6714e16e2d9d",
+    "seconds": 0.62
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "app_tail_lifecycle_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/app_tail_lifecycle_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/app_tail_lifecycle_oracle_test.run.log",
+    "log_sha256": "7b7e3d90ce5855435499da47574a375facca57c42779ae181b2083b4b7662e69",
+    "seconds": 2.52
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "async_sync_admission_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/async_sync_admission_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/async_sync_admission_test.run.log",
+    "log_sha256": "0474c8e38c836a2c3b3a1edcdeae286e3f501a2991c9267836fe7be13ceab90f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/backend_conformance_e1_threadpool_test.run.log",
+    "log_sha256": "7c03bc1e5b37d83a45a512cd797f5586ce1e17980e8cdfc338274ce665f62122",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "blocking_file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/blocking_file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/blocking_file_read_test.run.log",
+    "log_sha256": "2d6ad636631fee6b669a2ad194699dddd1de68ea3e8c7e9dba8282fef1816e80",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "blocking_file_sequential_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/blocking_file_sequential_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/blocking_file_sequential_test.run.log",
+    "log_sha256": "d052a4322b6023e731757dfe34440073c89bd8416d234e828368a889bb80234f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "blocking_file_state_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/blocking_file_state_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/blocking_file_state_test.run.log",
+    "log_sha256": "e8bbd1bd8b09f7ef08f14f053e02ace0fee97538ccdde712c3b62a6108005433",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "blocking_file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/blocking_file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/blocking_file_sync_all_test.run.log",
+    "log_sha256": "32062c47bc3faf7b39ffeb32d0ce5dbdb70f6d63535c663457a57ce5814b936f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "blocking_file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/blocking_file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/blocking_file_sync_data_test.run.log",
+    "log_sha256": "fea06d165e4ccaa74e70a72e83b32cd6ec1fbac173ef04a567f6c13cc176251b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "blocking_file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/blocking_file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/blocking_file_write_test.run.log",
+    "log_sha256": "9d1f26520269ed244b89af57614214bc9580671759809dc83e154f76965b9e2d",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "direct_composition_fault_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/direct_composition_fault_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/direct_composition_fault_test.run.log",
+    "log_sha256": "4e505b5bbd35cc588ea3b715d030cb0162cc24cb6eac13683657275a2b9d8d2e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "direct_composition_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/direct_composition_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/direct_composition_test.run.log",
+    "log_sha256": "2a446e6de4da34c584ea4aaf29809964887b07c4529262a09600b87df46fe908",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "direct_cursor_position_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/direct_cursor_position_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/direct_cursor_position_test.run.log",
+    "log_sha256": "9c41c190bab2c4bac25e39ce845418a4683f56a812c0dbec3f227578e7a3db55",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "direct_w01_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/direct_w01_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/direct_w01_consumer_probe.run.log",
+    "log_sha256": "af9565dd8b061aaf74ebaa447565762479141dfc3021f58f8bee21a16e067405",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/explicit_file_ref_test.run.log",
+    "log_sha256": "5db261104abc728acc09a003984cbfa56b5e5be4e9d9600e787dc91d9e5d8d6d",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_access_precedence_test.run.log",
+    "log_sha256": "53e8601673b397a9540fec48196cfccf8c2752e58c0cad92fdb0090efc9eb565",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_close_semantics_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_close_semantics_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_close_semantics_test.run.log",
+    "log_sha256": "6e66e6afa06a23a3c5ed1646b871295f1cc0d9b9295b6b459c6ed1b6aa6576a1",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_info_identity_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_info_identity_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_info_identity_test.run.log",
+    "log_sha256": "19d92ba9ee144b9465513a505e574c7c211e6fb66575f98012b79aca8cbce521",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_open_contract_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_open_contract_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_open_contract_test.run.log",
+    "log_sha256": "bd2716b00f49824462a8d9812f7e996ed4f165dbc3c0b8fc63b0c81bd706d8cc",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_read_test.run.log",
+    "log_sha256": "33f48ba07d282d2bdd3dc2df407fcd81284424c77f988dfd5e5321fb507b71b5",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_resource_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_resource_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_resource_test.run.log",
+    "log_sha256": "94878bc1e2d3410a214c7db88a3301ea2a7b4eecd8a1a7cec8ae6f6c46a5e87e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_sync_all_test.run.log",
+    "log_sha256": "910058dd57a34bcde09f05d73202a13abc46dda03fa86ea8d49a9573dc02d655",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_sync_data_test.run.log",
+    "log_sha256": "76e59c38f102017237d6ddd7aae158747fe3e8ed9a79ca6c01c1df34b619d7c8",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/file_write_test.run.log",
+    "log_sha256": "6c139e157c16ab083e325026548e897443955d460f86b000e3d0aaa28351ab19",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/progress_source_ownership_test.run.log",
+    "log_sha256": "29c5614559aa7351248aa04fce2c12bc100e27fb65e677621ffe28e3c1f81ce5",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/public_request_release_violation_test.run.log",
+    "log_sha256": "3bec142856687551bbdc46746f18ed62a32cb5999909dca2cb3abae0548a42fd",
+    "seconds": 0.77
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/public_request_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/public_request_test.run.log",
+    "log_sha256": "81ec46c3e7d0de8e16c5d6e24cdb474d54c1bd6dfd2dda4241665da479055a6a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "request_core_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/request_core_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/request_core_consumer_probe.run.log",
+    "log_sha256": "8244413509066037d6a53c905d816bd2889c266ff5cd661ea2e5ecb2ed2c57fd",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "request_core_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/request_core_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/request_core_ownership_test.run.log",
+    "log_sha256": "ca3fdc51e030b395b97b5ed69b29839e4530d3f3a1a17926d7320b00fbb4469b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/request_core_protocol_test.run.log",
+    "log_sha256": "0a9243a27e95c9f26b484c149d00ffa2d4aaeb52b8afdacba50a95b2fabc9b43",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/request_core_publication_test.run.log",
+    "log_sha256": "09b0093668ecd1371740831f34e769627b10b447096b6b19e2a5fd92364f5731",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/request_scope_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/request_scope_test.run.log",
+    "log_sha256": "7f658825e76e5ac61724158292c305d9496a61e5837b7c1dd46040a377cadd7b",
+    "seconds": 0.67
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/runtime_waiter_observer_test.run.log",
+    "log_sha256": "9ac6c003a649d6635d90275f4f9ef0afc2a6429db0f296a7fca73228a1de6494",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_durability_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_durability_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_durability_reference_test.run.log",
+    "log_sha256": "9399f6fdd363bd3123c743cf885a3cd10996a6bdf3791314006a7ac4a7d8908d",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_effect_outcome_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_effect_outcome_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_effect_outcome_test.run.log",
+    "log_sha256": "72504d00488181c56fb1f5348c66cda7ea9fcd8eaac0c5e9c0a8f1cd698b6a1a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_errno_mapping_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_errno_mapping_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_errno_mapping_test.run.log",
+    "log_sha256": "0f70d464e089ff693bc2e918b07849b3eb89889cb6494df3033c6c859f66fced",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_open_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_open_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_open_test.run.log",
+    "log_sha256": "bba3f305ed99e23b8507fbd7121a719a8d90c791928f9827330ee5a26d6679fa",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_range_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_range_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_range_test.run.log",
+    "log_sha256": "312405fa558b95cdef373e468838f6c73bcc7e2dcbe7bbd825977652da351d8a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_reference_case_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_reference_case_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_reference_case_test.run.log",
+    "log_sha256": "716ea5ec0477a3b98553fb23625a24f6749e92ab2dd2417d22d65b7c4c600176",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_short_io_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_short_io_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_short_io_reference_test.run.log",
+    "log_sha256": "f6d13ac48157056b921b0394c00d2ed0b9b71cabd02b411eafd19c72cc41d3ec",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "semantic_validation_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/semantic_validation_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/semantic_validation_precedence_test.run.log",
+    "log_sha256": "6875d838bb140606c2426a7407124359a86ff04a36f2aad6627f946a579522a4",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/shutdown_lifecycle_test.run.log",
+    "log_sha256": "d7e8765658d00cde31d30cf2882320e1a604f1a3dd8e9662d5ebb07e22c20450",
+    "seconds": 1.87
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "stackful_host_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/stackful_host_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/stackful_host_test.run.log",
+    "log_sha256": "9f73b041561351f475c76dd981fb01e26f773cba02bfdf6fe039cd839783601e",
+    "seconds": 0.82
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/threadpool_core_cutover_test.run.log",
+    "log_sha256": "38b0f9a9007e0fa84be1aa2d8854acbc5689e8a7bf9445387b0b3d1adb5d0328",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/threadpool_external_loop_test.run.log",
+    "log_sha256": "34e2db41208195488e6e535834b9da9ec109b84b47b343adebaeb516946026d5",
+    "seconds": 1.82
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/threadpool_progress_race_test.run.log",
+    "log_sha256": "f8f5cdc2c1b1b55d711cee3e8dfe4ffd5de471d722a01df0394f0e962ebcebd2",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-n",
+    "stage": "run",
+    "target": "uring_submit_boundary_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/build/linux/x86_64/release/uring_submit_boundary_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/uring_submit_boundary_test.run.log",
+    "log_sha256": "eff2153e56acaee2d0a121401f0772764d102a14e6afc1e37ededcaf163ec0b5",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-n",
+    "stage": "xmake-test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "test",
+      "-v"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-n/xmake-test.log",
+    "log_sha256": "d12af747bf0cbfb8a104f56dc3a99f0aa54e8969666100d5313d7968d9032ac4",
+    "seconds": 3.67
+  },
+  {
+    "profile": "release-y",
+    "stage": "configure",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "f",
+      "-m",
+      "release",
+      "--liburing=y",
+      "--ccache=n",
+      "-o",
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build",
+      "-y"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/config.log",
+    "log_sha256": "b7c6711d52f1a960afb383fdba31ad0712ea7eca5af0ca2d47262c9810879214",
+    "seconds": 0.67
+  },
+  {
+    "profile": "release-y",
+    "stage": "build",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "-a"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build.log",
+    "log_sha256": "1307a7a5faf0a74eb1af94f0cf5898281ff2a3513b2614646629c3d18dcdc4cd",
+    "seconds": 7.79
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_copy_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_copy_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_copy_consumption_test.run.log",
+    "log_sha256": "6970b0c443c9cbf2f8a3f21a40560563cbb575e17010cbd6f27a96b1187bb218",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_copy_dir_fsync_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_copy_dir_fsync_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_copy_dir_fsync_test.run.log",
+    "log_sha256": "beab7994ee004379153facc7adb4498f11a5f3cf55206b161e480c63f38e0569",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_copy_pipeline_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_copy_pipeline_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_copy_pipeline_oracle_test.run.log",
+    "log_sha256": "3426675fbd206466b892618ed4523ec66d38a741401353fc3b57db75fdcdb8c2",
+    "seconds": 2.67
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_grep_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_grep_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_grep_consumption_test.run.log",
+    "log_sha256": "e11272a739a06eac659206b244696e29d0acabd3ae8ccd77a572e8830d50fba7",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_hash_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_hash_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_hash_consumption_test.run.log",
+    "log_sha256": "ec939ed74a84c05c17fc6b15fde890db301bb3fd056b74dcda613266fe9af3cb",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_tail_cli_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_tail_cli_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_tail_cli_oracle_test.run.log",
+    "log_sha256": "e3b278dc88900e3f4a0746b18978d07ecbe43a8ae0727c68e27db2603bf9b2e6",
+    "seconds": 2.62
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_tail_consumption_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_tail_consumption_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_tail_consumption_test.run.log",
+    "log_sha256": "0e0a93c4ecaca2acf95a8946a768dba9ae0e04594380defaa1fbd57cde35647d",
+    "seconds": 0.62
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "app_tail_lifecycle_oracle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/app_tail_lifecycle_oracle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/app_tail_lifecycle_oracle_test.run.log",
+    "log_sha256": "b4d353355d5380852f0cc4e0e062634f74184c490a7cd74bd08d43591c75f593",
+    "seconds": 2.52
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "async_sync_admission_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/async_sync_admission_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/async_sync_admission_test.run.log",
+    "log_sha256": "3a4b9b4b4e5c90cbca267847fbdcfe873b730f45e47fafd364b0de2fc0cc6ed0",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/backend_conformance_e1_threadpool_test.run.log",
+    "log_sha256": "b7c6b114aa8e533db0bd0a6e86584fe50a61f24680ae9f413ce7f411eb46dea3",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "backend_conformance_e1_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/backend_conformance_e1_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/backend_conformance_e1_uring_test.run.log",
+    "log_sha256": "fb6d0612fa172d4a9100c8f66152f2782172f0cdd9a7df11185c75b6f571a61d",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "blocking_file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/blocking_file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/blocking_file_read_test.run.log",
+    "log_sha256": "8802b45518173c77f3d2cf84b7538dbd1310cdfe53ff13a0a1466b6951e0068e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "blocking_file_sequential_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/blocking_file_sequential_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/blocking_file_sequential_test.run.log",
+    "log_sha256": "69ffeb822a31016afc7ec42147dd4de8f5bf46b12f7e7a0920cd6e8f7c668b51",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "blocking_file_state_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/blocking_file_state_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/blocking_file_state_test.run.log",
+    "log_sha256": "f6f276af56c11f475f0492a56b8ea88cfc85432dc90573a7410e5ce3b739c45f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "blocking_file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/blocking_file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/blocking_file_sync_all_test.run.log",
+    "log_sha256": "8394a75f5ccb12a53dd85942c484710bf8f6f14aed4f32781fd6fe80794cca2e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "blocking_file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/blocking_file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/blocking_file_sync_data_test.run.log",
+    "log_sha256": "0a13d184d6546127ee57a262cf10e5313b28352a218906274536126362ccc432",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "blocking_file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/blocking_file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/blocking_file_write_test.run.log",
+    "log_sha256": "16a1d9f7b739ee5cbb0ddea505b983ee8c1b97fb2d919b2a3661706dc5007c3f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "direct_composition_fault_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/direct_composition_fault_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/direct_composition_fault_test.run.log",
+    "log_sha256": "939c24638627e0c485002429ea7fb6a3f72af649931738768770819e9665836c",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "direct_composition_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/direct_composition_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/direct_composition_test.run.log",
+    "log_sha256": "11212fe16de5afec0e7492736d1d44f0f9e7b3b0abf3cda8756dfc76e08b74d5",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "direct_cursor_position_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/direct_cursor_position_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/direct_cursor_position_test.run.log",
+    "log_sha256": "d38855bc8a7779b36d7529f3daaecb3f230ec338a1bc8034b9aad6b7064a9afe",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "direct_w01_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/direct_w01_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/direct_w01_consumer_probe.run.log",
+    "log_sha256": "1f9e6ad743970570858b68ef33c9b3f08746967090da78f6203715ac0843cfaa",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/explicit_file_ref_test.run.log",
+    "log_sha256": "e9e8d5993237a5ffb0cee4b6d21d62da1b080ba98096ecc8ece71629215e5578",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_access_precedence_test.run.log",
+    "log_sha256": "2fa13edc94790b1acf2b21ef809143f5aefd89c2a405a6e83faec8d6ad65f157",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_close_semantics_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_close_semantics_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_close_semantics_test.run.log",
+    "log_sha256": "e3aa1edc6fed3eb69edcf75ce629e9bf171f2cd6983a3f8ab60b19b87a0f215f",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_info_identity_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_info_identity_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_info_identity_test.run.log",
+    "log_sha256": "c070ae62132b3da0b7dcf0836b5b265d323acf138bb454c27ad0bf3b2f0e649c",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_open_contract_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_open_contract_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_open_contract_test.run.log",
+    "log_sha256": "fccf449aece24109b94b904c9f5a94cf384d9714615b497ced55d0daab54a1f0",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_read_test.run.log",
+    "log_sha256": "2894e509f55ef7d7510b01076f983439d7dddd74b3163adeb68cc814938e1ba3",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_resource_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_resource_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_resource_test.run.log",
+    "log_sha256": "05e65e529ce3a0c9cd9c867f3b908ef1083f85c16e439274be454ba7d091c75a",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_sync_all_test.run.log",
+    "log_sha256": "f985ad6178b4ee506400e5a74fe15e3b35b77ffba878f5e6360c05dc7f044def",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_sync_data_test.run.log",
+    "log_sha256": "3b98b764b5273071df98a4560e4de3867dc3da5233f84813a62d60e8675d3f69",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/file_write_test.run.log",
+    "log_sha256": "51b06870277888c59312367995c2e47d1084d2c6ff8e2061159c99a954819650",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/progress_source_ownership_test.run.log",
+    "log_sha256": "dc85528ef00851ccc53bbbd36e6505645ee8e3742c79bac84789932f357e1e35",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "progress_source_ownership_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/progress_source_ownership_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/progress_source_ownership_uring_test.run.log",
+    "log_sha256": "ec84fdca92c91d46f1b077dfa4f87bba57e4d80ee466868cac5f1f03f87befc7",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/public_request_release_violation_test.run.log",
+    "log_sha256": "87f52b118506ace7caf00674f658b80747cc34960b7fba918210bf15a24a302d",
+    "seconds": 0.77
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "public_request_release_violation_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/public_request_release_violation_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/public_request_release_violation_uring_test.run.log",
+    "log_sha256": "e3c0bf3b32abe4470f30d0446a5be8ef67572a53b201d3daac6a2c1c4a46cb5d",
+    "seconds": 0.67
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/public_request_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/public_request_test.run.log",
+    "log_sha256": "58aedba7b4c143fcc38d7ed2dda2a574c32ffa640d3282fc869e5cf69eb0ede8",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "public_request_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/public_request_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/public_request_uring_test.run.log",
+    "log_sha256": "36303aa2871fc5b7d26691b8ab411a0a93abbc76eafb221c7f84df1d4a4e7c41",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_core_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_core_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_core_consumer_probe.run.log",
+    "log_sha256": "078c09a821a97a7de4ad0dbb787cf042cf53f582e11c896f41443000183af743",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_core_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_core_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_core_ownership_test.run.log",
+    "log_sha256": "501fe52ae258d0ffe51fc01f78125761cf2b53eea34e66d26fd6a2aeaa5583b6",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_core_ownership_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_core_ownership_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_core_ownership_uring_test.run.log",
+    "log_sha256": "9a644285bb88f4c8f4171c4f3e0372d1faf0b4da615bca8ab764535099cbdd85",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_core_protocol_test.run.log",
+    "log_sha256": "903816f5d166fc98b51c29680a6b0292b32d1fa5557e6ea02278fb63e861350b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_core_publication_test.run.log",
+    "log_sha256": "7300dad3fbc58a58d6bdd512db07d103f9bb1ac515b05647a3a145145e8faaea",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_scope_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_scope_test.run.log",
+    "log_sha256": "5aca3846e6cca77779a41be33f39dcde8452968d70dfd05bf741f66164fd9a1a",
+    "seconds": 0.67
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "request_scope_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/request_scope_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/request_scope_uring_test.run.log",
+    "log_sha256": "af8a87c48f75bfb6da7e2364af28028a7c0a643ff9cf5f87995c27bc4e6e1cb8",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/runtime_waiter_observer_test.run.log",
+    "log_sha256": "3535499c4e279da33fcc5aa9430724fbdcea96a044ae97fc82585e4457083ea2",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_backend_conformance_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_backend_conformance_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_backend_conformance_test.run.log",
+    "log_sha256": "5d3d0c87ee8713db43afa2f48d86e082bda36d70ed498424f16f450eda60e03b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_durability_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_durability_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_durability_reference_test.run.log",
+    "log_sha256": "92af017c174d108291ecb2a5068a487a99be908a98af940184cec111bf9698c1",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_effect_outcome_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_effect_outcome_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_effect_outcome_test.run.log",
+    "log_sha256": "c155ab96355156e03f0dd915de735b7265fa36fc2eecc86a1d746409b83c2843",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_errno_mapping_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_errno_mapping_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_errno_mapping_test.run.log",
+    "log_sha256": "9a41792d4e17e5424f4d89fd3b61864b044abe7bd4f93cf5f6077211cf8f616e",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_open_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_open_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_open_test.run.log",
+    "log_sha256": "455905ea86b2da832584a856eca06e2eaf36ad3f562b9da01903082635f250cb",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_range_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_range_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_range_test.run.log",
+    "log_sha256": "331134f3378b37ca99ea646f1ad52053b2f7dd4deaad7f00339700956afd28b7",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_reference_case_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_reference_case_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_reference_case_test.run.log",
+    "log_sha256": "917b25a3b00698a2f16b9d93afa4d258ff8980464c2ea23419249fce1c2d2cc5",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_short_io_reference_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_short_io_reference_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_short_io_reference_test.run.log",
+    "log_sha256": "8151f968abd5291c4d30f96c1109e86a14b0ecf8f13a2e2a33539c10f2ee6571",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "semantic_validation_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/semantic_validation_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/semantic_validation_precedence_test.run.log",
+    "log_sha256": "c5b73c0f22fdb48813ab5c8597eb310eb9c3cd95d3216724473b98d55352d9f2",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/shutdown_lifecycle_test.run.log",
+    "log_sha256": "58d2d593874e4978db23c19b775f6d3c1476d84b2a5cf0f6a6c8487fa92dd382",
+    "seconds": 1.87
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "shutdown_lifecycle_uring_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/shutdown_lifecycle_uring_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/shutdown_lifecycle_uring_test.run.log",
+    "log_sha256": "feddcb22ded0b1495b3bddc53c3b9805b75fdb81405d5206d99c8f69b66f4647",
+    "seconds": 0.52
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "stackful_host_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/stackful_host_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/stackful_host_test.run.log",
+    "log_sha256": "9f6b98bb515e6f3e9a73835273c40419f24a0e7d3c4e91d16a62aa08c0b80798",
+    "seconds": 0.82
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/threadpool_core_cutover_test.run.log",
+    "log_sha256": "c52ca3a82046a92adc977d62e42f1045539b9afd5d2cea49a82cf3226be40913",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/threadpool_external_loop_test.run.log",
+    "log_sha256": "9b44271c72ab02fd3b60aa09a00afed15931638950fecabcdac5ea5131df6e11",
+    "seconds": 1.82
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/threadpool_progress_race_test.run.log",
+    "log_sha256": "bb95645d16cb69a9a62c5b4dfba7f349fb0da8dd8a19330b33488372059813f6",
+    "seconds": 0.02
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_backend_smoke_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_backend_smoke_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_backend_smoke_test.run.log",
+    "log_sha256": "b0399984f7e96f3330bbf487bd3650fcd4c47e0d219fd166c93ab1cb505116a7",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_core_cutover_test.run.log",
+    "log_sha256": "04e3da531c9b861eac1b80901efca24a30e62c04d7086cca3ce4397c530e652f",
+    "seconds": 0.01
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_external_loop_test.run.log",
+    "log_sha256": "1eb019799b8520f5850cd2c5cdf9291b2a3670aaf29d53d2c73b2a7119a36dda",
+    "seconds": 0.52
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_progress_race_test.run.log",
+    "log_sha256": "905ba451830a5be8599ce1ba409cdfafcd1f7be8f4af4d7a41e9f4634e2d5dcd",
+    "seconds": 0.27
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_public_consumer_probe",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_public_consumer_probe"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_public_consumer_probe.run.log",
+    "log_sha256": "0a910b4c740833bad25620c0c6278de29001e7237a7d4b7e5ee45deb79991c49",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_registration_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_registration_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_registration_lifecycle_test.run.log",
+    "log_sha256": "067743420bd1d37c0e9d04946c353685334dce225cd9813c015b45a0a68cf37b",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "run",
+    "target": "uring_submit_boundary_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/build/linux/x86_64/release/uring_submit_boundary_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/uring_submit_boundary_test.run.log",
+    "log_sha256": "d82a60208f1e125332ef3b11fb1d7aaa3fb8b6f65bbfb1a92049cd2c998ec5f7",
+    "seconds": 0.0
+  },
+  {
+    "profile": "release-y",
+    "stage": "xmake-test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "test",
+      "-v"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/release-y/xmake-test.log",
+    "log_sha256": "295ffa7a3410c029bbc0f341cae9a726cd6f4ea58c0110d1a31c2f9afdba8b8f",
+    "seconds": 3.87
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "configure",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "f",
+      "-m",
+      "asanubsan",
+      "--liburing=n",
+      "--ccache=n",
+      "-o",
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build",
+      "-y",
+      "--toolchain=clang",
+      "--ldflags=--target=x86_64-redhat-linux-gnu"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/config.log",
+    "log_sha256": "9a3e0ddccbf51c25eb914ea7ec5834531d41fcc658e6d6e26b2e7fd4057ad3e1",
+    "seconds": 0.67
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_read_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_read_test.build.log",
+    "log_sha256": "15b1e402a5dec34c28f3fa6581d8beeeb203591e09de50deb0c8531884c8ec13",
+    "seconds": 2.52
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_write_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_write_test.build.log",
+    "log_sha256": "a8e025573c25045d38421de4a039d250f463df34fbdbec2b03c9b85600c42d6c",
+    "seconds": 0.87
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_sync_data_test.build.log",
+    "log_sha256": "123fb60586688c1b840f06db1ea0d88e92cfaf7ca44e92049ce00be4187f813a",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_sync_all_test.build.log",
+    "log_sha256": "226092ad10dbcdb732e8db6ac806131909dc4e457c337808a3a586a599249359",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/explicit_file_ref_test.build.log",
+    "log_sha256": "ef7c23c18a7a4e76d12a1b118afa0911bad62236eb88e0092bbcb8ed7bf8e447",
+    "seconds": 0.82
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_access_precedence_test.build.log",
+    "log_sha256": "1e6e7e8b21905dbc1975451a566a45cf43a5e9ac78151f9beaf46ffecff3a6d4",
+    "seconds": 0.82
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "request_scope_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/request_scope_test.build.log",
+    "log_sha256": "9c542a8a21eafcd420081e146b9bad7b656898f615204bd1031c6578eb1118aa",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "public_request_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/public_request_test.build.log",
+    "log_sha256": "98b4423ca591a5fa6542dddc420deb2fb7092852a2af5707f1a022cc41000e27",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/public_request_release_violation_test.build.log",
+    "log_sha256": "351d45b86356fc25f9c398f85c47f90bd518287214765e8b615c8eb41cf43e4e",
+    "seconds": 0.87
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/request_core_protocol_test.build.log",
+    "log_sha256": "6c3d38a260827150a811a043ca9a92150b1277d1a8717e2fbe4b230ccae1e116",
+    "seconds": 0.82
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/request_core_publication_test.build.log",
+    "log_sha256": "5033b81057620488055f355dd75c48202d7fd1170d19688017b9333e4a1a8ced",
+    "seconds": 0.87
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/threadpool_core_cutover_test.build.log",
+    "log_sha256": "0e2ff21ef9253eaca42a861a01426770949f77724d37cb1bbf91f0d5a3ba55dd",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/runtime_waiter_observer_test.build.log",
+    "log_sha256": "3b42a0366a1eafb63d9fa478c439c38f811e3182aeeaadfc6a6d68341980ed53",
+    "seconds": 1.22
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/backend_conformance_e1_threadpool_test.build.log",
+    "log_sha256": "7200c718779552574082d864bd3e5b946a86edfdc474f807eea8bf8a6fcc2bd7",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/shutdown_lifecycle_test.build.log",
+    "log_sha256": "1be3ae8fbb391f10e63cf02dae55fc842c13d254bcaea6fd0656b68e30364e5e",
+    "seconds": 0.97
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/threadpool_progress_race_test.build.log",
+    "log_sha256": "882c4a8ef8a795c226dd96dc0d378c62863ebda0707ee851deeccf238b6a22bf",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/threadpool_external_loop_test.build.log",
+    "log_sha256": "63dec36eba5e89de7f8987bcdc7d4ccd9b310c650be12fcf479b44c67707f377",
+    "seconds": 0.87
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "build",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/progress_source_ownership_test.build.log",
+    "log_sha256": "3b2b38a9e5ecbe4e28cc98f82db76d5fe191f94f9d5dff498c6dbd7f97c0918b",
+    "seconds": 0.92
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/backend_conformance_e1_threadpool_test.run.log",
+    "log_sha256": "cc47c37a8d4a3047e56463869025af63a5bfee8ea56da204374f51d7aece4d5b",
+    "seconds": 0.06
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/explicit_file_ref_test.run.log",
+    "log_sha256": "f8e5f84ee6ceb41cc73f30d439f7b2ca664f9fab1a1642f06c8f2d5a6838fd7d",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_access_precedence_test.run.log",
+    "log_sha256": "cc2c607676f9899b2dcd6ec72c24b68c58774d5d9b857300719ee062eb094bb3",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_read_test.run.log",
+    "log_sha256": "0e41095d0ab273416b872ef704f62182fe18a58868aaf816854a34782dbaea8e",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_sync_all_test.run.log",
+    "log_sha256": "f1b956bcbeb8c3c49d33d369f994789acbeeb69a78eea2592f10062090643f24",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_sync_data_test.run.log",
+    "log_sha256": "47aecaba310b6404eca3f4c2388f70bc1ac94cb1fa1e5098a7b932fdbbb84fb0",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/file_write_test.run.log",
+    "log_sha256": "80d61d9641a995e65b59bc4e4dacb3651ac9977c5c7b04f6fc2b290a67008ba0",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/progress_source_ownership_test.run.log",
+    "log_sha256": "5b7f3d38142f3e6e91b7de3043a0847109f82f46ce4c6c39b5d5347082173bb9",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/public_request_release_violation_test.run.log",
+    "log_sha256": "981ce63a5d970d01fb84b674056e268726df46c11d436948ffbde52aa51bc9c9",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/public_request_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/public_request_test.run.log",
+    "log_sha256": "5f03c326d12b584551b9266002415f45322c75485229965584c549d2b3fb1651",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/request_core_protocol_test.run.log",
+    "log_sha256": "40b3f2f68a1db270d09cc8aef412e251708754042b72c169f11f5f006a3a451a",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/request_core_publication_test.run.log",
+    "log_sha256": "f50b787bc7a12e2d440a3d4d83ee7519d7fbdc85827254b22125c56dbb59e869",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/request_scope_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/request_scope_test.run.log",
+    "log_sha256": "611d3992dc11ea05c5b8a4fd7f8cf7bc8bf2baf6adcfdbae3ab597af78ea53d0",
+    "seconds": 0.52
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/runtime_waiter_observer_test.run.log",
+    "log_sha256": "d5cfe27a01e15c023c8baf3e93cb2b95c825171bcfcd758d55ac89e45b4dadef",
+    "seconds": 0.06
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/shutdown_lifecycle_test.run.log",
+    "log_sha256": "13264244b08c592e60928dbb87c8da32ca8d903c933c1b294544c0740cdd516b",
+    "seconds": 1.57
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/threadpool_core_cutover_test.run.log",
+    "log_sha256": "f6a699be08c32d258c6181ebb99bf654ca5d2a9d7a8fb62de3ef72212a760d15",
+    "seconds": 0.03
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/threadpool_external_loop_test.run.log",
+    "log_sha256": "99fe888b1692d38be8e641fef2851f363abb1e19fa72432150001b4c490af8b9",
+    "seconds": 1.22
+  },
+  {
+    "profile": "asanubsan-n",
+    "stage": "run",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/build/linux/x86_64/asanubsan/threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/asanubsan-n/threadpool_progress_race_test.run.log",
+    "log_sha256": "9c3495521e75f2f4bdb69f3e7d31e15fe49b8f894f53c6a226ac1be15ff217da",
+    "seconds": 0.06
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "configure",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "f",
+      "-m",
+      "tsan",
+      "--liburing=n",
+      "--ccache=n",
+      "-o",
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build",
+      "-y",
+      "--toolchain=clang",
+      "--ldflags=--target=x86_64-redhat-linux-gnu"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/config.log",
+    "log_sha256": "d3644728580a032fadc477cef4af014d310b7e73eb705a14d31e35ad337224fa",
+    "seconds": 0.67
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_read_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_read_test.build.log",
+    "log_sha256": "f46d833e4840844e879cd831eb77e06c85cfa304ac86e122be508b6e54d6d38c",
+    "seconds": 2.52
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_write_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_write_test.build.log",
+    "log_sha256": "ae53a2caf8ae72ca57eb03350cd143faa4d703f1bef7c485c6d783e9cbdef5c9",
+    "seconds": 1.02
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_sync_data_test.build.log",
+    "log_sha256": "4a4f6e4776cd6c6eef54da6e82bac7774155ad6da50df1fe2704231f7fa56317",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_sync_all_test.build.log",
+    "log_sha256": "617beb9c5368d8d22fbe3e34f9dc4f766ff9dfa85f6da691cdfcfcb580a45164",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/explicit_file_ref_test.build.log",
+    "log_sha256": "a69433793947961a065cf4296019e915ee90fb005a4e8d2557c24d3063053a28",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_access_precedence_test.build.log",
+    "log_sha256": "ac250cba2bf105258f19bbcf6ed8a6ebd6a8b1ab3ba727ccc2831de3d5e35b77",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "request_scope_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "request_scope_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 255,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/request_scope_test.build.log",
+    "log_sha256": "5131fcc369b3b39cca6bade13dd05b31ddc70f95f0c7d57cb67f0232db825aca",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "public_request_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/public_request_test.build.log",
+    "log_sha256": "2158e1b44a706cc4b94e115eff5e2f22da67d09000efbc36d7bf0e4ad9eace55",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/public_request_release_violation_test.build.log",
+    "log_sha256": "6d244a1352a3cb16dfa10a41816944264f6dcb82132ae68bafb00517661fdaee",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/request_core_protocol_test.build.log",
+    "log_sha256": "46b3f749e201dd79fc2c700eb12bb69204203775add2724081d75c63d5ab8129",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/request_core_publication_test.build.log",
+    "log_sha256": "9e06dbeb0ab5accfe1c4f73ee74d4c541b6f4c59d3801860cf6ad0a0d9a0b0e9",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/threadpool_core_cutover_test.build.log",
+    "log_sha256": "3f6cb3b3e7c5c33c6963dad70034a8e375015c568cf7e20a9816dc87fc830f1c",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/runtime_waiter_observer_test.build.log",
+    "log_sha256": "a436e50235d64cc497b760aecefd12b0a7d01c127869e000806d59e25539f629",
+    "seconds": 1.17
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/backend_conformance_e1_threadpool_test.build.log",
+    "log_sha256": "d9e2c1fa40ffffc6476d2c75da5eb24b4347dbc90bab8501be2cadf3b949fe9d",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/shutdown_lifecycle_test.build.log",
+    "log_sha256": "f8a562b04e8b2d0e363f16bf57f3edab3e4f55cf5f8391a05c1d252cc77ffaab",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/threadpool_progress_race_test.build.log",
+    "log_sha256": "98725a2a0b018f4ea12db29769dadaa72b33943155d676b68e9c15264a4b1b22",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/threadpool_external_loop_test.build.log",
+    "log_sha256": "253f3d34b0bb4c17dbe4e362b3f11a6b90ed40cb931fa060e87851cedc1a51ab",
+    "seconds": 0.97
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "build",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/.local/bin/xmake",
+      "b",
+      "-y",
+      "progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/Source/Sluice-f2",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/progress_source_ownership_test.build.log",
+    "log_sha256": "eaf0138f28b51e35501d11031e9cbb51dabd8a60bbd45b6c9e4764ab7bd170d5",
+    "seconds": 0.92
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "backend_conformance_e1_threadpool_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/backend_conformance_e1_threadpool_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/backend_conformance_e1_threadpool_test.run.log",
+    "log_sha256": "2715687455b4c73b135f9cc5f353bcd2dc9777620e181e2ce0f66a7b9e923a6e",
+    "seconds": 0.06
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "explicit_file_ref_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/explicit_file_ref_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/explicit_file_ref_test.run.log",
+    "log_sha256": "151c4e804e2f4baa1fcc7f6eeb0a71b98da4b53521c4a66116b28311ffa7eefc",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "file_access_precedence_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/file_access_precedence_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_access_precedence_test.run.log",
+    "log_sha256": "3cc12d8ccc26d1873e4891f4e21fc25741629738d0fb24b3e5aae2602d0d2607",
+    "seconds": 0.06
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "file_read_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/file_read_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_read_test.run.log",
+    "log_sha256": "7e81597bb41cf9547a994eaafad400c8df77150b1f95d7982ffb838c668e136f",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "file_sync_all_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/file_sync_all_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_sync_all_test.run.log",
+    "log_sha256": "3b0403c3bc58bb26abae2196228be2cbf415ecbf2976fc1356b216e3d1d72f14",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "file_sync_data_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/file_sync_data_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_sync_data_test.run.log",
+    "log_sha256": "84b26f9399b1db5d33e797dae4c3abb00e68e0bb7e5aad9a1561e3697b0b091c",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "file_write_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/file_write_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/file_write_test.run.log",
+    "log_sha256": "26f4e43b6858e089517399b4fbd490c07b381845a6a2795666f9b040b4af2b47",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "progress_source_ownership_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/progress_source_ownership_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/progress_source_ownership_test.run.log",
+    "log_sha256": "25e5ad5ea23566a1ffe72030ddfa2fb6c34197f630b09219a905006a193dd003",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "public_request_release_violation_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/public_request_release_violation_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/public_request_release_violation_test.run.log",
+    "log_sha256": "8ae0993927f6887dde0985fdb2ce2542d5f945751e9302bbd6a827f1e440acda",
+    "seconds": 0.06
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "public_request_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/public_request_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/public_request_test.run.log",
+    "log_sha256": "199a9e74f4a3ff04272ab5db90a7e569a894d642138a4b6f42984152a343df5e",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "request_core_protocol_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/request_core_protocol_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/request_core_protocol_test.run.log",
+    "log_sha256": "a5ea5472a7e8a247ed8d74db14682910edf839d1e9476d4517d9695f5880a229",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "request_core_publication_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/request_core_publication_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/request_core_publication_test.run.log",
+    "log_sha256": "3b038c9509d8f83838a18f1920991984d67dd262f07df64e2cecf59b02beefef",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "runtime_waiter_observer_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/runtime_waiter_observer_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/runtime_waiter_observer_test.run.log",
+    "log_sha256": "a5820c02221cf2cab44ff6b7035eef4a5569f9e25b4bb7bfa39a6a5503caa551",
+    "seconds": 0.07
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "shutdown_lifecycle_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/shutdown_lifecycle_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/shutdown_lifecycle_test.run.log",
+    "log_sha256": "bdd18db86a770c2907e51d9fd41335233e5378250c94c95030091a86c155a4df",
+    "seconds": 1.57
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "threadpool_core_cutover_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/threadpool_core_cutover_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/threadpool_core_cutover_test.run.log",
+    "log_sha256": "ba3f4758068a248efea3fe454157bc385f209be6e638768cba777fe535cbfbbd",
+    "seconds": 0.03
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "threadpool_external_loop_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/threadpool_external_loop_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/threadpool_external_loop_test.run.log",
+    "log_sha256": "e5e5b46480b665399936a5192476a198b0c7b2b000882e3d345ea6ea26500943",
+    "seconds": 1.22
+  },
+  {
+    "profile": "tsan-n",
+    "stage": "run",
+    "target": "threadpool_progress_race_test",
+    "argv": [
+      "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/build/linux/x86_64/tsan/threadpool_progress_race_test"
+    ],
+    "cwd": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/run-cwd",
+    "exit_code": 0,
+    "log": "/home/jnhu/f2-execution/w03-gates-matrix3/tsan-n/threadpool_progress_race_test.run.log",
+    "log_sha256": "5195703d44c5c1980fc902d0c4df84acd1badff9b790bd1d92e6a07097874f70",
+    "seconds": 0.06
+  }
+]

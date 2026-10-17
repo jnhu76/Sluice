@@ -1,0 +1,43 @@
+The liveness gate (RequestCoreLive.cfg) is NOT a result of this record.
+
+The run was started 2026-10-15T17:23:30+08:00 on the frozen snapshot and
+terminated 2026-10-15T17:27 by owner instruction ("do not run TLC yet, let me
+review first"). liveness.log is therefore a faithful partial log, not a
+completed run: it must not be read as a clean pass or as evidence for L1/L5.
+
+At termination it had reported no temporal violation, but had NOT completed:
+the last recorded checkpoint was 11,737,632 distinct states of the complete
+space, with 10 incremental temporal passes done on partial spaces. No liveness
+claim may be derived from a partial exploration.
+
+To complete it, re-run the same gate on the same frozen snapshot (same jar,
+same cfg, same model file):
+
+  java -Xmx48g -cp formal/tla/tla2tools.jar tlc2.TLC -workers 16 -deadlock \
+      -config formal/tla/RequestCoreLive.cfg \
+      -metadir /home/jnhu/.cache/sluice/tla524/liveness \
+      formal/tla/RequestCore.tla
+
+The metadir was left in place (not deleted) so the run can be resumed or
+restarted; the safety gate already completed and its log/exit code stand.
+
+Addendum (same day). A second attempt at the complete runs was launched at
+18:31:50 and aborted on the same owner instruction after ~1 minute (TLC JVM pid
+64722; it had reached 1,634,014 generated / 306,411 distinct states of the
+safety gate). Its partial safety log was discarded so that the committed
+safety receipt stays the clean complete run recorded above (pid 63151, exit 0,
+48 s); the aborted attempt produced no result for either gate. No TLC process
+is running as of this record.
+
+Addendum 2 (same day, after the owner authorised the formal liveness phase).
+The gate was then taken on a hash-verified frozen snapshot and completed
+cleanly: `liveness.log` in this directory is now the COMPLETE run (pid 65752,
+2026-10-15 19:12:35 -> 19:36:56, exit 0, 24 min 20 s, L1 and L5 over the
+complete state space). The partial log described above was renamed to
+`liveness-stopped-partial.log` so that both the history and the result are
+readable side by side; nothing in either file was edited. `exit-codes.tsv` now
+records `liveness 0` for the completed run. See
+`../../resource-and-execution-manifest.md` for the method and
+`liveness-run.tsv` for the run metadata. A safety re-run from the same snapshot
+(`safety-from-snapshot.log`, exit 0, identical counters) was taken with it as
+an auxiliary check; the safety receipt of record remains `safety.log`.

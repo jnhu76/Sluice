@@ -1,0 +1,38 @@
+== F6 TLA+ re-verification at frozen master 821c489f (2026-10-14) ==
+toolchain: tla2tools 1.7.4, SHA-256 936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88 (cached jar, checksum verified before every run)
+
+== commands ==
+  java -Xmx16g -cp <jar> tlc2.TLC -workers 8 -deadlock -config formal/tla/RequestCore.cfg formal/tla/RequestCore.tla   # safety, complete
+  java -Xmx40g -cp <jar> tlc2.TLC -workers 8 -deadlock -config formal/tla/RequestCoreLive.cfg formal/tla/RequestCore.tla # liveness, detached
+  (ObserverCore / ProgressSourceSafety / ShutdownCore ran via the same invocation shape in the safety-subset task)
+
+== ObserverCore.cfg ==
+5123 states generated, 1734 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 16.
+Finished in 01s at (2026-10-14 22:27:50) — no errors
+
+== ProgressSourceSafety.cfg ==
+21784 states generated, 4783 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 18.
+Finished in 00s at (2026-10-14 22:27:51) — no errors
+
+== ShutdownCore.cfg ==
+47521 states generated, 11156 distinct states found, 0 states left on queue.
+The depth of the complete state graph search is 21.
+Finished in 01s at (2026-10-14 22:27:53) — no errors
+
+== RequestCore.cfg (safety, COMPLETE at 2026-10-14 22:59:05) ==
+Progress(52) at 2026-10-14 22:59:00: 152,240,323 states generated (16,581,580 s/min), 26,566,666 distinct states found (2,681,883 ds/min), 314,697 states left on queue.
+Model checking completed. No error has been found.
+The depth of the complete state graph search is 53.
+The average outdegree of the complete state graph is 1 (minimum is 0, the maximum 11 and the 95th percentile is 3).
+Finished in 08min 09s at (2026-10-14 22:59:05)
+
+== RequestCoreLive.cfg (liveness re-run, status at audit close 2026-10-14 23:0x) ==
+IN FLIGHT (detached, pid 1393294, log /tmp/f6-tla-rcore-live/run.log).
+Last observation:
+Progress(36) at 2026-10-14 23:02:38: 35,254,099 states generated (1,254,214 s/min), 6,541,069 distinct states found (228,337 ds/min), 962,157 states left on queue.
+Interim temporal-property checks (12 branches) completed twice with no violation; generation continues.
+Disposition: supplementary only. Closure authority for REQ-06/L1 remains the E2-dated receipt
+(RequestCoreLive ~26.6M distinct states, 171-run gate) under F2's historical-reuse ruling (finding F6-F04).
+The complete safety graph over the same constants re-derived clean: see RequestCore.cfg block above.

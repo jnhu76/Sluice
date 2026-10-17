@@ -1,0 +1,129 @@
+# runner validation run (post-review, final scripts)
+command: bench/run_matrix.sh /tmp/g0-val 2 7 all|diagnostics
+date: 2026-10-15T19:27:40+08:00
+# g0 matrix run provenance (stage=all suffix=)
+started=2026-10-15T19:27:40+08:00
+git_head=6929316661943be3a036e2522cc7ff1fb9985f1e
+git_status_dirty=10
+warmup=2 measured=7 stage=all suffix=
+host_manifest=host-manifest.txt
+binary noring bench_w01_direct sha256=ab2314f986b5a37cfe3e6fe8017c38ee42cd581aa3a1f3f3de35e170c7da67a4
+binary noring bench_w02_pipeline sha256=c1923010df7b66b84350fcad0d091f3afa8914ba7ff32119e3f96f3c2bd2f97b
+binary noring bench_w03_external_loop sha256=3bfe189a3d473d681945bb8c78d2335887d9414c7c53362dffe259549843f0d5
+binary ring bench_w01_direct sha256=ab2314f986b5a37cfe3e6fe8017c38ee42cd581aa3a1f3f3de35e170c7da67a4
+binary ring bench_w02_pipeline sha256=60225bc75d13860e90940664dbae7d874da1b545909e37834941b81568f9cd90
+binary ring bench_w03_external_loop sha256=38b730f791036403ad0f0bc0ed335a7f423be1e712778b6d6790c246f522d4a8
+# load_before
+ 19:27:40 up  3:23,  1 user,  load average: 1.40, 1.43, 0.76
+                 total        used        free      shared  buff/cache   available
+  Mem:     16772689920  3514388480 12403625984  1412730880  2491588608 13258301440
+  Swap:     8589934592           0  8589934592
+== w01 direct :: noring/bench_w01_direct -> w01 (check=measured)
+2026-10-15T19:27:40+08:00
+exit=0 records=145
+check_run: OK w01.jsonl stage=measured cases=15 records=145 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+== w02 pipeline :: ring/bench_w02_pipeline -> w02 (check=measured)
+2026-10-15T19:28:19+08:00
+exit=0 records=145
+check_run: OK w02.jsonl stage=measured cases=16 records=145 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+== w03 external loop :: ring/bench_w03_external_loop -> w03 (check=measured)
+2026-10-15T19:29:42+08:00
+exit=0 records=55
+check_run: OK w03.jsonl stage=measured cases=6 records=55 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+== w02 no-ring profile :: noring/bench_w02_pipeline -> w02-noring-notrun (check=notrun)
+2026-10-15T19:30:18+08:00
+exit=1 records=17
+check_run: OK w02-noring-notrun.jsonl stage=notrun cases=16 records=17 warmup_per_case=0 measured_per_case=1 not_run=6 exit=1
+== w03 no-ring profile :: noring/bench_w03_external_loop -> w03-noring-notrun (check=notrun)
+2026-10-15T19:30:24+08:00
+exit=1 records=7
+check_run: OK w03-noring-notrun.jsonl stage=notrun cases=6 records=7 warmup_per_case=0 measured_per_case=1 not_run=3 exit=1
+# load_after
+ 19:30:27 up  3:26,  1 user,  load average: 2.28, 1.80, 1.01
+                 total        used        free      shared  buff/cache   available
+  Mem:     16772689920  3502366720 12404039680  1413337088  2503892992 13270323200
+  Swap:     8589934592           0  8589934592
+finished=2026-10-15T19:30:27+08:00
+PRIMARY_OK
+# g0 matrix run provenance (stage=diagnostics suffix=)
+started=2026-10-15T19:30:27+08:00
+git_head=6929316661943be3a036e2522cc7ff1fb9985f1e
+git_status_dirty=13
+warmup=2 measured=7 stage=diagnostics suffix=
+host_manifest=host-manifest.txt
+binary noring bench_w01_direct sha256=ab2314f986b5a37cfe3e6fe8017c38ee42cd581aa3a1f3f3de35e170c7da67a4
+binary noring bench_w02_pipeline sha256=c1923010df7b66b84350fcad0d091f3afa8914ba7ff32119e3f96f3c2bd2f97b
+binary noring bench_w03_external_loop sha256=3bfe189a3d473d681945bb8c78d2335887d9414c7c53362dffe259549843f0d5
+binary ring bench_w01_direct sha256=ab2314f986b5a37cfe3e6fe8017c38ee42cd581aa3a1f3f3de35e170c7da67a4
+binary ring bench_w02_pipeline sha256=60225bc75d13860e90940664dbae7d874da1b545909e37834941b81568f9cd90
+binary ring bench_w03_external_loop sha256=38b730f791036403ad0f0bc0ed335a7f423be1e712778b6d6790c246f522d4a8
+# load_before
+ 19:30:27 up  3:26,  1 user,  load average: 2.28, 1.80, 1.01
+                 total        used        free      shared  buff/cache   available
+  Mem:     16772689920  3502116864 12404289536  1413337088  2503892992 13270573056
+  Swap:     8589934592           0  8589934592
+== w02 diagnostics :: ring/bench_w02_pipeline -> w02-diagnostics (check=diagnostics)
+2026-10-15T19:30:27+08:00
+exit=0 records=172
+check_run: OK w02-diagnostics.jsonl stage=diagnostics cases=19 records=172 warmup_per_case=2 measured_per_case=7 not_run=0 exit=0
+# load_after
+ 19:32:04 up  3:27,  1 user,  load average: 2.69, 2.05, 1.18
+                 total        used        free      shared  buff/cache   available
+  Mem:     16772689920  3499573248 12406009856  1413562368  2504949760 13273116672
+  Swap:     8589934592           0  8589934592
+finished=2026-10-15T19:32:04+08:00
+DIAGNOSTICS_OK
+
+# medians recomputed from both runs with the same estimator (median of the
+# measured repetitions, ops/s from each record's own ops/wall_s)
+# CASE_ID                                            frozen   validation    delta
+# W01-file_info                                   2,074,765    2,031,744    -2.1%
+# W01-open_close                                    367,290      366,734    -0.2%
+# W01-read_at-1m-seq                                  9,000        7,434   -17.4%
+# W01-read_at-1m-seq-cold                               420          421    +0.1%
+# W01-read_at-4k-rand                               999,684    1,027,014    +2.7%
+# W01-read_at-4k-seq                              1,021,337    1,101,740    +7.9%
+# W01-read_at-64k-seq                               119,611      107,471   -10.1%
+# W01-read_at-64k-seq-cold                           13,132       12,848    -2.2%
+# W01-read_exact_at-4k                            1,520,845    1,428,017    -6.1%
+# W01-sync_all-4k                                 1,084,822    1,075,656    -0.8%
+# W01-sync_all-4k-disk                                1,081        1,054    -2.5%
+# W01-sync_data-4k                                1,075,240    1,044,965    -2.8%
+# W01-sync_data-4k-disk                               1,392        1,433    +3.0%
+# W01-write_all_at-4k                             1,054,908      981,644    -6.9%
+# W01-write_at-4k-seq                               861,949      912,826    +5.9%
+# W02-threadpool-4k-d1-w1                            26,223       26,969    +2.8%
+# W02-threadpool-4k-d16-w1                          220,366      225,015    +2.1%
+# W02-threadpool-4k-d16-w4                          111,757      111,607    -0.1%
+# W02-threadpool-4k-d16-w4-anyready                 109,212      111,382    +2.0%
+# W02-threadpool-4k-d16-w4-core64                   106,514      108,722    +2.1%
+# W02-threadpool-4k-d16-w4-saturate                 109,527      109,012    -0.5%
+# W02-threadpool-4k-d16-w4-scope64                  113,007      111,294    -1.5%
+# W02-threadpool-4k-d16-w8                          108,043      106,084    -1.8%
+# W02-threadpool-4k-d4-w4                           106,679      105,836    -0.8%
+# W02-threadpool-4k-d4-w4-scope64                   106,660      105,574    -1.0%
+# W02-threadpool-4k-d64-w4                          138,511      140,814    +1.7%
+# W02-threadpool-4k-d64-w4-anyready                 135,964      139,433    +2.6%
+# W02-threadpool-64k-d16-w4                          54,150       48,952    -9.6%
+# W02-uring-4k-d1                                    26,644       27,138    +1.9%
+# W02-uring-4k-d16                                  287,764      299,441    +4.1%
+# W02-uring-4k-d16-saturate                         274,404      274,911    +0.2%
+# W02-uring-4k-d4                                   166,671      161,600    -3.0%
+# W02-uring-4k-d64                                  291,082      253,313   -13.0%
+# W02-uring-64k-d16                                  62,951       68,826    +9.3%
+# W03-threadpool-4k-d16-w4                           95,938       97,243    +1.4%
+# W03-threadpool-4k-d4-w4                            53,065       52,846    -0.4%
+# W03-threadpool-4k-d64-w4                          107,785      111,535    +3.5%
+# W03-uring-4k-d16                                  143,620      144,737    +0.8%
+# W03-uring-4k-d4                                    76,589       79,126    +3.3%
+# W03-uring-4k-d64                                  130,976      132,105    +0.9%
+# cases in the frozen run but not in the validation run: none
+# largest deviation: W01-read_at-1m-seq -17.4%
+# interpretation: a same-day re-run of the frozen matrix on the same host without
+# CPU pinning, not a controlled A/B. 31 of 40 cases agree within +/-5% and 37
+# within +/-10% (median absolute deviation 2.1%); the exceptions are the
+# large-block and deep-queue cases that also carry the widest frozen spread
+# (1 MiB read -17.4%, uring d64 -13.0%, both 64 KiB cases ~10%). This run exists
+# to show the runner accepts a full real matrix with its checks armed; it does not
+# replace, re-baseline or invalidate raw/, whose values and spread stand as
+# recorded.

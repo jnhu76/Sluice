@@ -1,0 +1,54 @@
+# PR B head capture (7d565fc1):
+==86099==ERROR: LeakSanitizer: detected memory leaks
+Direct leak of 112 byte(s) in 1 object(s) allocated from:
+    #2 0x00000050a115 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:1009:18
+    #13 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #14 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #3 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #15 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #7 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #13 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #6 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #6 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #13 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #13 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #3 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #7 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #15 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #15 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #7 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #7 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #12 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+    #13 0x000000509775 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:985:27
+
+# Baseline 5c1b14db capture (worktree run, same scenario/site):
+==62887==ERROR: LeakSanitizer: detected memory leaks
+Direct leak of 96 byte(s) in 1 object(s) allocated from:
+    #2 0x00000050a067 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:1008:18
+    #13 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #13 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #3 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #15 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #7 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #13 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #5 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #5 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #13 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #13 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #3 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #7 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #15 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #15 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #7 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #7 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #11 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+    #13 0x0000005096b5 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) BASELINE_TREE/tests/shutdown_lifecycle_test.cpp:984:27
+
+# Review-fix head capture (observer-retirement protocol commit b3de9262 + P2 commits, asanubsan-y cell):
+==112584==ERROR: LeakSanitizer: detected memory leaks
+Direct leak of 112 byte(s) in 1 object(s) allocated from:
+    #2 0x00000050a115 in (anonymous namespace)::poison_with_in_flight_cqe((anonymous namespace)::Tracker&) /home/jnhu/Source/Sluice/tests/shutdown_lifecycle_test.cpp:1009:18
+Indirect leak of 1024 byte(s) in 1 object(s) allocated via (anonymous namespace)::PoisonedState (shutdown_lifecycle_test.cpp:1009); same scenario, same allocation site and same byte counts as the 7d565fc1 capture above.
+
+# Round-2 matrix re-run (after the acff36ab contraction): asanubsan-y again fails only
+# shutdown_lifecycle_uring_test at the same poison_with_in_flight_cqe site; unchanged.

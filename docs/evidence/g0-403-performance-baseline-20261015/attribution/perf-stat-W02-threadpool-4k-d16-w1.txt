@@ -1,0 +1,19 @@
+# started on Thu Oct 15 17:57:54 2026
+
+
+ Performance counter stats for 'docs/evidence/g0-403-performance-baseline-20261015/attribution/profiling-build/bench_w02_pipeline':
+
+         225102467      cycles:u                                                              
+         300216345      instructions:u                   #    1.33  insn per cycle            
+                 0      context-switches:u                                                    
+                 0      cpu-migrations:u                                                      
+           3737194      cache-misses:u                                                        
+          64421511      branches:u                                                            
+           1600909      branch-misses:u                  #    2.49% of all branches           
+
+       0.332403650 seconds time elapsed
+
+       0.072754000 seconds user
+       0.342343000 seconds sys
+
+

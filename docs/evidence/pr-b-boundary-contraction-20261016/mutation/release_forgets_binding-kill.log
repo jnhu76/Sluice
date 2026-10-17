@@ -1,0 +1,11 @@
+# Config: gcc release profile (xmake -m release --liburing=y), direct binary invocation
+#   xmake build -y public_request_mut_release_forgets_binding
+#   ./build/linux/x86_64/release/public_request_mut_release_forgets_binding
+# Recorded at the review-fix head; the mutant now injects in
+# detail::RequestBridge::discard (src/async/detail/request_core.cpp).
+
+FAIL [discard_releases_the_published_binding] discarding released the binding and reclaimed
+FAIL [discard_releases_the_published_binding] the discarded slot admits new work
+sluice::async::AsyncIoContext: relocating or destroying a context with outstanding public bindings (live Requests) is a contract violation
+terminate called without an active exception
+timeout: the monitored command dumped core
