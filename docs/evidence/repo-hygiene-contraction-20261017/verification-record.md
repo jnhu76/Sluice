@@ -70,8 +70,8 @@ bootstrap re-verifies the pinned jar checksum.
 |---|---|---|
 | Verifier self-test | `python3 scripts/test_verify_v2_package.py` | Ran 14 tests, OK, exit 0 |
 | Comment-guard self-test + scan | `python3 scripts/test_check_cpp_comment_authority.py && python3 scripts/check_cpp_comment_authority.py .` | OK, exit 0 |
-| Clean-room noliburing | `python3 scripts/verify_v2_package.py --manifest-out <fresh>` | 47 gates: 46 PASS + V2_B_PROVENANCE_RECORDED FAILING ONLY on a dirty worktree mid-round; re-run on the clean head recorded below |
-| Clean-room liburing | `python3 scripts/verify_v2_package.py --liburing --uring-prefix <prefix> --manifest-out <fresh>` | recorded below |
+| Clean-room noliburing | `python3 scripts/verify_v2_package.py --manifest-out <fresh>` | PASS — all gates, exit 0, re-run on the committed clean head `4d80cdd3` (the mid-round 46/47 run failed only the dirty-worktree provenance gate) |
+| Clean-room liburing | `python3 scripts/verify_v2_package.py --liburing --uring-prefix /usr --manifest-out <fresh>` | PASS — all gates, exit 0, same clean head |
 
 ## Naming and reference integrity
 
