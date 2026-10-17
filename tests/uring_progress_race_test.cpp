@@ -74,6 +74,21 @@ void resume_gate(PauseGate& gate) noexcept {
     gate.resume.notify_all();
 }
 
+// A failure exit taken while the owner thread is frozen at a pause gate must
+// release the park, drop the gate registrations and join before the captured
+// stack unwinds; an unreleased joinable owner terminates the process instead
+// of reporting the named oracle failure.
+void release_parked_owner(AsyncIoContext& ctx, PauseGate& gate, std::thread& owner,
+                          std::atomic<int>* prepark = nullptr) {
+    detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
+    resume_gate(gate);
+    if (owner.joinable())
+        owner.join();
+    if (prepark != nullptr)
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
+}
+
 bool wait_counter_reaches(const std::atomic<int>& v, int expected) {
     for (int i = 0; i < 20000000 && v.load(std::memory_order_acquire) < expected; ++i)
         std::this_thread::yield();
@@ -226,8 +241,10 @@ bool k1_k2_cqe_before_drain_recovered_by_final_probe() {
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
     read.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     resume_gate(gate);
     owner.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
@@ -266,13 +283,19 @@ bool k3_notification_without_epoch_mutation_wakes_and_reparks() {
 
     const std::uint64_t one = 1;
     const ssize_t n = ::write(interest.fd, &one, sizeof(one));
-    if (n != static_cast<ssize_t>(sizeof(one)))
+    if (n != static_cast<ssize_t>(sizeof(one))) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
-    if (!notification_fd_readable(interest.fd))
+    }
+    if (!notification_fd_readable(interest.fd)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     resume_gate(gate);
-    if (!wait_counter_reaches(prepark, 2))
+    if (!wait_counter_reaches(prepark, 2)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     const bool no_fabrication = !read.request.ready();
 
     read.release_bytes(1);
@@ -311,8 +334,10 @@ bool k5_k6_cqe_after_final_recheck_wakes_poll() {
     detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     read.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     resume_gate(gate);
     owner.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
@@ -343,8 +368,12 @@ bool k7_cqe_while_blocked_in_poll_wakes_owner() {
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
-    if (!wait_counter_reaches(prepark, 1))
+    if (!wait_counter_reaches(prepark, 1)) {
+        read.release_bytes(1);
+        owner.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         return false;
+    }
 
     read.release_bytes(1);
     owner.join();
@@ -386,8 +415,10 @@ bool k8_multiple_cqes_coalesce_into_one_wake() {
 
     for (auto& r : reads)
         r.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     resume_gate(gate);
     owner.join();
@@ -422,15 +453,27 @@ bool k9_spurious_notification_zero_cqes_is_harmless() {
 
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
-    if (!wait_counter_reaches(prepark, 1))
+    if (!wait_counter_reaches(prepark, 1)) {
+        read.release_bytes(1);
+        owner.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         return false;
+    }
 
     const std::uint64_t one = 1;
     const ssize_t n = ::write(interest.fd, &one, sizeof(one));
-    if (n != static_cast<ssize_t>(sizeof(one)))
+    if (n != static_cast<ssize_t>(sizeof(one))) {
+        read.release_bytes(1);
+        owner.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         return false;
-    if (!wait_counter_reaches(prepark, 2))
+    }
+    if (!wait_counter_reaches(prepark, 2)) {
+        read.release_bytes(1);
+        owner.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         return false;
+    }
     const bool no_fabrication = !read.request.ready();
 
     read.release_bytes(1);
@@ -471,8 +514,10 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
 
     ctx.interrupt_progress_waiters();
     read.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     resume_gate(gate);
     owner.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
@@ -517,8 +562,10 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
 
     ctx.interrupt_progress_waiters();
     read.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     resume_gate(gate);
     owner.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
@@ -563,8 +610,10 @@ bool k11a_saturated_eventfd_with_real_cqe_before_drain() {
 
     detail::TestAccess::context_saturate_progress_notification(ctx);
     read.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     resume_gate(gate);
     owner.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
@@ -602,8 +651,10 @@ bool k11b_drained_saturation_then_park_still_wakes_on_cqe() {
 
     detail::TestAccess::context_saturate_progress_notification(ctx);
     resume_gate(gate);
-    if (!wait_counter_reaches(prepark, 2))
+    if (!wait_counter_reaches(prepark, 2)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
     const bool drained_before_release = !notification_fd_readable(interest.fd);
 
     read.release_bytes(1);
@@ -642,8 +693,12 @@ bool u1_accepted_true_immediate_false_reports_and_parks() {
     detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
     std::optional<AsyncIoContext::ProgressWaitOutcome> result;
     std::thread owner([&] { DriverClaim claim{ctx}; result = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
-    if (!wait_counter_reaches(prepark, 1))
+    if (!wait_counter_reaches(prepark, 1)) {
+        read.release_bytes(1);
+        owner.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         return false;
+    }
 
     read.release_bytes(1);
     owner.join();
@@ -681,8 +736,10 @@ bool k13_cq_overflow_completions_are_not_stranded() {
 
     for (auto& r : reads)
         r.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner);
         return false;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     resume_gate(gate);
     owner.join();
@@ -747,8 +804,10 @@ bool k14_peer_drive_while_owner_parked_is_rejected_and_owner_recovers_cq() {
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
     read.release_bytes(1);
-    if (!wait_notification_readable(interest))
+    if (!wait_notification_readable(interest)) {
+        release_parked_owner(ctx, gate, owner, &prepark);
         return false;
+    }
 
     // A peer drive while the owner holds the domain is rejected, not
     // serialized; the kernel completion is recovered by the owner's own
@@ -795,8 +854,13 @@ bool poison_transition_wakes_parked_owner() {
 
     TimedWait driver;
     std::thread owner([&] { DriverClaim claim{ctx}; driver = wait_one_timed(ctx, std::chrono::milliseconds{2000}); });
-    if (!wait_counter_reaches(prepark, 1))
+    if (!wait_counter_reaches(prepark, 1)) {
+        for (auto& r : blocked)
+            r.release_bytes(1);
+        owner.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         return false;
+    }
 
     std::vector<std::byte> sink(4, std::byte{0});
     state.fail_next.store(true, std::memory_order_release);
@@ -928,8 +992,10 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
     drain.track(first.request);
     drain.track_pipe(second);
     drain.track(second.request);
-    if (!second.arm(ctx, 4))
+    if (!second.arm(ctx, 4)) {
+        release_parked_owner(ctx, gate, owner);
         return false;
+    }
     const bool peer_acceptance_entered_kernel = backend_ptr->sq_ready_for_test() == 0;
 
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
@@ -1568,13 +1634,19 @@ bool cancel_race_with_parked_owner_settles_and_leaves_the_fd_quiescent() {
     detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     const auto disposition = read.request.cancel();
-    if (!disposition.has_value() || disposition.value() != CancelDisposition::requested)
-        return false;
+    const bool cancel_requested =
+        disposition.has_value() && disposition.value() == CancelDisposition::requested;
     const bool no_fabrication_at_intent = !read.request.ready();
 
     resume_gate(gate);
     owner.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
+
+    if (!cancel_requested) {
+        std::fprintf(stderr, "cancel-race parked owner: cancel disposition=%d, expected requested\n",
+                     disposition.has_value() ? static_cast<int>(disposition.value()) : -1);
+        return false;
+    }
 
     const auto observation = read.request.try_result();
     const bool physical_cancel_terminal =
