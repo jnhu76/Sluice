@@ -1025,20 +1025,48 @@ std::unique_ptr<PoisonedState> poison_with_in_flight_cqe(Tracker& t) {
     return state;
 }
 
-bool poison_with_in_flight_cqe_reports_unresolved_health(Tracker& t) {
-    auto state = poison_with_in_flight_cqe(t);
+// The unresolved state cannot be destroyed (the in-flight borrow keeps its
+// public binding), so the witness runs in a forked child that ends through
+// _Exit: the parent never holds the violating object, and the child's exit
+// code — not a deliberate leak in a returning process — carries the verdict.
+void poison_unresolved_health_witness() {
+    Tracker witness{"poison unresolved health"};
+    auto state = poison_with_in_flight_cqe(witness);
     if (state == nullptr)
-        return true;
+        std::_Exit(2);
 
     const auto closed = state->ctx->shutdown(ShutdownPolicy::drain);
-    t.check(closed.has_value() && closed.value() == ShutdownOutcome::health_unresolved,
+    witness.check(closed.has_value() && closed.value() == ShutdownOutcome::health_unresolved,
+                  "the stuck in-flight borrow reports unresolved health");
+    witness.check(!state->ctx->execution_closed(),
+                  "an unresolved health outcome keeps execution open");
+    witness.check(state->poisoned.take_result().readiness == RequestReadiness::ready,
+                  "the poison terminal stays consumable in the unsettled context");
+    std::_Exit(witness.failures == 0 ? 0 : 1);
+}
+
+bool poison_with_in_flight_cqe_reports_unresolved_health(Tracker& t) {
+    const pid_t pid = ::fork();
+    if (pid < 0) {
+        t.check(false, "the unresolved-health witness forks");
+        return true;
+    }
+    if (pid == 0) {
+        ::alarm(30);
+        poison_unresolved_health_witness();
+        std::_Exit(2);
+    }
+    int status = 0;
+    if (::waitpid(pid, &status, 0) != pid) {
+        t.check(false, "the unresolved-health witness is reaped");
+        return true;
+    }
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 2) {
+        t.skip("io_uring is unavailable on this host");
+        return true;
+    }
+    t.check(WIFEXITED(status) && WEXITSTATUS(status) == 0,
             "the stuck in-flight borrow reports unresolved health");
-    t.check(!state->ctx->execution_closed(),
-            "an unresolved health outcome keeps execution open");
-    t.check(state->poisoned.take_result().readiness == RequestReadiness::ready,
-            "the poison terminal stays consumable in the unsettled context");
-    // Deliberately leaked: destruction of this state is a contract violation.
-    (void)state.release();
     return true;
 }
 
