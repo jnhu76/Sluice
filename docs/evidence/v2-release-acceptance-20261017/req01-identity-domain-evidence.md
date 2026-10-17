@@ -7,11 +7,17 @@ enforce the domain exhaustively; io_uring only).
 
 ## Implementation facts under proof (unchanged by this campaign)
 
-- Context identity: `src/async/detail/context_identity.cpp` — a global
-  monotone cursor; identities are claimed by CAS against the live context
-  registry; `0` is never a live identity; the cursor yields `UINT64_MAX`
-  once and then latches to `0` (exhausted), so no identity value is ever
-  minted twice.
+- Context identity: `src/async/detail/context_identity.cpp` — the whole
+  domain state is one global atomic cursor (`g_context_identity_cursor`,
+  initialized to `1`); `claim_context_identity` hands out the current value
+  by CAS (`compare_exchange_weak` increment, retrying on contention), so
+  every value in `1..UINT64_MAX` is minted at most once. `0` is never a
+  live identity: it is the unadopted slot-table value and the sticky
+  exhausted marker (`kContextIdentityExhausted`). At `UINT64_MAX` the
+  winning CAS latches the cursor to `0` while yielding the last value once,
+  so a concurrent or later claim observes the marker instead of a wrapped
+  counter; `allocate_context_identity` then fails fast
+  (`context_identity_exhausted_fail_fast`).
 - Slot generation: `src/async/detail/request_core.cpp` — `release_slot_`
   retires the slot at generation max; `reserve` reports `exhausted` only
   when every slot is permanently retired; reserve/accept is serialized by

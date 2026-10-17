@@ -19,10 +19,13 @@ Commits of this campaign, in order:
 6. `72acc209` — review fixes: witness exit-code channels, heap-core
    address-reuse observation, uring retired-slot assertion parity.
 7. Evidence, ledger and record commits (this directory).
+8. Post-review revision: the failure-path release in the uring race
+   oracles (`9b7bfa63`) and the evidence-accuracy/record update (this
+   commit), recorded in `post-review-revision/`.
 
 ## 7. Independent review record
 
-Three independent reviews were run against the exact commits; all
+Four independent reviews were run against the exact commits; all
 P0/P1 findings were fixed directly and re-verified:
 
 - **Lifetime & Request Identity** (RG1 `ff7d6dde`, RG4 `a0874ae2`):
@@ -50,6 +53,15 @@ P0/P1 findings were fixed directly and re-verified:
   TLA detail attribution, the W-02/W-03 label, the reviewer-2 figure
   attribution, and CHANGELOG/doc nits — all in the final review-fix
   commit.
+- **Pre-merge re-review** (whole PR, post-publication): REVISE_BEFORE_MERGE,
+  P0 = 0; two P1 evidence-accuracy findings and one P2 test failure-path
+  finding. Fixed in the revision this record's §8 covers: the SEM-06
+  ledger row's discharged-but-rewritten G10 gap, the identity evidence
+  doc's non-existent "live context registry" claim (replaced with the real
+  global-cursor mechanism), and the cancel-race oracle's unreleased frozen
+  owner on an unexpected disposition (generalized to every live-owner
+  failure exit in the file). The reviewer's commit count (9 on the branch)
+  is the correct one.
 
 Per-gate records in this directory:
 
@@ -204,3 +216,19 @@ table updated, W-03 release-evidence note discharged by the matrix cells.
 - The RG5 mutant kill currently lives in the registered mutant target
   (never a regular test); it must be re-run whenever the probe or its
   oracle changes (VERIFY-06 obligation).
+
+## 8. Post-review revision
+
+The pre-merge re-review's two P1 evidence-accuracy findings (the SEM-06
+row's stale discharged gap; the identity doc's non-existent registry claim)
+and its P2 test failure-path finding (an unreleased frozen owner on the
+cancel-race oracle's unexpected-disposition exit, generalized to every
+live-owner failure exit in `tests/uring_progress_race_test.cpp`) are fixed
+and re-verified in `post-review-revision/`. That directory records the
+finding-to-fix disposition and the re-runs at the revision commit: debug-y
+and release-y suites 74/74 passed, the race binary 23/23 across five
+repeats, and the registered final-probe mutant still RED on
+`k1_k2_cqe_before_drain_recovered_by_final_probe`. The revision's only
+executable delta after the matrix content head `72acc209` is that test
+file's failure-path release; no production code or configuration changed,
+so the matrix, package, TLA and mutation records above stand as recorded.
