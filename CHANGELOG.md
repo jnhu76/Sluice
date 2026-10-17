@@ -15,6 +15,16 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
+### Changed
+
+- **Repository hygiene contraction** — stage-labeled test/target/mutant
+  names renamed to behavior-describing names; closed-campaign verification
+  scripts, the retired formal corpora and dated-only evidence records moved
+  to Git history; the dead lefthook pre-push configuration and the closed
+  M-R disposition guard workflow removed. No product behavior, public API
+  or supported-surface change; details in
+  `docs/evidence/repo-hygiene-contraction-20261017/`.
+
 ### Fixed
 
 - **TSan data race in the timer test-observation seam (#229, PR #231)** —
