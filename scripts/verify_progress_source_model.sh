@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# C2-E (Issue #397) TLA+ verification gate for the frozen A-D progress
-# protocol, re-based on the #444 production corrective pass (the
-# transition-bound close_admission signal): formal/tla/ProgressSource.tla.
+# TLA+ verification gate for ProgressSource (formal/tla/ProgressSource.tla),
+# the pollable no-lost-wake progress model behind PROG-02/PROG-03. The
+# configuration catalogue below is the recorded C2-E campaign verdict set,
+# re-based on the #444 production corrective pass (the transition-bound
+# close_admission signal). Re-run it whenever the model or its mirrored C++
+# transitions change (ledger G8, VERIFY-06).
 #
 #   Campaign A -- safety / no-lost-wake:
 #     1. ProgressSourceSafety.cfg must complete cleanly under TypeOK,
@@ -32,7 +35,7 @@
 #        certificate: the representable internal state stays locally
 #        unsafe, while the corrected production transition system cannot
 #        reach it (see ReachClose* below and the C2-E records in
-#        docs/roadmap/v1-conformance.md). A clean run here means the
+#        the dated C2-E campaign records (Git history)). A clean run here means the
 #        boundary certificate no longer discriminates and the record must
 #        be re-anchored.
 #   Campaign C -- liveness (VERIFY-03 conditional):
@@ -43,7 +46,7 @@
 #    11-14. CertSticky / CertSat / CertSpent / CertHost must each be
 #        violated (house must-be-reachable pattern).
 #   Campaign R -- post-#444 reachability re-adjudication (see the C2-E
-#   re-closure record in docs/roadmap/v1-conformance.md):
+#   re-closure record in the dated C2-E campaign records (Git history)):
 #    15. ReachClose (normal Init, #444 semantics: repeated close = no
 #        signal) must complete CLEANLY: normal repeated close cannot pump
 #        the progress generation toward the absorbing pair.
@@ -161,7 +164,7 @@ run_clean Host
 run_clean ExhNear
 run_clean ExhTermControl
 run_violate ExhTermProgress InvSafePark \
-    "LOCAL-SAFETY BOUNDARY CERTIFICATE: absorbing progress pair {Max,Max} + L4a drain consumes fd freshness -> park past unadvertised obligation (production cannot reach this state; see ReachClose* and docs/roadmap/v1-conformance.md C2-E)"
+    "LOCAL-SAFETY BOUNDARY CERTIFICATE: absorbing progress pair {Max,Max} + L4a drain consumes fd freshness -> park past unadvertised obligation (production cannot reach this state; see ReachClose* and the dated C2-E campaign records)"
 run_clean Liveness
 run_violate CertSticky CertStickyControl "S4 mandated sticky scenario reachable"
 run_violate CertSat CertSatFreshness "V24 first-stage saturation freshness reachable"
