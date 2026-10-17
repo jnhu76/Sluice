@@ -279,7 +279,7 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
 }
 
 bool production_request_is_request_core_owned(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b core owned\n");
+    auto file = open_temp_file(t, "sluice core owned\n");
     if (!file.has_value())
         return false;
 
@@ -519,7 +519,7 @@ bool uring_context_carries_the_context_identity(Tracker& t) {
     t.check(core->capacity() == raw->slot_capacity(),
             "the core slot budget is the backend slot table capacity");
 
-    auto file = open_temp_file(t, "sluice b1c uring ownership\n");
+    auto file = open_temp_file(t, "sluice uring core ownership\n");
     if (!file.has_value())
         return false;
 

@@ -1,15 +1,16 @@
-// E1 cross-backend File-contract conformance: the same semantic claims must
+// Cross-backend File-contract conformance: the same semantic claims must
 // hold for the ThreadPool profile and the io_uring profile. The file is
-// compiled twice; SLUICE_E1_CONFORMANCE_URING selects the io_uring variant.
-// The uring variant also links the ThreadPool backend so the metadata records
-// of both profiles can be compared against each other and against the kernel.
+// compiled twice; SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING selects the
+// io_uring variant. The uring variant also links the ThreadPool backend so
+// the metadata records of both profiles can be compared against each other
+// and against the kernel.
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/async/detail/threadpool_backend.hpp>
-#if defined(SLUICE_E1_CONFORMANCE_URING)
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
 #include <sluice/async/detail/uring_backend.hpp>
 #endif
 #include <sluice/effect.hpp>
@@ -33,7 +34,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#if defined(SLUICE_E1_CONFORMANCE_URING)
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
 #ifndef SLUICE_HAS_LIBURING
 #error "the uring conformance variant must receive SLUICE_HAS_LIBURING"
 #endif
@@ -54,7 +55,7 @@ using sluice::async::detail::CoreSnapshot;
 using sluice::async::detail::PublicCancel;
 using sluice::async::detail::RequestCore;
 
-#if defined(SLUICE_E1_CONFORMANCE_URING)
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
 constexpr std::uint64_t kControlTag = std::uint64_t{1} << 63u;
 #endif
 constexpr std::uint64_t kUnrepresentableOffset = std::numeric_limits<std::uint64_t>::max();
@@ -72,7 +73,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_e1_conformance_XXXXXX";
+    char path[] = "/tmp/sluice_backend_contract_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -104,7 +105,7 @@ Fixture make_fixture(const std::string& content) {
     return Fixture{fd};
 }
 
-#if defined(SLUICE_E1_CONFORMANCE_URING)
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
 using Backend = UringAsyncBackend;
 
 std::unique_ptr<Backend> make_backend(std::size_t capacity) {
@@ -171,7 +172,7 @@ template <class T> Request<T>& req(Result<Request<T>>& submitted) {
 }
 
 bool read_reports_confirmed_counts_and_effect(Tracker& t) {
-    const std::string content = "sluice e1 read conformance body";
+    const std::string content = "sluice backend read conformance body";
     Fixture fix = make_fixture(content);
     if (!fix.ok()) {
         t.check(false, "fixture created");
@@ -244,7 +245,7 @@ bool write_sync_and_persistence_agree(Tracker& t) {
     auto backend = make_backend(4);
     AsyncIoContext ctx = detail::make_context(std::move(backend));
 
-    const std::string payload = "e1 write body\n";
+    const std::string payload = "file write body\n";
     std::vector<std::byte> bytes(16);
     std::memcpy(bytes.data(), payload.data(), payload.size());
     auto written = ctx.submit_write(
@@ -290,7 +291,7 @@ bool write_sync_and_persistence_agree(Tracker& t) {
 }
 
 bool file_info_and_size_match_the_kernel_record(Tracker& t) {
-    const std::string content = "sluice e1 metadata conformance";
+    const std::string content = "sluice backend metadata conformance";
     const std::string path = make_temp_file(content);
     if (path.empty()) {
         t.check(false, "fixture created");
@@ -386,7 +387,7 @@ bool closed_file_rejects_every_operation_before_admission(Tracker& t) {
 }
 
 bool semantic_rejections_precede_admission(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 rejection conformance");
+    Fixture fix = make_fixture("sluice backend rejection conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -427,7 +428,7 @@ bool semantic_rejections_precede_admission(Tracker& t) {
 
 bool setup_failures_are_explicit(Tracker& t) {
     bool threw = false;
-#if !defined(SLUICE_E1_CONFORMANCE_URING)
+#if !defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
     try {
         Backend broken(ThreadPoolConfig{0, 1});
         (void)broken;
@@ -437,7 +438,7 @@ bool setup_failures_are_explicit(Tracker& t) {
     t.check(threw, "a zero-capacity profile refuses construction");
 #endif
 
-#if defined(SLUICE_E1_CONFORMANCE_URING)
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
     UringAsyncBackend::set_injected_statx_probe_failure(true);
     threw = false;
     try {
@@ -480,7 +481,7 @@ bool setup_failures_are_explicit(Tracker& t) {
 }
 
 bool accepted_runtime_failure_converges_with_unknown_effect(Tracker& t) {
-    const std::string path = make_temp_file("sluice e1 v15 conformance");
+    const std::string path = make_temp_file("sluice backend v15 conformance");
     if (path.empty()) {
         t.check(false, "fixture created");
         return false;
@@ -517,7 +518,7 @@ bool accepted_runtime_failure_converges_with_unknown_effect(Tracker& t) {
 }
 
 bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 pre-execution cancel conformance");
+    Fixture fix = make_fixture("sluice backend pre-execution cancel conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -583,14 +584,14 @@ bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
 }
 
 bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 running cancel conformance");
+    Fixture fix = make_fixture("sluice backend running cancel conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
     }
 
     std::vector<std::byte> buffer(8, std::byte{0});
-#if !defined(SLUICE_E1_CONFORMANCE_URING)
+#if !defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
     {
         Backend::WorkerClaimedPauseGate gate;
         auto backend = make_backend(4);
@@ -672,14 +673,14 @@ bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
         t.check(core_is_idle(core.snapshot()), "the running cancel leaves no core residue");
         t.check(backend_quiescent(*raw), "the ring holds no live cookies");
     }
-#endif  // SLUICE_E1_CONFORMANCE_URING
+#endif  // SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING
     return true;
 }
 
-#if !defined(SLUICE_E1_CONFORMANCE_URING)
+#if !defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
 
 bool success_wins_over_a_recorded_cancel_intent(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 v14 success conformance");
+    Fixture fix = make_fixture("sluice backend v14 success conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -733,7 +734,7 @@ bool success_wins_over_a_recorded_cancel_intent(Tracker& t) {
 }
 
 bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 unclaimed retirement conformance");
+    Fixture fix = make_fixture("sluice backend unclaimed retirement conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -813,7 +814,7 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
 }
 
 bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 two stale entries conformance");
+    Fixture fix = make_fixture("sluice backend two stale entries conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -934,7 +935,7 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
 }
 
 bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 t4b stale entry removal conformance");
+    Fixture fix = make_fixture("sluice backend t4b stale entry removal conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1049,7 +1050,7 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
 }
 
 bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 t4b reclaimed identity conformance");
+    Fixture fix = make_fixture("sluice backend t4b reclaimed identity conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1189,7 +1190,7 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
 }
 
 bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 t4b won-lane single wake conformance");
+    Fixture fix = make_fixture("sluice backend t4b won-lane single wake conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1296,7 +1297,7 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
 }
 
 bool gate_teardown_retires_registered_passes_before_detach(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 gate lifetime conformance");
+    Fixture fix = make_fixture("sluice backend gate lifetime conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1419,10 +1420,10 @@ bool gate_teardown_retires_registered_passes_before_detach(Tracker& t) {
     return true;
 }
 
-#endif  // !SLUICE_E1_CONFORMANCE_URING
+#endif  // !SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING
 
 bool post_accept_dispatch_failure_converges_and_reclaims(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 dispatch failure conformance");
+    Fixture fix = make_fixture("sluice backend dispatch failure conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1459,7 +1460,7 @@ bool post_accept_dispatch_failure_converges_and_reclaims(Tracker& t) {
 }
 
 bool queue_saturation_reports_would_block_without_residue(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 saturation conformance");
+    Fixture fix = make_fixture("sluice backend saturation conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1496,7 +1497,7 @@ bool queue_saturation_reports_would_block_without_residue(Tracker& t) {
 }
 
 bool terminal_consumption_retires_every_physical_trace(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 retirement conformance");
+    Fixture fix = make_fixture("sluice backend retirement conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1530,7 +1531,7 @@ bool terminal_consumption_retires_every_physical_trace(Tracker& t) {
     return true;
 }
 
-#if defined(SLUICE_E1_CONFORMANCE_URING)
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
 
 struct AdvanceControl {
     std::atomic<bool> advance{true};
@@ -1606,7 +1607,7 @@ struct FictionBackend {
 };
 
 bool metadata_identity_agrees_across_backends(Tracker& t) {
-    const std::string content = "sluice e1 cross-backend metadata";
+    const std::string content = "sluice backend cross-backend metadata";
     const std::string path = make_temp_file(content);
     if (path.empty()) {
         t.check(false, "fixture created");
@@ -1658,7 +1659,7 @@ bool metadata_identity_agrees_across_backends(Tracker& t) {
 }
 
 bool canceled_metadata_op_reports_the_canceled_terminal(Tracker& t) {
-    const std::string content = "sluice e1 canceled metadata";
+    const std::string content = "sluice backend canceled metadata";
     const std::string path = make_temp_file(content);
     if (path.empty()) {
         t.check(false, "fixture created");
@@ -1700,7 +1701,7 @@ bool canceled_metadata_op_reports_the_canceled_terminal(Tracker& t) {
 }
 
 bool sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 sticky intent conformance");
+    Fixture fix = make_fixture("sluice backend sticky intent conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1751,7 +1752,7 @@ bool sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced(Tracker& t) {
 }
 
 bool success_and_cancel_converge_without_fabrication_under_the_fiction(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 uring v14 conformance");
+    Fixture fix = make_fixture("sluice backend uring v14 conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1792,7 +1793,7 @@ bool success_and_cancel_converge_without_fabrication_under_the_fiction(Tracker& 
 }
 
 bool hard_submit_failure_resolves_per_entry_kernel_visibility(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 partial submit visibility conformance");
+    Fixture fix = make_fixture("sluice backend partial submit visibility conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1913,7 +1914,7 @@ bool cancel_progress_wakes_a_parked_owner(Tracker& t) {
 }
 
 bool full_ring_zero_consumed_hard_error_settles_every_entry(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 full-ring reconcile conformance");
+    Fixture fix = make_fixture("sluice backend full-ring reconcile conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -1969,7 +1970,7 @@ bool full_ring_zero_consumed_hard_error_settles_every_entry(Tracker& t) {
 }
 
 bool wrapped_head_partial_consumption_keeps_logical_cardinality(Tracker& t) {
-    Fixture fix = make_fixture("sluice e1 wrapped-head reconcile conformance");
+    Fixture fix = make_fixture("sluice backend wrapped-head reconcile conformance");
     if (!fix.ok()) {
         t.check(false, "fixture created");
         return false;
@@ -2055,7 +2056,7 @@ bool wrapped_head_partial_consumption_keeps_logical_cardinality(Tracker& t) {
     return true;
 }
 
-#endif  // SLUICE_E1_CONFORMANCE_URING
+#endif  // SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING
 
 }  // namespace
 
@@ -2081,7 +2082,7 @@ int main() {
          pre_execution_cancel_wins_with_known_zero_effect},
         {"running_cancel_reports_the_backend_mechanism_fact",
          running_cancel_reports_the_backend_mechanism_fact},
-#if !defined(SLUICE_E1_CONFORMANCE_URING)
+#if !defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
         {"success_wins_over_a_recorded_cancel_intent",
          success_wins_over_a_recorded_cancel_intent},
         {"unclaimed_dispatch_entry_retirement_publishes_a_wake",
@@ -2131,15 +2132,15 @@ int main() {
         }
     }
     if (failures == 0) {
-#if defined(SLUICE_E1_CONFORMANCE_URING)
-        std::printf("all %zu e1 io_uring conformance tests passed\n",
+#if defined(SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING)
+        std::printf("all %zu io_uring backend conformance tests passed\n",
                     sizeof(tests) / sizeof(tests[0]));
 #else
-        std::printf("all %zu e1 ThreadPool conformance tests passed\n",
+        std::printf("all %zu ThreadPool backend conformance tests passed\n",
                     sizeof(tests) / sizeof(tests[0]));
 #endif
     } else {
-        std::printf("%d e1 conformance failures\n", failures);
+        std::printf("%d backend conformance failures\n", failures);
     }
     return failures == 0 ? 0 : 1;
 }

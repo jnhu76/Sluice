@@ -216,11 +216,11 @@ do
     end
 end
 
--- e1 (#474) COPY-B pipelined-copy contract oracles: the scripted-backend suite
--- driving run_pipelined_copy_with_backend through controlled submission,
--- completion, and failure ordering (read-ahead window, write ordering, short
--- I/O, error selection, settlement and bounded reuse). Test-only; compiles the
--- production copy_task.cpp unmodified, exactly like the consumption target.
+-- Pipelined-copy contract oracles: the scripted-backend suite driving
+-- run_pipelined_copy_with_backend through controlled submission, completion,
+-- and failure ordering (read-ahead window, write ordering, short I/O, error
+-- selection, settlement and bounded reuse). Test-only; compiles the production
+-- copy_task.cpp unmodified, exactly like the consumption target.
 do
     local dir = R .. "apps/sluice-copy"
     if os.isfile(dir .. "/copy_task.cpp") and os.isfile(R .. "tests/app_copy_pipeline_oracle_test.cpp") and
@@ -295,21 +295,21 @@ do
     -- manually, never run as regular tests.
     request_core_target("request_core_mut_attach_ignores_publication",
                         R .. "tests/request_core_protocol_test.cpp", true,
-                        "SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION")
+                        "SLUICE_REQUEST_CORE_MUTANT_ATTACH_IGNORES_PUBLICATION")
     request_core_target("request_core_mut_attach_treats_terminal_as_published",
                         R .. "tests/request_core_protocol_test.cpp", true,
-                        "SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED")
+                        "SLUICE_REQUEST_CORE_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED")
 
     -- C1-C (#429) named mutation builds over the delivery state machine.
     request_core_target("request_core_mut_delivery_claim_unbounded",
                         R .. "tests/request_core_protocol_test.cpp", true,
-                        "SLUICE_C1_MUTANT_DELIVERY_CLAIM_UNBOUNDED")
+                        "SLUICE_REQUEST_CORE_MUTANT_DELIVERY_CLAIM_UNBOUNDED")
     request_core_target("request_core_mut_cancel_during_delivery_returns",
                         R .. "tests/request_core_protocol_test.cpp", true,
-                        "SLUICE_C1_MUTANT_CANCEL_DURING_DELIVERY_RETURNS")
+                        "SLUICE_REQUEST_CORE_MUTANT_CANCEL_DURING_DELIVERY_RETURNS")
     request_core_target("request_core_mut_publication_skips_queue",
                         R .. "tests/request_core_protocol_test.cpp", true,
-                        "SLUICE_C1_MUTANT_PUBLICATION_SKIPS_QUEUE")
+                        "SLUICE_REQUEST_CORE_MUTANT_PUBLICATION_SKIPS_QUEUE")
 end
 
 -- B1-A context ownership/identity evidence. The observed surface (the
@@ -401,10 +401,10 @@ do
     -- transition-regression tests of the ownership suite; they are executed
     -- and recorded manually, never run as regular tests.
     progress_source_target("progress_source_mut_close_admission_always_signals", false,
-                           "SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
+                           "SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
     if has_config("liburing") then
         progress_source_target("progress_source_uring_mut_close_admission_always_signals", true,
-                               "SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
+                               "SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
     end
 end
 
@@ -413,7 +413,7 @@ end
 -- backend only; shared ProgressSource changes must still compile in the
 -- liburing-enabled progress/cutover targets.
 do
-    local function c2b_progress_target(name, test_source)
+    local function threadpool_progress_target(name, test_source)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -430,13 +430,13 @@ do
             add_tests(name, {run_timeout = 120000})
     end
 
-    c2b_progress_target("threadpool_progress_race_test",
+    threadpool_progress_target("threadpool_progress_race_test",
                         R .. "tests/threadpool_progress_race_test.cpp")
-    c2b_progress_target("progress_notification_suppression_test",
+    threadpool_progress_target("progress_notification_suppression_test",
                         R .. "tests/progress_notification_suppression_test.cpp")
-    c2b_progress_target("threadpool_progress_pass_bound_test",
+    threadpool_progress_target("threadpool_progress_pass_bound_test",
                         R .. "tests/threadpool_progress_pass_bound_test.cpp")
-    c2b_progress_target("threadpool_external_loop_test",
+    threadpool_progress_target("threadpool_external_loop_test",
                         R .. "tests/threadpool_external_loop_test.cpp")
 end
 
@@ -445,7 +445,7 @@ end
 -- kernel eventfd registration lifecycle. Real ring required; registered only
 -- when the liburing build switch is on.
 if has_config("liburing") then
-    local function c2c_uring_progress_target(name, test_source, extra_define)
+    local function uring_progress_target(name, test_source, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -470,34 +470,34 @@ if has_config("liburing") then
             end
     end
 
-    c2c_uring_progress_target("uring_progress_race_test",
+    uring_progress_target("uring_progress_race_test",
                               R .. "tests/uring_progress_race_test.cpp")
-    c2c_uring_progress_target("uring_external_loop_test",
+    uring_progress_target("uring_external_loop_test",
                               R .. "tests/uring_external_loop_test.cpp")
-    c2c_uring_progress_target("uring_registration_lifecycle_test",
+    uring_progress_target("uring_registration_lifecycle_test",
                               R .. "tests/uring_registration_lifecycle_test.cpp")
-    c2c_uring_progress_target("uring_owed_residue_test",
+    uring_progress_target("uring_owed_residue_test",
                               R .. "tests/uring_owed_residue_test.cpp")
 
     -- C2-C corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of
     -- the race suite; they are executed and recorded manually, never run as
     -- regular tests.
-    c2c_uring_progress_target("uring_progress_race_mut_transport_retry_unadvertised",
+    uring_progress_target("uring_progress_race_mut_transport_retry_unadvertised",
                               R .. "tests/uring_progress_race_test.cpp",
-                              "SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED")
-    c2c_uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
+                              "SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED")
+    uring_progress_target("uring_progress_race_mut_overflow_flush_ignored",
                               R .. "tests/uring_progress_race_test.cpp",
-                              "SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED")
-    c2c_uring_progress_target("uring_progress_race_mut_overflow_absence_settles_inflight",
+                              "SLUICE_URING_PROGRESS_MUTANT_OVERFLOW_FLUSH_IGNORED")
+    uring_progress_target("uring_progress_race_mut_overflow_absence_settles_inflight",
                               R .. "tests/uring_progress_race_test.cpp",
-                              "SLUICE_E1_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT")
-    c2c_uring_progress_target("uring_progress_race_mut_post_poison_flush_gated",
+                              "SLUICE_URING_PROGRESS_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT")
+    uring_progress_target("uring_progress_race_mut_post_poison_flush_gated",
                               R .. "tests/uring_progress_race_test.cpp",
-                              "SLUICE_E1_MUTANT_POST_POISON_FLUSH_GATED")
-    c2c_uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
+                              "SLUICE_URING_EXTERNAL_LOOP_MUTANT_POST_POISON_FLUSH_GATED")
+    uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
                               R .. "tests/uring_external_loop_test.cpp",
-                              "SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
+                              "SLUICE_URING_EXTERNAL_LOOP_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
 end
 
 -- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as
@@ -552,22 +552,22 @@ do
     -- as regular tests.
     public_request_target("public_request_mut_consume_keeps_binding",
                           R .. "tests/public_request_test.cpp", false,
-                          "SLUICE_B2_MUTANT_CONSUME_KEEPS_BINDING")
+                          "SLUICE_PUBLIC_REQUEST_MUTANT_CONSUME_KEEPS_BINDING")
     public_request_target("public_request_mut_observe_ignores_publication",
                           R .. "tests/public_request_test.cpp", false,
-                          "SLUICE_B2_MUTANT_OBSERVE_IGNORES_PUBLICATION")
+                          "SLUICE_PUBLIC_REQUEST_MUTANT_OBSERVE_IGNORES_PUBLICATION")
     public_request_target("public_request_mut_observe_consumes",
                           R .. "tests/public_request_test.cpp", false,
-                          "SLUICE_B2_MUTANT_OBSERVE_CONSUMES")
+                          "SLUICE_PUBLIC_REQUEST_MUTANT_OBSERVE_CONSUMES")
     public_request_target("public_request_mut_release_forgets_binding",
                           R .. "tests/public_request_test.cpp", false,
-                          "SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING")
+                          "SLUICE_PUBLIC_REQUEST_MUTANT_RELEASE_FORGETS_BINDING")
     public_request_target("public_request_mut_nonterminal_release_detaches",
                           R .. "tests/public_request_release_violation_test.cpp", false,
-                          "SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES")
+                          "SLUICE_PUBLIC_REQUEST_MUTANT_NONTERMINAL_RELEASE_DETACHES")
     public_request_target("public_request_mut_discard_accepts_inflight",
                           R .. "tests/public_request_release_violation_test.cpp", false,
-                          "SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
+                          "SLUICE_PUBLIC_REQUEST_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
 -- E2 (#452) shutdown lifecycle oracles: retained results at execution close,
@@ -620,37 +620,37 @@ do
     -- assertion recorded next to each target.
     if has_config("liburing") then
         shutdown_lifecycle_target("shutdown_mut_m1_occupancy_zero_destroyable", true,
-                                  "SLUICE_E2_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE")
+                                  "SLUICE_SHUTDOWN_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE")
         shutdown_lifecycle_target("shutdown_mut_m5_poison_fabricates_success", true,
-                                  "SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS")
+                                  "SLUICE_SHUTDOWN_MUTANT_M5_POISON_FABRICATES_SUCCESS")
         shutdown_lifecycle_target("shutdown_mut_m9_poison_releases_running_borrow", true,
-                                  "SLUICE_E2_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW")
+                                  "SLUICE_SHUTDOWN_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW")
         shutdown_lifecycle_target("shutdown_mut_m11_allow_notification_borrow_during_shutdown",
                                   true,
-                                  "SLUICE_E2_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN")
+                                  "SLUICE_SHUTDOWN_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN")
         shutdown_lifecycle_target("shutdown_mut_m12_execution_closed_fast_path_before_owner_check",
                                   true,
-                                  "SLUICE_E2_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK")
+                                  "SLUICE_SHUTDOWN_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK")
     end
     shutdown_lifecycle_target("shutdown_mut_m2_control_pin_caller_violation", false,
-                              "SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION")
+                              "SLUICE_SHUTDOWN_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION")
     shutdown_lifecycle_target("shutdown_mut_m3_destructor_ignores_live_binding", false,
-                              "SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING")
+                              "SLUICE_SHUTDOWN_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING")
     shutdown_lifecycle_target("shutdown_mut_m4_close_requires_consumption", false,
-                              "SLUICE_E2_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION")
+                              "SLUICE_SHUTDOWN_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION")
     shutdown_lifecycle_target("shutdown_mut_m10_prejoin_stale_dispatch_violation", false,
-                              "SLUICE_E2_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION")
+                              "SLUICE_SHUTDOWN_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION")
 end
 
--- E1 (#400) cross-backend File-contract conformance. One semantic suite is
--- compiled once per profile: the ThreadPool variant runs the real worker
--- path, and the io_uring variant runs the real ring plus the deterministic
--- submit fiction for the claimed/stuck control windows. The uring variant
--- also links the ThreadPool backend so both profiles' metadata records are
--- compared in one process. The seam build compiles its own copies of the
--- async TUs, mirroring the public request target's shape.
+-- Cross-backend File-contract conformance. One semantic suite is compiled
+-- once per profile: the ThreadPool variant runs the real worker path, and the
+-- io_uring variant runs the real ring plus the deterministic submit fiction
+-- for the claimed/stuck control windows. The uring variant also links the
+-- ThreadPool backend so both profiles' metadata records are compared in one
+-- process. The seam build compiles its own copies of the async TUs, mirroring
+-- the public request target's shape.
 do
-    local function e1_conformance_target(name, with_liburing, extra_define)
+    local function backend_contract_conformance_target(name, with_liburing, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -662,7 +662,7 @@ do
                 add_defines(extra_define)
             end
             local files = {
-                R .. "tests/backend_conformance_e1_test.cpp",
+                R .. "tests/backend_contract_conformance_test.cpp",
                 R .. "src/async/async_io_context.cpp",
                 R .. "src/async/threadpool_backend.cpp",
                 R .. "src/async/fail_fast.cpp",
@@ -670,7 +670,7 @@ do
                 R .. "src/async/detail/request_core.cpp",
             }
             if with_liburing then
-                add_defines("SLUICE_HAS_LIBURING", "SLUICE_E1_CONFORMANCE_URING")
+                add_defines("SLUICE_HAS_LIBURING", "SLUICE_BACKEND_CONTRACT_CONFORMANCE_URING")
                 add_links("uring")
                 for _, tu in ipairs(uring_backend_sources) do
                     table.insert(files, tu)
@@ -682,35 +682,35 @@ do
             end
     end
 
-    e1_conformance_target("backend_conformance_e1_threadpool_test", false)
+    backend_contract_conformance_target("backend_contract_conformance_threadpool_test", false)
     if has_config("liburing") then
-        e1_conformance_target("backend_conformance_e1_uring_test", true)
+        backend_contract_conformance_target("backend_contract_conformance_uring_test", true)
 
-        -- E1 named mutation builds. Each flips one load-bearing mechanism of
-        -- the #400 refinements and must be killed by the named failing
-        -- assertion of the conformance suite; they are executed and recorded
-        -- manually, never run as regular tests.
-        e1_conformance_target("e1_conformance_mut_metadata_drops_record", true,
-                              "SLUICE_E1_MUTANT_METADATA_DROPS_RECORD")
-        e1_conformance_target("e1_conformance_mut_byte_failure_accounted", true,
-                              "SLUICE_E1_MUTANT_BYTE_FAILURE_ACCOUNTED")
-        e1_conformance_target("e1_conformance_mut_sticky_intent_dropped", true,
-                              "SLUICE_E1_MUTANT_STICKY_INTENT_DROPPED")
-        e1_conformance_target("e1_conformance_mut_capability_probe_ignored", true,
-                              "SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED")
-        e1_conformance_target("e1_conformance_mut_cancel_progress_signal_dropped", true,
-                              "SLUICE_E1_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED")
-        e1_conformance_target("e1_conformance_mut_submit_batch_invisible", true,
-                              "SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE")
-        e1_conformance_target("e1_conformance_mut_opcode_probe_ignored", true,
-                              "SLUICE_E1_MUTANT_OPCODE_PROBE_IGNORED")
-        e1_conformance_target("e1_conformance_mut_masked_sq_cardinality", true,
-                              "SLUICE_E1_MUTANT_MASKED_SQ_CARDINALITY")
+        -- Named mutation builds. Each flips one load-bearing conformance
+        -- mechanism and must be killed by the named failing assertion of the
+        -- conformance suite; they are executed and recorded manually, never
+        -- run as regular tests.
+        backend_contract_conformance_target("backend_contract_conformance_mut_metadata_drops_record", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_METADATA_DROPS_RECORD")
+        backend_contract_conformance_target("backend_contract_conformance_mut_byte_failure_accounted", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_BYTE_FAILURE_ACCOUNTED")
+        backend_contract_conformance_target("backend_contract_conformance_mut_sticky_intent_dropped", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_STICKY_INTENT_DROPPED")
+        backend_contract_conformance_target("backend_contract_conformance_mut_capability_probe_ignored", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_CAPABILITY_PROBE_IGNORED")
+        backend_contract_conformance_target("backend_contract_conformance_mut_cancel_progress_signal_dropped", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED")
+        backend_contract_conformance_target("backend_contract_conformance_mut_submit_batch_invisible", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_SUBMIT_BATCH_INVISIBLE")
+        backend_contract_conformance_target("backend_contract_conformance_mut_opcode_probe_ignored", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_OPCODE_PROBE_IGNORED")
+        backend_contract_conformance_target("backend_contract_conformance_mut_masked_sq_cardinality", true,
+                              "SLUICE_BACKEND_CONTRACT_MUTANT_MASKED_SQ_CARDINALITY")
     end
-    e1_conformance_target("e1_conformance_mut_write_failure_accounted", false,
-                          "SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED")
-    e1_conformance_target("e1_conformance_mut_cancel_reports_requested", false,
-                          "SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED")
+    backend_contract_conformance_target("backend_contract_conformance_mut_write_failure_accounted", false,
+                          "SLUICE_BACKEND_CONTRACT_MUTANT_WRITE_FAILURE_ACCOUNTED")
+    backend_contract_conformance_target("backend_contract_conformance_mut_cancel_reports_requested", false,
+                          "SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_REPORTS_REQUESTED")
 end
 
 -- #526 (F6-F10) request-path error-domain re-diff: the submission-failure
@@ -941,27 +941,27 @@ do
     -- they are executed and recorded manually, never run as regular tests.
     request_scope_target("request_scope_mut_reserve_after_accept",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT")
+                         "SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT")
     request_scope_target("request_scope_mut_commit_drops_request",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_COMMIT_DROPS_REQUEST")
+                         "SLUICE_REQUEST_SCOPE_MUTANT_COMMIT_DROPS_REQUEST")
     request_scope_target("request_scope_mut_timeout_releases_slot",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT")
+                         "SLUICE_REQUEST_SCOPE_MUTANT_TIMEOUT_RELEASES_SLOT")
     -- The destructor mutant removes the TU's only read of policy_, so Clang's
     -- default-on -Wunused-private-field (promoted by -Werror) fails this one
     -- mutation build; the suppression is scoped to it and never reaches GCC
     -- or any other target. The mutant is still killed by its named assertions.
     request_scope_target("request_scope_mut_destructor_skips_settle",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE",
+                         "SLUICE_REQUEST_SCOPE_MUTANT_DESTRUCTOR_SKIPS_SETTLE",
                          "-Wno-unused-private-field")
     request_scope_target("request_scope_mut_finish_swallows_error",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR")
+                         "SLUICE_REQUEST_SCOPE_MUTANT_FINISH_SWALLOWS_ERROR")
     request_scope_target("request_scope_mut_finish_cancels_cleanup",
                          R .. "tests/request_scope_test.cpp", false,
-                         "SLUICE_D1_MUTANT_FINISH_CANCELS_CLEANUP")
+                         "SLUICE_REQUEST_SCOPE_MUTANT_FINISH_CANCELS_CLEANUP")
 end
 
 -- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault
@@ -969,20 +969,20 @@ end
 -- own copies of the async TUs and links neither sluice_async nor the other
 -- seam builds, mirroring the ownership target's shape.
 do
-    target("threadpool_core_cutover_test")
+    target("threadpool_request_core_integration_test")
         set_kind("binary")
         set_default(false)
         set_group("test")
         add_deps("sluice_core")
         add_includedirs(R .. "include", R .. "src/async")
         add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
-        add_files(R .. "tests/threadpool_core_cutover_test.cpp",
+        add_files(R .. "tests/threadpool_request_core_integration_test.cpp",
                   R .. "src/async/async_io_context.cpp",
                   R .. "src/async/threadpool_backend.cpp",
                   R .. "src/async/fail_fast.cpp",
                   R .. "src/async/detail/context_identity.cpp",
                   R .. "src/async/detail/request_core.cpp")
-        add_tests("threadpool_core_cutover_test")
+        add_tests("threadpool_request_core_integration_test")
 end
 
 -- B1-C io_uring cutover evidence. Same self-contained seam-build shape as the
@@ -1002,7 +1002,7 @@ if has_config("liburing") then
                 add_defines(extra_define)
             end
             add_links("uring")
-            add_files(R .. "tests/uring_core_cutover_test.cpp",
+            add_files(R .. "tests/uring_request_core_integration_test.cpp",
                       R .. "src/async/async_io_context.cpp",
                       R .. "src/async/uring_transport.cpp",
                       R .. "src/async/uring_completion.cpp",
@@ -1020,20 +1020,20 @@ if has_config("liburing") then
     -- B1-C named mutation builds. Each flips one load-bearing mechanism and
     -- must be killed by the named failing assertion of the same suite; they
     -- are executed and recorded manually, never run as regular tests.
-    uring_cutover_target("uring_cutover_mut_cookie_reuse", "SLUICE_B1C_MUTANT_COOKIE_REUSE")
-    uring_cutover_target("uring_cutover_mut_cancel_cqe_terminal",
-                         "SLUICE_B1C_MUTANT_CANCEL_CQE_AS_ORIGINAL_TERMINAL")
-    uring_cutover_target("uring_cutover_mut_publish_before_retire",
-                         "SLUICE_B1C_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT")
-    uring_cutover_target("uring_cutover_mut_drop_outcome",
-                         "SLUICE_B1C_MUTANT_DROP_ORIGINAL_OUTCOME")
-    uring_cutover_target("uring_cutover_mut_remove_control_pin",
-                         "SLUICE_B1C_MUTANT_REMOVE_CONTROL_PIN")
-    uring_cutover_target("uring_cutover_mut_reclaim_before_control",
-                         "SLUICE_B1C_MUTANT_RECLAIM_BEFORE_CONTROL_RETIREMENT")
-    uring_cutover_target("uring_cutover_mut_strand_poison",
-                         "SLUICE_B1C_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE")
-    uring_cutover_target("uring_cutover_mut_zero_op_dispatch",
-                         "SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
+    uring_cutover_target("uring_core_integration_mut_cookie_reuse", "SLUICE_URING_CORE_MUTANT_COOKIE_REUSE")
+    uring_cutover_target("uring_core_integration_mut_cancel_cqe_terminal",
+                         "SLUICE_URING_CORE_MUTANT_CANCEL_CQE_AS_ORIGINAL_TERMINAL")
+    uring_cutover_target("uring_core_integration_mut_publish_before_retire",
+                         "SLUICE_URING_CORE_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT")
+    uring_cutover_target("uring_core_integration_mut_drop_outcome",
+                         "SLUICE_URING_CORE_MUTANT_DROP_ORIGINAL_OUTCOME")
+    uring_cutover_target("uring_core_integration_mut_remove_control_pin",
+                         "SLUICE_URING_CORE_MUTANT_REMOVE_CONTROL_PIN")
+    uring_cutover_target("uring_core_integration_mut_reclaim_before_control",
+                         "SLUICE_URING_CORE_MUTANT_RECLAIM_BEFORE_CONTROL_RETIREMENT")
+    uring_cutover_target("uring_core_integration_mut_strand_poison",
+                         "SLUICE_URING_CORE_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE")
+    uring_cutover_target("uring_core_integration_mut_zero_op_dispatch",
+                         "SLUICE_URING_CORE_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
 end
 

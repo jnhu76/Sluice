@@ -68,7 +68,7 @@ int main() {
     }
     if (!sluice_semantic::matches_recorded_divergences("threadpool", threadpool_divergences, {})) {
         std::fprintf(stderr,
-                     "FAIL: ThreadPool diverges from the oracle; the B1-B cutover regressed it\n");
+                     "FAIL: ThreadPool diverges from the oracle; the ThreadPool core integration regressed it\n");
         return 1;
     }
     const std::size_t recorded_threadpool = 0;
@@ -101,7 +101,7 @@ int main() {
         }
         if (!sluice_semantic::matches_recorded_divergences("uring", uring_divergences, {})) {
             std::fprintf(stderr,
-                         "FAIL: io_uring diverges from the oracle; the B1-C cutover regressed "
+                         "FAIL: io_uring diverges from the oracle; the io_uring core integration regressed "
                          "it\n");
             return 1;
         }

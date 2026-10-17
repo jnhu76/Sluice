@@ -1,4 +1,4 @@
-// e4 (#474): TAIL signal-path, pending-I/O settlement and bounded-teardown
+// TAIL signal-path, pending-I/O settlement and bounded-teardown
 // oracles against the REAL sluice-tail binary. The parent harness drives the
 // child through stdout pipes, signal delivery and a test-only LD_PRELOAD
 // interposer (tests/support/tail_pread_shim.c) whose PRE/ENTERED/EXIT events

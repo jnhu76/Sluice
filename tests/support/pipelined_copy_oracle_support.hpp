@@ -1,6 +1,6 @@
 #pragma once
 
-// e1 (#474): COPY-B pipelined-copy contract oracles over the current
+// Pipelined-copy contract oracles over the current
 // run_pipelined_copy_with_context API, driven through a scripted backend.
 //
 // Backend model: submit accepts through RequestCore exactly like a v1 request

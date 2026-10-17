@@ -22,7 +22,7 @@
 #include <unistd.h>
 
 #ifndef SLUICE_HAS_LIBURING
-#error "the deterministic uring cutover suite must receive SLUICE_HAS_LIBURING"
+#error "the deterministic uring core integration suite must receive SLUICE_HAS_LIBURING"
 #endif
 
 namespace {
@@ -58,7 +58,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_b1c_cutover_XXXXXX";
+    char path[] = "/tmp/sluice_uring_core_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -219,7 +219,7 @@ bool complete_take_reclaim(FakeSubmitBackend& made, Request<std::size_t>& c,
 }
 
 bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c residue\n");
+    auto file = open_temp_file(t, "sluice uring core residue\n");
     if (!file.has_value())
         return false;
 
@@ -243,7 +243,7 @@ bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
 }
 
 bool range_precedes_health_and_capacity(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c precedence\n");
+    auto file = open_temp_file(t, "sluice uring core precedence\n");
     if (!file.has_value())
         return false;
 
@@ -294,7 +294,7 @@ bool range_precedes_health_and_capacity(Tracker& t) {
 }
 
 bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c ownership\n");
+    auto file = open_temp_file(t, "sluice uring core ownership\n");
     if (!file.has_value())
         return false;
 
@@ -355,7 +355,7 @@ bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
 }
 
 bool pre_submit_cancel_wins_with_zero_transport(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c pre-submit cancel\n");
+    auto file = open_temp_file(t, "sluice uring core pre-submit cancel\n");
     if (!file.has_value())
         return false;
 
@@ -421,7 +421,7 @@ bool pre_submit_cancel_wins_with_zero_transport(Tracker& t) {
 }
 
 bool original_cqe_first_defers_until_control_retires(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c original first\n");
+    auto file = open_temp_file(t, "sluice uring core original first\n");
     if (!file.has_value())
         return false;
 
@@ -481,7 +481,7 @@ bool original_cqe_first_defers_until_control_retires(Tracker& t) {
 }
 
 bool cancel_cqe_first_never_becomes_the_terminal(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c control first\n");
+    auto file = open_temp_file(t, "sluice uring core control first\n");
     if (!file.has_value())
         return false;
 
@@ -537,7 +537,7 @@ bool cancel_cqe_first_never_becomes_the_terminal(Tracker& t) {
 }
 
 bool cancel_racing_completion_keeps_the_confirmed_count(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c race\n");
+    auto file = open_temp_file(t, "sluice uring core race\n");
     if (!file.has_value())
         return false;
 
@@ -581,7 +581,7 @@ bool cancel_racing_completion_keeps_the_confirmed_count(Tracker& t) {
 bool cancel_racing_short_write_keeps_confirmed_count(Tracker& t) {
     sluice::FileOpen writable;
     writable.access = sluice::FileAccess::read_write;
-    auto file = open_temp_file(t, "sluice b1c race\n", writable);
+    auto file = open_temp_file(t, "sluice uring core race\n", writable);
     if (!file.has_value())
         return false;
 
@@ -629,7 +629,7 @@ bool cancel_racing_short_write_keeps_confirmed_count(Tracker& t) {
 }
 
 bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c stale cookie\n");
+    auto file = open_temp_file(t, "sluice uring core stale cookie\n");
     if (!file.has_value())
         return false;
 
@@ -688,7 +688,7 @@ bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
 }
 
 bool stale_identity_does_not_resolve_after_reuse(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c stale identity\n");
+    auto file = open_temp_file(t, "sluice uring core stale identity\n");
     if (!file.has_value())
         return false;
 
@@ -739,7 +739,7 @@ bool stale_identity_does_not_resolve_after_reuse(Tracker& t) {
 }
 
 bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c zero op\n");
+    auto file = open_temp_file(t, "sluice uring core zero op\n");
     if (!file.has_value())
         return false;
 
@@ -780,7 +780,7 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
 }
 
 bool zero_op_event_survives_release_before_poll(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c zero pin\n");
+    auto file = open_temp_file(t, "sluice uring core zero pin\n");
     if (!file.has_value())
         return false;
 
@@ -824,7 +824,7 @@ bool zero_op_event_survives_release_before_poll(Tracker& t) {
 }
 
 bool submit_stage_failures_rollback_completely(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c stage failures\n");
+    auto file = open_temp_file(t, "sluice uring core stage failures\n");
     if (!file.has_value())
         return false;
 
@@ -877,7 +877,7 @@ bool submit_stage_failures_rollback_completely(Tracker& t) {
 }
 
 bool dispatch_failure_converges_through_the_terminal(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c dispatch failure\n");
+    auto file = open_temp_file(t, "sluice uring core dispatch failure\n");
     if (!file.has_value())
         return false;
 
@@ -918,7 +918,7 @@ bool dispatch_failure_converges_through_the_terminal(Tracker& t) {
 }
 
 bool post_accept_submit_failure_poison_converges(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c submit failure\n");
+    auto file = open_temp_file(t, "sluice uring core submit failure\n");
     if (!file.has_value())
         return false;
 
@@ -975,7 +975,7 @@ bool post_accept_submit_failure_poison_converges(Tracker& t) {
 }
 
 bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c poison cancel\n");
+    auto file = open_temp_file(t, "sluice uring core poison cancel\n");
     if (!file.has_value())
         return false;
 
@@ -1034,7 +1034,7 @@ bool poison_with_running_cancel_keeps_the_real_completion(Tracker& t) {
 }
 
 bool publication_visibility_waits_for_the_epilogue(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c epilogue\n");
+    auto file = open_temp_file(t, "sluice uring core epilogue\n");
     if (!file.has_value())
         return false;
 
@@ -1101,7 +1101,7 @@ bool publication_visibility_waits_for_the_epilogue(Tracker& t) {
 }
 
 bool observer_registration_rides_publication(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c observer\n");
+    auto file = open_temp_file(t, "sluice uring core observer\n");
     if (!file.has_value())
         return false;
 
@@ -1148,7 +1148,7 @@ bool observer_registration_rides_publication(Tracker& t) {
 }
 
 bool concurrent_submissions_all_publish_and_reclaim(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c concurrency\n");
+    auto file = open_temp_file(t, "sluice uring core concurrency\n");
     if (!file.has_value())
         return false;
 
@@ -1209,7 +1209,7 @@ bool concurrent_submissions_all_publish_and_reclaim(Tracker& t) {
 }
 
 bool real_kernel_normal_completion_and_cancel(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c real kernel\n");
+    auto file = open_temp_file(t, "sluice uring core real kernel\n");
     if (!file.has_value())
         return false;
 
@@ -1267,7 +1267,7 @@ bool real_kernel_normal_completion_and_cancel(Tracker& t) {
 }
 
 bool real_kernel_slot_reuse(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1c real reuse\n");
+    auto file = open_temp_file(t, "sluice uring core real reuse\n");
     if (!file.has_value())
         return false;
 

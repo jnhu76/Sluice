@@ -78,7 +78,7 @@ AsyncIoContext::~AsyncIoContext() {
     {
         std::lock_guard<std::mutex> lk(access_mtx_);
         fail_fast_if_progress_binding_live_();
-#if !defined(SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
+#if !defined(SLUICE_SHUTDOWN_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
         if (core_ && core_->occupancy().public_bindings != 0) {
             detail::async_context_outstanding_fail_fast();
         }
@@ -132,7 +132,7 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
         {
             std::lock_guard<std::mutex> lk(access_mtx_);
             fail_fast_if_progress_binding_live_();
-#if !defined(SLUICE_E2_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
+#if !defined(SLUICE_SHUTDOWN_MUTANT_M3_DESTRUCTOR_IGNORES_LIVE_BINDING)
             if (core_ && core_->occupancy().public_bindings != 0) {
                 detail::async_context_outstanding_fail_fast();
             }
@@ -477,7 +477,7 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
         cancel_outstanding_for_stop_();
     }
 
-#if defined(SLUICE_E2_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE)
     {
         std::lock_guard<std::mutex> lk(access_mtx_);
         execution_closed_ = true;
@@ -499,7 +499,7 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
         const ProgressPass pass = run_progress_pass_();
 
         if (settlement_converged_()) {
-#if defined(SLUICE_E2_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
             if (core_->occupancy().public_bindings != 0) {
                 return ShutdownOutcome::health_unresolved;
             }
@@ -707,7 +707,7 @@ bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
 
 int AsyncIoContext::progress_notification_fd() noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
-#if defined(SLUICE_E2_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN)
     if (progress_ == nullptr) {
         return -1;
     }
@@ -849,7 +849,7 @@ Result<ShutdownOutcome> AsyncIoContext::shutdown(ShutdownPolicy policy) {
         if (!backend_ || notification_interest_live_ || drive_active_) {
             return make_unexpected<ShutdownOutcome>(IoError{IoError::Code::invalid_state});
         }
-#if defined(SLUICE_E2_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M12_EXECUTION_CLOSED_FAST_PATH_BEFORE_OWNER_CHECK)
         if (execution_closed_) {
             return settlement_outcome_;
         }

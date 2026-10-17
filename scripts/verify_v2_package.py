@@ -410,8 +410,8 @@ def run_seam_negative_probes(build_dir, prefix, command_log):
 
 
 INSTALLED_MUTANT_SEAM_ALLOWLIST = {
-    "sluice/async/request_scope.hpp:SLUICE_D1_MUTANT_COMMIT_DROPS_REQUEST",
-    "sluice/async/request_scope.hpp:SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT",
+    "sluice/async/request_scope.hpp:SLUICE_REQUEST_SCOPE_MUTANT_COMMIT_DROPS_REQUEST",
+    "sluice/async/request_scope.hpp:SLUICE_REQUEST_SCOPE_MUTANT_TIMEOUT_RELEASES_SLOT",
 }
 
 

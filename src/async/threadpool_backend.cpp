@@ -500,7 +500,7 @@ sluice::detail::IoOutcome ThreadPoolBackend::run_syscall(const PreparedBlockingO
 #if defined(SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED)
             return sluice::detail::failed_dispatched_attempt(
                 IoError{.code = IoError::Code::backend_error});
-#elif defined(SLUICE_E1_MUTANT_WRITE_FAILURE_ACCOUNTED)
+#elif defined(SLUICE_BACKEND_CONTRACT_MUTANT_WRITE_FAILURE_ACCOUNTED)
             return sluice::detail::IoOutcome::failure(sluice::from_errno_value(errno));
 #else
             return sluice::detail::failed_dispatched_attempt(sluice::from_errno_value(errno));
@@ -758,7 +758,7 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
             }
             publication_pending_.push_back(detail::RequestReservation{key.slot, key.generation});
         } else if (disposition == detail::PublicCancel::requested) {
-#if defined(SLUICE_E1_MUTANT_CANCEL_REPORTS_REQUESTED)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_REPORTS_REQUESTED)
             disposition = detail::PublicCancel::requested;
 #else
             disposition = detail::PublicCancel::physical_interruption_unsupported;
@@ -795,7 +795,7 @@ std::size_t ThreadPoolBackend::active_workers() const {
 }
 
 void ThreadPoolBackend::close_admission() {
-#if defined(SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
+#if defined(SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
     if (core_ != nullptr) {
         (void)core_->close_admission();
     }
@@ -823,7 +823,7 @@ bool ThreadPoolBackend::internal_work_retired() const noexcept {
 }
 
 void ThreadPoolBackend::stop_execution() noexcept {
-#if defined(SLUICE_E2_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M10_PREJOIN_STALE_DISPATCH_VIOLATION)
     if (core_ != nullptr && core_->occupancy().accepted_live != 0) {
         detail::threadpool_non_quiescent_destruction_fail_fast();
     }
@@ -852,7 +852,7 @@ void ThreadPoolBackend::retire_execution_resources() noexcept {
             any_event_owed_locked_() || occupancy.outstanding != 0 ||
             occupancy.execution_refs != 0 || occupancy.control_refs != 0 ||
             occupancy.publication_inflight != 0 || occupancy.observer_registrations != 0
-#if defined(SLUICE_E2_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION)
             || occupancy.accepted_live != 0
 #endif
         ) {

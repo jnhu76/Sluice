@@ -99,7 +99,7 @@ class RequestScope {
     template <class T>
     void commit_(std::size_t index, Request<T>&& request) noexcept {
         static_assert(std::is_nothrow_move_constructible_v<Request<T>>);
-#if defined(SLUICE_D1_MUTANT_COMMIT_DROPS_REQUEST)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_COMMIT_DROPS_REQUEST)
         (void)index;
 #else
         Slot& slot = slots_[index];
@@ -160,7 +160,7 @@ class RequestScope {
                 const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
                     deadline - std::chrono::steady_clock::now());
                 if (remaining.count() <= 0) {
-#if defined(SLUICE_D1_MUTANT_TIMEOUT_RELEASES_SLOT)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_TIMEOUT_RELEASES_SLOT)
                     release_slot_(slot);
 #endif
                     return ScopeWaitStatus::timeout;

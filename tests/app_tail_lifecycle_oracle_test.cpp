@@ -1,4 +1,4 @@
-// e4 (#474): TAIL stop / settlement / teardown contract oracles over the
+// TAIL stop / settlement / teardown contract oracles over the
 // public TailEngine API. Event anchors come from an in-process pread
 // interposer compiled into this target: ELF symbol interposition routes the
 // ThreadPoolBackend worker's ::pread through tail_probe, which gates on the

@@ -48,7 +48,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_b1b_cutover_XXXXXX";
+    char path[] = "/tmp/sluice_threadpool_core_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -94,7 +94,7 @@ template <class Gate> struct GateGuard {
 };
 
 bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b residue\n");
+    auto file = open_temp_file(t, "sluice threadpool core residue\n");
     if (!file.has_value())
         return false;
 
@@ -116,7 +116,7 @@ bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
 }
 
 bool range_precedes_capacity_under_saturation(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b saturation\n");
+    auto file = open_temp_file(t, "sluice threadpool core saturation\n");
     if (!file.has_value())
         return false;
 
@@ -163,7 +163,7 @@ bool range_precedes_capacity_under_saturation(Tracker& t) {
 }
 
 bool accepted_pre_dispatch_work_has_a_core_owner(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b ownership gap\n");
+    auto file = open_temp_file(t, "sluice threadpool core ownership gap\n");
     if (!file.has_value())
         return false;
 
@@ -215,7 +215,7 @@ bool accepted_pre_dispatch_work_has_a_core_owner(Tracker& t) {
 }
 
 bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b window cancel\n");
+    auto file = open_temp_file(t, "sluice threadpool core window cancel\n");
     if (!file.has_value())
         return false;
 
@@ -268,7 +268,7 @@ bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t)
 }
 
 bool post_accept_dispatch_failure_is_a_terminal_not_a_rejection(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b dispatch failure\n");
+    auto file = open_temp_file(t, "sluice threadpool core dispatch failure\n");
     if (!file.has_value())
         return false;
 
@@ -305,7 +305,7 @@ bool post_accept_dispatch_failure_is_a_terminal_not_a_rejection(Tracker& t) {
 }
 
 bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b running cancel\n");
+    auto file = open_temp_file(t, "sluice threadpool core running cancel\n");
     if (!file.has_value())
         return false;
 
@@ -358,7 +358,7 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
 }
 
 bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b last access\n");
+    auto file = open_temp_file(t, "sluice threadpool core last access\n");
     if (!file.has_value())
         return false;
 
@@ -405,7 +405,7 @@ bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
 }
 
 bool publication_visibility_waits_for_the_epilogue_and_release_reclaims(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b epilogue\n");
+    auto file = open_temp_file(t, "sluice threadpool core epilogue\n");
     if (!file.has_value())
         return false;
 
@@ -475,7 +475,7 @@ bool publication_visibility_waits_for_the_epilogue_and_release_reclaims(Tracker&
 }
 
 bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b zero op\n");
+    auto file = open_temp_file(t, "sluice threadpool core zero op\n");
     if (!file.has_value())
         return false;
 
@@ -510,7 +510,7 @@ bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
 }
 
 bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b deferred pin\n");
+    auto file = open_temp_file(t, "sluice threadpool core deferred pin\n");
     if (!file.has_value())
         return false;
 
@@ -584,7 +584,7 @@ bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
 }
 
 bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b close race\n");
+    auto file = open_temp_file(t, "sluice threadpool core close race\n");
     if (!file.has_value())
         return false;
 
@@ -628,7 +628,7 @@ bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& 
 }
 
 bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b observer\n");
+    auto file = open_temp_file(t, "sluice threadpool core observer\n");
     if (!file.has_value())
         return false;
 
@@ -691,7 +691,7 @@ bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
 }
 
 bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b observer terminal\n");
+    auto file = open_temp_file(t, "sluice threadpool core observer terminal\n");
     if (!file.has_value())
         return false;
 
@@ -744,7 +744,7 @@ bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
 }
 
 bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
-    auto file = open_temp_file(t, "sluice c1f parked owner\n");
+    auto file = open_temp_file(t, "sluice threadpool core parked owner\n");
     if (!file.has_value())
         return false;
 
@@ -877,7 +877,7 @@ bool retirement_waits_for_the_delivery_hook_to_return(Tracker& t) {
 }
 
 bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b stale identity\n");
+    auto file = open_temp_file(t, "sluice threadpool core stale identity\n");
     if (!file.has_value())
         return false;
 
@@ -911,7 +911,7 @@ bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
 }
 
 bool bounded_workers_execute_the_syscalls_not_the_submitter(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b workers\n");
+    auto file = open_temp_file(t, "sluice threadpool core workers\n");
     if (!file.has_value())
         return false;
 
@@ -997,11 +997,11 @@ int main() {
         }
     }
     if (failed != 0) {
-        std::fprintf(stderr, "%d of %zu threadpool core cutover tests failed\n", failed,
+        std::fprintf(stderr, "%d of %zu threadpool core integration tests failed\n", failed,
                      sizeof(tests) / sizeof(tests[0]));
         return 1;
     }
-    std::printf("all %zu threadpool core cutover tests passed\n",
+    std::printf("all %zu threadpool core integration tests passed\n",
                 sizeof(tests) / sizeof(tests[0]));
     return 0;
 }
