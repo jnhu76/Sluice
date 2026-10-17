@@ -1,0 +1,1 @@
+xmake build -y progress_source_uring_mut_close_admission_always_signals

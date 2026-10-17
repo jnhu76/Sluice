@@ -1,0 +1,17 @@
+target exit first_line
+shutdown_mut_m1_occupancy_zero_destroyable exit=134 killer=FAIL [cancel_then_drain_shutdown_cancels_pending_without_fabricated_success] the pending request settles on its real kernel outcome, not a fabricated cancel terminal
+shutdown_mut_m5_poison_fabricates_success exit=1 killer=FAIL [poison unresolved health] the never-visible request converges through the poison terminal
+shutdown_mut_m9_poison_releases_running_borrow exit=1 killer=FAIL [poison unresolved health] the in-flight request carries no fabricated terminal
+shutdown_mut_m11_allow_notification_borrow_during_shutdown exit=1 killer=FAIL [shutdown_blocks_new_notification_interest_after_drive_linearization] the shutdown drive lends no new notification interest
+shutdown_mut_m12_execution_closed_fast_path_before_owner_check exit=1 killer=FAIL [shutdown_from_non_owner_after_execution_close_is_refused] a non-owner's shutdown after execution close is refused as invalid state
+shutdown_mut_m2_control_pin_caller_violation exit=134 killer=(no FAIL line — nonzero exit)
+shutdown_mut_m3_destructor_ignores_live_binding exit=1 killer=FAIL [destruction_with_pending_live_binding_fails_fast] destroying a context under a pending live binding aborts at the named public-binding guard
+shutdown_mut_m4_close_requires_consumption exit=1 killer=FAIL [shutdown_completes_and_retained_results_stay_consumable] the drain shutdown reports completion
+shutdown_mut_m10_prejoin_stale_dispatch_violation exit=134 killer=(no FAIL line — nonzero exit)
+uring_progress_race_mut_transport_retry_unadvertised exit=1 killer=FAIL: u2_k15_retryable_submit_failure_does_not_strand_owner
+uring_progress_race_mut_overflow_flush_ignored exit=1 killer=FAIL: overflow_flush_failure_becomes_observable_health_event
+uring_progress_race_mut_overflow_absence_settles_inflight exit=1 killer=FAIL: overflow_flush_failure_does_not_release_still_inflight_borrow
+uring_progress_race_mut_post_poison_flush_gated exit=134 killer=(no FAIL line — nonzero exit)
+progress_source_uring_mut_final_probe_dropped exit=1 killer=FAIL: k1_k2_cqe_before_drain_recovered_by_final_probe
+progress_source_mut_close_admission_always_signals exit=1 killer=FAIL: threadpool_close_admission_signals_only_the_open_to_closed_transition
+progress_source_uring_mut_close_admission_always_signals exit=1 killer=FAIL: threadpool_close_admission_signals_only_the_open_to_closed_transition

@@ -1,0 +1,1 @@
+xmake f -m asanubsan --liburing=n --toolchain=clang --ccache=n --builddir=/tmp/rg6-build-asanubsan-n -y

@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m9_poison_releases_running_borrow

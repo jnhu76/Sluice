@@ -1,0 +1,71 @@
+$ bash scripts/verify_progress_source_model.sh
+== TLC jar (cached, checksum ok): v1.7.4 ==
+== TLC: Safety ==
+Model checking completed. No error has been found.
+21784 states generated, 4783 distinct states found, 0 states left on queue.
+== TLC: MutParkDrain (must violate InvSafePark) -- pure-drain park handshake killed ==
+Error: Invariant InvSafePark is violated.
+1476 states generated, 569 distinct states found, 304 states left on queue.
+== TLC: MutNoProbe (must violate InvSafePark) -- probe-blind park killed (M-C1 class) ==
+Error: Invariant InvSafePark is violated.
+1469 states generated, 566 distinct states found, 295 states left on queue.
+== TLC: MutNoExhaustion (must violate InvSafePark) -- sticky-bool saturation defect class killed (dated C2-B campaign records) ==
+Error: Invariant InvSafePark is violated.
+1135 states generated, 391 distinct states found, 188 states left on queue.
+== TLC: Deadline ==
+Model checking completed. No error has been found.
+36006 states generated, 8030 distinct states found, 0 states left on queue.
+== TLC: Host ==
+Model checking completed. No error has been found.
+5115 states generated, 993 distinct states found, 0 states left on queue.
+== TLC: ExhNear ==
+Model checking completed. No error has been found.
+651 states generated, 140 distinct states found, 0 states left on queue.
+== TLC: ExhTermControl ==
+Model checking completed. No error has been found.
+1256 states generated, 230 distinct states found, 0 states left on queue.
+== TLC: ExhTermProgress (must violate InvSafePark) -- LOCAL-SAFETY BOUNDARY CERTIFICATE: absorbing progress pair {Max,Max} + L4a drain consumes fd freshness -> park past unadvertised obligation (production cannot reach this state; see ReachClose* and the dated C2-E campaign records) ==
+Error: Invariant InvSafePark is violated.
+831 states generated, 292 distinct states found, 127 states left on queue.
+== TLC: Liveness ==
+Progress(11) at 2026-10-17 20:20:15: 11,173 states generated (11,173 s/min), 3,012 distinct states found (3,012 ds/min), 712 states left on queue.
+Progress(18) at 2026-10-17 20:20:17: 21,856 states generated, 4,783 distinct states found, 0 states left on queue.
+Model checking completed. No error has been found.
+21856 states generated, 4783 distinct states found, 0 states left on queue.
+== TLC: CertSticky (must violate CertStickyControl) -- S4 mandated sticky scenario reachable ==
+Error: Invariant CertStickyControl is violated.
+5 states generated, 3 distinct states found, 1 states left on queue.
+== TLC: CertSat (must violate CertSatFreshness) -- V24 first-stage saturation freshness reachable ==
+Error: Invariant CertSatFreshness is violated.
+6 states generated, 4 distinct states found, 2 states left on queue.
+== TLC: CertSpent (must violate CertSpentControlReports) -- spent control domain still reports control ==
+Error: Invariant CertSpentControlReports is violated.
+2 states generated, 2 distinct states found, 0 states left on queue.
+== TLC: CertHost (must violate CertHostLifecycle) -- host unregister-before-detach ordering reachable ==
+Error: Invariant CertHostLifecycle is violated.
+45 states generated, 22 distinct states found, 15 states left on queue.
+== TLC: ReachClose ==
+Model checking completed. No error has been found.
+21784 states generated, 4783 distinct states found, 0 states left on queue.
+== TLC: ReachClosePark ==
+Model checking completed. No error has been found.
+21784 states generated, 4783 distinct states found, 0 states left on queue.
+== TLC: ReachClosePub ==
+Model checking completed. No error has been found.
+21784 states generated, 4783 distinct states found, 0 states left on queue.
+== TLC: ReachNoFuel ==
+Progress(14) at 2026-10-17 20:20:39: 172,099 states generated (172,099 s/min), 44,245 distinct states found (44,245 ds/min), 11,846 states left on queue.
+Model checking completed. No error has been found.
+781351 states generated, 161755 distinct states found, 0 states left on queue.
+== TLC: MutNoExhClose (must violate InvNoProgressTerminal) -- load-bearing bound: without exhaustion-closes-admission, unbounded re-acceptance churn reaches the absorbing pair ==
+Progress(14) at 2026-10-17 20:20:52: 183,884 states generated (183,884 s/min), 46,693 distinct states found (46,693 ds/min), 11,729 states left on queue.
+Error: Invariant InvNoProgressTerminal is violated.
+875155 states generated, 191459 distinct states found, 12775 states left on queue.
+== TLC: MutRepeatCloseSignals (must violate InvNoProgressTerminal) -- RESTORED-PUMP DISCRIMINATOR: the pre-#444 per-call close signal alone re-reaches the absorbing pair from normal Init -- #444 removed the actual pump ==
+Error: Invariant InvNoProgressTerminal is violated.
+1292 states generated, 506 distinct states found, 296 states left on queue.
+== TLC: MutRepeatCloseSignalsPark (must violate InvSafePark) -- RESTORED-PUMP DISCRIMINATOR: the no-lost-wake composition staged from normal Init through the restored pump ==
+Error: Invariant InvSafePark is violated.
+27657 states generated, 6909 distinct states found, 1837 states left on queue.
+
+ProgressSource model: all expected outcomes reproduced.

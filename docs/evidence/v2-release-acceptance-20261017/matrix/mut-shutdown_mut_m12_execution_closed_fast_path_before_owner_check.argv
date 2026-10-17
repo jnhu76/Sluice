@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m12_execution_closed_fast_path_before_owner_check

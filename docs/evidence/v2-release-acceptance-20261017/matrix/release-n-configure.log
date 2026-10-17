@@ -1,0 +1,3 @@
+$ xmake f -m release --liburing=n --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-release-n -y
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m

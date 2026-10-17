@@ -1,0 +1,18 @@
+# environment fingerprint — captured 2026-10-17T17:59:10+08:00
+head=72acc209064251ba554986007fcf9fc88a7d2860
+head_subject=test(request,shutdown): close the review findings in the forked witness and identity oracles
+branch=v2-release-gates-convergence
+tree_clean_at_capture=2 entries
+NAME="Fedora Linux"
+VERSION="44 (KDE Plasma Desktop Edition)"
+kernel=7.2.9-201.fc44.x86_64
+arch=x86_64
+cpu_count=20
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+clang version 22.1.8 (Fedora 22.1.8-4.fc44)
+xmake=[0m[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua[0m[0m
+2.13
+python3=Python 3.14.8
+rootfs=btrfs
+tmpfs=tmpfs
+java=openjdk version "25.0.4.1" 2026-08-18

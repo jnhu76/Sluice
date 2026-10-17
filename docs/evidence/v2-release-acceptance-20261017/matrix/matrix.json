@@ -1,0 +1,290 @@
+[
+  {
+    "profile": "debug-n",
+    "mode": "debug",
+    "liburing": "n",
+    "toolchain": "gcc",
+    "builddir": "/tmp/rg6-build-debug-n",
+    "configure": {
+      "argv": [
+        "xmake f -m debug --liburing=n --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-debug-n -y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n-configure.log",
+      "log_sha256": "bd4e3fdfabace4adcbfddb9cf4b9eb946d8e68ca72cee9f4600a47034348d184"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "debug-n-build.log",
+      "log_sha256": "9ce0bcd1c32ade5a796bcaee6e95839ea100d93201b2a33ae332f2f560606bf3"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "debug-n.log",
+      "log_sha256": "37caa5bdf5d3e5952fda6a4fd49c1c1770104a3debc8ab0f78bcad00326c758d",
+      "tests": 56,
+      "failed": 0
+    },
+    "xmake_conf": "debug-n-xmake.conf"
+  },
+  {
+    "profile": "debug-y",
+    "mode": "debug",
+    "liburing": "y",
+    "toolchain": "gcc",
+    "builddir": "/tmp/rg6-build-debug-y",
+    "configure": {
+      "argv": [
+        "xmake f -m debug --liburing=y --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-debug-y -y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y-configure.log",
+      "log_sha256": "a2b149591e4c3c66c58015a3d61a2a71ca368c151a7a42589171162620efe0c4"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "debug-y-build.log",
+      "log_sha256": "cdb5f5dec74a9a20c9aa2f9f18ed6054df627f133df19936a867d707cc93c989"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "debug-y.log",
+      "log_sha256": "559465e3764bb10e66726b7afbe60b5d949c753916ec5a3a0627a9e32fa12f05",
+      "tests": 74,
+      "failed": 0
+    },
+    "xmake_conf": "debug-y-xmake.conf"
+  },
+  {
+    "profile": "release-n",
+    "mode": "release",
+    "liburing": "n",
+    "toolchain": "gcc",
+    "builddir": "/tmp/rg6-build-release-n",
+    "configure": {
+      "argv": [
+        "xmake f -m release --liburing=n --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-release-n -y"
+      ],
+      "exit_code": 0,
+      "log": "release-n-configure.log",
+      "log_sha256": "682254281e93c7d5e04ec7f14968c565baf84b7c45ef3160f19721fb7e23cf0a"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "release-n-build.log",
+      "log_sha256": "1efa3d430ec9c572445a41ba5fb981af8673dbaf199c27c1b2360fc7ca346f9a"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "release-n.log",
+      "log_sha256": "c943ef7f5b913c57fc00689c14e43dbf1241f2b1cc9279c1abf7e577afe1db87",
+      "tests": 56,
+      "failed": 0
+    },
+    "xmake_conf": "release-n-xmake.conf",
+    "apps_build": {
+      "argv": [
+        "xmake build -y -g apps"
+      ],
+      "exit_code": 0,
+      "log": "release-n-apps-build.log",
+      "log_sha256": "1b526fccdf5cba079f7303fd289602f5712a984868b7bd52bd8fda5cb1a208ac"
+    }
+  },
+  {
+    "profile": "release-y",
+    "mode": "release",
+    "liburing": "y",
+    "toolchain": "gcc",
+    "builddir": "/tmp/rg6-build-release-y",
+    "configure": {
+      "argv": [
+        "xmake f -m release --liburing=y --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-release-y -y"
+      ],
+      "exit_code": 0,
+      "log": "release-y-configure.log",
+      "log_sha256": "734400014043807176bd1624fb7f9624343e55618287c71ebaf54e3f50720ce5"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "release-y-build.log",
+      "log_sha256": "06cbb5da72805309c5bd8cae901b84421aba647120d8a87267c1385c098397a5"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "release-y.log",
+      "log_sha256": "1cd8650773d42ca7c35628d5042264e937edc6af2ed15be1b7a7f48b984d7686",
+      "tests": 74,
+      "failed": 0
+    },
+    "xmake_conf": "release-y-xmake.conf",
+    "apps_build": {
+      "argv": [
+        "xmake build -y -g apps"
+      ],
+      "exit_code": 0,
+      "log": "release-y-apps-build.log",
+      "log_sha256": "7074d463b982cc63cd5a4fc6b28868fe214d03bd94fa39fea9e091faaa291b76"
+    }
+  },
+  {
+    "profile": "asanubsan-n",
+    "mode": "asanubsan",
+    "liburing": "n",
+    "toolchain": "clang",
+    "builddir": "/tmp/rg6-build-asanubsan-n",
+    "configure": {
+      "argv": [
+        "xmake f -m asanubsan --liburing=n --toolchain=clang --ccache=n --builddir=/tmp/rg6-build-asanubsan-n -y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n-configure.log",
+      "log_sha256": "2cbd1a259b22d5265f9bbef557922cbc16bde6cddda346aacb615cffb019d91a"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n-build.log",
+      "log_sha256": "6d92cc7c8da98186426bf5139a0d4c06d0d6c197955a2ec786eaaa84db24c01d"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-n.log",
+      "log_sha256": "ad0c609985ca0f8dc6ff5c7718bf508f8f3ae85ded111a50b8e3e206c64d8a7d",
+      "tests": 56,
+      "failed": 0
+    },
+    "xmake_conf": "asanubsan-n-xmake.conf"
+  },
+  {
+    "profile": "asanubsan-y",
+    "mode": "asanubsan",
+    "liburing": "y",
+    "toolchain": "clang",
+    "builddir": "/tmp/rg6-build-asanubsan-y",
+    "configure": {
+      "argv": [
+        "xmake f -m asanubsan --liburing=y --toolchain=clang --ccache=n --builddir=/tmp/rg6-build-asanubsan-y -y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-y-configure.log",
+      "log_sha256": "33a0114f3ff54d62c922d11c6a16b27193070c698270c7e6a79e5cb3ecce95d5"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-y-build.log",
+      "log_sha256": "bc76fb7301557daae5d67a91c1a29421d6f576b31051eb416da36fae843c3da3"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "asanubsan-y.log",
+      "log_sha256": "1a3027b4ce8723c520fc953634ffe4a0e99eb858055709d7ab877168f83131e9",
+      "tests": 74,
+      "failed": 0
+    },
+    "xmake_conf": "asanubsan-y-xmake.conf"
+  },
+  {
+    "profile": "tsan-n",
+    "mode": "tsan",
+    "liburing": "n",
+    "toolchain": "gcc",
+    "builddir": "/tmp/rg6-build-tsan-n",
+    "configure": {
+      "argv": [
+        "xmake f -m tsan --liburing=n --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-tsan-n -y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n-configure.log",
+      "log_sha256": "67aa70b097ddbab30a3c3bb3cca55dd80065c657cad348ab63c3be01f122e1d7"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n-build.log",
+      "log_sha256": "96c71b522a4ba7ad21cd4b9da983f6187464ac215cfd11187a7d7288fae19d31"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-n.log",
+      "log_sha256": "017f13bd055c473ae1ce4aa34c6c27091d99452ef70955022672fa6630efc4ae",
+      "tests": 56,
+      "failed": 0
+    },
+    "xmake_conf": "tsan-n-xmake.conf"
+  },
+  {
+    "profile": "tsan-y",
+    "mode": "tsan",
+    "liburing": "y",
+    "toolchain": "gcc",
+    "builddir": "/tmp/rg6-build-tsan-y",
+    "configure": {
+      "argv": [
+        "xmake f -m tsan --liburing=y --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-tsan-y -y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-y-configure.log",
+      "log_sha256": "309787f1fb10651faf77e9ed28e512f878cb74f3f6b774a087d2d2b4b983259f"
+    },
+    "build": {
+      "argv": [
+        "xmake build -y -g test"
+      ],
+      "exit_code": 0,
+      "log": "tsan-y-build.log",
+      "log_sha256": "4115b8286e4ded1e9ad6dec633823c0d6dee38803473c19fae0f6348925510ae"
+    },
+    "test": {
+      "argv": [
+        "xmake test -y"
+      ],
+      "exit_code": 0,
+      "log": "tsan-y.log",
+      "log_sha256": "c505cd4d394b4d15813457cfac39062bd75078b6ed41a64c82351055b96fd3d8",
+      "tests": 74,
+      "failed": 0
+    },
+    "xmake_conf": "tsan-y-xmake.conf"
+  }
+]

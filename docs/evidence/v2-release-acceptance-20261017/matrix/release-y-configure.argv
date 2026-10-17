@@ -1,0 +1,1 @@
+xmake f -m release --liburing=y --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-release-y -y

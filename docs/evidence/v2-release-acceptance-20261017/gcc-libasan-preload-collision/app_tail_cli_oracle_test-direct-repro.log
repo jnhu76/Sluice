@@ -1,0 +1,14 @@
+CASE PASS: harness_watchdog_selftest
+CASE PASS: harness_stderr_capture_selftest
+CASE PASS: harness_split_line_selftest
+CASE PASS: finite_tail_and_cli_exit_codes
+CASE PASS: cli_removed_workers_and_max_poll_stop
+CASE PASS: cli_sigint_clean_exit
+CASE PASS: cli_sigterm_clean_exit
+CASE PASS: cli_double_signal_clean_exit
+FAIL: pending-sigint: no ENTERED event (LD_PRELOAD intercept failed?)
+CASE FAIL: cli_pending_sigint
+FAIL: pending-sigterm: no ENTERED event (LD_PRELOAD intercept failed?)
+CASE FAIL: cli_pending_sigterm
+CASE PASS: cli_descriptor_follow_rotation
+FAIL: 2 of 11 tail cli oracle cases failed

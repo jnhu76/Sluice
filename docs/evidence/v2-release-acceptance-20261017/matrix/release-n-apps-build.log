@@ -1,0 +1,18 @@
+$ xmake build -y -g apps
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/main.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/copy_task.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/cli_parse.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/file_domain.cpp[0m
+[0m[38;5;2;1m[ 23%]:[0m [38;5;5;1m<sluice-copy>[0m compiling.release apps/sluice-copy/safe_output.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/main.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/grep_task.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/matcher.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-grep>[0m compiling.release apps/sluice-grep/cli_parse.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-hash>[0m compiling.release apps/sluice-hash/main.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-hash>[0m compiling.release apps/sluice-hash/hash_task.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-hash>[0m compiling.release apps/sluice-hash/sha256.cpp[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice-hash>[0m compiling.release apps/sluice-hash/cli_parse.cpp[0m
+[0m[38;5;2;1m[ 65%]:[0m [38;5;5;1m<sluice-copy>[0m [38;5;5;1mlinking.release sluice-copy[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<sluice-grep>[0m [38;5;5;1mlinking.release sluice-grep[0m
+[0m[38;5;2;1m[ 82%]:[0m [38;5;5;1m<sluice-hash>[0m [38;5;5;1mlinking.release sluice-hash[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.396s[0m

@@ -1,0 +1,345 @@
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+sluice::async::AsyncIoContext: relocating or destroying a context with outstanding public bindings (live Requests) is a contract violation
+terminate called without an active exception
+
+=================================================================
+==351358==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 112 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000408499 in make_unique<(anonymous namespace)::PoisonedState> /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x00000040660b in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:1009
+    #3 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #4 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #5 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #6 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #7 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 1024 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000452d9f in std::__new_allocator<statx>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000451d4a in std::allocator<statx>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000451d4a in std::allocator_traits<std::allocator<statx> >::allocate(std::allocator<statx>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000451d4a in std::_Vector_base<statx, std::allocator<statx> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x000000451680 in std::_Vector_base<statx, std::allocator<statx> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x0000004506aa in std::_Vector_base<statx, std::allocator<statx> >::_Vector_base(unsigned long, std::allocator<statx> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000044cfa8 in std::vector<statx, std::allocator<statx> >::vector(unsigned long, std::allocator<statx> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x000000449745 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:164
+    #9 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #10 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #11 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #12 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #13 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #14 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #15 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #16 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #17 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #18 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 672 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000449106 in std::__new_allocator<sluice::async::detail::RequestCore::Slot>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000448894 in std::allocator<sluice::async::detail::RequestCore::Slot>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000448894 in std::allocator_traits<std::allocator<sluice::async::detail::RequestCore::Slot> >::allocate(std::allocator<sluice::async::detail::RequestCore::Slot>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000448894 in std::_Vector_base<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x00000044800e in std::_Vector_base<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x000000447b56 in std::_Vector_base<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::_Vector_base(unsigned long, std::allocator<sluice::async::detail::RequestCore::Slot> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x000000447578 in std::vector<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::vector(unsigned long, std::allocator<sluice::async::detail::RequestCore::Slot> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x000000444ad6 in sluice::async::detail::RequestCore::RequestCore(sluice::async::detail::ContextIdentity, unsigned long) src/async/detail/request_core.cpp:40
+    #9 0x00000042eca9 in std::__detail::_MakeUniq<sluice::async::detail::RequestCore>::__single_object std::make_unique<sluice::async::detail::RequestCore, sluice::async::detail::ContextIdentity const&, unsigned long const&>(sluice::async::detail::ContextIdentity const&, unsigned long const&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #10 0x00000040fd68 in sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:39
+    #11 0x0000004103a2 in sluice::async::detail::ContextFactory::make(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:47
+    #12 0x000000410528 in sluice::async::detail::make_context(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:51
+    #13 0x0000004010dd in create tests/shutdown_lifecycle_test.cpp:174
+    #14 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #15 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #16 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #17 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #18 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #19 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 400 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000040b764 in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #3 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #4 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #5 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #6 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #7 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #8 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 384 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000452b7c in std::__new_allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000451980 in std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000451980 in std::allocator_traits<std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> >::allocate(std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000451980 in std::_Vector_base<sluice::async::UringAsyncBackend::TransportLedger::Entry, std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x000000450eb2 in std::_Vector_base<sluice::async::UringAsyncBackend::TransportLedger::Entry, std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x00000044fe58 in std::_Vector_base<sluice::async::UringAsyncBackend::TransportLedger::Entry, std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> >::_Vector_base(unsigned long, std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000044c8e0 in std::vector<sluice::async::UringAsyncBackend::TransportLedger::Entry, std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> >::vector(unsigned long, std::allocator<sluice::async::UringAsyncBackend::TransportLedger::Entry> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x00000044c48b in sluice::async::UringAsyncBackend::TransportLedger::TransportLedger(unsigned long) src/async/uring_internal.hpp:155
+    #9 0x00000044d370 in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend::TransportLedger>::__single_object std::make_unique<sluice::async::UringAsyncBackend::TransportLedger, unsigned int&>(unsigned int&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #10 0x000000449a2f in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:178
+    #11 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #12 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #13 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #14 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #15 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #16 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #17 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #18 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #19 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #20 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 272 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000044cb82 in std::__detail::_MakeUniq<sluice::async::UringRingState>::__single_object std::make_unique<sluice::async::UringRingState>() /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x000000449779 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:165
+    #3 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #4 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #5 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #6 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #7 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #8 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #9 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #10 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #11 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #12 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 192 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000452c06 in std::__new_allocator<sluice::async::UringAsyncBackend::PreparedUringOp>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000451a82 in std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000451a82 in std::allocator_traits<std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::allocate(std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000451a82 in std::_Vector_base<sluice::async::UringAsyncBackend::PreparedUringOp, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x00000045109e in std::_Vector_base<sluice::async::UringAsyncBackend::PreparedUringOp, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x0000004500f8 in std::_Vector_base<sluice::async::UringAsyncBackend::PreparedUringOp, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::_Vector_base(unsigned long, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000044cc78 in std::vector<sluice::async::UringAsyncBackend::PreparedUringOp, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> >::vector(unsigned long, std::allocator<sluice::async::UringAsyncBackend::PreparedUringOp> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x0000004496aa in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:162
+    #9 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #10 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #11 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #12 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #13 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #14 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #15 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #16 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #17 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #18 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 144 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000042e152 in std::__detail::_MakeUniq<sluice::async::detail::ProgressSource>::__single_object std::make_unique<sluice::async::detail::ProgressSource>() /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x00000040f01b in sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:31
+    #3 0x0000004103a2 in sluice::async::detail::ContextFactory::make(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:47
+    #4 0x000000410528 in sluice::async::detail::make_context(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:51
+    #5 0x0000004010dd in create tests/shutdown_lifecycle_test.cpp:174
+    #6 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #7 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #8 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #9 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #10 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #11 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 128 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000042eb4a in std::__detail::_MakeUniq<sluice::async::detail::RequestCore>::__single_object std::make_unique<sluice::async::detail::RequestCore, sluice::async::detail::ContextIdentity const&, unsigned long const&>(sluice::async::detail::ContextIdentity const&, unsigned long const&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x00000040fd68 in sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:39
+    #3 0x0000004103a2 in sluice::async::detail::ContextFactory::make(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:47
+    #4 0x000000410528 in sluice::async::detail::make_context(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:51
+    #5 0x0000004010dd in create tests/shutdown_lifecycle_test.cpp:174
+    #6 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #7 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #8 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #9 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #10 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #11 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 128 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000452cd3 in std::__new_allocator<sluice::async::UringAsyncBackend::RouterEntry>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000451be6 in std::allocator<sluice::async::UringAsyncBackend::RouterEntry>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000451be6 in std::allocator_traits<std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::allocate(std::allocator<sluice::async::UringAsyncBackend::RouterEntry>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000451be6 in std::_Vector_base<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x000000451394 in std::_Vector_base<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x0000004503d6 in std::_Vector_base<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::_Vector_base(unsigned long, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000044ce10 in std::vector<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::vector(unsigned long, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x0000004496f6 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:163
+    #9 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #10 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #11 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #12 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #13 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #14 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #15 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #16 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #17 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #18 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 128 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000452c6d in std::__new_allocator<sluice::async::UringAsyncBackend::DeliveryRecord>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000451b34 in std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000451b34 in std::allocator_traits<std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> >::allocate(std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000451b34 in std::_Vector_base<sluice::async::UringAsyncBackend::DeliveryRecord, std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x00000045121e in std::_Vector_base<sluice::async::UringAsyncBackend::DeliveryRecord, std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x00000045026c in std::_Vector_base<sluice::async::UringAsyncBackend::DeliveryRecord, std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> >::_Vector_base(unsigned long, std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000044cd44 in std::vector<sluice::async::UringAsyncBackend::DeliveryRecord, std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> >::vector(unsigned long, std::allocator<sluice::async::UringAsyncBackend::DeliveryRecord> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x0000004496d0 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:163
+    #9 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #10 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #11 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #12 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #13 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #14 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #15 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #16 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #17 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #18 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 96 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000040b9ad in std::__detail::_MakeUniq<sluice::async::AsyncIoContext>::__single_object std::make_unique<sluice::async::AsyncIoContext, sluice::async::AsyncIoContext>(sluice::async::AsyncIoContext&&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x0000004010f3 in create tests/shutdown_lifecycle_test.cpp:174
+    #3 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #4 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #5 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #6 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #7 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #8 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 80 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000044d34c in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend::TransportLedger>::__single_object std::make_unique<sluice::async::UringAsyncBackend::TransportLedger, unsigned int&>(unsigned int&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x000000449a2f in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:178
+    #3 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #4 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #5 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #6 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #7 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #8 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #9 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #10 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #11 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #12 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 64 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000444515 in std::__new_allocator<sluice::async::detail::RequestReservation>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000443542 in std::allocator<sluice::async::detail::RequestReservation>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000443542 in std::allocator_traits<std::allocator<sluice::async::detail::RequestReservation> >::allocate(std::allocator<sluice::async::detail::RequestReservation>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000443542 in std::_Vector_base<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x000000442a76 in std::_Vector_base<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x000000441c46 in std::_Vector_base<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::_Vector_base(unsigned long, std::allocator<sluice::async::detail::RequestReservation> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000043ec26 in std::vector<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::vector(unsigned long, std::allocator<sluice::async::detail::RequestReservation> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x00000044c300 in sluice::async::UringAsyncBackend::BoundedDispatchQueue::BoundedDispatchQueue(unsigned long) src/async/uring_internal.hpp:85
+    #9 0x00000044d26a in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend::BoundedDispatchQueue>::__single_object std::make_unique<sluice::async::UringAsyncBackend::BoundedDispatchQueue, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #10 0x000000449988 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:170
+    #11 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #12 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #13 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #14 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #15 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #16 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #17 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #18 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #19 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #20 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 64 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000444515 in std::__new_allocator<sluice::async::detail::RequestReservation>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000443542 in std::allocator<sluice::async::detail::RequestReservation>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000443542 in std::allocator_traits<std::allocator<sluice::async::detail::RequestReservation> >::allocate(std::allocator<sluice::async::detail::RequestReservation>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000443542 in std::_Vector_base<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x000000442a76 in std::_Vector_base<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x000000441c46 in std::_Vector_base<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::_Vector_base(unsigned long, std::allocator<sluice::async::detail::RequestReservation> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000043ec26 in std::vector<sluice::async::detail::RequestReservation, std::allocator<sluice::async::detail::RequestReservation> >::vector(unsigned long, std::allocator<sluice::async::detail::RequestReservation> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x00000044c300 in sluice::async::UringAsyncBackend::BoundedDispatchQueue::BoundedDispatchQueue(unsigned long) src/async/uring_internal.hpp:85
+    #9 0x00000044d26a in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend::BoundedDispatchQueue>::__single_object std::make_unique<sluice::async::UringAsyncBackend::BoundedDispatchQueue, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #10 0x00000044994f in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:169
+    #11 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #12 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #13 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #14 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #15 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #16 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #17 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #18 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #19 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #20 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 48 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000044d247 in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend::BoundedDispatchQueue>::__single_object std::make_unique<sluice::async::UringAsyncBackend::BoundedDispatchQueue, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x00000044994f in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:169
+    #3 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #4 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #5 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #6 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #7 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #8 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #9 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #10 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #11 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #12 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 48 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x00000044d247 in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend::BoundedDispatchQueue>::__single_object std::make_unique<sluice::async::UringAsyncBackend::BoundedDispatchQueue, unsigned long&>(unsigned long&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #2 0x000000449988 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:170
+    #3 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #4 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #5 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #6 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #7 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #8 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #9 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #10 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #11 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #12 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 16 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000448d39 in std::__new_allocator<unsigned int>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000447d6c in std::allocator<unsigned int>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000447d6c in std::allocator_traits<std::allocator<unsigned int> >::allocate(std::allocator<unsigned int>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000447d6c in std::_Vector_base<unsigned int, std::allocator<unsigned int> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x00000044777e in std::vector<unsigned int, std::allocator<unsigned int> >::reserve(unsigned long) /usr/include/c++/16/bits/vector.tcc:82
+    #6 0x000000444b36 in sluice::async::detail::RequestCore::RequestCore(sluice::async::detail::ContextIdentity, unsigned long) src/async/detail/request_core.cpp:41
+    #7 0x00000042eca9 in std::__detail::_MakeUniq<sluice::async::detail::RequestCore>::__single_object std::make_unique<sluice::async::detail::RequestCore, sluice::async::detail::ContextIdentity const&, unsigned long const&>(sluice::async::detail::ContextIdentity const&, unsigned long const&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #8 0x00000040fd68 in sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:39
+    #9 0x0000004103a2 in sluice::async::detail::ContextFactory::make(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:47
+    #10 0x000000410528 in sluice::async::detail::make_context(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) src/async/async_io_context.cpp:51
+    #11 0x0000004010dd in create tests/shutdown_lifecycle_test.cpp:174
+    #12 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #13 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #14 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #15 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #16 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #17 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+Indirect leak of 16 byte(s) in 1 object(s) allocated from:
+    #0 0x7f3a594f04ff in operator new(unsigned long) (/lib64/libasan.so.8+0xf04ff) (BuildId: 61e8165ca90f7a4f06b73f064a938c76deaae079)
+    #1 0x000000452d39 in std::__new_allocator<sluice::async::detail::SlotIndex>::allocate(unsigned long, void const*) /usr/include/c++/16/bits/new_allocator.h:162
+    #2 0x000000451c98 in std::allocator<sluice::async::detail::SlotIndex>::allocate(unsigned long) /usr/include/c++/16/bits/allocator.h:206
+    #3 0x000000451c98 in std::allocator_traits<std::allocator<sluice::async::detail::SlotIndex> >::allocate(std::allocator<sluice::async::detail::SlotIndex>&, unsigned long) /usr/include/c++/16/bits/alloc_traits.h:638
+    #4 0x000000451c98 in std::_Vector_base<sluice::async::detail::SlotIndex, std::allocator<sluice::async::detail::SlotIndex> >::_M_allocate(unsigned long) /usr/include/c++/16/bits/stl_vector.h:389
+    #5 0x00000045150a in std::_Vector_base<sluice::async::detail::SlotIndex, std::allocator<sluice::async::detail::SlotIndex> >::_M_create_storage(unsigned long) /usr/include/c++/16/bits/stl_vector.h:407
+    #6 0x000000450540 in std::_Vector_base<sluice::async::detail::SlotIndex, std::allocator<sluice::async::detail::SlotIndex> >::_Vector_base(unsigned long, std::allocator<sluice::async::detail::SlotIndex> const&) /usr/include/c++/16/bits/stl_vector.h:341
+    #7 0x00000044cedc in std::vector<sluice::async::detail::SlotIndex, std::allocator<sluice::async::detail::SlotIndex> >::vector(unsigned long, std::allocator<sluice::async::detail::SlotIndex> const&) /usr/include/c++/16/bits/stl_vector.h:577
+    #8 0x00000044971c in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) src/async/uring_backend.cpp:164
+    #9 0x000000449499 in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) src/async/uring_backend.cpp:144
+    #10 0x00000044a2fe in sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks) src/async/uring_backend.cpp:332
+    #11 0x00000040b7db in std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105
+    #12 0x000000401082 in create tests/shutdown_lifecycle_test.cpp:171
+    #13 0x0000004062ab in poison_with_in_flight_cqe tests/shutdown_lifecycle_test.cpp:985
+    #14 0x0000004069b5 in poison_with_in_flight_cqe_reports_unresolved_health tests/shutdown_lifecycle_test.cpp:1029
+    #15 0x0000004075a8 in main tests/shutdown_lifecycle_test.cpp:1256
+    #16 0x7f3a5860a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #17 0x7f3a5860a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797) (BuildId: 85075e2ae2e13352a1413d41c327dacf6461526c)
+    #18 0x000000400ad4 in _start (/home/jnhu/Source/Sluice/build-rg1/linux/x86_64/debug/shutdown_lifecycle_uring_test+0x400ad4) (BuildId: 4f818bb87b3a06f1a3d15ed68cce12bd476fd3d2)
+
+SUMMARY: AddressSanitizer: 4016 byte(s) leaked in 19 allocation(s).

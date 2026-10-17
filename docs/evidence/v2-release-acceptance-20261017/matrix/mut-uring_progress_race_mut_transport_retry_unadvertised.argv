@@ -1,0 +1,1 @@
+xmake build -y uring_progress_race_mut_transport_retry_unadvertised

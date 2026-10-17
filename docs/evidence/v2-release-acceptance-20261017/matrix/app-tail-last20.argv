@@ -1,0 +1,1 @@
+/tmp/rg6-build-release-y/linux/x86_64/release/sluice-tail -n 20 /tmp/rg6-scratch/app-fixtures/lines.txt

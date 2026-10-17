@@ -1,0 +1,2 @@
+$ /tmp/rg6-build-release-y/linux/x86_64/release/sluice-copy --pipeline-depth 2 --sync all /tmp/rg6-scratch/app-fixtures/rand.bin /tmp/rg6-scratch/app-fixtures/out-syncall.bin
+/tmp/rg6-build-release-y/linux/x86_64/release/sluice-copy: copied 8388608 bytes (read_ops=10 write_ops=8 short_writes=0 sync=all pipeline_depth=2 atomic=on)

@@ -1,0 +1,1 @@
+LD_PRELOAD=/tmp/rg6-build-asanubsan-n/linux/x86_64/asanubsan/libtail_pread_shim.so  -n 2 /tmp/t5.txt  → ==ASan runtime does not come first in initial library list; exit=1
