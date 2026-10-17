@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""v2 clean-room package verification (PR B, D2/BOUND contraction).
+"""v2 clean-room package verification (package-boundary contraction).
 
 Builds the libraries, installs them into a fresh prefix, verifies the
 11-header contracted install surface, then compiles/links/runs the clean-room
@@ -7,10 +7,10 @@ external consumers against the installed prefix ONLY, and runs the negative
 surface probes.
 
 This is the v2 authority for the package boundary. It deliberately does not
-carry the F1 frozen-manifest reproduction protocol: the superseded F1
-baseline verified the pre-contraction 25-header surface, and reproducing it
-at a contracted head is impossible by construction. Evidence for a v2 claim
-is a fresh manifest per run, recorded under the PR B evidence directory.
+carry the superseded frozen-manifest reproduction protocol: that baseline
+verified the pre-contraction 25-header surface, and reproducing it at a
+contracted head is impossible by construction. Evidence for a v2 claim is a
+fresh manifest per run, recorded under the dated v2 evidence directories.
 
 Gates evaluated:
   V2_B_PACKAGE_PREFIX_READY               (exactly the 11 contracted headers)
@@ -69,9 +69,9 @@ EXPECTED_V2_HEADERS = [
 ]
 
 # Headers that exist in the repository tree but must NOT be installed: the 14
-# that left the install set with PR B (4 deleted host headers are asserted
-# absent from the tree as well, so they are not listed here) plus the new
-# uninstalled internal seam headers. Every one of these must fail to compile
+# that left the install set at the v2 contraction (4 deleted host headers are
+# asserted absent from the tree as well, so they are not listed here) plus
+# the uninstalled internal seam headers. Every one of these must fail to compile
 # when included from the prefix.
 UNINSTALLED_TREE_HEADERS = [
     "sluice/async/detail/async_backend.hpp",
@@ -91,8 +91,8 @@ UNINSTALLED_TREE_HEADERS = [
     "sluice/detail/uring_submit.hpp",
 ]
 
-# Deleted outright with the host bundle (D1): neither in the tree nor in the
-# prefix.
+# Deleted outright with the retired async-fiber bundle: neither in the tree
+# nor in the prefix.
 DELETED_HEADERS = [
     "sluice/async/cancel.hpp",
     "sluice/async/fiber.hpp",
@@ -416,8 +416,8 @@ INSTALLED_MUTANT_SEAM_ALLOWLIST = {
 
 
 def installed_mutant_define_findings(prefix):
-    """Mutation injection points belong to internal TUs. The two D1 seams in
-    request_scope.hpp sit inside function templates, which cannot leave the
+    """Mutation injection points belong to internal TUs. The two request-scope
+    seams in request_scope.hpp sit inside function templates, which cannot leave the
     header; they are pinned here as the complete set, so any new installed
     mutation region (or a removed one) forces an explicit decision. No
     installed non-template path carries a region."""
@@ -610,10 +610,10 @@ def main():
             "installed headers read no build-profile macro: consumer TUs need "
             "no SLUICE_HAS_LIBURING define and may hold any view without "
             "layout divergence (V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT)",
-            "installed mutation regions are pinned exactly: the two D1 "
-            "function-template seams in request_scope.hpp; the B2 release "
-            "path guard moved to an internal TU, and any new or removed "
-            "installed region fails "
+            "installed mutation regions are pinned exactly: the two "
+            "request-scope function-template seams in request_scope.hpp; the "
+            "public-request release path guard moved to an internal TU, and "
+            "any new or removed installed region fails "
             "(NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED)",
         ],
         "EXPECTED_EXTERNAL_WORKLOADS": P0_CONSUMERS + P1_CONSUMERS + [

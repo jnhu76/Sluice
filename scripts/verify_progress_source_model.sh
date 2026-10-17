@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # TLA+ verification gate for ProgressSource (formal/tla/ProgressSource.tla),
 # the pollable no-lost-wake progress model behind PROG-02/PROG-03. The
-# configuration catalogue below is the recorded C2-E campaign verdict set,
+# configuration catalogue below is the recorded verdict set of the dated
+# C2-E campaign records (Git history),
 # re-based on the #444 production corrective pass (the transition-bound
 # close_admission signal). Re-run it whenever the model or its mirrored C++
 # transitions change (ledger G8, VERIFY-06).
@@ -17,8 +18,9 @@
 #        must violate InvSafePark.
 #     3. MutNoProbe    (physical probe blind to CQ state, M-C1 class) must
 #        violate InvSafePark.
-#     4. MutNoExhaustion (saturated epoch bumps nothing -- the C2-B round-1
-#        sticky-bool defect class) must violate InvSafePark.
+#     4. MutNoExhaustion (saturated epoch bumps nothing -- the sticky-bool
+#        saturation defect class of the dated C2-B campaign records (Git
+#        history)) must violate InvSafePark.
 #   Campaign D -- deadline (S6):
 #     5. ProgressSourceDeadline.cfg (caller deadline paths + S6 ghosts)
 #        must complete cleanly including InvDeadlineNoCancel.
@@ -34,7 +36,7 @@
 #        MUST VIOLATE InvSafePark. This is the local-safety boundary
 #        certificate: the representable internal state stays locally
 #        unsafe, while the corrected production transition system cannot
-#        reach it (see ReachClose* below and the C2-E records in
+#        reach it (see ReachClose* below and
 #        the dated C2-E campaign records (Git history)). A clean run here means the
 #        boundary certificate no longer discriminates and the record must
 #        be re-anchored.
@@ -45,7 +47,7 @@
 #   Certificates (the mandated scenarios are reachable, not vacuous):
 #    11-14. CertSticky / CertSat / CertSpent / CertHost must each be
 #        violated (house must-be-reachable pattern).
-#   Campaign R -- post-#444 reachability re-adjudication (see the C2-E
+#   Campaign R -- post-#444 reachability re-adjudication (see the
 #   re-closure record in the dated C2-E campaign records (Git history)):
 #    15. ReachClose (normal Init, #444 semantics: repeated close = no
 #        signal) must complete CLEANLY: normal repeated close cannot pump
@@ -158,7 +160,7 @@ run_violate() {
 run_clean Safety
 run_violate MutParkDrain InvSafePark "pure-drain park handshake killed"
 run_violate MutNoProbe InvSafePark "probe-blind park killed (M-C1 class)"
-run_violate MutNoExhaustion InvSafePark "C2-B round-1 saturation defect class killed"
+run_violate MutNoExhaustion InvSafePark "sticky-bool saturation defect class killed (dated C2-B campaign records)"
 run_clean Deadline
 run_clean Host
 run_clean ExhNear
@@ -182,4 +184,4 @@ run_violate MutRepeatCloseSignalsPark InvSafePark \
     "RESTORED-PUMP DISCRIMINATOR: the no-lost-wake composition staged from normal Init through the restored pump"
 
 echo
-echo "C2-E ProgressSource campaign: all expected outcomes reproduced."
+echo "ProgressSource model: all expected outcomes reproduced."

@@ -227,7 +227,8 @@ run_temporal_violate() {
 #    30. Safety mutants: each switch must die on its named invariant.
 #        MutGenWrap dies first on InvAcceptedRepresented (the wrapped slot
 #        strands the accepted identity); InvSingleAcceptance kills the same
-#        mutant when checked alone (recorded in the B1-1 evidence note).
+#        mutant when checked alone (recorded in docs/roadmap/
+#        b1-1-request-core-evidence.md).
 #        MutExecAfterTerminal may present as either InvNoExecRevival or
 #        InvNoPubWhileExec depending on which violating state BFS reaches
 #        first, so both kills are the intended one.
@@ -241,15 +242,16 @@ run_temporal_violate() {
 #        state the current protocol makes unreachable, so their cfgs must
 #        complete CLEANLY and a violation means the enabling state came
 #        back.  MutReadyBeforePayload (publication may begin with no
-#        terminal chosen) is subsumed by the B1-1 Corrective-1 E-chain rule
-#        (exec = 0 with no terminal is unreachable).  MutReclaimIgnoresPub
+#        terminal chosen) is subsumed by the Corrective-1 E-chain rule of
+#        docs/roadmap/b1-1-request-core-evidence.md (exec = 0 with no
+#        terminal is unreachable).  MutReclaimIgnoresPub
 #        (reclaim drops the published requirement) is subsumed by #524's
 #        convergence: with the retired inflight-tolerant release flavor
 #        gone, every release edge requires publication complete, so
 #        InvBindImpliesPublished makes the dropped guard redundant -- and
 #        that witness is the tripwire for an inflight-tolerant release
 #        path reappearing.
-#    33. B2 (#395) public release-edge mutants: each release edge carries its
+#    33. Public release-edge mutants: each release edge carries its
 #        own mutant.  MutConsumeKeepsBind (take_result forgets the binding
 #        release) and MutDiscardKeepsBind (discard/destruction forgets it)
 #        must each die on InvReleasedNotLive from their own edge;
@@ -262,13 +264,13 @@ run_temporal_violate() {
 #        record the consumption/discard.  #524 removed ReleaseBind, the
 #        pre-F2 Completion release flavor, which was the only inflight-
 #        tolerant release edge; MutReleaseResolvable died with it.
-echo "== RequestCore:  safety =="
+echo "== RequestCore: safety =="
 run_clean rcore-safety RequestCore.cfg RequestCore
 
-echo "== RequestCore:  conditional liveness =="
+echo "== RequestCore: conditional liveness =="
 run_live_clean rcore-live RequestCoreLive.cfg RequestCore
 
-echo "== RequestCore:  safety mutants (ACTIVE MUTATION: each must violate its named property) =="
+echo "== RequestCore: safety mutants (ACTIVE MUTATION: each must violate its named property) =="
 run_violate rcore-mut-ignore-close RequestCoreMutIgnoreClose.cfg RequestCore InvNoAcceptAfterClose
 run_violate rcore-mut-ignore-health RequestCoreMutIgnoreHealth.cfg RequestCore InvNoAcceptAfterHealth
 run_violate rcore-mut-rollback-residue RequestCoreMutRollbackResidue.cfg RequestCore InvUnoccupiedClean
@@ -282,7 +284,7 @@ run_violate_any rcore-mut-exec-after-terminal RequestCoreMutExecAfterTerminal.cf
 run_violate rcore-mut-stale-event RequestCoreMutStaleEvent.cfg RequestCore InvTerminalMatchesGeneration
 run_violate rcore-mut-double-decrement RequestCoreMutDoubleDecrement.cfg RequestCore TypeOK
 
-echo "== RequestCore:  liveness mutants (ACTIVE MUTATION: each must violate a temporal property) =="
+echo "== RequestCore: liveness mutants (ACTIVE MUTATION: each must violate a temporal property) =="
 run_temporal_violate rcore-mut-strand-post-accept RequestCoreMutStrandPostAccept.cfg RequestCore
 run_temporal_violate rcore-mut-lazy-reclaim RequestCoreMutLazyReclaim.cfg RequestCore
 run_temporal_violate rcore-mut-ctl-after-settled RequestCoreMutCtlAfterSettled.cfg RequestCore
@@ -291,7 +293,7 @@ echo "== RequestCore: SUBSUMPTION WITNESSES (enabling state made unreachable; ea
 run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore
 run_clean rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg RequestCore
 
-echo "== Stage B2: RequestCore public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) =="
+echo "== RequestCore: public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) =="
 run_violate rcore-mut-consume-keeps-bind RequestCoreMutConsumeKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-consume-unpublished RequestCoreMutConsumeUnpublished.cfg RequestCore InvConsumeAfterPublish
 run_violate rcore-mut-discard-keeps-bind RequestCoreMutDiscardKeepsBind.cfg RequestCore InvReleasedNotLive
@@ -327,20 +329,20 @@ run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg Request
 #        retirement-after-delivery, observer-free settlement (S4), the
 #        delivery pin past binding release (OBS-03), and registration
 #        renewal after cancellation.
-echo "== ObserverCore: ObserverCore safety =="
+echo "== ObserverCore: safety =="
 run_clean obs-safety ObserverCore.cfg ObserverCore
 
-echo "== ObserverCore: ObserverCore conditional liveness =="
+echo "== ObserverCore: conditional liveness =="
 run_live_clean obs-live ObserverCoreLive.cfg ObserverCore
 
-echo "== ObserverCore: ObserverCore C++ mutation-seam mirrors (each must violate its named invariant) =="
+echo "== ObserverCore: C++ mutation-seam mirrors (each must violate its named invariant) =="
 run_violate obs-mut-attach-ignores-pub ObserverCoreMutAttachIgnoresPublication.cfg ObserverCore InvArmedRequiresUnpublished
 run_violate obs-mut-attach-terminal-as-pub ObserverCoreMutAttachTreatsTerminalAsPublished.cfg ObserverCore InvAlreadyTerminalRequiresPublication
 run_violate obs-mut-claim-unbounded ObserverCoreMutDeliveryClaimUnbounded.cfg ObserverCore InvAtMostOnceDelivery
 run_violate obs-mut-cancel-during-delivery ObserverCoreMutCancelDuringDeliveryReturns.cfg ObserverCore InvRetireOwnership
 run_temporal_violate obs-mut-publication-skips-queue ObserverCoreMutPublicationSkipsQueue.cfg ObserverCore
 
-echo "== ObserverCore: ObserverCore floor mutants (each must violate its named invariant or property) =="
+echo "== ObserverCore: floor mutants (each must violate its named invariant or property) =="
 run_violate obs-mut-obs-cancel-cancels-op ObserverCoreMutObsCancelCancelsOp.cfg ObserverCore InvCancelIsolation
 run_violate obs-mut-reclaim-ignores-observer ObserverCoreMutReclaimIgnoresObserver.cfg ObserverCore InvObserverPin
 run_temporal_violate obs-mut-no-delivery-wake ObserverCoreMutNoDeliveryWake.cfg ObserverCore
@@ -356,25 +358,25 @@ run_violate obs-cov-no-observer-settlement ObserverCoreCovNoObserverSettlement.c
 run_violate obs-cov-pinned-past-release ObserverCoreCovPinnedPastRelease.cfg ObserverCore InvCovPinnedPastRelease
 run_violate obs-cov-rearm ObserverCoreCovReArm.cfg ObserverCore InvCovReArm
 
-echo "== ShutdownCore: ShutdownCore safety =="
+echo "== ShutdownCore: safety =="
 run_clean shutdown-core-safety ShutdownCore.cfg ShutdownCore
 
-echo "== ShutdownCore: ShutdownCore C++ mutation-seam mirrors (each must violate its named invariant) =="
+echo "== ShutdownCore: C++ mutation-seam mirrors (each must violate its named invariant) =="
 run_violate shutdown-core-mut-m1-destroy-ignores-closure ShutdownCoreMutM1DestroyIgnoresClosure.cfg ShutdownCore InvDestroyRequiresExecutionClosed
 run_violate shutdown-core-mut-m6-snapshot-before-close ShutdownCoreMutM6SnapshotBeforeClose.cfg ShutdownCore InvNoAcceptAfterAdmissionClose
 run_violate shutdown-core-mut-m7-close-without-convergence ShutdownCoreMutM7CloseWithoutConvergence.cfg ShutdownCore InvExecutionClosedNoBorrowTouchingExecution
 run_violate shutdown-core-mut-m8-retire-fd-early ShutdownCoreMutM8RetireFdEarly.cfg ShutdownCore InvNotificationRetireRequiresNoDeliveryRefs
 
-echo "== ShutdownCore: ShutdownCore contract mutants (a clean run is the kill: the certified state becomes unreachable) =="
+echo "== ShutdownCore: contract mutants (a clean run is the kill: the certified state becomes unreachable) =="
 run_clean shutdown-core-mut-m4-require-consumption ShutdownCoreMutM4RequireConsumption.cfg ShutdownCore
 
-echo "== ShutdownCore: ShutdownCore reachability certificates (each must be reachable) =="
+echo "== ShutdownCore: reachability certificates (each must be reachable) =="
 run_violate shutdown-core-cov-published-survives ShutdownCoreCovPublishedSurvivesExecutionClose.cfg ShutdownCore InvCovPublishedSurvivesExecutionClose
 run_violate shutdown-core-cov-unconsumed-converges ShutdownCoreCovUnconsumedResultConverges.cfg ShutdownCore InvCovUnconsumedResultConverges
 run_violate shutdown-core-cov-internal-pin ShutdownCoreCovInternalPinThenCleanClose.cfg ShutdownCore InvCovInternalPinThenCleanClose
 run_violate shutdown-core-cov-cancel-policy ShutdownCoreCovCancelPolicyCompletes.cfg ShutdownCore InvCovCancelPolicyCompletes
 
-echo "== ShutdownCore: ShutdownCore conditional liveness (the SHUT-03 convergence statement) =="
+echo "== ShutdownCore: conditional liveness (the SHUT-03 convergence statement) =="
 run_live_clean shutdown-core-live ShutdownCoreLive.cfg ShutdownCore
 run_temporal_violate shutdown-core-live-ops-nofair ShutdownCoreLiveOpsNoFair.cfg ShutdownCore
 run_temporal_violate shutdown-core-live-close-nofair ShutdownCoreLiveCloseNoFair.cfg ShutdownCore

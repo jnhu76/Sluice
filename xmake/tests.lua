@@ -158,7 +158,7 @@ do
     end
 end
 
--- e4 (#474) TAIL lifecycle oracles, engine layer: stop/settlement/teardown
+-- TAIL lifecycle oracles, engine layer: stop/settlement/teardown
 -- contracts over the public TailEngine API. The target compiles an in-process
 -- pread interposer (ELF symbol interposition, dev/ino-gated) so a follow read
 -- can be held while stop is requested; no production seam is involved.
@@ -176,7 +176,7 @@ do
     end
 end
 
--- e4 (#474) TAIL lifecycle oracles, CLI layer: the real sluice-tail binary
+-- TAIL lifecycle oracles, CLI layer: the real sluice-tail binary
 -- under SIGINT/SIGTERM and under a held pending read released by the harness.
 -- Depends on the app target so the binary and the LD_PRELOAD interposer
 -- (tests/support/tail_pread_shim.c, loaded only by the spawned child) are
@@ -289,7 +289,7 @@ do
     request_core_target("request_core_consumer_probe",
                         R .. "tests/request_core_consumer_probe.cpp", false)
 
-    -- C1-B (#428) named mutation builds. Each flips one load-bearing arm of
+    -- Named mutation builds. Each flips one load-bearing arm of
     -- the attach/publication resolution and must be killed by the named
     -- failing assertion of the killer suite; they are executed and recorded
     -- manually, never run as regular tests.
@@ -300,7 +300,7 @@ do
                         R .. "tests/request_core_protocol_test.cpp", true,
                         "SLUICE_REQUEST_CORE_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED")
 
-    -- C1-C (#429) named mutation builds over the delivery state machine.
+    -- Named mutation builds over the delivery state machine.
     request_core_target("request_core_mut_delivery_claim_unbounded",
                         R .. "tests/request_core_protocol_test.cpp", true,
                         "SLUICE_REQUEST_CORE_MUTANT_DELIVERY_CLAIM_UNBOUNDED")
@@ -312,7 +312,7 @@ do
                         "SLUICE_REQUEST_CORE_MUTANT_PUBLICATION_SKIPS_QUEUE")
 end
 
--- B1-A context ownership/identity evidence. The observed surface (the
+-- Context ownership/identity evidence. The observed surface (the
 -- context-owned core, the slot-table identity, the adoption seam) is
 -- macro-guarded internal-testing surface, so this target compiles its own
 -- copies of the async TUs it observes and links neither sluice_async nor the
@@ -353,7 +353,7 @@ do
     end
 end
 
--- C2-A (#397) ProgressSource ownership/lifetime/route evidence. Same
+-- ProgressSource ownership/lifetime/route evidence. Same
 -- self-contained seam-build shape as the ownership target: the target compiles
 -- its own copies of the async TUs it observes and links neither sluice_async
 -- nor the other seam builds. The uring variant runs the same tests against the
@@ -396,7 +396,7 @@ do
         progress_source_target("progress_source_ownership_uring_test", true)
     end
 
-    -- C2-E corrective-round mutation builds. Each restores the pre-fix
+    -- Corrective-round mutation builds. Each restores the pre-fix
     -- unconditional close_admission progress signal and must be killed by the
     -- transition-regression tests of the ownership suite; they are executed
     -- and recorded manually, never run as regular tests.
@@ -408,7 +408,7 @@ do
     end
 end
 
--- C2-B (#397) ThreadPool no-lost-wake race campaign and external-loop W-03
+-- ThreadPool no-lost-wake race and external-loop W-03
 -- evidence. Same self-contained seam-build shape, observing the ThreadPool
 -- backend only; shared ProgressSource changes must still compile in the
 -- liburing-enabled progress/integration targets.
@@ -440,7 +440,7 @@ do
                         R .. "tests/threadpool_external_loop_test.cpp")
 end
 
--- C2-C (#397) io_uring readiness convergence evidence: kernel-style
+-- io_uring readiness convergence evidence: kernel-style
 -- no-lost-wake race campaign, real-ring external-loop W-03 half, and the
 -- kernel eventfd registration lifecycle. Real ring required; registered only
 -- when the liburing build switch is on.
@@ -479,7 +479,7 @@ if has_config("liburing") then
     uring_progress_target("uring_owed_residue_test",
                               R .. "tests/uring_owed_residue_test.cpp")
 
-    -- C2-C corrective-round mutation builds. Each restores one abandoned
+    -- Corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of
     -- the race suite; they are executed and recorded manually, never run as
     -- regular tests.
@@ -500,7 +500,7 @@ if has_config("liburing") then
                               "SLUICE_URING_EXTERNAL_LOOP_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
 end
 
--- B2 (#395) public Request<T> evidence. Same self-contained seam-build shape as
+-- Public Request<T> evidence. Same self-contained seam-build shape as
 -- the ownership target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
 do
@@ -546,7 +546,7 @@ do
     public_request_target("public_request_release_violation_test",
                           R .. "tests/public_request_release_violation_test.cpp", false)
 
-    -- B2 named mutation builds. Each flips one load-bearing mechanism of the
+    -- Named mutation builds. Each flips one load-bearing mechanism of the
     -- public-result surface and must be killed by the named failing assertion
     -- of the killer suite; they are executed and recorded manually, never run
     -- as regular tests.
@@ -570,7 +570,7 @@ do
                           "SLUICE_PUBLIC_REQUEST_MUTANT_DISCARD_ACCEPTS_INFLIGHT")
 end
 
--- E2 (#452) shutdown lifecycle oracles: retained results at execution close,
+-- Shutdown lifecycle oracles: retained results at execution close,
 -- the destructor death matrix, notification-fd retirement and reuse, the
 -- observer settlement path, the admission-close dual winner and the
 -- poison/control-pin retirement evidence. Same seam-build shape as the
@@ -614,7 +614,7 @@ do
         shutdown_lifecycle_target("shutdown_lifecycle_uring_test", true)
     end
 
-    -- E2 named mutation builds; executed manually, never regular tests.
+    -- Named mutation builds; executed manually, never regular tests.
     -- M6, M7 and M8 are killed by the ShutdownCore TLA+ mirrors in
     -- scripts/verify_tla.sh; the rest must be killed by the named failing
     -- assertion recorded next to each target.
@@ -883,7 +883,7 @@ do
                               "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
 end
 
--- D1 (#398) RequestScope evidence. Same self-contained seam-build shape as the
+-- RequestScope evidence. Same self-contained seam-build shape as the
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
 do
@@ -936,7 +936,7 @@ do
                              R .. "tests/request_scope_test.cpp", true)
     end
 
-    -- D1 named mutation builds. Each flips one load-bearing RequestScope rule
+    -- Named mutation builds. Each flips one load-bearing RequestScope rule
     -- and must be killed by the named failing scenario of the killer suite;
     -- they are executed and recorded manually, never run as regular tests.
     request_scope_target("request_scope_mut_reserve_after_accept",
