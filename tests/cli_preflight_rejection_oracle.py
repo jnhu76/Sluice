@@ -7,7 +7,7 @@ import tempfile
 
 ap=argparse.ArgumentParser();ap.add_argument('app',choices=['tail','copy']);ap.add_argument('binary',type=Path);ap.add_argument('output',type=Path);args=ap.parse_args();args.output.mkdir(parents=True,exist_ok=False)
 binary=args.binary.resolve();records=[];failures=[]
-with tempfile.TemporaryDirectory(prefix='sluice-f3-preflight-') as directory:
+with tempfile.TemporaryDirectory(prefix='sluice-preflight-oracle-') as directory:
  d=Path(directory);source=d/'source';source.write_text('seed\n');dest=d/'destination';dest.write_text('sentinel\n');missing=d/'missing'
  cases=[]
  if args.app=='tail':

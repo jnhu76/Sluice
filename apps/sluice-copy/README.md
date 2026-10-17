@@ -286,6 +286,10 @@ Earlier revisions of this README listed a `sluice_copy_*` test family
 gate. Those test sources were removed in `5f62b55b` and the script does not exist
 in this tree, so none of them is a current guarantee. The engine limit checks
 (`copy_task.cpp`), the slot-reuse and ordering contracts, and the
-directory-fsync retry were re-derived by the three targets above; CLI parsing,
-and the regular-file input domain at the CLI layer are **not** currently
-covered by subprocess tests. Controlled backend fault injection is covered.
+directory-fsync retry were re-derived by the three targets above.
+Out-of-range `--buffer-size`/`--pipeline-depth` rejection before any file
+access is covered by the manual strace oracle
+`tests/cli_preflight_rejection_oracle.py copy <binary> <output-dir>`; the
+rest of CLI parsing, and the regular-file input domain at the CLI layer are
+**not** currently covered by subprocess tests. Controlled backend fault
+injection is covered.
