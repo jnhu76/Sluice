@@ -35,7 +35,7 @@ Repository working rules              AGENTS.md
 2. docs/README.md                                this map
 3. docs/explicit-io-contract.md                  binding target contract (v2-r1)
 4. docs/roadmap/v2-conformance.md                implementation/evidence status
-5. C++ / tests / TLA+ / Lean / kernel evidence   what a commit actually does
+5. C++ / tests / TLA+ / kernel evidence        what a commit actually does
 ```
 
 C++ headers and implementation establish current behavior at a specific commit;
@@ -54,10 +54,15 @@ same PR.
 
 These four are the continuously maintained records under `docs/`. Everything
 else under `docs/` is a retained historical record or a dated evidence record
-kept for provenance, including the dated roadmap records
-(`docs/roadmap/b1-1-request-core-evidence.md`,
-`docs/roadmap/phase-m-f-live-handoff-20261012.md`), the `docs/review/` and
-`docs/evidence/` campaign records, and `docs/archive/`.
+kept for provenance: `docs/adr/` holds the adopted and superseded ADRs,
+`docs/archive/` the archived records, and `docs/evidence/` only the dated
+evidence records that active ledger rows or tooling still cite by path
+(`pr-b-boundary-contraction-20261016/`, `issue-524-requestcore-convergence-20261015/`,
+`f6-final-correspondence-20261014/`, `f2-authority-contraction-20261013/`,
+`g0-403-performance-baseline-20261015/`). Older campaign records — the Phase
+M/F campaign, `docs/review/`, the F0/F3/F4/F5 experiments and the retired
+formal corpora — live in Git history (base commit `9845cee1` and earlier)
+rather than in the tree; the ledger's carried rows cite them there.
 
 `research/RESULTS.md` (repository root, outside `docs/`) holds retained research
 conclusions; it is evidence and rationale, not an authority.
@@ -113,12 +118,14 @@ Two different things share the word "formal":
 
 - **`docs/archive/formal/fcb1/`** — historical FCB1 campaign reports for the
   superseded async-primitive architecture. Historical evidence only.
-- **`formal/` (repository root)** — Lean and TLA+ sources, `.cfg` instances and
-  `scripts/verify_formal.sh` / `scripts/verify_tla.sh`. These remain repository
-  formal source evidence. The living-model scope, evidence pointers and
-  coverage limitations are owned by the root's VERIFY-06 and the
-  [v2 conformance ledger](roadmap/v2-conformance.md) (group G8); the former v1
-  formal evidence map is superseded history.
+- **`formal/tla/` (repository root)** — the four living TLA+ models
+  (RequestCore, ObserverCore, ProgressSource, ShutdownCore) and their `.cfg`
+  instances. `scripts/verify_tla.sh` gates the first three;
+  `scripts/verify_progress_source_model.sh` gates ProgressSource. The
+  living-model scope, evidence pointers and coverage limitations are owned by
+  the root's VERIFY-06 and the [v2 conformance ledger](roadmap/v2-conformance.md)
+  (group G8). The retired synchronization-primitive TLA+ corpus and the Lean
+  FCB1 corpus are superseded history in Git history.
 
 Formal models prove properties of the model, not ownership of an architecture.
 Architecture selects proof obligations; proofs protect architecture; proofs do

@@ -1,7 +1,0 @@
-===== STEP 6y-ring-consumer: /home/jnhu/.local/bin/xmake build uring_public_consumer_probe
-[0m[38;5;2;1m[ 87%]:[0m [38;5;5;1m<uring_public_consumer_probe>[0m [38;5;5;1mlinking.debug uring_public_consumer_probe[0m
-[0m[1;38;5;1;1merror: [0m/usr/bin/ld.bfd: ../f520-shared-build/.objs/uring_public_consumer_probe/linux/x86_64/debug/tests/uring_public_consumer_probe.cpp.o: in function `main':
-/tmp/f520-work/tests/uring_public_consumer_probe.cpp:35:(.text+0x72): undefined reference to `sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)'
-collect2: error: ld returned 1 exit status
-[0m
-exit=255

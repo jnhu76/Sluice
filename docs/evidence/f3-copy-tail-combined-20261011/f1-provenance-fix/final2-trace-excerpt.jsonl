@@ -1,2 +1,0 @@
-{"event": "cmd_name", "sid": "20261011T121501.671489Z-H9a86054e-P001cd21f/20261011T121501.674729Z-H9a86054e-P001cd220", "thread": "main", "time": "2026-10-11T12:15:01.675029Z", "file": "git.c", "line": 507, "name": "receive-pack", "hierarchy": "push/receive-pack"}
-{"event": "cmd_name", "sid": "20261011T121501.849769Z-H9a86054e-P001cd257/20261011T121501.852755Z-H9a86054e-P001cd258", "thread": "main", "time": "2026-10-11T12:15:01.852948Z", "file": "git.c", "line": 507, "name": "receive-pack", "hierarchy": "push/receive-pack"}

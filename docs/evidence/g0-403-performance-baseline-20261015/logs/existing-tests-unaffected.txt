@@ -1,6 +1,0 @@
-request_core_protocol_test             exit=0  all 46 request core protocol tests passed
-request_core_publication_test          exit=0  all 11 request core publication tests passed
-request_scope_uring_test               exit=0  16 of 16 request scope tests passed
-submit_concurrency_uring_test          exit=0  submit concurrency oracle passed
-threadpool_external_loop_test          exit=0  all 20 threadpool external loop tests passed
-uring_external_loop_test               exit=0  all 5 uring external loop tests passed

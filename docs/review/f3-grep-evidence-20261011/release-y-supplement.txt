@@ -1,3 +1,0 @@
-all 9 app grep consumption tests passed
-CLI_ORACLE checks=47 failures=0
-7a997129f82d55709ccf76b502ad442440bebd15

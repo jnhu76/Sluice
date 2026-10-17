@@ -19,8 +19,6 @@ ADR 根据其中的稳定 requirement ID 细化实现选择；C++ 说明当前�
   证据、开放项与发布门槛；批准目标文档不代表代码已经符合。
 - [docs/README.md](docs/README.md)：文档地图——哪些是现行文档，哪些在 `docs/archive/` 归档。
 - [AGENTS.md](AGENTS.md)：仓库工作规则。
-- [v1 交互式架构演示](visuals/sluice-v1/)：v1 时期的可视化，仅作溯源保留，
-  不是当前契约。
 - [代码架构快照](docs/archive/architecture/architecture.md)：带基线的历史实现视图，不是 v2 目标图。
 - [研究结论](research/RESULTS.md)：保留的论据与证据。
 

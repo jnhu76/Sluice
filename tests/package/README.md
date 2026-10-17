@@ -11,10 +11,9 @@ graph: they must never build against the repository `include/`, `src/` or
   authority for the 11-header install surface (Appendix B).
 - [v2 conformance ledger](../../docs/roadmap/v2-conformance.md) — the release
   gate this evidence feeds.
-- `docs/review/f1-*` — the superseded F1 clean-room baseline (25-header
-  pre-contraction surface). Frozen records are retained as history; they are
-  not v2 evidence and must not be reproduced with the retired
-  `--check-frozen` protocol.
+- The superseded F1 clean-room baseline records (25-header pre-contraction
+  surface) are dated campaign history in Git history (base commit
+  `9845cee1` and earlier); they are not v2 evidence.
 
 ## Clean-room rules
 

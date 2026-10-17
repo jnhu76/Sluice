@@ -1,7 +1,0 @@
-debug-n tests=52 failed=0
-debug-y tests=66 failed=0
-release-n tests=52 failed=0
-release-y tests=66 failed=0
-asanubsan-n tests=52 failed=0
-tsan-n tests=51 failed=0
-F5_MATRIX_SIX_PROFILES_PASS

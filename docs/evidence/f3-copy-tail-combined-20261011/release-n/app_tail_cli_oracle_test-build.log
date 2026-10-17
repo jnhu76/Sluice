@@ -1,9 +1,0 @@
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<app_tail_cli_oracle_test>[0m cache compiling.release tests/app_tail_cli_oracle_test.cpp[0m
-[0m[38;5;2;1m[ 53%]:[0m [38;5;5;1m<sluice-tail>[0m cache compiling.release apps/sluice-tail/main.cpp[0m
-[0m[38;5;2;1m[ 53%]:[0m [38;5;5;1m<sluice-tail>[0m cache compiling.release apps/sluice-tail/tail_task.cpp[0m
-[0m[38;5;2;1m[ 53%]:[0m [38;5;5;1m<sluice-tail>[0m cache compiling.release apps/sluice-tail/cli_parse.cpp[0m
-[0m[38;5;2;1m[ 60%]:[0m [38;5;5;1m<tail_pread_shim>[0m cache compiling.release tests/support/tail_pread_shim.c[0m
-[0m[38;5;2;1m[ 66%]:[0m [38;5;5;1m<tail_pread_shim>[0m [38;5;5;1mlinking.release libtail_pread_shim.so[0m
-[0m[38;5;2;1m[ 79%]:[0m [38;5;5;1m<sluice-tail>[0m [38;5;5;1mlinking.release sluice-tail[0m
-[0m[38;5;2;1m[ 88%]:[0m [38;5;5;1m<app_tail_cli_oracle_test>[0m [38;5;5;1mlinking.release app_tail_cli_oracle_test[0m
-[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 3.903s[0m

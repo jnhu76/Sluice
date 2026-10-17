@@ -1,2 +1,0 @@
-$ /home/jnhu/.local/bin/xmake f -m release --liburing=n --ccache=n -o /tmp/f5-build-release-n -y
-[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m

@@ -1,2 +1,0 @@
-label	start	end	exit_code	workers	heap	host	pid	metadir	model_sha	cfg_sha	jar_sha
-liveness	2026-10-15T19:12:35+08:00	2026-10-15T19:36:56+08:00	0	16	48g	E5	65752	/home/jnhu/.cache/sluice/tla524/liveness-formal	4ad6dbe5cd4af19e12a846f06818622e099a37899474206fdd6984e445725aa1	062c8c3e6b873a5bfd518856952ceacd942dab2f08bf9e6145c34be4f771f09d	936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88

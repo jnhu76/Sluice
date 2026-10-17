@@ -1,9 +1,0 @@
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan tests/request_scope_test.cpp[0m
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan src/async/async_io_context.cpp[0m
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan src/async/request_scope.cpp[0m
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan src/async/threadpool_backend.cpp[0m
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan src/async/fail_fast.cpp[0m
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan src/async/detail/context_identity.cpp[0m
-[0m[38;5;2;1m[ 12%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m compiling.asanubsan src/async/detail/request_core.cpp[0m
-[0m[38;5;2;1m[ 82%]:[0m [38;5;5;1m<request_scope_mut_finish_cancels_cleanup>[0m [38;5;5;1mlinking.asanubsan request_scope_mut_finish_cancels_cleanup[0m
-[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 2.209s[0m
