@@ -115,7 +115,7 @@ The minimum Linux Clang Debug baseline is documented in `AGENTS.md`. Additional 
 - real-liburing tests;
 - negative compile gates;
 - formal positive and negative-control suites;
-- repository mechanical/pre-push gates;
+- repository mechanical gates (comment-authority guard, package-verifier self-tests);
 - performance attribution/benchmark evidence.
 
 Report only commands that were actually executed.
