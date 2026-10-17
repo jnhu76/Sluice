@@ -3,7 +3,7 @@
 -- so the measured artifact is the same archive the release build produces.
 --
 -- Build:  xmake build -g bench -y
--- Run:    G0_JSONL=<file> xmake run bench_w01_direct
+-- Run:    SLUICE_BENCH_JSONL=<file> xmake run bench_w01_direct
 
 local R = SLUICE_ROOT
 

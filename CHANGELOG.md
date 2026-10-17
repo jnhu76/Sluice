@@ -8,15 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 accumulates under `[Unreleased]`).
 
 > **Release-note workflow:** draft the section for a release from the commit
-> history with `python3 scripts/changelog/generate.py --base <prev-tag>
-> --head <commit> --version X.Y.Z --date YYYY-MM-DD`. The script maps
-> Conventional-Commits message prefixes to Keep a Changelog categories and
-> prints a draft (or inserts it with `--write`). Entries are **curated for
-> humans, not dumped from git** — review, merge duplicates, and reword the
-> draft before committing it. The previous record (v0.1.0 era) is archived
-> at `docs/history/archive/changelog-v0.1.0-era.md`.
+> history and curate it by hand. Entries are **curated for humans, not dumped
+> from git** — review, merge duplicates, and reword the draft before
+> committing it. The previous record (v0.1.0 era) and the retired
+> `scripts/changelog/generate.py` drafting helper live in Git history.
 
 ## [Unreleased]
+
+### Changed
+
+- **Repository hygiene contraction** — stage-labeled test/target/mutant
+  names renamed to behavior-describing names; closed-campaign verification
+  scripts, the retired formal corpora and dated-only evidence records moved
+  to Git history; the dead lefthook pre-push configuration and the closed
+  M-R disposition guard workflow removed. No product behavior, public API
+  or supported-surface change; details in
+  `docs/evidence/repo-hygiene-contraction-20261017/`.
 
 ### Fixed
 
@@ -30,17 +37,16 @@ accumulates under `[Unreleased]`).
   `earliest_active_deadline` / `waiting_select_count` locked-seam precedent.
   Test-only internal-testing vocabulary; production behavior, layout, and
   public API unchanged. The compliance gate record for the repair lands
-  with PR #231 (docs/architecture/).
+  with PR #231 (record in Git history).
 
 ### Changed
 
 - **Changelog restructured** — the changelog now lives at the repository
   root (`CHANGELOG.md`) in Keep a Changelog 2.0.0 format, and the version
   history starts at the `v0.0.1` reference baseline. The pre-v0.0.1 record
-  (the v0.1.0 era) moved to
-  `docs/history/archive/changelog-v0.1.0-era.md` with a Historical banner.
-  Added `scripts/changelog/generate.py` (with `--self-test`) to draft
-  release sections from commit history.
+  (the v0.1.0 era) moved to Git history with a Historical banner;
+  `scripts/changelog/generate.py` (with `--self-test`) was added then and
+  has since been retired.
 
 ## [0.0.1] - 2026-08-26
 
@@ -48,8 +54,8 @@ accumulates under `[Unreleased]`).
 pre-six-domain-refactor product surface. It accumulates everything since the
 v0.1.0-era record: the complete synchronous core and async runtime, the
 backend set, the application track, the post-freeze correctness work, and
-the documentation reorientation. Full detail per area:
-`docs/history/archive/changelog-v0.1.0-era.md`.
+the documentation reorientation. Full detail per area: the archived
+changelog record in Git history.
 
 ### Added
 

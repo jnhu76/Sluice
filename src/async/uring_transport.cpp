@@ -90,7 +90,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
                 newly_poisoned = !poisoned_before && fatal_error_.has_value();
             }
         }
-#if !defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+#if !defined(SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
         unsubmitted_after_dispatch =
             !fatal_error_.has_value() && dispatch_retry_remains_locked_();
 #endif
@@ -260,7 +260,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
 
     const int err = -rc;
     if (err == EINTR || err == EAGAIN || err == EBUSY) {
-#if !defined(SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE)
+#if !defined(SLUICE_BACKEND_CONTRACT_MUTANT_SUBMIT_BATCH_INVISIBLE)
         // A partial kernel fetch before the retryable error would otherwise
         // desync this ledger against the next retry's consumed count.
         (void)reconcile_ledger_with_kernel_locked_();
@@ -268,7 +268,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
         return;
     }
 
-#if !defined(SLUICE_E1_MUTANT_SUBMIT_BATCH_INVISIBLE)
+#if !defined(SLUICE_BACKEND_CONTRACT_MUTANT_SUBMIT_BATCH_INVISIBLE)
     // Resolve each ledger entry against the kernel SQ head before poison:
     // entries the head already passed are kernel-visible and keep their real
     // completion path; the remainder are provably invisible because no
@@ -299,7 +299,7 @@ std::size_t UringAsyncBackend::reconcile_ledger_with_kernel_locked_() noexcept {
     if (transport_ledger_ == nullptr || transport_ledger_->empty())
         return 0;
     const auto& sq = ring_state_->ring.sq;
-#if defined(SLUICE_E1_MUTANT_MASKED_SQ_CARDINALITY)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_MASKED_SQ_CARDINALITY)
     const unsigned khead = *sq.khead;
     const unsigned tail = static_cast<unsigned>(sq.sqe_tail & sq.ring_mask);
     const unsigned unconsumed = static_cast<unsigned>((tail - khead) & sq.ring_mask);
@@ -352,7 +352,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         const detail::RequestKey key{core_->context(), local.slot, local.generation};
         detail::TerminalCandidate candidate;
         candidate.kind = detail::TerminalCandidateKind::physical_outcome;
-#if defined(SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M5_POISON_FABRICATES_SUCCESS)
         candidate.outcome = sluice::detail::IoOutcome::success(0);
 #else
         candidate.outcome = sluice::detail::IoOutcome::failure(error);
@@ -371,7 +371,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         bump(stats_, &AsyncStats::completion_errors);
     }
 
-#if defined(SLUICE_B1C_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE)
+#if defined(SLUICE_URING_CORE_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE)
     for (std::size_t i = 0; i < 0; ++i)
 #else
     for (std::size_t i = 0; i < transport_ledger_->size(); ++i)
@@ -402,7 +402,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
             if (!route.terminal_delivered) {
                 detail::TerminalCandidate candidate;
                 candidate.kind = detail::TerminalCandidateKind::physical_outcome;
-#if defined(SLUICE_E2_MUTANT_M5_POISON_FABRICATES_SUCCESS)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M5_POISON_FABRICATES_SUCCESS)
                 candidate.outcome = sluice::detail::IoOutcome::success(0);
 #else
                 candidate.outcome = sluice::detail::IoOutcome::failure(error);
@@ -442,7 +442,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
         physical.class_a_recovery_retired = true;
     }
 
-#if defined(SLUICE_E2_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW)
+#if defined(SLUICE_SHUTDOWN_MUTANT_M9_POISON_RELEASES_RUNNING_BORROW)
     for (std::size_t router_index = 0; router_index < router_.size(); ++router_index) {
         RouterEntry& route = router_[router_index];
         if (!route.in_use || route.terminal_delivered)
@@ -463,7 +463,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
     // CQE may be parked in the unflushable overflow list while the operation
     // itself is still executing and still owns the caller's buffer), so only
     // a delivered CQE may retire them.
-#if defined(SLUICE_E1_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT)
+#if defined(SLUICE_URING_PROGRESS_MUTANT_OVERFLOW_ABSENCE_SETTLES_INFLIGHT)
     if (::io_uring_cq_has_overflow(&ring_state_->ring)) {
         const auto& cq = ring_state_->ring.cq;
         const unsigned visible_ready = ::io_uring_cq_ready(&ring_state_->ring);
@@ -524,7 +524,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
 }
 
 std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
-#if defined(SLUICE_B1C_MUTANT_COOKIE_REUSE)
+#if defined(SLUICE_URING_CORE_MUTANT_COOKIE_REUSE)
     return 1;
 #endif
     if (next_cookie_ == 0 || next_cookie_ >= CONTROL_TAG) {
@@ -596,7 +596,7 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
         bump(stats_, &AsyncStats::canceled_ops);
         signal_ready_progress();
     } else if (
-#if defined(SLUICE_E1_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED)
         false
 #else
         disposition == detail::PublicCancel::requested
@@ -646,7 +646,7 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation 
         return;
     }
 
-#if !defined(SLUICE_B1C_MUTANT_REMOVE_CONTROL_PIN)
+#if !defined(SLUICE_URING_CORE_MUTANT_REMOVE_CONTROL_PIN)
     const detail::RequestKey key{core_->context(), h.slot, h.generation};
     if (!core_->acquire_control(key)) {
         detail::uring_core_handoff_fail_fast();

@@ -5,6 +5,6 @@
 // async symbols and the package split is broken.
 #include <sluice/async/async_io_context.hpp>
 
-void sluice_f1_negative_use_async(sluice::async::AsyncIoContext& ctx) {
+void sluice_negative_use_async(sluice::async::AsyncIoContext& ctx) {
     (void)ctx.outstanding();
 }

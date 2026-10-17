@@ -90,5 +90,9 @@ fault-injected. Exhaustive allocation failure, `-n` at its maximum, inotify,
 `-F` name reopening, stdin, multiple files, byte modes and byte-exact missing-final-
 newline parity remain outside the evidence or implemented feature set.
 
-See [the F3 slice record](../../docs/review/f3-tail-owned-driver-20261011.md) for
-requirements, protocol, contraction audit and exact validation commands.
+`tests/cli_preflight_rejection_oracle.py tail <binary> <output-dir>` (manual,
+requires `strace`) drives removed and invalid option forms against the built
+binary and requires exit 1, the exact usage diagnostic, empty stdout, no
+`open`/`openat`/`creat` of the source, missing or destination path, an
+untouched destination and no scratch files — rejection must precede any file
+access.

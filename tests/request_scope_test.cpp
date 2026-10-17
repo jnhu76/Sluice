@@ -143,7 +143,7 @@ std::unique_ptr<Backend> make_backend(std::size_t capacity) {
 #endif
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_d1_scope_XXXXXX";
+    char path[] = "/tmp/sluice_request_scope_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -196,7 +196,7 @@ struct LifetimeProbe {
 };
 
 bool scope_construction_requires_a_claimable_progress_owner(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 owner\n");
+    auto file = open_temp_file(t, "sluice request scope owner\n");
     if (!file.has_value())
         return false;
 
@@ -278,7 +278,7 @@ bool zero_capacity_is_a_setup_error(Tracker& t) {
 }
 
 bool submit_commits_accepted_responsibility(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 commit\n");
+    auto file = open_temp_file(t, "sluice request scope commit\n");
     if (!file.has_value())
         return false;
 
@@ -320,7 +320,7 @@ bool submit_commits_accepted_responsibility(Tracker& t) {
 }
 
 bool v18a_scope_capacity_exhaustion_rejects_before_submission(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 v18a\n");
+    auto file = open_temp_file(t, "sluice request scope v18a\n");
     if (!file.has_value())
         return false;
 
@@ -365,10 +365,10 @@ bool v18a_scope_capacity_exhaustion_rejects_before_submission(Tracker& t) {
 }
 
 bool v18b_second_submission_rejection_keeps_first_owned(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 v18b\n");
+    auto file = open_temp_file(t, "sluice request scope v18b\n");
     if (!file.has_value())
         return false;
-    auto rejected_source = open_temp_file(t, "sluice d1 v18b closed\n");
+    auto rejected_source = open_temp_file(t, "sluice request scope v18b closed\n");
     if (!rejected_source.has_value())
         return false;
     File closed = std::move(rejected_source.value());
@@ -412,7 +412,7 @@ bool v18b_second_submission_rejection_keeps_first_owned(Tracker& t) {
 }
 
 bool take_consumes_and_releases_the_slot_for_reuse(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 reuse\n");
+    auto file = open_temp_file(t, "sluice request scope reuse\n");
     if (!file.has_value())
         return false;
 
@@ -449,7 +449,7 @@ bool take_consumes_and_releases_the_slot_for_reuse(Tracker& t) {
 }
 
 bool retained_ready_results_occupy_scope_capacity(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 retention\n");
+    auto file = open_temp_file(t, "sluice request scope retention\n");
     if (!file.has_value())
         return false;
 
@@ -501,7 +501,7 @@ bool retained_ready_results_occupy_scope_capacity(Tracker& t) {
 }
 
 bool finish_is_idempotent_and_rejects_late_submissions(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 finish\n");
+    auto file = open_temp_file(t, "sluice request scope finish\n");
     if (!file.has_value())
         return false;
 
@@ -588,7 +588,7 @@ bool w02_tracer_bounded_pipeline(Tracker& t) {
 }
 
 bool destructor_settles_on_early_return_with_drain_policy(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 early drain\n");
+    auto file = open_temp_file(t, "sluice request scope early drain\n");
     if (!file.has_value())
         return false;
 
@@ -613,7 +613,7 @@ bool destructor_settles_on_early_return_with_drain_policy(Tracker& t) {
 }
 
 bool destructor_cleanup_uses_the_selected_policy(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 policy\n");
+    auto file = open_temp_file(t, "sluice request scope policy\n");
     if (!file.has_value())
         return false;
 
@@ -636,7 +636,7 @@ bool destructor_cleanup_uses_the_selected_policy(Tracker& t) {
 }
 
 bool finish_reports_an_unconsumed_operation_error(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 finish error\n");
+    auto file = open_temp_file(t, "sluice request scope finish error\n");
     if (!file.has_value())
         return false;
 
@@ -666,7 +666,7 @@ bool finish_reports_an_unconsumed_operation_error(Tracker& t) {
 }
 
 bool destructor_cleanup_preserves_the_original_exception_and_still_releases(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 unwind error\n");
+    auto file = open_temp_file(t, "sluice request scope unwind error\n");
     if (!file.has_value())
         return false;
 
@@ -741,7 +741,7 @@ bool near_max_wait_bound_stays_well_defined(Tracker& t) {
 }
 
 bool v18c_exception_unwind_settles_and_preserves_the_exception(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 v18c\n");
+    auto file = open_temp_file(t, "sluice request scope v18c\n");
     if (!file.has_value())
         return false;
 
@@ -852,7 +852,7 @@ bool child_dies_running(void (*scenario)()) {
 
 
 bool v19_timeout_preserves_responsibility_until_cleanup(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 v19\n");
+    auto file = open_temp_file(t, "sluice request scope v19\n");
     if (!file.has_value())
         return false;
 
@@ -902,7 +902,7 @@ bool v19_timeout_preserves_responsibility_until_cleanup(Tracker& t) {
 }
 
 bool wait_for_reports_sticky_control_interruption(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 control\n");
+    auto file = open_temp_file(t, "sluice request scope control\n");
     if (!file.has_value())
         return false;
 
@@ -948,7 +948,7 @@ bool wait_for_reports_sticky_control_interruption(Tracker& t) {
 }
 
 bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 cancel won\n");
+    auto file = open_temp_file(t, "sluice request scope cancel won\n");
     if (!file.has_value())
         return false;
 
@@ -1003,7 +1003,7 @@ bool cancel_won_before_execution_settles_as_a_canceled_terminal(Tracker& t) {
 }
 
 bool pre_accept_throw_rolls_back_the_reservation(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 throw\n");
+    auto file = open_temp_file(t, "sluice request scope throw\n");
     if (!file.has_value())
         return false;
 
@@ -1038,7 +1038,7 @@ bool pre_accept_throw_rolls_back_the_reservation(Tracker& t) {
 }
 
 bool near_max_bound_waits_out_a_stalled_operation(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 near max stall\n");
+    auto file = open_temp_file(t, "sluice request scope near max stall\n");
     if (!file.has_value())
         return false;
 
@@ -1273,7 +1273,7 @@ bool explicit_finish_reports_an_externally_canceled_terminal(Tracker& t) {
 bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
     struct Scenario {
         static void run() {
-            std::string path = make_temp_file("sluice d1 health\n");
+            std::string path = make_temp_file("sluice request scope health\n");
             auto opened = File::open(path);
             ::unlink(path.c_str());
             if (!opened.has_value())
@@ -1308,7 +1308,7 @@ bool health_failure_during_cleanup_fails_fast_instead_of_returning(Tracker& t) {
 
 #if !defined(SLUICE_TSAN_TESTING)
 bool submit_path_allocates_nothing_after_acceptance(Tracker& t) {
-    auto file = open_temp_file(t, "sluice d1 alloc\n");
+    auto file = open_temp_file(t, "sluice request scope alloc\n");
     if (!file.has_value())
         return false;
 

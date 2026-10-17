@@ -40,7 +40,7 @@ int g_failures = 0;
 constexpr int EXIT_UNAVAILABLE = 2;
 
 std::string make_temp_path() {
-    char path[] = "/tmp/sluice_f1_w03_XXXXXX";
+    char path[] = "/tmp/sluice_w03_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};

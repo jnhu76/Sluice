@@ -112,7 +112,7 @@ Examples: async I/O ownership, RequestKey/RequestSlot lifecycle, Completion publ
 - [ ] Negative compile
 - [ ] Formal positive gates
 - [ ] Formal negative controls / witnesses
-- [ ] Repository mechanical / pre-push gates
+- [ ] Repository mechanical gates (comment-authority guard, package-verifier self-tests)
 - [ ] `git diff --check`
 
 Unrun / not-applicable gates and reason:

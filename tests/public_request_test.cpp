@@ -63,7 +63,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_b2_request_XXXXXX";
+    char path[] = "/tmp/sluice_public_request_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -190,7 +190,7 @@ bool pre_accept_rejection_returns_no_request(Tracker& t) {
 }
 
 bool accepted_request_pends_until_publication(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 pending window\n");
+    auto file = open_temp_file(t, "sluice public request pending window\n");
     if (!file.has_value())
         return false;
 
@@ -225,7 +225,7 @@ bool accepted_request_pends_until_publication(Tracker& t) {
     t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
                 observed.result.value() == 8,
             "try_result acquires the publication and observes the confirmed count");
-    t.check(std::memcmp(buffer.data(), "sluice b", 8) == 0,
+    t.check(std::memcmp(buffer.data(), "sluice p", 8) == 0,
             "the buffer is reusable after the publication was acquired");
 
     auto consumed = request.take_result();
@@ -246,7 +246,7 @@ bool accepted_request_pends_until_publication(Tracker& t) {
 #if defined(SLUICE_PUBLIC_REQUEST_URING)
 
 bool post_accept_failure_converges_on_the_returned_request(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 v05\n");
+    auto file = open_temp_file(t, "sluice public request v05\n");
     if (!file.has_value())
         return false;
 
@@ -287,7 +287,7 @@ bool post_accept_failure_converges_on_the_returned_request(Tracker& t) {
 #else
 
 bool post_accept_failure_converges_on_the_returned_request(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 v05\n");
+    auto file = open_temp_file(t, "sluice public request v05\n");
     if (!file.has_value())
         return false;
 
@@ -325,7 +325,7 @@ bool post_accept_failure_converges_on_the_returned_request(Tracker& t) {
 #endif
 
 bool zero_op_request_publishes_at_acceptance(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 zero\n");
+    auto file = open_temp_file(t, "sluice public request zero\n");
     if (!file.has_value())
         return false;
 
@@ -355,7 +355,7 @@ bool zero_op_request_publishes_at_acceptance(Tracker& t) {
 }
 
 bool cancel_wins_before_dispatch_and_converges(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 cancel\n");
+    auto file = open_temp_file(t, "sluice public request cancel\n");
     if (!file.has_value())
         return false;
 
@@ -418,7 +418,7 @@ bool cancel_wins_before_dispatch_and_converges(Tracker& t) {
 }
 
 bool consumed_result_with_a_live_control_ref_pins_the_slot(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 v08\n");
+    auto file = open_temp_file(t, "sluice public request v08\n");
     if (!file.has_value())
         return false;
 
@@ -468,7 +468,7 @@ bool consumed_result_with_a_live_control_ref_pins_the_slot(Tracker& t) {
 }
 
 bool retained_published_result_pins_capacity_while_execution_is_quiescent(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 retention\n");
+    auto file = open_temp_file(t, "sluice public request retention\n");
     if (!file.has_value())
         return false;
 
@@ -521,7 +521,7 @@ bool retained_published_result_pins_capacity_while_execution_is_quiescent(Tracke
 }
 
 bool discard_releases_the_published_binding(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 discard\n");
+    auto file = open_temp_file(t, "sluice public request discard\n");
     if (!file.has_value())
         return false;
 
@@ -554,7 +554,7 @@ bool discard_releases_the_published_binding(Tracker& t) {
 }
 
 bool publication_inflight_window_keeps_the_request_nonterminal(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 inflight window\n");
+    auto file = open_temp_file(t, "sluice public request inflight window\n");
     if (!file.has_value())
         return false;
 
@@ -616,7 +616,7 @@ bool publication_inflight_window_keeps_the_request_nonterminal(Tracker& t) {
 }
 
 bool move_transfers_responsibility_without_duplicating_it(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 move\n");
+    auto file = open_temp_file(t, "sluice public request move\n");
     if (!file.has_value())
         return false;
 
@@ -692,7 +692,7 @@ bool move_transfers_responsibility_without_duplicating_it(Tracker& t) {
 }
 
 bool context_move_preserves_bound_requests(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 context move\n");
+    auto file = open_temp_file(t, "sluice public request context move\n");
     if (!file.has_value())
         return false;
 
@@ -726,7 +726,7 @@ bool context_move_preserves_bound_requests(Tracker& t) {
 }
 
 bool sync_request_returns_result_void(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b2 sync\n");
+    auto file = open_temp_file(t, "sluice public request sync\n");
     if (!file.has_value())
         return false;
 

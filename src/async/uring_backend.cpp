@@ -181,7 +181,7 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
         throw;
     }
     have_ring_ = true;
-#if defined(SLUICE_E1_MUTANT_OPCODE_PROBE_IGNORED)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_OPCODE_PROBE_IGNORED)
     if (false) {
 #else
     if (!probe_required_opcodes_()) {
@@ -192,7 +192,7 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
             "sluice::async::UringAsyncBackend: io_uring required request opcodes unavailable "
             "(required-profile setup failure)");
     }
-#if defined(SLUICE_E1_MUTANT_CAPABILITY_PROBE_IGNORED)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_CAPABILITY_PROBE_IGNORED)
     if (false) {
 #else
     if (!probe_statx_support_()) {
@@ -310,7 +310,7 @@ ProgressPass UringAsyncBackend::poll_progress() {
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         pass.immediate_work_remains = !publication_pending_->empty() || any_event_owed_locked_();
-#if defined(SLUICE_B1C_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+#if defined(SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
         pass.dispatch_retry_remains = false;
 #else
         pass.dispatch_retry_remains = dispatch_retry_remains_locked_();
@@ -472,7 +472,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
         offset = op.len == 0 ? std::uint64_t{0} : op.offset;
         zero_op = op.len == 0;
     }
-#if defined(SLUICE_B1C_MUTANT_PREMATURE_ZERO_OP_DISPATCH)
+#if defined(SLUICE_URING_CORE_MUTANT_PREMATURE_ZERO_OP_DISPATCH)
     zero_op = false;
 #endif
     prepared_ops_[h.slot.value] =
@@ -659,7 +659,7 @@ std::size_t UringAsyncBackend::poll() {
 void UringAsyncBackend::close_admission() {
     if (!have_ring_)
         return;
-#if defined(SLUICE_C2E_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
+#if defined(SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
     if (core_ != nullptr) {
         (void)core_->close_admission();
     }

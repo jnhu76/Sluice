@@ -66,7 +66,7 @@ inline constexpr bool terminal_is_kernel_cancel(const IoError& error) noexcept {
     return error.code == IoError::Code::canceled || error.os_errno == ECANCELED;
 }
 
-#if defined(SLUICE_E1_MUTANT_STICKY_INTENT_DROPPED)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_STICKY_INTENT_DROPPED)
 inline constexpr bool sticky_intent_retained() noexcept {
     return false;
 }

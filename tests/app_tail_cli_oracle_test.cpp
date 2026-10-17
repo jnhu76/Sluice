@@ -1,4 +1,4 @@
-// e4 (#474): TAIL signal-path, pending-I/O settlement and bounded-teardown
+// TAIL signal-path, pending-I/O settlement and bounded-teardown
 // oracles against the REAL sluice-tail binary. The parent harness drives the
 // child through stdout pipes, signal delivery and a test-only LD_PRELOAD
 // interposer (tests/support/tail_pread_shim.c) whose PRE/ENTERED/EXIT events
@@ -69,7 +69,7 @@ struct TempFile {
     int append_fd = -1;
 
     explicit TempFile(const std::string& content) {
-        char tmpl[] = "/tmp/sluice_tail_e4_cli_XXXXXX";
+        char tmpl[] = "/tmp/sluice_tail_cli_XXXXXX";
         const int fd = ::mkstemp(tmpl);
         if (fd < 0) {
             std::fprintf(stderr, "DEADLINE_ABORT: mkstemp failed\n");
@@ -146,7 +146,7 @@ class TailChild {
     bool spawn(const std::string& bin, const std::vector<std::string>& args, dev_t shim_dev = 0,
                ino_t shim_ino = 0) {
         const bool with_shim = shim_dev != 0 || shim_ino != 0;
-        char dir_tmpl[] = "/tmp/sluice_tail_e4_child_XXXXXX";
+        char dir_tmpl[] = "/tmp/sluice_tail_child_XXXXXX";
         char* dir = ::mkdtemp(dir_tmpl);
         if (!dir) {
             std::fprintf(stderr, "FAIL: mkdtemp\n");
@@ -757,17 +757,17 @@ bool harness_watchdog_selftest() {
 // while writing stderr must be observable through err_text().
 bool harness_stderr_capture_selftest() {
     TailChild child;
-    if (!child.spawn("/bin/sh", {"-c", "echo e4-stderr-marker >&2; exit 0"})) {
+    if (!child.spawn("/bin/sh", {"-c", "echo tail-stderr-marker >&2; exit 0"})) {
         check_msg(false, "selftest-stderr: spawn sh");
         return false;
     }
     const ChildOutcome o = child.wait_exit(kExitDeadline);
     check_msg(o.kind == ChildOutcome::Kind::exited && o.code == 0,
               "selftest-stderr: exit 0, got " + o.describe());
-    check_msg(child.err_text().find("e4-stderr-marker") != std::string::npos,
+    check_msg(child.err_text().find("tail-stderr-marker") != std::string::npos,
               "selftest-stderr: stderr captured, got: [" + child.err_text() + "]");
     return o.kind == ChildOutcome::Kind::exited && o.code == 0 &&
-           child.err_text().find("e4-stderr-marker") != std::string::npos;
+           child.err_text().find("tail-stderr-marker") != std::string::npos;
 }
 
 bool harness_split_line_selftest() {

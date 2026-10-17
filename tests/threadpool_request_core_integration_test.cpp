@@ -1,0 +1,1007 @@
+#include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
+#include <sluice/async/detail/request_core.hpp>
+#include <sluice/async/request.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
+#include <sluice/file_resource.hpp>
+#include <sluice/result.hpp>
+
+#include <atomic>
+#include <cstdint>
+#include <cstdio>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+
+#include <fcntl.h>
+#include <unistd.h>
+
+namespace {
+
+using namespace sluice::async;
+using sluice::File;
+using sluice::IoError;
+using sluice::Result;
+using sluice::async::detail::CoreSnapshot;
+using sluice::async::detail::PublicCancel;
+using sluice::async::detail::PublicLookup;
+using sluice::async::detail::RequestCore;
+using sluice::async::detail::RequestKey;
+using sluice::async::detail::SlotIndex;
+
+constexpr std::uint64_t kUnrepresentableOffset = std::numeric_limits<std::uint64_t>::max();
+
+struct Tracker {
+    const char* name;
+    int failures = 0;
+
+    void check(bool ok, const char* label) {
+        if (!ok) {
+            ++failures;
+            std::fprintf(stderr, "FAIL [%s] %s\n", name, label);
+        }
+    }
+};
+
+std::string make_temp_file(const std::string& content) {
+    char path[] = "/tmp/sluice_threadpool_core_XXXXXX";
+    const int fd = ::mkstemp(path);
+    if (fd < 0)
+        return {};
+    if (!content.empty()) {
+        const ssize_t n = ::write(fd, content.data(), content.size());
+        if (n != static_cast<ssize_t>(content.size())) {
+            ::close(fd);
+            return {};
+        }
+    }
+    ::close(fd);
+    return path;
+}
+
+std::optional<File> open_temp_file(Tracker& t, const std::string& content) {
+    const std::string path = make_temp_file(content);
+    if (path.empty()) {
+        t.check(false, "the temporary fixture file is created");
+        return std::nullopt;
+    }
+    auto opened = File::open(path, sluice::FileOpen{});
+    ::unlink(path.c_str());
+    if (!opened.has_value()) {
+        t.check(false, "the temporary fixture file opens");
+        return std::nullopt;
+    }
+    return std::optional<File>{std::move(opened.value())};
+}
+
+bool resolves_as(RequestReadiness observed, RequestReadiness expected) {
+    return observed == expected;
+}
+
+template <class Gate> struct GateGuard {
+    Gate& gate;
+    bool rearmed = false;
+    ~GateGuard() {
+        if (!rearmed) {
+            resume_threadpool_gate(gate);
+            rearm_threadpool_gate(gate);
+        }
+    }
+};
+
+bool pre_accept_failure_leaves_no_core_residue(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core residue\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    std::byte buffer{std::byte{0}};
+    auto rejected = ctx.submit_read(
+        ReadOp{NativeFileRef(*file), &buffer, 1, kUnrepresentableOffset});
+    t.check(!rejected.has_value() && rejected.error().code == IoError::Code::invalid_argument,
+            "an unrepresentable range is rejected as invalid_argument and yields no request");
+
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.public_bindings == 0 &&
+                snap.execution_refs == 0 && snap.free_slots == core.capacity(),
+            "the rejected submission leaves no core residue and no leaked capacity");
+    return true;
+}
+
+bool range_precedes_capacity_under_saturation(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core saturation\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{1, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the first request occupies the only slot");
+    std::optional<Request<std::size_t>> first;
+    if (submitted.has_value())
+        first = std::move(submitted.value());
+    wait_threadpool_gate_paused(gate);
+
+    auto range_rejected =
+        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, kUnrepresentableOffset});
+    t.check(!range_rejected.has_value() &&
+                range_rejected.error().code == IoError::Code::invalid_argument,
+            "an invalid range outranks capacity under saturation");
+
+    auto capacity_rejected =
+        ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 1, 0});
+    t.check(!capacity_rejected.has_value() &&
+                capacity_rejected.error().code == IoError::Code::would_block,
+            "an otherwise valid request reports capacity exhaustion immediately");
+    t.check(core.snapshot().accepted_live == 1, "the table holds exactly the accepted request");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    while (!first->ready())
+        (void)ctx.poll();
+    first->discard();
+    return true;
+}
+
+bool accepted_pre_dispatch_work_has_a_core_owner(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core ownership gap\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::AcceptedPreDispatchPauseGate gate;
+    raw->set_accepted_pre_dispatch_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::optional<Request<std::size_t>> request;
+    std::optional<IoError> submit_error;
+    std::thread submitter([&] {
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
+        else
+            submit_error = submitted.error();
+    });
+    wait_threadpool_gate_paused(gate);
+
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 1 && snap.public_bindings == 1 && snap.execution_refs == 1,
+            "the accepted-undispatched request holds a core slot, binding and execution ref");
+    const auto slot0 = core.observe_slot(SlotIndex{0});
+    t.check(slot0.has_value() && slot0->phase == RequestCore::SlotPhase::accepted &&
+                !slot0->terminal_chosen && !slot0->execution_claimed && slot0->execution_refs == 1,
+            "acceptance installed the pending-dispatch execution responsibility");
+    t.check(raw->dispatch_size_for_test() == 0, "the dispatch queue does not hold it yet");
+
+    resume_threadpool_gate(gate);
+    submitter.join();
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+    t.check(request.has_value() && !submit_error.has_value(), "the submission itself succeeds");
+
+    while (!request->ready())
+        (void)ctx.poll();
+    const auto observed = request->take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the request completes normally");
+    t.check(core.snapshot().accepted_live == 0, "the slot reclaims after release");
+    return true;
+}
+
+bool cancel_during_accept_dispatch_window_converges_through_terminal(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core window cancel\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::AcceptedPreDispatchPauseGate gate;
+    raw->set_accepted_pre_dispatch_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::optional<Request<std::size_t>> request;
+    std::thread submitter([&] {
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
+    });
+    wait_threadpool_gate_paused(gate);
+
+    std::vector<RequestKey> outstanding;
+    core.collect_outstanding(outstanding);
+    t.check(outstanding.size() == 1,
+            "the accepted request holds its core slot while the dispatch handoff is parked");
+    const RequestKey key = outstanding.front();
+    const PublicCancel disposition = raw->cancel_key_for_test(key);
+    t.check(disposition == PublicCancel::won_before_execution,
+            "cancel wins while dispatch handoff has not completed");
+
+    resume_threadpool_gate(gate);
+    submitter.join();
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+    t.check(request.has_value() && request->id().valid(),
+            "the submission hands the public identity back to the caller");
+
+    while (raw->dispatch_size_for_test() != 0)
+        std::this_thread::yield();
+    while (!request->ready())
+        (void)ctx.poll();
+    const auto observed = request->take_result();
+    t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                observed.result.error().code == IoError::Code::canceled,
+            "the canceled request converges through its terminal path");
+    t.check(raw->syscall_count_for_test() == 0, "no physical syscall ever ran");
+    t.check(core.snapshot().accepted_live == 0, "the canceled slot reclaims");
+    return true;
+}
+
+bool post_accept_dispatch_failure_is_a_terminal_not_a_rejection(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core dispatch failure\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::DispatchFailureInjection injection;
+    injection.armed.store(true, std::memory_order_release);
+    raw->set_dispatch_failure_injection(&injection);
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the submission is accepted, not rejected");
+    Request<std::size_t> c = std::move(submitted.value());
+    t.check(injection.fired.load() == 1, "the injected dispatch failure fired once");
+    t.check(raw->syscall_count_for_test() == 0, "no worker ever ran the operation");
+    t.check(raw->publication_pending_size_for_test() == 1,
+            "the failed handoff queued its own publication");
+
+    (void)ctx.poll();
+    t.check(c.ready(), "the terminal is published");
+    const auto observed = c.try_result();
+    t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
+                observed.result.error().code == IoError::Code::backend_error,
+            "the post-accept failure surfaces as the request's terminal error");
+    const auto slot0 = core.observe_slot(SlotIndex{0});
+    t.check(slot0.has_value() && slot0->published && slot0->binding_live,
+            "the core published the terminal while the public binding is still live");
+    (void)c.take_result();
+    t.check(core.snapshot().accepted_live == 0, "the failed slot reclaims after release");
+    return true;
+}
+
+bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core running cancel\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId handle = c.id();
+    wait_threadpool_gate_paused(gate);
+
+    const auto slot0 = core.observe_slot(SlotIndex{0});
+    t.check(slot0.has_value() && slot0->execution_claimed && slot0->execution_refs == 1 &&
+                !slot0->terminal_chosen,
+            "the worker dequeue claimed execution and the borrow-touching ref is live");
+    t.check(!c.ready() && ctx.poll().value_or(0) == 0, "nothing publishes while execution is live");
+
+    const auto canceled = c.cancel();
+    t.check(canceled.has_value() &&
+                canceled.value() == CancelDisposition::physical_interruption_unsupported,
+            "cancel of a running blocking syscall reports the unsupported physical interruption");
+    const auto after_cancel = core.observe_slot(SlotIndex{0});
+    t.check(after_cancel.has_value() && after_cancel->cancel_intent &&
+                after_cancel->execution_refs == 1 && !after_cancel->terminal_chosen,
+            "cancel of a running blocking syscall records intent without retiring the borrow");
+    t.check(resolves_as(ctx.lookup(handle), RequestReadiness::pending),
+            "the request stays outstanding after the cancel intent");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    while (!c.ready())
+        (void)ctx.poll();
+    const auto observed = c.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the physical outcome wins over the earlier cancel intent");
+    return true;
+}
+
+bool last_borrow_access_precedes_final_execution_retirement(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core last access\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerOutcomePreTerminalPauseGate gate;
+    raw->set_worker_outcome_pre_terminal_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    wait_threadpool_gate_paused(gate);
+
+    t.check(raw->syscall_count_for_test() == 1, "the physical syscall has completed");
+    const auto slot0 = core.observe_slot(SlotIndex{0});
+    t.check(slot0.has_value() && slot0->execution_refs == 1 && !slot0->terminal_chosen,
+            "the execution ref outlives the last physical buffer access");
+    t.check(!c.ready() && ctx.poll().value_or(0) == 0 && raw->publication_pending_size_for_test() == 0,
+            "no publication is queued while the borrow-touching ref is live");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_outcome_pre_terminal_pause_gate(nullptr);
+
+    while (raw->publication_pending_size_for_test() == 0)
+        std::this_thread::yield();
+    t.check(raw->publication_pending_size_for_test() == 1,
+            "terminal selection and ref retirement queue the publication");
+    while (!c.ready())
+        (void)ctx.poll();
+    const auto observed = c.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the outcome publishes");
+    t.check(core.snapshot().accepted_live == 0, "reclaim follows release");
+    return true;
+}
+
+bool publication_visibility_waits_for_the_epilogue_and_release_reclaims(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core epilogue\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::PublicationEpiloguePauseGate gate;
+    raw->set_publication_epilogue_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId handle = c.id();
+    const RequestKey key = detail::TestAccess::request_key(c);
+
+    while (raw->publication_pending_size_for_test() == 0)
+        std::this_thread::yield();
+    // The publisher thread claims the driving attachment for its pass and
+    // releases it at thread exit so this thread may keep driving afterwards.
+    std::thread publisher([&] {
+        auto owner = ctx.claim_progress_owner();
+        if (owner.has_value())
+            (void)ctx.poll();
+    });
+    wait_threadpool_gate_paused(gate);
+
+    t.check(!c.ready() && c.try_result().readiness == RequestReadiness::pending,
+            "the outcome stays invisible while the publication pin is held");
+    const auto inflight = core.observe_slot(SlotIndex{0});
+    t.check(inflight.has_value() && inflight->publication_inflight && !inflight->published &&
+                inflight->binding_live,
+            "the publisher holds the publication pin between result write and completion");
+    t.check(core.lookup(key) == PublicLookup::outstanding,
+            "the public identity resolves only as outstanding mid-publication");
+
+    resume_threadpool_gate(gate);
+    publisher.join();
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_publication_epilogue_pause_gate(nullptr);
+
+    while (!c.ready())
+        (void)ctx.poll();
+    const auto observed = c.take_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 4,
+            "the epilogue publishes the outcome exactly once");
+    t.check(core.occupancy().accepted_live == 0,
+            "the release reclaims synchronously without unrelated new I/O");
+    t.check(raw->syscall_count_for_test() == syscalls_before + 1,
+            "the whole episode needed exactly the one physical syscall");
+    t.check(resolves_as(ctx.lookup(handle), RequestReadiness::empty),
+            "the released identity stops resolving after the epilogue completes");
+
+    auto resubmitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(resubmitted.has_value(), "the reclaimed slot is reusable");
+    Request<std::size_t> reused = std::move(resubmitted.value());
+    while (!reused.ready())
+        (void)ctx.poll();
+    (void)reused.take_result();
+    return true;
+}
+
+bool zero_op_publishes_at_acceptance_without_dispatch(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core zero op\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset});
+    t.check(submitted.has_value(), "the zero-op occupies a slot and is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    t.check(c.ready(), "the zero-op is published at acceptance");
+    t.check(raw->syscall_count_for_test() == syscalls_before, "no data syscall is dispatched");
+    const auto observed = c.try_result();
+    t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                observed.result.value() == 0,
+            "the zero-op result is zero bytes");
+    const auto slot0 = core.observe_slot(SlotIndex{0});
+    t.check(slot0.has_value() && slot0->published && slot0->binding_live,
+            "the core holds the published zero-op");
+    t.check(raw->event_owed_for_test(0), "the zero-op still owes its delivery event");
+
+    (void)ctx.poll();
+    t.check(raw->sink_deliveries() == 1, "the owed delivery event fires on the next progress");
+    t.check(!raw->event_owed_for_test(0), "the owed event is discharged");
+
+    (void)c.take_result();
+    t.check(core.snapshot().accepted_live == 0, "the zero-op slot reclaims after release");
+    return true;
+}
+
+bool zero_op_delivery_pins_the_slot_until_the_event_is_delivered(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core deferred pin\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{1, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+
+    auto submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(*file), nullptr, 0, kUnrepresentableOffset});
+    t.check(submitted.has_value(), "the zero-op occupies the only slot and is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const auto published = c.try_result();
+    t.check(published.readiness == RequestReadiness::ready && published.result.has_value() &&
+                published.result.value() == 0,
+            "the zero-op is published at acceptance");
+    const RequestKey key = detail::TestAccess::request_key(c);
+    const auto published_live = core.observe_slot(SlotIndex{0});
+    t.check(published_live.has_value() && published_live->published &&
+                published_live->binding_live && published_live->control_refs == 1,
+            "the deferred delivery obligation pins the core slot");
+    t.check(published_live.has_value() && key.slot == SlotIndex{0} &&
+                key.generation == published_live->generation,
+            "the request carries the core identity of its accepted slot");
+    t.check(raw->event_owed_for_test(0), "the ready event is owed");
+
+    c.discard();
+    const auto pinned = core.observe_slot(SlotIndex{0});
+    t.check(pinned.has_value() && pinned->phase == RequestCore::SlotPhase::accepted &&
+                pinned->published && !pinned->binding_live && pinned->control_refs == 1,
+            "resetting before the poll releases the binding but cannot reclaim the slot");
+    t.check(raw->event_owed_for_test(0), "the delivery obligation survives the release");
+    t.check(core.lookup(key) == PublicLookup::not_found,
+            "the released identity stops resolving while the event is still owed");
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto refused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(!refused.has_value() && refused.error().code == IoError::Code::would_block,
+            "the pinned slot cannot be reused before the owed event is delivered");
+    t.check(raw->event_owed_for_test(0),
+            "the refused submission leaves the owed record untouched");
+
+    const std::size_t events = ctx.poll().value_or(0);
+    t.check(events == 1, "the poll delivers exactly the owed event");
+    t.check(!raw->event_owed_for_test(0), "the owed event is discharged");
+    t.check(raw->sink_deliveries() == 1, "the ready event is delivered exactly once");
+    t.check(raw->sink_last_key() == key, "the delivered event carries the old request key");
+
+    const auto after = core.observe_slot(SlotIndex{0});
+    t.check(after.has_value() && after->phase == RequestCore::SlotPhase::free &&
+                after->generation.value == pinned->generation.value + 1 &&
+                core.snapshot().accepted_live == 0,
+            "the final pin retirement reclaims synchronously");
+    t.check(raw->syscall_count_for_test() == syscalls_before,
+            "the reclaim needed no unrelated new I/O");
+
+    auto reused = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(reused.has_value(), "the reclaimed slot serves a new request");
+    Request<std::size_t> next = std::move(reused.value());
+    while (!next.ready())
+        (void)ctx.poll();
+    const auto drained = next.take_result();
+    t.check(drained.readiness == RequestReadiness::ready && drained.result.has_value() &&
+                drained.result.value() == 4,
+            "the new request completes normally");
+    t.check(core.snapshot().accepted_live == 0 && core.snapshot().free_slots == core.capacity(),
+            "the context drains fully afterwards");
+    return true;
+}
+
+bool admission_close_between_reserve_and_accept_refuses_and_rolls_back(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core close race\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::PreAcceptCommitPauseGate gate;
+    raw->set_pre_accept_commit_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    std::optional<Request<std::size_t>> request;
+    std::optional<IoError> submit_error;
+    std::thread submitter([&] {
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+        if (submitted.has_value())
+            request = std::move(submitted.value());
+        else
+            submit_error = submitted.error();
+    });
+    wait_threadpool_gate_paused(gate);
+
+    t.check(core.snapshot().reserved == 1, "the reservation is not yet an acceptance");
+    raw->close_admission();
+
+    resume_threadpool_gate(gate);
+    submitter.join();
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_pre_accept_commit_pause_gate(nullptr);
+
+    t.check(!request.has_value() && submit_error.has_value() &&
+                submit_error->code == IoError::Code::invalid_state,
+            "the close race converts to an admission rejection with no request handed out");
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.reserved == 0 && snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the reservation rolls back with no residue");
+    return true;
+}
+
+bool observer_registration_and_delivery_ride_the_publication(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core observer\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
+    wait_threadpool_gate_paused(gate);
+
+    const auto attached = ctx.attach_observer(observed_id);
+    t.check(attached.armed(), "the observer arms on the outstanding request");
+    t.check(ctx.attach_observer(observed_id).status ==
+                sluice::async::AsyncIoContext::ObserverStatus::duplicate,
+            "a second registration on the same request returns the occupied disposition");
+    const auto registered_slot = core.observe_slot(SlotIndex{0});
+    t.check(registered_slot.has_value() &&
+                registered_slot->observer_phase == sluice::async::detail::ObserverPhase::armed,
+            "the core owns the registration existence");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    while (!c.ready())
+        (void)ctx.poll();
+    t.check(raw->sink_deliveries() >= 1 && raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
+            "the publication delivers a host-neutral ready event keyed by the request");
+
+    const auto pinned_slot = core.observe_slot(SlotIndex{0});
+    t.check(pinned_slot.has_value() &&
+                pinned_slot->observer_phase == sluice::async::detail::ObserverPhase::retired,
+            "the delivery owner retires the registration once the hook has returned");
+    const auto post_cancel = ctx.cancel_observer(observed_id);
+    t.check(post_cancel.status == AsyncIoContext::ObserverCancelStatus::not_registered,
+            "cancelling a retired registration reports no live registration");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery while the binding is live");
+
+    t.check(c.ready(), "an attach after publication observes the published result");
+    t.check(ctx.attach_observer(observed_id).status ==
+                sluice::async::AsyncIoContext::ObserverStatus::already_terminal,
+            "a fresh attach after publication returns the already-terminal disposition");
+    (void)c.take_result();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims once no registration is pinned");
+    return true;
+}
+
+bool attach_after_terminal_choice_rides_the_pending_publication(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core observer terminal\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
+    wait_threadpool_gate_paused(gate);
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    for (int i = 0; i < 1000 && raw->publication_pending_size_for_test() == 0; ++i)
+        std::this_thread::yield();
+    t.check(raw->publication_pending_size_for_test() == 1,
+            "the terminal is chosen with its publication still pending");
+
+    const auto attached = ctx.attach_observer(observed_id);
+    t.check(attached.armed(),
+            "attach after terminal choice but before the driven publication arms");
+    t.check(!c.ready(), "the publication has not run yet");
+
+    while (!c.ready())
+        (void)ctx.poll();
+    t.check(raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
+            "the pending publication delivers to the armed observer");
+    t.check(core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot)->observer_phase ==
+                sluice::async::detail::ObserverPhase::retired,
+            "the delivered registration retires once the hook returns");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery");
+    (void)c.take_result();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after owner-side retirement and release");
+    return true;
+}
+
+bool armed_delivery_survives_a_parked_progress_owner(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core parked owner\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate gate;
+    raw->set_worker_claimed_pause_gate(&gate);
+    GateGuard guard{gate};
+
+    std::atomic<int> prepark{0};
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
+
+    std::vector<std::byte> buffer(9, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 9, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
+    wait_threadpool_gate_paused(gate);
+
+    std::thread driver([&] { (void)ctx.wait_one(); });
+
+    for (int i = 0; i < 500000 && prepark.load(std::memory_order_acquire) < 1; ++i)
+        std::this_thread::yield();
+    t.check(prepark.load(std::memory_order_acquire) >= 1,
+            "the progress owner committed its park with nothing to drive");
+
+    const auto attached = ctx.attach_observer(observed_id);
+    t.check(attached.armed(),
+            "an observer arms while the only progress owner is parked");
+
+    resume_threadpool_gate(gate);
+    wait_threadpool_gate_exited(gate);
+    guard.rearmed = true;
+    rearm_threadpool_gate(gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
+
+    driver.join();
+    t.check(c.ready(), "the progress signal woke the parked owner and drove the publication");
+    t.check(raw->sink_last_key() == detail::TestAccess::request_key_of(attached.request),
+            "the driven publication delivered the armed observer's key");
+    t.check(core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot)->observer_phase ==
+                sluice::async::detail::ObserverPhase::retired,
+            "the wake chain delivered and the owner retired the registration");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery");
+    (void)c.take_result();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after owner-side retirement and release");
+    return true;
+}
+
+bool retirement_waits_for_the_delivery_hook_to_return(Tracker& t) {
+    auto file = open_temp_file(t, "sluice pr-b hook retirement\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    ThreadPoolBackend::WorkerClaimedPauseGate worker_gate;
+    raw->set_worker_claimed_pause_gate(&worker_gate);
+    GateGuard worker_guard{worker_gate};
+    ThreadPoolBackend::DeliveryClaimedPauseGate delivery_gate;
+    raw->set_delivery_claimed_pause_gate(&delivery_gate);
+    GateGuard delivery_guard{delivery_gate};
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(submitted.has_value(), "the observed request is accepted");
+    Request<std::size_t> c = std::move(submitted.value());
+    const RequestId observed_id = c.id();
+    wait_threadpool_gate_paused(worker_gate);
+
+    const auto attached = ctx.attach_observer(observed_id);
+    t.check(attached.armed(), "the observer arms on the outstanding request");
+
+    resume_threadpool_gate(worker_gate);
+    wait_threadpool_gate_exited(worker_gate);
+    worker_guard.rearmed = true;
+    rearm_threadpool_gate(worker_gate);
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    std::thread driver([&] {
+        while (!c.ready())
+            (void)ctx.poll();
+    });
+
+    wait_threadpool_gate_paused(delivery_gate);
+    const auto claimed_slot = core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot);
+    t.check(claimed_slot.has_value() &&
+                claimed_slot->observer_phase == sluice::async::detail::ObserverPhase::delivering,
+            "the delivery is claimed before the hook runs");
+    t.check(raw->sink_deliveries() == 0, "the delivery hook has not run while the claim is paused");
+    t.check(ctx.cancel_observer(observed_id).in_progress(),
+            "cancelling a claimed delivery reports in-progress, not retired");
+    t.check(!ctx.delivery_retired(attached.request),
+            "retirement is not granted while the delivery hook is still running");
+
+    resume_threadpool_gate(delivery_gate);
+    wait_threadpool_gate_exited(delivery_gate);
+    delivery_guard.rearmed = true;
+    rearm_threadpool_gate(delivery_gate);
+    raw->set_delivery_claimed_pause_gate(nullptr);
+
+    driver.join();
+    bool retired = false;
+    for (int i = 0; i < 500000 && !retired; ++i) {
+        const auto slot = core.observe_slot(detail::TestAccess::request_key_of(attached.request).slot);
+        retired = raw->sink_deliveries() == 1 && slot.has_value() &&
+                  slot->observer_phase == sluice::async::detail::ObserverPhase::retired;
+        std::this_thread::yield();
+    }
+    t.check(raw->sink_deliveries() == 1, "the hook ran exactly once for the registration");
+    t.check(retired, "the delivery owner retires once the hook has returned");
+    t.check(ctx.delivery_retired(attached.request),
+            "the retirement query reports the completed delivery while the binding is live");
+
+    (void)c.take_result();
+    const CoreSnapshot snap = core.snapshot();
+    t.check(snap.accepted_live == 0 && snap.free_slots == core.capacity(),
+            "the slot reclaims after the owner-side retirement and the release");
+    return true;
+}
+
+bool stale_identity_does_not_resolve_after_slot_reuse(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core stale identity\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    std::vector<std::byte> buffer(4, std::byte{0});
+    auto first_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(first_submitted.has_value(), "the first request is accepted");
+    Request<std::size_t> first = std::move(first_submitted.value());
+    const RequestId stale = first.id();
+    while (!first.ready())
+        (void)ctx.poll();
+    (void)first.take_result();
+    t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
+            "the released identity stops resolving");
+
+    auto second_submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4, 0});
+    t.check(second_submitted.has_value(), "the reclaimed slot serves a new request");
+    Request<std::size_t> second = std::move(second_submitted.value());
+    t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
+            "the stale identity does not resolve against the reused slot");
+    t.check(resolves_as(ctx.lookup(second.id()), RequestReadiness::pending),
+            "the new identity resolves while outstanding");
+    while (!second.ready())
+        (void)ctx.poll();
+    (void)second.take_result();
+    t.check(core.snapshot().accepted_live == 0, "both occupancies reclaimed");
+    return true;
+}
+
+bool bounded_workers_execute_the_syscalls_not_the_submitter(Tracker& t) {
+    auto file = open_temp_file(t, "sluice threadpool core workers\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 3});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    std::vector<std::vector<std::byte>> buffers;
+    std::vector<Request<std::size_t>> requests;
+    requests.reserve(4);
+    for (std::size_t i = 0; i < 4; ++i) {
+        buffers.emplace_back(4, std::byte{0});
+    }
+    for (std::size_t i = 0; i < 4; ++i) {
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(*file), buffers[i].data(), 4, 0});
+        t.check(submitted.has_value(), "each submission is accepted without waiting");
+        requests.push_back(std::move(submitted.value()));
+    }
+    for (std::size_t i = 0; i < 4; ++i) {
+        while (!requests[i].ready())
+            (void)ctx.poll();
+        const auto observed = requests[i].take_result();
+        t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
+                    observed.result.value() == 4,
+                "each request publishes its own outcome");
+    }
+    t.check(raw->syscall_count_for_test() == 4, "every syscall ran on a worker");
+    t.check(raw->workers_spawned_for_test() == 3, "the configured worker bound held");
+    t.check(core.snapshot().accepted_live == 0 && core.snapshot().free_slots == core.capacity(),
+            "the bounded table is fully reclaimed");
+    return true;
+}
+
+struct NamedTest {
+    const char* name;
+    bool (*fn)(Tracker&);
+};
+
+}
+
+int main() {
+    const NamedTest tests[] = {
+        {"pre_accept_failure_leaves_no_core_residue", pre_accept_failure_leaves_no_core_residue},
+        {"range_precedes_capacity_under_saturation", range_precedes_capacity_under_saturation},
+        {"accepted_pre_dispatch_work_has_a_core_owner", accepted_pre_dispatch_work_has_a_core_owner},
+        {"cancel_during_accept_dispatch_window_converges_through_terminal",
+         cancel_during_accept_dispatch_window_converges_through_terminal},
+        {"post_accept_dispatch_failure_is_a_terminal_not_a_rejection",
+         post_accept_dispatch_failure_is_a_terminal_not_a_rejection},
+        {"claim_chain_and_running_cancel_do_not_release_the_borrow",
+         claim_chain_and_running_cancel_do_not_release_the_borrow},
+        {"last_borrow_access_precedes_final_execution_retirement",
+         last_borrow_access_precedes_final_execution_retirement},
+        {"publication_visibility_waits_for_the_epilogue_and_release_reclaims",
+         publication_visibility_waits_for_the_epilogue_and_release_reclaims},
+        {"zero_op_publishes_at_acceptance_without_dispatch",
+         zero_op_publishes_at_acceptance_without_dispatch},
+        {"zero_op_delivery_pins_the_slot_until_the_event_is_delivered",
+         zero_op_delivery_pins_the_slot_until_the_event_is_delivered},
+        {"admission_close_between_reserve_and_accept_refuses_and_rolls_back",
+         admission_close_between_reserve_and_accept_refuses_and_rolls_back},
+        {"observer_registration_and_delivery_ride_the_publication",
+         observer_registration_and_delivery_ride_the_publication},
+        {"attach_after_terminal_choice_rides_the_pending_publication",
+         attach_after_terminal_choice_rides_the_pending_publication},
+        {"armed_delivery_survives_a_parked_progress_owner",
+         armed_delivery_survives_a_parked_progress_owner},
+        {"retirement_waits_for_the_delivery_hook_to_return",
+         retirement_waits_for_the_delivery_hook_to_return},
+        {"stale_identity_does_not_resolve_after_slot_reuse",
+         stale_identity_does_not_resolve_after_slot_reuse},
+        {"bounded_workers_execute_the_syscalls_not_the_submitter",
+         bounded_workers_execute_the_syscalls_not_the_submitter},
+    };
+    int failed = 0;
+    for (const NamedTest& test : tests) {
+        Tracker tracker{test.name};
+        const bool reached_end = test.fn(tracker);
+        if (!reached_end || tracker.failures != 0) {
+            ++failed;
+        }
+    }
+    if (failed != 0) {
+        std::fprintf(stderr, "%d of %zu threadpool core integration tests failed\n", failed,
+                     sizeof(tests) / sizeof(tests[0]));
+        return 1;
+    }
+    std::printf("all %zu threadpool core integration tests passed\n",
+                sizeof(tests) / sizeof(tests[0]));
+    return 0;
+}

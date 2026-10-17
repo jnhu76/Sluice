@@ -1,6 +1,0 @@
-name = "sluice-formal"
-version = "0.1.0"
-defaultTargets = ["Sluice"]
-
-[[lean_lib]]
-name = "Sluice"

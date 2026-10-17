@@ -141,7 +141,7 @@
 (*                                                                         *)
 (* Mutant switches (all FALSE in the reference cfg).  The first five      *)
 (* mirror the merged C++ mutation seams one-for-one (xmake/tests.lua,     *)
-(* the SLUICE_C1_MUTANT_ defines); each must die on its named invariant   *)
+(* the SLUICE_REQUEST_CORE_MUTANT_ defines); each must die on its named invariant   *)
 (*   MutAttachIgnoresPublication     arms on a published slot; dies on    *)
 (*                                   InvArmedRequiresUnpublished (and L2)*)
 (*   MutAttachTreatsTerminalAsPublished  reports already-terminal while   *)

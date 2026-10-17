@@ -141,12 +141,12 @@ class SeamNegativeProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             prefix = stage_installed_headers(tmp)
             self.assertEqual(verifier.installed_mutant_define_findings(prefix), [],
-                             "the allowlisted D1 template seams are the only "
+                             "the allowlisted request_scope template seams are the only "
                              "installed mutation regions")
             installed = prefix / "include" / "sluice" / "async" / "request.hpp"
             installed.write_text(
                 installed.read_text()
-                + "\n#if defined(SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING)\n"
+                + "\n#if defined(SLUICE_PUBLIC_REQUEST_MUTANT_RELEASE_FORGETS_BINDING)\n"
                   "#endif\n")
             findings = verifier.installed_mutant_define_findings(prefix)
             self.assertEqual(len(findings), 1,

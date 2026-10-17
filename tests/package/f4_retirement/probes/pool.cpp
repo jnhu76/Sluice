@@ -1,2 +1,0 @@
-#include <sluice/blocking_io_pool.hpp>
-int main() { sluice::PoolStats stats; auto p=sluice::make_blocking_io_pool({1,2}, &stats); if(!p) return 1; auto t=p.value()->submit([]{return 42;}); if(!t || t.value().get()!=42) return 2; p.value()->wait_idle(); if(p.value()->worker_count()!=1 || p.value()->queue_depth()!=0) return 3; p.value()->shutdown(); if(p.value()->try_submit([]{return 1;})) return 4; }

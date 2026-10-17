@@ -1,9 +1,0 @@
-$ unshare -r -m bash -c mount -t tmpfs tmpfs /usr/include && exec "$@" - /home/jnhu/.local/bin/xmake f -y -m debug --liburing=y --ccache=n -o /tmp/pm-switch-build-neg-missing-liburing-header
-$ CPATH=
-[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
-[0mchecking for sluice_liburing_capability ... [38;5;1;1mno[0m
-[0m[1;38;5;1;1merror: [0msluice --liburing=y: could not resolve <liburing.h> in the active C++ include resolution (/usr/lib64/ccache/g++): /tmp/.xmake0/261014/_c2412d935de97683151be7fc44956b11:1:10: fatal error: liburing.h: No such file or directory
-    1 | #include <liburing.h>
-      |          ^~~~~~~~~~~~
-compilation terminated.
-[0m

@@ -144,7 +144,7 @@ class ExternalLoopHost {
     }
 
     void reconcile_retry_schedule(const ProgressPass& pass) {
-#if defined(SLUICE_B1C_MUTANT_HOST_IGNORES_DISPATCH_RETRY)
+#if defined(SLUICE_URING_EXTERNAL_LOOP_MUTANT_HOST_IGNORES_DISPATCH_RETRY)
         (void)pass;
 #else
         if (pass.dispatch_retry_remains)

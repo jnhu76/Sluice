@@ -34,7 +34,7 @@ RequestScope::RequestScope(AsyncIoContext& ctx, std::size_t capacity,
       slots_(std::make_unique<Slot[]>(capacity_)) {}
 
 RequestScope::~RequestScope() {
-#if defined(SLUICE_D1_MUTANT_DESTRUCTOR_SKIPS_SETTLE)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_DESTRUCTOR_SKIPS_SETTLE)
     finished_ = true;
 #else
     if (!finished_) {
@@ -159,7 +159,7 @@ Result<ScopeTicket<std::size_t>> RequestScope::submit_read(ReadOp op) {
         return make_unexpected<ScopeTicket<std::size_t>>(
             IoError{IoError::Code::would_block});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
     auto accepted = ctx_.submit_read(op);
     Reservation guard{this, index};
 #else
@@ -185,7 +185,7 @@ Result<ScopeTicket<std::size_t>> RequestScope::submit_write(WriteOp op) {
         return make_unexpected<ScopeTicket<std::size_t>>(
             IoError{IoError::Code::would_block});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
     auto accepted = ctx_.submit_write(op);
     Reservation guard{this, index};
 #else
@@ -209,7 +209,7 @@ Result<ScopeTicket<void>> RequestScope::submit_sync_data(SyncDataOp op) {
     if (!reserve_slot_(index)) {
         return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::would_block});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
     auto accepted = ctx_.submit_sync_data(op);
     Reservation guard{this, index};
 #else
@@ -233,7 +233,7 @@ Result<ScopeTicket<void>> RequestScope::submit_sync_all(SyncAllOp op) {
     if (!reserve_slot_(index)) {
         return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::would_block});
     }
-#if defined(SLUICE_D1_MUTANT_RESERVE_AFTER_ACCEPT)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
     auto accepted = ctx_.submit_sync_all(op);
     Reservation guard{this, index};
 #else
@@ -280,14 +280,14 @@ Result<void> RequestScope::finish() noexcept {
     if (finished_) {
         return {};
     }
-#if defined(SLUICE_D1_MUTANT_FINISH_CANCELS_CLEANUP)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_FINISH_CANCELS_CLEANUP)
     Result<void> settled =
         settle_and_release_(policy_ == ScopeCleanupPolicy::cancel_then_drain);
 #else
     Result<void> settled = settle_and_release_(false);
 #endif
     finished_ = true;
-#if defined(SLUICE_D1_MUTANT_FINISH_SWALLOWS_ERROR)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_FINISH_SWALLOWS_ERROR)
     (void)settled;
     return {};
 #else

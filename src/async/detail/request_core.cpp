@@ -287,7 +287,7 @@ BindingRelease RequestCore::discard_public_result(RequestKey id) noexcept {
     if (slot == nullptr) {
         return BindingRelease::stale;
     }
-#if defined(SLUICE_B2_MUTANT_DISCARD_ACCEPTS_INFLIGHT)
+#if defined(SLUICE_PUBLIC_REQUEST_MUTANT_DISCARD_ACCEPTS_INFLIGHT)
     const bool published = slot->publication_inflight || slot->published;
 #else
     const bool published = slot->published;
@@ -307,7 +307,7 @@ PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* o
     if (slot == nullptr) {
         return PublicObservation::stale;
     }
-#if defined(SLUICE_B2_MUTANT_OBSERVE_IGNORES_PUBLICATION)
+#if defined(SLUICE_PUBLIC_REQUEST_MUTANT_OBSERVE_IGNORES_PUBLICATION)
     const bool published = true;
 #else
     const bool published = slot->published;
@@ -321,7 +321,7 @@ PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* o
     if (metadata_out != nullptr) {
         *metadata_out = slot->metadata;
     }
-#if defined(SLUICE_B2_MUTANT_OBSERVE_CONSUMES)
+#if defined(SLUICE_PUBLIC_REQUEST_MUTANT_OBSERVE_CONSUMES)
     const_cast<Slot*>(slot)->binding_live = false;
 #endif
     return PublicObservation::ready;
@@ -343,7 +343,7 @@ PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* o
     if (metadata_out != nullptr) {
         *metadata_out = slot->metadata;
     }
-#if !defined(SLUICE_B2_MUTANT_CONSUME_KEEPS_BINDING)
+#if !defined(SLUICE_PUBLIC_REQUEST_MUTANT_CONSUME_KEEPS_BINDING)
     slot->binding_live = false;
     try_reclaim_(*slot, id.slot.value);
 #endif
@@ -479,7 +479,7 @@ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept 
     slot->publication_inflight = false;
     slot->published = true;
     --outstanding_;
-#if defined(SLUICE_C1_MUTANT_PUBLICATION_SKIPS_QUEUE)
+#if defined(SLUICE_REQUEST_CORE_MUTANT_PUBLICATION_SKIPS_QUEUE)
     const bool queue_armed_observer = false;
 #else
     const bool queue_armed_observer = slot->observer_phase == ObserverPhase::armed;
@@ -504,9 +504,9 @@ ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
         slot->observer_phase != ObserverPhase::retired) {
         return ObserverRegistration::duplicate;
     }
-#if defined(SLUICE_C1_MUTANT_ATTACH_IGNORES_PUBLICATION)
+#if defined(SLUICE_REQUEST_CORE_MUTANT_ATTACH_IGNORES_PUBLICATION)
     const bool publication_visible = false;
-#elif defined(SLUICE_C1_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED)
+#elif defined(SLUICE_REQUEST_CORE_MUTANT_ATTACH_TREATS_TERMINAL_AS_PUBLISHED)
     const bool publication_visible = slot->terminal_chosen;
 #else
     const bool publication_visible = slot->published;
@@ -524,7 +524,7 @@ ObserverDeliveryClaim RequestCore::claim_observer_delivery(RequestKey id) noexce
     if (slot == nullptr) {
         return ObserverDeliveryClaim::none;
     }
-#if defined(SLUICE_C1_MUTANT_DELIVERY_CLAIM_UNBOUNDED)
+#if defined(SLUICE_REQUEST_CORE_MUTANT_DELIVERY_CLAIM_UNBOUNDED)
     const bool claimable = slot->observer_phase == ObserverPhase::armed ||
                            slot->observer_phase == ObserverPhase::queued ||
                            slot->observer_phase == ObserverPhase::delivering;
@@ -551,7 +551,7 @@ ObserverCancellation RequestCore::cancel_observer(RequestKey id) noexcept {
         try_reclaim_(*slot, id.slot.value);
         return ObserverCancellation::retired;
     case ObserverPhase::delivering:
-#if defined(SLUICE_C1_MUTANT_CANCEL_DURING_DELIVERY_RETURNS)
+#if defined(SLUICE_REQUEST_CORE_MUTANT_CANCEL_DURING_DELIVERY_RETURNS)
         slot->observer_phase = ObserverPhase::retired;
         try_reclaim_(*slot, id.slot.value);
         return ObserverCancellation::retired;
@@ -747,13 +747,13 @@ RequestReadiness RequestBridge::consume(RequestCore* core, const RequestId& id,
 }
 
 void RequestBridge::discard(RequestCore* core, const RequestId& id) noexcept {
-#if defined(SLUICE_B2_MUTANT_RELEASE_FORGETS_BINDING)
+#if defined(SLUICE_PUBLIC_REQUEST_MUTANT_RELEASE_FORGETS_BINDING)
     (void)core;
     (void)id;
     return;
 #endif
     const BindingRelease released = core->discard_public_result(RequestBridge::key_of(id));
-#if defined(SLUICE_B2_MUTANT_NONTERMINAL_RELEASE_DETACHES)
+#if defined(SLUICE_PUBLIC_REQUEST_MUTANT_NONTERMINAL_RELEASE_DETACHES)
     if (released == BindingRelease::stale) {
 #else
     if (released == BindingRelease::not_visible_yet) {

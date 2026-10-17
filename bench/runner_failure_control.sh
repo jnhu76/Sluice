@@ -10,13 +10,13 @@
 # attributable to the injected defect rather than to the shim itself.
 #
 # The committed evidence is never written: every scenario runs into a temp
-# directory, and G0_BIN_DIR points the runner at the shims.
+# directory, and SLUICE_BENCH_BIN_DIR points the runner at the shims.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-evidence="${G0_REFERENCE_DIR:-docs/evidence/g0-403-performance-baseline-20261015/raw}"
+evidence="${SLUICE_BENCH_REFERENCE_DIR:-docs/evidence/g0-403-performance-baseline-20261015/raw}"
 runner="$root/bench/run_matrix.sh"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -53,7 +53,7 @@ expect_reject() {
     local label="$1" dir="$2" stage="$3" mode="$4" exit_code="${5:-0}"
     local out="$dir/out"
     local rc=0
-    NC_MODE="$mode" NC_EXIT="$exit_code" NC_DIR="$dir" G0_BIN_DIR="$dir/shim" \
+    NC_MODE="$mode" NC_EXIT="$exit_code" NC_DIR="$dir" SLUICE_BENCH_BIN_DIR="$dir/shim" \
         "$runner" "$out" 2 7 "$stage" "" >"$dir/runner.log" 2>&1 || rc=$?
     if [ "$rc" -eq 0 ]; then
         echo "FAIL: $label: runner exited 0, so the injected failure was reported as a success"
@@ -73,7 +73,7 @@ expect_accept() {
     local label="$1" dir="$2" stage="$3" mode="$4" exit_code="${5:-0}"
     local out="$dir/out"
     local rc=0
-    NC_MODE="$mode" NC_EXIT="$exit_code" NC_DIR="$dir" G0_BIN_DIR="$dir/shim" \
+    NC_MODE="$mode" NC_EXIT="$exit_code" NC_DIR="$dir" SLUICE_BENCH_BIN_DIR="$dir/shim" \
         "$runner" "$out" 2 7 "$stage" "" >"$dir/runner.log" 2>&1 || rc=$?
     if [ "$rc" -ne 0 ]; then
         echo "FAIL: $label: runner rejected a run that matches the frozen expectation (exit=$rc)"
@@ -94,11 +94,11 @@ case "$mode" in
     silent)      exit 0 ;;
     silent_fail) exit 3 ;;
     crash)       kill -SEGV $$ ;;
-    copy)        cp "$fixture" "${G0_JSONL:?}"; exit "${NC_EXIT:-0}" ;;
-    drop_record) head -n -1 "$fixture" >"${G0_JSONL:?}"; exit 0 ;;
-    drop_case)   head -n -9 "$fixture" >"${G0_JSONL:?}"; exit 0 ;;
-    flip_ok)     python3 "$NC_DIR/flip_ok.py" "$fixture" "${G0_JSONL:?}"; exit 0 ;;
-    flip_notrun) python3 "$NC_DIR/flip_notrun.py" "$fixture" "${G0_JSONL:?}"; exit 1 ;;
+    copy)        cp "$fixture" "${SLUICE_BENCH_JSONL:?}"; exit "${NC_EXIT:-0}" ;;
+    drop_record) head -n -1 "$fixture" >"${SLUICE_BENCH_JSONL:?}"; exit 0 ;;
+    drop_case)   head -n -9 "$fixture" >"${SLUICE_BENCH_JSONL:?}"; exit 0 ;;
+    flip_ok)     python3 "$NC_DIR/flip_ok.py" "$fixture" "${SLUICE_BENCH_JSONL:?}"; exit 0 ;;
+    flip_notrun) python3 "$NC_DIR/flip_notrun.py" "$fixture" "${SLUICE_BENCH_JSONL:?}"; exit 1 ;;
     *) echo "unknown NC_MODE $mode" >&2; exit 99 ;;
 esac
 SHIM

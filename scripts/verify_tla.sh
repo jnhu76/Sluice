@@ -1,149 +1,16 @@
 #!/usr/bin/env bash
-# FORMAL-CAPABILITY-BOUNDARY-1 TLA+ verification gate.
+# TLA+ verification gate for the models that mirror C++ mutation seams:
+# RequestCore, ObserverCore and ShutdownCore (formal/tla/). ProgressSource is
+# gated separately by scripts/verify_progress_source_model.sh because its
+# configurations pin their own verdict catalogues.
 #
-#   Stage 1V2.2 (Event):
-#     1. TLC on the Event primitive model (`formal/tla/EventCore.tla`, the
-#        V2.2 execution-domain machine): TypeOK and the issue-anchored
-#        no-wait-before-set safety property must hold.
-#     2. TLC on the negative mutant (wait completing inline on a clear flag,
-#        Lean `eventMutant`): the safety property MUST be violated, proving
-#        the check bites.
-#
-#   Stage 2V2.3 (Semaphore, `formal/tla/SemCore.tla`):
-#     3. Safety: the constructor-domain matrix (initial in {0,1} x
-#        max in {1,2}) must complete cleanly under all nine safety
-#        invariants (TypeOK .. InvCompDiscipline plus InvReleaseResult).
-#     4. Witness: the V2.3 return-window witness (InvWitness) must be
-#        reachable in the correct model -- the check MUST be violated.
-#     5. Coverage: the 13 scenario certificates are negated conjunctions;
-#        each MUST be violated, which certifies the scenario is reachable.
-#     6. Safety mutants: each mutant switch must be killed by its expected
-#        invariant (a clean pass, or a failure for any other reason, fails
-#        the gate).  The release result semantics are gated separately:
-#        MutOverflowFull (ceiling overflow, result/effect consistent) must
-#        die on the capacity invariants, while MutWrongFullResult (ceiling
-#        refusal returns true) and MutWrongGrantResult (grant returns
-#        false) must die exactly on InvReleaseResult -- the independent
-#        binding between the observable release(bool) and the effect
-#        branch that actually ran.
-#     7. Fused-return mutant (FiberEffect and FiberDone fused into one
-#        step, the pre-V2.3 shape): must complete CLEANLY -- all nine
-#        safety invariants including InvReleaseResult.  The witness
-#        becomes unreachable there -- that unreachability is the
-#        separation certificate for the V2.3 split.
+# The retired synchronization-primitive corpus (Event/Semaphore/Mutex/
+# Condition/RwLock/Queue/Select/Driver models and their coverage/mutant
+# configurations) is dated v1-campaign evidence in Git history; it carries no
+# required v2 obligation and is no longer executed by this gate.
 #
 # Every expected failure is checked against its specific invariant line,
 # never against a bare exit code.
-#
-#   Stage 4V2.3 (Condition, `formal/tla/CondCore.tla`):
-#     8. Safety: the three boot configurations (primInit-faithful, the
-#        slot-holder start, the parked-waiter start) must complete
-#        cleanly under all seven safety invariants.
-#     9. Coverage: the six scenario certificates are negated
-#        conjunctions; each MUST be violated (the witness is reachable).
-#    10. Safety mutants: MutSpurious (M1, the finish ignores the record)
-#        and MutNoTake (M3, the reacquire skips the slot take) must die
-#        on their discipline invariants; MutParkHoldsOwn (M4's release
-#        skipped) must die on InvQueueOwnership (the slot holder parked).
-#    11. Under-production witness separations: MutDrainOne (M2,
-#        notify_all readies only the head) and MutParkHolds (M4) must
-#        complete CLEANLY with the broadcast/fast-path witness
-#        invariants asserted -- the GOOD witnesses are unreachable there
-#        (the coverage cfgs certify they ARE reachable in the correct
-#        model).
-#
-#   Stage 5V2.3 (RwLock, `formal/tla/RwCore.tla`):
-#    12. Safety: the boot configurations (primInit-faithful, two queued
-#        readers, held write + queued writer) must complete cleanly
-#        under all eight safety invariants.
-#    13. Coverage: the seven scenario certificates are negated
-#        conjunctions; each MUST be violated (the witness is reachable).
-#    14. Safety mutants: MutGrantWrite (M1, the writer claim ignores the
-#        reader count) must die on InvExclusion; MutNoPay (M2,
-#        unlock_read skips the decrement) on InvLedger; MutOwnerSkip
-#        (M4, the unlock_write owner gate dropped) on InvWriterOwned.
-#    15. Under-production witness separation: MutBatchOne (M3, the
-#        reader batch grants only the head) must complete CLEANLY with
-#        full safety plus NotBatchWitness -- the batch witness is
-#        unreachable there (the coverage cfg certifies it IS reachable
-#        in the correct model).
-#
-#   Stage 6V2.3 (Queue, `formal/tla/QueueCore.tla`):
-#    16. Safety: the boot configurations (primInit-faithful, the full
-#        ring with a parked producer, the parked consumer) must complete
-#        cleanly under all nine safety invariants (capacity, the
-#        commit/delivery ledger, drained consumers, no-commit-after-close,
-#        result agreement, queue discipline, completion discipline).
-#    17. Coverage: the ten scenario certificates (inline push, inline
-#        pop, producer blocking, consumer blocking, the p->c and c->p
-#        handoffs, close over a buffered item, close draining a parked
-#        producer, close draining a parked consumer, capacity>1 FIFO)
-#        are negated conjunctions; each MUST be violated (the witness is
-#        reachable).
-#    18. Mutants: MutCloseCommit (the closed gate dropped from push)
-#        must die on InvNoCommitClosed; MutFifo (pop delivers the second
-#        ring item) on InvLog; MutWrongResult (try_pop returns itemA on
-#        an empty closed queue) on InvResultAgree.  MutNoConsumerGrant
-#        and MutNoProducerGrant must complete CLEANLY with NotHandoffCP
-#        / NotHandoffPC -- the handoff witnesses are unreachable there
-#        (the coverage cfgs certify they ARE reachable in the correct
-#        model); these two are TRACE-REMOVAL kills, not safety kills.
-#
-#   Stage 7V2.3 (Select, `formal/tla/SelectCore.tla`):
-#    19. Safety: the boot configurations (primInit-faithful, the armed
-#        select start, the armed + timer-due start) must complete
-#        cleanly under all seven safety invariants (armed quiet,
-#        phase/winner agreement with source-read ghosts, the one-record
-#        completion window, group ownership, result agreement,
-#        completion discipline).
-#    20. Coverage: the eight scenario certificates (inline event win,
-#        inline timer win, the set-section hand-off, the timer-pump
-#        hand-off, both-ready priority resolved to each arm, reset
-#        blindness, the level-semantics re-arm) are negated
-#        conjunctions; each MUST be violated (the witness is
-#        reachable).
-#    21. Mutants: MutReResolve (the done-group gate dropped from the
-#        set section) must die on InvWindow; MutFinishLie (the resumed
-#        select delivers wonEv regardless of the consumed record) and
-#        MutM5 (the scan order flipped) on InvResultAgree; MutParkReady
-#        (the ready-source gate dropped from the park) on
-#        InvQuietArmed.
-#    22. Trace-removal witness separation: MutNoTimer (the timer pump
-#        omitted) must complete CLEANLY with full safety plus
-#        NotHandoffTim -- the timer-handoff witness is unreachable
-#        there (the coverage cfg certifies it IS reachable in the
-#        correct model); a TRACE-REMOVAL kill, not a safety kill.
-#
-#   Stage 8V2.3 (Driver, `formal/tla/DriverCore.tla`):
-#    23. Safety: the two boot configurations (runInit-faithful, the
-#        loaded mid-run start with the drain in flight over a queued
-#        task) must complete cleanly under all eight safety invariants
-#        (task conservation, id bounds, worker occupancy, the
-#        idle-backlog shape, terminate quiescence, the spawn-record
-#        shape, completion discipline).
-#    24. Coverage: the seven scenario certificates (the empty drain,
-#        two tasks through the backlog and the worker, the mid-run
-#        spawn section minting onto the backlog, the entry flush, the
-#        stale-classify window, the post-terminate unclaimed spawn, the
-#        task issue) are negated conjunctions; each MUST be violated
-#        (the witness is reachable).
-#    25. Mutants: MutQuiescence (the drain-return quiescence gates
-#        dropped) must die on InvTermQuiet; MutDuplicateDispatch (the
-#        worker-free gate dropped from dispatch) on InvConservation;
-#        MutDrainResult (the drain returns rDone) on InvDrainResult.
-#    26. Trace-removal witness separation: MutSilentDispatch (the
-#        task's issue observation dropped) must complete CLEANLY with
-#        full state safety plus NotWorkIssue -- no step emits a `work`
-#        issue there (the coverage cfg certifies the issue IS reachable
-#        in the correct model); a TRACE-REMOVAL kill, not a safety
-#        kill.  The completion discipline is excluded from that
-#        configuration: the removed issue orphans the completion, and
-#        that break IS the removal.
-#    27. Result-binding separation: MutUnbackedMint (the spawn section
-#        fixes the result without minting the task) must be VIOLATED on
-#        NotUnbacked -- the unbacked four-observation trace becomes
-#        reachable there while the state stays safe; the correct
-#        model's unreachability of that trace is the Lean separation.
 #
 # `-deadlock` is legitimate here: the fuel bounds (MaxHistory and friends)
 # create terminal parked states by construction.
@@ -347,189 +214,7 @@ run_temporal_violate() {
     enqueue temporal_violate "$label" "$cfg" "$module" ""
 }
 
-echo "== Stage 1V2.2: Event =="
-run_clean event-main EventCore.cfg EventCore
-run_violate event-mutant EventCoreMutant.cfg EventCore NoWaitBeforeSet
-
-echo "== Stage 2V2.3: SemCore safety matrix =="
-for cfg in SemCore SemCoreI1 SemCoreM2 SemCoreI1M2; do
-    run_clean "sem-safety-$cfg" "$cfg.cfg" SemCore
-done
-
-echo "== Stage 2V2.3: V2.3 seam witness (must be reachable) =="
-run_violate sem-witness SemCoreCovWitness.cfg SemCore InvWitness
-
-echo "== Stage 2V2.3: scenario coverage (each must be reachable) =="
-run_violate sem-cov-a1 SemCoreCovA1.cfg SemCore InvCovW1
-run_violate sem-cov-a2 SemCoreCovA2.cfg SemCore InvCovW2
-run_violate sem-cov-a3 SemCoreCovA3.cfg SemCore InvCovQ
-run_violate sem-cov-b1 SemCoreCovB1.cfg SemCore InvCovW1
-run_violate sem-cov-b2 SemCoreCovB2.cfg SemCore InvCovInitial
-run_violate sem-cov-b3 SemCoreCovB3.cfg SemCore InvCovQ
-run_violate sem-cov-c1 SemCoreCovC1.cfg SemCore InvCovMax2
-run_violate sem-cov-c2 SemCoreCovC2.cfg SemCore InvCovW2
-run_violate sem-cov-c3 SemCoreCovC3.cfg SemCore InvCovReorder
-run_violate sem-cov-d1 SemCoreCovD1.cfg SemCore InvCovW1
-run_violate sem-cov-d2 SemCoreCovD2.cfg SemCore InvCovInitial
-run_violate sem-cov-d3 SemCoreCovD3.cfg SemCore InvCovMax2State
-run_violate sem-cov-d4 SemCoreCovD4.cfg SemCore InvCovQ1
-
-echo "== Stage 2V2.3: safety mutants (each must die on its expected invariant) =="
-run_violate sem-mut-create-permit SemCoreMutCreatePermit.cfg SemCore InvPermitPool
-run_violate sem-mut-lose-permit SemCoreMutLosePermit.cfg SemCore InvPermitPool
-run_violate sem-mut-double-consume SemCoreMutDoubleConsume.cfg SemCore InvPermitPool
-run_violate sem-mut-fifo-bypass SemCoreMutFifoBypass.cfg SemCore InvFifo
-
-echo "== Stage 2V2.3: release result-semantics mutants =="
-run_violate_any sem-mut-overflow-full SemCoreMutOverflowFull.cfg SemCore "TypeOK|InvCapacity"
-run_violate sem-mut-wrong-full-result SemCoreMutWrongFullResult.cfg SemCore InvReleaseResult
-run_violate sem-mut-wrong-grant-result SemCoreMutWrongGrantResult.cfg SemCore InvReleaseResult
-
-echo "== Stage 2V2.3: fused-return mutant (witness must become unreachable) =="
-run_clean sem-mut-fused-return SemCoreMutFusedReturn.cfg SemCore
-
-echo "== Stage 3V2.3: MutexCore safety matrix =="
-run_clean mutex-main MutexCore.cfg MutexCore
-
-echo "== Stage 3V2.3: V2.3 seam witness (must be reachable) =="
-run_violate mutex-witness MutexCoreWitness.cfg MutexCore InvWitness
-
-echo "== Stage 3V2.3: scenario coverage (each must be reachable) =="
-run_violate mutex-cov-w1 MutexCoreCovW1.cfg MutexCore InvCovW1
-run_violate mutex-cov-q MutexCoreCovQ.cfg MutexCore InvCovQ
-run_violate mutex-cov-tryboth MutexCoreCovTryBoth.cfg MutexCore InvCovTryBoth
-run_violate mutex-cov-cancelchain MutexCoreCovCancelChain.cfg MutexCore InvCovCancelChain
-run_violate mutex-cov-cancelmiss MutexCoreCovCancelMiss.cfg MutexCore InvCovCancelMiss
-run_violate mutex-cov-extwindow MutexCoreCovExtWindow.cfg MutexCore InvCovExtWindow
-
-echo "== Stage 3V2.3: safety mutants (each must die on its expected invariant) =="
-run_violate mutex-mut-grant-held MutexCoreMutGrantHeld.cfg MutexCore InvBalance
-run_violate mutex-mut-handoff-owner MutexCoreMutHandoffOwner.cfg MutexCore InvRecordOwner
-run_violate mutex-mut-cancel-true MutexCoreMutCancelTrue.cfg MutexCore InvBalance
-
-echo "== Stage 3V2.3: fused-return mutant (witness must become unreachable) =="
-run_clean mutex-mut-fused-return MutexCoreMutFusedReturn.cfg MutexCore
-
-echo "== Stage 4V2.3: CondCore safety matrix =="
-for cfg in CondCore CondCoreBoot CondCoreBootWait3; do
-    run_clean "cond-safety-$cfg" "$cfg.cfg" CondCore
-done
-
-echo "== Stage 4V2.3: scenario coverage (each must be reachable) =="
-run_violate cond-cov-fastpath CondCoreCovFastPath.cfg CondCore InvCovFastPath
-run_violate cond-cov-broadcast CondCoreCovBroadcast.cfg CondCore InvCovBroadcast
-run_violate cond-cov-cancel CondCoreCovCancel.cfg CondCore InvCovCancel
-run_violate cond-cov-handoff CondCoreCovHandoff.cfg CondCore InvCovHandoff
-run_violate cond-cov-notify-empty CondCoreCovNotifyEmpty.cfg CondCore InvCovNotifyEmpty
-run_violate cond-cov-cancel-miss CondCoreCovCancelMiss.cfg CondCore InvCovCancelMiss
-
-echo "== Stage 4V2.3: safety mutants (each must die on its expected invariant) =="
-run_violate cond-mut-spurious CondCoreMutSpurious.cfg CondCore InvFinishBacked
-run_violate cond-mut-no-take CondCoreMutNoTake.cfg CondCore InvFinishOwned
-run_violate cond-mut-park-holds-own CondCoreMutParkHoldsOwn.cfg CondCore InvQueueOwnership
-
-echo "== Stage 4V2.3: under-production witness separations (must hold cleanly) =="
-run_clean cond-mut-drain-one CondCoreMutDrainOne.cfg CondCore
-run_clean cond-mut-park-holds CondCoreMutParkHolds.cfg CondCore
-
-echo "== Stage 5V2.3: RwCore safety matrix =="
-for cfg in RwCore RwCoreRq2 RwCoreWq1; do
-    run_clean "rw-safety-$cfg" "$cfg.cfg" RwCore
-done
-
-echo "== Stage 5V2.3: scenario coverage (each must be reachable) =="
-run_violate rw-cov-inline-read RwCoreCovInlineRead.cfg RwCore InvCovInlineRead
-run_violate rw-cov-inline-write RwCoreCovInlineWrite.cfg RwCore InvCovInlineWrite
-run_violate rw-cov-writer-claim RwCoreCovWriterClaim.cfg RwCore InvCovWriterClaim
-run_violate rw-cov-batch RwCoreCovBatch.cfg RwCore InvCovBatch
-run_violate rw-cov-cancel RwCoreCovCancel.cfg RwCore InvCovCancel
-run_violate rw-cov-try-fail RwCoreCovTryFail.cfg RwCore InvCovTryFail
-run_violate rw-cov-cancel-miss RwCoreCovCancelMiss.cfg RwCore InvCovCancelMiss
-
-echo "== Stage 5V2.3: safety mutants (each must die on its expected invariant) =="
-run_violate rw-mut-grant-write RwCoreMutGrantWrite.cfg RwCore InvExclusion
-run_violate rw-mut-no-pay RwCoreMutNoPay.cfg RwCore InvLedger
-run_violate rw-mut-owner-skip RwCoreMutOwnerSkip.cfg RwCore InvWriterOwned
-
-echo "== Stage 5V2.3: under-production witness separation (must hold cleanly) =="
-run_clean rw-mut-batch-one RwCoreMutBatchOne.cfg RwCore
-
-echo "== Stage 6V2.3: QueueCore safety matrix =="
-for cfg in QueueCore QueueCoreFull2 QueueCoreEmptyC; do
-    run_clean "queue-safety-$cfg" "$cfg.cfg" QueueCore
-done
-
-echo "== Stage 6V2.3: scenario coverage (each must be reachable) =="
-run_violate queue-cov-inline-push QueueCoreCovInlinePush.cfg QueueCore InvCovInlinePush
-run_violate queue-cov-inline-pop QueueCoreCovInlinePop.cfg QueueCore InvCovInlinePop
-run_violate queue-cov-push-park QueueCoreCovPushPark.cfg QueueCore InvCovPushPark
-run_violate queue-cov-pop-park QueueCoreCovPopPark.cfg QueueCore InvCovPopPark
-run_violate queue-cov-handoff-pc QueueCoreCovHandoffPC.cfg QueueCore InvCovHandoffPC
-run_violate queue-cov-handoff-cp QueueCoreCovHandoffCP.cfg QueueCore InvCovHandoffCP
-run_violate queue-cov-close-buffered QueueCoreCovCloseBuffered.cfg QueueCore InvCovCloseBuffered
-run_violate queue-cov-close-pushpark QueueCoreCovClosePushPark.cfg QueueCore InvCovClosePushPark
-run_violate queue-cov-close-poppark QueueCoreCovClosePopPark.cfg QueueCore InvCovClosePopPark
-run_violate queue-cov-fifo-multi QueueCoreCovFifoMulti.cfg QueueCore InvCovFifoMulti
-
-echo "== Stage 6V2.3: safety mutants (each must die on its expected invariant) =="
-run_violate queue-mut-close-commit QueueCoreMutCloseCommit.cfg QueueCore InvNoCommitClosed
-run_violate queue-mut-fifo QueueCoreMutFifo.cfg QueueCore InvLog
-run_violate queue-mut-wrong-result QueueCoreMutWrongResult.cfg QueueCore InvResultAgree
-
-echo "== Stage 6V2.3: trace-removal witness separations (must hold cleanly) =="
-run_clean queue-mut-no-consumer-grant QueueCoreMutNoConsumerGrant.cfg QueueCore
-run_clean queue-mut-no-producer-grant QueueCoreMutNoProducerGrant.cfg QueueCore
-
-echo "== Stage 7V2.3: SelectCore safety matrix =="
-for cfg in SelectCore SelectCoreArmed SelectCoreDue; do
-    run_clean "select-safety-$cfg" "$cfg.cfg" SelectCore
-done
-
-echo "== Stage 7V2.3: scenario coverage (each must be reachable) =="
-run_violate select-cov-inline-ev SelectCoreCovInlineEv.cfg SelectCore InvCovInlineEv
-run_violate select-cov-inline-tim SelectCoreCovInlineTim.cfg SelectCore InvCovInlineTim
-run_violate select-cov-handoff-ev SelectCoreCovHandoffEv.cfg SelectCore InvCovHandoffEv
-run_violate select-cov-handoff-tim SelectCoreCovHandoffTim.cfg SelectCore InvCovHandoffTim
-run_violate select-cov-prio-ev SelectCoreCovPrioEv.cfg SelectCore InvCovPrioEv
-run_violate select-cov-prio-tim SelectCoreCovPrioTim.cfg SelectCore InvCovPrioTim
-run_violate select-cov-reset-blind SelectCoreCovResetBlind.cfg SelectCore InvCovResetBlind
-run_violate select-cov-rearm SelectCoreCovRearm.cfg SelectCore InvCovRearm
-
-echo "== Stage 7V2.3: safety + result mutants (each must die on its expected invariant) =="
-run_violate select-mut-reresolve SelectCoreMutReResolve.cfg SelectCore InvWindow
-run_violate select-mut-finish-lie SelectCoreMutFinishLie.cfg SelectCore InvResultAgree
-run_violate select-mut-park-ready SelectCoreMutParkReady.cfg SelectCore InvQuietArmed
-run_violate select-mut-scan-flip SelectCoreMutScanFlip.cfg SelectCore InvResultAgree
-
-echo "== Stage 7V2.3: trace-removal witness separation (must hold cleanly) =="
-run_clean select-mut-no-timer SelectCoreMutNoTimer.cfg SelectCore
-
-echo "== Stage 8V2.3: DriverCore safety matrix =="
-for cfg in DriverCore DriverCoreLoaded; do
-    run_clean "driver-safety-$cfg" "$cfg.cfg" DriverCore
-done
-
-echo "== Stage 8V2.3: scenario coverage (each must be reachable) =="
-run_violate driver-cov-empty-drain DriverCoreCovEmptyDrain.cfg DriverCore InvCovEmptyDrain
-run_violate driver-cov-fifo-two DriverCoreCovFifoTwo.cfg DriverCore InvCovFifoTwo
-run_violate driver-cov-effect-in DriverCoreCovEffectIn.cfg DriverCore InvCovEffectIn
-run_violate driver-cov-flush DriverCoreCovFlush.cfg DriverCore InvCovFlush
-run_violate driver-cov-stale DriverCoreCovStale.cfg DriverCore InvCovStale
-run_violate driver-cov-post-term DriverCoreCovPostTerm.cfg DriverCore InvCovPostTerm
-run_violate driver-cov-dispatch DriverCoreCovDispatch.cfg DriverCore InvCovDispatch
-
-echo "== Stage 8V2.3: safety + result mutants (each must die on its expected invariant) =="
-run_violate driver-mut-quiescence DriverCoreMutQuiescence.cfg DriverCore InvTermQuiet
-run_violate driver-mut-duplicate-dispatch DriverCoreMutDuplicateDispatch.cfg DriverCore InvConservation
-run_violate driver-mut-drain-result DriverCoreMutDrainResult.cfg DriverCore InvDrainResult
-
-echo "== Stage 8V2.3: trace-removal witness separation (must hold cleanly) =="
-run_clean driver-mut-silent-dispatch DriverCoreMutSilentDispatch.cfg DriverCore
-
-echo "== Stage 8V2.3: result-binding separation (must be reachable there) =="
-run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore NotUnbacked
-
-#   Stage B1-1 (#394): RequestCore, the first liveness-carrying model.
+#   RequestCore (issue #394 campaign record), the first liveness-carrying model.
 #    28. Safety: the full fact set (admission close race, single acceptance,
 #        single admissible winner, generation matching, cancel-admissibility,
 #        publication gated on exec retirement, release invalidation, release
@@ -542,7 +227,8 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #    30. Safety mutants: each switch must die on its named invariant.
 #        MutGenWrap dies first on InvAcceptedRepresented (the wrapped slot
 #        strands the accepted identity); InvSingleAcceptance kills the same
-#        mutant when checked alone (recorded in the B1-1 evidence note).
+#        mutant when checked alone (recorded in docs/roadmap/
+#        b1-1-request-core-evidence.md).
 #        MutExecAfterTerminal may present as either InvNoExecRevival or
 #        InvNoPubWhileExec depending on which violating state BFS reaches
 #        first, so both kills are the intended one.
@@ -556,15 +242,16 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #        state the current protocol makes unreachable, so their cfgs must
 #        complete CLEANLY and a violation means the enabling state came
 #        back.  MutReadyBeforePayload (publication may begin with no
-#        terminal chosen) is subsumed by the B1-1 Corrective-1 E-chain rule
-#        (exec = 0 with no terminal is unreachable).  MutReclaimIgnoresPub
+#        terminal chosen) is subsumed by the Corrective-1 E-chain rule of
+#        docs/roadmap/b1-1-request-core-evidence.md (exec = 0 with no
+#        terminal is unreachable).  MutReclaimIgnoresPub
 #        (reclaim drops the published requirement) is subsumed by #524's
 #        convergence: with the retired inflight-tolerant release flavor
 #        gone, every release edge requires publication complete, so
 #        InvBindImpliesPublished makes the dropped guard redundant -- and
 #        that witness is the tripwire for an inflight-tolerant release
 #        path reappearing.
-#    33. B2 (#395) public release-edge mutants: each release edge carries its
+#    33. Public release-edge mutants: each release edge carries its
 #        own mutant.  MutConsumeKeepsBind (take_result forgets the binding
 #        release) and MutDiscardKeepsBind (discard/destruction forgets it)
 #        must each die on InvReleasedNotLive from their own edge;
@@ -577,13 +264,13 @@ run_violate driver-mut-unbacked-mint DriverCoreMutUnbackedMint.cfg DriverCore No
 #        record the consumption/discard.  #524 removed ReleaseBind, the
 #        pre-F2 Completion release flavor, which was the only inflight-
 #        tolerant release edge; MutReleaseResolvable died with it.
-echo "== Stage B1-1: RequestCore safety =="
+echo "== RequestCore: safety =="
 run_clean rcore-safety RequestCore.cfg RequestCore
 
-echo "== Stage B1-1: RequestCore conditional liveness =="
+echo "== RequestCore: conditional liveness =="
 run_live_clean rcore-live RequestCoreLive.cfg RequestCore
 
-echo "== Stage B1-1: RequestCore safety mutants (ACTIVE MUTATION: each must violate its named property) =="
+echo "== RequestCore: safety mutants (ACTIVE MUTATION: each must violate its named property) =="
 run_violate rcore-mut-ignore-close RequestCoreMutIgnoreClose.cfg RequestCore InvNoAcceptAfterClose
 run_violate rcore-mut-ignore-health RequestCoreMutIgnoreHealth.cfg RequestCore InvNoAcceptAfterHealth
 run_violate rcore-mut-rollback-residue RequestCoreMutRollbackResidue.cfg RequestCore InvUnoccupiedClean
@@ -597,22 +284,22 @@ run_violate_any rcore-mut-exec-after-terminal RequestCoreMutExecAfterTerminal.cf
 run_violate rcore-mut-stale-event RequestCoreMutStaleEvent.cfg RequestCore InvTerminalMatchesGeneration
 run_violate rcore-mut-double-decrement RequestCoreMutDoubleDecrement.cfg RequestCore TypeOK
 
-echo "== Stage B1-1: RequestCore liveness mutants (ACTIVE MUTATION: each must violate a temporal property) =="
+echo "== RequestCore: liveness mutants (ACTIVE MUTATION: each must violate a temporal property) =="
 run_temporal_violate rcore-mut-strand-post-accept RequestCoreMutStrandPostAccept.cfg RequestCore
 run_temporal_violate rcore-mut-lazy-reclaim RequestCoreMutLazyReclaim.cfg RequestCore
 run_temporal_violate rcore-mut-ctl-after-settled RequestCoreMutCtlAfterSettled.cfg RequestCore
 
-echo "== Stage B1-1: SUBSUMPTION WITNESSES (enabling state made unreachable; each must remain clean) =="
+echo "== RequestCore: SUBSUMPTION WITNESSES (enabling state made unreachable; each must remain clean) =="
 run_clean rcore-mut-ready-before-payload RequestCoreMutReadyBeforePayload.cfg RequestCore
 run_clean rcore-mut-reclaim-ignores-pub RequestCoreMutReclaimIgnoresPub.cfg RequestCore
 
-echo "== Stage B2: RequestCore public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) =="
+echo "== RequestCore: public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) =="
 run_violate rcore-mut-consume-keeps-bind RequestCoreMutConsumeKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-consume-unpublished RequestCoreMutConsumeUnpublished.cfg RequestCore InvConsumeAfterPublish
 run_violate rcore-mut-discard-keeps-bind RequestCoreMutDiscardKeepsBind.cfg RequestCore InvReleasedNotLive
 run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg RequestCore InvDiscardAfterPublish
 
-#   Stage C1 (#396/#433): ObserverCore, the host-neutral observer delivery
+#   ObserverCore (issues #396/#433 campaign record), the host-neutral observer delivery
 #   protocol model derived from the merged implementation.
 #    34. Safety: the full fact set (reset discipline, observer-cancel
 #        isolation, attach/publishation atomicity in both directions, the
@@ -624,7 +311,7 @@ run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg Request
 #        no observer), L1 (armed + publication ~> retired), L2 (waiting +
 #        publication ~> woken) and L4 (refused attach ~> published) under
 #        the declared WF_ driver/host service conjuncts.
-#    36. C++ mutation-seam mirrors (the SLUICE_C1_MUTANT_* defines):
+#    36. C++ mutation-seam mirrors (the SLUICE_REQUEST_CORE_MUTANT_* defines):
 #        MutAttachIgnoresPublication dies on InvArmedRequiresUnpublished;
 #        MutAttachTreatsTerminalAsPublished on
 #        InvAlreadyTerminalRequiresPublication; MutDeliveryClaimUnbounded
@@ -642,25 +329,25 @@ run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg Request
 #        retirement-after-delivery, observer-free settlement (S4), the
 #        delivery pin past binding release (OBS-03), and registration
 #        renewal after cancellation.
-echo "== Stage C1: ObserverCore safety =="
+echo "== ObserverCore: safety =="
 run_clean obs-safety ObserverCore.cfg ObserverCore
 
-echo "== Stage C1: ObserverCore conditional liveness =="
+echo "== ObserverCore: conditional liveness =="
 run_live_clean obs-live ObserverCoreLive.cfg ObserverCore
 
-echo "== Stage C1: ObserverCore C++ mutation-seam mirrors (each must violate its named invariant) =="
+echo "== ObserverCore: C++ mutation-seam mirrors (each must violate its named invariant) =="
 run_violate obs-mut-attach-ignores-pub ObserverCoreMutAttachIgnoresPublication.cfg ObserverCore InvArmedRequiresUnpublished
 run_violate obs-mut-attach-terminal-as-pub ObserverCoreMutAttachTreatsTerminalAsPublished.cfg ObserverCore InvAlreadyTerminalRequiresPublication
 run_violate obs-mut-claim-unbounded ObserverCoreMutDeliveryClaimUnbounded.cfg ObserverCore InvAtMostOnceDelivery
 run_violate obs-mut-cancel-during-delivery ObserverCoreMutCancelDuringDeliveryReturns.cfg ObserverCore InvRetireOwnership
 run_temporal_violate obs-mut-publication-skips-queue ObserverCoreMutPublicationSkipsQueue.cfg ObserverCore
 
-echo "== Stage C1: ObserverCore floor mutants (each must violate its named invariant or property) =="
+echo "== ObserverCore: floor mutants (each must violate its named invariant or property) =="
 run_violate obs-mut-obs-cancel-cancels-op ObserverCoreMutObsCancelCancelsOp.cfg ObserverCore InvCancelIsolation
 run_violate obs-mut-reclaim-ignores-observer ObserverCoreMutReclaimIgnoresObserver.cfg ObserverCore InvObserverPin
 run_temporal_violate obs-mut-no-delivery-wake ObserverCoreMutNoDeliveryWake.cfg ObserverCore
 
-echo "== Stage C1: race/scenario coverage (each witness must be reachable) =="
+echo "== ObserverCore: race/scenario coverage (each witness must be reachable) =="
 run_violate obs-cov-attach-rode-pub ObserverCoreCovAttachRodePublication.cfg ObserverCore InvCovAttachRodePublication
 run_violate obs-cov-already-terminal ObserverCoreCovAlreadyTerminalFastPath.cfg ObserverCore InvCovAlreadyTerminalFastPath
 run_violate obs-cov-window-attach ObserverCoreCovWindowAttach.cfg ObserverCore InvCovWindowAttach
@@ -671,28 +358,28 @@ run_violate obs-cov-no-observer-settlement ObserverCoreCovNoObserverSettlement.c
 run_violate obs-cov-pinned-past-release ObserverCoreCovPinnedPastRelease.cfg ObserverCore InvCovPinnedPastRelease
 run_violate obs-cov-rearm ObserverCoreCovReArm.cfg ObserverCore InvCovReArm
 
-echo "== Stage E2: ShutdownCore safety =="
-run_clean e2-safety ShutdownCore.cfg ShutdownCore
+echo "== ShutdownCore: safety =="
+run_clean shutdown-core-safety ShutdownCore.cfg ShutdownCore
 
-echo "== Stage E2: ShutdownCore C++ mutation-seam mirrors (each must violate its named invariant) =="
-run_violate e2-mut-m1-destroy-ignores-closure ShutdownCoreMutM1DestroyIgnoresClosure.cfg ShutdownCore InvDestroyRequiresExecutionClosed
-run_violate e2-mut-m6-snapshot-before-close ShutdownCoreMutM6SnapshotBeforeClose.cfg ShutdownCore InvNoAcceptAfterAdmissionClose
-run_violate e2-mut-m7-close-without-convergence ShutdownCoreMutM7CloseWithoutConvergence.cfg ShutdownCore InvExecutionClosedNoBorrowTouchingExecution
-run_violate e2-mut-m8-retire-fd-early ShutdownCoreMutM8RetireFdEarly.cfg ShutdownCore InvNotificationRetireRequiresNoDeliveryRefs
+echo "== ShutdownCore: C++ mutation-seam mirrors (each must violate its named invariant) =="
+run_violate shutdown-core-mut-m1-destroy-ignores-closure ShutdownCoreMutM1DestroyIgnoresClosure.cfg ShutdownCore InvDestroyRequiresExecutionClosed
+run_violate shutdown-core-mut-m6-snapshot-before-close ShutdownCoreMutM6SnapshotBeforeClose.cfg ShutdownCore InvNoAcceptAfterAdmissionClose
+run_violate shutdown-core-mut-m7-close-without-convergence ShutdownCoreMutM7CloseWithoutConvergence.cfg ShutdownCore InvExecutionClosedNoBorrowTouchingExecution
+run_violate shutdown-core-mut-m8-retire-fd-early ShutdownCoreMutM8RetireFdEarly.cfg ShutdownCore InvNotificationRetireRequiresNoDeliveryRefs
 
-echo "== Stage E2: ShutdownCore contract mutants (a clean run is the kill: the certified state becomes unreachable) =="
-run_clean e2-mut-m4-require-consumption ShutdownCoreMutM4RequireConsumption.cfg ShutdownCore
+echo "== ShutdownCore: contract mutants (a clean run is the kill: the certified state becomes unreachable) =="
+run_clean shutdown-core-mut-m4-require-consumption ShutdownCoreMutM4RequireConsumption.cfg ShutdownCore
 
-echo "== Stage E2: ShutdownCore reachability certificates (each must be reachable) =="
-run_violate e2-cov-published-survives ShutdownCoreCovPublishedSurvivesExecutionClose.cfg ShutdownCore InvCovPublishedSurvivesExecutionClose
-run_violate e2-cov-unconsumed-converges ShutdownCoreCovUnconsumedResultConverges.cfg ShutdownCore InvCovUnconsumedResultConverges
-run_violate e2-cov-internal-pin ShutdownCoreCovInternalPinThenCleanClose.cfg ShutdownCore InvCovInternalPinThenCleanClose
-run_violate e2-cov-cancel-policy ShutdownCoreCovCancelPolicyCompletes.cfg ShutdownCore InvCovCancelPolicyCompletes
+echo "== ShutdownCore: reachability certificates (each must be reachable) =="
+run_violate shutdown-core-cov-published-survives ShutdownCoreCovPublishedSurvivesExecutionClose.cfg ShutdownCore InvCovPublishedSurvivesExecutionClose
+run_violate shutdown-core-cov-unconsumed-converges ShutdownCoreCovUnconsumedResultConverges.cfg ShutdownCore InvCovUnconsumedResultConverges
+run_violate shutdown-core-cov-internal-pin ShutdownCoreCovInternalPinThenCleanClose.cfg ShutdownCore InvCovInternalPinThenCleanClose
+run_violate shutdown-core-cov-cancel-policy ShutdownCoreCovCancelPolicyCompletes.cfg ShutdownCore InvCovCancelPolicyCompletes
 
-echo "== Stage E2: ShutdownCore conditional liveness (the SHUT-03 convergence statement) =="
-run_live_clean e2-live ShutdownCoreLive.cfg ShutdownCore
-run_temporal_violate e2-live-ops-nofair ShutdownCoreLiveOpsNoFair.cfg ShutdownCore
-run_temporal_violate e2-live-close-nofair ShutdownCoreLiveCloseNoFair.cfg ShutdownCore
+echo "== ShutdownCore: conditional liveness (the SHUT-03 convergence statement) =="
+run_live_clean shutdown-core-live ShutdownCoreLive.cfg ShutdownCore
+run_temporal_violate shutdown-core-live-ops-nofair ShutdownCoreLiveOpsNoFair.cfg ShutdownCore
+run_temporal_violate shutdown-core-live-close-nofair ShutdownCoreLiveCloseNoFair.cfg ShutdownCore
 
 drain
 

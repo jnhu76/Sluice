@@ -1,3 +1,0 @@
-Thread 1 "request_scope_m" received signal SIGABRT, Aborted.
-#28 0x00000000004f95e6 in (anonymous namespace)::destructor_cleanup_preserves_the_original_exception_and_still_releases (t=...) at tests/request_scope_test.cpp:688
-#29 0x00000000004ecba8 in main () at tests/request_scope_test.cpp:1417

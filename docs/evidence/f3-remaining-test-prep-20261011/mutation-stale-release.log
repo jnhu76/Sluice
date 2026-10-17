@@ -1,8 +1,0 @@
-stale-release: temporary support-only mutation, release liburing=y, SLUICE_ORACLE_FILTER=borrow_live_write_peak_selftest
-[0m[38;5;2;1m[  4%]:[0m cache compiling.release tests/app_copy_pipeline_oracle_test.cpp[0m
-[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1mlinking.release app_copy_pipeline_oracle_test[0m
-[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 5.639s[0m
-FAIL: slot-reuse staged-unreleased write stays borrow-live
-CASE FAIL: borrow_live_write_peak_selftest
-[0m[1;38;5;1;1merror: [0mexecv(/home/jnhu/Source/Sluice-f3-498-remaining-tests/build/remaining-release-y/linux/x86_64/release/app_copy_pipeline_oracle_test ) failed(1)[0m
-observed_exit=255

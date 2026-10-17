@@ -59,7 +59,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_e2_shutdown_XXXXXX";
+    char path[] = "/tmp/sluice_shutdown_lifecycle_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -210,7 +210,7 @@ bool scenario_dies_aborting(void (*scenario)()) {
 // The contract names its always-on diagnostics; the death scenario must end
 // at the named guard, not at any abort that happens to be nearby.
 bool scenario_dies_aborting_named(void (*scenario)(), const char* needle) {
-    char diag[] = "/tmp/sluice_e2_death_XXXXXX";
+    char diag[] = "/tmp/sluice_shutdown_death_XXXXXX";
     const int capture = ::mkstemp(diag);
     if (capture < 0)
         return false;

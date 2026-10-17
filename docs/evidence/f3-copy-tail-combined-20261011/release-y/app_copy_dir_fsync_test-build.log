@@ -1,6 +1,0 @@
-[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m cache compiling.release tests/app_copy_dir_fsync_test.cpp[0m
-[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m cache compiling.release apps/sluice-copy/copy_task.cpp[0m
-[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m cache compiling.release apps/sluice-copy/file_domain.cpp[0m
-[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m cache compiling.release apps/sluice-copy/safe_output.cpp[0m
-[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1m<app_copy_dir_fsync_test>[0m [38;5;5;1mlinking.release app_copy_dir_fsync_test[0m
-[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.723s[0m

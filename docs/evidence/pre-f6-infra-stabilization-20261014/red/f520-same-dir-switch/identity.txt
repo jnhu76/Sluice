@@ -1,5 +1,0 @@
-BASE_SHA=f99acbc3a64cf4eae356ef39b99d88e89183f579
-xmake=[0m[1mxmake v3.0.9+20260621, A cross-platform build utility based on Lua[0m[0m
-gcc=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
-kernel=7.2.9-201.fc44.x86_64
-DRIVER_DONE

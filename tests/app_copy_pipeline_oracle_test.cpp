@@ -1,4 +1,4 @@
-// e1 (#474): COPY-B contract oracle cases over the current
+// Contract oracle cases over the current
 // run_pipelined_copy_with_context API. The scripted backend, controller,
 // scenario harness and the CONTRACT_DECISION_REQUIRED analysis live in
 // tests/support/pipelined_copy_oracle_support.hpp.

@@ -1,4 +1,4 @@
-// e4 (#474): TAIL stop / settlement / teardown contract oracles over the
+// TAIL stop / settlement / teardown contract oracles over the
 // public TailEngine API. Event anchors come from an in-process pread
 // interposer compiled into this target: ELF symbol interposition routes the
 // ThreadPoolBackend worker's ::pread through tail_probe, which gates on the
@@ -223,7 +223,7 @@ struct TempFile {
     int append_fd = -1;
 
     explicit TempFile(const std::string& content) {
-        char tmpl[] = "/tmp/sluice_tail_e4_XXXXXX";
+        char tmpl[] = "/tmp/sluice_tail_lifecycle_XXXXXX";
         const int fd = ::mkstemp(tmpl);
         if (fd < 0)
             deadline_abort("mkstemp failed");

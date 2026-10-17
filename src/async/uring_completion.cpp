@@ -48,7 +48,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
         } else if (terminal_is_kernel_cancel(terminal.error)) {
             candidate.outcome = sluice::detail::canceled_racing_in_flight_attempt(0);
         } else {
-#if defined(SLUICE_E1_MUTANT_BYTE_FAILURE_ACCOUNTED)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_BYTE_FAILURE_ACCOUNTED)
             candidate.outcome = sluice::detail::IoOutcome::failure(terminal.error);
 #else
             candidate.outcome = sluice::detail::failed_dispatched_attempt(terminal.error);
@@ -59,7 +59,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
     } else {
         candidate.outcome = sluice::detail::IoOutcome::success();
         if (metadata != nullptr) {
-#if defined(SLUICE_E1_MUTANT_METADATA_DROPS_RECORD)
+#if defined(SLUICE_BACKEND_CONTRACT_MUTANT_METADATA_DROPS_RECORD)
             candidate.has_metadata = false;
 #else
             candidate.has_metadata = true;
@@ -83,7 +83,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
     }
 
     route.terminal_delivered = true;
-#if defined(SLUICE_B1C_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT)
+#if defined(SLUICE_URING_CORE_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT)
     publication_pending_->push_back(route.handle);
 #else
     if (core_->release_execution(key) != detail::ExecutionRelease::borrow_touch_fully_retired) {
@@ -120,7 +120,7 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
         if (core_->release_control(key) != detail::ControlRelease::released) {
             detail::uring_core_handoff_fail_fast();
         }
-#if defined(SLUICE_B1C_MUTANT_CANCEL_CQE_AS_ORIGINAL_TERMINAL)
+#if defined(SLUICE_URING_CORE_MUTANT_CANCEL_CQE_AS_ORIGINAL_TERMINAL)
         if (!route.terminal_delivered) {
             detail::TerminalCandidate fabricated;
             fabricated.kind = detail::TerminalCandidateKind::physical_outcome;
@@ -133,7 +133,7 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
             }
         }
 #endif
-#if defined(SLUICE_B1C_MUTANT_RECLAIM_BEFORE_CONTROL_RETIREMENT)
+#if defined(SLUICE_URING_CORE_MUTANT_RECLAIM_BEFORE_CONTROL_RETIREMENT)
         retire_router_entry_(router_index);
 #else
         if (route.terminal_delivered) {
@@ -159,7 +159,7 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     const sluice::FileInfo* metadata_out = nullptr;
     sluice::detail::IoOutcome terminal;
     if (res < 0) {
-#if defined(SLUICE_B1C_MUTANT_DROP_ORIGINAL_OUTCOME)
+#if defined(SLUICE_URING_CORE_MUTANT_DROP_ORIGINAL_OUTCOME)
         if (is_byte_op)
             return;
 #endif
@@ -227,7 +227,7 @@ void UringAsyncBackend::reap_cqes() noexcept {
         }
     };
     reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
-#if defined(SLUICE_E1_MUTANT_POST_POISON_FLUSH_GATED)
+#if defined(SLUICE_URING_EXTERNAL_LOOP_MUTANT_POST_POISON_FLUSH_GATED)
     bool overflow_flush_allowed = true;
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -248,7 +248,7 @@ void UringAsyncBackend::reap_cqes() noexcept {
         // The routes behind a still-unflushable overflow keep their borrows
         // and stay pending under the failed health; their retirement proof is
         // the delivered CQE, never absence from the visible ring.
-#if defined(SLUICE_B1C_MUTANT_OVERFLOW_FLUSH_IGNORED)
+#if defined(SLUICE_URING_PROGRESS_MUTANT_OVERFLOW_FLUSH_IGNORED)
         (void)::io_uring_get_events(&ring_state_->ring);
         {
             std::lock_guard<std::mutex> lk(dispatch_mtx_);

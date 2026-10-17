@@ -1,7 +1,0 @@
-	linux-vdso.so.1 (0x00007fc4802df000)
-	libclang_rt.tsan.so => /usr/lib/clang/22/lib/x86_64-redhat-linux-gnu/libclang_rt.tsan.so (0x00007fc47ee00000)
-	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fc47ea00000)
-	libm.so.6 => /lib64/libm.so.6 (0x00007fc47ece9000)
-	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fc47ecbc000)
-	libc.so.6 => /lib64/libc.so.6 (0x00007fc47e807000)
-	/lib64/ld-linux-x86-64.so.2 (0x00007fc4802e1000)

@@ -1,3 +1,0 @@
-[0m[38;5;2;1m[  4%]:[0m [38;5;5;1m<semantic_backend_conformance_test>[0m cache compiling.debug tests/semantic_backend_conformance_test.cpp[0m
-[0m[38;5;2;1m[ 91%]:[0m [38;5;5;1m<semantic_backend_conformance_test>[0m [38;5;5;1mlinking.debug semantic_backend_conformance_test[0m
-[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.949s[0m

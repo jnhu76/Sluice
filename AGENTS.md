@@ -181,3 +181,16 @@ Keep `xmake.lua` and `xmake/` aligned with actual supported targets. New tests,
 models, scripts or CI must serve a current requirement; historical tooling has
 no automatic inheritance right. Keep commits narrow and reviewable. Do not merge
 unless explicitly instructed.
+
+A script enters master only when it serves a standing development, verification
+or release duty, has a named consumer and entry point, has definable
+success/failure criteria, carries a self-test or independent check where the
+check itself could be wrong, duplicates no existing tool, and is worth more
+maintained than rewritten when next needed. One-shot probes, bulk collectors,
+worktree experiment drivers and temporary reproduction tools belong in `/tmp`,
+an ignored local directory or an experiment branch; commit the evidence they
+produce (results, commands, configuration, provenance), not the collector.
+Active naming states the verified behavior, protected invariant, injected
+failure or current duty — never a development phase, issue number or campaign
+label; historical records keep their original names under their supersession
+notices.

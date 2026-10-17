@@ -57,7 +57,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_b1a_ownership_XXXXXX";
+    char path[] = "/tmp/sluice_core_ownership_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
@@ -237,7 +237,7 @@ bool backend_slot_table_carries_the_context_identity(Tracker& t) {
 }
 
 bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1a identity provenance\n");
+    auto file = open_temp_file(t, "sluice ownership identity provenance\n");
     if (!file.has_value())
         return false;
 
@@ -279,7 +279,7 @@ bool foreign_and_released_identities_do_not_resolve(Tracker& t) {
 }
 
 bool production_request_is_request_core_owned(Tracker& t) {
-    auto file = open_temp_file(t, "sluice b1b core owned\n");
+    auto file = open_temp_file(t, "sluice core owned\n");
     if (!file.has_value())
         return false;
 
@@ -480,7 +480,7 @@ bool move_assignment_transfers_the_same_core(Tracker& t) {
     t.check(settle(*assigned_core, id), "the slot settles through the move-assigned core");
     t.check(core_is_idle(assigned_core->snapshot()), "settling leaves no live core fact");
 
-    auto file = open_temp_file(t, "sluice b1a move assignment\n");
+    auto file = open_temp_file(t, "sluice ownership move assignment\n");
     if (!file.has_value())
         return false;
     std::vector<std::byte> scratch(8);
@@ -519,7 +519,7 @@ bool uring_context_carries_the_context_identity(Tracker& t) {
     t.check(core->capacity() == raw->slot_capacity(),
             "the core slot budget is the backend slot table capacity");
 
-    auto file = open_temp_file(t, "sluice b1c uring ownership\n");
+    auto file = open_temp_file(t, "sluice uring core ownership\n");
     if (!file.has_value())
         return false;
 
