@@ -27,7 +27,7 @@ int g_failures = 0;
     } while (0)
 
 std::string make_temp_path() {
-    char path[] = "/tmp/sluice_f1_cdur_XXXXXX";
+    char path[] = "/tmp/sluice_cdur_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};

@@ -223,7 +223,7 @@ struct TempFile {
     int append_fd = -1;
 
     explicit TempFile(const std::string& content) {
-        char tmpl[] = "/tmp/sluice_tail_e4_XXXXXX";
+        char tmpl[] = "/tmp/sluice_tail_lifecycle_XXXXXX";
         const int fd = ::mkstemp(tmpl);
         if (fd < 0)
             deadline_abort("mkstemp failed");

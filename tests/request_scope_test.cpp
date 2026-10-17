@@ -143,7 +143,7 @@ std::unique_ptr<Backend> make_backend(std::size_t capacity) {
 #endif
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_d1_scope_XXXXXX";
+    char path[] = "/tmp/sluice_request_scope_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};

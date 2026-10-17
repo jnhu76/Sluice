@@ -50,7 +50,7 @@ std::unique_ptr<Backend> make_backend() {
 #endif
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_b2_violation_XXXXXX";
+    char path[] = "/tmp/sluice_public_violation_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};

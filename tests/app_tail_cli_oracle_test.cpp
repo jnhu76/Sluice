@@ -69,7 +69,7 @@ struct TempFile {
     int append_fd = -1;
 
     explicit TempFile(const std::string& content) {
-        char tmpl[] = "/tmp/sluice_tail_e4_cli_XXXXXX";
+        char tmpl[] = "/tmp/sluice_tail_cli_XXXXXX";
         const int fd = ::mkstemp(tmpl);
         if (fd < 0) {
             std::fprintf(stderr, "DEADLINE_ABORT: mkstemp failed\n");
@@ -146,7 +146,7 @@ class TailChild {
     bool spawn(const std::string& bin, const std::vector<std::string>& args, dev_t shim_dev = 0,
                ino_t shim_ino = 0) {
         const bool with_shim = shim_dev != 0 || shim_ino != 0;
-        char dir_tmpl[] = "/tmp/sluice_tail_e4_child_XXXXXX";
+        char dir_tmpl[] = "/tmp/sluice_tail_child_XXXXXX";
         char* dir = ::mkdtemp(dir_tmpl);
         if (!dir) {
             std::fprintf(stderr, "FAIL: mkdtemp\n");

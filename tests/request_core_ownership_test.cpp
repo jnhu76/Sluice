@@ -57,7 +57,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_b1a_ownership_XXXXXX";
+    char path[] = "/tmp/sluice_core_ownership_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};
