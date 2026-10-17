@@ -73,13 +73,13 @@ Evidence (SHA/config) · Missing proof or gap · Next owner.
 
 | Requirement IDs | C++ owner | Current state | Target | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|---|
-| BACKEND-02/03 ThreadPool profile (six request ops, explicit setup failure, fault paths) | `src/async/threadpool_backend.cpp` | All six ops incl. metadata on workers; construction throws rather than degrading; cancel dispositions incl. `physical_interruption_unsupported` | Root §15 | VERIFIED (carried) | E1 records + F6 matrix; xmake targets `backend_conformance_e1_threadpool_test`/`_uring_test` from `tests/backend_conformance_e1_test.cpp` + killed `e1_conformance_mut_*` builds; scoped to recorded commits/configs | Release-matrix rerun (G10) | Release gate |
+| BACKEND-02/03 ThreadPool profile (six request ops, explicit setup failure, fault paths) | `src/async/threadpool_backend.cpp` | All six ops incl. metadata on workers; construction throws rather than degrading; cancel dispositions incl. `physical_interruption_unsupported` | Root §15 | VERIFIED (carried) | E1 records + F6 matrix; xmake targets `backend_contract_conformance_threadpool_test`/`_uring_test` from `tests/backend_contract_conformance_test.cpp` + killed `backend_contract_conformance_mut_*` builds (renamed from the E1-stage spellings on 2026-10-17, see the hygiene record below); scoped to recorded commits/configs | Release-matrix rerun (G10) | Release gate |
 
 ### G6 io_uring execution
 
 | Requirement IDs | C++ owner | Current state | Target | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|---|
-| BACKEND-02/03 io_uring profile (statx metadata, sticky cancel intent, poison convergence, availability gate) | `src/async/uring_backend.cpp`, `detail/uring_submit.hpp` | Required profile incl. statx probe gate; `-ECANCELED` terminal with unknown remainder; transport/completion split | Root §15 | VERIFIED (carried) | B1-C/E1/C2-C records; xmake target `backend_conformance_e1_uring_test` from `tests/backend_conformance_e1_test.cpp` (15 tests, real kernel WSL2 6.18.40.1, liburing 2.14, gcc 15.2.0, tmpfs) | Environment divergence: recorded real-kernel evidence is WSL2; release matrix must cover the declared Linux configurations (G10) | Release gate |
+| BACKEND-02/03 io_uring profile (statx metadata, sticky cancel intent, poison convergence, availability gate) | `src/async/uring_backend.cpp`, `detail/uring_submit.hpp` | Required profile incl. statx probe gate; `-ECANCELED` terminal with unknown remainder; transport/completion split | Root §15 | VERIFIED (carried) | B1-C/E1/C2-C records; xmake target `backend_contract_conformance_uring_test` from `tests/backend_contract_conformance_test.cpp` (15 tests, real kernel WSL2 6.18.40.1, liburing 2.14, gcc 15.2.0, tmpfs; target renamed 2026-10-17, evidence unchanged) | Environment divergence: recorded real-kernel evidence is WSL2; release matrix must cover the declared Linux configurations (G10) | Release gate |
 | PROG-02 io_uring settlement notification | `uring_backend.cpp` + ProgressSource | Structural argument only: no deterministic io_uring settlement-notification oracle | Root §11 PROG-02 for both backends | **GAP** | Standing item recorded at `b870a7c0` (v2-c4 §23.1, Git history) | Deterministic uring notification/no-lost-wake oracle or a reviewed equivalence argument | Implementation slice |
 | PROG-01 uring owed-delivery residue (V29) | `uring_backend.cpp` | Owed-delivery events reported as immediate residue; fixed by PR #543 | Root §11 PROG-01 | VERIFIED (live 2026-10-16) | `tests/uring_owed_residue_test.cpp` merged at `b870a7c0`; live 3/3 PASS this host (config above) | — | — |
 
@@ -101,10 +101,10 @@ execution evidence.
 |---|---|---|---|---|---|---|
 | RequestCore model (REQ/VERIFY-02 S1–S3, S6; L1/L5) | `src/async/detail/request_core.cpp` | Safety: 20 invariants incl. `InvBindImpliesPublished`; liveness L1+L5 per identity; #524 convergence removed the retired `ReleaseBind` flavor and migrated mutation gates | VERIFIED (carried, model) | `formal/tla/RequestCore.tla`; safety PASS 31,289,609 gen / 5,359,732 distinct / depth 53; liveness PASS (12 branches = 2 slots × generations 0..2 × {L1,L5}); frozen `28f0fe33` (`docs/evidence/issue-524-requestcore-convergence-20261015/`) | Bounded instances (2 slots, gens 0..2); not C++ memory ordering; no unbounded identity domain | — |
 | ObserverCore model (OBS, L3) | core observer phases | Safety floor (at-most-once per generation, cancel isolation, retirement finality) + conditional liveness; 5 mirrored mutation seams killed | VERIFIED (carried, model) | `formal/tla/ObserverCore.tla` (C1-H, #433); cfgs with `PROPERTY` liveness + liveness mutants | Host callback internals and kernel timing unmodeled | — |
-| ProgressSource model (PROG-02, V24) | `detail/progress_source.hpp` | Epoch/token park-wake handshake; reachable-state obligations re-proved on corrected close semantics; `MutRepeatCloseSignals` discriminator | VERIFIED (carried, model) | `formal/tla/ProgressSource.tla` (C2-E campaign + re-closure records) | Model predates the C1 suppression mechanism: no suppression action exists in the model; the suppression rule's coverage is the PROG-02 equivalence argument, not a model action; single-boolean readiness | — |
+| ProgressSource model (PROG-02, V24) | `detail/progress_source.hpp` | Epoch/token park-wake handshake; reachable-state obligations re-proved on corrected close semantics; `MutRepeatCloseSignals` discriminator | VERIFIED (carried, model) | `formal/tla/ProgressSource.tla` (C2-E campaign + re-closure records); gated by `scripts/verify_progress_source_model.sh` | Model predates the C1 suppression mechanism: no suppression action exists in the model; the suppression rule's coverage is the PROG-02 equivalence argument, not a model action; single-boolean readiness | — |
 | ShutdownCore model (SHUT, L4) | `async_io_context.cpp` | Five-state lifecycle, `InvCanceledRequiresTargeting`, LiveOpsSettle/LiveShutdownCloses under explicit fairness; per-property negative controls | VERIFIED (carried, model) | `formal/tla/ShutdownCore.tla` (E2); part of the 171-gate run `VERIFY_TLA: PASS` | Host teardown/application consumption timing unmodeled | — |
 | Mutation mirrors / correspondence (VERIFY-01/06) | test seams `SLUICE_*_MUTANT_*` | Compile-time protocol mutations killed by named invariants/oracles; in-tree C++ mutation builds recorded across B2/E1/E2/#531/#532 | VERIFIED (carried, campaign-scoped) | 71/72 campaign record (survivor: documented F2 path-dependent case, guard-caught — recorded in `docs/evidence/f2-authority-contraction-20261013/` and the PR #536 receipt, not restated in this ledger); per-slice kills named in carried records | Full campaign is campaign-scale, not per-commit; re-run obligations follow VERIFY-06 on model/transition change | — |
-| Historical Lean/FCB1 corpus (`formal/Sluice/**`, Event/Mutex/… TLA+) | retired primitives | Proves retired synchronization-primitive family; zero file-I/O/liveness content | DEFERRED_OUT_OF_SCOPE (evidence asset carrying no required v2 obligation) | Superseded v1 formal evidence map dispositions (Git history `c001bb1e`) | None required; no v2 claim rests on it | — |
+| Historical Lean/FCB1 corpus (`formal/Sluice/**`, Event/Mutex/… TLA+) | retired primitives | Proves retired synchronization-primitive family; zero file-I/O/liveness content | DEFERRED_OUT_OF_SCOPE (evidence asset carrying no required v2 obligation) | Superseded v1 formal evidence map dispositions (Git history `c001bb1e`); the in-tree copies (Lean `formal/Sluice/**`, the Event/Mutex/… TLA+ modules, `scripts/verify_formal.sh` and the retired `verify_tla.sh` stages) were removed from the active tree on 2026-10-17 and remain recoverable from Git history | None required; no v2 claim rests on it | — |
 
 No model result is a production execution claim: C++ transition mapping is
 recorded per campaign (correspondence headers and the #524
@@ -194,8 +194,57 @@ are recorded in the verification record §6:
 - Package verifier hardened (`d8c57cd5`, `47a58e87`, `51dc830f`): seam
   negatives compile the real installed headers with pinned diagnostics
   and are mutation self-tested; each consumer runs once; the installed
-  mutation-region set is pinned (the two D1 template seams; the B2
-  release-path region moved to an internal TU in `3bace3d4` and re-killed).
+  mutation-region set is pinned (the two request_scope template seams,
+  spelled `SLUICE_D1_MUTANT_*` at the time of the pin and
+  `SLUICE_REQUEST_SCOPE_MUTANT_*` since the 2026-10-17 hygiene renames; the
+  public-request release-path region moved to an internal TU in `3bace3d4`
+  and re-killed, now `SLUICE_PUBLIC_REQUEST_MUTANT_*`).
 - Re-verification at the fix head: full 8-cell matrix rerun (seven cells
   green; asanubsan-y only the recorded RG1), both package profiles at 49
   gates PASS with refreshed manifests, B2 mutants re-killed.
+
+## Dated repository-hygiene contraction (2026-10-17)
+
+A repository-hygiene round (single PR, base `9845cee1`) renamed the remaining
+development-stage identifiers in the active test/build graph and removed
+closed-campaign tooling. No requirement changed status, no evidence class was
+rewritten, and no recorded verdict was re-dated; affected rows above are
+re-worded in place. Summary:
+
+- Renames (pure structural; same injection points, oracles and kill
+  commands modulo the new names): `tests/backend_conformance_e1_test.cpp` →
+  `backend_contract_conformance_test.cpp` with targets
+  `backend_contract_conformance_{threadpool,uring}_test` and mutants
+  `backend_contract_conformance_mut_*` (G5/G6 rows updated);
+  `tests/{uring,threadpool}_core_cutover_test.cpp` →
+  `{uring,threadpool}_request_core_integration_test.cpp` with mutants
+  `uring_core_integration_mut_*`; stage-prefixed mutant defines re-spelled
+  (`SLUICE_E1_MUTANT_*` → `SLUICE_BACKEND_CONTRACT_MUTANT_*` or
+  `SLUICE_{URING_PROGRESS,URING_EXTERNAL_LOOP}_MUTANT_*`,
+  `SLUICE_B1C_MUTANT_*` → `SLUICE_URING_CORE_MUTANT_*`,
+  `SLUICE_C1_MUTANT_*` → `SLUICE_REQUEST_CORE_MUTANT_*`,
+  `SLUICE_C2E_MUTANT_*` → `SLUICE_PROGRESS_SOURCE_MUTANT_*`,
+  `SLUICE_E2_MUTANT_M*` → `SLUICE_SHUTDOWN_MUTANT_M*` with the ADR-0004
+  M-numbers preserved, `SLUICE_B2_MUTANT_*` →
+  `SLUICE_PUBLIC_REQUEST_MUTANT_*`, `SLUICE_D1_MUTANT_*` →
+  `SLUICE_REQUEST_SCOPE_MUTANT_*`; the G9 seam allowlist followed).
+  Requirement-ID prefixes with current contract meaning (`SLUICE_ERR01_*`,
+  `SLUICE_THREAD01_*`, `SLUICE_LIFE_*`) and the W-01/W-02/W-03 workload
+  names are unchanged.
+- Formal gate: `scripts/verify_tla.sh` shrunk to the three active
+  C++-mirrored models; the retired-primitive TLA+ corpus and the Lean FCB1
+  corpus left the tree (G8 historical row above);
+  `scripts/verify_c2e_progress.sh` → `scripts/verify_progress_source_model.sh`
+  (verdict catalogue unchanged).
+- Retired closed-campaign tooling: the F0/F3/F4/M/M-R/liburing verifier
+  scripts, the `mr-disposition-guard` workflow (the M-R disposition overlay
+  closed per `docs/review/m-phase-final-closeout.json`, Git history at the
+  hygiene base), `tests/package/f4_retirement/` (the live 11-header boundary
+  is owned by `scripts/verify_v2_package.py`, G9), and the dead lefthook
+  pre-push configuration (its gate script was deleted in `5f62b55b`).
+- Dated evidence: `docs/review/` and the campaign-only `docs/evidence/`
+  records left the tree; the five evidence records cited by active rows or
+  tooling remain in place unmodified.
+- Verification of this round: both build profiles green, clean-room package
+  verifier re-run with the renamed seam allowlist, renamed mutants re-killed;
+  recorded in `docs/evidence/repo-hygiene-contraction-20261017/`.

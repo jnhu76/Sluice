@@ -1654,7 +1654,7 @@ report fix.
 | Observation protocol | core observer phases + `observer_protocol.hpp` | `ObserverCore.tla`; C1 campaign |
 | Progress authority | `include/sluice/async/detail/progress_source.hpp` | `ProgressSource.tla`; progress ownership suites; no-lost-wake matrices |
 | Pass bound + suppression mechanism | `src/async/threadpool_backend.cpp`, `uring_backend.cpp` | PR #536 oracles merged in `dd83595d`; suppression test; V28 discriminator at the baseline; V29 discriminator (`tests/uring_owed_residue_test.cpp`) merged by PR #543 |
-| Backend seam | `AsyncBackend` + `threadpool_backend.*`, `uring_*.cpp` | cutover suites; E1 conformance; `ShutdownCore.tla` |
+| Backend seam | `AsyncBackend` + `threadpool_backend.*`, `uring_*.cpp` | backend core-integration suites; cross-backend contract conformance; `ShutdownCore.tla` |
 | Shutdown lifecycle | `src/async/async_io_context.cpp` | `shutdown_lifecycle_test` (9 TP / 17 uring scenarios); `ShutdownCore.tla` |
 
 ## 23.4 Owner decisions — resolved
