@@ -6,7 +6,7 @@
 // caller violation and is deliberately not driven here.
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -17,7 +17,7 @@
 #include <vector>
 
 #if defined(SLUICE_HAS_LIBURING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 #if defined(SLUICE_LIFE_MUTANT_MOVE_CLOSES_NATIVE)
@@ -114,7 +114,7 @@ bool moved_owner_keeps_outstanding_borrow_settling() {
     if (!opened.has_value())
         return false;
 
-    AsyncIoContext ctx(make_backend());
+    AsyncIoContext ctx = detail::make_context(make_backend());
     std::vector<std::byte> buffer(body.size(), std::byte{0});
     auto submitted = ctx.submit_read(ReadOp{NativeFileRef{opened.value()}, buffer.data(),
                                             buffer.size(), 0});
@@ -166,7 +166,7 @@ bool second_submission_through_moved_owner_settles() {
     if (!opened.has_value())
         return false;
 
-    AsyncIoContext ctx(make_backend());
+    AsyncIoContext ctx = detail::make_context(make_backend());
     std::vector<std::byte> low(body.size() / 2, std::byte{0});
     std::vector<std::byte> high(body.size() / 2, std::byte{0});
     auto first = ctx.submit_read(ReadOp{NativeFileRef{opened.value()}, low.data(), low.size(), 0});

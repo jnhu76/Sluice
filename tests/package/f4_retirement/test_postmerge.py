@@ -1,3 +1,5 @@
+# SUPERSEDED by the v2 root: unit tests for the archived pre-v2 F4 postmerge
+# verifier; see the supersession notes on scripts/verify_f4_postmerge.py.
 import copy
 import importlib.util
 import json

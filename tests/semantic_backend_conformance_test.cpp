@@ -1,7 +1,7 @@
 #include "semantic_path_probes.hpp"
 #include "semantic_scenarios.hpp"
 
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 
 #include <cstdio>
 #include <memory>

@@ -61,8 +61,8 @@ int main() {
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
         CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>(
-            ThreadPoolConfig{.request_capacity = 8, .worker_count = 2}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 8, .worker_count = 2});
         std::vector<std::byte> buf1(4, std::byte{0});
         std::vector<std::byte> buf2(4, std::byte{0});
         RequestScope scope(ctx, 4, ScopeCleanupPolicy::drain);
@@ -75,10 +75,12 @@ int main() {
                                           .dst = buf1.data(),
                                           .len = buf1.size(),
                                           .offset = 0});
+
         auto c = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                           .dst = buf2.data(),
                                           .len = buf2.size(),
                                           .offset = 8});
+
         CHECK(b.has_value() && c.has_value());
 
         CHECK(scope.wait_for(a.value(), std::chrono::seconds(5)).has_value());
@@ -112,15 +114,16 @@ int main() {
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
         CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         std::vector<std::byte> big(64, std::byte{0});
         RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
         auto r = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                           .dst = big.data(),
                                           .len = big.size(),
                                           .offset = 2});
+
         CHECK(r.has_value());
         CHECK(scope.wait_for(r.value(), std::chrono::seconds(5)).has_value());
         const auto observed = scope.take(r.value());
@@ -137,9 +140,9 @@ int main() {
     // slots, and admission rejects with a distinct would_block outcome while
     // the context stays open.
     {
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 2,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 2,
+            .worker_count = 1});
         const std::string path = make_temp_path();
         auto opened = File::open(path, create_read_write());
         CHECK(opened.has_value());
@@ -154,10 +157,12 @@ int main() {
                                             .dst = nullptr,
                                             .len = 0,
                                             .offset = 0});
+
         auto second = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
                                              .dst = nullptr,
                                              .len = 0,
                                              .offset = 0});
+
         CHECK(first.has_value() && second.has_value());
         while (!first.value().ready() || !second.value().ready())
             (void)ctx.poll();
@@ -166,6 +171,7 @@ int main() {
                                             .dst = nullptr,
                                             .len = 0,
                                             .offset = 0});
+
         CHECK(!third.has_value());
         CHECK(third.error().code == IoError::Code::would_block);
         CHECK(ctx.admission_open());
@@ -202,9 +208,9 @@ int main() {
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
         CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 1,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 1,
+            .worker_count = 1});
         bool first_settled = false;
         {
             std::vector<std::byte> buf(8, std::byte{0});
@@ -213,11 +219,13 @@ int main() {
                                                   .dst = buf.data(),
                                                   .len = buf.size(),
                                                   .offset = 0});
+
             CHECK(first.has_value());
             auto second = scope.submit_read(ReadOp{.file = NativeFileRef{file},
                                                    .dst = buf.data(),
                                                    .len = buf.size(),
                                                    .offset = 0});
+
             CHECK(!second.has_value());
             CHECK(ctx.admission_open());
         } // early return: destructor settles the outstanding first request
@@ -235,9 +243,9 @@ int main() {
         CHECK(opened.has_value());
         File file = std::move(opened).value();
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         bool threw = false;
         try {
             std::vector<std::byte> buf(4, std::byte{0});
@@ -246,6 +254,7 @@ int main() {
                                               .dst = buf.data(),
                                               .len = buf.size(),
                                               .offset = 0});
+
             CHECK(r.has_value());
             throw std::runtime_error("w02 exception-cleanup probe");
         } catch (const std::runtime_error&) {
@@ -270,14 +279,15 @@ int main() {
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
         CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         std::vector<std::byte> buf(payload.size(), std::byte{0});
         auto r = ctx.submit_read(ReadOp{.file = NativeFileRef{file},
                                         .dst = buf.data(),
                                         .len = buf.size(),
                                         .offset = 0});
+
         CHECK(r.has_value());
         const auto disposition = r.value().cancel();
         CHECK(disposition.has_value());

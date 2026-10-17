@@ -73,13 +73,14 @@ int main() {
         const std::span<const std::byte> bytes(
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         auto r = ctx.submit_write(WriteOp{.file = NativeFileRef{file},
                                           .src = bytes.data(),
                                           .len = bytes.size(),
                                           .offset = 0});
+
         CHECK(r.has_value());
         const auto disposition = r.value().cancel();
         CHECK(disposition.has_value());
@@ -118,9 +119,9 @@ int main() {
         CHECK(opened.has_value());
         File file = std::move(opened).value();
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         auto r = ctx.submit_read(
             ReadOp{.file = NativeFileRef{file}, .dst = nullptr, .len = 0, .offset = 0});
         CHECK(r.has_value());
@@ -144,9 +145,9 @@ int main() {
         CHECK(opened.has_value());
         File file = std::move(opened).value();
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         const std::string payload = "ordered-write-sync";
         const std::span<const std::byte> bytes(
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
@@ -154,6 +155,7 @@ int main() {
                                           .src = bytes.data(),
                                           .len = bytes.size(),
                                           .offset = 0});
+
         CHECK(w.has_value());
         while (!w.value().ready())
             (void)ctx.poll();

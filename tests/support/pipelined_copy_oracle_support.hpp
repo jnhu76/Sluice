@@ -1,7 +1,7 @@
 #pragma once
 
 // e1 (#474): COPY-B pipelined-copy contract oracles over the current
-// run_pipelined_copy_with_backend API, driven through a scripted backend.
+// run_pipelined_copy_with_context API, driven through a scripted backend.
 //
 // Backend model: submit accepts through RequestCore exactly like a v1 request
 // backend (reserve -> accept(borrow facts) -> claim_execution). Accepted ops
@@ -44,6 +44,7 @@
 #include "copy_task.hpp"
 
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/async_backend.hpp>
 #include <sluice/async/detail/reference_ready_sink.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/file_semantics.hpp>
@@ -953,9 +954,9 @@ struct CopyScenario {
         ctrl = ScriptedController(shared);
         copy_thread = std::thread([this, buffer_size, depth, sync, workers, slots, shared]() {
             auto backend = std::make_unique<ScriptedBackend>(shared, slots);
-            auto r = run_pipelined_copy_with_backend(
+            auto r = run_pipelined_copy_with_context(
                 *src, NativeFileRef{*dst}, buffer_size, depth, workers, sync,
-                std::move(backend));
+                sluice::async::detail::make_context(std::move(backend)));
             copy_result = std::move(r);
             copy_published.store(true, std::memory_order_release);
         });

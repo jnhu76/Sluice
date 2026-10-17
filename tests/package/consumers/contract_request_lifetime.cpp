@@ -56,9 +56,9 @@ int main() {
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-    AsyncIoContext ctx(
-        std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                              .worker_count = 1}));
+    AsyncIoContext ctx = make_threadpool_context(
+        ThreadPoolConfig{.request_capacity = 4,
+        .worker_count = 1});
 
     // Accepted, published, retained-but-unconsumed: ready() is observable
     // without consuming.
@@ -67,6 +67,7 @@ int main() {
                                      .dst = buf.data(),
                                      .len = buf.size(),
                                      .offset = 0});
+
     CHECK(r1.has_value());
     while (!r1.value().ready())
         (void)ctx.poll();
@@ -96,6 +97,7 @@ int main() {
                                      .dst = buf.data(),
                                      .len = buf.size(),
                                      .offset = 0});
+
     CHECK(r2.has_value());
     Request<std::size_t> moved = std::move(r2.value());
     CHECK(!r2.value().valid());
@@ -116,6 +118,7 @@ int main() {
                                      .dst = buf.data(),
                                      .len = buf.size(),
                                      .offset = 0});
+
     CHECK(r3.has_value());
     while (!r3.value().ready())
         (void)ctx.poll();
@@ -131,6 +134,7 @@ int main() {
                                         .dst = buf.data(),
                                         .len = buf.size(),
                                         .offset = 0});
+
         if (!r.has_value()) {
             resubmit_ok = false;
             break;

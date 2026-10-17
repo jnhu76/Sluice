@@ -1,5 +1,5 @@
 // e1 (#474): COPY-B contract oracle cases over the current
-// run_pipelined_copy_with_backend API. The scripted backend, controller,
+// run_pipelined_copy_with_context API. The scripted backend, controller,
 // scenario harness and the CONTRACT_DECISION_REQUIRED analysis live in
 // tests/support/pipelined_copy_oracle_support.hpp.
 
@@ -7,7 +7,7 @@
 #include "support/pipelined_copy_oracle_support.hpp"
 
 #include <sluice/async/request_scope.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 
 #include <algorithm>
 #include <array>
@@ -193,7 +193,7 @@ bool borrow_live_write_peak_selftest() {
     std::optional<Result<std::size_t>> result;
     std::atomic<bool> done{false};
     std::thread runner([&]() {
-        AsyncIoContext ctx(std::make_unique<ScriptedBackend>(shared, 8));
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ScriptedBackend>(shared, 8));
         RequestScope scope(ctx, 2, ScopeCleanupPolicy::drain);
         auto run = [&]() -> Result<std::size_t> {
             auto first = scope.submit_write(WriteOp{dst_ref, payload.data(), B, 0});
@@ -264,7 +264,7 @@ bool borrow_live_write_peak_selftest() {
     std::optional<Result<std::size_t>> result2;
     std::atomic<bool> done2{false};
     std::thread runner2([&]() {
-        AsyncIoContext ctx(std::make_unique<ScriptedBackend>(shared2, 1));
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ScriptedBackend>(shared2, 1));
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto run = [&]() -> Result<std::size_t> {
             std::size_t total = 0;
@@ -739,9 +739,9 @@ bool throwing_backend_submit_surfaces_error() {
     if (!sc.src.has_value() || !sc.dst.has_value())
         return false;
     sc.copy_thread = std::thread([&sc]() {
-        auto r = run_pipelined_copy_with_backend(*sc.src, NativeFileRef{*sc.dst}, 16, 2, 1,
-                                                 SyncPolicy::none,
-                                                 std::make_unique<ThrowingBackend>());
+        auto r = run_pipelined_copy_with_context(
+            *sc.src, NativeFileRef{*sc.dst}, 16, 2, 1, SyncPolicy::none,
+            sluice::async::detail::make_context(std::make_unique<ThrowingBackend>()));
         sc.copy_result = std::move(r);
         sc.copy_published.store(true, std::memory_order_release);
     });
@@ -809,9 +809,9 @@ bool real_uring_pipeline_content_and_sync() {
     check(::write(fd, bytes.data(), bytes.size()) == static_cast<ssize_t>(bytes.size()),
           "real-uring seed written");
     ::close(fd);
-    auto result = run_pipelined_copy_with_backend(
+    auto result = run_pipelined_copy_with_context(
         *sc.src, NativeFileRef{*sc.dst}, 16, 4, 1, SyncPolicy::all,
-        std::make_unique<UringAsyncBackend>(64));
+        sluice::async::detail::make_context(std::make_unique<UringAsyncBackend>(64)));
     check(result.has_value(), "real-uring canonical pipeline succeeds");
     if (!result.has_value())
         return false;
@@ -849,23 +849,21 @@ bool invalid_arguments_rejected_synchronously() {
         std::size_t buffer;
         std::size_t depth;
         unsigned workers;
-        bool null_backend;
     };
     const Case cases[] = {
-        {"depth zero", 16, 0, 1, false},
-        {"buffer zero", 0, 2, 1, false},
-        {"workers zero", 16, 2, 0, false},
-        {"null backend", 16, 2, 1, true},
-        {"buffer cap", kMaxBufferSize + 1, 1, 1, false},
-        {"depth cap", 16, kMaxPipelineDepth + 1, 1, false},
-        {"workers cap", 16, 2, kMaxWorkers + 1, false},
+        {"depth zero", 16, 0, 1},
+        {"buffer zero", 0, 2, 1},
+        {"workers zero", 16, 2, 0},
+        {"buffer cap", kMaxBufferSize + 1, 1, 1},
+        {"depth cap", 16, kMaxPipelineDepth + 1, 1},
+        {"workers cap", 16, 2, kMaxWorkers + 1},
     };
     bool all_ok = true;
     for (const Case& c : cases) {
         auto shared = std::make_shared<ScriptedShared>();
-        auto backend = c.null_backend ? nullptr : std::make_unique<ScriptedBackend>(shared, 64);
-        auto r = run_pipelined_copy_with_backend(src_file, dst_ref, c.buffer, c.depth, c.workers,
-                                                 SyncPolicy::none, std::move(backend));
+        auto r = run_pipelined_copy_with_context(
+            src_file, dst_ref, c.buffer, c.depth, c.workers, SyncPolicy::none,
+            sluice::async::detail::make_context(std::make_unique<ScriptedBackend>(shared, 64)));
         const bool ok = !r.has_value() && r.error().code == IoError::Code::invalid_state;
         check_msg(ok, std::string("invalid args: ") + c.name);
         all_ok = all_ok && ok;
@@ -873,8 +871,9 @@ bool invalid_arguments_rejected_synchronously() {
     {
         auto shared = std::make_shared<ScriptedShared>();
         constexpr std::size_t huge = static_cast<std::size_t>(-1) / 2 + 1;
-        auto r = run_pipelined_copy_with_backend(src_file, dst_ref, huge, 2, 1, SyncPolicy::none,
-                                                 std::make_unique<ScriptedBackend>(shared, 64));
+        auto r = run_pipelined_copy_with_context(
+            src_file, dst_ref, huge, 2, 1, SyncPolicy::none,
+            sluice::async::detail::make_context(std::make_unique<ScriptedBackend>(shared, 64)));
         const bool ok = !r.has_value() && r.error().code == IoError::Code::invalid_state;
         check(ok, "invalid args: product overflow");
         all_ok = all_ok && ok;
@@ -882,8 +881,9 @@ bool invalid_arguments_rejected_synchronously() {
     {
         auto shared = std::make_shared<ScriptedShared>();
         constexpr std::size_t kB32 = 32 * 1024 * 1024;
-        auto r = run_pipelined_copy_with_backend(src_file, dst_ref, kB32, 32, 1, SyncPolicy::none,
-                                                 std::make_unique<ScriptedBackend>(shared, 64));
+        auto r = run_pipelined_copy_with_context(
+            src_file, dst_ref, kB32, 32, 1, SyncPolicy::none,
+            sluice::async::detail::make_context(std::make_unique<ScriptedBackend>(shared, 64)));
         const bool ok = !r.has_value() && r.error().code == IoError::Code::invalid_state;
         check(ok, "invalid args: total byte cap");
         all_ok = all_ok && ok;

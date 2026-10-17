@@ -4,7 +4,7 @@
 // rules; nothing here is derived from the implementation's mapping.
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 
@@ -14,7 +14,7 @@
 #include <vector>
 
 #if defined(SLUICE_HAS_LIBURING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 
 namespace {
@@ -65,7 +65,7 @@ template <class T> void drive_ready(AsyncIoContext& ctx, Request<T>& request) {
 // admission rejection that may read would_block, and conflating the two
 // collapses the admission-domain boundary.
 bool admission_closed_rejection_spells_invalid_state() {
-    AsyncIoContext ctx(make_backend());
+    AsyncIoContext ctx = detail::make_context(make_backend());
     ctx.close_admission();
     check(!ctx.admission_open(), "close_admission closes admission");
 
@@ -122,7 +122,7 @@ bool accepted_write_fault_settles_no_space_with_native_detail() {
     g_enospc_injection_ran = true;
     File file = std::move(opened.value());
 
-    AsyncIoContext ctx(make_backend());
+    AsyncIoContext ctx = detail::make_context(make_backend());
     const NativeFileRef ref{file};
     std::vector<std::byte> buffer(4, std::byte{'x'});
     auto submitted = ctx.submit_write(WriteOp{ref, buffer.data(), buffer.size(), 0});
@@ -158,7 +158,7 @@ bool accepted_read_fault_keeps_unmapped_native_detail() {
         return false;
     File file = std::move(opened.value());
 
-    AsyncIoContext ctx(make_backend());
+    AsyncIoContext ctx = detail::make_context(make_backend());
     const NativeFileRef ref{file};
     std::vector<std::byte> buffer(4, std::byte{0});
     auto submitted = ctx.submit_read(ReadOp{ref, buffer.data(), buffer.size(), 0});
@@ -197,7 +197,7 @@ bool closed_resource_is_a_rejection_on_both_paths() {
     File file = std::move(opened.value());
     (void)file.close();
 
-    AsyncIoContext ctx(make_backend());
+    AsyncIoContext ctx = detail::make_context(make_backend());
     const NativeFileRef ref{file};
     std::vector<std::byte> buffer(4, std::byte{0});
     auto submitted = ctx.submit_write(WriteOp{ref, buffer.data(), buffer.size(), 0});

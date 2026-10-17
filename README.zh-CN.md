@@ -35,7 +35,7 @@ Direct execution 不依赖请求表或 runtime。显式 `IoContext` 拥有有界
 RequestCore、一个 backend 和 progress source；move-only Request 表达尚待履行
 的操作责任。backend seam 是内部的：v2 只随附 ThreadPool 与 io_uring 两个
 backend，用户自写 backend 不是受支持配置。stackful host 及其 fiber/cancel
-组件在 v2 之外（由 PR B 物理删除）；有界管线改用 owned-driver 的
+组件在 v2 之外并已物理删除；有界管线改用 owned-driver 的
 `RequestScope`。
 
 请求公开完成、消费结果、回收 slot 是不同事件；取消等待不结束 buffer borrow。
@@ -46,8 +46,8 @@ backend，用户自写 backend 不是受支持配置。stackful host 及其 fibe
 
 当前代码树包含 canonical File/blocking 操作、Request/AsyncIoContext 请求核心
 （ThreadPool 与 io_uring backend）以及 W-02 的 RequestScope。可选 stackful
-host 候选在 v2 之外，等待 PR B 物理删除（属主决策 D1）；在此之前它是无契约
-的存量代码，不是保留选项。实现状态、开放缺口与发布门槛记录在
+host 候选在 v2 之外并已按属主决策 D1 物理删除；代码树中不存在任何 host
+runtime。实现状态、开放缺口与发布门槛记录在
 [v2 符合性台账](docs/roadmap/v2-conformance.md)；v1 收敛战役（Phase M/F）是已
 完成的历史，不再约束任何工作。
 

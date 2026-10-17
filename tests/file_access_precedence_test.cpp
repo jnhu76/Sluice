@@ -1,7 +1,7 @@
 #include "canonical_request_test_support.hpp"
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
@@ -299,7 +299,7 @@ bool scoped_read_closed_with_empty_buffer_reports_invalid_state() {
         return false;
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_read(ReadOp{file, nullptr, 0, 0});
         if (r_admitted.has_value() || ctx.outstanding() != 0)
@@ -320,7 +320,7 @@ bool scoped_write_closed_with_empty_buffer_reports_invalid_state() {
         return false;
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_write(WriteOp{file, nullptr, 0, 0});
         if (r_admitted.has_value() || ctx.outstanding() != 0)
@@ -339,7 +339,7 @@ bool scoped_read_on_write_only_with_empty_buffer_reports_invalid_argument() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_read(ReadOp{file, nullptr, 0, 0});
         if (r_admitted.has_value() || ctx.outstanding() != 0)
@@ -359,7 +359,7 @@ bool scoped_write_on_read_only_with_empty_buffer_reports_invalid_argument() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_write(WriteOp{file, nullptr, 0, 0});
         if (r_admitted.has_value() || ctx.outstanding() != 0)
@@ -382,7 +382,7 @@ bool scoped_read_on_closed_write_only_reports_invalid_state() {
 
     std::vector<std::byte> dst(1);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (admitted.has_value() || ctx.outstanding() != 0)
@@ -404,7 +404,7 @@ bool scoped_write_on_closed_read_only_reports_invalid_state() {
 
     const std::byte src{std::byte{0}};
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =
             scope.submit_write(WriteOp{file, (std::span<const std::byte>(&src, 1)).data(),
@@ -425,7 +425,7 @@ bool scoped_read_empty_buffer_ignores_unrepresentable_offset() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_read(ReadOp{file, nullptr, 0, unrepresentable_offset});
         if (!r_admitted.has_value())
@@ -446,7 +446,7 @@ bool scoped_write_empty_buffer_ignores_unrepresentable_offset() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r = [&]() -> Result<std::size_t> {
             auto admitted = scope.submit_write(WriteOp{file, nullptr, 0, unrepresentable_offset});
@@ -472,7 +472,7 @@ bool submit_read_rejects_closed_empty_reference_before_backend() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
@@ -491,7 +491,7 @@ bool submit_write_rejects_closed_empty_reference_before_backend() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
@@ -508,7 +508,7 @@ bool submit_read_rejects_illegal_access_with_empty_buffer_before_backend() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0});
     const bool admission_ok = reports_invalid_argument(r) && ctx.outstanding() == 0;
@@ -525,7 +525,7 @@ bool submit_write_rejects_illegal_access_with_empty_buffer_before_backend() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0});
     const bool admission_ok = reports_invalid_argument(r) && ctx.outstanding() == 0;
@@ -544,7 +544,7 @@ bool submit_read_rejects_closed_illegal_access_as_invalid_state() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_read(ReadOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
@@ -563,7 +563,7 @@ bool submit_write_rejects_closed_illegal_access_as_invalid_state() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_write(WriteOp{file, nullptr, 0, 0});
     if (!reports_invalid_state(r))
@@ -580,7 +580,7 @@ bool submit_read_rejects_illegal_access_before_offset_validation() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::byte dst{std::byte{0}};
     auto r = ctx.submit_read(ReadOp{file, &dst, 1, unrepresentable_offset});
@@ -598,7 +598,7 @@ bool submit_write_rejects_illegal_access_before_offset_validation() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const std::byte src{std::byte{0}};
     auto r = ctx.submit_write(WriteOp{file, &src, 1, unrepresentable_offset});
@@ -615,7 +615,7 @@ bool submit_zero_length_read_completes_zero_despite_unrepresentable_offset() {
     ::unlink(path.c_str());
 
     auto backend = std::make_unique<ThreadPoolBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::byte scratch{std::byte{0}};
     auto sr = ctx.submit_read(ReadOp{file, &scratch, 0, unrepresentable_offset});
@@ -639,7 +639,7 @@ bool submit_zero_length_write_completes_zero_despite_unrepresentable_offset() {
     ::unlink(path.c_str());
 
     auto backend = std::make_unique<ThreadPoolBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const std::byte scratch{std::byte{0}};
     auto sr = ctx.submit_write(WriteOp{file, &scratch, 0, unrepresentable_offset});
@@ -663,7 +663,7 @@ bool submit_read_with_unrepresentable_offset_rejected_at_admission() {
     ::unlink(path.c_str());
 
     auto backend = std::make_unique<ThreadPoolBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::byte dst{std::byte{0}};
     auto sr = ctx.submit_read(ReadOp{file, &dst, 1, unrepresentable_offset});
@@ -687,7 +687,7 @@ bool submit_write_with_unrepresentable_offset_rejected_at_admission() {
     ::unlink(path.c_str());
 
     auto backend = std::make_unique<ThreadPoolBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const std::byte src{std::byte{0}};
     auto sr = ctx.submit_write(WriteOp{file, &src, 1, unrepresentable_offset});

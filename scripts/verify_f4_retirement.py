@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Versioned F4 package experiment. Evidence verification never reruns commands."""
+"""Versioned F4 package experiment. Evidence verification never reruns commands.
+
+SUPERSEDED by the v2 root (docs/explicit-io-contract.md): this tool and its
+recorded evidence document the pre-v2 F4 surface-retirement campaign. Its
+consumer inputs (w04_stackful_candidate.cpp, probes/retained.cpp) were
+removed from the live tree with PR B and survive only in Git history and the
+archived campaign tarball; it is dated evidence, not current authority. The
+active package verifier is scripts/verify_v2_package.py."""
 import argparse
 import datetime
 import hashlib

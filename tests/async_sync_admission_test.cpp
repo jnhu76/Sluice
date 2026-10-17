@@ -1,4 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/async_backend.hpp>
+#include <sluice/async/detail/request_core.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
@@ -93,7 +95,7 @@ bool submit_sync_data_rejects_closed_reference_before_backend() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto submitted = ctx.submit_sync_data(SyncDataOp{file});
     if (submitted.has_value())
@@ -109,7 +111,7 @@ bool submit_sync_all_rejects_closed_reference_before_backend() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto submitted = ctx.submit_sync_all(SyncAllOp{file});
     if (submitted.has_value())
@@ -125,7 +127,7 @@ bool submit_sync_data_rejection_leaves_no_request_binding() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_sync_data(SyncDataOp{file});
     if (r.has_value())
@@ -141,7 +143,7 @@ bool submit_sync_all_rejection_leaves_no_request_binding() {
 
     auto backend = std::make_unique<CountingBackend>();
     CountingBackend* counts = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     auto r = ctx.submit_sync_all(SyncAllOp{file});
     if (r.has_value())

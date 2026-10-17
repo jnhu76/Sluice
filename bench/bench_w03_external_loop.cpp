@@ -35,7 +35,6 @@ using sluice::FileAccess;
 using sluice::FileExistence;
 using sluice::FileOpen;
 using sluice::IoError;
-using sluice::async::AsyncBackend;
 using sluice::async::AsyncIoContext;
 using sluice::AsyncStats;
 using sluice::async::NativeFileRef;
@@ -43,7 +42,6 @@ using sluice::async::ReadOp;
 using sluice::async::Request;
 using sluice::async::RequestReadiness;
 using sluice::async::ShutdownPolicy;
-using sluice::async::ThreadPoolBackend;
 using sluice::async::ThreadPoolConfig;
 
 constexpr std::size_t kInstrumentedSampleCap = 200000;
@@ -98,29 +96,35 @@ struct BackendChoice {
     std::string unavailable_reason;
 };
 
-std::unique_ptr<AsyncBackend> make_backend(const BackendChoice& choice, std::size_t depth,
-                                           std::size_t workers, std::string& failure) {
+std::optional<AsyncIoContext> make_context(const BackendChoice& choice, std::size_t depth,
+                                            std::size_t workers, std::string& failure) {
     if (choice.name == "threadpool") {
         ThreadPoolConfig config;
         config.request_capacity = depth;
         config.worker_count = workers;
-        return std::make_unique<ThreadPoolBackend>(config);
+        try {
+            return sluice::async::make_threadpool_context(config);
+        } catch (const std::exception& error) {
+            failure = error.what();
+            return std::nullopt;
+        }
     }
-#if defined(SLUICE_HAS_LIBURING)
     try {
         sluice::async::UringConfig config;
         config.request_capacity = depth;
         config.queue_depth = static_cast<unsigned>(depth);
-        return std::make_unique<sluice::async::UringAsyncBackend>(config);
+        auto made = sluice::async::make_uring_context(config);
+        if (!made.has_value()) {
+            failure = "io_uring backend not available in this build profile";
+            return std::nullopt;
+        }
+        return std::move(made).value();
     } catch (const std::exception& error) {
         failure = error.what();
-        return nullptr;
+        return std::nullopt;
     }
-#else
-    failure = "io_uring backend not present in this build profile";
-    return nullptr;
-#endif
 }
+
 
 struct LoopParams {
     const BackendChoice* backend = nullptr;
@@ -266,13 +270,13 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
 
     AsyncStats stats;
     std::string backend_failure;
-    auto backend = make_backend(*params.backend, params.depth, params.workers, backend_failure);
-    if (backend == nullptr) {
+    auto context = make_context(*params.backend, params.depth, params.workers, backend_failure);
+    if (!context.has_value()) {
         phase.ok = false;
         phase.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
         return phase;
     }
-    AsyncIoContext ctx(std::move(backend), &stats);
+    AsyncIoContext ctx = std::move(*context);
 
     const int epoll_fd = ::epoll_create1(0);
     if (epoll_fd < 0) {
@@ -579,8 +583,8 @@ int main() {
     BackendChoice uring{"uring", true, {}};
     {
         std::string reason;
-        auto backend = make_backend(uring, 8, 0, reason);
-        if (backend == nullptr) {
+        auto context = make_context(uring, 8, 0, reason);
+        if (!context.has_value()) {
             uring.available = false;
             uring.unavailable_reason = reason;
             std::fprintf(stderr, "io_uring backend unavailable: %s\n", reason.c_str());

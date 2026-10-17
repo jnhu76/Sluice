@@ -1,3 +1,7 @@
+# SUPERSEDED by the v2 root: unit tests for the archived pre-v2 F4 campaign
+# verifier. The campaign inputs (probes/retained.cpp, w04 consumer) were
+# removed from the live tree with PR B; see the supersession notes on
+# scripts/verify_f4_retirement.py.
 import copy
 import importlib.util
 import json

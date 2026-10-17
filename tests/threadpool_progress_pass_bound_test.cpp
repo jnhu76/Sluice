@@ -1,6 +1,7 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -122,7 +123,7 @@ AsyncIoContext make_pool_context(std::size_t capacity, std::size_t workers,
                                  ThreadPoolBackend** raw_out) {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{capacity, workers});
     *raw_out = backend.get();
-    return AsyncIoContext(std::move(backend));
+    return detail::make_context(std::move(backend));
 }
 
 bool fail_at(const char* case_name, const char* what, long long got = -1, long long want = -1) {
@@ -272,7 +273,7 @@ bool pass_delivers_exactly_the_entry_snapshot() {
 
     Rendezvous rv;
     ProducingSink sink(rv, kProduced, ctx, file.fd(), buffer.data());
-    ctx.set_ready_sink(&sink);
+    detail::TestAccess::context_set_ready_sink(ctx, &sink);
 
     std::vector<Request<std::size_t>> seeded;
     for (int n = 0; n < kSeed; ++n) {

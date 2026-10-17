@@ -1,0 +1,17 @@
+# RED reproduction recipe (recorded 2026-10-16 against the pre-fix tree e34965a5):
+#   git worktree add /tmp/pr-b-red e34965a5
+#   insert the retirement_waits_for_the_delivery_hook_to_return scenario from the
+#   post-fix tests/threadpool_core_cutover_test.cpp into the worktree's copy of
+#   that file, spelling the public call retire_delivery (the pre-fix acquisition
+#   API the fix replaces with the delivery_retired query)
+#   xmake f -m release --liburing=y --ccache=n -y
+#   xmake build -y threadpool_core_cutover_test
+#   timeout 120 ./build/linux/x86_64/release/threadpool_core_cutover_test
+# Production sources are untouched at e34965a5; the two failures are the new
+# scenario's and show the pre-fix defect: retirement granted after the delivery
+# claim while the hook had not run yet (first line), and the post-completion
+# acquisition call reporting not_registered instead of the completed delivery
+# (second line).
+FAIL [retirement_waits_for_the_delivery_hook_to_return] retirement is not granted while the delivery hook is still running
+FAIL [retirement_waits_for_the_delivery_hook_to_return] the retirement query reports the completed delivery while the binding is live
+1 of 17 threadpool core cutover tests failed

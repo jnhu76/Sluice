@@ -1,6 +1,7 @@
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -387,7 +388,7 @@ bool child_dies_running(void (*scenario)()) {
 // timer.
 bool external_poll_loop_threadpool_w03() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{16, 2});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (!host.pinned())
         return false;
@@ -572,7 +573,7 @@ bool external_poll_loop_threadpool_w03() {
 bool late_handoff_wake_is_application_owned() {
     {
         auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         ExternalLoopHost host(ctx);
         if (!host.pinned())
             return false;
@@ -591,7 +592,7 @@ bool late_handoff_wake_is_application_owned() {
         if (fd_readable(host.nfd()))
             return false;
 
-        const auto token_before = ctx.progress_token_for_test();
+        const auto token_before = detail::TestAccess::context_progress_token(ctx);
         SharedRequest late;
         HandoffGate gate;
         std::thread helper([&] { (void)late.submit_zero_op(ctx, &gate); });
@@ -625,7 +626,7 @@ bool late_handoff_wake_is_application_owned() {
         const bool visible_after_handoff = late.ready();
         const bool handoff_generates_no_signal = ::poll(&parked, 1, 200) == 0;
 
-        const auto token_after = ctx.progress_token_for_test();
+        const auto token_after = detail::TestAccess::context_progress_token(ctx);
         const unsigned long long epoch_delta =
             token_after.progress - token_before.progress;
         std::printf(
@@ -659,7 +660,7 @@ bool late_handoff_wake_is_application_owned() {
 
     {
         auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         ExternalLoopHost host(ctx);
         if (!host.pinned())
             return false;
@@ -732,7 +733,7 @@ bool late_handoff_wake_is_application_owned() {
 
     {
         auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         ExternalLoopHost host(ctx);
         if (!host.pinned())
             return false;
@@ -803,7 +804,7 @@ bool late_handoff_wake_is_application_owned() {
 // completions are all discovered through a single wake.
 bool coalesced_signals_delivered_through_one_wake() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{16, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (!host.pinned())
         return false;
@@ -852,7 +853,7 @@ bool coalesced_signals_delivered_through_one_wake() {
 // serving later real work.
 bool spurious_wake_is_harmless_and_completions_survive() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (!host.pinned())
         return false;
@@ -894,12 +895,12 @@ bool spurious_wake_is_harmless_and_completions_survive() {
 // observes EAGAIN, the host still wakes, and one acknowledgement drains it.
 bool saturated_notification_preserves_wake() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (!host.pinned())
         return false;
 
-    ctx.saturate_progress_notification_for_test();
+    detail::TestAccess::context_saturate_progress_notification(ctx);
     if (!fd_readable(host.nfd()))
         return false;
 
@@ -934,7 +935,7 @@ bool saturated_notification_preserves_wake() {
 // quiescent without a second foreign signal.
 bool host_acknowledgement_racing_new_signal_never_strands() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (!host.pinned())
         return false;
@@ -1033,7 +1034,7 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
 // detachment.
 bool host_stop_settle_detach_retires_registration() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 2});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     ExternalLoopHost host(ctx);
     if (!host.pinned())
         return false;
@@ -1073,7 +1074,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
     int reused_fd = -1;
     {
         auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         const int borrowed = ctx.progress_notification_fd();
         if (borrowed < 0)
             return false;
@@ -1084,7 +1085,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
     }
     {
         auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         const int fresh = ctx.progress_notification_fd();
         if (fresh < 0)
             return false;
@@ -1104,7 +1105,7 @@ bool stale_detached_registration_cannot_authorize_a_new_context() {
 
 void scenario_move_with_live_owner_capability() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto owner = ctx.claim_progress_owner();
     if (!owner.has_value())
         return;
@@ -1114,7 +1115,7 @@ void scenario_move_with_live_owner_capability() {
 
 void scenario_destroy_with_live_owner_capability() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    auto* ctx = new AsyncIoContext(std::move(backend));
+    auto* ctx = new AsyncIoContext(detail::make_context(std::move(backend)));
     auto owner = ctx->claim_progress_owner();
     if (!owner.has_value()) {
         delete ctx;
@@ -1127,7 +1128,7 @@ void scenario_destroy_with_live_owner_capability() {
 
 void scenario_destroy_with_live_interest() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    auto* ctx = new AsyncIoContext(std::move(backend));
+    auto* ctx = new AsyncIoContext(detail::make_context(std::move(backend)));
     (void)ctx->progress_notification_fd();
     // The context dies while its notification fd is still registered with an
     // external event loop: the registration was never retired.
@@ -1146,7 +1147,7 @@ bool contract_violations_fail_fast() {
 // the owner capability is live, and exactly one capability can exist.
 bool pinned_context_rejects_foreign_drivers() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 2});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
@@ -1213,7 +1214,7 @@ bool host_readable_sleep(AsyncIoContext& ctx, std::chrono::milliseconds budget) 
 bool deadline_expiry_does_not_cancel_or_settle() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
@@ -1261,7 +1262,7 @@ bool deadline_expiry_does_not_cancel_or_settle() {
 // owner acknowledges it.
 bool idle_and_control_outcomes_are_distinct_and_sticky() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
@@ -1292,7 +1293,7 @@ bool idle_and_control_outcomes_are_distinct_and_sticky() {
 // acknowledgement does not erase unacknowledged control.
 bool control_before_wait_and_across_notification_ack_survives() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
@@ -1325,7 +1326,7 @@ bool control_before_wait_and_across_notification_ack_survives() {
 // observed must not erase a control that arrived before the acknowledgement.
 bool acknowledging_observed_control_keeps_a_later_control() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
@@ -1359,14 +1360,14 @@ bool acknowledging_observed_control_keeps_a_later_control() {
 // never a zero-completion report.
 bool injected_health_failure_is_sticky_and_distinguishable() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
     std::optional<ProgressOwner> owner = std::move(claimed).value();
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
-    ctx.set_wait_health_failed_for_test();
+    detail::TestAccess::context_set_wait_health_failed(ctx);
     const auto sick_pass = ctx.poll_progress();
     if (!sick_pass.has_value() || !sick_pass.value().health_failed)
         return false;
@@ -1388,7 +1389,7 @@ bool injected_health_failure_is_sticky_and_distinguishable() {
 bool wait_one_stops_on_health_failure_and_releases_owner() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -1415,7 +1416,7 @@ bool wait_one_stops_on_health_failure_and_releases_owner() {
         return false;
     waited = std::move(waited_submitted).value();
 
-    ctx.set_wait_health_failed_for_test();
+    detail::TestAccess::context_set_wait_health_failed(ctx);
     sluice::Result<AsyncIoContext::ProgressWaitOutcome> stopped =
         sluice::make_unexpected<AsyncIoContext::ProgressWaitOutcome>(
             sluice::IoError{sluice::IoError::Code::invalid_state});
@@ -1453,7 +1454,7 @@ bool wait_one_stops_on_health_failure_and_releases_owner() {
 bool competing_concurrent_drives_cannot_both_succeed() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 2});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -1502,7 +1503,7 @@ bool competing_concurrent_drives_cannot_both_succeed() {
 // contract violation, not a second driver.
 bool nested_drive_from_delivery_hook_is_rejected() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;
@@ -1527,7 +1528,7 @@ bool nested_drive_from_delivery_hook_is_rejected() {
         AsyncIoContext& ctx_;
         std::atomic<bool> nested_rejected_{false};
     } probe(ctx);
-    ctx.set_ready_sink(&probe);
+    detail::TestAccess::context_set_ready_sink(ctx, &probe);
 
     Request<std::size_t> c = submit_zero_op(ctx);
     RequestPublicationDrain drain{[&ctx] { (void)ctx.poll(); }};
@@ -1536,7 +1537,7 @@ bool nested_drive_from_delivery_hook_is_rejected() {
     if (!c.valid())
         return false;
     const auto pass = ctx.poll_progress();
-    ctx.set_ready_sink(nullptr);
+    detail::TestAccess::context_set_ready_sink(ctx, nullptr);
 
     const bool ok = pass.has_value() && pass.value().completed == 1 && probe.nested_rejected();
     c.discard();
@@ -1550,7 +1551,7 @@ bool nested_drive_from_delivery_hook_is_rejected() {
 // attach sequentially.
 bool first_drive_attaches_a_fixed_owner() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{8, 2});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const auto self_pass = ctx.poll_progress();
     if (!self_pass.has_value())
@@ -1604,7 +1605,7 @@ bool first_drive_attaches_a_fixed_owner() {
 // and consume without a progress pass, even while the owner claim is held.
 bool zero_length_requests_skip_driving() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     auto claimed = ctx.claim_progress_owner();
     if (!claimed.has_value())
         return false;

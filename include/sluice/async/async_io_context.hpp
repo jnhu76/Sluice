@@ -1,9 +1,5 @@
 #pragma once
 
-#include <sluice/async/detail/observer_protocol.hpp>
-#include <sluice/async/detail/progress_source.hpp>
-#include <sluice/async/detail/ready_sink.hpp>
-#include <sluice/async/detail/request_key.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/error.hpp>
 #include <sluice/file_resource.hpp>
@@ -16,15 +12,21 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <stdexcept>
 #include <thread>
 
 namespace sluice::async {
 
+class AsyncBackend;
+class AsyncIoContext;
+
 namespace detail {
 class RequestCore;
+class ProgressSource;
+struct ContextFactory;
+struct TestAccess;
 }
+
 struct NativeFileRef {
     NativeFileRef() = default;
     NativeFileRef(const sluice::File& file) : fd(file.native_handle()), access(file.access()) {}
@@ -60,109 +62,20 @@ struct SizeOp {
     NativeFileRef file;
 };
 
-class AsyncBackend {
-  public:
-    virtual ~AsyncBackend() = default;
-    AsyncBackend(const AsyncBackend&) = delete;
-    AsyncBackend& operator=(const AsyncBackend&) = delete;
-
-    void attach_stats(AsyncStats* s) { stats_ = s; }
-
-    void attach_ready_sink(detail::SynchronousReadySink* sink) noexcept { routing_sink_ = sink; }
-
-    // Installed exactly once by the AsyncIoContext constructor before the
-    // backend can produce any work. There is no rebind path. A backend that
-    // cannot install its required progress-notification binding fails the
-    // context construction.
-    void attach_progress_port(detail::BackendProgressPort port) {
-        progress_port_ = port;
-        if (!progress_port_attached()) {
-            throw std::runtime_error(
-                "sluice::async::AsyncBackend: progress notification binding install failed");
-        }
-    }
-
-    // Authoritative result of one bounded nonblocking progress pass. The
-    // booleans are post-pass facts about backend state, not guesses derived
-    // from the completion count.
-    struct ProgressPass {
-        std::size_t completed = 0;
-        bool immediate_work_remains = false;
-        bool accepted_work_remains = false;
-        // Accepted work whose transport has not reached the kernel; the owner
-        // owes a further bounded pass and must not idle-return or park past it
-        // without scheduling one.
-        bool dispatch_retry_remains = false;
-        // The context's sticky wait-health verdict at this pass.
-        bool health_failed = false;
-    };
-
-    virtual std::size_t poll() = 0;
-
-    virtual ProgressPass poll_progress() {
-        ProgressPass pass;
-        pass.completed = poll();
-        pass.accepted_work_remains = outstanding() != 0;
-        return pass;
-    }
-
-    virtual std::size_t outstanding() const noexcept = 0;
-
-    // retire_execution_resources is valid only after internal_work_retired
-    // holds; internal_work_retired must report a real retirement witness, so
-    // no default is provided.
-    virtual bool internal_work_retired() const noexcept = 0;
-    virtual void stop_execution() noexcept {}
-    virtual void retire_execution_resources() noexcept {}
-
-    virtual bool signals_physical_progress() const noexcept { return false; }
-
-  private:
-    friend class AsyncIoContext;
-    template <class T> friend class Request;
-
-    // Nonblocking probe of immediately actionable backend-physical work
-    // (kernel CQ state for io_uring). Kernel producers bypass the userspace
-    // progress epochs, so the park handshake needs this physical answer as
-    // its final actionable-work check. Producers that signal through the
-    // context source are covered by token revalidation and answer false.
-    virtual bool has_immediate_physical_work() const noexcept { return false; }
-
-    // Accepts and linearizes one operation; the returned key is the accepted
-    // request identity in every accepting case.
-    virtual Result<detail::RequestKey> submit_read(ReadOp op) = 0;
-    virtual Result<detail::RequestKey> submit_write(WriteOp op) = 0;
-    virtual Result<detail::RequestKey> submit_sync_data(SyncDataOp op) = 0;
-    virtual Result<detail::RequestKey> submit_sync_all(SyncAllOp op) = 0;
-    virtual Result<detail::RequestKey> submit_file_info(FileInfoOp op) = 0;
-    virtual Result<detail::RequestKey> submit_size(SizeOp op) = 0;
-
-    // The capacity of the request slot table this backend serves; the
-    // context-owned core is sized by it.
-    virtual std::size_t slot_capacity() const noexcept = 0;
-
-    virtual detail::PublicCancel cancel_identity(detail::RequestKey key) = 0;
-
-  protected:
-    AsyncBackend() = default;
-    AsyncStats* stats_ = nullptr;
-
-    detail::SynchronousReadySink* routing_sink_ = nullptr;
-
-    detail::BackendProgressPort progress_port_{};
-
-    // Runs once after the context installs the progress port, before any work
-    // can exist. Backends install their kernel progress-notification binding
-    // here; false fails the context construction. They cannot replace, query,
-    // or unbind the port.
-    virtual bool progress_port_attached() noexcept { return true; }
-
-    // Installed only by the AsyncIoContext constructor; backends never set
-    // or clear it, and the backend retires before the core storage does.
-    detail::RequestCore* core_ = nullptr;
+// Authoritative result of one bounded nonblocking progress pass. The booleans
+// are post-pass facts about backend state, not guesses derived from the
+// completion count.
+struct ProgressPass {
+    std::size_t completed = 0;
+    bool immediate_work_remains = false;
+    bool accepted_work_remains = false;
+    // Accepted work whose transport has not reached the kernel; the owner owes
+    // a further bounded pass and must not idle-return or park past it without
+    // scheduling one.
+    bool dispatch_retry_remains = false;
+    // The context's sticky wait-health verdict at this pass.
+    bool health_failed = false;
 };
-
-class AsyncIoContext;
 
 enum class ShutdownPolicy : std::uint8_t {
     drain,
@@ -174,6 +87,8 @@ enum class ShutdownOutcome : std::uint8_t {
     health_unresolved,
     health_failed,
 };
+
+class AsyncIoContext;
 
 // Release handle for the context's fixed driving authority: claiming records
 // this thread as the context's progress owner; the handle's destruction or
@@ -197,15 +112,14 @@ class ProgressOwner {
 
 class AsyncIoContext {
   public:
-    explicit AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats = nullptr);
-    ~AsyncIoContext();
-
     AsyncIoContext(const AsyncIoContext&) = delete;
     AsyncIoContext& operator=(const AsyncIoContext&) = delete;
 
     AsyncIoContext(AsyncIoContext&&) noexcept;
 
     AsyncIoContext& operator=(AsyncIoContext&&) noexcept;
+
+    ~AsyncIoContext();
 
     Result<Request<std::size_t>> submit_read(ReadOp op);
     Result<Request<std::size_t>> submit_write(WriteOp op);
@@ -235,7 +149,6 @@ class AsyncIoContext {
     // drive is active on this context, or when the context is inert
     // (moved-from). A ProgressOwner release detaches so a later driver may
     // attach.
-    using ProgressPass = AsyncBackend::ProgressPass;
     Result<ProgressPass> poll_progress();
 
     // Records this thread as the context's fixed progress owner and returns
@@ -313,60 +226,59 @@ class AsyncIoContext {
 
     bool execution_closed() const noexcept;
 
-    void set_ready_sink(detail::SynchronousReadySink* sink);
+    enum class ObserverStatus : std::uint8_t {
+        armed,
+        duplicate,
+        already_terminal,
+        admission_closed,
+        not_found,
+    };
 
     struct ObserverAttachment {
-        detail::ObserverRegistration status = detail::ObserverRegistration::not_found;
-        detail::RequestKey key{};
-        bool armed() const noexcept { return status == detail::ObserverRegistration::armed; }
+        ObserverStatus status = ObserverStatus::not_found;
+        RequestId request{};
+        bool armed() const noexcept { return status == ObserverStatus::armed; }
+    };
+
+    enum class ObserverCancelStatus : std::uint8_t {
+        retired,
+        delivery_in_progress,
+        not_registered,
+        not_found,
     };
 
     struct ObserverCancelResult {
-        detail::ObserverCancellation status = detail::ObserverCancellation::not_found;
-        detail::RequestKey key{};
-        bool retired() const noexcept { return status == detail::ObserverCancellation::retired; }
+        ObserverCancelStatus status = ObserverCancelStatus::not_found;
+        RequestId request{};
+        bool retired() const noexcept { return status == ObserverCancelStatus::retired; }
         bool in_progress() const noexcept {
-            return status == detail::ObserverCancellation::delivery_in_progress;
+            return status == ObserverCancelStatus::delivery_in_progress;
         }
     };
 
     ObserverAttachment attach_observer(const RequestId& id);
+
     ObserverCancelResult cancel_observer(const RequestId& id);
-    bool retire_delivery(detail::RequestKey key);
+
+    // Retirement query: reports whether the registration's delivery
+    // retirement has been acquired. The driver retires a delivered
+    // registration once its terminal hook has returned; a cancellation
+    // retires an armed or queued one. While a delivery is in progress this
+    // reports false and the caller must retain its observer state. Query it
+    // while the Request binding is retained; once the released slot
+    // reclaims, the identity stops resolving and this reports false, so the
+    // answer is only authoritative before the binding is released.
+    bool delivery_retired(const RequestId& id) const;
 
     std::size_t outstanding() const noexcept;
     const AsyncStats* stats() const noexcept { return stats_; }
 
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-    detail::RequestCore* context_core_for_test() noexcept { return core_.get(); }
-
-    detail::ProgressSource::Token progress_token_for_test() const noexcept;
-
-    detail::ProgressSource* progress_source_for_test() noexcept { return progress_.get(); }
-
-    void set_progress_prepark_counter_for_test(std::atomic<int>* counter) noexcept;
-
-    void set_progress_prerevalidate_pause_gate_for_test(
-        detail::ProgressSource::PauseGate* gate) noexcept;
-
-    void set_progress_prepark_pause_gate_for_test(
-        detail::ProgressSource::PauseGate* gate) noexcept;
-
-    void set_progress_epoch_for_test(std::uint64_t epoch) noexcept;
-
-    void set_control_epoch_for_test(std::uint64_t epoch) noexcept;
-
-    void set_control_exhaustion_for_test(std::uint64_t exhaustion) noexcept;
-
-    void set_wait_health_failed_for_test() noexcept;
-
-    void saturate_progress_notification_for_test() noexcept;
-
-    bool progress_exhausted_for_test() const noexcept;
-#endif
-
   private:
+    friend struct detail::ContextFactory;
+    friend struct detail::TestAccess;
+
+    explicit AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats = nullptr);
+
     // Declaration order is teardown order on every exit path, constructor
     // unwind included: the backend retires before the progress source its
     // port borrows and before the core its workers call into.
@@ -401,7 +313,7 @@ class AsyncIoContext {
 
     // One backend progress pass for a caller already holding the drive
     // domain; the public drive entry points gate before using this.
-    AsyncBackend::ProgressPass run_progress_pass_();
+    ProgressPass run_progress_pass_();
 
     // Drives to the execution-closed transition. The caller holds the drive
     // domain (shutdown) or the destructor's exclusive position.
@@ -437,24 +349,5 @@ class AsyncIoContext {
     bool execution_closed_ = false;
     ShutdownOutcome settlement_outcome_ = ShutdownOutcome::health_failed;
 };
-
-template <class T> Result<CancelDisposition> Request<T>::cancel() {
-    if (backend_ == nullptr) {
-        return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
-    }
-    switch (backend_->cancel_identity(key_)) {
-    case detail::PublicCancel::won_before_execution:
-        return CancelDisposition::won_before_execution;
-    case detail::PublicCancel::requested:
-        return CancelDisposition::requested;
-    case detail::PublicCancel::already_terminal:
-        return CancelDisposition::already_terminal;
-    case detail::PublicCancel::not_found:
-        return CancelDisposition::not_found;
-    case detail::PublicCancel::physical_interruption_unsupported:
-        return CancelDisposition::physical_interruption_unsupported;
-    }
-    return CancelDisposition::not_found;
-}
 
 }

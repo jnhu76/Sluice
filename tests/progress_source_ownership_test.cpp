@@ -1,6 +1,7 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/threadpool_backend.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/test_access.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/file_resource.hpp>
 #include <sluice/result.hpp>
 
@@ -22,6 +23,7 @@
 
 #include <csignal>
 #include <sys/wait.h>
+#include <sluice/async/detail/progress_source.hpp>
 
 namespace {
 
@@ -120,11 +122,11 @@ struct RequestSettlement {
 
 bool context_owns_one_progress_source() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     if (ctx.progress_notification_fd() < 0)
         return false;
-    const auto token = ctx.progress_token_for_test();
+    const auto token = detail::TestAccess::context_progress_token(ctx);
     if (token.progress != 0)
         return false;
 
@@ -139,7 +141,7 @@ bool context_owns_one_progress_source() {
 
     // The zero-op publication is a physical progress signal routed through the
     // backend capability into the context notification fd.
-    const auto after = ctx.progress_token_for_test();
+    const auto after = detail::TestAccess::context_progress_token(ctx);
     if (after.progress <= token.progress)
         return false;
     if (!notification_fd_readable(ctx.progress_notification_fd()))
@@ -196,7 +198,7 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
         }
     };
 
-    AsyncIoContext ctx(std::make_unique<NullBackend>());
+    AsyncIoContext ctx = detail::make_context(std::make_unique<NullBackend>());
     if (ctx.progress_notification_fd() < 0)
         return false;
     if (ctx.has_split_wait_capability())
@@ -211,14 +213,14 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
 
 bool thread_pool_context_declares_physical_progress() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     return ctx.has_split_wait_capability() && ctx.has_bounded_split_wait_capability();
 }
 
 bool move_construction_preserves_progress_responsibility() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     ThreadPoolBackend::WorkerClaimedPauseGate gate;
     raw->set_worker_claimed_pause_gate(&gate);
@@ -241,7 +243,7 @@ bool move_construction_preserves_progress_responsibility() {
     RequestSettlement settlement{moved, request};
 
     std::atomic<int> prepark{0};
-    moved.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(moved, &prepark);
 
     using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
     bool woke = false;
@@ -259,7 +261,7 @@ bool move_construction_preserves_progress_responsibility() {
             std::this_thread::yield();
         if (prepark.load(std::memory_order_acquire) < 1) {
             driver.join();
-            moved.set_progress_prepark_counter_for_test(nullptr);
+            detail::TestAccess::context_set_progress_prepark_counter(moved, nullptr);
             raw->set_worker_claimed_pause_gate(nullptr);
             gate.resume.store(true, std::memory_order_release);
             gate.resume.notify_all();
@@ -270,7 +272,7 @@ bool move_construction_preserves_progress_responsibility() {
         gate.resume.notify_all();
         driver.join();
     }
-    moved.set_progress_prepark_counter_for_test(nullptr);
+    detail::TestAccess::context_set_progress_prepark_counter(moved, nullptr);
 
     const bool ok = woke && driven == 1 && request.ready() &&
                     notification_fd_readable(moved.progress_notification_fd());
@@ -281,7 +283,7 @@ bool move_construction_preserves_progress_responsibility() {
 
 bool move_assignment_preserves_progress_responsibility() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto submitted =
@@ -291,7 +293,7 @@ bool move_assignment_preserves_progress_responsibility() {
         return false;
     Request<std::size_t> request = std::move(submitted).value();
 
-    AsyncIoContext target(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
+    AsyncIoContext target = detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
     const int previous_fd = target.progress_notification_fd();
     target.detach_progress_host();
     target = std::move(ctx);
@@ -321,7 +323,7 @@ bool move_assignment_preserves_progress_responsibility() {
 
 bool moved_from_context_is_inert() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     AsyncIoContext moved(std::move(ctx));
 
     const auto wait = ctx.wait_one();
@@ -384,7 +386,7 @@ bool backend_destructor_runs_while_progress_source_lives() {
     std::atomic<bool> signaled_in_destruction{false};
     auto backend = std::make_unique<DtorSignalBackend>(&signaled_in_destruction);
     {
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         if (ctx.progress_notification_fd() < 0)
             return false;
         ctx.detach_progress_host();
@@ -449,7 +451,7 @@ bool constructor_unwind_destroys_backend_before_progress_source() {
 
     std::atomic<bool> signaled{false};
     try {
-        AsyncIoContext ctx(std::make_unique<UnwindSignalBackend>(&signaled));
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UnwindSignalBackend>(&signaled));
         (void)ctx;
         return false;
     } catch (const std::length_error&) {
@@ -474,10 +476,10 @@ bool unattached_backend_control_ops_are_absent() {
 template <class Backend>
 bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
                                                             AsyncIoContext& ctx) {
-    const auto before = ctx.progress_token_for_test();
+    const auto before = detail::TestAccess::context_progress_token(ctx);
 
     raw->close_admission();
-    const auto first = ctx.progress_token_for_test();
+    const auto first = detail::TestAccess::context_progress_token(ctx);
     if (first.progress != before.progress + 1 ||
         first.progress_exhaustion != before.progress_exhaustion) {
         return false;
@@ -492,7 +494,7 @@ bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
 
     raw->close_admission();
     raw->close_admission();
-    const auto repeated = ctx.progress_token_for_test();
+    const auto repeated = detail::TestAccess::context_progress_token(ctx);
     if (repeated.progress != first.progress ||
         repeated.progress_exhaustion != first.progress_exhaustion) {
         return false;
@@ -511,7 +513,7 @@ bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
 bool threadpool_close_admission_signals_only_the_open_to_closed_transition() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     const bool ok = close_admission_signal_tracks_the_admission_transition(raw, ctx);
     ctx.detach_progress_host();
     return ok;
@@ -532,7 +534,7 @@ bool uring_close_admission_signals_only_the_open_to_closed_transition() {
         return true;
     auto backend = std::make_unique<UringAsyncBackend>();
     UringAsyncBackend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     const bool ok = close_admission_signal_tracks_the_admission_transition(raw, ctx);
     ctx.detach_progress_host();
     return ok;
@@ -545,7 +547,7 @@ bool uring_zero_op_signals_context_notification() {
         return true;
 
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     if (!ctx.has_split_wait_capability())
         return false;
 
@@ -586,7 +588,7 @@ bool uring_completion_wakes_parked_driver() {
         return false;
 
     auto backend = std::make_unique<UringAsyncBackend>();
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     std::vector<std::byte> buffer(16, std::byte{0});
     auto submitted = ctx.submit_read(

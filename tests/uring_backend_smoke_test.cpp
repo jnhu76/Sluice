@@ -1,6 +1,6 @@
 #include "canonical_request_test_support.hpp"
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/file_resource.hpp>
 
 #include <cstdio>
@@ -66,7 +66,7 @@ bool read_op_through_canonical_file() {
 
     std::vector<std::byte> dst(13);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (!admitted.has_value())
@@ -93,7 +93,7 @@ bool write_op_through_canonical_file() {
     const std::byte payload[5] = {std::byte{'w'}, std::byte{'r'}, std::byte{'i'}, std::byte{'t'},
                                   std::byte{'e'}};
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(WriteOp{file, payload, sizeof(payload), 0});
         if (!admitted.has_value())
@@ -121,7 +121,7 @@ bool sync_data_op_through_canonical_file() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_sync_data(SyncDataOp{file});
         if (!admitted.has_value())
@@ -142,7 +142,7 @@ bool sync_all_op_through_canonical_file() {
     ::unlink(path.c_str());
 
     auto result = [&]() -> Result<void> {
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_sync_all(SyncAllOp{file});
         if (!admitted.has_value())
@@ -164,7 +164,7 @@ bool zero_length_read_completes_zero_despite_unrepresentable_offset() {
 
     auto result = [&]() -> Result<std::size_t> {
         std::byte scratch{std::byte{0}};
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =
             scope.submit_read(ReadOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()});
@@ -186,7 +186,7 @@ bool zero_length_write_completes_zero_despite_unrepresentable_offset() {
 
     auto result = [&]() -> Result<std::size_t> {
         const std::byte scratch{std::byte{0}};
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_write(
             WriteOp{file, &scratch, 0, std::numeric_limits<std::uint64_t>::max()});
@@ -208,7 +208,7 @@ bool read_with_unrepresentable_offset_rejected_at_admission() {
 
     auto result = [&]() -> Result<std::size_t> {
         std::byte dst{std::byte{0}};
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =
             scope.submit_read(ReadOp{file, &dst, 1, std::numeric_limits<std::uint64_t>::max()});
@@ -237,7 +237,7 @@ bool write_with_unrepresentable_offset_rejected_at_admission() {
 
     auto result = [&]() -> Result<std::size_t> {
         const std::byte src{std::byte{0}};
-        AsyncIoContext ctx(std::make_unique<UringAsyncBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<UringAsyncBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted =
             scope.submit_write(WriteOp{file, &src, 1, std::numeric_limits<std::uint64_t>::max()});

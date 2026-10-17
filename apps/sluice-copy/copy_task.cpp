@@ -294,20 +294,19 @@ Result<CopyStats> run_pipelined_copy(const File& src_file, const NativeFileRef& 
     if (!valid_config(buffer_size, pipeline_depth, workers))
         return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
     try {
-        return run_pipelined_copy_with_backend(
+        return run_pipelined_copy_with_context(
             src_file, dst, buffer_size, pipeline_depth, workers, sync,
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{64, workers}));
+            make_threadpool_context(ThreadPoolConfig{64, workers}));
     } catch (...) {
         return copy_exception();
     }
 }
 
-Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const NativeFileRef& dst,
+Result<CopyStats> run_pipelined_copy_with_context(const File& src_file, const NativeFileRef& dst,
                                                   std::size_t buffer_size,
                                                   std::size_t pipeline_depth, unsigned workers,
-                                                  SyncPolicy sync,
-                                                  std::unique_ptr<AsyncBackend> backend) {
-    if (!valid_config(buffer_size, pipeline_depth, workers) || !backend)
+                                                  SyncPolicy sync, AsyncIoContext ctx) {
+    if (!valid_config(buffer_size, pipeline_depth, workers))
         return make_unexpected<CopyStats>(IoError{IoError::Code::invalid_state});
 
     std::vector<std::unique_ptr<PipelineSlot>> slots;
@@ -325,7 +324,6 @@ Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const Na
     PipelinedCopyTask task{&src_file, dst, buffer_size, pipeline_depth, sync, std::move(slots)};
 
     try {
-        AsyncIoContext ctx(std::move(backend));
         auto result = [&]() -> Result<CopyStats> {
             try {
                 RequestScope scope(ctx, pipeline_depth, ScopeCleanupPolicy::cancel_then_drain);
@@ -347,12 +345,11 @@ Result<CopyStats> run_pipelined_copy_with_backend(const File& src_file, const Na
     }
 }
 
-Result<CopyStats> run_sequential_copy_with_backend(const File& src_file, const NativeFileRef& dst,
+Result<CopyStats> run_sequential_copy_with_context(const File& src_file, const NativeFileRef& dst,
                                                    std::size_t buffer_size, unsigned workers,
-                                                   SyncPolicy sync,
-                                                   std::unique_ptr<AsyncBackend> backend) {
-    return run_pipelined_copy_with_backend(src_file, dst, buffer_size, 1, workers, sync,
-                                           std::move(backend));
+                                                   SyncPolicy sync, AsyncIoContext ctx) {
+    return run_pipelined_copy_with_context(src_file, dst, buffer_size, 1, workers, sync,
+                                           std::move(ctx));
 }
 
 }

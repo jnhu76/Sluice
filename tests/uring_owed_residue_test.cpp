@@ -1,6 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -16,7 +16,6 @@ namespace {
 
 using namespace sluice::async;
 
-using ProgressPass = AsyncBackend::ProgressPass;
 using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
 
 struct DriverClaim {
@@ -57,7 +56,7 @@ std::optional<AsyncIoContext::ProgressWaitOutcome> wait_one_value(AsyncIoContext
 struct OwedResidueFixture {
     std::unique_ptr<UringAsyncBackend> backend = std::make_unique<UringAsyncBackend>();
     UringAsyncBackend* raw = backend.get();
-    AsyncIoContext ctx{std::move(backend)};
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     FILE* backing = ::tmpfile();
     UringAsyncBackend::DeliverySweepEpiloguePauseGate gate{};
 

@@ -1,4 +1,8 @@
-"""Isolated Clang sanitizer package witnesses; no system dependency installation."""
+"""Isolated Clang sanitizer package witnesses; no system dependency installation.
+
+SUPERSEDED by the v2 root: part of the archived pre-v2 F4 campaign. Its
+probes/retained.cpp input was removed with PR B; the campaign record and
+inputs survive in Git history and docs/evidence/f4-retirement-20261012."""
 import importlib.util
 import json
 from pathlib import Path

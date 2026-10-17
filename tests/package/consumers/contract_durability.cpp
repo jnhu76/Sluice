@@ -66,9 +66,9 @@ int main() {
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
         CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
         auto info_req = ctx.submit_file_info(FileInfoOp{.file = NativeFileRef{file}});
         CHECK(info_req.has_value());
         while (!info_req.value().ready())
@@ -104,9 +104,9 @@ int main() {
             reinterpret_cast<const std::byte*>(payload.data()), payload.size());
         CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-        AsyncIoContext ctx(
-            std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 4,
-                                                                  .worker_count = 1}));
+        AsyncIoContext ctx = make_threadpool_context(
+            ThreadPoolConfig{.request_capacity = 4,
+            .worker_count = 1});
 
         CHECK(sluice::blocking::resize(file, 128).has_value());
         auto sync_grow = ctx.submit_sync_data(SyncDataOp{.file = NativeFileRef{file}});

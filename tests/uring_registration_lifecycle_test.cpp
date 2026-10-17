@@ -1,5 +1,5 @@
 #include <sluice/async/async_io_context.hpp>
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <atomic>
@@ -77,7 +77,7 @@ bool attachment_registers_kernel_notification_once() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 8}, hooks);
     UringAsyncBackend* raw = backend.get();
     {
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         if (!ctx.has_split_wait_capability())
             return false;
         if (raw->eventfd_registrations_for_test() != 1)
@@ -171,7 +171,7 @@ bool forced_registration_failure_fails_context_construction() {
     auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
     bool construction_failed = false;
     try {
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         (void)ctx;
     } catch (const std::runtime_error&) {
         construction_failed = true;
@@ -192,7 +192,7 @@ bool teardown_unregisters_before_ring_exit() {
     UringAsyncBackend* raw = backend.get();
     unsigned registrations = 0;
     {
-        AsyncIoContext ctx(std::move(backend));
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
         registrations = raw->eventfd_registrations_for_test();
     }
     return registrations == 1 && teardown.unregisters.load() == 1 &&

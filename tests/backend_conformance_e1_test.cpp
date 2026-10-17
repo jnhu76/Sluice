@@ -5,11 +5,12 @@
 // of both profiles can be compared against each other and against the kernel.
 
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/test_access.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #if defined(SLUICE_E1_CONFORMANCE_URING)
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 #endif
 #include <sluice/effect.hpp>
 #include <sluice/file_resource.hpp>
@@ -178,8 +179,8 @@ bool read_reports_confirmed_counts_and_effect(Tracker& t) {
     }
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> full(content.size(), std::byte{0});
     auto whole = ctx.submit_read(ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write},
@@ -241,7 +242,7 @@ bool write_sync_and_persistence_agree(Tracker& t) {
         return false;
     }
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
 
     const std::string payload = "e1 write body\n";
     std::vector<std::byte> bytes(16);
@@ -296,7 +297,7 @@ bool file_info_and_size_match_the_kernel_record(Tracker& t) {
         return false;
     }
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     {
         auto opened = File::open(path);
         if (!opened.has_value()) {
@@ -357,8 +358,8 @@ bool closed_file_rejects_every_operation_before_admission(Tracker& t) {
     (void)closed.close();
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     const NativeFileRef ref{closed};
@@ -391,8 +392,8 @@ bool semantic_rejections_precede_admission(Tracker& t) {
         return false;
     }
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     const NativeFileRef declared_read_only{fix.fd, sluice::FileAccess::read_only};
@@ -473,7 +474,7 @@ bool setup_failures_are_explicit(Tracker& t) {
 #endif
 
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     t.check(ctx.outstanding() == 0, "a healthy profile still constructs after the failures");
     return true;
 }
@@ -491,8 +492,8 @@ bool accepted_runtime_failure_converges_with_unknown_effect(Tracker& t) {
         return false;
     }
     auto backend = make_backend(4);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     const std::byte payload{std::byte{1}};
     // The declared access promises writability the description does not have:
@@ -523,8 +524,8 @@ bool pre_execution_cancel_wins_with_known_zero_effect(Tracker& t) {
     }
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     Backend::AcceptedPreDispatchPauseGate gate;
     raw->set_accepted_pre_dispatch_pause_gate(&gate);
@@ -594,8 +595,8 @@ bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
         Backend::WorkerClaimedPauseGate gate;
         auto backend = make_backend(4);
         Backend* raw = backend.get();
-        AsyncIoContext ctx(std::move(backend));
-        RequestCore& core = *ctx.context_core_for_test();
+        AsyncIoContext ctx = detail::make_context(std::move(backend));
+        RequestCore& core = *detail::TestAccess::context_core(ctx);
 
         raw->set_worker_claimed_pause_gate(&gate);
 
@@ -640,8 +641,8 @@ bool running_cancel_reports_the_backend_mechanism_fact(Tracker& t) {
         };
         auto owned = std::make_unique<Backend>(UringConfig{4, 8}, hooks);
         Backend* raw = owned.get();
-        AsyncIoContext ctx(std::move(owned));
-        RequestCore& core = *ctx.context_core_for_test();
+        AsyncIoContext ctx = detail::make_context(std::move(owned));
+        RequestCore& core = *detail::TestAccess::context_core(ctx);
 
         auto submitted = ctx.submit_read(
             ReadOp{NativeFileRef{fix.fd, sluice::FileAccess::read_write}, buffer.data(), 8, 0});
@@ -686,8 +687,8 @@ bool success_wins_over_a_recorded_cancel_intent(Tracker& t) {
     Backend::WorkerClaimedPauseGate gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(8, std::byte{0});
     raw->set_worker_claimed_pause_gate(&gate);
@@ -741,8 +742,8 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
     Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
@@ -770,13 +771,13 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
         return false;
     }
     const auto key = outstanding.front();
-    const auto before_cancel = ctx.progress_token_for_test();
+    const auto before_cancel = detail::TestAccess::context_progress_token(ctx);
     const PublicCancel disposition = raw->cancel_key_for_test(key);
     t.check(disposition == PublicCancel::won_before_execution,
             "the pre-dispatch cancel wins while dispatch is parked");
     // Control: the same observer sees the wake the cancel path publishes before
     // it returns, so the observer is known to move for a published wake.
-    const auto observed = ctx.progress_token_for_test();
+    const auto observed = detail::TestAccess::context_progress_token(ctx);
     t.check(observed.progress != before_cancel.progress ||
                 observed.progress_exhaustion != before_cancel.progress_exhaustion,
             "the cancel's own wake reaches the progress token");
@@ -795,7 +796,7 @@ bool unclaimed_dispatch_entry_retirement_publishes_a_wake(Tracker& t) {
         (void)ctx.poll();
 
     wait_gate_paused(retirement_gate);
-    const auto retired = ctx.progress_token_for_test();
+    const auto retired = detail::TestAccess::context_progress_token(ctx);
     t.check(retired.progress != observed.progress ||
                 retired.progress_exhaustion != observed.progress_exhaustion,
             "retiring an unclaimable dispatch entry publishes a progress wake");
@@ -821,8 +822,8 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
     Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
@@ -898,7 +899,7 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
     wait_gate_paused(retirement_gate);
     t.check(raw->dispatch_size_for_test() == 1,
             "the first retirement leaves the second entry pending");
-    const auto before_last = ctx.progress_token_for_test();
+    const auto before_last = detail::TestAccess::context_progress_token(ctx);
 
     {
         GateGuard<Backend::WorkerUnclaimedRetirementPauseGate> guard{retirement_gate};
@@ -908,7 +909,7 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
     // Only the second entry's retirement can move the token from here.
     const auto last_wake_by = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     for (;;) {
-        const auto now_token = ctx.progress_token_for_test();
+        const auto now_token = detail::TestAccess::context_progress_token(ctx);
         if (now_token.progress != before_last.progress ||
             now_token.progress_exhaustion != before_last.progress_exhaustion)
             break;
@@ -916,7 +917,7 @@ bool two_stale_entries_wake_without_premature_quiescence(Tracker& t) {
             break;
         std::this_thread::yield();
     }
-    const auto after_last = ctx.progress_token_for_test();
+    const auto after_last = detail::TestAccess::context_progress_token(ctx);
     t.check(after_last.progress != before_last.progress ||
                 after_last.progress_exhaustion != before_last.progress_exhaustion,
             "retiring the last unclaimable entry publishes a progress wake");
@@ -942,8 +943,8 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
     Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
@@ -1016,7 +1017,7 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
     wait_gate_paused(retirement_gate);
     t.check(raw->dispatch_size_for_test() == 1,
             "exactly one stale entry remains queued for the public cancel");
-    const auto before_public = ctx.progress_token_for_test();
+    const auto before_public = detail::TestAccess::context_progress_token(ctx);
 
     // The second PUBLIC cancel on the already-terminal request removes the
     // queued stale entry: remove_exact succeeds, the core verdict is
@@ -1030,7 +1031,7 @@ bool public_cancel_removing_last_stale_entry_owes_a_wake(Tracker& t) {
             "the public cancel reports the already-terminal verdict");
     t.check(raw->dispatch_size_for_test() == 0,
             "the public cancel removed the last queued stale entry");
-    const auto after_public = ctx.progress_token_for_test();
+    const auto after_public = detail::TestAccess::context_progress_token(ctx);
     t.check(after_public.progress != before_public.progress ||
                 after_public.progress_exhaustion != before_public.progress_exhaustion,
             "a public cancel emptying the dispatch ring publishes a progress wake");
@@ -1057,8 +1058,8 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
     Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
@@ -1130,7 +1131,7 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
     t.check(raw->dispatch_size_for_test() == 1,
             "exactly one stale entry remains queued before the reclaimed-identity cancel");
     second->discard();
-    const auto before_reclaim_cancel = ctx.progress_token_for_test();
+    const auto before_reclaim_cancel = detail::TestAccess::context_progress_token(ctx);
 
     const PublicCancel reclaimed =
         raw->cancel_key_for_test(second_key);
@@ -1138,21 +1139,21 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
             "the reclaimed identity reports not_found to the cancel");
     t.check(raw->dispatch_size_for_test() == 0,
             "the reclaimed identity still removed its queued stale entry");
-    const auto after_reclaim_cancel = ctx.progress_token_for_test();
+    const auto after_reclaim_cancel = detail::TestAccess::context_progress_token(ctx);
     t.check(after_reclaim_cancel.progress != before_reclaim_cancel.progress ||
                 after_reclaim_cancel.progress_exhaustion !=
                     before_reclaim_cancel.progress_exhaustion,
             "removing a stale entry for a reclaimed identity publishes a wake");
 
-    const auto before_no_op = ctx.progress_token_for_test();
+    const auto before_no_op = detail::TestAccess::context_progress_token(ctx);
     t.check(raw->cancel_key_for_test(second_key) == PublicCancel::not_found,
             "repeating the reclaimed-identity cancel still reports not_found");
-    const auto after_no_op = ctx.progress_token_for_test();
+    const auto after_no_op = detail::TestAccess::context_progress_token(ctx);
     t.check(after_no_op.progress == before_no_op.progress &&
                 after_no_op.progress_exhaustion == before_no_op.progress_exhaustion,
             "a repeat cancel that removes nothing publishes no wake");
 
-    const auto reuse_key_marker = ctx.progress_token_for_test();
+    const auto reuse_key_marker = detail::TestAccess::context_progress_token(ctx);
     (void)reuse_key_marker;
     auto submitted_third = ctx.submit_read(op);
     t.check(submitted_third.has_value(), "a fresh submit is accepted while the worker is parked");
@@ -1163,7 +1164,7 @@ bool stale_entry_removal_by_reclaimed_identity_and_slot_reuse(Tracker& t) {
             "the reclaimed generation reports not_found against the reused slot");
     t.check(raw->dispatch_size_for_test() == 1,
             "the old-generation cancel removes nothing from the reused slot");
-    const auto after_stale_generation = ctx.progress_token_for_test();
+    const auto after_stale_generation = detail::TestAccess::context_progress_token(ctx);
     t.check(after_stale_generation.progress == reuse_key_marker.progress &&
                 after_stale_generation.progress_exhaustion ==
                     reuse_key_marker.progress_exhaustion,
@@ -1197,8 +1198,8 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
     Backend::WorkerUnclaimedRetirementPauseGate retirement_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
@@ -1249,13 +1250,13 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
 
     // The parked worker's retirement wake precedes this snapshot and nothing
     // else signals, so the epoch delta isolates the cancel's own wake count.
-    const auto before_won = ctx.progress_token_for_test();
+    const auto before_won = detail::TestAccess::context_progress_token(ctx);
     const auto won = ctx.cancel(queued->id());
     t.check(won.has_value() && won.value() == CancelDisposition::won_before_execution,
             "the public cancel wins before execution on the parked worker");
     t.check(raw->dispatch_size_for_test() == 0,
             "the winning public cancel removed its own queued entry");
-    const auto after_won = ctx.progress_token_for_test();
+    const auto after_won = detail::TestAccess::context_progress_token(ctx);
     t.check(after_won.progress == before_won.progress + 1 &&
                 after_won.progress_exhaustion == before_won.progress_exhaustion,
             "a won cancel that also removes its entry signals exactly once");
@@ -1267,9 +1268,9 @@ bool won_cancel_with_queued_entry_signals_exactly_once(Tracker& t) {
                 canceled_observed.result.error().code == IoError::Code::canceled,
             "the won cancel converges to a canceled terminal");
 
-    const auto before_no_op = ctx.progress_token_for_test();
+    const auto before_no_op = detail::TestAccess::context_progress_token(ctx);
     const auto repeat = ctx.cancel(queued->id());
-    const auto after_no_op = ctx.progress_token_for_test();
+    const auto after_no_op = detail::TestAccess::context_progress_token(ctx);
     t.check(repeat.has_value() && repeat.value() == CancelDisposition::already_terminal,
             "the repeat cancel reports the already-terminal verdict");
     t.check(after_no_op.progress == before_no_op.progress &&
@@ -1306,8 +1307,8 @@ bool gate_teardown_retires_registered_passes_before_detach(Tracker& t) {
     Backend::BeforeWorkerDequeuePauseGate dequeue_gate;
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
     raw->set_accepted_pre_dispatch_pause_gate(&dispatch_gate);
     raw->set_worker_unclaimed_retirement_pause_gate(&retirement_gate);
 
@@ -1428,8 +1429,8 @@ bool post_accept_dispatch_failure_converges_and_reclaims(Tracker& t) {
     }
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     Backend::DispatchFailureInjection injection;
     raw->set_dispatch_failure_injection(&injection);
@@ -1464,8 +1465,8 @@ bool queue_saturation_reports_would_block_without_residue(Tracker& t) {
         return false;
     }
     auto backend = make_backend(1);
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     auto first =
@@ -1502,8 +1503,8 @@ bool terminal_consumption_retires_every_physical_trace(Tracker& t) {
     }
     auto backend = make_backend(4);
     Backend* raw = backend.get();
-    AsyncIoContext ctx(std::move(backend));
-    RequestCore& core = *ctx.context_core_for_test();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
 
     std::vector<std::byte> buffer(6, std::byte{0});
     auto submitted =
@@ -1559,7 +1560,7 @@ struct HookedBackend {
         auto owned = std::make_unique<Backend>(UringConfig{capacity, depth}, hooks);
         made.backend = owned.get();
         made.control->advance.store(advance, std::memory_order_release);
-        made.ctx = std::make_unique<AsyncIoContext>(std::move(owned));
+        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
         return made;
     }
 };
@@ -1599,7 +1600,7 @@ struct FictionBackend {
         hooks.context = made.control.get();
         auto owned = std::make_unique<Backend>(UringConfig{capacity, depth}, hooks);
         made.backend = owned.get();
-        made.ctx = std::make_unique<AsyncIoContext>(std::move(owned));
+        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
         return made;
     }
 };
@@ -1619,8 +1620,8 @@ bool metadata_identity_agrees_across_backends(Tracker& t) {
     }
     File file = std::move(opened).value();
 
-    AsyncIoContext tp(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
-    AsyncIoContext ring(std::make_unique<Backend>(UringConfig{4, 8}));
+    AsyncIoContext tp = detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1}));
+    AsyncIoContext ring = detail::make_context(std::make_unique<Backend>(UringConfig{4, 8}));
 
     auto tp_info = tp.submit_file_info(FileInfoOp{NativeFileRef{file}});
     auto ring_info = ring.submit_file_info(FileInfoOp{NativeFileRef{file}});
@@ -1671,7 +1672,7 @@ bool canceled_metadata_op_reports_the_canceled_terminal(Tracker& t) {
     }
     File file = std::move(opened).value();
     HookedBackend made = HookedBackend::create(4, 8, /*advance=*/true);
-    RequestCore& core = *made.ctx->context_core_for_test();
+    RequestCore& core = *detail::TestAccess::context_core(*made.ctx);
 
     auto submitted = made.ctx->submit_file_info(FileInfoOp{NativeFileRef{file}});
     t.check(submitted.has_value(), "the to-be-canceled file_info is accepted");
@@ -1705,7 +1706,7 @@ bool sticky_cancel_intent_survives_sqe_exhaustion_and_is_serviced(Tracker& t) {
         return false;
     }
     HookedBackend made = HookedBackend::create(4, 1, /*advance=*/false);
-    RequestCore& core = *made.ctx->context_core_for_test();
+    RequestCore& core = *detail::TestAccess::context_core(*made.ctx);
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted = made.ctx->submit_read(
@@ -1756,7 +1757,7 @@ bool success_and_cancel_converge_without_fabrication_under_the_fiction(Tracker& 
         return false;
     }
     HookedBackend made = HookedBackend::create(4, 8, /*advance=*/true);
-    RequestCore& core = *made.ctx->context_core_for_test();
+    RequestCore& core = *detail::TestAccess::context_core(*made.ctx);
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted = made.ctx->submit_read(
@@ -1797,7 +1798,7 @@ bool hard_submit_failure_resolves_per_entry_kernel_visibility(Tracker& t) {
         return false;
     }
     FictionBackend made = FictionBackend::create(4, 8);
-    RequestCore& core = *made.ctx->context_core_for_test();
+    RequestCore& core = *detail::TestAccess::context_core(*made.ctx);
 
     std::vector<std::byte> first(4, std::byte{0});
     std::vector<std::byte> second(4, std::byte{0});
@@ -1852,9 +1853,9 @@ bool cancel_progress_wakes_a_parked_owner(Tracker& t) {
     }
     auto owned_backend = make_backend(4);
     Backend* raw = owned_backend.get();
-    AsyncIoContext ctx(std::move(owned_backend));
+    AsyncIoContext ctx = detail::make_context(std::move(owned_backend));
     std::atomic<int> prepark{0};
-    ctx.set_progress_prepark_counter_for_test(&prepark);
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
 
     std::vector<std::byte> buffer(8, std::byte{0});
     auto submitted = ctx.submit_read(
@@ -1918,7 +1919,7 @@ bool full_ring_zero_consumed_hard_error_settles_every_entry(Tracker& t) {
         return false;
     }
     FictionBackend made = FictionBackend::create(8, 8);
-    RequestCore& core = *made.ctx->context_core_for_test();
+    RequestCore& core = *detail::TestAccess::context_core(*made.ctx);
 
     made.control->mode.store(1, std::memory_order_release);
     std::vector<std::byte> buffer(4, std::byte{0});
@@ -1974,7 +1975,7 @@ bool wrapped_head_partial_consumption_keeps_logical_cardinality(Tracker& t) {
         return false;
     }
     FictionBackend made = FictionBackend::create(4, 4);
-    RequestCore& core = *made.ctx->context_core_for_test();
+    RequestCore& core = *detail::TestAccess::context_core(*made.ctx);
 
     std::vector<std::byte> buffer(4, std::byte{0});
     for (unsigned round = 0; round < 5; ++round) {

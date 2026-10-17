@@ -1,4 +1,4 @@
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/async/detail/request_core.hpp>
@@ -84,6 +84,10 @@ bool ThreadPoolBackend::BoundedHandleRing::remove_exact(detail::RequestReservati
         }
     }
     return false;
+}
+
+AsyncIoContext make_threadpool_context(ThreadPoolConfig config, AsyncStats* stats) {
+    return detail::make_context(std::make_unique<ThreadPoolBackend>(config), stats);
 }
 
 ThreadPoolBackend::ThreadPoolBackend(ThreadPoolConfig config)
@@ -375,6 +379,7 @@ void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationK
     wait_delivery_claimed_pause_();
 #endif
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+    (void)core_->retire_observer_delivery(key);
 }
 
 void ThreadPoolBackend::worker_loop() {
@@ -537,7 +542,7 @@ std::size_t ThreadPoolBackend::poll() {
     return poll_progress().completed;
 }
 
-AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
+ProgressPass ThreadPoolBackend::poll_progress() {
     std::size_t published = 0;
     // The entry snapshot is the pass boundary and bounds the pass: at most
     // capacity_ queued publications plus at most capacity_ owed events are
@@ -582,7 +587,7 @@ AsyncBackend::ProgressPass ThreadPoolBackend::poll_progress() {
         ++published;
     }
 
-    AsyncBackend::ProgressPass pass;
+    ProgressPass pass;
     pass.completed = published;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);

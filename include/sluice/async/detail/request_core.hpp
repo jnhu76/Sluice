@@ -196,10 +196,6 @@ class RequestCore {
     // a later pass may retire a slot before the key is acted on.
     void collect_outstanding(std::vector<RequestKey>& out) const noexcept;
 
-    // Retires delivery episodes in the delivering phase; the caller must run
-    // this only when no synchronous delivery hook is still on the stack.
-    std::size_t retire_delivered_episodes() noexcept;
-
     PublicLookup lookup(RequestKey id) const noexcept;
     PublicCancel cancel(RequestKey id) noexcept;
     BindingRelease discard_public_result(RequestKey id) noexcept;
@@ -228,6 +224,7 @@ class RequestCore {
     ObserverDeliveryClaim claim_observer_delivery(RequestKey id) noexcept;
     ObserverCancellation cancel_observer(RequestKey id) noexcept;
     ObserverDeliveryRetirement retire_observer_delivery(RequestKey id) noexcept;
+    bool observer_retirement_acquired(RequestKey id) const noexcept;
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 

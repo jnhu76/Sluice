@@ -62,9 +62,9 @@ int main() {
         reinterpret_cast<const std::byte*>(payload.data()), payload.size());
     CHECK(sluice::blocking::write_all(file, bytes).has_value());
 
-    AsyncIoContext ctx(
-        std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{.request_capacity = 8,
-                                                              .worker_count = 2}));
+    AsyncIoContext ctx = make_threadpool_context(
+        ThreadPoolConfig{.request_capacity = 8,
+        .worker_count = 2});
 
     const int epoll_fd = ::epoll_create1(0);
     CHECK(epoll_fd >= 0);
@@ -102,6 +102,7 @@ int main() {
                                         .dst = buf.data(),
                                         .len = buf.size(),
                                         .offset = 0});
+
         if (!r.has_value()) {
             std::fprintf(stderr, "FAIL: progress submit rejected\n");
             return;
@@ -174,6 +175,7 @@ int main() {
                                         .dst = buf2.data(),
                                         .len = buf2.size(),
                                         .offset = 4});
+
         if (!r.has_value()) {
             std::fprintf(stderr, "FAIL: second-cycle submit rejected\n");
             return;

@@ -1,6 +1,6 @@
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request.hpp>
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/result.hpp>
 
 #include <chrono>
@@ -91,7 +91,7 @@ bool wait_all_ready(AsyncIoContext& ctx, std::vector<Request<std::size_t>>& requ
 // bit stayed set past its EAGAIN.
 bool coalesce_then_acknowledge_round_trip() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     if (interest.fd < 0)
         return false;
@@ -137,7 +137,7 @@ bool coalesce_then_acknowledge_round_trip() {
 // within a bounded wait and the acknowledge must leave the fd empty.
 bool concurrent_producers_never_strand_a_completion() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
-    AsyncIoContext ctx(std::move(backend));
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
     HostInterest interest(ctx);
     if (interest.fd < 0)
         return false;

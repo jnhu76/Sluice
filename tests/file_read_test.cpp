@@ -1,5 +1,5 @@
 #include "canonical_request_test_support.hpp"
-#include <sluice/async/threadpool_backend.hpp>
+#include <sluice/async/detail/threadpool_backend.hpp>
 #include <sluice/file_resource.hpp>
 
 #include <cerrno>
@@ -64,7 +64,7 @@ bool read_returns_bytes_at_offset() {
 
     std::vector<std::byte> dst(5);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 6});
         if (!admitted.has_value())
@@ -92,7 +92,7 @@ bool short_read_reports_only_available_bytes() {
     File file = std::move(File::open(path).value());
     ::unlink(path.c_str());
     std::vector<std::byte> dst(8, std::byte{0x5a});
-    AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+    AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
     RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
     auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 1});
     if (!admitted.has_value())
@@ -115,7 +115,7 @@ bool read_past_end_returns_zero() {
 
     std::vector<std::byte> dst(4);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 100});
         if (!admitted.has_value())
@@ -139,7 +139,7 @@ bool read_empty_buffer_returns_zero_without_data_effect() {
     File file = std::move(File::open(path).value());
 
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_read(ReadOp{file, nullptr, 0, 0});
         if (!r_admitted.has_value())
@@ -168,7 +168,7 @@ bool outstanding_read_resource_valid_until_terminal() {
 
     std::vector<std::byte> dst(6);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (!admitted.has_value())
@@ -242,7 +242,7 @@ bool moved_file_owns_nothing_and_target_keeps_resource() {
 
     std::vector<std::byte> dst(4);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{other, dst.data(), dst.size(), 0});
         if (!admitted.has_value())
@@ -330,7 +330,7 @@ bool read_after_close_reports_invalid_state() {
 
     std::vector<std::byte> dst(4);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (admitted.has_value() || ctx.outstanding() != 0)
@@ -356,7 +356,7 @@ bool scoped_read_on_write_only_file_rejected_upfront() {
 
     std::vector<std::byte> dst(3);
     auto result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_read(ReadOp{file, dst.data(), dst.size(), 0});
         if (r_admitted.has_value() || ctx.outstanding() != 0)
@@ -370,7 +370,7 @@ bool scoped_read_on_write_only_file_rejected_upfront() {
         return false;
 
     auto empty_result = [&]() -> Result<std::size_t> {
-        AsyncIoContext ctx(std::make_unique<ThreadPoolBackend>());
+        AsyncIoContext ctx = detail::make_context(std::make_unique<ThreadPoolBackend>());
         RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
         auto r_admitted = scope.submit_read(ReadOp{file, nullptr, 0, 0});
         if (r_admitted.has_value() || ctx.outstanding() != 0)

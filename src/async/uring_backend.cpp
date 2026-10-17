@@ -1,4 +1,4 @@
-#include <sluice/async/uring_backend.hpp>
+#include <sluice/async/detail/uring_backend.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
 #include <sluice/detail/file_semantics.hpp>
@@ -32,6 +32,12 @@
 namespace sluice::async {
 
 #if !defined(SLUICE_HAS_LIBURING)
+
+Result<AsyncIoContext> make_uring_context(UringConfig config, AsyncStats* stats) {
+    (void)config;
+    (void)stats;
+    return make_unexpected<AsyncIoContext>(IoError{IoError::Code::not_supported});
+}
 
 UringAsyncBackend::UringAsyncBackend(unsigned queue_depth) : available_(false) {
     (void)queue_depth;
@@ -136,6 +142,10 @@ UringAsyncBackend::UringAsyncBackend(unsigned queue_depth)
 
 UringAsyncBackend::UringAsyncBackend(UringConfig config)
     : UringAsyncBackend(validate_config_(config), ValidatedConfigTag{}) {}
+
+Result<AsyncIoContext> make_uring_context(UringConfig config, AsyncStats* stats) {
+    return detail::make_context(std::make_unique<UringAsyncBackend>(config), stats);
+}
 
 UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
     constexpr std::size_t slot_index_max =
@@ -291,7 +301,7 @@ bool UringAsyncBackend::any_event_owed_locked_() const noexcept {
     return false;
 }
 
-AsyncBackend::ProgressPass UringAsyncBackend::poll_progress() {
+ProgressPass UringAsyncBackend::poll_progress() {
     ProgressPass pass;
     pass.completed = poll();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -578,6 +588,7 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
 void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
     (void)core_->claim_observer_delivery(key);
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+    (void)core_->retire_observer_delivery(key);
 }
 
 std::size_t UringAsyncBackend::poll() {
