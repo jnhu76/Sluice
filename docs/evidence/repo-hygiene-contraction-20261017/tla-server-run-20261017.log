@@ -1,0 +1,183 @@
+== TLC jar (cached, checksum ok): v1.7.4 ==
+== RequestCore:  safety ==
+== TLC: rcore-safety ==
+== RequestCore:  conditional liveness ==
+== TLC: rcore-live (temporal properties) ==
+== RequestCore:  safety mutants (ACTIVE MUTATION: each must violate its named property) ==
+== TLC: rcore-mut-ignore-close (must violate InvNoAcceptAfterClose) ==
+== TLC: rcore-mut-ignore-health (must violate InvNoAcceptAfterHealth) ==
+== TLC: rcore-mut-rollback-residue (must violate InvUnoccupiedClean) ==
+== TLC: rcore-mut-terminal-overwrite (must violate InvSingleWinner) ==
+== TLC: rcore-mut-cancel-as-physical (must violate InvCancelWinRequiresUnclaimed) ==
+== TLC: rcore-mut-publish-while-e (must violate InvNoPubWhileExec) ==
+== TLC: rcore-mut-gen-wrap (must violate InvAcceptedRepresented) ==
+== TLC: rcore-mut-reclaim-ignores-ctl (must violate InvReclaimConditions) ==
+== TLC: rcore-mut-retire-last-exec (must violate InvExecHeldUntilTerminal) ==
+== TLC: rcore-mut-exec-after-terminal (must violate one of: InvNoExecRevival|InvNoPubWhileExec) ==
+== TLC: rcore-mut-stale-event (must violate InvTerminalMatchesGeneration) ==
+== TLC: rcore-mut-double-decrement (must violate TypeOK) ==
+== RequestCore:  liveness mutants (ACTIVE MUTATION: each must violate a temporal property) ==
+== TLC: rcore-mut-strand-post-accept (must violate a temporal property) ==
+== TLC: rcore-mut-lazy-reclaim (must violate a temporal property) ==
+== TLC: rcore-mut-ctl-after-settled (must violate a temporal property) ==
+== RequestCore: SUBSUMPTION WITNESSES (enabling state made unreachable; each must remain clean) ==
+== TLC: rcore-mut-ready-before-payload ==
+== TLC: rcore-mut-reclaim-ignores-pub ==
+== Stage B2: RequestCore public release-edge mutants (ACTIVE MUTATION: each must violate its named invariant) ==
+== TLC: rcore-mut-consume-keeps-bind (must violate InvReleasedNotLive) ==
+== TLC: rcore-mut-consume-unpublished (must violate InvConsumeAfterPublish) ==
+== TLC: rcore-mut-discard-keeps-bind (must violate InvReleasedNotLive) ==
+== TLC: rcore-mut-discard-inflight (must violate InvDiscardAfterPublish) ==
+== ObserverCore: ObserverCore safety ==
+== TLC: obs-safety ==
+== ObserverCore: ObserverCore conditional liveness ==
+== TLC: obs-live (temporal properties) ==
+== ObserverCore: ObserverCore C++ mutation-seam mirrors (each must violate its named invariant) ==
+== TLC: obs-mut-attach-ignores-pub (must violate InvArmedRequiresUnpublished) ==
+== TLC: obs-mut-attach-terminal-as-pub (must violate InvAlreadyTerminalRequiresPublication) ==
+== TLC: obs-mut-claim-unbounded (must violate InvAtMostOnceDelivery) ==
+== TLC: obs-mut-cancel-during-delivery (must violate InvRetireOwnership) ==
+== TLC: obs-mut-publication-skips-queue (must violate a temporal property) ==
+== ObserverCore: ObserverCore floor mutants (each must violate its named invariant or property) ==
+== TLC: obs-mut-obs-cancel-cancels-op (must violate InvCancelIsolation) ==
+== TLC: obs-mut-reclaim-ignores-observer (must violate InvObserverPin) ==
+== TLC: obs-mut-no-delivery-wake (must violate a temporal property) ==
+== ObserverCore: race/scenario coverage (each witness must be reachable) ==
+== TLC: obs-cov-attach-rode-pub (must violate InvCovAttachRodePublication) ==
+== TLC: obs-cov-already-terminal (must violate InvCovAlreadyTerminalFastPath) ==
+== TLC: obs-cov-window-attach (must violate InvCovWindowAttach) ==
+== TLC: obs-cov-cancel-lost-to-claim (must violate InvCovCancelLostToClaim) ==
+== TLC: obs-cov-queued-suppression (must violate InvCovQueuedSuppression) ==
+== TLC: obs-cov-delivery-retired (must violate InvCovDeliveryRetired) ==
+== TLC: obs-cov-no-observer-settlement (must violate InvCovNoObserverSettlement) ==
+== TLC: obs-cov-pinned-past-release (must violate InvCovPinnedPastRelease) ==
+== TLC: obs-cov-rearm (must violate InvCovReArm) ==
+== ShutdownCore: ShutdownCore safety ==
+== TLC: shutdown-core-safety ==
+== ShutdownCore: ShutdownCore C++ mutation-seam mirrors (each must violate its named invariant) ==
+== TLC: shutdown-core-mut-m1-destroy-ignores-closure (must violate InvDestroyRequiresExecutionClosed) ==
+== TLC: shutdown-core-mut-m6-snapshot-before-close (must violate InvNoAcceptAfterAdmissionClose) ==
+== TLC: shutdown-core-mut-m7-close-without-convergence (must violate InvExecutionClosedNoBorrowTouchingExecution) ==
+== TLC: shutdown-core-mut-m8-retire-fd-early (must violate InvNotificationRetireRequiresNoDeliveryRefs) ==
+== ShutdownCore: ShutdownCore contract mutants (a clean run is the kill: the certified state becomes unreachable) ==
+== TLC: shutdown-core-mut-m4-require-consumption ==
+== ShutdownCore: ShutdownCore reachability certificates (each must be reachable) ==
+== TLC: shutdown-core-cov-published-survives (must violate InvCovPublishedSurvivesExecutionClose) ==
+== TLC: shutdown-core-cov-unconsumed-converges (must violate InvCovUnconsumedResultConverges) ==
+== TLC: shutdown-core-cov-internal-pin (must violate InvCovInternalPinThenCleanClose) ==
+== TLC: shutdown-core-cov-cancel-policy (must violate InvCovCancelPolicyCompletes) ==
+== ShutdownCore: ShutdownCore conditional liveness (the SHUT-03 convergence statement) ==
+== TLC: shutdown-core-live (temporal properties) ==
+== TLC: shutdown-core-live-ops-nofair (must violate a temporal property) ==
+== TLC: shutdown-core-live-close-nofair (must violate a temporal property) ==
+Model checking completed. No error has been found.
+31289609 states generated, 5359732 distinct states found, 0 states left on queue.
+Model checking completed. No error has been found.
+31289609 states generated, 5359732 distinct states found, 0 states left on queue.
+Error: Invariant InvNoAcceptAfterClose is violated.
+124 states generated, 85 distinct states found, 49 states left on queue.
+Error: Invariant InvNoAcceptAfterHealth is violated.
+88 states generated, 55 distinct states found, 27 states left on queue.
+Error: Invariant InvUnoccupiedClean is violated.
+95 states generated, 68 distinct states found, 25 states left on queue.
+Error: Invariant InvSingleWinner is violated.
+577 states generated, 277 distinct states found, 155 states left on queue.
+Error: Invariant InvCancelWinRequiresUnclaimed is violated.
+283 states generated, 177 distinct states found, 105 states left on queue.
+Error: Invariant InvNoPubWhileExec is violated.
+314 states generated, 193 distinct states found, 113 states left on queue.
+Error: Invariant InvAcceptedRepresented is violated.
+4921 states generated, 1359 distinct states found, 575 states left on queue.
+Error: Invariant InvReclaimConditions is violated.
+8913 states generated, 2855 distinct states found, 1425 states left on queue.
+Error: Invariant InvExecHeldUntilTerminal is violated.
+90 states generated, 68 distinct states found, 31 states left on queue.
+Error: Invariant InvNoExecRevival is violated.
+221 states generated, 129 distinct states found, 74 states left on queue.
+Error: Invariant InvTerminalMatchesGeneration is violated.
+851 states generated, 404 distinct states found, 232 states left on queue.
+Error: Invariant TypeOK is violated.
+275 states generated, 187 distinct states found, 111 states left on queue.
+Error: Temporal properties were violated.
+24160 states generated, 7111 distinct states found, 3151 states left on queue.
+Error: Temporal properties were violated.
+683245 states generated, 133330 distinct states found, 28522 states left on queue.
+Error: Temporal properties were violated.
+24146 states generated, 6003 distinct states found, 2723 states left on queue.
+Model checking completed. No error has been found.
+32373785 states generated, 5359732 distinct states found, 0 states left on queue.
+Model checking completed. No error has been found.
+31289609 states generated, 5359732 distinct states found, 0 states left on queue.
+Error: Invariant InvReleasedNotLive is violated.
+4723 states generated, 1675 distinct states found, 834 states left on queue.
+Error: Invariant InvConsumeAfterPublish is violated.
+234 states generated, 162 distinct states found, 98 states left on queue.
+Error: Invariant InvReleasedNotLive is violated.
+3043 states generated, 1154 distinct states found, 595 states left on queue.
+Error: Invariant InvDiscardAfterPublish is violated.
+1320 states generated, 592 distinct states found, 330 states left on queue.
+Model checking completed. No error has been found.
+5123 states generated, 1734 distinct states found, 0 states left on queue.
+Model checking completed. No error has been found.
+5123 states generated, 1734 distinct states found, 0 states left on queue.
+Error: Invariant InvArmedRequiresUnpublished is violated.
+273 states generated, 167 distinct states found, 81 states left on queue.
+Error: Invariant InvAlreadyTerminalRequiresPublication is violated.
+28 states generated, 26 distinct states found, 10 states left on queue.
+Error: Invariant InvAtMostOnceDelivery is violated.
+196 states generated, 129 distinct states found, 69 states left on queue.
+Error: Invariant InvRetireOwnership is violated.
+635 states generated, 336 distinct states found, 135 states left on queue.
+Error: Temporal properties were violated.
+2066 states generated, 717 distinct states found, 0 states left on queue.
+Error: Invariant InvCancelIsolation is violated.
+168 states generated, 100 distinct states found, 47 states left on queue.
+Error: Invariant InvObserverPin is violated.
+621 states generated, 334 distinct states found, 146 states left on queue.
+Error: Temporal properties were violated.
+3741 states generated, 1276 distinct states found, 0 states left on queue.
+Error: Invariant InvCovAttachRodePublication is violated.
+161 states generated, 104 distinct states found, 47 states left on queue.
+Error: Invariant InvCovAlreadyTerminalFastPath is violated.
+254 states generated, 149 distinct states found, 69 states left on queue.
+Error: Invariant InvCovWindowAttach is violated.
+25 states generated, 23 distinct states found, 8 states left on queue.
+Error: Invariant InvCovCancelLostToClaim is violated.
+551 states generated, 289 distinct states found, 116 states left on queue.
+Error: Invariant InvCovQueuedSuppression is violated.
+358 states generated, 199 distinct states found, 85 states left on queue.
+Error: Invariant InvCovDeliveryRetired is violated.
+1136 states generated, 567 distinct states found, 210 states left on queue.
+Error: Invariant InvCovNoObserverSettlement is violated.
+70 states generated, 54 distinct states found, 24 states left on queue.
+Error: Invariant InvCovPinnedPastRelease is violated.
+320 states generated, 180 distinct states found, 74 states left on queue.
+Error: Invariant InvCovReArm is violated.
+223 states generated, 122 distinct states found, 47 states left on queue.
+Model checking completed. No error has been found.
+47521 states generated, 11156 distinct states found, 0 states left on queue.
+Error: Invariant InvDestroyRequiresExecutionClosed is violated.
+215 states generated, 120 distinct states found, 79 states left on queue.
+Error: Invariant InvNoAcceptAfterAdmissionClose is violated.
+187 states generated, 103 distinct states found, 66 states left on queue.
+Error: Invariant InvExecutionClosedNoBorrowTouchingExecution is violated.
+2123 states generated, 846 distinct states found, 462 states left on queue.
+Error: Invariant InvNotificationRetireRequiresNoDeliveryRefs is violated.
+1115 states generated, 464 distinct states found, 263 states left on queue.
+Model checking completed. No error has been found.
+45167 states generated, 10700 distinct states found, 0 states left on queue.
+Error: Invariant InvCovPublishedSurvivesExecutionClose is violated.
+1983 states generated, 812 distinct states found, 445 states left on queue.
+Error: Invariant InvCovUnconsumedResultConverges is violated.
+2986 states generated, 1139 distinct states found, 589 states left on queue.
+Error: Invariant InvCovInternalPinThenCleanClose is violated.
+1421 states generated, 605 distinct states found, 346 states left on queue.
+Error: Invariant InvCovCancelPolicyCompletes is violated.
+2255 states generated, 894 distinct states found, 478 states left on queue.
+Model checking completed. No error has been found.
+47521 states generated, 11156 distinct states found, 0 states left on queue.
+Error: Temporal properties were violated.
+47521 states generated, 11156 distinct states found, 0 states left on queue.
+Error: Temporal properties were violated.
+47521 states generated, 11156 distinct states found, 0 states left on queue.
+VERIFY_TLA: PASS
