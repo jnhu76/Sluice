@@ -3,13 +3,13 @@
 Executed at the hygiene head (branch `repo-hygiene`), host: WSL2 Linux
 6.18.54.1-microsoft-standard, xmake 2.9.7, gcc 15 (system), liburing
 /dev present (`/usr/include/liburing.h`), OpenJDK 25. Base `9845cee1`.
-Content-verification head: `628968a9` (commits after it are docs-only);
+Content-verification head: `34a55226` (commits after it are docs-only);
 the TLA gate ran at `a645baed` with its script diff-verified comment/echo-only
 since (see below).
 
 ## Build and test matrix (all commands from the repository root)
 
-Final full-matrix re-run at `628968a9` (the content head; every cell names
+Final full-matrix re-run at `34a55226` (the content head; every cell names
 its liburing flag explicitly — an `xmake f` without the flag carries the
 previous cell's setting over):
 
@@ -37,15 +37,16 @@ The mutation set is 59 manual targets over 53 injection defines at base
 and head; the rename touched 18 target names and 49 defines, while 4
 defines (backing 8 targets) are byte-identical at base and head — the
 decomposition is in `test-retention.md`. All 59 targets were rebuilt and
-executed at `9217609f` (debug, liburing=y); every one exited
+executed at `34a55226` (debug, liburing=y); every one exited
 nonzero (killed by its oracle). Per-target results:
-`mutant-kill-matrix.txt` in this directory.
+`mutant-kill-matrix.txt` in this directory (re-generated at the final
+content head after the last content-tag sweep; 59/59 there as well).
 
 ## Formal gates
 
 | Gate | Command | Result |
 |---|---|---|
-| ProgressSource model | `./scripts/verify_progress_source_model.sh` | PASS — "ProgressSource model: all expected outcomes reproduced.", exit 0 (21 configurations); re-run at `628968a9` after the message rewording |
+| ProgressSource model | `./scripts/verify_progress_source_model.sh` | PASS — "ProgressSource model: all expected outcomes reproduced.", exit 0 (21 configurations); re-run after the message rewording |
 | RequestCore/ObserverCore/ShutdownCore models | `./scripts/verify_tla.sh` | PASS — 55/55 expected verdicts; full run on the build server (details below) |
 
 ### verify_tla.sh server run (2026-10-17)
@@ -85,8 +86,8 @@ the ones in force at this branch's head.
 |---|---|---|
 | Verifier self-test | `python3 scripts/test_verify_v2_package.py` | Ran 14 tests, OK, exit 0 (re-run at `628968a9` after the comment rewording) |
 | Comment-guard self-test + scan | `python3 scripts/test_check_cpp_comment_authority.py && python3 scripts/check_cpp_comment_authority.py .` | OK, exit 0 |
-| Clean-room noliburing | `python3 scripts/verify_v2_package.py --manifest-out /tmp/pkg-manifest-noliburing-628968a9.json` | PASS — all gates, exit 0 at the committed clean head `628968a9` (an earlier clean run at `4d80cdd3` also passed; the mid-round 46/47 run failed only the dirty-worktree provenance gate) |
-| Clean-room liburing | `python3 scripts/verify_v2_package.py --liburing --uring-prefix /usr --manifest-out /tmp/pkg-manifest-liburing-628968a9.json` | PASS — all gates, exit 0, same clean head |
+| Clean-room noliburing | `python3 scripts/verify_v2_package.py --manifest-out /tmp/pkg-manifest-noliburing-34a55226.json` | PASS — all gates, exit 0 at the committed clean head `34a55226` (earlier clean runs at `4d80cdd3`/`628968a9` also passed; the mid-round 46/47 run failed only the dirty-worktree provenance gate) |
+| Clean-room liburing | `python3 scripts/verify_v2_package.py --liburing --uring-prefix /usr --manifest-out /tmp/pkg-manifest-liburing-34a55226.json` | PASS — all gates, exit 0, same clean head |
 
 ## Naming and reference integrity
 
