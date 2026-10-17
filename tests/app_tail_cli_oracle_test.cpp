@@ -757,17 +757,17 @@ bool harness_watchdog_selftest() {
 // while writing stderr must be observable through err_text().
 bool harness_stderr_capture_selftest() {
     TailChild child;
-    if (!child.spawn("/bin/sh", {"-c", "echo e4-stderr-marker >&2; exit 0"})) {
+    if (!child.spawn("/bin/sh", {"-c", "echo tail-stderr-marker >&2; exit 0"})) {
         check_msg(false, "selftest-stderr: spawn sh");
         return false;
     }
     const ChildOutcome o = child.wait_exit(kExitDeadline);
     check_msg(o.kind == ChildOutcome::Kind::exited && o.code == 0,
               "selftest-stderr: exit 0, got " + o.describe());
-    check_msg(child.err_text().find("e4-stderr-marker") != std::string::npos,
+    check_msg(child.err_text().find("tail-stderr-marker") != std::string::npos,
               "selftest-stderr: stderr captured, got: [" + child.err_text() + "]");
     return o.kind == ChildOutcome::Kind::exited && o.code == 0 &&
-           child.err_text().find("e4-stderr-marker") != std::string::npos;
+           child.err_text().find("tail-stderr-marker") != std::string::npos;
 }
 
 bool harness_split_line_selftest() {

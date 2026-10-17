@@ -84,7 +84,7 @@ bool child_dies_running(void (*scenario)()) {
 }
 
 void destroy_nonterminal_request() {
-    auto file_path = make_temp_file("sluice b2 nonterminal destructor\n");
+    auto file_path = make_temp_file("sluice public request nonterminal destructor\n");
     auto opened = File::open(file_path);
     ::unlink(file_path.c_str());
     if (!opened.has_value())
@@ -109,7 +109,7 @@ void destroy_nonterminal_request() {
 }
 
 void move_assign_over_nonterminal_request() {
-    auto file_path = make_temp_file("sluice b2 move assign violation\n");
+    auto file_path = make_temp_file("sluice public request move assign violation\n");
     auto opened = File::open(file_path);
     ::unlink(file_path.c_str());
     if (!opened.has_value())
@@ -141,7 +141,7 @@ void move_assign_over_nonterminal_request() {
 }
 
 void destroy_context_with_live_public_binding() {
-    auto file_path = make_temp_file("sluice b2 v21\n");
+    auto file_path = make_temp_file("sluice public request v21\n");
     auto opened = File::open(file_path);
     ::unlink(file_path.c_str());
     if (!opened.has_value())
@@ -174,7 +174,7 @@ template <class Gate> void wait_gate_paused(Gate& gate) noexcept {
 }
 
 void discard_request_during_publication_inflight() {
-    auto file_path = make_temp_file("sluice b2 inflight discard\n");
+    auto file_path = make_temp_file("sluice public request inflight discard\n");
     auto opened = File::open(file_path);
     ::unlink(file_path.c_str());
     if (!opened.has_value())

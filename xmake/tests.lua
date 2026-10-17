@@ -713,7 +713,7 @@ do
                           "SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_REPORTS_REQUESTED")
 end
 
--- #526 (F6-F10) request-path error-domain re-diff: the submission-failure
+-- Request-path error-domain re-diff: the submission-failure
 -- and terminal-outcome spellings observed on the public request path are
 -- compared against the same native faults driven through the direct path.
 -- The async TUs compile in production shape (no internal-testing seam): the

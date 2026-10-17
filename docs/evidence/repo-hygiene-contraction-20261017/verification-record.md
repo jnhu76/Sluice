@@ -72,7 +72,8 @@ captured log: `tla-server-run-20261017.log` in this directory.
 Reproduce with `./scripts/verify_tla.sh` at the recorded head; the
 bootstrap re-verifies the pinned jar checksum. Commits after `a645baed`
 on this branch touch `scripts/verify_tla.sh` only in comments and echo
-labels (diff-verified: zero non-comment/echo changed lines), so the
+labels and one `run_violate` diagnostic message string (the expected
+invariant is identical; diff-verified: zero other changed lines), so the
 dispatch set, expected verdicts and jar pinning of the recorded run are
 the ones in force at this branch's head.
 
@@ -89,8 +90,11 @@ the ones in force at this branch's head.
 
 ## Naming and reference integrity
 
-- Stage-token file paths under active dirs (`src include tests apps bench
-  scripts formal .github`): 30 at base -> 0 at head.
+- Campaign-token file paths under active dirs (`src include tests apps
+  bench scripts formal .github`) with the token set
+  {e1,e2,e4,b1a,b1b,b1c,b2,c1,c2,d1,f0,f1,f3,f4,g0,h1,i1,mr,pr-b} matched
+  on path components: 32 at base -> 0 at head (reproducible with the
+  stated set; the review draft's unqualified "30" is superseded).
 - Campaign-labeled test-side `/tmp` template strings and the negative-probe
   symbol added to the sweep by the review round (16 strings with `b1a`,
   `b2`, `d1`, `f1`, `tail_e4` prefixes): 16 at base -> 0 at head; the

@@ -91,6 +91,15 @@ fix commits, same mechanical class (no assertion or oracle change):
   duplicated campaign phrasing in `scripts/verify_progress_source_model.sh`
   collapsed. Pointers to dated campaign records (Git history) remain the
   traceability pattern.
+- Final sweep (second review round): 38 test-side content tags
+  `"sluice {d1,b1a,b2} ..."` -> `"sluice {request scope,ownership,
+  public request} ..."` (write/read pairs updated together; the
+  `memcmp(buffer, "sluice b", 8)` read-back became `"sluice p", 8`);
+  `e4-stderr-marker` -> `tail-stderr-marker` in the tail CLI oracle; the
+  `#526 (F6-F10)` label dropped from a build-graph comment;
+  `verify_v2_package.py`'s default `--uring-prefix /tmp/f1-deps/...`
+  -> `/tmp/sluice-uring-prefix` (every documented invocation overrides
+  it).
 
 ## Bench tooling
 

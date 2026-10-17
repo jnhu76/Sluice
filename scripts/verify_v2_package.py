@@ -437,7 +437,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="release", choices=["release", "debug"])
     ap.add_argument("--liburing", action="store_true")
-    ap.add_argument("--uring-prefix", default="/tmp/f1-deps/uring-prefix")
+    ap.add_argument("--uring-prefix", default="/tmp/sluice-uring-prefix")
     ap.add_argument("--manifest-out", required=True)
     ap.add_argument("--archive-baseline-out", default=None)
     ap.add_argument("--keep-prefix", action="store_true")
