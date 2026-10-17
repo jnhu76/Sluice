@@ -411,7 +411,7 @@ end
 -- C2-B (#397) ThreadPool no-lost-wake race campaign and external-loop W-03
 -- evidence. Same self-contained seam-build shape, observing the ThreadPool
 -- backend only; shared ProgressSource changes must still compile in the
--- liburing-enabled progress/cutover targets.
+-- liburing-enabled progress/integration targets.
 do
     local function threadpool_progress_target(name, test_source)
         target(name)
@@ -964,7 +964,7 @@ do
                          "SLUICE_REQUEST_SCOPE_MUTANT_FINISH_CANCELS_CLEANUP")
 end
 
--- B1-B ThreadPool cutover evidence. The deterministic pause gates and fault
+-- ThreadPool request-core integration evidence. The deterministic pause gates and fault
 -- injections are macro-guarded backend surface, so this target compiles its
 -- own copies of the async TUs and links neither sluice_async nor the other
 -- seam builds, mirroring the ownership target's shape.
@@ -985,12 +985,13 @@ do
         add_tests("threadpool_request_core_integration_test")
 end
 
--- B1-C io_uring cutover evidence. Same self-contained seam-build shape as the
--- ThreadPool cutover target, plus the real liburing backend TU. The
+-- io_uring request-core integration evidence. Same self-contained
+-- seam-build shape as the ThreadPool integration target, plus the real
+-- liburing backend TU. The
 -- deterministic ordering cases inject CQEs through the seam; the real-kernel
 -- cases exercise the live ring. Requires the liburing build switch.
 if has_config("liburing") then
-    local function uring_cutover_target(name, extra_define)
+    local function uring_core_integration_target(name, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -1015,25 +1016,25 @@ if has_config("liburing") then
             end
     end
 
-    uring_cutover_target("uring_core_cutover_test", nil)
+    uring_core_integration_target("uring_request_core_integration_test", nil)
 
-    -- B1-C named mutation builds. Each flips one load-bearing mechanism and
+    -- Named mutation builds. Each flips one load-bearing mechanism and
     -- must be killed by the named failing assertion of the same suite; they
     -- are executed and recorded manually, never run as regular tests.
-    uring_cutover_target("uring_core_integration_mut_cookie_reuse", "SLUICE_URING_CORE_MUTANT_COOKIE_REUSE")
-    uring_cutover_target("uring_core_integration_mut_cancel_cqe_terminal",
+    uring_core_integration_target("uring_core_integration_mut_cookie_reuse", "SLUICE_URING_CORE_MUTANT_COOKIE_REUSE")
+    uring_core_integration_target("uring_core_integration_mut_cancel_cqe_terminal",
                          "SLUICE_URING_CORE_MUTANT_CANCEL_CQE_AS_ORIGINAL_TERMINAL")
-    uring_cutover_target("uring_core_integration_mut_publish_before_retire",
+    uring_core_integration_target("uring_core_integration_mut_publish_before_retire",
                          "SLUICE_URING_CORE_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT")
-    uring_cutover_target("uring_core_integration_mut_drop_outcome",
+    uring_core_integration_target("uring_core_integration_mut_drop_outcome",
                          "SLUICE_URING_CORE_MUTANT_DROP_ORIGINAL_OUTCOME")
-    uring_cutover_target("uring_core_integration_mut_remove_control_pin",
+    uring_core_integration_target("uring_core_integration_mut_remove_control_pin",
                          "SLUICE_URING_CORE_MUTANT_REMOVE_CONTROL_PIN")
-    uring_cutover_target("uring_core_integration_mut_reclaim_before_control",
+    uring_core_integration_target("uring_core_integration_mut_reclaim_before_control",
                          "SLUICE_URING_CORE_MUTANT_RECLAIM_BEFORE_CONTROL_RETIREMENT")
-    uring_cutover_target("uring_core_integration_mut_strand_poison",
+    uring_core_integration_target("uring_core_integration_mut_strand_poison",
                          "SLUICE_URING_CORE_MUTANT_STRAND_POST_ACCEPT_SUBMIT_FAILURE")
-    uring_cutover_target("uring_core_integration_mut_zero_op_dispatch",
+    uring_core_integration_target("uring_core_integration_mut_zero_op_dispatch",
                          "SLUICE_URING_CORE_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
 end
 

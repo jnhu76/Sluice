@@ -309,7 +309,7 @@ run_violate rcore-mut-discard-inflight RequestCoreMutDiscardInflight.cfg Request
 #        no observer), L1 (armed + publication ~> retired), L2 (waiting +
 #        publication ~> woken) and L4 (refused attach ~> published) under
 #        the declared WF_ driver/host service conjuncts.
-#    36. C++ mutation-seam mirrors (the SLUICE_C1_MUTANT_* defines):
+#    36. C++ mutation-seam mirrors (the SLUICE_REQUEST_CORE_MUTANT_* defines):
 #        MutAttachIgnoresPublication dies on InvArmedRequiresUnpublished;
 #        MutAttachTreatsTerminalAsPublished on
 #        InvAlreadyTerminalRequiresPublication; MutDeliveryClaimUnbounded
