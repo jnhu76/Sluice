@@ -495,6 +495,9 @@ if has_config("liburing") then
     uring_progress_target("uring_progress_race_mut_post_poison_flush_gated",
                               R .. "tests/uring_progress_race_test.cpp",
                               "SLUICE_URING_EXTERNAL_LOOP_MUTANT_POST_POISON_FLUSH_GATED")
+    uring_progress_target("progress_source_uring_mut_final_probe_dropped",
+                              R .. "tests/uring_progress_race_test.cpp",
+                              "SLUICE_PROGRESS_SOURCE_MUTANT_FINAL_PROBE_DROPPED")
     uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_URING_EXTERNAL_LOOP_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
