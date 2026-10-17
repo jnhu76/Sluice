@@ -1229,7 +1229,7 @@ bool real_kernel_normal_completion_and_cancel(Tracker& t) {
         (void)ctx.poll();
     const auto read_result = read_done.try_result();
     t.check(read_result.result.has_value() && read_result.result.value() == 8 &&
-                std::memcmp(buffer.data(), "sluice b", 8) == 0,
+                std::memcmp(buffer.data(), "sluice u", 8) == 0,
             "the real kernel read completed with the file bytes");
     (void)read_done.take_result();
     for (int i = 0; i < 256 && core.snapshot().accepted_live != 0; ++i)
@@ -1370,7 +1370,7 @@ int main() {
         }
         std::printf("ok %s\n", test.name);
     }
-    std::printf("%zu of %zu uring core cutover tests passed, %d not run\n",
+    std::printf("%zu of %zu uring core integration tests passed, %d not run\n",
                 sizeof(tests) / sizeof(tests[0]) - static_cast<std::size_t>(failed) -
                     static_cast<std::size_t>(skipped),
                 sizeof(tests) / sizeof(tests[0]), skipped);
