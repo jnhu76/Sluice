@@ -966,9 +966,9 @@ bool dispatch_failure_poison_retires_through_real_failure_terminals(Tracker& t) 
 }
 
 // The scenario leaves the context deliberately unsettled: the in-flight
-// request keeps its borrow forever (its completion never arrives), so
-// destruction over this state is a contract violation. The parent leaks the
-// state on purpose; only the forked death scenario may destroy it.
+// request keeps its borrow forever (its completion never arrives), so the
+// state can never be destroyed. The forked witness retains it and ends
+// through _Exit; only the forked death scenario may destroy it.
 struct PoisonedState {
     std::unique_ptr<AsyncIoContext> ctx;
     UringAsyncBackend* backend = nullptr;
@@ -1033,7 +1033,7 @@ void poison_unresolved_health_witness() {
     Tracker witness{"poison unresolved health"};
     auto state = poison_with_in_flight_cqe(witness);
     if (state == nullptr)
-        std::_Exit(2);
+        std::_Exit(witness.skipped && witness.failures == 0 ? 2 : 3);
 
     const auto closed = state->ctx->shutdown(ShutdownPolicy::drain);
     witness.check(closed.has_value() && closed.value() == ShutdownOutcome::health_unresolved,
@@ -1063,6 +1063,10 @@ bool poison_with_in_flight_cqe_reports_unresolved_health(Tracker& t) {
     }
     if (WIFEXITED(status) && WEXITSTATUS(status) == 2) {
         t.skip("io_uring is unavailable on this host");
+        return true;
+    }
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 3) {
+        t.check(false, "the unresolved-health witness stages its scenario");
         return true;
     }
     t.check(WIFEXITED(status) && WEXITSTATUS(status) == 0,

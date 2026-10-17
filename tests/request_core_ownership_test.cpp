@@ -416,8 +416,6 @@ bool domain_identities_are_not_reused_across_contexts(Tracker& t) {
 }
 
 bool concurrent_identity_allocation_never_repeats(Tracker& t) {
-    // Production entry point under concurrency: every concurrently constructed
-    // context still holds a distinct domain value.
     constexpr int kConcurrentContexts = 8;
     std::vector<std::unique_ptr<AsyncIoContext>> contexts(kConcurrentContexts);
     {
@@ -453,9 +451,6 @@ bool concurrent_identity_allocation_never_repeats(Tracker& t) {
         }
     }
 
-    // Domain exhaustion under concurrency, driven at the injected cursor: the
-    // claims partition the remaining domain exactly, and the loser claims all
-    // observe the exhausted marker instead of a wrapped or repeated value.
     {
         constexpr int kRacers = 8;
         constexpr std::uint64_t kRemaining = 3;
@@ -519,7 +514,7 @@ bool context_address_reuse_never_adopts_a_stale_identity(Tracker& t) {
         {
             AsyncIoContext context =
                 detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
-            observed = &context;
+            observed = detail::TestAccess::context_core(context);
             auto submitted = context.submit_read(
                 ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
             t.check(submitted.has_value(), "the zero-op request is accepted");
@@ -571,9 +566,6 @@ bool retired_slot_domain_rejects_submissions_before_accept(Tracker& t) {
     AsyncIoContext ctx = detail::make_context(std::move(backend));
     RequestCore* core = detail::TestAccess::context_core(ctx);
 
-    // Drive both slots to their final valid generation and let their last
-    // requests retire them: after this, admission must fail before any
-    // dispatch, with no residue and no way for a stale identity to act.
     std::vector<RequestId> retired_ids;
     for (std::uint32_t slot = 0; slot < raw->slot_capacity(); ++slot) {
         core->force_generation_for_testing(
@@ -655,15 +647,24 @@ bool uring_retired_slot_domain_rejects_submissions_before_accept(Tracker& t) {
     const CoreSnapshot retired = core->snapshot();
     t.check(retired.retired_slots == core->capacity() && retired.free_slots == 0,
             "every io_uring slot is permanently retired after its final generation");
+    t.check(retired.accepted_live == 0 && retired.reserved == 0 && retired.public_bindings == 0,
+            "the retired io_uring domain holds no live work");
 
-    auto rejected = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
-    t.check(!rejected.has_value() && rejected.error().code == IoError::Code::would_block,
-            "the exhausted io_uring slot domain rejects submission before any dispatch");
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        auto rejected = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+        t.check(!rejected.has_value() && rejected.error().code == IoError::Code::would_block,
+                "the exhausted io_uring slot domain rejects submission before any dispatch");
+    }
     t.check(same_core_facts(core->snapshot(), retired),
-            "the rejected io_uring submission leaves no residue");
+            "the rejected io_uring submissions leave no residue");
+    t.check(ctx.admission_open(),
+            "the io_uring exhaustion rejection is an admission verdict, not a close");
     for (const RequestId& stale : retired_ids) {
         t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
                 "a retired io_uring identity never resolves");
+        auto stale_cancel = ctx.cancel(stale);
+        t.check(stale_cancel.has_value() && stale_cancel.value() == CancelDisposition::not_found,
+                "a retired io_uring identity cancels nothing");
     }
     return true;
 }
