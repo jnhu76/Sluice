@@ -128,19 +128,23 @@ alongside (`mut-<target>-run.log`). M6/M7/M8 remain TLA-mirror kills
 
 ## 3. Clean-room package verification (G9/RG2/RG3 refresh)
 
-`scripts/verify_v2_package.py` both profiles at the final content head;
-manifests: `v2-package-manifest-{noliburing,liburing}.json`; archive
-baselines alongside. Gates: 11-header exact install set, sole-include
-compiles, clean-room consumers (core-only and async workloads) compiled,
-linked and executed, ODR probe across opposite macro views, seam negative
-probes compiling the real installed headers with pinned diagnostics,
+`scripts/verify_v2_package.py` both profiles at the clean head
+(`bbc98fae`, the evidence commit): **24/24 gates PASS in each profile**,
+exit 0, recorded in `matrix/package-verify-{liburing,noliburing}.log`
+with argv/exit/sha256 alongside; manifests:
+`v2-package-manifest-{noliburing,liburing}.json`; archive baselines
+alongside. Gates: 11-header exact install set, sole-include compiles,
+clean-room consumers (core-only and async workloads) compiled, linked and
+executed, ODR probe across opposite macro views, seam negative probes
+compiling the real installed headers with pinned diagnostics,
 `w03 uring` reporting `not_supported` (exit 2) without liburing and real
-io_uring selection (exit 0) with it. Verifier behavior self-test:
-`matrix/package-verifier-selftest.log` (14 tests, exit 0). An initial
-verifier run at a dirty tree failed only `V2_B_PROVENANCE_RECORDED` (the
-worktree-cleanliness provenance gate, by design); those first-run logs are
-preserved in `package-first-run-dirty-tree/`, and the manifests committed
-alongside this record are the clean-head re-run.
+io_uring selection (exit 0) with it. Verifier behavior self-test
+refreshed at the same head: `matrix/package-verifier-selftest.log`
+(14 tests, exit 0). Earlier attempts that failed only the
+`V2_B_PROVENANCE_RECORDED` worktree-cleanliness gate (by design, before
+the tree was committed and when sibling-profile outputs sat untracked in
+the tree) are preserved in `package-first-run-dirty-tree/`; the recorded
+manifests are the clean-head run.
 
 ## 4. Formal models (G8 refresh)
 
