@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m1_occupancy_zero_destroyable

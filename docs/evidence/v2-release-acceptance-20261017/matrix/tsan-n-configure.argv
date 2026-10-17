@@ -1,0 +1,1 @@
+xmake f -m tsan --liburing=n --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-tsan-n -y

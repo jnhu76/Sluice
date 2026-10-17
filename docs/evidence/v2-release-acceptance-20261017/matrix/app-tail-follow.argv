@@ -1,0 +1,2 @@
+# follow-mode capture: sluice-tail -n 0 -f <fixture> in the background;
+# one line appended after 1s; process terminated by SIGTERM after 2s

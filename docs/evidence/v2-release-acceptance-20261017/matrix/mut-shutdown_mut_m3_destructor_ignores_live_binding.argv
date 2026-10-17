@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m3_destructor_ignores_live_binding

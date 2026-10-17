@@ -1,0 +1,21 @@
+$ /tmp/rg6-build-release-y/linux/x86_64/release/sluice-tail -n 20 /tmp/rg6-scratch/app-fixtures/lines.txt
+line_1981
+line_1982
+line_1983
+line_1984
+line_1985
+line_1986
+line_1987
+line_1988
+line_1989
+line_1990
+line_1991
+line_1992
+line_1993
+line_1994
+line_1995
+line_1996
+line_1997
+line_1998
+line_1999
+line_2000

@@ -1,0 +1,1 @@
+xmake build -y uring_progress_race_mut_post_poison_flush_gated

@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m11_allow_notification_borrow_during_shutdown

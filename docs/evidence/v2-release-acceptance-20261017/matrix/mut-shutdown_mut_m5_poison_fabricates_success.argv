@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m5_poison_fabricates_success

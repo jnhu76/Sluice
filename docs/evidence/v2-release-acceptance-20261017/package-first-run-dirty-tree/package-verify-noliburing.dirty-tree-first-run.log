@@ -1,0 +1,426 @@
+$ python3 scripts/verify_v2_package.py --mode release --manifest-out /home/jnhu/Source/Sluice/docs/evidence/v2-release-acceptance-20261017/v2-package-manifest-noliburing.json --archive-baseline-out /home/jnhu/Source/Sluice/docs/evidence/v2-release-acceptance-20261017/v2-package-archive-baseline-noliburing.json
+== v2 package verification — profile v2-noliburing ==
+prefix=/tmp/sluice-v2-prefix-hox31hgw consumer_build=/tmp/sluice-v2-consumers-qn69dn7b
++ git rev-parse HEAD
++ git status --porcelain
++ xmake f -m release -y --liburing=n
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m
++ xmake -y sluice_core
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.183s[0m
++ xmake -y sluice_async
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 11%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 83%]:[0m [38;5;5;1m<sluice_async>[0m [38;5;5;1marchiving.release libsluice_async.a[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 2.034s[0m
++ xmake install -o /tmp/sluice-v2-prefix-hox31hgw sluice_core
+installing sluice_core ..
+installing sluice_core to /tmp/sluice-v2-prefix-hox31hgw ..
+[0m[38;5;2;1minstall ok![0m
++ xmake install -o /tmp/sluice-v2-prefix-hox31hgw sluice_async
+installing sluice_async ..
+installing sluice_async to /tmp/sluice-v2-prefix-hox31hgw ..
+[0m[38;5;2;1minstall ok![0m
+[PASS] V2_B_PACKAGE_PREFIX_READY (11 headers vs contracted 11, 2 libs; extra=[], missing=[])
+[FAIL] V2_B_PROVENANCE_RECORDED (head 5fd8e10962f4, worktree_clean=False, non-output dirt=[' M CHANGELOG.md', '?? build-rg1/', '?? docs/evidence/v2-release-acceptance-20261017/'])
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_async_io_context.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_async_io_context.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_request.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_request.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_request_scope.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_request_scope.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_threadpool_backend.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_threadpool_backend.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_uring_backend.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_async_uring_backend.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_blocking_file.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_blocking_file.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_effect.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_effect.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_error.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_error.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_file_resource.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_file_resource.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_measurement.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_measurement.hpp.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_result.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/standalone/sluice_result.hpp.o
+[PASS] V2_E_STANDALONE_HEADER_COMPILES (11/11 sole-include compiles; failed=[])
++ ar t /tmp/sluice-v2-prefix-hox31hgw/lib/libsluice_async.a
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.fail_fast.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.fail_fast.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.async_io_context.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.async_io_context.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.request_scope.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.request_scope.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.threadpool_backend.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.threadpool_backend.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.uring_backend.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.uring_backend.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.uring_completion.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.uring_completion.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.uring_transport.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.uring_transport.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.context_identity.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.context_identity.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.request_core.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_async.a.request_core.cpp.o
++ ar t /tmp/sluice-v2-prefix-hox31hgw/lib/libsluice_core.a
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_core.a.blocking_file.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_core.a.blocking_file.cpp.o
++ nm --defined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_core.a.file_resource.cpp.o
++ nm --undefined-only /tmp/sluice-v2-consumers-qn69dn7b/archive-baseline/libsluice_core.a.file_resource.cpp.o
+[PASS] V2_E_ARCHIVE_BASELINE_RECORDED (2 archives, 11 objects, 391 defined symbols -> /home/jnhu/Source/Sluice/docs/evidence/v2-release-acceptance-20261017/v2-package-archive-baseline-noliburing.json)
+[PASS] V2_E_ARCHIVE_MATCHES_PROFILE (async archive io_uring refs=False, make_uring_context defined=True, profile liburing=False)
++ g++ --version
++ uname -m
++ uname -r
+manifest written: /home/jnhu/Source/Sluice/docs/evidence/v2-release-acceptance-20261017/v2-package-manifest-noliburing.json
+[PASS] CLEAN_ROOM_CONSUMER_INCLUDES_ANGLE_BRACKET_ONLY []
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/w01_direct.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/w01_direct.objs/w01_direct.o
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/w01_direct.objs/w01_direct.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/w01_direct
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/w01_direct
++ /tmp/sluice-v2-consumers-qn69dn7b/w01_direct
+[PASS] P0_W01_CORE_ONLY_CLEAN_ROOM rc=0 (compile+link+run against installed prefix; -lsluice_core only)
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/w02_pipeline.objs/w02_pipeline.o
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:102:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  102 |         file.close();
+      |         ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request_scope.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:135:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  135 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:195:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  195 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:235:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  235 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:266:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  266 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/w02_pipeline.cpp:304:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  304 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/w02_pipeline.objs/w02_pipeline.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/w02_pipeline
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/w02_pipeline
++ /tmp/sluice-v2-consumers-qn69dn7b/w02_pipeline
+[PASS] P1_w02_pipeline rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_request_lifetime.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_request_lifetime.objs/contract_request_lifetime.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_request_lifetime.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_request_lifetime.cpp:149:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  149 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/threadpool_backend.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_request_lifetime.cpp:3:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_request_lifetime.objs/contract_request_lifetime.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_request_lifetime
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_request_lifetime
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_request_lifetime
+[PASS] P1_contract_request_lifetime rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_admission.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_admission.objs/contract_admission.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_admission.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_admission.cpp:167:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  167 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/threadpool_backend.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_admission.cpp:3:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_admission.objs/contract_admission.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_admission
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_admission
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_admission
+[PASS] P1_contract_admission rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_cancel_effect.objs/contract_cancel_effect.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp: In function ‘bool {anonymous}::direct_content_is(const std::string&, const std::string&)’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp:54:25: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+   54 |     opened.value().close();
+      |     ~~~~~~~~~~~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/threadpool_backend.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp:3:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp:55:39: warning: comparison of integer expressions of different signedness: ‘const long unsigned int’ and ‘std::ptrdiff_t’ {aka ‘long int’} [-Wsign-compare]
+   55 |     return n.has_value() && n.value() == static_cast<std::ptrdiff_t>(expected.size()) &&
+      |                             ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp:108:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  108 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp:135:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  135 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_cancel_effect.cpp:173:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  173 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_cancel_effect.objs/contract_cancel_effect.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_cancel_effect
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_cancel_effect
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_cancel_effect
+[PASS] P1_contract_cancel_effect rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_observer.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_observer.objs/contract_observer.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_observer.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_observer.cpp:211:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  211 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_observer.cpp:6:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_observer.objs/contract_observer.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_observer
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_observer
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_observer
+[PASS] P1_contract_observer rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_progress.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_progress.objs/contract_progress.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_progress.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_progress.cpp:211:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  211 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/threadpool_backend.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_progress.cpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_progress.objs/contract_progress.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_progress
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_progress
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_progress
+[PASS] P1_contract_progress rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_shutdown.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_shutdown.objs/contract_shutdown.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_shutdown.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_shutdown.cpp:94:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+   94 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/threadpool_backend.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_shutdown.cpp:5:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_shutdown.objs/contract_shutdown.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_shutdown
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_shutdown
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_shutdown
+[PASS] P1_contract_shutdown rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_durability.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_durability.objs/contract_durability.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_durability.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_durability.cpp:90:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+   90 |         file.close();
+      |         ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/threadpool_backend.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_durability.cpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_durability.cpp:132:19: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  132 |         file.close();
+      |         ~~~~~~~~~~^~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_durability.objs/contract_durability.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_durability
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_durability
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_durability
+[PASS] P1_contract_durability rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/contract_backend_availability.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/contract_backend_availability.objs/contract_backend_availability.o
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_backend_availability.cpp: In function ‘int main()’:
+/home/jnhu/Source/Sluice/tests/package/consumers/contract_backend_availability.cpp:160:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  160 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/contract_backend_availability.cpp:6:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/contract_backend_availability.objs/contract_backend_availability.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/contract_backend_availability
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/contract_backend_availability
++ /tmp/sluice-v2-consumers-qn69dn7b/contract_backend_availability
+[PASS] P1_contract_backend_availability rc=0
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/w03_external_loop.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/w03_external_loop.objs/w03_external_loop.o
+/home/jnhu/Source/Sluice/tests/package/consumers/w03_external_loop.cpp: In function ‘int main(int, char**)’:
+/home/jnhu/Source/Sluice/tests/package/consumers/w03_external_loop.cpp:191:15: warning: ignoring returned value of type ‘sluice::Result<void>’, declared with attribute ‘nodiscard’ [-Wunused-result]
+  191 |     file.close();
+      |     ~~~~~~~~~~^~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/request.hpp:5,
+                 from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/async/async_io_context.hpp:3,
+                 from /home/jnhu/Source/Sluice/tests/package/consumers/w03_external_loop.cpp:8:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:82:18: note: in call to ‘sluice::Result<void> sluice::File::close()’, declared here
+   82 |     Result<void> close() noexcept;
+      |                  ^~~~~
+In file included from /tmp/sluice-v2-prefix-hox31hgw/include/sluice/file_resource.hpp:4:
+/tmp/sluice-v2-prefix-hox31hgw/include/sluice/result.hpp:145:33: note: ‘sluice::Result<void>’ declared here
+  145 | template <> class [[nodiscard]] Result<void> {
+      |                                 ^~~~~~~~~~~~
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/w03_external_loop.objs/w03_external_loop.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/w03_external_loop
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/w03_external_loop
++ /tmp/sluice-v2-consumers-qn69dn7b/w03_external_loop threadpool
+[PASS] P1_W03_EXTERNAL_LOOP_THREADPOOL (rc=0)
++ /tmp/sluice-v2-consumers-qn69dn7b/w03_external_loop uring
+[PASS] V2_P1_URING_EXPLICIT_NOT_SUPPORTED (rc=2: w03_uring: UNAVAILABLE (io_uring profile not built into this package))
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/odr_two_tu_a.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu.objs/odr_two_tu_a.o
++ g++ -std=c++20 -Wall -Wextra -I/tmp/sluice-v2-prefix-hox31hgw/include -DSLUICE_HAS_LIBURING -c /home/jnhu/Source/Sluice/tests/package/consumers/odr_two_tu_b.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu.objs/odr_two_tu_b.o
++ g++ -std=c++20 /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu.objs/odr_two_tu_a.o /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu.objs/odr_two_tu_b.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_async -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu
++ ldd /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu
++ /tmp/sluice-v2-consumers-qn69dn7b/odr_two_tu
+[PASS] V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT (public layouts agree across opposite macro views; context_bytes=96)
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_async_backend.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_async_backend.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_context_identity.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_context_identity.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_fail_fast.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_fail_fast.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_observer_protocol.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_observer_protocol.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_progress_source.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_progress_source.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_ready_sink.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_ready_sink.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_reference_ready_sink.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_reference_ready_sink.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_request_core.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_request_core.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_request_key.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_request_key.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_test_access.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_test_access.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_threadpool_backend.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_threadpool_backend.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_uring_backend.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_async_detail_uring_backend.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_detail_file_semantics.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_detail_file_semantics.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_detail_posix_retry.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_detail_posix_retry.hpp.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_detail_uring_submit.hpp.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_sluice_detail_uring_submit.hpp.o
+[PASS] NEGATIVE_V2_REMOVED_HEADERS_UNAVAILABLE []
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_derive_backend.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_derive_backend.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_construct_backend.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_construct_backend.o
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /tmp/sluice-v2-consumers-qn69dn7b/neg_unique_ptr_ctor.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/neg_unique_ptr_ctor.o
+[PASS] NEGATIVE_V2_SEAM_UNAVAILABLE []
+[PASS] NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED []
++ g++ -std=c++20 -I/tmp/sluice-v2-prefix-hox31hgw/include -c /home/jnhu/Source/Sluice/tests/package/consumers/negative_async_symbols_in_core.cpp -o /tmp/sluice-v2-consumers-qn69dn7b/negative_async_symbols_in_core.o
++ g++ /tmp/sluice-v2-consumers-qn69dn7b/negative_async_symbols_in_core.o -L/tmp/sluice-v2-prefix-hox31hgw/lib -lsluice_core -o /tmp/sluice-v2-consumers-qn69dn7b/negative.out
+[PASS] NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE link against core-only must fail with undefined async symbols
+[PASS] CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY []
+consumer build command log: /tmp/sluice-v2-consumers-qn69dn7b/consumer-build-commands.txt
+
+== v2 package gate summary ==
+  PASS  V2_B_PACKAGE_PREFIX_READY
+  FAIL  V2_B_PROVENANCE_RECORDED
+  PASS  V2_E_STANDALONE_HEADER_COMPILES
+  PASS  V2_E_ARCHIVE_BASELINE_RECORDED
+  PASS  V2_E_ARCHIVE_MATCHES_PROFILE
+  PASS  CLEAN_ROOM_CONSUMER_INCLUDES_ANGLE_BRACKET_ONLY
+  PASS  P0_W01_CORE_ONLY_CLEAN_ROOM
+  PASS  P1_w02_pipeline
+  PASS  P1_contract_request_lifetime
+  PASS  P1_contract_admission
+  PASS  P1_contract_cancel_effect
+  PASS  P1_contract_observer
+  PASS  P1_contract_progress
+  PASS  P1_contract_shutdown
+  PASS  P1_contract_durability
+  PASS  P1_contract_backend_availability
+  PASS  P1_W03_EXTERNAL_LOOP_THREADPOOL
+  PASS  V2_P1_URING_EXPLICIT_NOT_SUPPORTED
+  PASS  V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT
+  PASS  NEGATIVE_V2_REMOVED_HEADERS_UNAVAILABLE
+  PASS  NEGATIVE_V2_SEAM_UNAVAILABLE
+  PASS  NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED
+  PASS  NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE
+  PASS  CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY
+
+v2 package verification: 1 gate(s) FAILED

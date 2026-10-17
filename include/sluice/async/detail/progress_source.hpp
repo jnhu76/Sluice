@@ -172,7 +172,11 @@ class ProgressSource {
             }
 #endif
 
-            if (probe != nullptr && probe(probe_context)) {
+            if (probe != nullptr
+#if defined(SLUICE_PROGRESS_SOURCE_MUTANT_FINAL_PROBE_DROPPED)
+                && false
+#endif
+                && probe(probe_context)) {
                 return WakeReason::progress;
             }
 

@@ -1,0 +1,1 @@
+xmake f -m debug --liburing=y --toolchain=gcc --ccache=n --builddir=/tmp/rg6-build-debug-y -y

@@ -1,0 +1,2 @@
+$ xmake build -y shutdown_mut_m3_destructor_ignores_live_binding
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.094s[0m

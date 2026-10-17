@@ -1,0 +1,1 @@
+/tmp/rg6-build-release-y/linux/x86_64/release/sluice-copy --pipeline-depth 4 --buffer-size 65536 --workers 2 /tmp/rg6-scratch/app-fixtures/rand.bin /tmp/rg6-scratch/app-fixtures/out-pipeline.bin

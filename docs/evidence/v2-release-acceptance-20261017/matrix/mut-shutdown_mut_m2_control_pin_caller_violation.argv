@@ -1,0 +1,1 @@
+xmake build -y shutdown_mut_m2_control_pin_caller_violation

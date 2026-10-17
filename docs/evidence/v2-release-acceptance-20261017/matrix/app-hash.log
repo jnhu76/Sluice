@@ -1,0 +1,2 @@
+$ /tmp/rg6-build-release-y/linux/x86_64/release/sluice-hash /tmp/rg6-scratch/app-fixtures/rand.bin
+7e860ba437345687a7a999d959adbfe203ae79eb85529cfe004da8a794fe04b0  /tmp/rg6-scratch/app-fixtures/rand.bin

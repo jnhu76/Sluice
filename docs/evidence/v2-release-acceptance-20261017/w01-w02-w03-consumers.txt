@@ -1,0 +1,90 @@
+# W-01/W-02/W-03 consumer-oracle extraction from the recorded matrix cells
+# W-01 direct: direct_w01_consumer_probe (core-only link); W-02 bounded scope: request_scope_test(+_uring), threadpool_external_loop_test; W-03 external loop: uring_external_loop_test, uring_public_consumer_probe
+
+## cell debug-n
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.061s
+request_scope_test/request_scope_test .................................................... passed 0.971s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 2.922s
+
+## cell debug-y
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test request_scope_uring_test/request_scope_uring_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+running.test uring_external_loop_test/uring_external_loop_test
+running.test uring_public_consumer_probe/uring_public_consumer_probe
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.061s
+request_scope_uring_test/request_scope_uring_test ........................................ passed 0.048s
+uring_public_consumer_probe/uring_public_consumer_probe .................................. passed 0.014s
+uring_external_loop_test/uring_external_loop_test ........................................ passed 0.484s
+request_scope_test/request_scope_test .................................................... passed 1.073s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 3.160s
+
+## cell release-n
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.053s
+request_scope_test/request_scope_test .................................................... passed 0.874s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 2.654s
+
+## cell release-y
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test request_scope_uring_test/request_scope_uring_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+running.test uring_external_loop_test/uring_external_loop_test
+running.test uring_public_consumer_probe/uring_public_consumer_probe
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.055s
+request_scope_uring_test/request_scope_uring_test ........................................ passed 0.057s
+uring_public_consumer_probe/uring_public_consumer_probe .................................. passed 0.022s
+uring_external_loop_test/uring_external_loop_test ........................................ passed 0.481s
+request_scope_test/request_scope_test .................................................... passed 1.096s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 2.718s
+
+## cell asanubsan-n
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.090s
+request_scope_test/request_scope_test .................................................... passed 0.543s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 1.270s
+
+## cell asanubsan-y
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test request_scope_uring_test/request_scope_uring_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+running.test uring_external_loop_test/uring_external_loop_test
+running.test uring_public_consumer_probe/uring_public_consumer_probe
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.080s
+request_scope_uring_test/request_scope_uring_test ........................................ passed 0.100s
+uring_public_consumer_probe/uring_public_consumer_probe .................................. passed 0.039s
+request_scope_test/request_scope_test .................................................... passed 0.540s
+uring_external_loop_test/uring_external_loop_test ........................................ passed 0.523s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 1.278s
+
+## cell tsan-n
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.052s
+request_scope_test/request_scope_test .................................................... passed 0.537s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 1.292s
+
+## cell tsan-y
+running.test direct_w01_consumer_probe/direct_w01_consumer_probe
+running.test request_scope_test/request_scope_test
+running.test request_scope_uring_test/request_scope_uring_test
+running.test threadpool_external_loop_test/threadpool_external_loop_test
+running.test uring_external_loop_test/uring_external_loop_test
+running.test uring_public_consumer_probe/uring_public_consumer_probe
+direct_w01_consumer_probe/direct_w01_consumer_probe ...................................... passed 0.081s
+request_scope_uring_test/request_scope_uring_test ........................................ passed 0.078s
+uring_public_consumer_probe/uring_public_consumer_probe .................................. passed 0.038s
+request_scope_test/request_scope_test .................................................... passed 0.572s
+uring_external_loop_test/uring_external_loop_test ........................................ passed 0.527s
+threadpool_external_loop_test/threadpool_external_loop_test .............................. passed 1.292s

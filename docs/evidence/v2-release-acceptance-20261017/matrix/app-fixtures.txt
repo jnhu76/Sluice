@@ -1,0 +1,13 @@
+# app behavior acceptance fixtures
+fixture_rand_sha256=7e860ba437345687a7a999d959adbfe203ae79eb85529cfe004da8a794fe04b0  /tmp/rg6-scratch/app-fixtures/rand.bin
+fixture_lines_sha256=917964416298b0ec2390fc158b50ddbca45131cd4647b5fd672dfd309948cf27  /tmp/rg6-scratch/app-fixtures/lines.txt
+fixture_lines_count=2000
+app-copy-default cmp_exit=0
+app-copy-pipeline cmp_exit=0
+app-copy-syncall cmp_exit=0
+app-hash expected=7e860ba437345687a7a999d959adbfe203ae79eb85529cfe004da8a794fe04b0
+app-hash got=7e860ba437345687a7a999d959adbfe203ae79eb85529cfe004da8a794fe04b0 match=yes
+app-grep grep_count=111 app_count=111
+app-tail-last20 cmp_exit=0
+app-tail-follow saw_appended_exit=0
+app-copy-default-noliburing cmp_exit=0
