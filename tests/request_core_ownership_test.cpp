@@ -10,6 +10,7 @@
 #include <sluice/async/detail/uring_backend.hpp>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -18,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -413,6 +415,261 @@ bool domain_identities_are_not_reused_across_contexts(Tracker& t) {
     return true;
 }
 
+bool concurrent_identity_allocation_never_repeats(Tracker& t) {
+    // Production entry point under concurrency: every concurrently constructed
+    // context still holds a distinct domain value.
+    constexpr int kConcurrentContexts = 8;
+    std::vector<std::unique_ptr<AsyncIoContext>> contexts(kConcurrentContexts);
+    {
+        std::vector<std::thread> builders;
+        std::atomic<int> failures{0};
+        for (int i = 0; i < kConcurrentContexts; ++i) {
+            builders.emplace_back([&contexts, &failures, i] {
+                try {
+                    contexts[static_cast<std::size_t>(i)] = std::make_unique<AsyncIoContext>(
+                        detail::make_context(std::make_unique<RecordingBackend>()));
+                } catch (...) {
+                    failures.fetch_add(1, std::memory_order_relaxed);
+                }
+            });
+        }
+        for (std::thread& builder : builders)
+            builder.join();
+        t.check(failures.load() == 0, "concurrent context construction succeeds");
+    }
+    std::vector<ContextIdentity> live;
+    for (const auto& context : contexts) {
+        if (context == nullptr)
+            continue;
+        live.push_back(detail::TestAccess::context_core(*context)->context());
+    }
+    t.check(live.size() == static_cast<std::size_t>(kConcurrentContexts),
+            "every concurrently built context exposes its core");
+    for (std::size_t i = 0; i < live.size(); ++i) {
+        t.check(live[i].value != 0, "a concurrent identity is never the reserved value");
+        for (std::size_t j = i + 1; j < live.size(); ++j) {
+            t.check(live[i] != live[j],
+                    "concurrently allocated context identities never collide");
+        }
+    }
+
+    // Domain exhaustion under concurrency, driven at the injected cursor: the
+    // claims partition the remaining domain exactly, and the loser claims all
+    // observe the exhausted marker instead of a wrapped or repeated value.
+    {
+        constexpr int kRacers = 8;
+        constexpr std::uint64_t kRemaining = 3;
+        std::atomic<std::uint64_t> boundary{std::numeric_limits<std::uint64_t>::max() -
+                                            (kRemaining - 1)};
+        std::vector<std::vector<std::uint64_t>> claimed(kRacers);
+        std::vector<std::thread> racers;
+        for (int r = 0; r < kRacers; ++r) {
+            racers.emplace_back([&boundary, &claimed, r] {
+                claimed[static_cast<std::size_t>(r)].push_back(
+                    sluice::async::detail::claim_context_identity(boundary));
+            });
+        }
+        for (std::thread& racer : racers)
+            racer.join();
+
+        std::vector<std::uint64_t> domain_values;
+        std::size_t exhausted_claims = 0;
+        for (const auto& claims : claimed) {
+            for (const std::uint64_t value : claims) {
+                if (value == sluice::async::detail::kContextIdentityExhausted) {
+                    ++exhausted_claims;
+                } else {
+                    domain_values.push_back(value);
+                }
+            }
+        }
+        t.check(exhausted_claims == kRacers - kRemaining,
+                "every claim past the domain end observes the exhausted marker");
+        std::sort(domain_values.begin(), domain_values.end());
+        t.check(domain_values.size() == kRemaining &&
+                    domain_values[0] == std::numeric_limits<std::uint64_t>::max() - 2 &&
+                    domain_values[1] == std::numeric_limits<std::uint64_t>::max() - 1 &&
+                    domain_values[2] == std::numeric_limits<std::uint64_t>::max(),
+                "the remaining domain values are handed out exactly once each");
+        t.check(boundary.load() == sluice::async::detail::kContextIdentityExhausted,
+                "the raced boundary latches exhaustion instead of wrapping");
+        for (int i = 0; i < 4; ++i) {
+            t.check(sluice::async::detail::claim_context_identity(boundary) ==
+                        sluice::async::detail::kContextIdentityExhausted,
+                    "the latched domain never returns a live value again");
+        }
+    }
+    return true;
+}
+
+bool context_address_reuse_never_adopts_a_stale_identity(Tracker& t) {
+    auto file = open_temp_file(t, "sluice address reuse identity\n");
+    if (!file.has_value())
+        return false;
+
+    // Destroying and reconstructing same-sized contexts invites allocator
+    // address reuse; a stale identity must stay dead across every round no
+    // matter which addresses the heap hands back.
+    constexpr int kRounds = 8;
+    std::vector<RequestId> stale_ids;
+    std::vector<void*> observed_addresses;
+    for (int round = 0; round < kRounds; ++round) {
+        RequestId minted;
+        void* observed = nullptr;
+        {
+            AsyncIoContext context =
+                detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
+            observed = &context;
+            auto submitted = context.submit_read(
+                ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+            t.check(submitted.has_value(), "the zero-op request is accepted");
+            if (!submitted.has_value())
+                return false;
+            minted = submitted.value().id();
+            t.check(submitted.value().take_result().readiness == RequestReadiness::ready,
+                    "the zero-op request publishes inline before the context closes");
+        }
+        stale_ids.push_back(minted);
+        observed_addresses.push_back(observed);
+
+        AsyncIoContext successor =
+            detail::make_context(std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1}));
+        const ContextIdentity successor_identity =
+            detail::TestAccess::context_core(successor)->context();
+        for (std::size_t i = 0; i < stale_ids.size(); ++i) {
+            const detail::RequestKey key = detail::TestAccess::request_key_of(stale_ids[i]);
+            t.check(key.context != successor_identity,
+                    "a successor context never inherits a retired identity");
+            t.check(resolves_as(successor.lookup(stale_ids[i]), RequestReadiness::empty),
+                    "a stale identity resolves nowhere on the reused allocation site");
+            auto stale_cancel = successor.cancel(stale_ids[i]);
+            t.check(stale_cancel.has_value() &&
+                        stale_cancel.value() == CancelDisposition::not_found,
+                    "a stale identity cancels nothing on the reused allocation site");
+        }
+    }
+    bool any_address_reused = false;
+    for (std::size_t i = 0; i < observed_addresses.size(); ++i) {
+        for (std::size_t j = i + 1; j < observed_addresses.size(); ++j) {
+            any_address_reused = any_address_reused || observed_addresses[i] == observed_addresses[j];
+        }
+    }
+    if (!any_address_reused) {
+        t.skip("the allocator handed out distinct context addresses; the stale rules were "
+               "still enforced every round");
+    }
+    return true;
+}
+
+bool retired_slot_domain_rejects_submissions_before_accept(Tracker& t) {
+    auto file = open_temp_file(t, "sluice retired slot domain\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{2, 1});
+    ThreadPoolBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore* core = detail::TestAccess::context_core(ctx);
+
+    // Drive both slots to their final valid generation and let their last
+    // requests retire them: after this, admission must fail before any
+    // dispatch, with no residue and no way for a stale identity to act.
+    std::vector<RequestId> retired_ids;
+    for (std::uint32_t slot = 0; slot < raw->slot_capacity(); ++slot) {
+        core->force_generation_for_testing(
+            SlotIndex{slot},
+            sluice::async::detail::Generation{std::numeric_limits<std::uint64_t>::max()});
+    }
+    for (std::size_t i = 0; i < raw->slot_capacity(); ++i) {
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+        t.check(submitted.has_value(), "the final-generation request is accepted");
+        if (!submitted.has_value())
+            return false;
+        retired_ids.push_back(submitted.value().id());
+        t.check(submitted.value().take_result().readiness == RequestReadiness::ready,
+                "the final-generation request publishes inline");
+        // The inline publication's owed delivery pin retires through a
+        // progress pass, which is the release that reclaims the slot.
+        t.check(ctx.poll().has_value(), "the delivery pass retires the inline pin");
+    }
+    const CoreSnapshot retired = core->snapshot();
+    t.check(retired.retired_slots == raw->slot_capacity() && retired.free_slots == 0,
+            "every slot is permanently retired after its final generation");
+    t.check(retired.accepted_live == 0 && retired.reserved == 0 && retired.public_bindings == 0,
+            "the retired domain holds no live work");
+
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        auto rejected = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+        t.check(!rejected.has_value() && rejected.error().code == IoError::Code::would_block,
+                "the exhausted slot domain rejects submission before acceptance");
+    }
+    const CoreSnapshot after = core->snapshot();
+    t.check(same_core_facts(after, retired),
+            "the rejected submissions leave no reservation or borrow residue");
+    t.check(ctx.admission_open(), "the exhaustion rejection is an admission verdict, not a close");
+    for (const RequestId& stale : retired_ids) {
+        t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
+                "a retired identity never resolves against the exhausted domain");
+        auto stale_cancel = ctx.cancel(stale);
+        t.check(stale_cancel.has_value() && stale_cancel.value() == CancelDisposition::not_found,
+                "a retired identity cancels nothing");
+    }
+    return true;
+}
+
+#if defined(SLUICE_HAS_LIBURING)
+
+bool uring_retired_slot_domain_rejects_submissions_before_accept(Tracker& t) {
+    std::unique_ptr<UringAsyncBackend> backend;
+    try {
+        backend = std::make_unique<UringAsyncBackend>(UringConfig{2, 4});
+    } catch (...) {
+    }
+    if (!backend || !backend->available()) {
+        t.skip("io_uring is unavailable on this host");
+        return true;
+    }
+    auto file = open_temp_file(t, "sluice uring retired slot domain\n");
+    if (!file.has_value())
+        return false;
+
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    RequestCore* core = detail::TestAccess::context_core(ctx);
+
+    std::vector<RequestId> retired_ids;
+    for (std::uint32_t slot = 0; slot < core->capacity(); ++slot) {
+        core->force_generation_for_testing(
+            SlotIndex{slot},
+            sluice::async::detail::Generation{std::numeric_limits<std::uint64_t>::max()});
+    }
+    for (std::size_t i = 0; i < core->capacity(); ++i) {
+        auto submitted = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+        t.check(submitted.has_value(), "the final-generation io_uring request is accepted");
+        if (!submitted.has_value())
+            return false;
+        retired_ids.push_back(submitted.value().id());
+        t.check(submitted.value().take_result().readiness == RequestReadiness::ready,
+                "the final-generation io_uring request publishes inline");
+        t.check(ctx.poll().has_value(), "the delivery pass retires the inline pin");
+    }
+    const CoreSnapshot retired = core->snapshot();
+    t.check(retired.retired_slots == core->capacity() && retired.free_slots == 0,
+            "every io_uring slot is permanently retired after its final generation");
+
+    auto rejected = ctx.submit_read(ReadOp{NativeFileRef{*file}, nullptr, 0, 0});
+    t.check(!rejected.has_value() && rejected.error().code == IoError::Code::would_block,
+            "the exhausted io_uring slot domain rejects submission before any dispatch");
+    t.check(same_core_facts(core->snapshot(), retired),
+            "the rejected io_uring submission leaves no residue");
+    for (const RequestId& stale : retired_ids) {
+        t.check(resolves_as(ctx.lookup(stale), RequestReadiness::empty),
+                "a retired io_uring identity never resolves");
+    }
+    return true;
+}
+
+#endif
+
 // Drives the domain itself rather than UINT64_MAX contexts: the cursor is seeded at
 // its last value, so the boundary is reached deterministically in three claims.
 bool identity_domain_terminates_at_exhaustion(Tracker& t) {
@@ -569,9 +826,17 @@ int main() {
          capacity_handshake_happens_once_at_context_construction},
         {"domain_identities_are_not_reused_across_contexts",
          domain_identities_are_not_reused_across_contexts},
+        {"concurrent_identity_allocation_never_repeats",
+         concurrent_identity_allocation_never_repeats},
+        {"context_address_reuse_never_adopts_a_stale_identity",
+         context_address_reuse_never_adopts_a_stale_identity},
+        {"retired_slot_domain_rejects_submissions_before_accept",
+         retired_slot_domain_rejects_submissions_before_accept},
         {"identity_domain_terminates_at_exhaustion", identity_domain_terminates_at_exhaustion},
 #if defined(SLUICE_HAS_LIBURING)
         {"uring_context_carries_the_context_identity", uring_context_carries_the_context_identity},
+        {"uring_retired_slot_domain_rejects_submissions_before_accept",
+         uring_retired_slot_domain_rejects_submissions_before_accept},
 #endif
     };
     int failed = 0;
