@@ -662,7 +662,7 @@ int main() {
         cases.push_back(p);
     }
     // Opt-in: a default rebuild reproduces the frozen case list exactly.
-    if (std::getenv("G0_DIAGNOSTICS") != nullptr) {
+    if (std::getenv("SLUICE_BENCH_DIAGNOSTICS") != nullptr) {
         PipelineParams p;
         p.backend = &threadpool;
         p.block_size = 4096;

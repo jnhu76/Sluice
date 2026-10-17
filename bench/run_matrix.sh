@@ -22,7 +22,7 @@ stage="${4:-all}"
 suffix="${5:-}"
 mode="release"
 
-reference_dir="${G0_REFERENCE_DIR:-docs/evidence/g0-403-performance-baseline-20261015/raw}"
+reference_dir="${SLUICE_BENCH_REFERENCE_DIR:-docs/evidence/g0-403-performance-baseline-20261015/raw}"
 checker="$root/bench/check_run.py"
 
 if [ -z "$suffix" ] && [[ "$(realpath -m "$out")" == "$root"/docs/evidence/* ]]; then
@@ -33,15 +33,15 @@ fi
 
 mkdir -p "$out/raw" "$out/logs"
 
-export G0_WARMUP="$warmup"
-export G0_MEASURED="$measured"
+export SLUICE_BENCH_WARMUP="$warmup"
+export SLUICE_BENCH_MEASURED="$measured"
 
-# G0_BIN_DIR is a test seam for bench/runner_failure_control.sh, which points it
+# SLUICE_BENCH_BIN_DIR is a test seam for bench/runner_failure_control.sh, which points it
 # at deliberately failing shims; a real matrix run must leave it unset.
-bin() { printf '%s/%s' "${G0_BIN_DIR:-build-bench-$1/linux/x86_64/$mode}" "$2"; }
+bin() { printf '%s/%s' "${SLUICE_BENCH_BIN_DIR:-build-bench-$1/linux/x86_64/$mode}" "$2"; }
 
 provenance() {
-    echo "# g0 matrix run provenance (stage=$stage suffix=$suffix)"
+    echo "# bench matrix run provenance (stage=$stage suffix=$suffix)"
     echo "started=$(date -Is)"
     echo "git_head=$(git rev-parse HEAD)"
     echo "git_status_dirty=$(git status --porcelain | wc -l)"
@@ -70,8 +70,8 @@ run_case() {
         | tee -a "$out/matrix-run.log"
     date -Is | tee -a "$out/matrix-run.log"
     rc=0
-    G0_WARMUP="$run_warmup" G0_MEASURED="$run_measured" \
-        G0_JSONL="$out/raw/$output.jsonl" "$b" \
+    SLUICE_BENCH_WARMUP="$run_warmup" SLUICE_BENCH_MEASURED="$run_measured" \
+        SLUICE_BENCH_JSONL="$out/raw/$output.jsonl" "$b" \
         >"$out/logs/$output.log" 2>&1 || rc=$?
     echo "exit=$rc records=$(wc -l <"$out/raw/$output.jsonl" 2>/dev/null || echo 0)" \
         | tee -a "$out/matrix-run.log"
@@ -101,7 +101,7 @@ if [ "$stage" = "diagnostics" ]; then
 # Post-hoc attribution diagnostics (opt-in case set): the two capacity
 # isolations and the completion-order discriminator, at the full repetition
 # count. The ring binary carries both backends.
-G0_DIAGNOSTICS=1 run_case "w02 diagnostics" ring bench_w02_pipeline \
+SLUICE_BENCH_DIAGNOSTICS=1 run_case "w02 diagnostics" ring bench_w02_pipeline \
     "w02-diagnostics$suffix" diagnostics "$reference_dir/w02-diagnostics.jsonl" \
     "$warmup" "$measured" 19
 elif [ "$stage" = "all" ] || [ "$stage" = "measured" ]; then

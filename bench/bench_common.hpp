@@ -339,7 +339,7 @@ inline std::string json_escape(const std::string& in) {
 
 inline std::FILE* jsonl_stream() {
     static std::FILE* stream = [] {
-        const char* path = std::getenv("G0_JSONL");
+        const char* path = std::getenv("SLUICE_BENCH_JSONL");
         if (path == nullptr || *path == '\0') {
             return static_cast<std::FILE*>(nullptr);
         }
@@ -431,29 +431,29 @@ inline double clock_overhead_ns(std::size_t iterations = 200000) {
 struct EnvConfig {
     std::size_t warmup = 2;
     std::size_t measured = 7;
-    std::string tmp_dir = "/tmp/sluice-g0-bench";
+    std::string tmp_dir = "/tmp/sluice-bench";
     std::string disk_dir;
     bool include_disk = true;
 };
 
 inline EnvConfig env_config() {
     EnvConfig cfg;
-    if (const char* v = std::getenv("G0_WARMUP")) {
+    if (const char* v = std::getenv("SLUICE_BENCH_WARMUP")) {
         cfg.warmup = static_cast<std::size_t>(std::strtoul(v, nullptr, 10));
     }
-    if (const char* v = std::getenv("G0_MEASURED")) {
+    if (const char* v = std::getenv("SLUICE_BENCH_MEASURED")) {
         cfg.measured = static_cast<std::size_t>(std::strtoul(v, nullptr, 10));
     }
-    if (const char* v = std::getenv("G0_TMP_DIR")) {
+    if (const char* v = std::getenv("SLUICE_BENCH_TMP_DIR")) {
         cfg.tmp_dir = v;
     }
-    if (const char* v = std::getenv("G0_DISK_DIR")) {
+    if (const char* v = std::getenv("SLUICE_BENCH_DISK_DIR")) {
         cfg.disk_dir = v;
     } else {
         const char* home = std::getenv("HOME");
-        cfg.disk_dir = home != nullptr ? std::string(home) + "/.cache/sluice-g0-bench" : "";
+        cfg.disk_dir = home != nullptr ? std::string(home) + "/.cache/sluice-bench" : "";
     }
-    if (const char* v = std::getenv("G0_SKIP_DISK")) {
+    if (const char* v = std::getenv("SLUICE_BENCH_SKIP_DISK")) {
         cfg.include_disk = v[0] == '0';
     }
     cfg.include_disk = cfg.include_disk && !cfg.disk_dir.empty();
@@ -480,7 +480,7 @@ inline std::vector<std::size_t> rotation_order(std::size_t count, std::size_t ro
 }
 
 inline bool case_selected(const std::string& case_id) {
-    const char* filter = std::getenv("G0_CASE_FILTER");
+    const char* filter = std::getenv("SLUICE_BENCH_CASE_FILTER");
     if (filter == nullptr || *filter == '\0') {
         return true;
     }
