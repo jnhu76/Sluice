@@ -88,6 +88,41 @@ void wait_gate_paused(PauseGate& gate) {
     }
 }
 
+// Causal witness that the gated worker's completion signal has completed.
+// ProgressSource::signal() advances the progress token and writes (or
+// saturates) the notification fd inside one mutex hold, and the worker's
+// publication enqueue precedes its signal by program order, so a snapshot
+// differing from a baseline recorded while the worker was still gated
+// observes both a completed signal and an enqueued publication. Resuming the
+// paused owner before this returns, or baselining the token after release,
+// would lose the interleaving under test. The bound only reports failure; it
+// is never the synchronization.
+constexpr auto kWorkerSignalWatchdog = std::chrono::milliseconds{10000};
+
+bool wait_worker_completion_signal(AsyncIoContext& ctx,
+                                   detail::ProgressSource::Token baseline) {
+    const auto deadline = std::chrono::steady_clock::now() + kWorkerSignalWatchdog;
+    for (;;) {
+        const auto token = detail::TestAccess::context_progress_token(ctx);
+        if (token.progress != baseline.progress ||
+            token.progress_exhaustion != baseline.progress_exhaustion) {
+            return true;
+        }
+        if (std::chrono::steady_clock::now() >= deadline) {
+            std::fprintf(stderr,
+                         "worker completion signal missing after %lldms: token %llu/%llu -> "
+                         "%llu/%llu\n",
+                         static_cast<long long>(kWorkerSignalWatchdog.count()),
+                         static_cast<unsigned long long>(baseline.progress),
+                         static_cast<unsigned long long>(baseline.progress_exhaustion),
+                         static_cast<unsigned long long>(token.progress),
+                         static_cast<unsigned long long>(token.progress_exhaustion));
+            return false;
+        }
+        std::this_thread::yield();
+    }
+}
+
 void resume_gate(PauseGate& gate) noexcept {
     gate.resume.store(true, std::memory_order_release);
     gate.resume.notify_all();
@@ -349,12 +384,15 @@ bool r4_worker_completion_signal_before_final_recheck_is_caught() {
     wait_gate_paused(gate);
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
+    const auto token_before_release = detail::TestAccess::context_progress_token(ctx);
     read.release();
+    const bool worker_signaled = wait_worker_completion_signal(ctx, token_before_release);
     resume_gate(gate);
     driver.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
-    const bool ok = is_progress(result, 1) && prepark.load() == 0 && read.request.ready();
+    const bool ok = worker_signaled && is_progress(result, 1) && prepark.load() == 0 &&
+                    read.request.ready();
     read.request.discard();
     return ok;
 }
@@ -846,15 +884,12 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
         return true;
     }();
 
+    const auto token_before_release = detail::TestAccess::context_progress_token(ctx);
     read.release();
+    const bool worker_signaled = wait_worker_completion_signal(ctx, token_before_release);
     ctx.acknowledge_progress_control();
-    std::optional<AsyncIoContext::ProgressWaitOutcome> final_r;
-    for (int i = 0; i < 1000; ++i) {
-        final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
-        if (is_progress(final_r, 1))
-            break;
-    }
-    return ok && is_progress(final_r, 1) && read.request.ready() &&
+    const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+    return ok && worker_signaled && is_progress(final_r, 1) && read.request.ready() &&
            (read.request.discard(), true);
 }
 
@@ -961,19 +996,19 @@ bool saturated_notification_still_wakes_parked_owner() {
     detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
     detail::TestAccess::context_saturate_progress_notification(ctx);
-    if (!notification_fd_readable(interest.fd))
-        return false;
+    const bool saturated_readable = notification_fd_readable(interest.fd);
 
+    const auto token_before_release = detail::TestAccess::context_progress_token(ctx);
     read.release();
-    const bool readable_after_saturated_signal =
-        notification_fd_readable(interest.fd);
+    const bool worker_signaled = wait_worker_completion_signal(ctx, token_before_release);
+    const bool readable_after_saturated_signal = notification_fd_readable(interest.fd);
     resume_gate(gate);
     driver.join();
     detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
 
-    const bool ok =
-        readable_after_saturated_signal && is_progress(result, 1) && prepark.load() == 1 &&
-        read.request.ready();
+    const bool ok = saturated_readable && worker_signaled &&
+                    readable_after_saturated_signal && is_progress(result, 1) &&
+                    prepark.load() == 1 && read.request.ready();
     read.request.discard();
     return ok;
 }
