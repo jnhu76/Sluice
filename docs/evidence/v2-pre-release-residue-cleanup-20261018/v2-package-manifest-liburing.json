@@ -1,9 +1,9 @@
 {
   "FORMAT": "v2-package-manifest-v1",
   "PROFILE": "v2-liburing",
-  "VERIFICATION_HEAD": "5128013502378fa40f0b83ea302221e70ae7b7e6",
-  "VERIFICATION_HEAD_DIRTY": true,
-  "GENERATED_UTC": "2026-10-18T12:50:56.136789+00:00",
+  "VERIFICATION_HEAD": "8b78a2ce20c4fd0d216eab2c532aae411f708ef6",
+  "VERIFICATION_HEAD_DIRTY": false,
+  "GENERATED_UTC": "2026-10-18T12:51:43.436401+00:00",
   "COMPILER": "g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
   "ARCH": "x86_64",
   "KERNEL": "6.18.54.1-microsoft-standard-WSL2",
@@ -100,8 +100,8 @@
     },
     {
       "name": "V2_B_PROVENANCE_RECORDED",
-      "ok": false,
-      "detail": "(head 512801350237, worktree_clean=False, non-output dirt=['?? docs/evidence/v2-pre-release-residue-cleanup-20261018/v2-package-manifest-noliburing-archive-baseline.json', '?? docs/evidence/v2-pre-release-residue-cleanup-20261018/v2-package-manifest-noliburing.json'])"
+      "ok": true,
+      "detail": "(head 8b78a2ce20c4, worktree_clean=True, non-output dirt=[])"
     },
     {
       "name": "V2_E_STANDALONE_HEADER_COMPILES",
