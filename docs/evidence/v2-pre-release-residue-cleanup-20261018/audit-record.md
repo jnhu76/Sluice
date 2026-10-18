@@ -157,10 +157,36 @@ Baseline (`2171d37f`, clean tree) and branch head (`8c2170bb`, clean tree):
   from tree and prefix), `NEGATIVE_V2_SEAM_UNAVAILABLE` (seam construction
   from installed headers fails with pinned diagnostics),
   `NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE`, ODR macro-independence all PASS.
-  The recorded manifests next to this record were produced at `8b78a2ce`
-  (a documentation-only follow-on of the battery head `8c2170bb`: the
-  intervening commits add evidence files only, so the verified C++/build
-  content is identical).
+  The recorded manifests were produced by two sequential verifier runs and
+  pin two different heads (fields read from the JSON, not inferred):
+
+  ```text
+  MANIFEST_N_HEAD = 5128013502378fa40f0b83ea302221e70ae7b7e6
+  MANIFEST_Y_HEAD = 8b78a2ce20c4fd0d216eab2c532aae411f708ef6
+  MANIFEST_N_DIRTY = False
+  MANIFEST_Y_DIRTY = False
+  MANIFEST_N_GATES = 24/24 PASS
+  MANIFEST_Y_GATES = 24/24 PASS
+  V2_PACKAGE_HEADERS = 11 (both profiles, equal to the libraries.lua allowlist)
+  ```
+
+  The noliburing run verified the tree at `51280135` (clean; its outputs
+  are the two noliburing files). The first liburing attempt, still at
+  `51280135`, failed the `V2_B_PROVENANCE_RECORDED` gate — the untracked
+  noliburing outputs made the tree dirty as non-output dirt — and was
+  rerun after those outputs were committed in `8b78a2ce`; the failed
+  intermediate manifest is visible in the `8b78a2ce` tree and the passing
+  rerun (clean at `8b78a2ce`) replaced it in `bccd8131`. Both heads are
+  Markdown-only follow-ons of the battery head `8c2170bb` (`8c2170bb..51280135`
+  changes `docs/README.md`, the ledger and this record only), so the
+  verified C++/build content is identical to the battery head. From each
+  manifest head to the final PR head `0cc89df0` the changed files are
+  Markdown/JSON under `docs/` and `.github/` plus one comment-only source
+  edit (`tests/shutdown_lifecycle_test.cpp` in `861e1f26`, the `#483`
+  citation drop), so no executable token, target, oracle or package-surface
+  change separates a verification head from the final head and the 24/24
+  receipts remain valid there; the final-head token check below covers the
+  whole branch.
 - `python3 scripts/check_cpp_comment_authority.py .` — clean (branch head).
 
 ## Validation battery (branch head `8c2170bb`)
@@ -204,22 +230,27 @@ filters and every job passed on the PR head:
 | Linux debug build + tests | PASS |
 | Linux release build + tests | PASS |
 
-## Independent review
+## Review passes (in-session)
 
 Two adversarial review passes were run over the branch (architecture /
 C++ / concurrency, and documentation / release accuracy). The originally
 planned independent-context reviewer agents could not be launched: the
 hosting account's subagent quota was exhausted at review time (reset
 2026-10-19 00:51). Both passes were therefore executed in-session as
-separate structured checklists against the branch tree, and the PR is left
-OPEN for owner review — the deviation is disclosed here rather than
-papered over.
+separate structured checklists against the branch tree — they are review
+passes, not independent-context reviews — and the PR is left
+OPEN for owner review; the deviation is disclosed here rather than
+papered over. A separate-context agent review was later obtained and is
+recorded in the next section.
 
 Reviewer A (architecture) — **PASS_WITH_NOTES**:
 
 - Diff-class proof: comment-stripped (whitespace-normalized) sources are
-  token-identical to master for all eight non-Markdown files; root spec,
-  AGENTS.md and CHANGELOG.md byte-identical; no target, identifier, oracle,
+  token-identical to master for all non-Markdown files modified at the
+  review-time head — eight; the ninth (`tests/shutdown_lifecycle_test.cpp`)
+  arrives with the review fix below and is covered by the final-head
+  token check in the reconciliation section. Root spec, AGENTS.md and
+  CHANGELOG.md byte-identical; no target, identifier, oracle,
   assertion, `add_tests` registration or public-surface change.
 - Reworded-comment correspondence re-derived from source: the shipped
   backends' executor handoff is `RequestCore::claim_execution`
@@ -261,6 +292,95 @@ Reviewer B (documentation / release) — **PASS_WITH_NOTES**:
 No P0/P1 findings; both P2-class findings were fixed directly and
 re-verified. The final review heads include those fixes (`861e1f26` and
 the CONTRIBUTING fix commit).
+
+## Independent review (separate-context agent, 2026-10-18)
+
+A separate-context reviewer agent (fresh context; read-only adversarial
+instructions; no access to the author's working conclusions beyond the
+repository itself) reviewed the PR at head `0cc89df0`. It derived its own
+evidence: full PR diff and per-commit file lists, its own comment-stripped
+token comparison, manifest JSON fields, the allowlist enumeration, CLI
+parser reads, link checks, `gh` CI state, and SHA ancestry. Verdict:
+**REVISE** — the diff class, package boundary, manifest genuineness,
+interval equivalence, append-only ledger and documentation claims all
+survived its counterexample attempts; the required revisions were two
+sentences inside this record.
+
+Findings and dispositions:
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| F1 | P1 | This record's sentence "The recorded manifests next to this record were produced at `8b78a2ce`" was false for the noliburing manifest (its own `VERIFICATION_HEAD` is `51280135`, and `8b78a2ce` contains it); the parenthetical "intervening commits add evidence files only" also glossed two Markdown follow-ons | Fixed in this reconciliation commit (provenance block above) |
+| F2 | P2 | The failed first liburing verifier run (`V2_B_PROVENANCE_RECORDED` false at `51280135`, non-output dirt) was discoverable only from Git history; the record never disclosed it | Fixed in this reconciliation commit (provenance block above) |
+| F3 | P3 | The section title "Independent review" overstated two in-session passes | Fixed: retitled "Review passes (in-session)"; this section now holds the agent review |
+| F4 | P3 | Reviewer A's "all eight non-Markdown files" was stale at the final head (nine) | Fixed above (eight at the review head, ninth identified) |
+| F5 | P3 | PR body said "CI jobs are the same three" while four check entries report | PR body clarified (three workflow jobs; the build job is a debug/release matrix) |
+
+The reviewer's stated final condition: after the two-sentence provenance
+amendment (and optionally the P3 tweaks) the PR is a clean PASS.
+
+Post-amendment confirmation round (2026-10-18, same separate-context
+agent, working-tree amendment at HEAD `0cc89df0`): items 1–4 above
+confirmed item-by-item against the reviewer's own git/JSON evidence
+(per-manifest heads and the failed-run reconstruction, the retitle, the
+eight/ninth recount, and every number in the reconciliation block,
+including the correct 9 commits where the reviewer's round-1 count of 10
+was its own miscount, acknowledged by it). The round raised two new
+findings on the amendment itself: NEW-1 (P2 — the F5 cell above asserted
+a PR-body clarification that had not yet been performed) and NEW-2 (P3 —
+this section's closing sentence promised a confirmation record "below"
+that did not exist). Fixes applied before this commit was finalized: the
+PR body was edited (REST PATCH, 2026-10-18T14:41:41Z) to state the three
+workflow jobs and the debug/release matrix, making the F5 disposition
+true as written; and this paragraph replaces the dangling pointer. A
+closing confirmation round over exactly these two fixes follows; its
+outcome is the only content added to this record after that round.
+
+Closing-round outcome (2026-10-18): both fixes re-verified — the live PR
+body shows the matrix heading at `updated_at` 2026-10-18T14:41:41Z with
+the old string gone, and the F5 cell and the replaced paragraph are true
+as written; three fresh counterexample attempts failed; no new
+inaccuracy. Verdict, quoted verbatim from the reviewer's closing round:
+"PASS — at 0cc89df0 with this working-tree amendment committed, PR #549
+is approved: every executable-preservation, provenance and documentation
+claim has survived three independent adversarial verification rounds, all
+identified inaccuracies are fixed and re-verified true as written, and no
+P0/P1/P2 finding remains open." This closing-round paragraph is the only
+content added after that round, as announced above.
+
+## Final-head reconciliation (2026-10-18)
+
+Counts at head `0cc89df0` (from `git diff --name-status` and `gh pr diff`,
+cross-checked against the agent reviewer's independent recount):
+
+```text
+CHANGED_FILES = 24 (19 modified, 5 added, 0 deleted)
+NON_MARKDOWN_MODIFIED = 9 (7 C++ tests, 2 xmake Lua)
+CPP_FILES = 7   XMAKE_FILES = 2   ADDED_JSON = 4
+CHANGED_MARKDOWN = 11 (10 modified + this record, added)
+COMMITS_AT_0cc89df0 = 9 (this reconciliation commit makes it 10)
+```
+
+Equivalence at the final head, re-derived after all review fixes:
+comment-stripped (C++ `//`/`/* */`, Lua `--`/`--[[ ]]`) and
+whitespace-normalized sources are token-identical to master `2171d37f`
+for all nine non-Markdown files; `include/`, `src/`, `scripts/`,
+`formal/`, `bench/` and the untouched xmake files have zero diff; the
+installed-header allowlist is unchanged and resolves to the same 11
+headers the manifests record. Therefore production source, build graph,
+test oracles, verifier logic and package surface are all unchanged from
+master, and the local battery at `8c2170bb` plus the two manifest runs
+remain valid evidence at the final head modulo the disclosed comment-only
+delta.
+
+CI at the final head: all four check entries passed at `0cc89df0`
+(C++ comment authority guard, Package verifier surface self-tests,
+Linux debug build + tests, Linux release build + tests; the workflow
+defines three jobs, the build job being a debug/release matrix). This
+reconciliation commit touches only evidence Markdown under `docs/`,
+which the `ci.yml` path filters do not trigger on; the merge-readiness
+argument for the new head therefore rests on the passing checks at
+`0cc89df0` plus the verified equivalence, not on a fresh CI run.
 
 ## Release-gate impact
 
