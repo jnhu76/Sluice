@@ -157,8 +157,9 @@ canonical scope/context fail-fast obligations remain applicable.
 
 `--workers` now configures actual ThreadPoolBackend I/O workers (1..64). Previously
 it configured Scheduler workers while the backend used its default four workers.
-The injected-backend API validates this compatibility parameter but leaves physical
-execution configuration with the supplied backend. The default path retains a
+The value flows into the context through the public
+`make_threadpool_context(ThreadPoolConfig{...})` factory — backend construction is
+not caller-injectable on the v2 surface. The default path retains a
 64-request backend bound and a tracking capacity equal to pipeline depth.
 
 ## Version C — atomicity and durability scope (default output mode)

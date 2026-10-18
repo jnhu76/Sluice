@@ -23,9 +23,8 @@ Repository working rules              AGENTS.md
   conformance ledger and the v1 formal evidence map from the active tree —
   Git history retains them.
 - **[v2 conformance ledger](roadmap/v2-conformance.md)** tracks which v2
-  obligations have evidence and which do not, the open implementation items
-  (public-surface contraction, host removal, known evidence gaps) and the
-  release gate. Adopting the target does not certify the code; nothing in
+  obligations have evidence and which do not, any remaining implementation
+  items, and the release gate. Adopting the target does not certify the code; nothing in
   this repository is VERIFIED without a recorded evidence entry there.
 
 ## Reading order

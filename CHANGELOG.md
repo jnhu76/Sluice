@@ -30,9 +30,9 @@ obligation, not a rollback lever.
 - **Direct file I/O with no runtime.** `sluice/file_resource.hpp` owns the
   native resource (`File`, open flags, `FileInfo`, identity comparison);
   `sluice/blocking/file.hpp` provides the completed-return blocking
-  operations `read_at`/`write_at`, positional `read`/`write`,
-  `sync_data`/`sync_all`, `file_info`, `size`, `resize`, and the
-  short-I/O compositions `read_exact*`/`write_all*`. Direct execution
+  operations — explicit-offset `read_at`/`write_at`, current-offset
+  `read`/`write`, `sync_data`/`sync_all`, `file_info`, `size`, `resize` —
+  and the short-I/O compositions `read_exact*`/`write_all*`. Direct execution
   needs no context, worker or request table, and `sluice_core` links and
   runs standalone.
 
