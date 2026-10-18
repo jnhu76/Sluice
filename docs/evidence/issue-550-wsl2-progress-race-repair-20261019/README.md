@@ -148,8 +148,10 @@ The repaired saturated scenario proves, in order:
   (b) `saturate_notification_for_test` set the counter to the eventfd maximum
   `2^64-2` after that drain; (c) `HostInterest` only polls, never reads, and
   no `acknowledge_notification` runs before resume; therefore the worker's
-  write of 1 would exceed the eventfd maximum and the kernel deterministically
-  returns `EAGAIN` on the non-blocking fd; (d) the token witness proves that
+  write of 1 onto `2^64-2` fails the kernel's strict-inequality admission
+  check (a write succeeds only while the resulting counter stays strictly
+  below `2^64-1`, so `2^64-2 + 1` is rejected) and the non-blocking fd
+  deterministically returns `EAGAIN`; (d) the token witness proves that
   write completed inside the signal critical section.
 - **EAGAIN handling**: the branch is exercised (mutant M3 below shows the
   execution passes through it and that mishandling it is loud), and its
@@ -243,7 +245,11 @@ existing `TestAccess` seam and replaces no production mechanism.
   in unrelated subtests of this file (r2/r3/r5/r8/r10/r13/r15/f1) whose
   trigger conditions are environmental failures never observed in #550's
   campaigns; they are out of this slice's confirmed-defect scope and left for
-  the owner to schedule.
+  the owner to schedule. Likewise pre-existing (identical on master, flagged
+  in review): `RequestPublicationDrain`'s tail `discard()` fail-fasts if a
+  worker never reaches its enqueue, and the f1 token spin is unbounded and
+  compares only `.progress` — unlike the bounded two-field witness added
+  here.
 - The production no-lost-wake protocol's full correctness is not re-proven
   here; the ProgressSource model and the existing oracle suites remain the
   standing evidence.

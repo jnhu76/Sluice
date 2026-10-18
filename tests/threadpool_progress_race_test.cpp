@@ -88,15 +88,14 @@ void wait_gate_paused(PauseGate& gate) {
     }
 }
 
-// Causal witness that the gated worker's completion signal has completed.
-// ProgressSource::signal() advances the progress token and writes (or
-// saturates) the notification fd inside one mutex hold, and the worker's
-// publication enqueue precedes its signal by program order, so a snapshot
-// differing from a baseline recorded while the worker was still gated
-// observes both a completed signal and an enqueued publication. Resuming the
-// paused owner before this returns, or baselining the token after release,
-// would lose the interleaving under test. The bound only reports failure; it
-// is never the synchronization.
+// Causal witness that the gated worker's completion signal has completed;
+// the sufficiency argument (single mutex hold, enqueue-before-signal) is in
+// docs/evidence/issue-550-wsl2-progress-race-repair-20261019. Misuse that
+// would invalidate the interleaving under test: baselining the token after
+// release, resuming the paused owner before this returns, or letting any
+// other progress-token producer (zero-op submission, cancel, a second
+// worker) become reachable in the scenario. The bound only reports failure;
+// it is never the synchronization.
 constexpr auto kWorkerSignalWatchdog = std::chrono::milliseconds{10000};
 
 bool wait_worker_completion_signal(AsyncIoContext& ctx,
