@@ -56,7 +56,9 @@ else under `docs/` is a retained historical record or a dated evidence record
 kept for provenance: `docs/adr/` holds the adopted and superseded ADRs,
 `docs/archive/` the archived records, and `docs/evidence/` only the dated
 evidence records that active ledger rows or tooling still cite by path
-(`pr-b-boundary-contraction-20261016/`, `issue-524-requestcore-convergence-20261015/`,
+(`v2-release-acceptance-20261017/`, `repo-hygiene-contraction-20261017/`,
+`issue-528-release-doc-closeout-20261018/`, `pr-b-boundary-contraction-20261016/`,
+`issue-524-requestcore-convergence-20261015/`,
 `f6-final-correspondence-20261014/`, `f2-authority-contraction-20261013/`,
 `g0-403-performance-baseline-20261015/`). Older campaign records — the Phase
 M/F campaign, `docs/review/`, the F0/F3/F4/F5 experiments and the retired

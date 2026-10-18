@@ -256,7 +256,10 @@ re-worded in place. Summary:
 
 F6-F16 asked for explicit dispositions of two internal seams that no public
 claim depends on. Both were re-derived from source at master `9f22bde6`,
-not copied from the F2 record; no production code changed.
+not copied from the F2 record; no production code changed. The full #528
+closeout record — CHANGELOG curation (F6-F05), the status reconciliation
+above, the validation battery and both independent-review verdicts — is
+`docs/evidence/issue-528-release-doc-closeout-20261018/closeout-record.md`.
 
 ### `RequestCore::acquire_execution` — PROTOCOL_TEST_ONLY
 
@@ -293,8 +296,8 @@ READY_SINK_PRODUCTION_BINDING = none attached: no production call site
     — routing_sink_ ? *routing_sink_ : sink_)
 READY_SINK_TEST_BINDING = TestAccess::context_set_ready_sink
     (include/sluice/async/detail/test_access.hpp:31, uninstalled),
-    serialized against other TestAccess setters by the context access
-    mutex; exercised by tests/threadpool_external_loop_test.cpp and
+    serialized against context operations by the context access mutex;
+    exercised by tests/threadpool_external_loop_test.cpp and
     tests/threadpool_progress_pass_bound_test.cpp
 READY_SINK_REBIND_SUPPORTED = no production rebind path exists (no
     production caller). Unlike attach_progress_port, the routing pointer

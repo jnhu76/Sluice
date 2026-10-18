@@ -86,7 +86,10 @@ obligation, not a rollback lever.
 - **Four reference applications on the v2 surfaces.** `sluice-copy`,
   `sluice-tail`, `sluice-grep` and `sluice-hash` are retained and now
   build on the v2 execution forms (request path, `RequestScope`, or
-  direct blocking I/O) with bounded work and explicit progress.
+  direct blocking I/O) with bounded work and explicit progress. CLI
+  note: `--workers` remains only on `sluice-copy` (its thread-pool
+  workers); `sluice-tail`, `sluice-grep` and `sluice-hash` reject the
+  flag — they execute on the caller thread or an app-owned driver.
 
 - **Request handles carry public identity; rebuild required.** `Request<T>`
   stores the public `RequestId` (context identity + slot + generation) and
