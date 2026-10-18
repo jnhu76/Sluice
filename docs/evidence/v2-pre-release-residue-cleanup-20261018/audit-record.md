@@ -191,14 +191,18 @@ verified by inspection of `git diff master...HEAD`), and the deterministic
 suites above cover the compiled artifacts of every touched file. No TLA+
 re-run: no model source or modeled transition changed.
 
-## CI expectation
+## CI expectation and observed verdicts
 
-The PR touches `tests/**`, `xmake/**`, `scripts/**` (none) and root/docs
-Markdown. `.github/workflows/ci.yml` triggers on the `tests/**` and
-`xmake/**` path filters, so all three jobs (comment-authority guard,
-package-verifier self-tests, debug+release builds with `xmake test`) are
-expected to run on the PR; the record will be updated with the observed CI
-verdicts. Local equivalents of all three jobs pass as recorded above.
+The PR (#549) touches `tests/**`, `xmake/**` and root/docs Markdown.
+`.github/workflows/ci.yml` triggered on the `tests/**` and `xmake/**` path
+filters and every job passed on the PR head:
+
+| Job | Verdict |
+|---|---|
+| C++ comment authority guard (self-tests + scan) | PASS |
+| Package verifier surface self-tests | PASS |
+| Linux debug build + tests | PASS |
+| Linux release build + tests | PASS |
 
 ## Independent review
 
