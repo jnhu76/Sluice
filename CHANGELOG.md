@@ -15,6 +15,8 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-10-19
+
 **v2 re-architecture (breaking).** This is the first release line on the
 v2 Architecture and Contract (`docs/explicit-io-contract.md`, revision
 v2-r1). Owner decision D3 (root §23.4) authorizes these breaking changes
