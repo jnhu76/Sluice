@@ -106,7 +106,7 @@ Unknown authority, wake, failure, or capacity semantics block implementation.
 
 ## Tests and evidence
 
-The minimum Linux Clang Debug baseline is documented in `AGENTS.md`. Additional gates depend on change class and may include:
+The testing discipline (smallest sufficient deterministic set during implementation, full configuration matrix at slice/phase boundaries and before merge) is documented in `AGENTS.md`. Additional gates depend on change class and may include:
 
 - focused deterministic regression;
 - Release;

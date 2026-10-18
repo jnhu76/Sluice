@@ -75,6 +75,8 @@ Class C/D (stage-name residue / stale current documentation) — fixed:
 | `apps/sluice-copy/README.md` | `retired by F2/F5` | `retired with the v1 surfaces` |
 | `.github/CONTRIBUTING.md` | v1-era area list (`Completion publication`, `scheduler wake/progress`, `synchronization primitives`) and dead `AGENTS.md §4` reference | v2 vocabulary; references AGENTS.md's engineering order/architecture discipline by name |
 | `.github/pull_request_template.md` | v1-era examples (`RequestKey/RequestSlot`, `Completion publication`, `Scheduler wake/progress`, `Runtime ownership`); `Completion/publication authority` checklist line | v2 vocabulary; `Terminal/publication authority` |
+| `tests/shutdown_lifecycle_test.cpp:94` | `(the release-job flake, #483)` | issue number dropped, hazard text kept (review fix) |
+| `.github/CONTRIBUTING.md` tests section | "The minimum Linux Clang Debug baseline is documented in `AGENTS.md`" — no such baseline exists in AGENTS.md (dead v1-era reference) | replaced with the actual AGENTS.md testing discipline (review fix) |
 
 Class E/F/G (provenance / domain terminology / stable evidence IDs) —
 justified keeps, verified against current citations:
@@ -91,10 +93,16 @@ justified keeps, verified against current citations:
   (`SLUICE_ERR01_*`, `SLUICE_THREAD01_*`, `SLUICE_LIFE_*`): VERIFY-04
   scenario and W-workload IDs with current contract meaning (kept by the
   2026-10-17 hygiene round's rule).
-- `formal/tla/**` campaign-era provenance comments (C2-E/E2/F2/F3/…): the
-  models are the living VERIFY-06 evidence base; the comments map modeled
-  transitions to their origin. Comment-only edits would still change model
-  sources and trigger a model re-run obligation for zero contract benefit.
+- `formal/tla/**` campaign-era provenance comments (C2-E/E2/F2/F3/…) and
+  the model-gate script `scripts/verify_progress_source_model.sh` (`#444` /
+  C2-B / C2-E verdict-catalogue anchors): the models are the living
+  VERIFY-06 evidence base; the comments map modeled transitions and gate
+  verdicts to their origin. Comment-only edits would still change model /
+  gate sources and trigger a model re-run obligation for zero contract
+  benefit.
+- `tests/semantic_reference_case_test.cpp` `owner #400` DEFERRED markers:
+  live disposition pointers naming the owner of the deferred request-side
+  representation evidence, printed by the test itself.
 - ADR-0004 filename and `M1..M12` mutation numbers: stable ADR identity
   cited by ledger G7 and `scripts/verify_tla.sh`.
 - `docs/roadmap/b1-1-request-core-evidence.md`: dated slice record under its
@@ -191,6 +199,64 @@ Markdown. `.github/workflows/ci.yml` triggers on the `tests/**` and
 package-verifier self-tests, debug+release builds with `xmake test`) are
 expected to run on the PR; the record will be updated with the observed CI
 verdicts. Local equivalents of all three jobs pass as recorded above.
+
+## Independent review
+
+Two adversarial review passes were run over the branch (architecture /
+C++ / concurrency, and documentation / release accuracy). The originally
+planned independent-context reviewer agents could not be launched: the
+hosting account's subagent quota was exhausted at review time (reset
+2026-10-19 00:51). Both passes were therefore executed in-session as
+separate structured checklists against the branch tree, and the PR is left
+OPEN for owner review — the deviation is disclosed here rather than
+papered over.
+
+Reviewer A (architecture) — **PASS_WITH_NOTES**:
+
+- Diff-class proof: comment-stripped (whitespace-normalized) sources are
+  token-identical to master for all eight non-Markdown files; root spec,
+  AGENTS.md and CHANGELOG.md byte-identical; no target, identifier, oracle,
+  assertion, `add_tests` registration or public-surface change.
+- Reworded-comment correspondence re-derived from source: the shipped
+  backends' executor handoff is `RequestCore::claim_execution`
+  (`threadpool_backend.cpp:405`, `uring_transport.cpp:113/152`); the
+  shutdown fail-fast/poison oracles live in `shutdown_lifecycle_test.cpp`
+  (poison convergence plus the forked SIGABRT death matrix); the uring f1
+  oracle uses `detail::make_context` + submit test hooks (internal seam).
+- Package boundary unchanged (allowlist token-identical; 24/24 verifier
+  gates both profiles).
+- Finding (fixed): `tests/shutdown_lifecycle_test.cpp:94` still carried an
+  issue-number citation (`#483`) in the deadline-budget comment — dropped
+  in commit `861e1f26`; both shutdown suites re-run green (10 TP / 17
+  uring scenarios PASS).
+- Residue sweep: remaining letter-code/issue references in active files
+  are the justified keeps enumerated above (RG5 oracle vocabulary, model
+  provenance, G0 evidence linkage, `owner #400` disposition pointers).
+
+Reviewer B (documentation / release) — **PASS_WITH_NOTES**:
+
+- `--workers` claims verified empirically on the built release binaries:
+  grep rejects with exit 2, hash with exit 1, tail with exit 1 (exact
+  recorded messages); copy accepts 1..64, `--workers 0`/`65` are usage
+  exit 1, `--workers 2` copies byte-identically with `atomic=on` and no
+  leftover temp file.
+- README/diagram: no stale `HOST`/`IoContext` node remains; the evidence
+  link resolves; "configurations outside that record are untested" matches
+  the ledger/CHANGELOG disclosure; EN/ZH make equivalent claims.
+- docs/README evidence-dir list matches `docs/evidence/` exactly
+  (9 = 9); ledger diff is append-only (0 removed lines); CHANGELOG
+  byte-identical; 11 changed Markdown files, 0 broken relative links.
+- Finding (fixed): `.github/CONTRIBUTING.md` claimed "the minimum Linux
+  Clang Debug baseline is documented in `AGENTS.md`" — no such baseline
+  exists there (dead v1-era reference); replaced with the actual AGENTS.md
+  testing discipline.
+- Remaining convergence phrasing in the READMEs is the allowed kind:
+  "open gaps" names the ledger's live gap column, and the v1 Phase M/F
+  sentence is explicit completed-history framing.
+
+No P0/P1 findings; both P2-class findings were fixed directly and
+re-verified. The final review heads include those fixes (`861e1f26` and
+the CONTRIBUTING fix commit).
 
 ## Release-gate impact
 
