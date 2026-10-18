@@ -8,9 +8,9 @@
 | Assessed source commit | Tree `c001bb1eb21f19c045e57558e13e5487335e1e86`. The C++ content is identical to the v2-r1 implementation baseline `b870a7c0` (the commits between them change documentation only) |
 | Date of assessment | 2026-10-16 |
 | Supported-contract target | v2 contract of the governing root: W-01 direct execution, W-02 bounded scope, W-03 external loop, ThreadPool and io_uring request backends, **11 installed public headers** (root Appendix B) |
-| Actual implemented surface | **25 installed headers** (`xmake/libraries.lua` at the assessed commit), including the four host/cancel headers pending deletion and seven seam/detail headers pending internalization; `AsyncBackend` is a public abstract type in `sluice/async/async_io_context.hpp` and context construction takes a caller-built `std::unique_ptr<AsyncBackend>` |
+| Actual implemented surface | **11 installed public headers** on current master (`xmake/libraries.lua` explicit allowlist, in force since the PR #545 contraction): `sluice/{effect,error,file_resource,measurement,result}.hpp`, `sluice/blocking/file.hpp`, `sluice/async/{async_io_context,request,request_scope,threadpool_backend,uring_backend}.hpp`; the backend classes, the `AsyncBackend` seam and all detail headers are internal and uninstalled, and context construction is through the named factories only. The assessed-commit snapshot below retains its original wording: at `c001bb1e` (pre-contraction) the install set was 25 headers including the four host/cancel headers then pending deletion and seven seam/detail headers then pending internalization, with `AsyncBackend` a public abstract type — that is the dated baseline the assessment rows were written against, not the current surface |
 | Evidence scope and limitations | See each row. `VERIFIED` names the property, evidence artifact, configuration and commit; carried-forward claims from the v1 campaign (Git history at `c001bb1e`) were re-checked for source correspondence — the assessed tree's C++ is identical to `b870a7c0` — but the underlying test/model runs were not all re-executed for this ledger. Spot re-executions run for this assessment are marked `live 2026-10-16`. Bounded TLC/Lean results establish only their explored instances |
-| Overall conformance status | **RELEASE-READY at PR head (2026-10-17 convergence PR).** The retained execution paths (direct, ThreadPool, io_uring, scope, observer, progress, shutdown) are implemented with scoped verified evidence at recorded commits; the public-boundary contraction (D1–D3) is VERIFIED (PR #545 merge); every release gate RG1–RG7 carries a status (see the Release Gate table) and the release-acceptance matrix is recorded in `docs/evidence/v2-release-acceptance-20261017/`. Statuses stated at the convergence PR's head become effective on its merge (GOV-05). The dated assessment rows below retain their scoped-at-record wording |
+| Overall conformance status | **RELEASE-READY, gates effective on master.** The retained execution paths (direct, ThreadPool, io_uring, scope, observer, progress, shutdown) are implemented with scoped verified evidence at recorded commits; the public-boundary contraction (D1–D3) is VERIFIED (PR #545 merge); every release gate RG1–RG7 is VERIFIED (see the Release Gate table) and the release-acceptance matrix is recorded in `docs/evidence/v2-release-acceptance-20261017/`. The 2026-10-17 convergence PR #547 merged as `9f22bde6`, so its PR-head statuses became effective per GOV-05; master at `9f22bde6` differs from the acceptance capture head `72acc209` only by documentation commits and one test-only commit (`9b7bfa63`, race-oracle failure-exit hygiene) — no production C++, build or model change. The v0.0.2 tag and GitHub release are a separate future task; `RELEASE_TAG_CREATED` is not claimed here. The dated assessment rows below retain their scoped-at-record wording |
 
 This ledger replaces `docs/roadmap/v1-conformance.md` (deleted by the same
 PR; its campaign records are dated evidence in Git history). It tracks
@@ -25,7 +25,7 @@ requirement. The v1 root's phases, gates and statuses do not transfer.
 | GAP | A specific missing or nonconforming behavior identified with source evidence |
 | IMPLEMENTED_UNVERIFIED | A candidate implementation exists; required evidence is incomplete |
 | VERIFIED | Named requirement passed the recorded evidence for the stated commits/configurations |
-| VERIFIED_AT_PR_HEAD | A qualified VERIFIED used by the release-gate table: the gate's evidence is complete and checked at the convergence PR's head; the status becomes plain VERIFIED when that PR merges |
+| VERIFIED_AT_PR_HEAD | A qualified VERIFIED used by the release-gate table: the gate's evidence is complete and checked at the convergence PR's head; the status becomes plain VERIFIED when that PR merges. The convergence PR #547 merged as `9f22bde6` (2026-10-17), so the Release Gate rows above now read VERIFIED; dated acceptance files under `docs/evidence/` retain their original PR-head spellings |
 | DEFERRED_OUT_OF_SCOPE | Not a required v2 capability; no supported-product claim |
 
 A required v2 obligation can never be `DEFERRED_OUT_OF_SCOPE`. `VERIFIED`
@@ -125,22 +125,22 @@ correspondence-before record), and production evidence lives in G1–G7 rows.
 | Requirement IDs | C++ owner | Current state | Target | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|---|
 | W-03 pollable progress source both backends (PROG-03) | `detail/progress_source.hpp`, backends | eventfd-based pollable handle per backend; fd never a second drain authority; external `poll(2)` integration exercised | Root §11 PROG-03 | VERIFIED (carried; release evidence recorded) | C2-B/C2-C/C2-D records (owner outcomes, sticky control, external-host lifetime, detach acknowledgement); external-loop consumer runs recorded per matrix cell in `docs/evidence/v2-release-acceptance-20261017/w01-w02-w03-consumers.txt` (`threadpool_external_loop_test` all 8 cells; `uring_external_loop_test` + `uring_public_consumer_probe` all 4 liburing=y cells) | — | — |
-| Release acceptance: W-01/W-02/W-03 + both backends, PROD-02 matrix | whole library | Full 8-cell matrix executed at the campaign head (debug/release × liburing n/y, clang for asanubsan cells, gcc primary incl. tsan): 56/74-test suites, 0 failed in every cell; 4 reference applications built and behavior-accepted; W-01/W-02/W-03 consumer oracles pass in every applicable cell (36/36) | Release evidence enumerating compiler/arch/kernel/liburing/filesystem; W-01–W-03 pass on ThreadPool and a successfully constructed io_uring backend | VERIFIED_AT_PR_HEAD (gate closes at merge) | `docs/evidence/v2-release-acceptance-20261017/`: `verification-record.md`, `matrix/matrix.json` (per-cell argv/exit/log digests/`xmake.conf`), `environment.txt`, `w01-w02-w03-consumers.txt`, app behavior logs, round-0 defect record, GCC libasan collision disposition; D3 disclosure in CHANGELOG.md `[Unreleased]` | Configurations outside the recorded environment are untested by this release (disclosed) | Merge |
+| Release acceptance: W-01/W-02/W-03 + both backends, PROD-02 matrix | whole library | Full 8-cell matrix executed at the campaign head (debug/release × liburing n/y, clang for asanubsan cells, gcc primary incl. tsan): 56/74-test suites, 0 failed in every cell; 4 reference applications built and behavior-accepted; W-01/W-02/W-03 consumer oracles pass in every applicable cell (36/36) | Release evidence enumerating compiler/arch/kernel/liburing/filesystem; W-01–W-03 pass on ThreadPool and a successfully constructed io_uring backend | VERIFIED (effective at the PR #547 merge `9f22bde6`, GOV-05) | `docs/evidence/v2-release-acceptance-20261017/`: `verification-record.md`, `matrix/matrix.json` (per-cell argv/exit/log digests/`xmake.conf`), `environment.txt`, `w01-w02-w03-consumers.txt`, app behavior logs, round-0 defect record, GCC libasan collision disposition; D3 disclosure in CHANGELOG.md `[Unreleased]` | Configurations outside the recorded environment are untested by this release (disclosed) | — |
 
 ## Release Gate
 
 Tied to v2 requirements, not to v1 phase completion. All gates are blocking
 for the first v2 release:
 
-| Gate | Requirement | Condition | Status (2026-10-17 convergence PR, `VERIFIED_AT_PR_HEAD` closes at merge) |
+| Gate | Requirement | Condition | Status (checked at the 2026-10-17 convergence PR #547 head; the PR merged as `9f22bde6`, so the PR-head statuses are effective VERIFIED per GOV-05 — the PR-head evidence SHAs are retained below) |
 |---|---|---|---|
-| RG1 | G7 LSan row | The LeakSanitizer finding on the uring poisoned-shutdown path is fixed with a regression oracle, or granted a formal owner-approved exception with recorded reasoning. (PR B's wider matrix surfaces it under asanubsan-y; pre-existence at `5c1b14db` recorded in `docs/evidence/pr-b-boundary-contraction-20261016/matrix/asanubsan-y-rg1-lsan-disposition.txt`.) | VERIFIED_AT_PR_HEAD — fixed at `ff7d6dde` with the fork-isolated witness; disposition `docs/evidence/v2-release-acceptance-20261017/lsan-poisoned-shutdown-disposition.md`; leak-free in the liburing=y asanubsan cell (the scenario's test target is compiled only under `SLUICE_SHUTDOWN_URING`) |
-| RG2 | D1/D2 (root §23.4) | PR B substance complete at the PR B head (G9 rows VERIFIED; audits recorded under `docs/evidence/pr-b-boundary-contraction-20261016/`); gate closes when the PR merges | VERIFIED_AT_PR_HEAD (substance carried from PR #545 merge) — closes at this PR's merge |
-| RG3 | VERIFY-01 build row | Substance complete: clean-room core-only and async consumer compile/link/run recorded on the 11-header surface in both profiles (`v2-package-manifest-*.json`); gate closes when the PR merges | VERIFIED_AT_PR_HEAD — both profile manifests re-recorded at this campaign's clean head (see verification record §3); closes at merge |
-| RG4 | REQ-01 | Request identity-domain enforcement or proved equivalence, with exhaustion evidence, recorded in this ledger | VERIFIED_AT_PR_HEAD — at `a0874ae2`, `docs/evidence/v2-release-acceptance-20261017/req01-identity-domain-evidence.md`; G2 row updated |
-| RG5 | PROG-02 | io_uring settlement-notification evidence beyond the structural argument (deterministic oracle or reviewed equivalence) | VERIFIED_AT_PR_HEAD — at `6411cff3`+`5fd8e109`, coverage table + registered mutant kill + real-kernel cancel-race oracle in `docs/evidence/v2-release-acceptance-20261017/prog02-settlement-notification-oracle.md`; G6 row updated |
-| RG6 | PROD-02 | Release evidence enumerates tested compiler/architecture/kernel/liburing/filesystem configurations; W-01/W-02/W-03 pass on ThreadPool and io_uring in that matrix | VERIFIED_AT_PR_HEAD — 8-cell matrix, 0 failed, apps behavior-accepted, `docs/evidence/v2-release-acceptance-20261017/verification-record.md`; closes at merge |
-| RG7 | D3 | Release notes disclose removed/internalized headers, the closed extension seam, and the absence of compatibility shims | VERIFIED_AT_PR_HEAD — CHANGELOG.md `[Unreleased]` at `7efd86ec` |
+| RG1 | G7 LSan row | The LeakSanitizer finding on the uring poisoned-shutdown path is fixed with a regression oracle, or granted a formal owner-approved exception with recorded reasoning. (PR B's wider matrix surfaces it under asanubsan-y; pre-existence at `5c1b14db` recorded in `docs/evidence/pr-b-boundary-contraction-20261016/matrix/asanubsan-y-rg1-lsan-disposition.txt`.) | VERIFIED — fixed at `ff7d6dde` with the fork-isolated witness; disposition `docs/evidence/v2-release-acceptance-20261017/lsan-poisoned-shutdown-disposition.md`; leak-free in the liburing=y asanubsan cell (the scenario's test target is compiled only under `SLUICE_SHUTDOWN_URING`) |
+| RG2 | D1/D2 (root §23.4) | PR B substance complete at the PR B head (G9 rows VERIFIED; audits recorded under `docs/evidence/pr-b-boundary-contraction-20261016/`); gate closes when the PR merges | VERIFIED — substance carried from the PR #545 merge; closed at the PR #547 merge |
+| RG3 | VERIFY-01 build row | Substance complete: clean-room core-only and async consumer compile/link/run recorded on the 11-header surface in both profiles (`v2-package-manifest-*.json`); gate closes when the PR merges | VERIFIED — both profile manifests re-recorded at this campaign's clean head (see verification record §3); closed at the PR #547 merge |
+| RG4 | REQ-01 | Request identity-domain enforcement or proved equivalence, with exhaustion evidence, recorded in this ledger | VERIFIED — at `a0874ae2`, `docs/evidence/v2-release-acceptance-20261017/req01-identity-domain-evidence.md`; G2 row updated |
+| RG5 | PROG-02 | io_uring settlement-notification evidence beyond the structural argument (deterministic oracle or reviewed equivalence) | VERIFIED — at `6411cff3`+`5fd8e109`, coverage table + registered mutant kill + real-kernel cancel-race oracle in `docs/evidence/v2-release-acceptance-20261017/prog02-settlement-notification-oracle.md`; G6 row updated |
+| RG6 | PROD-02 | Release evidence enumerates tested compiler/architecture/kernel/liburing/filesystem configurations; W-01/W-02/W-03 pass on ThreadPool and io_uring in that matrix | VERIFIED — 8-cell matrix, 0 failed, apps behavior-accepted, `docs/evidence/v2-release-acceptance-20261017/verification-record.md`; closed at the PR #547 merge |
+| RG7 | D3 | Release notes disclose removed/internalized headers, the closed extension seam, and the absence of compatibility shims | VERIFIED — CHANGELOG.md `[Unreleased]` disclosure recorded at `7efd86ec`; the #528 closeout re-based the same disclosure (retired-surface enumeration, closed seam, no compatibility shims) without weakening it |
 
 ## Provenance of carried evidence
 
@@ -251,3 +251,66 @@ re-worded in place. Summary:
 - Verification of this round: both build profiles green, clean-room package
   verifier re-run with the renamed seam allowlist, renamed mutants re-killed;
   recorded in `docs/evidence/repo-hygiene-contraction-20261017/`.
+
+## Dated internal-seam dispositions (2026-10-18, #528 closeout)
+
+F6-F16 asked for explicit dispositions of two internal seams that no public
+claim depends on. Both were re-derived from source at master `9f22bde6`,
+not copied from the F2 record; no production code changed. The full #528
+closeout record — CHANGELOG curation (F6-F05), the status reconciliation
+above, the validation battery and both independent-review verdicts — is
+`docs/evidence/issue-528-release-doc-closeout-20261018/closeout-record.md`.
+
+### `RequestCore::acquire_execution` — PROTOCOL_TEST_ONLY
+
+- Production callers: none. `src/` contains only the definition
+  (`src/async/detail/request_core.cpp:388`). The accepting transaction
+  itself takes the first execution reference (`request_core.cpp:210`,
+  inside `accept`), and the executor handoff authority is
+  `claim_execution` (`src/async/threadpool_backend.cpp`,
+  `src/async/uring_transport.cpp`).
+- Test callers: `tests/request_core_test_driver.hpp` and the five
+  `acquire_execution` sites in `tests/request_core_protocol_test.cpp`
+  (positive executor-handoff obligations and negative
+  terminal/zero-op refusals). It models an additional executor
+  borrow-touch on the same slot, mirroring the `AcquireExec` model action
+  recorded by the #524 correspondence
+  (`docs/evidence/issue-524-requestcore-convergence-20261015/correspondence-after.md`).
+- Exposure: none on the installed surface — `request_core.hpp` is an
+  uninstalled `detail/` header. The symbol is present in the shipped
+  static archive (recorded in both archive baselines) because
+  `request_core.cpp` compiles into `sluice_async`; it is unreachable from
+  the 11-header public surface.
+- Root obligation: none. REQ-02..06 are discharged through the
+  accept/claim/release paths; the v2 root imposes no public semantics on
+  this entry point. Classification confirms the F2 record's
+  protocol-test-surface reading (`docs/evidence/f2-authority-contraction-20261013/minimal-state-ledger.md`).
+
+### Ready-sink routing seam
+
+```text
+READY_SINK_PRODUCTION_BINDING = none attached: no production call site
+    invokes AsyncBackend::attach_ready_sink; each backend's default
+    backend-owned ReferenceReadySink member receives the events
+    (src/async/threadpool_backend.cpp:381, src/async/uring_backend.cpp:590
+    — routing_sink_ ? *routing_sink_ : sink_)
+READY_SINK_TEST_BINDING = TestAccess::context_set_ready_sink
+    (include/sluice/async/detail/test_access.hpp:31, uninstalled),
+    serialized against context operations by the context access mutex;
+    exercised by tests/threadpool_external_loop_test.cpp and
+    tests/threadpool_progress_pass_bound_test.cpp
+READY_SINK_REBIND_SUPPORTED = no production rebind path exists (no
+    production caller). Unlike attach_progress_port, the routing pointer
+    carries no install-once invariant and no failure reporting: tests may
+    attach, replace and clear it at controlled points, and the attaching
+    caller must clear the binding before the sink object is destroyed
+READY_SINK_LIFETIME_OWNER = the attaching caller owns the sink object
+    (the backend holds a borrowed raw pointer); the backend-owned default
+    sink_ member lives with the backend
+PUBLIC_API_IMPACT = NONE (all types live in uninstalled detail headers)
+```
+
+The `attach_progress_port` install-once contract is deliberately not
+projected onto `attach_ready_sink`: the progress port is a
+construction-time install with a failure path, while ready-sink routing
+is a plain override pointer whose only writers are the test accessors.

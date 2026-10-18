@@ -15,8 +15,8 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
-**v2 contract adoption (breaking).** Sluice v2 is the first release line on
-the v2 Architecture and Contract (`docs/explicit-io-contract.md`, revision
+**v2 re-architecture (breaking).** This is the first release line on the
+v2 Architecture and Contract (`docs/explicit-io-contract.md`, revision
 v2-r1). Owner decision D3 (root §23.4) authorizes these breaking changes
 with **no v1 compatibility obligations**: there is no compatibility layer,
 forwarding wrapper, type alias, or dual public API for v1 users. Consumers
@@ -25,7 +25,126 @@ cannot enumerate them. Pin a v1-era tag (for example `v0.0.1`) or migrate
 per the guidance below. This disclosure is a D3 release-documentation
 obligation, not a rollback lever.
 
+### Added
+
+- **Direct file I/O with no runtime.** `sluice/file_resource.hpp` owns the
+  native resource (`File`, open flags, `FileInfo`, identity comparison);
+  `sluice/blocking/file.hpp` provides the completed-return blocking
+  operations — explicit-offset `read_at`/`write_at`, current-offset
+  `read`/`write`, `sync_data`/`sync_all`, `file_info`, `size`, `resize` —
+  and the short-I/O compositions `read_exact*`/`write_all*`. Direct execution
+  needs no context, worker or request table, and `sluice_core` links and
+  runs standalone.
+
+- **Request execution with public identity.** An `AsyncIoContext` accepts
+  six operations per outstanding request (`submit_read`, `submit_write`,
+  `submit_sync_data`, `submit_sync_all`, `submit_file_info`,
+  `submit_size`) and returns a move-only `Request<T>` carrying a public
+  `RequestId` (context identity, slot, generation). Publication,
+  observation and consumption of a result are separate events:
+  `ready()` and the non-consuming `try_result()` never consume,
+  `take_result()` consumes once, and `discard()` releases the public
+  binding; slot reclamation follows its own borrow-retirement rules.
+  Observer, progress and shutdown vocabulary are public enums and types
+  on the installed headers — no `detail::` vocabulary is needed to use
+  them.
+
+- **Explicit backend selection.** Contexts are created only through the
+  shipped factories `make_threadpool_context(ThreadPoolConfig)` and
+  `make_uring_context(UringConfig)`; the io_uring factory reports an
+  explicit `not_supported` outcome where the build has no liburing.
+  Backend selection stays an explicit caller choice; user-authored
+  backends are not a supported configuration.
+
+- **Bounded progress and external event loops.** `poll_progress()` returns
+  a `ProgressPass`: a bounded pass reporting completed work, whether
+  accepted work remains, and honest owed-delivery residue. A context has
+  one fixed progress owner (`claim_progress_owner()`), and each backend
+  exposes a pollable progress-notification handle that an external
+  `poll(2)` loop can integrate — the handle is never a second drain
+  authority.
+
+- **Request observers.** Per-request terminal-notification observers
+  (`attach_observer`) with generation-armed at-most-once delivery,
+  bounded non-throwing hooks, observer cancellation, and a public
+  `delivery_retired()` query; retirement happens at the delivery owner
+  after the hook returns.
+
+- **Shutdown with retained results.** `shutdown(ShutdownPolicy)` blocks,
+  drains execution and reports a `ShutdownOutcome`. Unconsumed results
+  are retained after execution closes — shutdown does not drop accepted
+  work — and destroying the context requires every public `Request`
+  binding to be gone.
+
+- **`RequestScope` for bounded pipelines.** The owned-driver scope in
+  `sluice/async/request_scope.hpp` reserves tracking before acceptance,
+  submits through the context, holds the accepted requests, and settles
+  every slot on normal, early-exit and exception paths.
+
+### Changed
+
+- **Four reference applications on the v2 surfaces.** `sluice-copy`,
+  `sluice-tail`, `sluice-grep` and `sluice-hash` are retained and now
+  build on the v2 execution forms (request path, `RequestScope`, or
+  direct blocking I/O) with bounded work and explicit progress. CLI
+  note: `--workers` remains only on `sluice-copy` (its thread-pool
+  workers); `sluice-tail`, `sluice-grep` and `sluice-hash` reject the
+  flag — they execute on the caller thread or an app-owned driver.
+
+- **Request handles carry public identity; rebuild required.** `Request<T>`
+  stores the public `RequestId` (context identity + slot + generation) and
+  grew from 40 to 48 bytes with no added allocation. The ABI is not stable
+  across this boundary: dependent programs must recompile against the v2
+  headers.
+
+- **Package shape and build profiles.** `sluice_core` (blocking default)
+  and `sluice_async` (opt-in request runtime) install through an explicit
+  header allowlist, and the liburing-enabled and liburing-free profiles
+  are verified as separate package identities
+  (`docs/evidence/v2-release-acceptance-20261017/`).
+
+- **Tested environment range (first v2 release).** Validated on Linux
+  x86_64 (Fedora 44, kernel 7.2.9) with GCC 16.2.1 (primary; also carries
+  the TSan runs), clang 22.1.8 (ASan+UBSan runs), xmake 3.0.9 and system
+  liburing 2.13, across debug/release builds, liburing-disabled and
+  liburing-enabled configurations, ASan+UBSan and TSan sanitizer runs, the
+  ThreadPool and io_uring backends, and the four reference applications.
+  The full matrix with per-cell commands and exit codes is recorded in
+  `docs/evidence/v2-release-acceptance-20261017/`; configurations outside
+  that record are untested by this release.
+
+- **Repository hygiene contraction** — stage-labeled test/target/mutant
+  names renamed to behavior-describing names; closed-campaign verification
+  scripts, the retired formal corpora and dated-only evidence records moved
+  to Git history; the dead lefthook pre-push configuration and the closed
+  M-R disposition guard workflow removed. No product behavior, public API
+  or supported-surface change; details in
+  `docs/evidence/repo-hygiene-contraction-20261017/`.
+
+- **Changelog restructured** — the changelog now lives at the repository
+  root (`CHANGELOG.md`) in Keep a Changelog 2.0.0 format, and the version
+  history starts at the `v0.0.1` reference baseline. The pre-v0.0.1 record
+  (the v0.1.0 era) moved to Git history with a Historical banner;
+  `scripts/changelog/generate.py` (with `--self-test`) was added then and
+  has since been retired.
+
 ### Removed
+
+- **v1 synchronous core surface.** The v0.0.1-era headers
+  `sluice/{file,reader,writer,buffer,buffered_readable,copy,copy_strategy,iovec,limit,observed,fault,sync,wal}.hpp`,
+  `sluice/io_context.hpp` (`BlockingIoContext`),
+  `sluice/memory_io_context.hpp`, `sluice/blocking_io_pool.hpp`, the
+  sync/fake async backends and `sluice/experimental/uring_*.hpp` no
+  longer exist. Use `File` plus `sluice/blocking/file.hpp` for direct I/O
+  or the request path above; otherwise pin `v0.0.1`.
+
+- **v1 cooperative async runtime.** `Scheduler`, the stackful `Fiber`
+  await model, `Completion`/`RequestHandle`/`Batch`, the
+  Event/Mutex/Semaphore/Condition/Queue/Group/Future/Select/wait
+  families, `application_runtime`, and the timer/wait vocabulary are
+  removed together with their exclusive consumers. Bounded pipelines use
+  `RequestScope`; waiting is explicit progress ownership; otherwise pin
+  `v0.0.1`.
 
 - **Stackful host bundle (W-04) hard-removed (D1).** The Stackful I/O Host,
   fiber context switching and the cooperative Cancel kit — the installed
@@ -40,9 +159,11 @@ obligation, not a rollback lever.
 - **Install surface contracted 25 → 11 headers (D2).** The eleven installed
   public headers are `sluice/{effect,error,file_resource,measurement,result}.hpp`,
   `sluice/blocking/file.hpp`, and
-  `sluice/async/{async_io_context,request,request_scope,threadpool_backend,uring_backend}.hpp`.
-  Everything else that previously installed is internalized or deleted and
-  no longer ships: the seven `sluice/async/detail/*` seam headers
+  `sluice/async/{async_io_context,request,request_scope,threadpool_backend,uring_backend}.hpp`
+  (the 25-header figure is the v2 campaign's pre-contraction interim
+  baseline; v0.0.1 shipped the earlier, larger v1 surface). Everything else
+  that installed at that interim is internalized or deleted and no longer
+  ships: the seven `sluice/async/detail/*` seam headers
   (`request_key`, `ready_sink`, `reference_ready_sink`, `observer_protocol`,
   `fail_fast`, `request_core`, `progress_source`), the three
   `sluice/detail/*` core headers (`file_semantics`, `posix_retry`,
@@ -59,54 +180,6 @@ obligation, not a rollback lever.
   `not_supported` outcome where liburing is unavailable. Shipping a third
   backend against the public surface is not supported.
 
-### Changed
-
-- **Request handles carry public identity; rebuild required.** `Request<T>`
-  stores the public `RequestId` (context identity + slot + generation) and
-  grew from 40 to 48 bytes with no added allocation. The ABI is not stable
-  across this boundary: dependent programs must recompile against the v2
-  headers.
-- **Observer and shutdown vocabulary is public.** Progress observation and
-  shutdown outcome reporting use public enums on the installed headers
-  instead of `detail::` vocabulary; consumers matching on the internal
-  enumerators must rename.
-- **Tested environment range (first v2 release).** Validated on Linux
-  x86_64 (Fedora 44, kernel 7.2.9) with GCC 16.2.1 (primary; also carries
-  the TSan runs), clang 22.1.8 (ASan+UBSan runs), xmake 3.0.9 and system
-  liburing 2.13, across debug/release builds, liburing-disabled and
-  liburing-enabled configurations, ASan+UBSan and TSan sanitizer runs, the
-  ThreadPool and io_uring backends, and the four reference applications.
-  The full matrix with per-cell commands and exit codes is recorded in
-  `docs/evidence/v2-release-acceptance-20261017/`; configurations outside
-  that record are untested by this release.
-- **Repository hygiene contraction** — stage-labeled test/target/mutant
-  names renamed to behavior-describing names; closed-campaign verification
-  scripts, the retired formal corpora and dated-only evidence records moved
-  to Git history; the dead lefthook pre-push configuration and the closed
-  M-R disposition guard workflow removed. No product behavior, public API
-  or supported-surface change; details in
-  `docs/evidence/repo-hygiene-contraction-20261017/`.
-
-- **Changelog restructured** — the changelog now lives at the repository
-  root (`CHANGELOG.md`) in Keep a Changelog 2.0.0 format, and the version
-  history starts at the `v0.0.1` reference baseline. The pre-v0.0.1 record
-  (the v0.1.0 era) moved to Git history with a Historical banner;
-  `scripts/changelog/generate.py` (with `--self-test`) was added then and
-  has since been retired.
-
-### Fixed
-
-- **TSan data race in the timer test-observation seam (#229, PR #231)** —
-  `Scheduler::AsyncTestAccess::active_deadline_count()` read the
-  `global_mtx_`-guarded `active_deadline_count_` counter unlocked, racing
-  with production deadline registration/retire paths while a live
-  coordinator fiber polled the seam
-  (`timer_new_earlier_deadline_becomes_earliest`). The accessor now takes
-  `global_mtx_` and returns a synchronized snapshot, following the
-  `earliest_active_deadline` / `waiting_select_count` locked-seam precedent.
-  Test-only internal-testing vocabulary; production behavior, layout, and
-  public API unchanged. The compliance gate record for the repair lands
-  with PR #231 (record in Git history).
 ## [0.0.1] - 2026-08-26
 
 `v0.0.1` is the explicit-I/O reference baseline (`a38df5e`), frozen as the

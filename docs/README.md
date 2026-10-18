@@ -23,9 +23,8 @@ Repository working rules              AGENTS.md
   conformance ledger and the v1 formal evidence map from the active tree —
   Git history retains them.
 - **[v2 conformance ledger](roadmap/v2-conformance.md)** tracks which v2
-  obligations have evidence and which do not, the open implementation items
-  (public-surface contraction, host removal, known evidence gaps) and the
-  release gate. Adopting the target does not certify the code; nothing in
+  obligations have evidence and which do not, any remaining implementation
+  items, and the release gate. Adopting the target does not certify the code; nothing in
   this repository is VERIFIED without a recorded evidence entry there.
 
 ## Reading order
@@ -57,7 +56,9 @@ else under `docs/` is a retained historical record or a dated evidence record
 kept for provenance: `docs/adr/` holds the adopted and superseded ADRs,
 `docs/archive/` the archived records, and `docs/evidence/` only the dated
 evidence records that active ledger rows or tooling still cite by path
-(`pr-b-boundary-contraction-20261016/`, `issue-524-requestcore-convergence-20261015/`,
+(`v2-release-acceptance-20261017/`, `repo-hygiene-contraction-20261017/`,
+`issue-528-release-doc-closeout-20261018/`, `pr-b-boundary-contraction-20261016/`,
+`issue-524-requestcore-convergence-20261015/`,
 `f6-final-correspondence-20261014/`, `f2-authority-contraction-20261013/`,
 `g0-403-performance-baseline-20261015/`). Older campaign records — the Phase
 M/F campaign, `docs/review/`, the F0/F3/F4/F5 experiments and the retired
