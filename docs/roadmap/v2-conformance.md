@@ -314,3 +314,17 @@ The `attach_progress_port` install-once contract is deliberately not
 projected onto `attach_ready_sink`: the progress port is a
 construction-time install with a failure path, while ready-sink routing
 is a plain override pointer whose only writers are the test accessors.
+
+## Dated pre-release residue cleanup (2026-10-18)
+
+A pre-release hygiene round (branch `chore/v2-pre-release-residue-cleanup`)
+re-audited the active tree for v1 and development-stage residue ahead of
+v0.0.2. No requirement changed status, no evidence class was rewritten and
+no recorded verdict was re-dated: the round dropped stage/issue-number
+narration from build-graph and test comments and aligned the READMEs and
+active documentation navigation with the release-ready state. Coverage-oracle
+ID vocabulary cited by the frozen RG5 evidence, root requirement-ID
+prefixes and the ADR-0004 M-numbers were deliberately kept. The audit
+classification, the negative package-boundary evidence and the validation
+battery are recorded in
+`docs/evidence/v2-pre-release-residue-cleanup-20261018/audit-record.md`.

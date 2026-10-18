@@ -605,7 +605,7 @@ bool r11b_stale_readiness_drained_at_park_without_fabrication() {
 }
 
 // R12: a control wake racing the park boundary ends the bounded wait without
-// fabricating a completion (the sticky outcome taxonomy is C2-D scope).
+// fabricating a completion.
 bool r12_control_wake_racing_park_boundary() {
     ThreadPoolBackend* raw = nullptr;
     AsyncIoContext ctx = make_pool_context(4, 1, &raw);

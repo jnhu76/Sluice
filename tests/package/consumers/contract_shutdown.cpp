@@ -1,7 +1,6 @@
 // Clean-room micro-contract probe: shutdown with retained results.
 // Fail-fast and poison paths are process-fatal or fault-seam-only and cannot
-// be probed in-process; they map to the internal shutdown oracles in the F1
-// evidence matrix.
+// be probed in-process; they map to the internal shutdown lifecycle oracles.
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/blocking/file.hpp>
 #include <sluice/file_resource.hpp>

@@ -19,8 +19,8 @@ current behavior; tests and models establish scoped evidence. None
 independently changes the target contract.
 
 - [v2 conformance ledger](docs/roadmap/v2-conformance.md) — implementation
-  state and evidence against the v2 root, with the open items and release
-  gate. Adopting the specification does not certify the code.
+  state and evidence against the v2 root, including the release-gate status.
+  Adopting the specification does not certify the code.
 - [docs/README.md](docs/README.md) — documentation map: active records versus
   `docs/archive/` historical records.
 - [AGENTS.md](AGENTS.md) — repository working rules.
@@ -37,8 +37,9 @@ A canonical `File` owns the native resource and access facts. Shared operation
 semantics apply to direct completed-return calls and explicit outstanding
 requests.
 
-Direct execution needs no request table or runtime. An explicit `IoContext`
-owns a bounded RequestCore, one backend and a progress source; a move-only
+Direct execution needs no request table or runtime. An explicit
+`AsyncIoContext` owns a bounded RequestCore, one backend and a progress
+source; a move-only
 Request represents outstanding responsibility. The backend seam is internal:
 v2 ships exactly the ThreadPool and io_uring backends, and user-authored
 backends are not a supported configuration. The stackful host and its
@@ -63,12 +64,12 @@ flowchart TB
     DIRECT["Direct adapter · 直接完成返回"]
     REQUEST["Request&lt;T&gt; · 唯一 public result / settlement responsibility"]
     SCOPE["RequestScope · W-02 owned-driver scope<br/>预分配 tracking · 持有并 settle Requests"]
-    HOST["Progress owner / Host<br/>每个 context 一个 fixed active owner · 无 live transfer"]
+    PROGRESS_OWNER["Progress owner (application side)<br/>每个 context 一个 fixed active owner · 无 live transfer"]
     OS["Linux regular-file I/O"]
 
-    subgraph CTX["IoContext · 请求执行域"]
+    subgraph CTX["AsyncIoContext · 请求执行域"]
         direction TB
-        IOC["IoContext · identity / budgets / admission / health"]
+        IOC["AsyncIoContext · identity / budgets / admission / health"]
         CORE["RequestCore · acceptance / result / publication / reclaim"]
         BACKEND["Backend · ThreadPool 或 io_uring"]
         PROGRESS["ProgressSource · persistent progress notification"]
@@ -91,7 +92,7 @@ flowchart TB
     FILE -->|"resource / access facts"| SEM
 
     APP -->|"显式选择 direct"| DIRECT
-    APP -->|"显式指定 IoContext"| IOC
+    APP -->|"显式指定 AsyncIoContext"| IOC
     SEM -.->|"governs direct semantics"| DIRECT
     SEM -.->|"governs request semantics"| IOC
     DIRECT -->|"caller thread executes"| OS
@@ -104,12 +105,12 @@ flowchart TB
     SCOPE -->|"reserve tracking before acceptance · submit via context"| IOC
     SCOPE ==>|"owns accepted Request&lt;T&gt; · settle on every exit"| REQUEST
 
-    HOST -->|"poll / drive shutdown"| IOC
-    HOST -->|"prepare / wait"| PROGRESS
-    OBS -.->|"driver delivers terminal notification"| HOST
+    PROGRESS_OWNER -->|"poll / drive shutdown"| IOC
+    PROGRESS_OWNER -->|"prepare / wait"| PROGRESS
+    OBS -.->|"driver delivers terminal notification"| PROGRESS_OWNER
 ```
 
-## Current implementation and convergence
+## Current implementation
 
 The current tree contains the canonical File/blocking operations, the
 Request/AsyncIoContext request core with ThreadPool and io_uring backends,
@@ -144,8 +145,10 @@ xmake f -m release -y
 xmake
 ```
 
-`xmake.lua` and `xmake/` define the targets that currently exist. A successful
-build is not evidence that every v2 target configuration has been implemented.
+`xmake.lua` and `xmake/` define the targets that currently exist. The tested
+compiler, kernel and liburing configurations are recorded in the
+[v2 release acceptance evidence](docs/evidence/v2-release-acceptance-20261017/);
+configurations outside that record are untested.
 
 ## License
 

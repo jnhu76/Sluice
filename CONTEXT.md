@@ -10,8 +10,8 @@ owned-driver scope. No host runtime is in the supported surface.
   v2-r1) is the sole normative root: product scope, dictionary, semantics,
   lifetime, progress, shutdown, threading, evidence and acceptance.
 - [v2 conformance ledger](docs/roadmap/v2-conformance.md) tracks
-  implementation and evidence against the v2 root, including the open items
-  and the release gate. Adoption of the target does not establish
+  implementation and evidence against the v2 root, including the
+  release-gate status. Adoption of the target does not establish
   conformance.
 - [AGENTS.md](AGENTS.md) gives repository working instructions.
 

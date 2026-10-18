@@ -18,13 +18,13 @@ Repository working rules              AGENTS.md
   boundaries, lifetime rules, and acceptance obligations. Every other
   document is derived from it or is evidence about a particular commit. No
   other document is a normative authority, and none stands as a peer of the
-  root. The revision becomes the sole normative root when its adopting PR
-  merges (GOV-05); that same PR supersedes and removes the v1 root, the v1
+  root. The revision became the sole normative root when its adopting PR
+  merged (GOV-05); that same PR superseded and removed the v1 root, the v1
   conformance ledger and the v1 formal evidence map from the active tree —
   Git history retains them.
 - **[v2 conformance ledger](roadmap/v2-conformance.md)** tracks which v2
-  obligations have evidence and which do not, any remaining implementation
-  items, and the release gate. Adopting the target does not certify the code; nothing in
+  obligations have recorded evidence, and the release-gate status. Adopting
+  the target does not certify the code; nothing in
   this repository is VERIFIED without a recorded evidence entry there.
 
 ## Reading order
@@ -57,7 +57,9 @@ kept for provenance: `docs/adr/` holds the adopted and superseded ADRs,
 `docs/archive/` the archived records, and `docs/evidence/` only the dated
 evidence records that active ledger rows or tooling still cite by path
 (`v2-release-acceptance-20261017/`, `repo-hygiene-contraction-20261017/`,
-`issue-528-release-doc-closeout-20261018/`, `pr-b-boundary-contraction-20261016/`,
+`issue-528-release-doc-closeout-20261018/`,
+`v2-pre-release-residue-cleanup-20261018/`,
+`pr-b-boundary-contraction-20261016/`,
 `issue-524-requestcore-convergence-20261015/`,
 `f6-final-correspondence-20261014/`, `f2-authority-contraction-20261013/`,
 `g0-403-performance-baseline-20261015/`). Older campaign records — the Phase

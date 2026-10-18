@@ -48,7 +48,7 @@ result:
 
 **Does this PR affect an architecture boundary?**
 
-Examples: async I/O ownership, RequestKey/RequestSlot lifecycle, Completion publication, backend submission/dispatch/reap, cancellation, Scheduler wake/progress, synchronization primitives, capacity/bounds, Runtime ownership, public async API, shutdown/drain, io_uring ownership.
+Examples: async I/O ownership, RequestCore slot lifecycle and identity, terminal selection and publication, backend submission/dispatch/reap, cancellation, progress ownership and no-lost-wake, capacity/bounds, public request API, shutdown/drain, io_uring ownership.
 
 - [ ] **No** — no architecture boundary is changed.
 - [ ] **Yes** — architecture compliance is required and the governing design/gate is linked below.
@@ -61,7 +61,7 @@ Examples: async I/O ownership, RequestKey/RequestSlot lifecycle, Completion publ
 - [ ] State machine and ownership transitions are documented.
 - [ ] Lock/atomic authority and observable intermediate states are documented.
 - [ ] Submit failure remains transactional where applicable.
-- [ ] Completion/publication authority is unchanged or explicitly approved.
+- [ ] Terminal/publication authority is unchanged or explicitly approved.
 - [ ] Wake/progress obligations and fairness assumptions are documented.
 - [ ] Capacity/resource bounds and overload behavior are documented.
 - [ ] Cancellation layer/winner authority is identified.

@@ -1028,8 +1028,8 @@ bool host_acknowledgement_racing_new_signal_never_strands() {
     return ok && follow_ok;
 }
 
-// C2-D stop/settle/detach: the supported host shutdown order is stop
-// admitting, settle every accepted request, then retire the registration. A
+// Stop/settle/detach ordering: the supported external-host shutdown order is
+// stop admitting, settle every accepted request, then retire the registration. A
 // second detach is an idempotent no-op and the context lends nothing after
 // detachment.
 bool host_stop_settle_detach_retires_registration() {

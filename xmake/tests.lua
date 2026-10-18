@@ -29,7 +29,7 @@ sluice_one_file_target("binary", "test", "uring_submit_boundary_test", "tests", 
 sluice_one_file_target("binary", "test", "file_access_precedence_test", "tests",
                        {"sluice_core", "sluice_async"})
 
--- A1 shared File semantic oracle: decision tables, property tests and
+-- Shared File semantic oracle: decision tables, property tests and
 -- reference cases. All of them compare execution paths against the one shared
 -- oracle; none carries a backend-specific expected-output file.
 sluice_one_file_target("binary", "test", "semantic_errno_mapping_test", "tests", "sluice_core")
@@ -43,11 +43,11 @@ sluice_one_file_target("binary", "test", "semantic_reference_case_test", "tests"
 sluice_one_file_target("binary", "test", "semantic_validation_precedence_test", "tests",
                        {"sluice_core", "sluice_async"})
 
--- A2 direct closure: canonical File close/RAII semantics, minimal metadata and
--- identity, the direct cursor/positional distinction, and the exact/all
--- composition surfaces. `direct_w01_consumer_probe` is the core-only consumer:
--- it links `sluice_core` alone, so it proves the W-01 trace needs no async
--- runtime and no liburing.
+-- Direct execution surface: canonical File close/RAII semantics, minimal
+-- metadata and identity, the direct cursor/positional distinction, and the
+-- exact/all composition surfaces. `direct_w01_consumer_probe` is the
+-- core-only consumer: it links `sluice_core` alone, so it proves the W-01
+-- trace needs no async runtime and no liburing.
 sluice_one_file_target("binary", "test", "file_info_identity_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "direct_cursor_position_test", "tests", "sluice_core")
 sluice_one_file_target("binary", "test", "direct_composition_test", "tests", "sluice_core")
@@ -110,7 +110,7 @@ if has_config("liburing") then
         add_tests("uring_backend_smoke_test")
 end
 
--- A2 app-consumption tests: exercise the app engines through the canonical
+-- App-consumption tests: exercise the app engines through the canonical
 -- File resource they now consume. Each target compiles the app's engine
 -- modules with public headers only, mirroring the app target's dependency
 -- shape (no test seams, no src/ include).
@@ -757,7 +757,7 @@ do
     if has_config("liburing") then
         request_error_domain_target("request_error_domain_uring_test", true)
 
-        -- #526 named mutation builds. Each flips one request-path error
+        -- Named mutation builds. Each flips one request-path error
         -- spelling and must be killed by the named failing assertion of the
         -- error-domain suite; executed and recorded manually, never run as
         -- regular tests.
@@ -772,7 +772,7 @@ do
                                 false, "SLUICE_ERR01_MUTANT_PHYSICAL_ERRNO_UNMAPPED")
 end
 
--- #527 (F6-F13) File-owner moves against outstanding accepted borrows. The
+-- File-owner moves against outstanding accepted borrows. The
 -- target compiles the two core TUs itself so the named move mutation build
 -- can flip the move constructor alone; the async TUs stay in production
 -- shape (no internal-testing seam).
@@ -832,7 +832,7 @@ do
     end
 end
 
--- #527 (F6-F14) concurrent submissions through one context. Same
+-- Concurrent submissions through one context. Same
 -- self-contained seam-build shape as the ownership target: the submit pause
 -- gates and the core snapshot need the internal-testing define.
 do
@@ -905,7 +905,7 @@ do
             if extra_clang_cxxflags ~= nil then
                 add_cxxflags(extra_clang_cxxflags, {tools = {"clang", "clang_cl"}})
             end
-            -- #521: TSan replaces the global allocation functions, so the
+            -- TSan replaces the global allocation functions, so the
             -- suite's strong overrides and the zero-allocation oracle compile
             -- only outside TSan (see the SLUICE_TSAN_TESTING seam guards).
             if is_mode("tsan") then

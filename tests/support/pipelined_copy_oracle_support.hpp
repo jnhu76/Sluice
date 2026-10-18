@@ -3,8 +3,8 @@
 // Pipelined-copy contract oracles over the current
 // run_pipelined_copy_with_context API, driven through a scripted backend.
 //
-// Backend model: submit accepts through RequestCore exactly like a v1 request
-// backend (reserve -> accept(borrow facts) -> claim_execution). Accepted ops
+// Backend model: submit accepts through RequestCore exactly like the shipped
+// request backends (reserve -> accept(borrow facts) -> claim_execution). Accepted ops
 // stay completable until the test stages an outcome: the fill/commit of the
 // read/write borrow happens BEFORE offer_terminal + release_execution (the
 // borrow is legal to touch exactly in that window), then the publication is
