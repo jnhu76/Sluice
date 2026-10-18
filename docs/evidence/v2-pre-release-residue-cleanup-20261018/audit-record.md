@@ -149,7 +149,10 @@ Baseline (`2171d37f`, clean tree) and branch head (`8c2170bb`, clean tree):
   from tree and prefix), `NEGATIVE_V2_SEAM_UNAVAILABLE` (seam construction
   from installed headers fails with pinned diagnostics),
   `NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE`, ODR macro-independence all PASS.
-  Fresh manifests recorded next to this record at the branch head.
+  The recorded manifests next to this record were produced at `8b78a2ce`
+  (a documentation-only follow-on of the battery head `8c2170bb`: the
+  intervening commits add evidence files only, so the verified C++/build
+  content is identical).
 - `python3 scripts/check_cpp_comment_authority.py .` — clean (branch head).
 
 ## Validation battery (branch head `8c2170bb`)
