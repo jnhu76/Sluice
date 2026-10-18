@@ -1235,7 +1235,7 @@ bool overflow_flush_failure_does_not_release_still_inflight_borrow() {
 // (here a won-before-execution cancel of an undispatched entry, held
 // undispatched by a retryable submit failure saturating the SQ) stays for the
 // next pass and is reported as remaining immediate work.
-// Kept on the compat spellings: the mid-epilogue readiness of the cancelled
+// Kept on the internal seam spellings: the mid-epilogue readiness of the cancelled
 // entry is an oracle fact the public Request face cannot express (publication
 // visibility commits only at complete_publication).
 bool f1_publication_pass_is_entry_bounded() {

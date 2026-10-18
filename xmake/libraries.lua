@@ -20,10 +20,10 @@ target("sluice_core")
                     R .. "include/(sluice/measurement.hpp)",
                     R .. "include/(sluice/result.hpp)",
                     R .. "include/(sluice/blocking/file.hpp)")
-    -- Reproducible archives (#489): binutils built without
+    -- Reproducible archives: binutils built without
     -- --enable-deterministic-archives embeds each member's real mtime/uid/gid,
     -- so identical objects archive to different bytes on those toolchains and
-    -- the F1 frozen archive baselines cannot reproduce. GNU ar's -D modifier
+    -- the frozen archive baselines cannot reproduce. GNU ar's -D modifier
     -- zeroes that metadata; {force=true} bypasses xmake's flag check, which
     -- does not know ar modifiers. Scoped to Linux: the Windows/clang-cl
     -- archiver (lib.exe-style) does not accept -D.

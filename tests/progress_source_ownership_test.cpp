@@ -58,7 +58,7 @@ concept backend_has_no_wait_member =
     !requires(B b) { b.wait_one(); } && !requires { &B::wait_one_is_nonblocking; };
 static_assert(backend_has_no_wait_member<AsyncBackend>);
 
-// The C2-C convergence removed the poll-only readiness-fd lend: neither the
+// No poll-only readiness-fd lend exists: neither the
 // source nor the backend port exposes a readiness-fd binding operation.
 template <class S>
 concept progress_source_has_no_readiness_lend =
