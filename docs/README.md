@@ -57,7 +57,9 @@ kept for provenance: `docs/adr/` holds the adopted and superseded ADRs,
 `docs/archive/` the archived records, and `docs/evidence/` only the dated
 evidence records that active ledger rows or tooling still cite by path
 (`v2-release-acceptance-20261017/`, `repo-hygiene-contraction-20261017/`,
-`issue-528-release-doc-closeout-20261018/`, `pr-b-boundary-contraction-20261016/`,
+`issue-528-release-doc-closeout-20261018/`,
+`v2-pre-release-residue-cleanup-20261018/`,
+`pr-b-boundary-contraction-20261016/`,
 `issue-524-requestcore-convergence-20261015/`,
 `f6-final-correspondence-20261014/`, `f2-authority-contraction-20261013/`,
 `g0-403-performance-baseline-20261015/`). Older campaign records — the Phase
