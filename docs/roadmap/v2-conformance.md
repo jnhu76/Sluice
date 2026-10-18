@@ -251,3 +251,63 @@ re-worded in place. Summary:
 - Verification of this round: both build profiles green, clean-room package
   verifier re-run with the renamed seam allowlist, renamed mutants re-killed;
   recorded in `docs/evidence/repo-hygiene-contraction-20261017/`.
+
+## Dated internal-seam dispositions (2026-10-18, #528 closeout)
+
+F6-F16 asked for explicit dispositions of two internal seams that no public
+claim depends on. Both were re-derived from source at master `9f22bde6`,
+not copied from the F2 record; no production code changed.
+
+### `RequestCore::acquire_execution` — PROTOCOL_TEST_ONLY
+
+- Production callers: none. `src/` contains only the definition
+  (`src/async/detail/request_core.cpp:388`). The accepting transaction
+  itself takes the first execution reference (`request_core.cpp:210`,
+  inside `accept`), and the executor handoff authority is
+  `claim_execution` (`src/async/threadpool_backend.cpp`,
+  `src/async/uring_transport.cpp`).
+- Test callers: `tests/request_core_test_driver.hpp` and the five
+  `acquire_execution` sites in `tests/request_core_protocol_test.cpp`
+  (positive executor-handoff obligations and negative
+  terminal/zero-op refusals). It models an additional executor
+  borrow-touch on the same slot, mirroring the `AcquireExec` model action
+  recorded by the #524 correspondence
+  (`docs/evidence/issue-524-requestcore-convergence-20261015/correspondence-after.md`).
+- Exposure: none on the installed surface — `request_core.hpp` is an
+  uninstalled `detail/` header. The symbol is present in the shipped
+  static archive (recorded in both archive baselines) because
+  `request_core.cpp` compiles into `sluice_async`; it is unreachable from
+  the 11-header public surface.
+- Root obligation: none. REQ-02..06 are discharged through the
+  accept/claim/release paths; the v2 root imposes no public semantics on
+  this entry point. Classification confirms the F2 record's
+  protocol-test-surface reading (`docs/evidence/f2-authority-contraction-20261013/minimal-state-ledger.md`).
+
+### Ready-sink routing seam
+
+```text
+READY_SINK_PRODUCTION_BINDING = none attached: no production call site
+    invokes AsyncBackend::attach_ready_sink; each backend's default
+    backend-owned ReferenceReadySink member receives the events
+    (src/async/threadpool_backend.cpp:381, src/async/uring_backend.cpp:590
+    — routing_sink_ ? *routing_sink_ : sink_)
+READY_SINK_TEST_BINDING = TestAccess::context_set_ready_sink
+    (include/sluice/async/detail/test_access.hpp:31, uninstalled),
+    serialized against other TestAccess setters by the context access
+    mutex; exercised by tests/threadpool_external_loop_test.cpp and
+    tests/threadpool_progress_pass_bound_test.cpp
+READY_SINK_REBIND_SUPPORTED = no production rebind path exists (no
+    production caller). Unlike attach_progress_port, the routing pointer
+    carries no install-once invariant and no failure reporting: tests may
+    attach, replace and clear it at controlled points, and the attaching
+    caller must clear the binding before the sink object is destroyed
+READY_SINK_LIFETIME_OWNER = the attaching caller owns the sink object
+    (the backend holds a borrowed raw pointer); the backend-owned default
+    sink_ member lives with the backend
+PUBLIC_API_IMPACT = NONE (all types live in uninstalled detail headers)
+```
+
+The `attach_progress_port` install-once contract is deliberately not
+projected onto `attach_ready_sink`: the progress port is a
+construction-time install with a failure path, while ready-sink routing
+is a plain override pointer whose only writers are the test accessors.
