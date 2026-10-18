@@ -222,7 +222,7 @@ The default app composes canonical request settlement and owned progress with
 bounded read-ahead, ordered short-write retries, and atomic output. It does not
 require ApplicationRuntime, RuntimeTaskContext, TaskResultSlot, Completion, or
 legacy await helpers in its production source. ApplicationRuntime has been retired. The former Scheduler/Fiber compatibility
-layer was retired by F2/F5 and never established W-04 support.
+layer was retired with the v1 surfaces and never established W-04 support.
 
 ## Test targets
 

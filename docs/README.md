@@ -18,13 +18,13 @@ Repository working rules              AGENTS.md
   boundaries, lifetime rules, and acceptance obligations. Every other
   document is derived from it or is evidence about a particular commit. No
   other document is a normative authority, and none stands as a peer of the
-  root. The revision becomes the sole normative root when its adopting PR
-  merges (GOV-05); that same PR supersedes and removes the v1 root, the v1
+  root. The revision became the sole normative root when its adopting PR
+  merged (GOV-05); that same PR superseded and removed the v1 root, the v1
   conformance ledger and the v1 formal evidence map from the active tree —
   Git history retains them.
 - **[v2 conformance ledger](roadmap/v2-conformance.md)** tracks which v2
-  obligations have evidence and which do not, any remaining implementation
-  items, and the release gate. Adopting the target does not certify the code; nothing in
+  obligations have recorded evidence, and the release-gate status. Adopting
+  the target does not certify the code; nothing in
   this repository is VERIFIED without a recorded evidence entry there.
 
 ## Reading order

@@ -24,7 +24,7 @@ Each successful file prints `<SHA-256 digest>  <path>` on stdout.
 
 ## Migration from the legacy worker bridge
 
-The owner explicitly approved removal for F3 Step 3 on 2026-10-11. `--workers`
+The owner explicitly approved the removal on 2026-10-11. `--workers`
 is removed, including explicit `--workers 1`. When encountered, it reports
 `--workers has been removed; omit it to use direct execution`, prints usage,
 and returns 1 before opening inputs. `--workers=<value>` receives the same

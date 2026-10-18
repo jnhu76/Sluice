@@ -93,14 +93,14 @@ Every PR should:
 - identify architecture impact;
 - provide exact commands/results actually executed;
 - distinguish deterministic evidence from stress/environment observations;
-- record performance A/B evidence for scheduler/atomic/hot-path changes when practical;
+- record performance A/B evidence for concurrency/atomic/hot-path changes when practical;
 - list residual risks and re-track meaningful residual scope before using a closing keyword.
 
 Use `.github/pull_request_template.md` as the review contract.
 
 ## Architecture-sensitive changes
 
-Changes involving async I/O ownership, request lifecycle, Completion publication, cancellation, scheduler wake/progress, synchronization primitives, runtime ownership, resource bounds, shutdown/drain, or io_uring ownership require the architecture compliance process in `AGENTS.md §4` before production implementation.
+Changes involving async I/O ownership, request acceptance and publication, cancellation, progress ownership and wake handling, resource bounds, shutdown/drain, or io_uring ownership require the engineering order and architecture discipline in `AGENTS.md` before production implementation.
 
 Unknown authority, wake, failure, or capacity semantics block implementation.
 

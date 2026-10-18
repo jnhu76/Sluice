@@ -46,7 +46,7 @@ ownership ends through RAII with the existing destructor close-error policy.
 
 ## Migration from the legacy worker bridge
 
-The owner explicitly approved removal for F3 Step 3 on 2026-10-11. `--workers`
+The owner explicitly approved the removal on 2026-10-11. `--workers`
 is removed, including explicit `--workers 1`. When encountered, it reports
 `--workers has been removed; omit it to use direct execution`, prints usage,
 and returns 2 before opening inputs. `--workers=<value>` receives the same
@@ -76,5 +76,5 @@ The removed injected canceled-submission test returned `canceled` before
 admission; it did not prove an accepted-request cancellation schedule. Canonical
 admission/cancellation obligations remain with `async_sync_admission_test`,
 `backend_contract_conformance_threadpool_test`, `backend_contract_conformance_uring_test`,
-and the backend core integration suites. The Scheduler-era waiter/observer tests (retired with the F2 contraction) were separate from application execution.
+and the backend core integration suites. The Scheduler-era waiter/observer tests (retired with the v1 surfaces) were separate from application execution.
 ApplicationRuntime has been retired; COPY uses RequestScope and TAIL its own driver.

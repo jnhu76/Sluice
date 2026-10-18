@@ -8,7 +8,7 @@ Sluice 是一个 C++20 显式文件 I/O 库：统一 File 契约、显式 direct
 ## 规范权威
 
 **[Sluice v2 架构与契约](docs/explicit-io-contract.md)**（修订 v2-r1）是唯一
-规范根。它也是后续工作的术语字典与设计支架，规定文件语义、调用方式、请求与
+规范根。它规定术语字典、文件语义、调用方式、请求与
 观察者生命周期、进展、关闭、线程安全、资源预算和验收要求。原 v1 根与其台账
 已被取代，Git 历史保留其文本。
 
@@ -16,7 +16,7 @@ ADR 根据其中的稳定 requirement ID 细化实现选择；C++ 说明当前�
 提供有范围的证据。三者都不能独立改变根规范。
 
 - [v2 符合性台账](docs/roadmap/v2-conformance.md)：对照 v2 根记录实现状态、
-  证据、开放项与发布门槛；批准目标文档不代表代码已经符合。
+  证据与发布门槛；采用目标规范不代表代码已经符合。
 - [docs/README.md](docs/README.md)：文档地图——哪些是现行文档，哪些在 `docs/archive/` 归档。
 - [AGENTS.md](AGENTS.md)：仓库工作规则。
 - [代码架构快照](docs/archive/architecture/architecture.md)：带基线的历史实现视图，不是 v2 目标图。
@@ -29,7 +29,7 @@ ADR 根据其中的稳定 requirement ID 细化实现选择；C++ 说明当前�
 canonical `File` 拥有 native resource 与 access 事实。direct completed-return
 与显式 outstanding request 共用操作语义。
 
-Direct execution 不依赖请求表或 runtime。显式 `IoContext` 拥有有界
+Direct execution 不依赖请求表或 runtime。显式 `AsyncIoContext` 拥有有界
 RequestCore、一个 backend 和 progress source；move-only Request 表达尚待履行
 的操作责任。backend seam 是内部的：v2 只随附 ThreadPool 与 io_uring 两个
 backend，用户自写 backend 不是受支持配置。stackful host 及其 fiber/cancel
@@ -40,7 +40,7 @@ backend，用户自写 backend 不是受支持配置。stackful host 及其 fibe
 执行资源关闭后仍保留未消费的结果，context 销毁则要求所有 public binding 已释放。
 具体契约与 Linux 范围以根规范为准。
 
-## 当前实现与收敛
+## 当前实现
 
 当前代码树包含 canonical File/blocking 操作、Request/AsyncIoContext 请求核心
 （ThreadPool 与 io_uring backend）以及 W-02 的 RequestScope。可选 stackful
@@ -72,7 +72,9 @@ xmake f -m release -y
 xmake
 ```
 
-当前 target 以 `xmake.lua` 和 `xmake/` 为准。构建成功不代表全部 v2 目标配置已经实现。
+当前 target 以 `xmake.lua` 和 `xmake/` 为准。已测试的编译器、内核与 liburing
+配置记录在 [v2 发布验收证据](docs/evidence/v2-release-acceptance-20261017/)；该
+记录之外的配置未经测试。
 
 ## 许可证
 
