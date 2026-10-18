@@ -91,7 +91,7 @@ std::optional<File> open_temp_file(Tracker& t, const std::string& content) {
 
 // Readiness waits are bounded by a wall-clock deadline, not an iteration
 // budget: a runnable worker can lose any fixed spin count to CPU contention
-// (the release-job flake, #483). The loop keeps the test's own publication
+// (the release-job flake). The loop keeps the test's own publication
 // pass as the observation point, yields cooperatively so a runnable worker
 // wins the deadline race under CPU pressure, and reports the observed state
 // when the deadline expires instead of silently ending the budget.
