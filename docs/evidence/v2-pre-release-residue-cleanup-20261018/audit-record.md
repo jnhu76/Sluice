@@ -334,7 +334,9 @@ PR body was edited (REST PATCH, 2026-10-18T14:41:41Z) to state the three
 workflow jobs and the debug/release matrix, making the F5 disposition
 true as written; and this paragraph replaces the dangling pointer. A
 closing confirmation round over exactly these two fixes follows; its
-outcome is the only content added to this record after that round.
+outcome is recorded below, along with the single post-review addition
+that proved necessary: the CI-trigger correction in the reconciliation
+section, forced by an observed run that post-dated the closed review.
 
 Closing-round outcome (2026-10-18): both fixes re-verified — the live PR
 body shows the matrix heading at `updated_at` 2026-10-18T14:41:41Z with
@@ -345,8 +347,9 @@ inaccuracy. Verdict, quoted verbatim from the reviewer's closing round:
 is approved: every executable-preservation, provenance and documentation
 claim has survived three independent adversarial verification rounds, all
 identified inaccuracies are fixed and re-verified true as written, and no
-P0/P1/P2 finding remains open." This closing-round paragraph is the only
-content added after that round, as announced above.
+P0/P1/P2 finding remains open." Beyond the post-review CI-trigger
+correction in the reconciliation section, this closing-round paragraph is
+the only content added after that round.
 
 ## Final-head reconciliation (2026-10-18)
 
@@ -358,7 +361,8 @@ CHANGED_FILES = 24 (19 modified, 5 added, 0 deleted)
 NON_MARKDOWN_MODIFIED = 9 (7 C++ tests, 2 xmake Lua)
 CPP_FILES = 7   XMAKE_FILES = 2   ADDED_JSON = 4
 CHANGED_MARKDOWN = 11 (10 modified + this record, added)
-COMMITS_AT_0cc89df0 = 9 (this reconciliation commit makes it 10)
+COMMITS_AT_0cc89df0 = 9 (the provenance reconciliation commit makes it
+                    10; the CI-trigger correction below makes it 11)
 ```
 
 Equivalence at the final head, re-derived after all review fixes:
@@ -373,14 +377,18 @@ master, and the local battery at `8c2170bb` plus the two manifest runs
 remain valid evidence at the final head modulo the disclosed comment-only
 delta.
 
-CI at the final head: all four check entries passed at `0cc89df0`
-(C++ comment authority guard, Package verifier surface self-tests,
-Linux debug build + tests, Linux release build + tests; the workflow
-defines three jobs, the build job being a debug/release matrix). This
-reconciliation commit touches only evidence Markdown under `docs/`,
-which the `ci.yml` path filters do not trigger on; the merge-readiness
-argument for the new head therefore rests on the passing checks at
-`0cc89df0` plus the verified equivalence, not on a fresh CI run.
+CI: all four check entries passed at `0cc89df0` (C++ comment authority
+guard, Package verifier surface self-tests, Linux debug build + tests,
+Linux release build + tests; the workflow defines three jobs, the build
+job being a debug/release matrix). The reconciliation commit `e79d380c`
+(touching only this record) triggered a fresh run as well — run
+39137354129, same four entries passing — because the `ci.yml`
+`pull_request` paths filter evaluates the cumulative PR diff, which
+contains the `tests/**` and `xmake/**` changes; a docs-only push to this
+PR re-runs CI after all. An earlier sentence in the `e79d380c` version of
+this paragraph asserted the opposite (no trigger; argument resting on
+equivalence alone); the observed run corrected it, and any further
+evidence-only push re-runs the same green matrix by the same mechanism.
 
 ## Release-gate impact
 
