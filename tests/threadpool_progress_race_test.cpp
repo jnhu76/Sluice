@@ -452,6 +452,7 @@ bool r4b_worker_held_past_completion_signal_is_serviced_without_parking() {
                              "(harness failure)\n");
         ctx.interrupt_progress_waiters();
         driver.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         raw->set_worker_post_completion_signal_pause_gate(nullptr);
         resume_threadpool_gate(post_signal);
         wait_threadpool_gate_exited(post_signal);
@@ -473,6 +474,7 @@ bool r4b_worker_held_past_completion_signal_is_serviced_without_parking() {
                      static_cast<unsigned long long>(token_now.progress_exhaustion));
         ctx.interrupt_progress_waiters();
         driver.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         raw->set_worker_post_completion_signal_pause_gate(nullptr);
         resume_threadpool_gate(post_signal);
         wait_threadpool_gate_exited(post_signal);
