@@ -1,0 +1,245 @@
+# Sluice
+
+> Sluice is a C++20 explicit file-I/O library for Linux regular files: one
+> shared `File` contract, direct completed-return execution and explicit
+> request-based execution with exactly two shipped backends (ThreadPool and
+> io_uring), bounded progress, explicit resource ownership and lifetime rules,
+> and no host runtime or general task scheduler in the supported surface.
+
+This file is a navigation index, not a specification; it adds no rules and has
+no normative force. What wins when sources disagree:
+
+1. [docs/explicit-io-contract.md](https://github.com/jnhu76/Sluice/blob/master/docs/explicit-io-contract.md) —
+   sole normative root (revision v2-r1). Do not infer APIs from summaries;
+   open the linked contract or header.
+2. [docs/roadmap/v2-conformance.md](https://github.com/jnhu76/Sluice/blob/master/docs/roadmap/v2-conformance.md) —
+   what is implemented and what evidence exists, per requirement group.
+3. C++ under [include/](https://github.com/jnhu76/Sluice/tree/master/include)
+   and [src/](https://github.com/jnhu76/Sluice/tree/master/src) — what a
+   commit actually does; a mismatch with the root is a conformance gap, not a
+   contract change.
+4. [AGENTS.md](https://github.com/jnhu76/Sluice/blob/master/AGENTS.md) —
+   repository working rules (testing discipline, mechanism justification).
+
+Superseded v1 documents and archived records are history; their statuses do
+not transfer (see `## Optional`).
+
+## Specification and authority
+
+- [docs/explicit-io-contract.md](https://github.com/jnhu76/Sluice/blob/master/docs/explicit-io-contract.md):
+  the v2 root. Key sections: §1 product scope (Linux regular-file data I/O
+  only), §2 dictionary (TERM-01), §3 workloads W-01/W-02/W-03, §6 File
+  semantics, §7 errors and partial effects, §8–9 request core and handles,
+  §10 observation, §11 progress and external-host integration, §12 borrow
+  lifetime, §13 threading, §14 cancellation, §15 closed backend seam,
+  §17 shutdown and destruction, §18 resource bounds, §19 verification rules,
+  §23 decision tables.
+- [docs/roadmap/v2-conformance.md](https://github.com/jnhu76/Sluice/blob/master/docs/roadmap/v2-conformance.md):
+  conformance ledger (groups G1–G10, release gates RG1–RG7). Every `VERIFIED`
+  is bounded to a stated property, commit and configuration — a passing test
+  or model at one commit is not a universal correctness proof.
+- [README.md](https://github.com/jnhu76/Sluice/blob/master/README.md):
+  product overview with an informative architecture diagram;
+  [docs/README.md](https://github.com/jnhu76/Sluice/blob/master/docs/README.md)
+  maps current authority versus dated evidence;
+  [CHANGELOG.md](https://github.com/jnhu76/Sluice/blob/master/CHANGELOG.md)
+  records release history and the v2 breaking-change disclosure.
+
+## Public SDK: libraries, headers, build and install
+
+Build system is [xmake](https://xmake.io); a C++20 compiler and Linux are
+required. `sluice_core` (File + shared semantics + direct execution) has no
+async dependency; `sluice_async` (request execution) depends on `sluice_core`
+and is opt-in. `--liburing=y` / `--liburing=n` are different build profiles:
+`n` ships an honest io_uring stub with no `SLUICE_HAS_LIBURING`; `y` requires
+a real liburing. `xmake install -o <prefix> sluice_core sluice_async` installs
+the public headers plus `libsluice_core.a` / `libsluice_async.a`; consumers
+compile/link against the prefix directly (e.g. `-L<prefix>/lib
+-lsluice_core -lsluice_async`; a liburing=y build additionally links
+`-luring`). No CMake package config or exported CMake
+targets are provided or verified.
+
+The installed public surface is exactly these 11 headers
+(`xmake/libraries.lua` allowlist; root Appendix B). Everything else — the
+backend classes, the `AsyncBackend` seam and all `detail/` headers — is
+internal and uninstalled; do not treat `detail/` paths as SDK.
+
+- [include/sluice/file_resource.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/file_resource.hpp):
+  `File` RAII owner, open modes, `FileInfo`/identity, `native_handle()` borrow.
+- [include/sluice/blocking/file.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/blocking/file.hpp):
+  direct completed-return operations (`read_at`/`write_at`, `read`/`write`,
+  `sync_data`/`sync_all`, `file_info`, `size`, `resize`) and short-I/O
+  compositions (`read_exact*`, `write_all*`).
+- [include/sluice/result.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/result.hpp),
+  [error.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/error.hpp),
+  [effect.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/effect.hpp),
+  [measurement.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/measurement.hpp):
+  `Result<T>`/`IoError` vocabulary, confirmed-bytes-vs-unknown effect
+  reporting, non-authoritative diagnostics.
+- [include/sluice/async/async_io_context.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/async_io_context.hpp):
+  `AsyncIoContext` (six `submit_*` ops, `cancel`, `lookup`, `poll_progress`,
+  `wait_one`, `claim_progress_owner`, `progress_notification_fd()`,
+  `acknowledge_progress_notification()`, `detach_progress_host()`,
+  `close_admission`/`request_stop`/`shutdown`, observer attach/cancel,
+  `delivery_retired`), `ProgressPass` (including `dispatch_retry_remains`),
+  `ProgressOwner`.
+- [include/sluice/async/request.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/request.hpp):
+  move-only `Request<T>` (`ready`, `try_result`, `take_result`, `discard`,
+  `cancel`), `RequestId`, `CancelDisposition`, `RequestReadiness`.
+- [include/sluice/async/request_scope.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/request_scope.hpp):
+  `RequestScope` + `ScopeTicket<T>` bounded owned-driver pipeline scope.
+- [include/sluice/async/threadpool_backend.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/threadpool_backend.hpp)
+  and [uring_backend.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/uring_backend.hpp):
+  the only context factories — `make_threadpool_context(ThreadPoolConfig)`
+  (throws on setup failure) and `make_uring_context(UringConfig)` returning
+  `Result` with an explicit `not_supported` when the build has no io_uring
+  profile. Neither falls back to another execution.
+- [xmake.lua](https://github.com/jnhu76/Sluice/blob/master/xmake.lua) +
+  [xmake/](https://github.com/jnhu76/Sluice/tree/master/xmake): targets,
+  sanitizer modes, the liburing switch (`xmake/uring.lua`) and the installed
+  header allowlist (`xmake/libraries.lua`).
+- [scripts/verify_v2_package.py](https://github.com/jnhu76/Sluice/blob/master/scripts/verify_v2_package.py):
+  independent verification entry — installs into a fresh prefix, gates the
+  11-header surface, compiles/links/runs clean-room consumers against the
+  installed prefix only, in both liburing profiles. Its recorded scope is the
+  dated manifests under
+  [docs/evidence/v2-release-acceptance-20261017/](https://github.com/jnhu76/Sluice/tree/master/docs/evidence/v2-release-acceptance-20261017).
+- [tests/package/consumers/](https://github.com/jnhu76/Sluice/tree/master/tests/package/consumers):
+  clean-room external-consumer examples compiled against the installed
+  prefix only — `w01_direct.cpp`, `w02_pipeline.cpp`, `w03_external_loop.cpp`
+  and per-contract micro-consumers are the most faithful usage examples.
+- [apps/](https://github.com/jnhu76/Sluice/tree/master/apps): four reference
+  applications (sluice-copy/hash/grep/tail) built on the public surface.
+
+## Execution models
+
+- W-01 Ordinary utility (direct): open, read/write at explicit or shared
+  cursor, sync, metadata — completed-return calls on the caller thread with no
+  context, worker or request table. Authority: root §3 W-01, §6–7; public API
+  [blocking/file.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/blocking/file.hpp).
+- W-02 Bounded pipeline (`RequestScope`): submit up to a chosen bound, tolerate
+  short I/O and admission rejection, settle every accepted request on normal,
+  early and exceptional exit. Authority: root §3 W-02, §16; public API
+  [request_scope.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/request_scope.hpp).
+- W-03 External event loop: the application owns its loop and the single
+  fixed progress owner; it integrates the pollable notification fd, submits
+  and reaps bounded work, and shuts down without busy polling. Authority:
+  root §3 W-03, §11 (PROG-01..04), §13 (THREAD-01), §17; public API
+  [async_io_context.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/async_io_context.hpp)
+  (`poll_progress`, `wait_one`, `progress_notification_fd()`,
+  `acknowledge_progress_notification()`, `detach_progress_host()`).
+
+Note: "Direct" names Sluice's direct completed-return invocation model
+(W-01). It is not the Linux `O_DIRECT` open flag; Sluice never sets
+`O_DIRECT`, and the two concepts are unrelated.
+
+## Async request lifecycle and progress — read before writing an adapter
+
+The authoritative protocol is the root, not any summary: §5 (INV: initiation
+never waits), §8 (REQ: acceptance, publication, reclaim), §9 (HANDLE:
+`Request<T>` states and destruction), §10 (OBS: observer attach/deliver/
+retire), §11 (PROG: driver contract, no-lost-wake, external loop), §12
+(LIFE: borrows), §14 (CANCEL), §17 (SHUT). C++ entry points live in
+[async_io_context.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/async_io_context.hpp)
+and
+[request.hpp](https://github.com/jnhu76/Sluice/blob/master/include/sluice/async/request.hpp).
+
+Cautions that follow directly from the root (each link above defines the
+exact conditions; the summaries do not replace them):
+
+- A returned `Request` means acceptance, not completion; submission never
+  waits for I/O or capacity (INV-02). Acceptance, publication, observation
+  and consumption are distinct events (REQ-03..05, HANDLE-01).
+- A notification is a progress-availability signal, not a completion
+  guarantee and never a drain authority (PROG-01, PROG-03, TERM-01).
+  `ExecutionClosed` shutdown retains unconsumed results (SHUT-01);
+  notification does not mean every published result has been consumed.
+- Reuse of buffers or the `File` follows an acquired public terminal —
+  observing it via `ready()`/`try_result()`/`take_result()`/`lookup()`.
+  Physical completion alone, a cancel disposition, a wait timeout or observer
+  cancellation never ends the borrow (REQ-04, LIFE-01, CANCEL-02).
+- Cancel is best-effort: `requested` and
+  `physical_interruption_unsupported` do not mean the I/O stopped, and a
+  cancel completion does not prove the operation's buffer is unreachable
+  (CANCEL-01/02, BACKEND-03).
+- `poll_progress()`/`wait_one()`/driving `shutdown()` belong to the single
+  fixed progress owner (PROG-01, THREAD-01). Do not park host ASYNC worker
+  threads inside `wait_one()` to emulate completion-driven execution; host
+  workers integrate via the notification fd and the owner drives.
+- A `ProgressPass` with `dispatch_retry_remains` set owes another bounded
+  pass: that accepted transport has not reached the kernel, produces no
+  completion and no notification until submitted, so an fd-only wait strands
+  it (PROG-01). A temporarily unreadable notification fd is not evidence that
+  dispatch/progress work is finished (PROG-03).
+- Shutdown: any thread may call `close_admission()`/`request_stop()`;
+  driving `shutdown()` and context destruction require the owner and zero
+  live public bindings (SHUT-01..04, HANDLE-03).
+
+## Correctness evidence: tests, formal models, package verification
+
+- [tests/](https://github.com/jnhu76/Sluice/tree/master/tests): deterministic
+  suites run as xmake targets (`xmake run <target>`). Landmarks:
+  `semantic_*` (File-semantics oracle suites), `backend_contract_conformance_{threadpool,uring}_test`
+  (cross-backend contract conformance), `public_request_test`,
+  `request_core_protocol_test`, `request_scope_test`,
+  `threadpool_progress_pass_bound_test`, `threadpool_external_loop_test`,
+  `uring_progress_race_test`, `uring_owed_residue_test`,
+  `uring_external_loop_test`, `shutdown_lifecycle_test` (plus its `_uring`
+  variant), `request_error_domain_{threadpool,uring}_test`. Target
+  definitions:
+  [xmake/tests.lua](https://github.com/jnhu76/Sluice/blob/master/xmake/tests.lua).
+- [formal/tla/](https://github.com/jnhu76/Sluice/tree/master/formal/tla): four
+  living bounded TLA+ models mirroring C++ transitions — `RequestCore`,
+  `ObserverCore`, `ProgressSource`, `ShutdownCore`. Gates:
+  [scripts/verify_tla.sh](https://github.com/jnhu76/Sluice/blob/master/scripts/verify_tla.sh)
+  and
+  [scripts/verify_progress_source_model.sh](https://github.com/jnhu76/Sluice/blob/master/scripts/verify_progress_source_model.sh).
+  Scope and non-coverage: root VERIFY-06; evidence state: ledger G8. A model
+  PASS proves only its explored instances under stated fairness assumptions.
+- [scripts/verify_v2_package.py](https://github.com/jnhu76/Sluice/blob/master/scripts/verify_v2_package.py)
+  (+ [tests/package/README.md](https://github.com/jnhu76/Sluice/blob/master/tests/package/README.md)):
+  the external-consumer package-boundary verification described above.
+- [docs/evidence/v2-release-acceptance-20261017/verification-record.md](https://github.com/jnhu76/Sluice/blob/master/docs/evidence/v2-release-acceptance-20261017/verification-record.md):
+  release-acceptance record — 8-cell build matrix (per-cell compiler/mode/
+  liburing; kernel and filesystem recorded once in the same directory's
+  `environment.txt`); per-cell argv/exit logs in
+  [matrix/matrix.json](https://github.com/jnhu76/Sluice/blob/master/docs/evidence/v2-release-acceptance-20261017/matrix/matrix.json).
+  Configurations outside the recorded matrix are untested by that release.
+
+## Performance research
+
+- [docs/performance/methodology.md](https://github.com/jnhu76/Sluice/blob/master/docs/performance/methodology.md):
+  standing method — freeze (commit SHA, host, compiler/flags, workload,
+  correctness oracle, measurement config) before the first run; baseline
+  before profiling; single-factor attribution; paired A/B on one host.
+- [bench/](https://github.com/jnhu76/Sluice/tree/master/bench): harness for
+  the preregistered G0 matrix ([run_matrix.sh](https://github.com/jnhu76/Sluice/blob/master/bench/run_matrix.sh),
+  [check_run.py](https://github.com/jnhu76/Sluice/blob/master/bench/check_run.py));
+  a new workload needs its own runner configuration before results count as
+  evidence.
+
+For external integrations (e.g. a DuckDB or fio adapter), the method applies
+to the composed system: verify semantics and the actual I/O path first
+(which Sluice backend really executed, how many bytes/requests Sluice
+actually served), distinguish Direct/ThreadPool/io_uring by their real
+execution semantics, and never attribute adapter overhead to Sluice (or
+conversely) without measurement. Label results with source commit, build
+profile, backend, cache state and measurement configuration. Adapter
+experiments are external workloads: no adapter ships here, and this
+repository does not bind any consumer version or benchmark parameters.
+
+## Optional
+
+- [docs/archive/README.md](https://github.com/jnhu76/Sluice/blob/master/docs/archive/README.md):
+  index of superseded v1-era records (old architecture snapshots, retired
+  roadmaps and formal corpora). Historical statuses are scoped to the
+  baselines they examined; none certifies v2.
+- [docs/adr/](https://github.com/jnhu76/Sluice/tree/master/docs/adr): ADR
+  provenance — ADR-0004 is the one adopted (subordinate implementation
+  decision, restated in root §17); 0001–0002 are superseded rationale and
+  0003 was retired to Git history.
+- [research/RESULTS.md](https://github.com/jnhu76/Sluice/blob/master/research/RESULTS.md):
+  retained pre-reset research conclusions (dated, environment-limited
+  evidence; not architecture authority).
+- [README.zh-CN.md](https://github.com/jnhu76/Sluice/blob/master/README.zh-CN.md):
+  Chinese product overview.
