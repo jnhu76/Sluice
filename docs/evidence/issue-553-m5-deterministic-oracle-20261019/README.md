@@ -186,7 +186,9 @@ signal happens-before enqueue — is exactly the historical M5 inversion.
 ### WSL2 implementation and causality verification (M5-3)
 
 Environment: WSL2 Ubuntu 26.04, kernel `6.18.54.1-microsoft-standard-WSL2`,
-g++ 15.2.0, xmake v3.1.2. Source: branch commit `1612e52b` (seam + r4b).
+g++ 15.2.0, xmake v3.1.2. The numbers in this section were first produced
+at the seam commit `1612e52b` and re-produced unchanged at the final HEAD
+`fe2d5e75` after the review hardening (see the identity paragraph below).
 
 Mutant builds are one-off `/tmp` copies (`/tmp/sluice-553-mutants/`, direct
 g++ recipe from the #550 campaign: `-std=c++20 -O2 -g -pthread
@@ -252,6 +254,160 @@ joined), no held worker (gate resumed, `exited` awaited), no unconsumed
 `Request` (final pass publishes, then discard) and no blocked eventfd
 (control acknowledged).
 
+WSL2 final-HEAD identity (after the review hardening commit): pristine
+binary SHA-256 `4ef67d70…`, m5 binary `9e04a9c0…`, m1 `58d6a871…`, m2
+`a736bc84…`, m3 `879941d9…`; all four mutant **diff** SHA-256s unchanged
+(the hardening touched only the test file), and every campaign above was
+re-run green at that HEAD (M5 20/20 same signature; M1/M2/M3 5/5 each;
+0/360, 0/480, 0/480; TSan 5/5; matrix 56/74 × 4 configs).
+
+## Native Linux cross-validation (E5, M5-4)
+
+Validation-only host `jnhu@192.168.31.75` (`E5`), SSH Batch Mode key auth,
+Git fetch/ff-only sync (no scp/rsync of sources, no host-key policy change).
+Both validation rounds (intermediate `12f420d2`, final `fe2d5e75`) ran the
+full protocol; the numbers below are the **final-HEAD** round.
+
+| Item | Value |
+|---|---|
+| Virtualization | bare metal (per the #550 record) |
+| OS / kernel | Fedora Linux 44, `7.2.9-201.fc44.x86_64` |
+| Compiler | gcc 16.2.1 20260819 (Red Hat 16.2.1-2) |
+| xmake | 3.0.6+20260117 |
+| CPUs / RAM | 20 threads (Xeon E5-2666 v3), 62 GiB |
+| Source identity | `REMOTE_SHA == LOCAL_SHA == fe2d5e75…` before every run (`SOURCE_IDENTITY_PASS`) |
+
+Results (rebuilt from source in an isolated worktree, never a copied
+binary):
+
+| Case | Result |
+|---|---|
+| Pristine suite (xmake release×liburing=y) | 22/22 PASS, binary SHA-256 `439fb858…` |
+| Pristine campaigns | 0 fails / 360 sequential, 0/480 concurrent-8, 0/480 concurrent-16 |
+| Pristine xmake matrix | 56/56 debug×n, 74/74 debug×y, 56/56 release×n, 74/74 release×y |
+| M5 / unforced r4 | PASS inside all 20 mutant runs (`ok r4_…` printed before the r4b kill) |
+| M5 / deterministic r4b | **KILLED 20/20**, `rc=1`, identical signature `prepark=1 publication_pending=0 token 0/0 -> 1/0`, `cleanup publication ok` in 20/20 |
+| M1 | KILLED 5/5 at `r4_…` (18.01 s watchdog) |
+| M2 | KILLED 5/5 at `r2_…` |
+| M3 | KILLED 5/5, `rc=134`, `write failed with errno=11` after `ok r15_…` |
+| TSan | 5/5 runs, zero warnings |
+
+Cross-host mutant identity: all four mutant diff SHA-256s are **identical
+on both hosts** (m5 `1f74a027…`, m1 `027bbd4b…`, m2 `790ea5a3…`, m3
+`62436458…`), so WSL2 and E5 verified the same source commit under the same
+mutated semantics; only compiler-produced binaries differ (E5 m5 binary
+`0750903e…`). WSL2 and E5 sample counts are recorded separately above and
+are never pooled.
+
+Remote hygiene: no leftover test processes after any campaign; the 553
+worktree was removed and the owner checkout restored to `master` (local
+master left as found, behind origin by pre-existing commits); raw receipts
+remain under `jnhu@192.168.31.75:~/sluice-553-native/{evidence,mutants}/`
+(mutants never on any branch).
+
+## Independent review (M5-5)
+
+Fresh-context reviewer, no implementation involvement; read the branch diff,
+re-derived the synchronization chain, **independently rebuilt** pristine and
+all four mutants from `git archive` + diffs (removing binary-provenance
+trust) and re-verified the E5 receipts live over SSH. Verdict on the
+implementation: no P0; technical dimensions all pass — oracle independence
+strong (three conjuncts on three disjoint authorities: public wait outcome,
+public Request readiness, production-side park-boundary counter; the
+publication queue is read only in failure diagnostics), controlled schedule
+valid (adversarial schedule attempts produced no wrong verdict; the only
+theoretical hang requires a different production defect and is visible,
+never false-green), native reproducibility verified first-hand on both
+hosts, seam cost justified (tenth gate of the existing family, compiled out
+of production builds, call site outside both mutexes, standing consumer).
+
+Findings raised (REVISE, all closed before delivery):
+
+- P1 (doc): `Reproduction` section referenced but absent; E5 round not yet
+  recorded in the repository. **Closed**: this document now carries the
+  final-HEAD E5 record and the reproduction commands below.
+- P2 (code hardening, applied): r4b's failure paths now detach the prepark
+  counter after joining the driver (`context_set_progress_prepark_counter(
+  ctx, nullptr)`), matching the sibling subtests instead of relying on
+  declaration-order convergence at teardown — commit `fe2d5e75`, after
+  which both environments re-ran the complete protocol above.
+- P2 (optional, not taken): a v2-conformance-ledger pointer row. The slice
+  moves no production authority and changes no conformance status, so the
+  ledger stays untouched; this document is the evidence location.
+- P3 (noted, no change): the gate-paused waits are unbounded, consistent
+  with the file's idiom; a hang there is a visible failure, never a false
+  verdict.
+
+## Authority contraction audit
+
+No production authority moved. The slice adds one test-only seam (class:
+test-only evidence) and one subtest; it replaces no mechanism and removes
+no eligibility. Production builds compile none of it.
+
+## Disposition (M5-6)
+
+```text
+DISPOSITION = ADOPT_DETERMINISTIC_GATE
+PRODUCTION_CHANGE = NONE (the seam exists only inside
+  SLUICE_ASYNC_INTERNAL_TESTING builds; apps and production targets never
+  define it)
+M5_COVERAGE_GAP = CLOSED for the threadpool completion-signal window: the
+  suite now schedules the erroneous interleaving deterministically and
+  kills it at the intended oracle (20/20 both hosts, ~7 ms, exact
+  prepark==0 conjunct, full causal signature)
+M5_EQUIVALENCE = REFUTED (deterministic kill; the historical unforced
+  0/20+0/20 miss is now explained inside the runs themselves: r4 stays
+  green unforced while r4b kills — the gap was scheduling, never oracle
+  blindness)
+MUTANT_NOT_PRODUCTION_DEFECT = the M5 window exists only in the mutated
+  order; pristine enqueue-before-signal plus the single-mutex signal keep
+  the owner's observed-token path park-free (M5-1 argument), and no
+  pristine lost wake was observed in 2×1320 campaign runs + 8 matrix cells
+  + TSan
+```
+
+## Reproduction
+
+WSL2 (implementation host):
+
+```bash
+git checkout fe2d5e75                      # branch test/553-m5-deterministic-oracle
+xmake f -m release --liburing=y --toolchain=gcc -o /tmp/sluice-553-build -y
+xmake build -y threadpool_progress_race_test
+/tmp/sluice-553-build/linux/x86_64/release/threadpool_progress_race_test
+# expect: 22 ok lines, rc=0
+
+# mutants: stage a copy, patch, build with the campaign recipe
+git archive HEAD | tar -x -C /tmp/sluice-553-mutants/pristine
+# apply exactly the swaps recorded by these SHA-256s (m5.diff =
+# 1f74a027ce00cde6e3b26a6ac880e93b3716279b19be2c4b3e86bf0f5509639d):
+#   m5: exchange the publication_pending_.push_back block and the
+#       signal_ready_progress() call in worker_loop's have_op branch
+#       (the SLUICE_ASYNC_INTERNAL_TESTING gate lines are untouched)
+#   m1: delete the post-enqueue signal_ready_progress() call
+#   m2: delete the first epoch-revalidation return inside
+#       ProgressSource::wait_if_unchanged
+#   m3: delete the EAGAIN tolerance in wake_notification_nolock_
+g++ -std=c++20 -O2 -g -pthread -DSLUICE_ASYNC_INTERNAL_TESTING \
+    -I include -I src/async \
+    tests/threadpool_progress_race_test.cpp src/async/threadpool_backend.cpp \
+    src/async/async_io_context.cpp src/async/fail_fast.cpp src/async/request_scope.cpp \
+    src/async/detail/context_identity.cpp src/async/detail/request_core.cpp \
+    src/blocking_file.cpp src/file_resource.cpp -o /tmp/m5-bin
+/tmp/m5-bin    # expect rc=1 in ~7 ms:
+               #   ok r4_worker_completion_signal_before_final_recheck_is_caught
+               #   r4b: owner crossed the park boundary although the worker was
+               #        already past its completion signal: prepark=1
+               #        publication_pending=0 token 0/0 -> 1/0
+               #   r4b: cleanup publication ok
+               #   FAIL: r4b_worker_held_past_completion_signal_is_serviced_without_parking
+```
+
+E5 (validation host): same protocol after
+`git fetch origin test/553-m5-deterministic-oracle && git switch test/553-m5-deterministic-oracle`
+in a worktree, with `SOURCE_IDENTITY_PASS` on `fe2d5e75…` recorded before
+the campaigns; receipts under `~/sluice-553-native/{evidence,mutants}/`.
+
 ## Environment
 
 ### WSL2 (implementation host)
@@ -263,3 +419,15 @@ joined), no held worker (gate resumed, `exited` awaited), no unconsumed
 | xmake | v3.1.2+HEAD.5d21e9d |
 | Suite size | 22 subtests (21 + r4b) |
 
+## Remaining limitations
+
+- Mutation coverage, not production correctness: the kill proves the suite
+  now schedules and discriminates the M5 window; it does not re-prove the
+  whole PROG-02 protocol (the ProgressSource model and the standing oracle
+  suites remain that evidence).
+- 0/N campaign counts are sample statements, not race-freedom proofs.
+- The seam covers the threadpool completion-signal window only; the uring
+  backend's progress paths have their own targets.
+- The r4b bounded yield loop watches which of two authority states changed
+  first; its bound only reports harness failure and is never the
+  synchronization.
