@@ -1,0 +1,23 @@
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -457,16 +457,15 @@
+                     detail::ExecutionRelease::borrow_touch_fully_retired) {
+                     detail::threadpool_core_handoff_fail_fast();
+                 }
+-                {
+-                    std::lock_guard<std::mutex> wl(work_mtx_);
+-                    publication_pending_.push_back(h);
+-                }
+-
+                 signal_ready_progress();
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+                 wait_worker_post_completion_signal_pause_();
+ #endif
++                {
++                    std::lock_guard<std::mutex> wl(work_mtx_);
++                    publication_pending_.push_back(h);
++                }
+             }
+         }
+     } catch (...) {

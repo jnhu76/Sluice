@@ -348,6 +348,11 @@ no eligibility. Production builds compile none of it.
 
 ```text
 DISPOSITION = ADOPT_DETERMINISTIC_GATE
+CLOSING SEMANTICS = PROG-02 / ThreadPool completion-signal / M5
+  deterministic schedule coverage = CLOSED
+  (scope note: this closes exactly that coverage window — it is not a
+  "PROG-02 fully verified" claim, and the io_uring backend's progress
+  windows remain separate scope with their own targets)
 PRODUCTION_CHANGE = NONE (the seam exists only inside
   SLUICE_ASYNC_INTERNAL_TESTING builds; apps and production targets never
   define it)
@@ -368,7 +373,28 @@ MUTANT_NOT_PRODUCTION_DEFECT = the M5 window exists only in the mutated
 
 ## Reproduction
 
-WSL2 (implementation host):
+The exact M5 mutant patch and a self-checking reproduction script are
+persisted next to this document:
+
+- `m5.diff` — the exact validated swap (SHA-256
+  `1f74a027ce00cde6e3b26a6ac880e93b3716279b19be2c4b3e86bf0f5509639d`,
+  byte-identical to the campaign artifacts on both hosts);
+- `reproduce-m5-kill.sh` — verifies the patch hash, builds a pristine
+  control and the mutant from a throwaway `git archive` stage, and checks
+  the pristine suite green plus the exact r4b kill signature (unforced r4
+  pass, park-boundary line, cleanup line, named FAIL). The repository is
+  never modified; success prints `REPRODUCTION_OK`. The script is pinned
+  to this evidence era: if `threadpool_backend.cpp` moves on, the patch
+  stops applying and the script fails loudly rather than reproducing
+  something else.
+
+```bash
+docs/evidence/issue-553-m5-deterministic-oracle-20261019/reproduce-m5-kill.sh [repo-root]
+# expect: REPRODUCTION_OK (pristine suite green; M5 killed at r4b with the
+#         recorded signature)
+```
+
+WSL2 (implementation host), manual equivalent:
 
 ```bash
 git checkout fe2d5e75                      # branch test/553-m5-deterministic-oracle
