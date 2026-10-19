@@ -81,6 +81,7 @@ class ThreadPoolBackend : public AsyncBackend {
     struct WorkerClaimedPauseGate;
     struct WorkerUnclaimedRetirementPauseGate;
     struct WorkerOutcomePreTerminalPauseGate;
+    struct WorkerPostCompletionSignalPauseGate;
     struct PublicationEpiloguePauseGate;
     struct DeliveryClaimedPauseGate;
 
@@ -96,6 +97,8 @@ class ThreadPoolBackend : public AsyncBackend {
         WorkerUnclaimedRetirementPauseGate* gate) noexcept;
     void set_worker_outcome_pre_terminal_pause_gate(
         WorkerOutcomePreTerminalPauseGate* gate) noexcept;
+    void set_worker_post_completion_signal_pause_gate(
+        WorkerPostCompletionSignalPauseGate* gate) noexcept;
     void set_publication_epilogue_pause_gate(PublicationEpiloguePauseGate* gate) noexcept;
     void set_delivery_claimed_pause_gate(DeliveryClaimedPauseGate* gate) noexcept;
     void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept;
@@ -203,6 +206,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_worker_claimed_pause_() noexcept;
     void wait_unclaimed_retirement_pause_() noexcept;
     void wait_worker_outcome_pre_terminal_pause_() noexcept;
+    void wait_worker_post_completion_signal_pause_() noexcept;
     void wait_publication_epilogue_pause_() noexcept;
     void wait_delivery_claimed_pause_() noexcept;
 
@@ -243,6 +247,8 @@ class ThreadPoolBackend : public AsyncBackend {
     std::atomic<WorkerClaimedPauseGate*> worker_claimed_gate_{nullptr};
     std::atomic<WorkerUnclaimedRetirementPauseGate*> unclaimed_retirement_gate_{nullptr};
     std::atomic<WorkerOutcomePreTerminalPauseGate*> worker_outcome_pre_terminal_gate_{nullptr};
+    std::atomic<WorkerPostCompletionSignalPauseGate*>
+        worker_post_completion_signal_gate_{nullptr};
     std::atomic<PublicationEpiloguePauseGate*> publication_epilogue_gate_{nullptr};
     std::atomic<DeliveryClaimedPauseGate*> delivery_claimed_gate_{nullptr};
 

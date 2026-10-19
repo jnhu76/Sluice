@@ -463,6 +463,10 @@ void ThreadPoolBackend::worker_loop() {
                 }
 
                 signal_ready_progress();
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+                wait_worker_post_completion_signal_pause_();
+#endif
             }
         }
     } catch (...) {
@@ -678,6 +682,18 @@ void ThreadPoolBackend::wait_unclaimed_retirement_pause_() noexcept {
 
 void ThreadPoolBackend::wait_worker_outcome_pre_terminal_pause_() noexcept {
     auto* g = worker_outcome_pre_terminal_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_worker_post_completion_signal_pause_() noexcept {
+    auto* g = worker_post_completion_signal_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);

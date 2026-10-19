@@ -53,6 +53,12 @@ struct ThreadPoolBackend::WorkerOutcomePreTerminalPauseGate {
     std::atomic<bool> exited{true};
 };
 
+struct ThreadPoolBackend::WorkerPostCompletionSignalPauseGate {
+    std::atomic<bool> paused{false};
+    std::atomic<bool> resume{false};
+    std::atomic<bool> exited{true};
+};
+
 struct ThreadPoolBackend::PublicationEpiloguePauseGate {
     std::atomic<bool> paused{false};
     std::atomic<bool> resume{false};
@@ -136,6 +142,10 @@ inline void ThreadPoolBackend::set_worker_unclaimed_retirement_pause_gate(
 inline void ThreadPoolBackend::set_worker_outcome_pre_terminal_pause_gate(
     WorkerOutcomePreTerminalPauseGate* gate) noexcept {
     worker_outcome_pre_terminal_gate_.store(gate, std::memory_order_release);
+}
+inline void ThreadPoolBackend::set_worker_post_completion_signal_pause_gate(
+    WorkerPostCompletionSignalPauseGate* gate) noexcept {
+    worker_post_completion_signal_gate_.store(gate, std::memory_order_release);
 }
 inline void ThreadPoolBackend::set_publication_epilogue_pause_gate(
     PublicationEpiloguePauseGate* gate) noexcept {

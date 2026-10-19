@@ -396,6 +396,107 @@ bool r4_worker_completion_signal_before_final_recheck_is_caught() {
     return ok;
 }
 
+// R4's deterministic-schedule form: the worker is held just past its
+// completion signal while the owner, released at the revalidation boundary,
+// must service the publication without ever crossing the park boundary. The
+// worker-side hold is what lets the same schedule reach a signal-before-
+// enqueue order if one is ever introduced; misuse that would invalidate it:
+// resuming the worker's post-signal hold before the owner's outcome is
+// witnessed, or letting any other progress-token producer become reachable
+// in the scenario.
+bool r4b_worker_held_past_completion_signal_is_serviced_without_parking() {
+    ThreadPoolBackend* raw = nullptr;
+    AsyncIoContext ctx = make_pool_context(4, 1, &raw);
+    GatedWorkerRead read;
+    RequestPublicationDrain drain{ctx};
+    drain.track_gate(read);
+    drain.track(read.request);
+    if (!read.arm(ctx, raw))
+        return false;
+
+    ThreadPoolBackend::WorkerPostCompletionSignalPauseGate post_signal;
+    raw->set_worker_post_completion_signal_pause_gate(&post_signal);
+
+    PauseGate gate;
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, &gate);
+    std::atomic<int> prepark{0};
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, &prepark);
+
+    std::optional<AsyncIoContext::ProgressWaitOutcome> result;
+    std::atomic<bool> driver_done{false};
+    std::thread driver([&] {
+        DriverClaim owner{ctx};
+        result = wait_one_value(ctx, std::chrono::milliseconds{8000});
+        driver_done.store(true, std::memory_order_release);
+    });
+    wait_gate_paused(gate);
+    detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
+
+    const auto token_before_release = detail::TestAccess::context_progress_token(ctx);
+    read.release();
+    wait_threadpool_gate_paused(post_signal);
+    resume_gate(gate);
+
+    bool owner_parked = false;
+    bool owner_returned = false;
+    for (int i = 0; i < 20000000; ++i) {
+        owner_parked = prepark.load(std::memory_order_acquire) >= 1;
+        owner_returned = driver_done.load(std::memory_order_acquire);
+        if (owner_parked || owner_returned)
+            break;
+        std::this_thread::yield();
+    }
+
+    if (!owner_parked && !owner_returned) {
+        std::fprintf(stderr, "r4b: owner neither parked nor returned after signal "
+                             "(harness failure)\n");
+        ctx.interrupt_progress_waiters();
+        driver.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
+        raw->set_worker_post_completion_signal_pause_gate(nullptr);
+        resume_threadpool_gate(post_signal);
+        wait_threadpool_gate_exited(post_signal);
+        ctx.acknowledge_progress_control();
+        return false;
+    }
+
+    if (owner_parked) {
+        const auto token_now = detail::TestAccess::context_progress_token(ctx);
+        std::fprintf(stderr,
+                     "r4b: owner crossed the park boundary although the worker was "
+                     "already past its completion signal: prepark=%d "
+                     "publication_pending=%zu token %llu/%llu -> %llu/%llu\n",
+                     prepark.load(std::memory_order_acquire),
+                     raw->publication_pending_size_for_test(),
+                     static_cast<unsigned long long>(token_before_release.progress),
+                     static_cast<unsigned long long>(token_before_release.progress_exhaustion),
+                     static_cast<unsigned long long>(token_now.progress),
+                     static_cast<unsigned long long>(token_now.progress_exhaustion));
+        ctx.interrupt_progress_waiters();
+        driver.join();
+        detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
+        raw->set_worker_post_completion_signal_pause_gate(nullptr);
+        resume_threadpool_gate(post_signal);
+        wait_threadpool_gate_exited(post_signal);
+        ctx.acknowledge_progress_control();
+        const auto final_r = wait_one_value(ctx, std::chrono::milliseconds{8000});
+        std::fprintf(stderr, "r4b: cleanup publication %s\n",
+                     is_progress(final_r, 1) && read.request.ready() ? "ok" : "incomplete");
+        read.request.discard();
+        return false;
+    }
+
+    driver.join();
+    detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
+    raw->set_worker_post_completion_signal_pause_gate(nullptr);
+    resume_threadpool_gate(post_signal);
+    wait_threadpool_gate_exited(post_signal);
+
+    const bool ok = is_progress(result, 1) && prepark.load() == 0 && read.request.ready();
+    read.request.discard();
+    return ok;
+}
+
 // R5: readiness raised after the pass boundary is observable while the owner
 // is paused and the wake is delivered on resume.
 bool r5_postdrain_signal_readiness_persists_into_poll() {
@@ -1194,6 +1295,8 @@ int main() {
          r3_signal_after_ack_wakes_poll_before_next_snapshot},
         {"r4_worker_completion_signal_before_final_recheck_is_caught",
          r4_worker_completion_signal_before_final_recheck_is_caught},
+        {"r4b_worker_held_past_completion_signal_is_serviced_without_parking",
+         r4b_worker_held_past_completion_signal_is_serviced_without_parking},
         {"r5_postdrain_signal_readiness_persists_into_poll",
          r5_postdrain_signal_readiness_persists_into_poll},
         {"r8_empty_pass_signal_immediately_before_poll_entry",
