@@ -23,6 +23,8 @@ independently changes the target contract.
   Adopting the specification does not certify the code.
 - [docs/README.md](docs/README.md) — documentation map: active records versus
   `docs/archive/` historical records.
+- [llms.txt](llms.txt) — navigation index for LLM/coding agents; an index
+  only, with no normative force.
 - [AGENTS.md](AGENTS.md) — repository working rules.
 - [Current-code architecture snapshot](docs/archive/architecture/architecture.md) — dated historical
   implementation view, not a v2 target diagram.
