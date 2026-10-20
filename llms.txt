@@ -24,6 +24,11 @@ no normative force. What wins when sources disagree:
 Superseded v1 documents and archived records are history; their statuses do
 not transfer (see `## Optional`).
 
+All GitHub links target `master` as an online navigation aid. A consumer
+building against a pinned Sluice checkout (e.g. a submodule) must read the
+contract, headers and scripts from that checked-out revision and record its
+SHA; a master link is not a substitute for the checked-out source identity.
+
 ## Specification and authority
 
 - [docs/explicit-io-contract.md](https://github.com/jnhu76/Sluice/blob/master/docs/explicit-io-contract.md):
@@ -52,11 +57,22 @@ required. `sluice_core` (File + shared semantics + direct execution) has no
 async dependency; `sluice_async` (request execution) depends on `sluice_core`
 and is opt-in. `--liburing=y` / `--liburing=n` are different build profiles:
 `n` ships an honest io_uring stub with no `SLUICE_HAS_LIBURING`; `y` requires
-a real liburing. `xmake install -o <prefix> sluice_core sluice_async` installs
-the public headers plus `libsluice_core.a` / `libsluice_async.a`; consumers
-compile/link against the prefix directly (e.g. `-L<prefix>/lib
--lsluice_core -lsluice_async`; a liburing=y build additionally links
-`-luring`). No CMake package config or exported CMake
+a real liburing. Install the two targets with one `xmake install` call per
+target (the form the package verifier uses):
+
+```
+xmake install -o <prefix> sluice_core
+xmake install -o <prefix> sluice_async
+```
+
+This installs the public headers plus `libsluice_core.a` /
+`libsluice_async.a`; consumers compile/link against the prefix directly.
+GNU static-archive resolution is order-sensitive: name each consumer object
+first, then dependents before their dependencies — `-L<prefix>/lib
+-lsluice_async -lsluice_core` (a liburing=y build additionally appends
+`-luring`). This is the exact order the clean-room consumers in
+[scripts/verify_v2_package.py](https://github.com/jnhu76/Sluice/blob/master/scripts/verify_v2_package.py)
+link with. No CMake package config or exported CMake
 targets are provided or verified.
 
 The installed public surface is exactly these 11 headers
@@ -171,9 +187,11 @@ exact conditions; the summaries do not replace them):
   completion and no notification until submitted, so an fd-only wait strands
   it (PROG-01). A temporarily unreadable notification fd is not evidence that
   dispatch/progress work is finished (PROG-03).
-- Shutdown: any thread may call `close_admission()`/`request_stop()`;
-  driving `shutdown()` and context destruction require the owner and zero
-  live public bindings (SHUT-01..04, HANDLE-03).
+- Shutdown: any thread may call `close_admission()`/`request_stop()`, but
+  only the fixed progress owner drives `shutdown()`. `ExecutionClosed` may
+  retain ready, unconsumed request results; shutdown does not wait for
+  application result consumption. Context destruction instead requires the
+  final public and host bindings to be retired (SHUT-01..04, HANDLE-03).
 
 ## Correctness evidence: tests, formal models, package verification
 
