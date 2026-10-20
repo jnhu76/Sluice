@@ -164,6 +164,74 @@ Memory overhead of candidates: H1 none (encoding change, plus the two
 domain bounds); H2 one 8 B counter per backend (derived summary maintained
 in the same critical sections); H3 none (rejected).
 
+## Gain-source classification (charter §9)
+
+- **H1 — algorithmic + microarchitectural**: O(R)→O(1) lookup (algorithmic),
+  realized as fewer cache lines walked and fewer unpredictable compare
+  branches per CQE (microarchitectural). No state removed or added.
+- **H2 — state/abstraction simplification (+ algorithmic)**: an 8 B derived
+  summary replaces a full-array visibility scan and, on uring, C lock pairs
+  per pass (microarchitectural component). The simplification is bounded by
+  BACKEND-04: the summary stays non-authoritative for settlement/destruction.
+- **H3 — state/abstraction simplification, rejected on evidence**: the free
+  list would have been a pure state-mechanism swap; the measurement showed
+  it taxes the primary consumption shape, so lines-of-code or mechanism
+  elegance is not a runtime improvement — recorded as REJECT.
+
+## PROPOSE_UPSTREAM sketches (minimal production changes, for owner adjudication)
+
+**H1 — encode the router slot in io_uring `user_data`**
+- Minimal change: in `dispatch_one_locked` set
+  `user_data = control_tag | router_slot << 48 | cookie48`; in
+  `find_live_router_cookie_` decode the slot and re-check the full cookie
+  (falling back to nothing — a mismatch is a miss, exactly as today);
+  `allocate_cookie_` fail-fast moves from `CONTROL_TAG` to `2^48`;
+  `UringConfig` validation gains `request_capacity <= 32768`.
+- Affected requirements: REQ-01 (identity/anti-ABA preserved by full-cookie
+  re-check + never-reuse), BACKEND-02/03 (profile behavior unchanged),
+  BACKEND-04 (mechanism, not contract), BOUND-01 (capacity visibility gains
+  an explicit ceiling).
+- Next-round matrix: boundary oracles at slot 32767/32768 and cookie near
+  2^48; the full `uring_*` deterministic suites (incl. RG5 registered
+  mutant re-run per VERIFY-06); native-Linux Layer B re-profile; ledger
+  re-basing of G4/G6 rows.
+
+**H2 — owed counter + single-lock snapshot sweep**
+- Minimal change: add an 8 B `owed_count_` beside `delivery_`, maintained
+  in the same critical sections as every `event_owed` write/clear; the
+  uring sweep snapshots under one lock (mirroring the ThreadPool
+  `owed_batch_` shape) and skips the scan when the count is zero;
+  `poll_progress`'s residue verdict reads the count. `internal_work_retired()`
+  and both destructors keep the authoritative `delivery_` scan (BACKEND-04).
+- Affected requirements: PROG-01 (V28/V29 honest residue — verdict parity
+  is the discriminator), BACKEND-04 (derived-summary rule), THREAD-02
+  (same-lock discipline unchanged).
+- Next-round matrix: `uring_owed_residue_test` + `threadpool_progress_*`
+  suites, the owed-counter parity oracle from `bench/mechanisms/h2`,
+  native-Linux W-02 A/B with the interleaved protocol, ledger re-basing of
+  G4/G6.
+
+**INVESTIGATE (H3 scan share)**: re-run the G0 `-scope64` isolation cases
+with ≥ 15 reps under the frozen-matrix protocol to pin the scan-specific
+share before any scope-mechanism proposal.
+
+## Measurement-axis disclosures (charter §8 deviations)
+
+- Threads: 1 only — every mechanism under test is serialized under a single
+  mutex in production, so a single-threaded replay under the same lock
+  discipline is the faithful model; concurrent arms would measure the mutex,
+  not the mechanism. The 4/8-worker dimension is covered by the production
+  W-02/W-03 matrix (G0) instead.
+- Cache state: structures at these capacities (≤ 32 KB for H1 at R=1024,
+  ≤ 32 KB H2 records at C=1024) never leave L2; the >L1/>L2 working-set axis
+  is not meaningful for them and was not swept. Layer B profiles carry the
+  realistic cache context.
+- Access distributions: uniform (xorshift), reuse-heavy (churn), high-miss
+  (miss mix), FIFO/sequential (fifo pattern), adversarial collision (stale
+  probes); Zipf-like hot-set and burst distributions were not swept — for
+  dense ≤1024-slot arrays they vary only the scan start position, which the
+  occupancy and pattern axes already bound.
+
 ## Evidence boundaries (honesty constraints)
 
 - Layer A→Layer B mapping: mechanism deltas were measured hot-in-cache and
