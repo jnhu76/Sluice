@@ -1,0 +1,50 @@
+# resolved attribution from perf.data: /tmp/m1perf_tp.data
+# binary: /tmp/m1prof/bench_w02
+# # Samples: 680  of event 'cycles:Pu'
+# resolution: perf report --percent-limit 0.1; DSO-relative addresses mapped via nm -D symbol tables and addr2line; kernel samples stay under [unknown]
+ 31.88%  [unknown] (unresolved)
+  8.53%  libc:_dl_mcount_wrapper@GLIBC_2.2.5
+  7.15%  sluice::async::RequestScope::take
+  6.02%  sluice::async::RequestScope::wait_for
+  5.54%  [vdso] (unresolved)
+  4.40%  sluice::async::ThreadPoolBackend::submit_read
+  4.02%  sluice::async::ThreadPoolBackend::publish_one
+  3.81%  libc:pthread_mutex_lock@@GLIBC_2.2.5
+  3.15%  bench_binary_unresolved
+  2.90%  libc:pthread_mutex_unlock@@GLIBC_2.2.5
+  2.71%  sluice::async::RequestScope::submit_read
+  1.92%  sluice::async::detail::RequestBridge::consume
+  1.72%  sluice::async::AsyncIoContext::submit_read
+  1.56%  ld-linux-x86-64.so.2 (unresolved)
+  1.33%  libstdc++.so.6.0.35 (unresolved)
+  1.30%  sluice::async::detail::RequestCore::begin_publication
+  1.13%  sluice::async::detail::RequestCore::accept
+  1.13%  __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator
+  1.03%  sluice::async::ThreadPoolBackend::poll_progress
+  0.79%  sluice::async::detail::RequestCore::reserve
+  0.65%  libc:clock_gettime@GLIBC_2.2.5
+  0.62%  sluice::async::detail::RequestCore::try_reclaim_
+  0.57%  sluice::async::detail::RequestBridge::ready
+  0.49%  void std::__unguarded_linear_insert<__gnu_cxx::__normal_iterator<double*
+  0.49%  sluice::async::detail::RequestCore::claim_observer_delivery
+  0.41%  libc:pthread_cond_signal@@GLIBC_2.3.2
+  0.39%  mkdir (unresolved)
+  0.35%  ??
+  0.28%  sluice::async::AsyncIoContext::wait_one
+  0.27%  sluice::async::AsyncIoContext::run_progress_pass_
+  0.27%  sluice::async::detail::RequestCore::complete_publication
+  0.27%  sluice::async::ThreadPoolBackend::outstanding
+  0.26%  sluice::async::detail::RequestCore::outstanding_summary
+  0.26%  sluice::async::detail::RequestCore::retire_observer_delivery
+  0.25%  std::vector<std::byte, std::allocator<std::byte> >::data
+  0.25%  sluice::async::ThreadPoolBackend::worker_loop
+  0.24%  bench::pattern_distinct_values
+  0.21%  sluice::async::detail::RequestCore::context
+  0.20%  bool __gnu_cxx::__ops::_Iter_less_iter::operator
+  0.18%  libc:strcat@@GLIBC_2.2.5
+  0.14%  libc:free@@GLIBC_2.2.5
+  0.13%  libc:__default_morecore@GLIBC_2.2.5
+  0.13%  double& std::vector<double, std::allocator<double> >::emplace_back<doubl
+  0.13%  std::vector<unsigned long, std::allocator<unsigned long> >::pop_back
+  0.12%  libc:pthread_cond_wait@@GLIBC_2.3.2
+  0.12%  libc:__lll_lock_wake_private@@GLIBC_PRIVATE

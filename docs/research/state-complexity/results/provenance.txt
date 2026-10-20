@@ -1,0 +1,10 @@
+git_sha=8fdcd99c5f9a42dadfe5aa0c095bf96c756aeb01
+git_dirty=2
+dirty_paths=bench/mechanisms/,docs/research/,
+compiler=g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+kernel=6.18.54.1-microsoft-standard-WSL2
+cpu=AMD Ryzen 7 5800H with Radeon Graphics
+pinned_cpu=2
+cxx_flags=-std=c++20 -O2 -Wall -Wextra
+reps=9 ops_scale=1
+perf_events=task-clock,cycles,instructions,cache-references,cache-misses,branch-misses
