@@ -1,8 +1,9 @@
 # M0/M1 Independent Review Record
 
-Two independent reviews were executed against the study at BASE `8fdcd99c`:
-Review A (architecture & semantics) and Review B (performance & evidence).
-Both returned REVISE; every P1/P2 finding was dispositioned and the fixes
+Three independent reviews were executed against the study at BASE
+`8fdcd99c`: Review A (architecture & semantics), Review B (performance &
+evidence), and the owner review of the open PR (closeout below).
+All returned REVISE; every P1/P2 finding was dispositioned and the fixes
 landed in the documents and artifacts before the final conclusions. The
 verbatim findings and their resolutions are recorded here.
 
@@ -57,3 +58,25 @@ P3 documentation caveats are recorded in place. The final decision table in
 `m1-results.md` (H1 PROPOSE_UPSTREAM with envelope obligations; H2
 PROPOSE_UPSTREAM with BACKEND-04 scope; H3 REJECT free list + INVESTIGATE
 scan share) reflects the post-review evidence.
+
+## Owner review of the open PR (2026-10-20) — closeout
+
+A third review (GitHub review `5589871022`, verdict REVISE) examined this
+PR at `31446946` together with the production cookie, transport-ledger,
+cancellation and completion paths at the base commit. Its findings and
+their closeout in this commit:
+
+| # | Severity | Finding | Closeout |
+|---|---|---|---|
+| P1 | P1 | The H1 sketch encoded only the operation SQE, but `RouterEntry.cookie`, both `TransportLedger::Entry.cookie` values, the `io_uring_prep_cancel64` match target, the control SQE/CQE, `mark_consumed_control_locked_` and poison/Class-A recovery all carry or consume the same identity at baseline, so an SQE-only encoding breaks cancel matching and recovery routing; a complete authority/dataflow table, named deterministic oracles and an explicit domain-narrowing decision were required for research closeout | The H1 proposal sketch now states the full-consumer format rule (which fields move to the packed identity, which keep the bit-63 tag, where decode-and-verify is required), points to the complete 16-row producer/consumer/verification matrix with its negative controls in `docs/research/native-linux-m2/h1-identity-matrix.md` (native-Linux M2, PR #562), names the cancellation/recovery/stale-cookie/envelope oracles, and records that narrowing `request_capacity` to ≤ 32768 and the cookie horizon to `2^48` is an explicit owner/contract decision |
+| P2 | P2 | The H2 conditional complexity was misstated: the sweep is O(1) only when zero events are owed; with any event owed it still scans all C slots, so it is not an O(owed) traversal. H2a (single-lock snapshot versus uring C per-slot lock pairs) and H2b (derived count skipping empty scans) must be analyzed as separate gains, and producer interleavings plus post-pass residue/event order belong in the next protocol-oracle matrix | The Layer A prose and the synthesis table now state O(1) empty skip and O(C) scan + O(K) delivery when nonempty; the proposal sketch decomposes H2a and H2b; the next-round matrix names the concurrent-producer and post-pass residue/event-order oracles |
+
+Nonblocking caveats: the single-run Layer B percentages already carry
+Poisson CIs and upper-bound framing; the ≈44% unresolved `[unknown]`
+profile bucket is now explicitly excluded from claims in `m1-results.md`.
+
+Subsequent native-Linux M2 evidence (PR #562) validates the P2 separation
+empirically: H2a and H2b are independently confirmed mechanisms, H2b
+dominates on the decisive 4 KiB/64 KiB configurations (single-lock
+per-slot sweep removed), and H1's end-to-end share is bounded at ≤ 3.7%,
+which leaves H1 MICROBENCH_ONLY and H2b the only production candidate.

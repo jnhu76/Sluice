@@ -55,7 +55,9 @@ direct arm passes the identical sequence.
 total CPU** (14 samples; Poisson 95% CI ≈ 1.1–3.3%). A zero-cost
 replacement therefore caps the uring W-02 end-to-end gain near **2%, CI
 1–3%** at this depth — an upper-bound estimate from one profiled run, not
-a measured improvement.
+a measured improvement. The largest bucket in that profile, ≈ 44% of
+samples, is unresolved (`[unknown]`): it is attributed to neither kernel
+nor user code and no claim is drawn from it.
 
 ## H2 — owed-event visibility (Layer A)
 
@@ -73,8 +75,12 @@ are the meaningful quantity.
 ns/pass; cap 1024 idle: 1503.8 / 6891.6 / 1016.8. At cap 64 idle the
 uring shape pays ≈ 370 ns/pass more than the counter shape (disjoint
 ranges, spreads ≤ 3%): that delta is the per-slot lock/unlock pairs plus
-the always-run O(C) scan, which the counter replaces with an O(1) verdict
-and an O(owed) sweep. Crossover: for owed fractions ≳ 50% of capacity all
+the always-run O(C) scan, which the counter replaces with an O(1) empty
+skip and — once at least one event is owed — the same O(C) scan over all
+slots plus the O(K) delivery work. The candidate is not an O(owed)
+traversal: only the empty state changes asymptotically, and the nonempty
+scan visits every slot regardless of how many events are owed.
+Crossover: for owed fractions ≳ 50% of capacity all
 shapes converge (delivery work dominates); below that the counter wins.
 The fresh-event verdict phase keeps the counter arm honest (≈ half the
 rounds still scan), so the idle column understates the counter's strict
@@ -157,7 +163,7 @@ sign-consistent with a small scan share but statistically uninformative at
 | Mechanism | Semantic equivalence | Original | Candidate | Measured (Layer A) | In-context bound (Layer B, single-run CI) | Decision |
 |---|---|---|---|---|---|---|
 | H1 router direct index | PASS (oracle + collision control) | O(R)/CQE scan | O(1)+verify | 0.41x at R=64, 0.05x at R=1024, flat in R | ≤ ~2% (1.1–3.3%) of uring W02 CPU (d64) | **PROPOSE_UPSTREAM** (with the 15-bit/48-bit envelope and its config validation + fail-fast obligations) |
-| H2 owed counter + snapshot sweep | PASS (delivery sets, residue verdict, negative control) | O(C)/pass (+C lock pairs uring) | O(1) verdict, O(owed) sweep | −370 ns/pass (uring, C=64 idle); converges ≥50% owed; −40 ns/pass ThreadPool | ≤ ~5% uring W02 CPU (d64); ~1.5% ThreadPool | **PROPOSE_UPSTREAM** (uring first; BACKEND-04 scope: pass verdict only, settlement/destruction keep the authoritative scan) |
+| H2 owed counter + snapshot sweep | PASS (delivery sets, residue verdict, negative control) | O(C)/pass (+C lock pairs uring) | O(1) empty skip; O(C) scan + O(K) delivery when nonempty | −370 ns/pass (uring, C=64 idle); converges ≥50% owed; −40 ns/pass ThreadPool | ≤ ~5% uring W02 CPU (d64); ~1.5% ThreadPool | **PROPOSE_UPSTREAM** (uring first; BACKEND-04 scope: pass verdict only, settlement/destruction keep the authoritative scan) |
 | H3 scope free list | PASS (behavioral oracle, capacity, negative control) | O(S) first-free + O(S) resolve | O(1) reserve, resolve unchanged | **+15–21% regression** on the W-02 FIFO shape at S≤64; −17–29% only in adversarial saturated-random | scope machinery ≈15.9% (13–19%) of tp W02 CPU, scan share unproven | **REJECT** the free list as a general mechanism (hurts the primary consumption shape); **INVESTIGATE** the scan-specific share (needs a higher-rep `-scope64` isolation protocol) |
 
 Memory overhead of candidates: H1 none (encoding change, plus the two
@@ -187,27 +193,54 @@ in the same critical sections); H3 none (rejected).
   (falling back to nothing — a mismatch is a miss, exactly as today);
   `allocate_cookie_` fail-fast moves from `CONTROL_TAG` to `2^48`;
   `UringConfig` validation gains `request_capacity <= 32768`.
+- Every consumer of the identity must move to the same format; encoding
+  only the operation SQE breaks the protocol. At baseline the operation
+  SQE `user_data`, `RouterEntry.cookie`, the operation and cancel_control
+  `TransportLedger::Entry.cookie`, and the `io_uring_prep_cancel64` match
+  target (`route.cookie`) all carry one value and must all carry the
+  packed identity; the control SQE/CQE keep the bit-63 tag over the
+  packed identity; `mark_consumed_control_locked_`, poison/Class-A
+  recovery and both CQE paths decode the slot and re-verify full equality
+  before any state transition. The complete 16-row
+  producer/consumer/verification matrix, its negative controls and the
+  caught slot-only mutant are recorded in
+  `docs/research/native-linux-m2/h1-identity-matrix.md` (native-Linux M2,
+  PR #562).
+- Required domain decision: the encoding narrows `request_capacity` to
+  ≤ 32768 and the cookie horizon to `2^48`. Both are visible
+  product-domain changes; accepting them is an explicit owner/contract
+  decision, not an optimization detail.
 - Affected requirements: REQ-01 (identity/anti-ABA preserved by full-cookie
   re-check + never-reuse), BACKEND-02/03 (profile behavior unchanged),
   BACKEND-04 (mechanism, not contract), BOUND-01 (capacity visibility gains
   an explicit ceiling).
-- Next-round matrix: boundary oracles at slot 32767/32768 and cookie near
-  2^48; the full `uring_*` deterministic suites (incl. RG5 registered
+- Next-round matrix: cancellation and recovery oracles (cancel64 target
+  equality; consumed-control and ledger-cookie lookups under decode),
+  stale generation/cookie after router-slot reuse, boundary oracles at
+  slot 32767/32768 and cookie near 2^48; the full `uring_*`
+  deterministic suites (incl. RG5 registered
   mutant re-run per VERIFY-06); native-Linux Layer B re-profile; ledger
-  re-basing of G4/G6 rows.
+  re-basing of G4/G6 rows. The M2 candidate worktree already realizes the
+  cancellation/recovery/stale/envelope oracles (seven identity controls,
+  all passing), recorded in the matrix above.
 
-**H2 — owed counter + single-lock snapshot sweep**
-- Minimal change: add an 8 B `owed_count_` beside `delivery_`, maintained
-  in the same critical sections as every `event_owed` write/clear; the
-  uring sweep snapshots under one lock (mirroring the ThreadPool
-  `owed_batch_` shape) and skips the scan when the count is zero;
-  `poll_progress`'s residue verdict reads the count. `internal_work_retired()`
+**H2 — owed counter + single-lock snapshot sweep** (two separable gains)
+- H2a single-lock snapshot: the uring sweep snapshots under one lock
+  (mirroring the ThreadPool `owed_batch_` shape), replacing the C
+  per-slot lock/unlock pairs with one lock pair.
+- H2b derived owed count: an 8 B `owed_count_` beside `delivery_`,
+  maintained in the same critical sections as every `event_owed`
+  write/clear, lets the sweep skip the scan when the count is zero and
+  gives `poll_progress`'s residue verdict an O(1) read. It does not make
+  the nonempty scan O(owed). `internal_work_retired()`
   and both destructors keep the authoritative `delivery_` scan (BACKEND-04).
 - Affected requirements: PROG-01 (V28/V29 honest residue — verdict parity
   is the discriminator), BACKEND-04 (derived-summary rule), THREAD-02
   (same-lock discipline unchanged).
 - Next-round matrix: `uring_owed_residue_test` + `threadpool_progress_*`
   suites, the owed-counter parity oracle from `bench/mechanisms/h2`,
+  a protocol-oracle matrix covering concurrent producers (owed events
+  arriving during a pass) and post-pass residue/event ordering,
   native-Linux W-02 A/B with the interleaved protocol, ledger re-basing of
   G4/G6.
 
