@@ -1,4 +1,4 @@
-// One-shot provisional A/B driver for the K>0 zero-op burst shape (issue #564).
+// Provisional paired-A/B driver for the K>0 zero-op burst shape.
 // Same measurement and oracle discipline as bench/native-linux-m2/pipeline_ab.cpp
 // but with zero-length reads so every in-flight request stands as an owed
 // delivery event. Not committed to the product tree; the recorded results are.
