@@ -1,0 +1,63 @@
+solo_run=h1:baseline_scan
+# started on Wed Oct 21 01:05:25 2026
+
+3081310396,,task-clock:u,3081310396,100.00,1.001,CPUs utilized
+12500344199,,cycles:u,3081310396,100.00,4.057,GHz
+35244692870,,instructions:u,3081310396,100.00,2.82,insn per cycle
+280086091,,cache-references:u,3081310396,100.00,90.898,M/sec
+5679421,,cache-misses:u,3081310396,100.00,2.03,of all cache refs
+100450779,,branch-misses:u,3081310396,100.00,,
+solo_run=h1:direct_index
+# started on Wed Oct 21 01:05:29 2026
+
+557632577,,task-clock:u,557632577,100.00,0.998,CPUs utilized
+1965433276,,cycles:u,557632577,100.00,3.525,GHz
+3216278834,,instructions:u,557632577,100.00,1.64,insn per cycle
+37003000,,cache-references:u,557632577,100.00,66.357,M/sec
+3255618,,cache-misses:u,557632577,100.00,8.80,of all cache refs
+30553492,,branch-misses:u,557632577,100.00,,
+solo_run=h2:baseline_single_lock_sweep
+# started on Wed Oct 21 01:05:29 2026
+
+4211892414,,task-clock:u,4211892414,100.00,0.999,CPUs utilized
+17204052644,,cycles:u,4211892414,100.00,4.085,GHz
+39316647785,,instructions:u,4211892414,100.00,2.29,insn per cycle
+347545595,,cache-references:u,4211892414,100.00,82.515,M/sec
+3867381,,cache-misses:u,4211892414,100.00,1.11,of all cache refs
+216888147,,branch-misses:u,4211892414,100.00,,
+solo_run=h2:baseline_per_slot_lock_sweep
+# started on Wed Oct 21 01:05:33 2026
+
+7437810682,,task-clock:u,7437810682,100.00,1.000,CPUs utilized
+29894475882,,cycles:u,7437810682,100.00,4.019,GHz
+78596785701,,instructions:u,7437810682,100.00,2.63,insn per cycle
+91305874,,cache-references:u,7437810682,100.00,12.276,M/sec
+832455,,cache-misses:u,7437810682,100.00,0.91,of all cache refs
+214929993,,branch-misses:u,7437810682,100.00,,
+solo_run=h2:counter_snapshot_sweep
+# started on Wed Oct 21 01:05:41 2026
+
+4213461539,,task-clock:u,4213461539,100.00,1.000,CPUs utilized
+17248533304,,cycles:u,4213461539,100.00,4.094,GHz
+37897467663,,instructions:u,4213461539,100.00,2.20,insn per cycle
+300399240,,cache-references:u,4213461539,100.00,71.295,M/sec
+2852442,,cache-misses:u,4213461539,100.00,0.95,of all cache refs
+213874056,,branch-misses:u,4213461539,100.00,,
+solo_run=h3:baseline_first_free_scan
+# started on Wed Oct 21 01:05:45 2026
+
+2552532656,,task-clock:u,2552532656,100.00,1.000,CPUs utilized
+10133398135,,cycles:u,2552532656,100.00,3.970,GHz
+32435650173,,instructions:u,2552532656,100.00,3.20,insn per cycle
+1479008815,,cache-references:u,2552532656,100.00,579.428,M/sec
+15180712,,cache-misses:u,2552532656,100.00,1.03,of all cache refs
+84010461,,branch-misses:u,2552532656,100.00,,
+solo_run=h3:freelist_lifo
+# started on Wed Oct 21 01:05:48 2026
+
+2437415534,,task-clock:u,2437415534,100.00,1.000,CPUs utilized
+9606198042,,cycles:u,2437415534,100.00,3.941,GHz
+29516580499,,instructions:u,2437415534,100.00,3.07,insn per cycle
+1187835677,,cache-references:u,2437415534,100.00,487.334,M/sec
+12482573,,cache-misses:u,2437415534,100.00,1.05,of all cache refs
+84595661,,branch-misses:u,2437415534,100.00,,

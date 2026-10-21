@@ -1,0 +1,52 @@
+# resolved attribution from perf.data: /tmp/m1perf.data
+# binary: /tmp/m1prof/bench_w02
+# # Samples: 711  of event 'cycles:Pu'
+# resolution: perf report --percent-limit 0.1; DSO-relative addresses mapped via nm -D symbol tables and addr2line; kernel samples stay under [unknown]
+ 44.17%  [unknown] (unresolved)
+  7.22%  libc:_dl_mcount_wrapper@GLIBC_2.2.5
+  5.46%  libc:pthread_mutex_lock@@GLIBC_2.2.5
+  5.17%  sluice::async::UringAsyncBackend::dispatch_one_locked
+  2.78%  sluice::async::UringAsyncBackend::submit_read
+  2.21%  [vdso] (unresolved)
+  2.09%  libc:pthread_mutex_unlock@@GLIBC_2.2.5
+  2.05%  sluice::async::UringAsyncBackend::publish_one
+  2.03%  bench_binary_unresolved
+  2.01%  sluice::async::UringAsyncBackend::find_live_router_cookie_
+  2.00%  sluice::async::UringAsyncBackend::dispatch_after_accept
+  1.75%  sluice::async::RequestScope::submit_read
+  1.47%  sluice::async::UringAsyncBackend::finalize_operation_terminal_
+  1.41%  sluice::async::RequestScope::take
+  1.31%  ld-linux-x86-64.so.2 (unresolved)
+  1.10%  __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator
+  1.01%  sluice::async::detail::RequestCore::release_execution
+  0.99%  sluice::async::detail::RequestCore::begin_publication
+  0.95%  libc:free@@GLIBC_2.2.5
+  0.86%  sluice::async::detail::RequestCore::reserve
+  0.85%  sluice::async::UringAsyncBackend::handle_one_cqe
+  0.82%  sluice::async::detail::RequestCore::claim_observer_delivery
+  0.75%  sluice::async::detail::RequestCore::offer_terminal
+  0.73%  sluice::async::UringAsyncBackend::poll
+  0.73%  sluice::async::detail::RequestBridge::consume
+  0.70%  libstdc++.so.6.0.35 (unresolved)
+  0.65%  sluice::async::AsyncIoContext::submit_read
+  0.61%  sluice::async::RequestScope::wait_for
+  0.60%  sluice::async::detail::RequestCore::complete_publication
+  0.54%  sluice::async::UringAsyncBackend::retire_router_entry_
+  0.46%  void std::__unguarded_linear_insert<__gnu_cxx::__normal_iterator<double*
+  0.44%  sluice::async::UringAsyncBackend::service_pending_controls_locked_
+  0.36%  sluice::async::detail::RequestCore::claim_execution
+  0.32%  mkdir (unresolved)
+  0.31%  bench::pattern_table
+  0.30%  liburing.so.2.14 (unresolved)
+  0.30%  libc:clock_gettime@GLIBC_2.2.5
+  0.28%  sluice::async::detail::RequestCore::accept
+  0.27%  sluice::async::detail::RequestCore::context
+  0.27%  sluice::async::AsyncIoContext::wait_one
+  0.26%  sluice::async::detail::RequestCore::try_reclaim_
+  0.17%  libm.so.6 (unresolved)
+  0.16%  sluice::async::detail::RequestCore::outstanding_summary
+  0.15%  sluice::async::UringAsyncBackend::signals_physical_progress
+  0.15%  ??
+  0.14%  sluice::async::UringAsyncBackend::poll_progress
+  0.14%  sluice::async::detail::RequestBridge::ready
+  0.13%  sluice::async::AsyncIoContext::~AsyncIoContext

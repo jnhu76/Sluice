@@ -1,0 +1,32 @@
+# Layer B (Sluice context) provenance — W-02 production binaries, BASE 8fdcd99c
+# Build: xmake release with --liburing=y (ring profile) for the measured runs;
+# a separate unstripped profiling variant (same archives, -O3 -g, gcc via
+# attribution.sh's recipe) was built ONLY for symbol resolution and perf
+# sampling. Perf-sampled runs and timed runs are separate processes.
+#
+# timed Layer B runs (median of 5 measured reps, warmup 1, CPU pinned via taskset -c 2):
+#   BIN=./build/linux/x86_64/release/bench_w02_pipeline
+#   export SLUICE_BENCH_TMP_DIR=/tmp/sluice-m1-bench SLUICE_BENCH_WARMUP=1 SLUICE_BENCH_MEASURED=5
+#   export SLUICE_BENCH_JSONL=<results>/layerb_w02.jsonl
+#   SLUICE_BENCH_CASE_FILTER="=W02-threadpool-4k-d4-w4"          taskset -c 2 $BIN
+#   SLUICE_BENCH_CASE_FILTER="=W02-threadpool-4k-d4-w4-scope64"  taskset -c 2 $BIN
+#   SLUICE_BENCH_CASE_FILTER="=W02-threadpool-4k-d16-w4"         taskset -c 2 $BIN
+#   SLUICE_BENCH_CASE_FILTER="=W02-uring-4k-d16"                 taskset -c 2 $BIN
+#   SLUICE_BENCH_CASE_FILTER="=W02-uring-4k-d64"                 taskset -c 2 $BIN
+#   SLUICE_BENCH_CASE_FILTER="=W02-threadpool-4k-d64-w4"         taskset -c 2 $BIN
+# These are case-filtered research runs outside the frozen G0 matrix contract
+# (check_run.py is not applicable to filtered case sets).
+#
+# perf-record runs (sampling only, not timing; single run each):
+#   g++ -g -o /tmp/m1prof/bench_w02 (bench_w02.o built -O3 -g against ring-profile archives)
+#   SLUICE_BENCH_WARMUP=0 SLUICE_BENCH_MEASURED=1 \
+#   SLUICE_BENCH_CASE_FILTER="=W02-uring-4k-d64" \
+#     taskset -c 2 perf record -F 2999 -g -o perf-uring.data -- /tmp/m1prof/bench_w02
+#     -> 711 samples (cycles:Pu)   [results/perf-uring-d64-attribution.txt]
+#   SLUICE_BENCH_CASE_FILTER="=W02-threadpool-4k-d64-w4" (same flags)
+#     -> 680 samples (cycles:Pu)   [results/perf-threadpool-d64-attribution.txt]
+# Kernel-side samples stay under "[unknown] (unresolved)" (paranoid>=2);
+# user symbols resolved offline from the unstripped variant (nm -D + addr2line);
+# 2.0-3.2% of samples sit in binary addresses addr2line could not map and are
+# reported as bench_binary_unresolved. perf.data binaries themselves are not
+# committed (raw capture); the resolved per-symbol tables above are the record.

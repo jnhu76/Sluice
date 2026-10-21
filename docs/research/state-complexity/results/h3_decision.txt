@@ -1,0 +1,80 @@
+H3 negative control (freelist without release push-back): CAUGHT (capacity exhausted while model expects accepts)
+H3 oracle baseline_first_free_scan cap=8: PASS
+H3 oracle baseline_first_free_scan cap=16: PASS
+H3 oracle baseline_first_free_scan cap=32: PASS
+H3 oracle baseline_first_free_scan cap=64: PASS
+H3 oracle baseline_first_free_scan cap=128: PASS
+H3 oracle baseline_first_free_scan cap=256: PASS
+H3 oracle baseline_first_free_scan cap=1024: PASS
+H3 oracle freelist_lifo cap=8: PASS
+H3 oracle freelist_lifo cap=16: PASS
+H3 oracle freelist_lifo cap=32: PASS
+H3 oracle freelist_lifo cap=64: PASS
+H3 oracle freelist_lifo cap=128: PASS
+H3 oracle freelist_lifo cap=256: PASS
+H3 oracle freelist_lifo cap=1024: PASS
+== H3 / baseline_first_free_scan ==
+cap=   8 pattern=fifo       12.96 ns/op spread=0.055 selfcheck=PASS
+cap=   8 pattern=random     17.88 ns/op spread=0.087 selfcheck=PASS
+cap=   8 pattern=lifo       11.45 ns/op spread=0.101 selfcheck=PASS
+cap=   8 pattern=saturated     26.85 ns/op spread=0.032 selfcheck=PASS
+cap=  16 pattern=fifo       18.16 ns/op spread=0.059 selfcheck=PASS
+cap=  16 pattern=random     24.04 ns/op spread=0.175 selfcheck=PASS
+cap=  16 pattern=lifo       13.54 ns/op spread=0.101 selfcheck=PASS
+cap=  16 pattern=saturated     34.88 ns/op spread=0.043 selfcheck=PASS
+cap=  32 pattern=fifo       23.56 ns/op spread=0.041 selfcheck=PASS
+cap=  32 pattern=random     29.62 ns/op spread=0.051 selfcheck=PASS
+cap=  32 pattern=lifo       22.02 ns/op spread=0.099 selfcheck=PASS
+cap=  32 pattern=saturated     46.50 ns/op spread=0.033 selfcheck=PASS
+cap=  64 pattern=fifo       29.95 ns/op spread=0.081 selfcheck=PASS
+cap=  64 pattern=random     35.25 ns/op spread=0.059 selfcheck=PASS
+cap=  64 pattern=lifo       33.46 ns/op spread=0.126 selfcheck=PASS
+cap=  64 pattern=saturated     66.82 ns/op spread=0.045 selfcheck=PASS
+cap= 128 pattern=fifo       38.01 ns/op spread=0.325 selfcheck=PASS
+cap= 128 pattern=random     45.25 ns/op spread=0.207 selfcheck=PASS
+cap= 128 pattern=lifo       49.11 ns/op spread=0.579 selfcheck=PASS
+cap= 128 pattern=saturated    102.45 ns/op spread=0.097 selfcheck=PASS
+cap= 256 pattern=fifo       52.12 ns/op spread=0.461 selfcheck=PASS
+cap= 256 pattern=random     60.90 ns/op spread=0.485 selfcheck=PASS
+cap= 256 pattern=lifo       81.31 ns/op spread=0.694 selfcheck=PASS
+cap= 256 pattern=saturated    188.38 ns/op spread=0.067 selfcheck=PASS
+cap=1024 pattern=fifo       59.02 ns/op spread=1.825 selfcheck=PASS
+cap=1024 pattern=random     70.22 ns/op spread=1.724 selfcheck=PASS
+cap=1024 pattern=lifo       87.82 ns/op spread=2.358 selfcheck=PASS
+cap=1024 pattern=saturated    785.03 ns/op spread=0.082 selfcheck=PASS
+== H3 / freelist_lifo ==
+cap=   8 pattern=fifo       15.12 ns/op spread=0.074 selfcheck=PASS
+cap=   8 pattern=random     18.62 ns/op spread=0.108 selfcheck=PASS
+cap=   8 pattern=lifo       11.06 ns/op spread=0.239 selfcheck=PASS
+cap=   8 pattern=saturated     26.26 ns/op spread=0.063 selfcheck=PASS
+cap=  16 pattern=fifo       22.05 ns/op spread=0.042 selfcheck=PASS
+cap=  16 pattern=random     26.16 ns/op spread=0.064 selfcheck=PASS
+cap=  16 pattern=lifo       13.21 ns/op spread=0.088 selfcheck=PASS
+cap=  16 pattern=saturated     30.54 ns/op spread=0.041 selfcheck=PASS
+cap=  32 pattern=fifo       27.73 ns/op spread=0.032 selfcheck=PASS
+cap=  32 pattern=random     32.69 ns/op spread=0.086 selfcheck=PASS
+cap=  32 pattern=lifo       18.43 ns/op spread=0.165 selfcheck=PASS
+cap=  32 pattern=saturated     38.27 ns/op spread=0.418 selfcheck=PASS
+cap=  64 pattern=fifo       34.51 ns/op spread=0.059 selfcheck=PASS
+cap=  64 pattern=random     40.14 ns/op spread=0.088 selfcheck=PASS
+cap=  64 pattern=lifo       28.18 ns/op spread=0.188 selfcheck=PASS
+cap=  64 pattern=saturated     52.91 ns/op spread=0.067 selfcheck=PASS
+cap= 128 pattern=fifo       43.93 ns/op spread=0.129 selfcheck=PASS
+cap= 128 pattern=random     50.94 ns/op spread=0.284 selfcheck=PASS
+cap= 128 pattern=lifo       42.23 ns/op spread=0.409 selfcheck=PASS
+cap= 128 pattern=saturated     86.31 ns/op spread=0.052 selfcheck=PASS
+cap= 256 pattern=fifo       58.42 ns/op spread=0.420 selfcheck=PASS
+cap= 256 pattern=random     66.62 ns/op spread=0.398 selfcheck=PASS
+cap= 256 pattern=lifo       66.88 ns/op spread=0.748 selfcheck=PASS
+cap= 256 pattern=saturated    156.44 ns/op spread=0.329 selfcheck=PASS
+cap=1024 pattern=fifo       63.31 ns/op spread=1.588 selfcheck=PASS
+cap=1024 pattern=random     72.09 ns/op spread=1.529 selfcheck=PASS
+cap=1024 pattern=lifo       78.12 ns/op spread=2.270 selfcheck=PASS
+cap=1024 pattern=saturated    557.45 ns/op spread=0.090 selfcheck=PASS
+== H3 companion: W-02 harness-only window bookkeeping ==
+depth=   1 harness-only bookkeeping    4.96 ns/op spread=0.423
+depth=   4 harness-only bookkeeping    5.61 ns/op spread=0.091
+depth=  16 harness-only bookkeeping    5.74 ns/op spread=0.045
+depth=  64 harness-only bookkeeping    5.41 ns/op spread=0.187
+depth= 256 harness-only bookkeeping    5.42 ns/op spread=0.039
+depth=1024 harness-only bookkeeping    5.33 ns/op spread=0.203
