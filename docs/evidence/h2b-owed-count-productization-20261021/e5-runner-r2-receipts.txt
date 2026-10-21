@@ -1,0 +1,52 @@
+=== runner r2 gate counterfactuals (host Hu, 2026-10-21T16:45:02Z)
+runner_sha256=67ce56eeb977993097cccded9c3356d14a615f7e3d89e4a75fcaa2c99f02f65f
+verdict_sha256=174e111467dae920775f399b2431704f1c0eab13e72cfe45319e3d6b3554f3ec
+
+--- C0 reducer selftest
+ok clean_dataset_passes -> PASS
+ok regression_fails -> FAIL
+ok missing_row_fails -> FAIL
+ok duplicate_row_fails -> FAIL
+ok failed_oracle_fails -> FAIL
+ok illegal_measurement_fails -> FAIL
+ok unknown_config_fails -> FAIL
+ok same_arm_identity_fails -> FAIL
+ok sha_mismatch_fails -> FAIL
+reducer selftest: PASS
+exit=0
+
+--- C1 same-arm refusal (both pins = c8970702aad4fa74d4053d00ae941409e709ce67)
+refusing: both arms pinned to the same sha; not an A/B
+exit=2
+
+--- C2 HEAD-mismatch refusal (h2b pinned to 0733411c40622580b70d99f824bd4a9905b6e98a)
+refusing: h2b tree HEAD 4edb957df0192c48a50784a51ab523038b30aa28 != pinned 0733411c40622580b70d99f824bd4a9905b6e98a
+exit=2
+
+--- C2b malformed pin refusal
+refusing: expected h2b sha is not a 40-hex sha
+exit=2
+
+--- C3 dirty tree refusal
+refusing: h2b tree is dirty:
+ M README.md
+exit=2
+
+--- C3b identical-path refusal
+refusing: both arms point at one tree
+exit=2
+
+--- C4 stale-artifact exclusion (verify-only forces empty-build rebuild)
+stale marker planted in h2b build tree (1024 bytes)
+building arm base from an empty build/ and cleared config (stale artifacts excluded)
+building arm h2b from an empty build/ and cleared config (stale artifacts excluded)
+fixture created: /tmp/sluice-h2b-fixture/fixture.bin
+verify-only: identity and clean-build gates passed; no measurement taken
+exit=0
+h2b stale marker after forced rebuild: ABSENT-destroyed
+worktrees still clean: base=[0 entries] h2b=[0 entries] (r1 copied the harness into them; r2 must not)
+
+--- latent r1 defect found by C4 (kept as evidence):
+r1 built with plain `xmake build -y`, which skips sluice_async (set_default(false) in xmake/libraries.lua) and r1 verified nothing; r2 builds sluice_core sluice_async explicitly and refuses a missing library. First r2 C4 attempt reproduced this as: refusing: arm base library was not produced (exit 2).
+
+=== end runner r2 receipts

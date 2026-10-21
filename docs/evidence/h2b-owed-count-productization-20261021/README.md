@@ -121,7 +121,7 @@ build; killed deterministically):
 | M2 `SLUICE_URING_MUTANT_OWED_COUNT_MISSING_DECREMENT` | sweep does not uncount | parity suite: `counter_matches_authority` fails (`counter_tracks_zero_op_reads`) | 1 |
 | M3 `SLUICE_URING_MUTANT_OWED_EMPTY_VERDICT_ALWAYS` | false empty verdict | residue oracle `uring_owed_residue_test` (`a_zero_op_after_sweep_is_immediate_residue`), NOT a counter comparison | 1 |
 | M4 `SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS` | reclaim ignores owed pin | parity suite reaches the submit-reset fail-fast → SIGABRT | 134 |
-| M5 `SLUICE_URING_MUTANT_ZERO_OP_PUBLICATION_DROPS_WAKE` | lost wake | W-03 external loop suite → progress-binding contract violation → SIGABRT | 134 |
+| M5 `SLUICE_URING_MUTANT_ZERO_OP_PUBLICATION_DROPS_WAKE` | lost wake | W-03 external loop suite: fd-readability oracle fails → named `FAIL: external_host_sees_userspace_publication_wake`; the scenario helper retires its progress binding on every unwind (review r2), so the kill is the direct oracle failure (r1 surfaced the same detection only as a destructor SIGABRT, exit 134) | 1 |
 
 Negative control: M4 deliberately breaks the control-ref precondition and the
 system detects it loudly rather than proceeding.
@@ -202,29 +202,56 @@ exactly one symbol), and the formal E5 script below restores the
 `arm-identity.txt` hash step and refuses to run on a sanitizer-tainted
 config.
 
-### 6.2 Formal E5 acceptance — NOT_RUN
+### 6.2 Formal E5 acceptance — NOT_RUN (runner r2 ready)
 
-The E5 credentials are supplied by the execution environment's interactive
-authentication and were not available in this autonomous session (same
-disposition as M2's `W03_AB = NOT_RUN`). The formal protocol is frozen as a
-runnable script, `run_e5_ab.frozen.sh` in this directory (Review B findings
-B1/B3): it parameterizes worktree root / output dir / reps / cpu, records
-per-arm worktree SHA + binary/library SHA-256 into `arm-identity.txt`, refuses
-a sanitizer-tainted config, runs the same 9 data + 2 zero-burst configs with
-rotation and the byte-oracle gate, captures `perf stat`
-(task-clock, instructions, cycles) on the 4096/C=1024/d=1 headline when
-counters are permitted, and states the acceptance rule in advance:
+Round-2 review (P1-A/P1-B) rejected the r1 runner as an acceptance
+mechanism: it recorded arm identity without verifying it (stale libraries
+could be measured, dirty trees accepted, identical arms undetectable) and it
+computed no verdict (a uniformly regressing h2b could still exit 0). The
+runner in this directory is revised to r2 with fail-closed behavior:
 
-- median `cpu_ns_per_op` ratio ≤ 1.03 for every config, AND
-- sign test over the 15 paired ratios: at most 10 of 15 pairs above 1.03 per
-  config (majority-regression rejected at the 5% level).
+- Identity gates run before any build or measurement: exact expected SHAs
+  are command-line pins; HEAD, clean status and path distinctness are
+  enforced; identical pins or identical paths are refused. For the open PR:
+  base = `c8970702` (frozen pre-PR master), candidate = the PR branch HEAD
+  under test. A post-merge re-acceptance must pin the actual merge commit
+  and its actual base — never a GitHub-precomputed merge SHA.
+- Both arms rebuild from an empty `build/` and a cleared xmake config on
+  every invocation, so stale artifacts cannot reach a measurement; the
+  sanitizer-taint refusal stays.
+- Harnesses compile from single read-only sources; the trees under test are
+  never written (r1 copied the data harness into the worktrees, dirtying
+  them). The data harness must hash-match across trees, and the arms' async
+  libraries must differ — otherwise the run is refused as "not an A/B".
+- Acceptance is computed only by `e5_verdict.py` (fail-closed): it
+  reconstructs the complete arm/config/rep/phase cell set (missing rows,
+  duplicated rows, failed byte oracles, illegal measurements and unknown
+  configs all fail), cross-checks `arm-identity.txt` against the pins,
+  applies the pre-declared rule per config, and writes `verdict.json`. A run
+  that ends without a `verdict.json` is not an acceptance.
+- Statistical erratum (review P2-A): the ≤10/15 pair threshold rejects a
+  majority-regression at the one-sided binomial level
+  P(X ≥ 11 | n = 15, p = 0.5) = 0.059 — an engineering ~6% bound, not an
+  exact 5% test. REPS is pinned to 15 so the rule and the design cannot
+  diverge.
+- Hardware-counter attribution is decoupled from acceptance (review P2-C):
+  `perf stat` runs only when a probe succeeds and is otherwise recorded as
+  `perf_stat_status=NOT_AVAILABLE`; the paired CPU-time experiment alone
+  decides PASS/FAIL.
 
-BASE is the unmodified current master — the E5 numbers must be regenerated,
-not imported from M2's recorded SHA-specific data. The K>0 zero burst is
-mandatory in every run. Owner steps: create `base`/`h2b` worktrees (base =
-`c8970702`, h2b = the merge SHA), configure both
-`xmake f -m release --liburing=y -y`, then run the script; record the PASS/FAIL
-verdict in the ledger PROG-01 row.
+Gate receipts: `e5-runner-r2-receipts.txt` — reducer selftest 9/9
+counterfactuals (clean dataset PASS; regression, missing row, duplicate row,
+failed oracle, illegal measurement, unknown config, same-arm identity and
+SHA mismatch each FAIL); runner refusals for identical pins, HEAD mismatch,
+malformed pin, dirty tree and identical paths (exit 2 before any build); and
+a planted stale artifact destroyed by the forced empty-build rebuild with
+both worktrees still clean afterwards.
+
+E5 execution remains NOT_RUN (credentials provisioned interactively; §8).
+Owner steps: `git worktree add` base at `c8970702` and h2b at the PR HEAD,
+then `run_e5_ab.frozen.sh <base-tree> <h2b-tree> <base-sha> <h2b-sha>
+<output-dir> [cpu]`; the process exit code and `verdict.json` are the
+acceptance receipt — record them in the ledger PROG-01 row.
 
 ## 7. Reviews
 
