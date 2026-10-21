@@ -1,0 +1,517 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 03ecf5d1..c680c104 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -96,6 +96,7 @@ class UringAsyncBackend : public AsyncBackend {
+     std::uint64_t submit_flushes_for_test() const noexcept;
+     std::size_t live_cookies_for_test() const noexcept;
+     std::uint64_t peek_next_cookie_for_test() const noexcept;
++    void set_next_cookie_for_test(std::uint64_t value) noexcept;
+     std::optional<std::uint64_t>
+     live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept;
+ 
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index e11a3931..f9616e90 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -148,12 +148,10 @@ Result<AsyncIoContext> make_uring_context(UringConfig config, AsyncStats* stats)
+ }
+ 
+ UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
+-    constexpr std::size_t slot_index_max =
+-        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max());
+-    if (config.request_capacity == 0 || config.request_capacity > slot_index_max ||
++    if (config.request_capacity == 0 || config.request_capacity > ROUTER_SLOT_CAPACITY ||
+         config.queue_depth == 0) {
+         throw std::invalid_argument(
+-            "UringConfig request_capacity must be in [1, UINT32_MAX] and queue_depth must be > 0");
++            "UringConfig request_capacity must be in [1, 32768] and queue_depth must be > 0");
+     }
+     return config;
+ }
+diff --git a/src/async/uring_internal.hpp b/src/async/uring_internal.hpp
+index 87790411..5e90af4e 100644
+--- a/src/async/uring_internal.hpp
++++ b/src/async/uring_internal.hpp
+@@ -45,6 +45,25 @@ struct UringRingState {
+ inline constexpr std::uint64_t CONTROL_TAG = std::uint64_t{1} << 63u;
+ inline constexpr std::uint64_t COOKIE_MASK = CONTROL_TAG - 1u;
+ 
++// Operation identity: bit 63 stays free for CONTROL_TAG, bits [48..62] carry
++// the router slot, bits [0..47] the per-backend cookie. Every consumer of the
++// operation identity (SQE user_data, cancel target, control target, transport
++// ledger) must carry this same value.
++inline constexpr unsigned ROUTER_SLOT_BITS = 15;
++inline constexpr unsigned ROUTER_SLOT_SHIFT = 48;
++inline constexpr std::uint64_t ROUTER_SLOT_MASK = (std::uint64_t{1} << ROUTER_SLOT_BITS) - 1u;
++inline constexpr std::uint64_t OPERATION_COOKIE_LIMIT = std::uint64_t{1} << ROUTER_SLOT_SHIFT;
++inline constexpr std::size_t ROUTER_SLOT_CAPACITY = std::size_t{1} << ROUTER_SLOT_BITS;
++
++inline constexpr std::uint64_t make_operation_identity(std::uint32_t router_slot,
++                                                       std::uint64_t cookie) noexcept {
++    return (static_cast<std::uint64_t>(router_slot) << ROUTER_SLOT_SHIFT) | cookie;
++}
++
++inline constexpr std::uint32_t operation_identity_slot(std::uint64_t identity) noexcept {
++    return static_cast<std::uint32_t>((identity >> ROUTER_SLOT_SHIFT) & ROUTER_SLOT_MASK);
++}
++
+ inline constexpr bool is_control_cookie(std::uint64_t user_data) noexcept {
+     return (user_data & CONTROL_TAG) != 0;
+ }
+diff --git a/src/async/uring_test_seams.hpp b/src/async/uring_test_seams.hpp
+index 431f5eca..ed03d403 100644
+--- a/src/async/uring_test_seams.hpp
++++ b/src/async/uring_test_seams.hpp
+@@ -88,6 +88,10 @@ inline std::uint64_t UringAsyncBackend::peek_next_cookie_for_test() const noexce
+     return next_cookie_;
+ }
+ 
++inline void UringAsyncBackend::set_next_cookie_for_test(std::uint64_t value) noexcept {
++    next_cookie_ = value;
++}
++
+ inline std::optional<std::uint64_t>
+ UringAsyncBackend::live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
+     for (const auto& entry : router_) {
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index efaee658..d9ea4a19 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -162,6 +162,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+     cookie_free_list_.pop_back();
+ 
+     const std::uint64_t op_cookie = allocate_cookie_();
++    const std::uint64_t op_identity = make_operation_identity(router_slot.value, op_cookie);
+     const PreparedUringOp& prep = prepared_ops_[h.slot.value];
+     switch (prep.kind) {
+     case detail::OperationKind::read:
+@@ -186,17 +187,18 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+         break;
+     }
+ 
+-    ::io_uring_sqe_set_data64(sqe, op_cookie);
++    ::io_uring_sqe_set_data64(sqe, op_identity);
+     RouterEntry& route = router_[router_slot.value];
+     route = RouterEntry{};
+-    route.cookie = op_cookie;
++    route.cookie = op_identity;
+     route.handle = h;
+     route.in_use = true;
+     live_cookies_.fetch_add(1, std::memory_order_relaxed);
+     const auto& sq = ring_state_->ring.sq;
+     const std::uint32_t physical_position =
+         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+-    transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
++    transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_identity,
++                              h);
+ 
+     if (!dispatch_->remove_exact(h)) {
+         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
+@@ -527,9 +529,9 @@ std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
+ #if defined(SLUICE_URING_CORE_MUTANT_COOKIE_REUSE)
+     return 1;
+ #endif
+-    if (next_cookie_ == 0 || next_cookie_ >= CONTROL_TAG) {
++    if (next_cookie_ == 0 || next_cookie_ >= OPERATION_COOKIE_LIMIT) {
+         std::fprintf(stderr, "sluice::async::UringAsyncBackend: operation-cookie "
+-                             "domain exhausted (would enter tagged control range / "
++                             "domain exhausted (48-bit identity envelope / "
+                              "wrap; invariant violation)\n");
+         std::fflush(stderr);
+         std::terminate();
+@@ -548,11 +550,15 @@ std::size_t UringAsyncBackend::find_live_router_index_(detail::RequestReservatio
+     return router_.size();
+ }
+ 
+-std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
+-    for (std::size_t i = router_.size(); i-- > 0;) {
+-        if (router_[i].in_use && router_[i].cookie == cookie)
+-            return i;
+-    }
++std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t identity) const noexcept {
++    if (identity == 0 || identity >= CONTROL_TAG)
++        return router_.size();
++    const std::size_t slot = operation_identity_slot(identity);
++    if (slot >= router_.size())
++        return router_.size();
++    const RouterEntry& entry = router_[slot];
++    if (entry.in_use && entry.cookie == identity)
++        return slot;
+     return router_.size();
+ }
+ 
+diff --git a/tests/backend_contract_conformance_test.cpp b/tests/backend_contract_conformance_test.cpp
+index 3a1bef12..e609c33b 100644
+--- a/tests/backend_contract_conformance_test.cpp
++++ b/tests/backend_contract_conformance_test.cpp
+@@ -1684,10 +1684,13 @@ bool canceled_metadata_op_reports_the_canceled_terminal(Tracker& t) {
+     const auto disposition = request.cancel();
+     t.check(disposition.has_value() && disposition.value() == CancelDisposition::requested,
+             "the cancel is requested against the claimed metadata op");
+-    const std::uint64_t cookie = made.backend->peek_next_cookie_for_test() - 1;
++    const auto cookie = made.backend->live_cookie_for_offset_for_test(0);
++    t.check(cookie.has_value(), "the running metadata op keeps a live identity");
++    if (!cookie.has_value())
++        return false;
+     (void)made.ctx->poll();
+-    made.backend->inject_cqe_for_test(kControlTag | cookie, 0);
+-    made.backend->inject_cqe_for_test(cookie, -ECANCELED);
++    made.backend->inject_cqe_for_test(kControlTag | *cookie, 0);
++    made.backend->inject_cqe_for_test(*cookie, -ECANCELED);
+     while (!request.ready())
+         (void)made.ctx->poll();
+     const auto observed = request.take_result();
+diff --git a/tests/uring_identity_envelope_test.cpp b/tests/uring_identity_envelope_test.cpp
+new file mode 100644
+index 00000000..1c5d04f1
+--- /dev/null
++++ b/tests/uring_identity_envelope_test.cpp
+@@ -0,0 +1,292 @@
++// Research-only negative controls for the M2 H1 packed router identity.
++// Not part of the product test roster: this target exists only in the
++// isolated candidate worktree and is replayed from the recorded patch.
++
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/file_resource.hpp>
++#include <sluice/result.hpp>
++
++#include <liburing.h>
++
++#include "uring_internal.hpp"
++
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <memory>
++#include <optional>
++#include <string>
++#include <sys/wait.h>
++#include <unistd.h>
++
++namespace {
++
++using namespace sluice::async;
++
++constexpr std::uint64_t kControlTag = std::uint64_t{1} << 63u;
++constexpr std::uint64_t kCookieLimit = std::uint64_t{1} << 48u;
++constexpr std::uint64_t kSlotUnit = std::uint64_t{1} << 48u;
++
++int fake_submit_no_kernel(void*, ::io_uring* ring) noexcept {
++    const unsigned ready = ::io_uring_sq_ready(ring);
++    *ring->sq.ktail = ring->sq.sqe_tail;
++    *ring->sq.khead = ring->sq.sqe_tail;
++    return static_cast<int>(ready);
++}
++
++struct Fixture {
++    std::unique_ptr<AsyncIoContext> ctx;
++    UringAsyncBackend* raw = nullptr;
++    FILE* backing = nullptr;
++
++    static Fixture create(std::size_t capacity) {
++        Fixture made;
++        made.backing = ::tmpfile();
++        if (made.backing == nullptr)
++            return made;
++        std::byte content[4096];
++        std::memset(content, 0x5a, sizeof(content));
++        if (::fwrite(content, 1, sizeof(content), made.backing) != sizeof(content))
++            return Fixture{};
++        ::rewind(made.backing);
++        UringBackendSubmitTestHooks hooks;
++        hooks.submit = fake_submit_no_kernel;
++        auto owned = std::make_unique<UringAsyncBackend>(UringConfig{capacity, 8}, hooks);
++        made.raw = owned.get();
++        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
++        return made;
++    }
++
++    bool ok() const { return ctx != nullptr && raw != nullptr && backing != nullptr; }
++
++    std::optional<Request<std::size_t>> submit_retry(std::uint64_t offset, std::byte* buffer) {
++        for (int attempt = 0; attempt < 200; ++attempt) {
++            auto submitted = ctx->submit_read(ReadOp{
++                NativeFileRef(::fileno(backing), sluice::FileAccess::read_only), buffer, 4, offset});
++            if (submitted.has_value())
++                return std::optional<Request<std::size_t>>(std::move(submitted).value());
++            if (submitted.error().code != sluice::IoError::Code::would_block)
++                return std::nullopt;
++            (void)ctx->poll();
++        }
++        return std::nullopt;
++    }
++};
++
++template <class F> bool dies(F&& fn) {
++    const pid_t pid = ::fork();
++    if (pid == 0) {
++        fn();
++        ::_exit(0);
++    }
++    if (pid < 0)
++        return false;
++    int status = 0;
++    if (::waitpid(pid, &status, 0) != pid)
++        return false;
++    return WIFSIGNALED(status) || (WIFEXITED(status) && WEXITSTATUS(status) != 0);
++}
++
++bool identity_round_trip_and_envelope() {
++    const std::uint64_t max_cookie = kCookieLimit - 1u;
++    const std::uint64_t max_identity = make_operation_identity(32767u, max_cookie);
++    if (max_identity >= kControlTag)
++        return false;
++    for (const std::uint32_t slot : {0u, 1u, 16383u, 32767u}) {
++        const std::uint64_t identity = make_operation_identity(slot, 0x1234u);
++        if (operation_identity_slot(identity) != slot)
++            return false;
++        if ((identity & (kCookieLimit - 1u)) != 0x1234u)
++            return false;
++    }
++    return true;
++}
++
++bool capacity_ceiling_is_explicit() {
++    bool accepted_ceiling = false;
++    bool rejected_overflow = false;
++    try {
++        UringAsyncBackend backend(UringConfig{32768, 8});
++        accepted_ceiling = backend.available();
++    } catch (...) {
++        accepted_ceiling = false;
++    }
++    try {
++        UringAsyncBackend backend(UringConfig{32769, 8});
++        (void)backend;
++    } catch (const std::invalid_argument&) {
++        rejected_overflow = true;
++    } catch (...) {
++        rejected_overflow = false;
++    }
++    return accepted_ceiling && rejected_overflow;
++}
++
++bool wrong_slot_identity_is_rejected() {
++    Fixture made = Fixture::create(1);
++    if (!made.ok())
++        return false;
++    std::byte buffer[4];
++    auto request = made.submit_retry(0, buffer);
++    if (!request.has_value())
++        return false;
++    (void)made.ctx->poll();
++    const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!identity.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(*identity + kSlotUnit, 4);
++    (void)made.ctx->poll();
++    if (request->ready())
++        return false;
++    made.raw->inject_cqe_for_test(*identity, 4);
++    (void)made.ctx->poll();
++    if (!request->ready())
++        return false;
++    const auto observed = request->take_result();
++    return observed.result.has_value() && observed.result.value() == 4u;
++}
++
++bool stale_identity_after_slot_reuse_is_rejected() {
++    Fixture made = Fixture::create(1);
++    if (!made.ok())
++        return false;
++    std::byte first_buffer[4];
++    std::byte second_buffer[4];
++    std::uint64_t first_identity = 0;
++    {
++        auto first = made.submit_retry(0, first_buffer);
++        if (!first.has_value())
++            return false;
++        (void)made.ctx->poll();
++        const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++        if (!identity.has_value())
++            return false;
++        first_identity = *identity;
++        made.raw->inject_cqe_for_test(first_identity, 4);
++        (void)made.ctx->poll();
++        if (!first->ready())
++            return false;
++        const auto observed = first->take_result();
++        if (!observed.result.has_value() || observed.result.value() != 4u)
++            return false;
++    }
++    auto second = made.submit_retry(0, second_buffer);
++    if (!second.has_value())
++        return false;
++    (void)made.ctx->poll();
++    const auto second_identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!second_identity.has_value() || *second_identity == first_identity)
++        return false;
++    made.raw->inject_cqe_for_test(first_identity, 4);
++    (void)made.ctx->poll();
++    if (second->ready())
++        return false;
++    made.raw->inject_cqe_for_test(*second_identity, 4);
++    (void)made.ctx->poll();
++    if (!second->ready())
++        return false;
++    const auto observed = second->take_result();
++    return observed.result.has_value() && observed.result.value() == 4u;
++}
++
++bool control_target_mismatch_does_not_release_control() {
++    Fixture made = Fixture::create(2);
++    if (!made.ok())
++        return false;
++    std::byte buffer[4];
++    auto request = made.submit_retry(0, buffer);
++    if (!request.has_value())
++        return false;
++    (void)made.ctx->poll();
++    const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!identity.has_value())
++        return false;
++    const auto disposition = request->cancel();
++    if (!disposition.has_value() || disposition.value() != CancelDisposition::requested)
++        return false;
++    (void)made.ctx->poll();
++    if (made.raw->live_control_sqes_for_test() != 1)
++        return false;
++    made.raw->inject_cqe_for_test(kControlTag | (*identity + kSlotUnit), 0);
++    if (made.raw->live_control_sqes_for_test() != 1)
++        return false;
++    made.raw->inject_cqe_for_test(kControlTag | *identity, 0);
++    if (made.raw->live_control_sqes_for_test() != 0)
++        return false;
++    made.raw->inject_cqe_for_test(*identity, -ECANCELED);
++    (void)made.ctx->poll();
++    if (!request->ready())
++        return false;
++    const auto observed = request->take_result();
++    return observed.readiness == RequestReadiness::ready && !observed.result.has_value() &&
++           observed.result.error().code == sluice::IoError::Code::canceled;
++}
++
++bool control_cqe_without_control_state_terminates() {
++    return dies([] {
++        Fixture made = Fixture::create(1);
++        if (!made.ok())
++            ::_exit(0);
++        std::byte buffer[4];
++        auto request = made.submit_retry(0, buffer);
++        if (!request.has_value())
++            ::_exit(0);
++        (void)made.ctx->poll();
++        const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++        if (!identity.has_value())
++            ::_exit(0);
++        made.raw->inject_cqe_for_test(kControlTag | *identity, 0);
++    });
++}
++
++bool cookie_exhaustion_fails_before_aliasing() {
++    return dies([] {
++        Fixture made = Fixture::create(2);
++        if (!made.ok())
++            ::_exit(0);
++        made.raw->set_next_cookie_for_test(kCookieLimit - 1u);
++        std::byte first_buffer[4];
++        std::byte second_buffer[4];
++        auto first = made.submit_retry(0, first_buffer);
++        if (!first.has_value())
++            ::_exit(0);
++        auto second = made.submit_retry(4, second_buffer);
++        (void)second;
++    });
++}
++
++} // namespace
++
++int main() {
++    ::alarm(120);
++    struct NamedTest {
++        const char* name;
++        bool (*fn)();
++    };
++    const NamedTest tests[] = {
++        {"identity_round_trip_and_envelope", identity_round_trip_and_envelope},
++        {"capacity_ceiling_is_explicit", capacity_ceiling_is_explicit},
++        {"wrong_slot_identity_is_rejected", wrong_slot_identity_is_rejected},
++        {"stale_identity_after_slot_reuse_is_rejected",
++         stale_identity_after_slot_reuse_is_rejected},
++        {"control_target_mismatch_does_not_release_control",
++         control_target_mismatch_does_not_release_control},
++        {"control_cqe_without_control_state_terminates",
++         control_cqe_without_control_state_terminates},
++        {"cookie_exhaustion_fails_before_aliasing", cookie_exhaustion_fails_before_aliasing},
++    };
++    std::size_t passed = 0;
++    for (const NamedTest& t : tests) {
++        if (!t.fn()) {
++            std::fprintf(stderr, "FAIL: %s\n", t.name);
++            return 1;
++        }
++        ++passed;
++        std::printf("ok %s\n", t.name);
++        std::fflush(stdout);
++    }
++    std::printf("all %zu uring identity-envelope controls passed\n", passed);
++    return 0;
++}
+diff --git a/tests/uring_request_core_integration_test.cpp b/tests/uring_request_core_integration_test.cpp
+index d2fdc657..736dd0df 100644
+--- a/tests/uring_request_core_integration_test.cpp
++++ b/tests/uring_request_core_integration_test.cpp
+@@ -649,6 +649,10 @@ bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
+     Request<std::size_t> a = std::move(first.value());
+     t.check(raw->peek_next_cookie_for_test() == cookie_a + 1,
+             "request A consumed one monotonic cookie");
++    const auto identity_a = raw->live_cookie_for_offset_for_test(0);
++    t.check(identity_a.has_value(), "request A has a routable identity");
++    if (!identity_a.has_value())
++        return false;
+     fake_complete(made, 0, 4);
+     if (!complete_take_reclaim(made, a, 4)) {
+         t.check(false, "request A retires cleanly");
+@@ -661,19 +665,19 @@ bool stale_cookie_cannot_reach_a_reused_slot(Tracker& t) {
+     const detail::RequestKey key_b = detail::TestAccess::request_key(b);
+     t.check(key_b.slot == SlotIndex{0} && key_b.generation.value == 1,
+             "request B occupies the same slot at generation+1");
+-    const auto cookie_b = live_cookie(made, 0);
+-    t.check(cookie_b.has_value() && *cookie_b != cookie_a,
+-            "the kernel cookie is never reused across requests");
+-    if (!cookie_b.has_value())
++    const auto identity_b = live_cookie(made, 0);
++    t.check(identity_b.has_value() && *identity_b != *identity_a,
++            "the kernel identity is never reused across requests");
++    if (!identity_b.has_value())
+         return false;
+ 
+-    inject_completion(made, cookie_a, static_cast<int>(-EIO));
++    inject_completion(made, *identity_a, static_cast<int>(-EIO));
+     const auto after_stale = core.observe_slot(SlotIndex{0});
+     t.check(after_stale.has_value() && !after_stale->terminal_chosen,
+-            "a stale cookie's CQE cannot affect the reused request");
++            "a stale identity's CQE cannot affect the reused request");
+ 
+     (void)ctx.poll();
+-    inject_completion(made, *cookie_b, 4);
++    inject_completion(made, *identity_b, 4);
+     for (int i = 0; i < 64 && !b.ready(); ++i)
+         (void)ctx.poll();
+     const auto b_result = b.try_result();
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index 68adefbc..f8d67f23 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -478,6 +478,8 @@ if has_config("liburing") then
+                               R .. "tests/uring_registration_lifecycle_test.cpp")
+     uring_progress_target("uring_owed_residue_test",
+                               R .. "tests/uring_owed_residue_test.cpp")
++    uring_progress_target("uring_identity_envelope_test",
++                              R .. "tests/uring_identity_envelope_test.cpp")
+ 
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of

@@ -1,0 +1,411 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 03ecf5d1..20e7c6e9 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -96,6 +96,8 @@ class UringAsyncBackend : public AsyncBackend {
+     std::uint64_t submit_flushes_for_test() const noexcept;
+     std::size_t live_cookies_for_test() const noexcept;
+     std::uint64_t peek_next_cookie_for_test() const noexcept;
++    std::size_t owed_count_for_test() const noexcept;
++    bool owed_scan_for_test() const noexcept;
+     std::optional<std::uint64_t>
+     live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept;
+ 
+@@ -191,6 +193,11 @@ class UringAsyncBackend : public AsyncBackend {
+         detail::RequestKey owed_key{};
+     };
+ 
++    struct OwedEvent {
++        detail::RequestKey key{};
++        detail::OperationKind kind = detail::OperationKind::read;
++    };
++
+     class BoundedDispatchQueue;
+ 
+     class TransportLedger;
+@@ -245,6 +252,7 @@ class UringAsyncBackend : public AsyncBackend {
+     void reap_cqes() noexcept;
+ 
+     bool any_event_owed_locked_() const noexcept;
++    bool owed_visible_locked_() const noexcept { return owed_count_ != 0; }
+ 
+     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
+ 
+@@ -281,6 +289,8 @@ class UringAsyncBackend : public AsyncBackend {
+     std::size_t capacity_ = 0;
+     std::vector<PreparedUringOp> prepared_ops_;
+     std::vector<DeliveryRecord> delivery_;
++    std::vector<OwedEvent> owed_batch_;
++    std::size_t owed_count_ = 0;
+     std::vector<RouterEntry> router_;
+     std::vector<detail::SlotIndex> cookie_free_list_;
+     std::vector<struct ::statx> statx_buffers_;
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index e11a3931..c442c055 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -160,8 +160,9 @@ UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
+ 
+ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     : capacity_(config.request_capacity), prepared_ops_(config.request_capacity),
+-      delivery_(config.request_capacity), router_(config.request_capacity),
+-      cookie_free_list_(config.request_capacity), statx_buffers_(config.request_capacity),
++      delivery_(config.request_capacity), owed_batch_(config.request_capacity),
++      router_(config.request_capacity), cookie_free_list_(config.request_capacity),
++      statx_buffers_(config.request_capacity),
+       ring_state_(std::make_unique<UringRingState>()) {
+     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
+         cookie_free_list_[i] = detail::SlotIndex{i};
+@@ -309,7 +310,7 @@ ProgressPass UringAsyncBackend::poll_progress() {
+ #endif
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-        pass.immediate_work_remains = !publication_pending_->empty() || any_event_owed_locked_();
++        pass.immediate_work_remains = !publication_pending_->empty() || owed_visible_locked_();
+ #if defined(SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+         pass.dispatch_retry_remains = false;
+ #else
+@@ -487,6 +488,9 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+         DeliveryRecord& record = delivery_[h.slot.value];
++        if (record.event_owed) {
++            --owed_count_;
++        }
+         record.kind = kind;
+         record.event_owed = false;
+         record.owed_key = {};
+@@ -558,6 +562,9 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+         DeliveryRecord& record = delivery_[h.slot.value];
++        if (!record.event_owed) {
++            ++owed_count_;
++        }
+         record.event_owed = true;
+         record.owed_key = id;
+     }
+@@ -633,21 +640,35 @@ std::size_t UringAsyncBackend::poll() {
+         publish_one(h);
+         ++published;
+     }
+-    for (std::uint32_t i = 0; i < capacity_; ++i) {
+-        detail::RequestKey owed{};
+-        detail::OperationKind owed_kind = detail::OperationKind::read;
+-        {
+-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-            DeliveryRecord& record = delivery_[i];
+-            if (!record.event_owed)
+-                continue;
+-            record.event_owed = false;
+-            owed = record.owed_key;
+-            record.owed_key = {};
+-            owed_kind = record.kind;
++    std::size_t owed_bound = 0;
++    {
++        std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        const std::size_t expected = owed_count_;
++        if (expected != 0) {
++            for (std::uint32_t i = 0; i < capacity_; ++i) {
++                DeliveryRecord& record = delivery_[i];
++                if (!record.event_owed)
++                    continue;
++                record.event_owed = false;
++#if !defined(SLUICE_M2_MUTANT_OWED_COUNT_NO_DECREMENT)
++                --owed_count_;
++#endif
++                owed_batch_[owed_bound] = OwedEvent{record.owed_key, record.kind};
++                record.owed_key = {};
++                ++owed_bound;
++            }
++            if (owed_bound != expected) {
++                std::fprintf(stderr, "sluice::async::UringAsyncBackend: owed-count "
++                                     "parity lost against the delivery scan "
++                                     "(invariant violation)\n");
++                std::fflush(stderr);
++                std::terminate();
++            }
+         }
+-        deliver_event(owed, owed_kind);
+-        if (core_->release_control(owed) != detail::ControlRelease::released) {
++    }
++    for (std::size_t n = 0; n < owed_bound; ++n) {
++        deliver_event(owed_batch_[n].key, owed_batch_[n].kind);
++        if (core_->release_control(owed_batch_[n].key) != detail::ControlRelease::released) {
+             detail::uring_core_handoff_fail_fast();
+         }
+         ++published;
+diff --git a/src/async/uring_test_seams.hpp b/src/async/uring_test_seams.hpp
+index 431f5eca..c87ec38f 100644
+--- a/src/async/uring_test_seams.hpp
++++ b/src/async/uring_test_seams.hpp
+@@ -88,6 +88,14 @@ inline std::uint64_t UringAsyncBackend::peek_next_cookie_for_test() const noexce
+     return next_cookie_;
+ }
+ 
++inline std::size_t UringAsyncBackend::owed_count_for_test() const noexcept {
++    return owed_count_;
++}
++
++inline bool UringAsyncBackend::owed_scan_for_test() const noexcept {
++    return any_event_owed_locked_();
++}
++
+ inline std::optional<std::uint64_t>
+ UringAsyncBackend::live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
+     for (const auto& entry : router_) {
+diff --git a/tests/uring_owed_counter_parity_test.cpp b/tests/uring_owed_counter_parity_test.cpp
+new file mode 100644
+index 00000000..385d3555
+--- /dev/null
++++ b/tests/uring_owed_counter_parity_test.cpp
+@@ -0,0 +1,233 @@
++// Research-only parity controls for the M2 H2 owed-count derived summary.
++// Not part of the product test roster: this target exists only in the
++// isolated candidate worktrees and is replayed from the recorded patches.
++
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/file_resource.hpp>
++#include <sluice/result.hpp>
++
++#include <liburing.h>
++
++#include <atomic>
++#include <chrono>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <memory>
++#include <optional>
++#include <thread>
++#include <vector>
++
++namespace {
++
++using namespace sluice::async;
++
++int fake_submit_no_kernel(void*, ::io_uring* ring) noexcept {
++    const unsigned ready = ::io_uring_sq_ready(ring);
++    *ring->sq.ktail = ring->sq.sqe_tail;
++    *ring->sq.khead = ring->sq.sqe_tail;
++    return static_cast<int>(ready);
++}
++
++struct Fixture {
++    std::unique_ptr<AsyncIoContext> ctx;
++    UringAsyncBackend* raw = nullptr;
++    FILE* backing = nullptr;
++
++    static Fixture create(std::size_t capacity) {
++        Fixture made;
++        made.backing = ::tmpfile();
++        if (made.backing == nullptr)
++            return made;
++        std::byte content[4096];
++        std::memset(content, 0x33, sizeof(content));
++        if (::fwrite(content, 1, sizeof(content), made.backing) != sizeof(content))
++            return Fixture{};
++        ::rewind(made.backing);
++        UringBackendSubmitTestHooks hooks;
++        hooks.submit = fake_submit_no_kernel;
++        auto owned = std::make_unique<UringAsyncBackend>(UringConfig{capacity, 8}, hooks);
++        made.raw = owned.get();
++        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
++        return made;
++    }
++
++    bool ok() const { return ctx != nullptr && raw != nullptr && backing != nullptr; }
++
++    ReadOp zero_op(std::byte* buffer, std::uint64_t offset) {
++        return ReadOp{NativeFileRef(::fileno(backing), sluice::FileAccess::read_only), buffer, 0,
++                      offset};
++    }
++
++    ReadOp data_op(std::byte* buffer, std::uint64_t offset) {
++        return ReadOp{NativeFileRef(::fileno(backing), sluice::FileAccess::read_only), buffer, 4,
++                      offset};
++    }
++};
++
++bool counter_tracks_zero_op_owed_events() {
++    Fixture made = Fixture::create(4);
++    if (!made.ok())
++        return false;
++    std::byte buffers[3][1];
++    std::vector<Request<std::size_t>> requests;
++    for (std::uint64_t i = 0; i < 3; ++i) {
++        auto submitted = made.ctx->submit_read(made.zero_op(buffers[i], i));
++        if (!submitted.has_value())
++            return false;
++        requests.push_back(std::move(submitted).value());
++    }
++    if (made.raw->owed_count_for_test() != 3)
++        return false;
++    if (!made.raw->owed_scan_for_test())
++        return false;
++    (void)made.ctx->poll();
++    if (made.raw->owed_count_for_test() != 0)
++        return false;
++    if (made.raw->owed_scan_for_test())
++        return false;
++    if (made.raw->sink_deliveries() != 3)
++        return false;
++    for (auto& request : requests) {
++        if (!request.ready())
++            return false;
++        const auto observed = request.take_result();
++        if (!observed.result.has_value() || observed.result.value() != 0)
++            return false;
++    }
++    return true;
++}
++
++bool counter_ignores_data_ops() {
++    Fixture made = Fixture::create(2);
++    if (!made.ok())
++        return false;
++    std::byte buffer[4];
++    auto submitted = made.ctx->submit_read(made.data_op(buffer, 0));
++    if (!submitted.has_value())
++        return false;
++    (void)made.ctx->poll();
++    if (made.raw->owed_count_for_test() != 0 || made.raw->owed_scan_for_test())
++        return false;
++    const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!identity.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(*identity, 4);
++    (void)made.ctx->poll();
++    if (!submitted.value().ready())
++        return false;
++    const auto observed = submitted.value().take_result();
++    return observed.result.has_value() && observed.result.value() == 4 &&
++           made.raw->owed_count_for_test() == 0 && !made.raw->owed_scan_for_test();
++}
++
++bool slot_reuse_keeps_parity() {
++    Fixture made = Fixture::create(1);
++    if (!made.ok())
++        return false;
++    std::byte first_buffer[1];
++    std::byte second_buffer[1];
++    {
++        auto first = made.ctx->submit_read(made.zero_op(first_buffer, 0));
++        if (!first.has_value())
++            return false;
++        if (made.raw->owed_count_for_test() != 1)
++            return false;
++        (void)made.ctx->poll();
++        if (made.raw->owed_count_for_test() != 0)
++            return false;
++        const auto observed = first.value().take_result();
++        if (!observed.result.has_value())
++            return false;
++    }
++    auto second = made.ctx->submit_read(made.zero_op(second_buffer, 4));
++    if (!second.has_value())
++        return false;
++    if (made.raw->owed_count_for_test() != 1 || !made.raw->owed_scan_for_test())
++        return false;
++    (void)made.ctx->poll();
++    if (made.raw->owed_count_for_test() != 0 || made.raw->owed_scan_for_test())
++        return false;
++    if (made.raw->sink_deliveries() != 2)
++        return false;
++    const auto observed = second.value().take_result();
++    return observed.result.has_value();
++}
++
++bool concurrent_producers_keep_exactly_once() {
++    Fixture made = Fixture::create(64);
++    if (!made.ok())
++        return false;
++    constexpr std::size_t kOperations = 500;
++    std::byte buffer[1];
++    std::atomic<bool> done{false};
++    std::atomic<bool> failed{false};
++    std::atomic<std::size_t> accepted{0};
++    std::thread producer([&] {
++        std::size_t count = 0;
++        while (count < kOperations) {
++            auto submitted = made.ctx->submit_read(made.zero_op(buffer, count));
++            if (!submitted.has_value()) {
++                if (submitted.error().code == sluice::IoError::Code::would_block) {
++                    std::this_thread::yield();
++                    continue;
++                }
++                failed.store(true, std::memory_order_release);
++                break;
++            }
++            const auto observed = submitted.value().take_result();
++            if (!observed.result.has_value()) {
++                failed.store(true, std::memory_order_release);
++                break;
++            }
++            ++count;
++            accepted.store(count, std::memory_order_release);
++        }
++        done.store(true, std::memory_order_release);
++    });
++    for (std::size_t i = 0; i < 2000000; ++i) {
++        (void)made.ctx->poll();
++        if (done.load(std::memory_order_acquire) &&
++            made.raw->sink_deliveries() >= kOperations)
++            break;
++        std::this_thread::yield();
++    }
++    producer.join();
++    if (failed.load(std::memory_order_acquire))
++        return false;
++    if (accepted.load(std::memory_order_acquire) != kOperations)
++        return false;
++    if (made.raw->sink_deliveries() != kOperations)
++        return false;
++    return made.raw->owed_count_for_test() == 0 && !made.raw->owed_scan_for_test();
++}
++
++} // namespace
++
++int main() {
++    ::alarm(120);
++    struct NamedTest {
++        const char* name;
++        bool (*fn)();
++    };
++    const NamedTest tests[] = {
++        {"counter_tracks_zero_op_owed_events", counter_tracks_zero_op_owed_events},
++        {"counter_ignores_data_ops", counter_ignores_data_ops},
++        {"slot_reuse_keeps_parity", slot_reuse_keeps_parity},
++        {"concurrent_producers_keep_exactly_once", concurrent_producers_keep_exactly_once},
++    };
++    std::size_t passed = 0;
++    for (const NamedTest& t : tests) {
++        if (!t.fn()) {
++            std::fprintf(stderr, "FAIL: %s\n", t.name);
++            return 1;
++        }
++        ++passed;
++        std::printf("ok %s\n", t.name);
++        std::fflush(stdout);
++    }
++    std::printf("all %zu uring owed-count parity controls passed\n", passed);
++    return 0;
++}
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index 68adefbc..5b4f8c7f 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -478,6 +478,11 @@ if has_config("liburing") then
+                               R .. "tests/uring_registration_lifecycle_test.cpp")
+     uring_progress_target("uring_owed_residue_test",
+                               R .. "tests/uring_owed_residue_test.cpp")
++    uring_progress_target("uring_owed_counter_parity_test",
++                              R .. "tests/uring_owed_counter_parity_test.cpp")
++    uring_progress_target("uring_owed_counter_parity_mut_no_decrement",
++                              R .. "tests/uring_owed_counter_parity_test.cpp",
++                              "SLUICE_M2_MUTANT_OWED_COUNT_NO_DECREMENT")
+ 
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of
