@@ -1,0 +1,36 @@
+=== uring_owed_mut_missing_increment
+command: /home/hoo/Projects/Sluice/build/linux/x86_64/releasedbg/uring_owed_mut_missing_increment  (releasedbg + liburing=y, no sanitizers)
+exit: 142
+output (tail):
+
+=== uring_owed_mut_missing_decrement
+command: /home/hoo/Projects/Sluice/build/linux/x86_64/releasedbg/uring_owed_mut_missing_decrement  (releasedbg + liburing=y, no sanitizers)
+exit: 1
+output (tail):
+FAIL: counter_tracks_zero_op_reads
+
+=== uring_owed_mut_empty_verdict_always
+command: /home/hoo/Projects/Sluice/build/linux/x86_64/releasedbg/uring_owed_mut_empty_verdict_always  (releasedbg + liburing=y, no sanitizers)
+exit: 1
+output (tail):
+test a: owed delivery standing, immediate_work_remains observed as false
+FAIL: a_zero_op_after_sweep_is_immediate_residue
+
+=== uring_owed_mut_reclaim_ignoring_control_refs
+command: /home/hoo/Projects/Sluice/build/linux/x86_64/releasedbg/uring_owed_mut_reclaim_ignoring_control_refs  (releasedbg + liburing=y, no sanitizers)
+exit: 134
+output (tail):
+ok zero_length_write_is_owed
+ok full_capacity_sweeps_exactly_once
+sluice::async::UringAsyncBackend: core handoff reached a protocol-unreachable state (invariant violation)
+terminate called without an active exception
+
+=== uring_owed_mut_zero_op_wake_dropped
+command: /home/hoo/Projects/Sluice/build/linux/x86_64/releasedbg/uring_owed_mut_zero_op_wake_dropped  (releasedbg + liburing=y, no sanitizers)
+exit: 134
+output (tail):
+ok external_poll_loop_uring_w03
+ok kernel_completions_delivered_without_stranding
+sluice::async::AsyncIoContext: relocating or destroying a context with a live progress binding (progress-owner handle, active drive, or live external notification registration) is a contract violation
+terminate called without an active exception
+

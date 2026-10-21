@@ -1,0 +1,11 @@
+host=Hu
+kernel=6.18.54.1-microsoft-standard-WSL2
+git_base=c8970702aad4fa74d4053d00ae941409e709ce67
+git_h2b=4edb957df0192c48a50784a51ab523038b30aa28
+cpu_model=AMD Ryzen 7 5800H with Radeon Graphics
+pinned_cpu=2
+reps=15
+compiler=g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+harness_flags=-std=c++20 -O3 -DNDEBUG
+fixture=/tmp/sluice-h2b-ab/fixture.bin
+status=PROVISIONAL_WSL2_NOT_E5

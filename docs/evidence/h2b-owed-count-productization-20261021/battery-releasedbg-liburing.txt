@@ -1,0 +1,4 @@
+cell: releasedbg + liburing=y, sanitizers empty (xmake f -c -m releasedbg --liburing=y)
+command: xmake build -y && xmake test
+date: 2026-10-21T23:16:37+08:00
+result: 75/75 passed, 0 failed
