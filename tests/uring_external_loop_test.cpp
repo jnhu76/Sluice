@@ -650,7 +650,246 @@ bool external_retryable_transport_does_not_strand() {
     return ok;
 }
 
+// Zero-op owed events created before and after a notification acknowledgement
+// are both standing obligations: acknowledging the first wake must not
+// consume the undelivered event, and one post-ack pass delivers both exactly
+// once without needing further wakes.
+bool zero_op_owed_events_across_ack_deliver_exactly_once() {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8});
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    ExternalLoopHost host(ctx);
+
+    std::vector<std::byte> first(1, std::byte{0});
+    std::vector<std::byte> second(1, std::byte{0});
+    auto one_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               first.data(), 0, 0});
+    if (!one_submitted.has_value())
+        return false;
+    auto one = std::move(one_submitted).value();
+    if (!fd_readable(host.nfd()))
+        return false;
+    // The acknowledgement drains the wake only; the undelivered obligation
+    // stands and the next submission adds a second one with a fresh wake.
+    ctx.acknowledge_progress_notification();
+    auto two_submitted =
+        ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                               second.data(), 0, 4});
+    if (!two_submitted.has_value())
+        return false;
+    auto two = std::move(two_submitted).value();
+    if (!fd_readable(host.nfd()))
+        return false;
+
+    const auto pass = ctx.poll_progress();
+    if (!pass.has_value() || pass.value().completed != 2)
+        return false;
+    if (!one.ready() || !two.ready())
+        return false;
+    const auto one_result = one.take_result();
+    const auto two_result = two.take_result();
+    if (!one_result.result.has_value() || one_result.result.value() != 0)
+        return false;
+    if (!two_result.result.has_value() || two_result.result.value() != 0)
+        return false;
+
+    // Settling round: no further deliveries, no further wakes.
+    if (host.acknowledge_and_drive() != 0)
+        return false;
+    const bool quiet = !fd_readable(host.nfd());
+    struct pollfd p;
+    p.fd = host.nfd();
+    p.events = POLLIN;
+    p.revents = 0;
+    const bool idle = ::poll(&p, 1, 150) == 0;
+    host.stop_and_detach();
+    return quiet && idle;
 }
+
+// An owed event produced by another thread while a pass sits between its
+// sweep and its report must leave a readable notification fd, be reported as
+// post-pass residue, and be delivered exactly once by the owner's next drive.
+// After the driving owner releases, a fresh owner on another thread must be
+// able to claim and drive the settling pass.
+bool zero_op_from_another_thread_during_pass_is_served() {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8});
+    UringAsyncBackend* raw = backend.get();
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    ExternalLoopHost host(ctx);
+
+    UringAsyncBackend::DeliverySweepEpiloguePauseGate gate{};
+    raw->set_delivery_sweep_epilogue_pause_gate(&gate);
+
+    std::vector<std::byte> buffer(1, std::byte{0});
+    std::optional<ProgressPass> paused_pass;
+    std::atomic<bool> producer_landed{false};
+    std::atomic<bool> wake_pending_during_pass{false};
+    std::thread helper([&] {
+        while (!gate.paused.load(std::memory_order_acquire))
+            gate.paused.wait(gate.paused.load(std::memory_order_acquire));
+        auto submitted =
+            ctx.submit_read(ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only),
+                                   buffer.data(), 0, 0});
+        producer_landed.store(submitted.has_value(), std::memory_order_release);
+        // The submission raced a live pass and still leaves persistent
+        // readiness: the notification interest was borrowed before the drive
+        // started, so the wake must be observable right now.
+        wake_pending_during_pass.store(fd_readable(host.nfd()), std::memory_order_release);
+        gate.resume.store(true, std::memory_order_release);
+        gate.resume.notify_all();
+    });
+    const auto driven = ctx.poll_progress();
+    if (driven.has_value())
+        paused_pass = driven.value();
+    helper.join();
+    raw->set_delivery_sweep_epilogue_pause_gate(nullptr);
+
+    if (!producer_landed.load(std::memory_order_acquire) ||
+        !wake_pending_during_pass.load(std::memory_order_acquire))
+        return false;
+    if (!paused_pass.has_value() || paused_pass.value().completed != 0)
+        return false;
+    if (!paused_pass.value().immediate_work_remains)
+        return false;
+
+    if (host.acknowledge_and_drive() == 0)
+        return false;
+
+    // Owner transfer: the driving authority moves to a fresh thread, which
+    // observes a fully settled backend and a quiet fd.
+    const int borrowed = host.nfd();
+    host.stop_and_detach();
+    bool settled = false;
+    std::thread successor([&] {
+        auto claimed = ctx.claim_progress_owner();
+        if (!claimed.has_value())
+            return;
+        ProgressOwner owner = std::move(claimed).value();
+        const auto pass = ctx.poll_progress();
+        settled = pass.has_value() && pass.value().completed == 0 &&
+                  !pass.value().immediate_work_remains;
+    });
+    successor.join();
+    if (!settled)
+        return false;
+    struct pollfd p;
+    p.fd = borrowed;
+    p.events = POLLIN;
+    p.revents = 0;
+    if (::poll(&p, 1, 150) != 0)
+        return false;
+    ctx.detach_progress_host();
+    return true;
+}
+
+// A wait over an outstanding owed delivery must serve it inside the wait's
+// own pass instead of parking past it; only a genuinely empty backend may
+// return the quiescent zero-completion outcome.
+bool wait_one_serves_owed_without_parking_past_it() {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8});
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    auto claimed = ctx.claim_progress_owner();
+    if (!claimed.has_value())
+        return false;
+    ProgressOwner owner = std::move(claimed).value();
+
+    std::vector<std::byte> buffer(1, std::byte{0});
+    auto submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(::fileno(tmpfile()), FileAccess::read_only), buffer.data(), 0, 0});
+    if (!submitted.has_value())
+        return false;
+    auto zero = std::move(submitted).value();
+
+    using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
+    const auto served = ctx.wait_one(std::chrono::milliseconds{5000});
+    if (!served.has_value() || served.value().kind != WaitKind::progress ||
+        served.value().completed != 1)
+        return false;
+    if (!zero.ready())
+        return false;
+    const auto observed = zero.take_result();
+    if (!observed.result.has_value() || observed.result.value() != 0)
+        return false;
+
+    const auto quiescent = ctx.wait_one(std::chrono::milliseconds{100});
+    if (!quiescent.has_value() || quiescent.value().kind != WaitKind::progress ||
+        quiescent.value().completed != 0)
+        return false;
+    return true;
+}
+
+// A registered observer, an in-kernel data completion and a zero-op owed
+// delivery share one settlement sequence without losing or duplicating any
+// outcome; the delivered observer registration retires with its delivery,
+// and shutdown converges only after every obligation has settled.
+bool observer_zero_op_and_shutdown_settle_together() {
+    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8});
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    ExternalLoopHost host(ctx);
+
+    const int source = temp_file_fd(std::string(64, 'c'));
+    if (source < 0)
+        return false;
+    std::vector<std::byte> data(32, std::byte{0});
+    std::vector<std::byte> zero_buffer(1, std::byte{0});
+
+    auto data_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(source, FileAccess::read_only), data.data(), data.size(), 0});
+    if (!data_submitted.has_value())
+        return false;
+    auto data_request = std::move(data_submitted).value();
+    const auto observer = ctx.attach_observer(data_request.id());
+    if (!observer.armed())
+        return false;
+
+    auto zero_submitted = ctx.submit_read(
+        ReadOp{NativeFileRef(source, FileAccess::read_only), zero_buffer.data(), 0, 0});
+    if (!zero_submitted.has_value())
+        return false;
+    auto zero = std::move(zero_submitted).value();
+    if (!fd_readable(host.nfd()))
+        return false;
+
+    constexpr int kMaxRounds = 16;
+    int rounds = 0;
+    while ((!data_request.ready() || !zero.ready()) && rounds < kMaxRounds) {
+        ++rounds;
+        const auto serviced = host.wait_and_service(std::chrono::milliseconds{5000});
+        if (!serviced)
+            return false;
+        host.acknowledge_and_drive();
+    }
+    if (rounds == kMaxRounds)
+        return false;
+    if (host.acknowledge_and_drive() != 0)
+        return false;
+
+    // The retirement query stays authoritative only while the binding is
+    // retained, so it is read before consumption.
+    if (!ctx.delivery_retired(data_request.id()))
+        return false;
+    const auto data_result = data_request.take_result();
+    const auto zero_result = zero.take_result();
+    if (data_result.readiness != RequestReadiness::ready || !data_result.result.has_value() ||
+        data_result.result.value() != static_cast<std::size_t>(data.size()))
+        return false;
+    if (zero_result.readiness != RequestReadiness::ready || !zero_result.result.has_value() ||
+        zero_result.result.value() != 0)
+        return false;
+
+    if (fd_readable(host.nfd()))
+        return false;
+    ::close(source);
+
+    // The external notification interest is retired before the settlement
+    // driver runs; shutdown then converges on the fully settled backend.
+    host.stop_and_detach();
+    const auto outcome = ctx.shutdown(ShutdownPolicy::drain);
+    if (!outcome.has_value() || outcome.value() != ShutdownOutcome::completed)
+        return false;
+    return true;
+}
+} // namespace
 
 int main() {
     ::alarm(120);
@@ -668,6 +907,14 @@ int main() {
          saturation_with_real_kernel_completion_preserves_wake},
         {"external_retryable_transport_does_not_strand",
          external_retryable_transport_does_not_strand},
+        {"zero_op_owed_events_across_ack_deliver_exactly_once",
+         zero_op_owed_events_across_ack_deliver_exactly_once},
+        {"zero_op_from_another_thread_during_pass_is_served",
+         zero_op_from_another_thread_during_pass_is_served},
+        {"wait_one_serves_owed_without_parking_past_it",
+         wait_one_serves_owed_without_parking_past_it},
+        {"observer_zero_op_and_shutdown_settle_together",
+         observer_zero_op_and_shutdown_settle_together},
     };
 
     std::size_t passed = 0;
