@@ -1,0 +1,16 @@
+status=FORMAL_E5
+runner=run_e5_ab.frozen.sh r2
+runner_sha256=01159c7521ccbbeb41391d53ac91939dc090d99c82fc3c14fa272184e9f422fe
+verdict_sha256=174e111467dae920775f399b2431704f1c0eab13e72cfe45319e3d6b3554f3ec
+host=E5
+kernel=7.2.9-201.fc44.x86_64
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+pinned_cpu=2
+reps=15
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+harness_flags=-std=c++20 -O3 -DNDEBUG
+fixture=/tmp/sluice-h2b-fixture/fixture.bin
+acceptance=median<=1.03 AND pairs-above<=10/15 per config (engineering ~6% bound, not exact 5%)
+perf_paranoid=2
+data_harness_sha256=6aa9e30c2b98d53c08a8a0843083b49a80b88f9a6e979a3c9737d60c32645223
+perf_stat_status=AVAILABLE

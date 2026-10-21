@@ -202,13 +202,13 @@ exactly one symbol), and the formal E5 script below restores the
 `arm-identity.txt` hash step and refuses to run on a sanitizer-tainted
 config.
 
-### 6.2 Formal E5 acceptance — NOT_RUN (runner r2 ready)
+### 6.2 Formal E5 acceptance — PASS (2026-10-22)
 
 Round-2 review (P1-A/P1-B) rejected the r1 runner as an acceptance
 mechanism: it recorded arm identity without verifying it (stale libraries
 could be measured, dirty trees accepted, identical arms undetectable) and it
 computed no verdict (a uniformly regressing h2b could still exit 0). The
-runner in this directory is revised to r2 with fail-closed behavior:
+runner in this directory was revised to r2 with fail-closed behavior:
 
 - Identity gates run before any build or measurement: exact expected SHAs
   are command-line pins; HEAD, clean status and path distinctness are
@@ -218,26 +218,37 @@ runner in this directory is revised to r2 with fail-closed behavior:
   and its actual base — never a GitHub-precomputed merge SHA.
 - Both arms rebuild from an empty `build/` and a cleared xmake config on
   every invocation, so stale artifacts cannot reach a measurement; the
-  sanitizer-taint refusal stays.
+  sanitizer-taint refusal stays. The libraries are built by explicit
+  per-target commands (`sluice_async` is not an xmake default target — r1's
+  plain `xmake build -y` silently skipped it, a latent defect the first r2
+  gate run caught, and the multi-target form is rejected by xmake 3.0.6 on
+  the E5 host).
 - Harnesses compile from single read-only sources; the trees under test are
-  never written (r1 copied the data harness into the worktrees, dirtying
-  them). The data harness must hash-match across trees, and the arms' async
-  libraries must differ — otherwise the run is refused as "not an A/B".
+  never written by the harness step (r1 copied the data harness into the
+  worktrees, dirtying them). The data harness must hash-match across trees,
+  and the arms' async libraries must differ — otherwise the run is refused
+  as "not an A/B".
 - Acceptance is computed only by `e5_verdict.py` (fail-closed): it
   reconstructs the complete arm/config/rep/phase cell set (missing rows,
   duplicated rows, failed byte oracles, illegal measurements and unknown
   configs all fail), cross-checks `arm-identity.txt` against the pins,
   applies the pre-declared rule per config, and writes `verdict.json`. A run
   that ends without a `verdict.json` is not an acceptance.
-- Statistical erratum (review P2-A): the ≤10/15 pair threshold rejects a
-  majority-regression at the one-sided binomial level
-  P(X ≥ 11 | n = 15, p = 0.5) = 0.059 — an engineering ~6% bound, not an
-  exact 5% test. REPS is pinned to 15 so the rule and the design cannot
-  diverge.
+- Statistical erratum and strengthening note (review P2-A + runner-audit
+  N1): the pair-count clause (≤ 10 of 15 pairs above 1.03) is an engineering
+  bound whose one-sided binomial level is P(X ≥ 11 | n = 15, p = 0.5) =
+  0.059 — not an exact 5% test — and on 15 pairs it is additionally
+  subsumed by the median clause: a median ≤ 1.03 already forces at most 7
+  pairs above 1.03, so the effective acceptance gate is the median rule and
+  majority regressions are rejected deterministically, not statistically.
+  Both clauses were kept because they are the rule as pre-declared before
+  any E5 data existed; the subsumption is recorded here rather than by
+  editing the runner after its SHA was frozen into the run provenance.
 - Hardware-counter attribution is decoupled from acceptance (review P2-C):
   `perf stat` runs only when a probe succeeds and is otherwise recorded as
   `perf_stat_status=NOT_AVAILABLE`; the paired CPU-time experiment alone
-  decides PASS/FAIL.
+  decides PASS/FAIL. On the E5 host the probe succeeded, so attribution was
+  captured (see `formal-e5-ab/`).
 
 Gate receipts: `e5-runner-r2-receipts.txt` — reducer selftest 9/9
 counterfactuals (clean dataset PASS; regression, missing row, duplicate row,
@@ -245,13 +256,20 @@ failed oracle, illegal measurement, unknown config, same-arm identity and
 SHA mismatch each FAIL); runner refusals for identical pins, HEAD mismatch,
 malformed pin, dirty tree and identical paths (exit 2 before any build); and
 a planted stale artifact destroyed by the forced empty-build rebuild with
-both worktrees still clean afterwards.
+both worktrees still clean afterwards. An independent adversarial audit of
+the r2 runner and reducer (7 attack classes, ~40 live mutations) found no
+path to a false PASS or a silently accepted measurement; verdict
+RUNNER_ACCEPTED with tamper-hardening notes recorded in §7.
 
-E5 execution remains NOT_RUN (credentials provisioned interactively; §8).
-Owner steps: `git worktree add` base at `c8970702` and h2b at the PR HEAD,
-then `run_e5_ab.frozen.sh <base-tree> <h2b-tree> <base-sha> <h2b-sha>
-<output-dir> [cpu]`; the process exit code and `verdict.json` are the
-acceptance receipt — record them in the ledger PROG-01 row.
+Execution: the formal run was executed on the E5 native Linux host on
+2026-10-22 with base `c8970702` and candidate `eb465c4f` — **PASS**:
+870/870 rows, 0 reasons, all 11 configs pass, headline 4 KiB / C = 1024 /
+depth 1 median ratio **0.495**, capacity dose-response intact (0.956 at
+C = 16 → 0.495 at C = 1024), 1 MiB I/O control neutral (0.994), K>0
+zero-op burst 0.956/0.990, and perf attribution on the headline shape shows
+instructions and cycles at ~0.26x of base (mechanism-consistent). Full
+record: `formal-e5-ab/` (provenance, arm identity, verdict.json, raw 870-row
+ab.jsonl, perf files). The ledger PROG-01 row records this evidence.
 
 ## 7. Reviews
 
@@ -259,9 +277,49 @@ See `review-A-concurrency.md` and `review-B-performance.md` in this
 directory (independent reviews; verdicts recorded verbatim with findings and
 resolutions).
 
+Round 2 (2026-10-22): an external review of the PR accepted the production
+mechanism (correctness/W-03 APPROVED, WSL2 performance PROVISIONAL PASS) and
+returned 2×P1 / 3×P2 findings against the acceptance protocol — P1-A the
+runner computed no verdict, P1-B arm identity recorded but not verified,
+P2-A the binomial claim, P2-B the M5 kill surfacing only as a teardown
+abort, P2-C perf gating conflating attribution with acceptance. All five are
+addressed in this record (§4 M5 receipt, §6.2); no change to the H2b
+production mechanism was required or made.
+
+Round 2 runner audit (2026-10-22): an independent adversarial audit of the
+r2 runner and reducer — stale artifacts, identical arms, incomplete or
+corrupt datasets, uniform 20% regression, dirty or mismatched trees,
+reducer logic holes, shell-level holes (7 attack classes, ~40 live
+mutations against the reducer) — returned RUNNER_ACCEPTED: no path to a
+false PASS or a silently accepted measurement. Findings and dispositions:
+
+- N1 (P2): the ≤10/15 pair-count clause is mathematically subsumed by the
+  median clause on 15 pairs. Accepted as a documentation issue: the rule as
+  pre-declared was executed unchanged, and it is strictly stronger than the
+  sign test alone; the subsumption is recorded in §6.2 rather than by
+  editing the runner after its SHA entered the run provenance.
+- N2 (P3): the runner does not refuse an output directory placed inside a
+  worktree (which would write into the measured tree post-gate, undetected).
+  Accepted as a recorded operational limitation of the frozen runner: the
+  executed run used `~/h2b-e5-results`, disjoint from both trees. Not
+  patched post-run, for the same provenance-freeze reason.
+- N3 (P3, tamper-only): first-vs-last match divergence between the runner's
+  identity extractor and the reducer's on a hand-duplicated identity file;
+  unreachable from the honest pipeline (the file is truncated and written
+  once per arm).
+- N4/N5/N8 (P3, tamper-only): non-standard JSON constants, type-confused
+  rows and forged request counts are either rejected or crash fail-closed
+  (nonzero exit, no verdict.json); none are producible by the harness
+  pipeline; none enable a false acceptance.
+- N6 (P3): a perf failure after a successful probe aborts post-campaign
+  before the verdict — fail-closed, contrary to the decoupling spirit; the
+  executed run completed attribution normally.
+- N7 (nit): `model name` parsing is x86-specific; irrelevant to the E5 host.
+
 ## 8. Remaining limitations
 
-- Formal E5 A/B acceptance is NOT_RUN until the owner executes §6.2.
+- None open on the acceptance path: the formal E5 A/B executed with a PASS
+  verdict (§6.2, `formal-e5-ab/`).
 - The asan cell's tail-shim conflict is a pre-existing host issue, recorded
   with base-reproduction evidence.
 - `owed_count_` remains a derived summary: correctness never depends on it
@@ -276,3 +334,7 @@ resolutions).
   oracle pins the counter to the authoritative scan and external deliveries,
   and the submit-reset guard converts the one dangerous drift class into a
   loud termination.
+- Frozen-runner hardening notes (runner-audit N2–N8, §7) are recorded but
+  deliberately not patched post-run: the runner's SHA-256 is part of the E5
+  provenance chain, and none of the notes enables a wrong acceptance. Any
+  future re-acceptance run should fold them in first.
