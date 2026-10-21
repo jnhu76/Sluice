@@ -1,5 +1,5 @@
-=== runner r2 gate counterfactuals (host Hu, 2026-10-21T16:45:02Z)
-runner_sha256=67ce56eeb977993097cccded9c3356d14a615f7e3d89e4a75fcaa2c99f02f65f
+=== runner r2 gate counterfactuals (host Hu, 2026-10-21T16:55:22Z)
+runner_sha256=01159c7521ccbbeb41391d53ac91939dc090d99c82fc3c14fa272184e9f422fe
 verdict_sha256=174e111467dae920775f399b2431704f1c0eab13e72cfe45319e3d6b3554f3ec
 
 --- C0 reducer selftest
@@ -47,6 +47,6 @@ h2b stale marker after forced rebuild: ABSENT-destroyed
 worktrees still clean: base=[0 entries] h2b=[0 entries] (r1 copied the harness into them; r2 must not)
 
 --- latent r1 defect found by C4 (kept as evidence):
-r1 built with plain `xmake build -y`, which skips sluice_async (set_default(false) in xmake/libraries.lua) and r1 verified nothing; r2 builds sluice_core sluice_async explicitly and refuses a missing library. First r2 C4 attempt reproduced this as: refusing: arm base library was not produced (exit 2).
+r1 built with plain `xmake build -y`, which skips sluice_async (set_default(false) in xmake/libraries.lua); r2 builds sluice_core and sluice_async explicitly and refuses a missing library. The first r2 C4 attempt reproduced this as: refusing: arm base library was not produced (exit 2). A second compatibility fix splits the multi-target build form, which xmake 3.0.6 on the E5 host rejects (invalid argument), into per-target builds.
 
 === end runner r2 receipts

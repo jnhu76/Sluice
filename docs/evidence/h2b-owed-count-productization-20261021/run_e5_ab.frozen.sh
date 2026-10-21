@@ -105,7 +105,7 @@ for arm in base h2b; do
   echo "building arm $arm from an empty build/ and cleared config (stale artifacts excluded)" >&2
   rm -rf "$wt/build"
   (cd "$wt" && xmake f -c -y >/dev/null && xmake f -m release --liburing=y -y >/dev/null \
-    && xmake build -y sluice_core sluice_async >/dev/null)
+    && xmake build -y sluice_core >/dev/null && xmake build -y sluice_async >/dev/null)
   grep -q 'sanitizers = ""' "$wt/.xmake/linux/x86_64/xmake.conf" \
     || die "arm $arm config is not sanitizer-clean"
   [ -f "$lib" ] || die "arm $arm library was not produced"
