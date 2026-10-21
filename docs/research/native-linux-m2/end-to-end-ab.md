@@ -14,6 +14,15 @@ The harness (`pipeline_ab.cpp`) is identical for every arm; only the linked
 path over a 64 MiB tmpfs fixture, with a bounded in-flight window. Every run
 performs:
 
+**W03_AB = NOT_RUN.** The harness drives only the W-02 synchronous-wait shape
+(`RequestScope::submit_read` → `scope.wait_for` → `scope.take`, always
+`--backend=uring`); it never drives `progress_notification_fd`,
+acknowledge/detach, or a host-owned external event loop. The configurations
+below are 20 W-02 combinations, not a W-02 × W-03 matrix, and every confirmed
+result in this document is W-02-scoped. W-03 wakeup and liveness under the
+tested mechanisms remain an outstanding product-admission gate
+(`h2-results.md` §6); a W-02 gain cannot certify W-03 behavior.
+
 1. warmup (not emitted);
 2. timed phase (oracle disabled, allocations counted);
 3. oracle phase (every read verified against `fill_pattern`);

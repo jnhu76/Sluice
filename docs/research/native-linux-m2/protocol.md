@@ -19,6 +19,12 @@ native-Linux host:
 M2 does not change product `src/` or `include/`, does not change CI, and does
 not merge either research branch. Its PR is research-only and stays open.
 
+Workload scope: the Layer C campaign exercises the W-02 synchronous-wait
+shape only (`submit_read` → `wait_for` → `take`). **W03_AB = NOT_RUN** — the
+notification/acknowledge path and host-owned external event loops were not
+driven, so all confirmed conclusions are W-02-scoped and W-03 admission
+remains a productization gate (`h2-results.md` §6).
+
 ## 2. Dependency state at execution time
 
 | Item | State |
@@ -35,6 +41,11 @@ The #560 review's P1 and P2 are addressed *inside M2* by
 silently applied to #560: #560 remains at its frozen head and stays open. The
 M2 campaign itself was requested separately by the owner; it is not presented as
 the #560 correction.
+
+Post-campaign closeout: the P1/P2 corrections were backfilled into #560 at
+`2e998fba` with a review disposition, and #560 was merged; this PR was then
+retargeted to `master` so its diff is M2-only. The owner review of this PR
+(review `5599795090`) and its dispositions are recorded in `review.md`.
 
 ## 3. Corrected mechanism statements
 

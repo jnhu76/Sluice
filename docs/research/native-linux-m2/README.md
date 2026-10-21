@@ -9,8 +9,12 @@ host. It is research evidence, not a product change.
 |---|---|
 | H1 io_uring router direct index | **MICROBENCH_ONLY** — lookup 0.04-0.82× in isolation, ≤3.7% end-to-end; requires product-domain narrowing |
 | H2a single-lock owed snapshot | **MECHANISM_IMPROVEMENT_CONFIRMED**, not selected — H2b is better on the decisive 4 KiB/64 KiB configs, H2a is better at 1 MiB/C=64/d=1 |
-| H2b derived owed count | **MECHANISM_IMPROVEMENT_CONFIRMED** — 0.478-0.988 on the decisive 4 KiB/64 KiB configs; neutral at 1 MiB |
+| H2b derived owed count | **MECHANISM_IMPROVEMENT_CONFIRMED** — 0.478-0.988 on the decisive 4 KiB/64 KiB configs; neutral at 1 MiB. W-02 only: `W03_AB = NOT_RUN` |
 | H2a+H2b | not selected — usually 1.01-1.04× H2b and sign-flips at one config |
+
+All Layer C results are W-02-scoped (`submit_read` → `wait_for` → `take`);
+the W-03 external-event-loop path was not driven and remains a
+product-admission gate (`h2-results.md` §6).
 
 The H2b gain comes from removing a per-pass `O(C)` sweep with `C` mutex
 lock/unlock pairs when no owed event exists. The remaining time is real
@@ -60,8 +64,9 @@ each arm's static library, runs the matrix, and invokes
 ## Status
 
 - Source baseline: `8fdcd99c5f9a42dadfe5aa0c095bf96c756aeb01`.
-- Research input: PR #560 is **OPEN** at
-  `31446946c25de65ae93711071e52d94d2a8867c2`; this branch is stacked on it and
-  does not modify it.
+- M0/M1 research input: #560, closed out at `2e998fba` (H1 identity rule and
+  H2 complexity corrections) and merged; this branch was opened stacked on it.
 - Product `src/`/`include/`: unchanged. No CI changes.
-- No product-fix PR is created or merged by M2.
+- No product-fix PR is created or merged by M2. H2b productization — with the
+  W-03 admission and the submit-reset fail-fast obligation in
+  `h2-results.md` §6 — is a separate owner decision.

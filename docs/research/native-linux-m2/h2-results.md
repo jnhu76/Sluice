@@ -185,7 +185,12 @@ Full method, sample counts and limits: `cpu-attribution.md`.
   submit reset. The submit-reset decrement is a defensive branch that is
   unreachable in a consistent state: `event_owed` holds a core control
   reference, and a slot cannot be re-reserved while that reference is held.
-  A product proposal should either justify or remove it. The H2ab arm
+  A product proposal must not silently normalize this state: it has to either
+  justify the transition as legal with an independent test that reaches it,
+  or replace the branch with an invariant-fail (fail-fast) whose
+  unreachability is established by a negative oracle. The research patch
+  keeps the silent branch only because the timing result does not depend on
+  it. The H2ab arm
   additionally asserts `owed_bound == expected` and terminates on a parity loss.
 - Destructor and `internal_work_retired()` use `any_event_owed_locked_()`, not
   the derived count. BACKEND-04 is preserved.
@@ -205,7 +210,15 @@ If the owner decides to productize, the smallest change is **H2b only**:
 
 Validation checklist before any product merge:
 
-- full deterministic suite plus the parity test and mutant kill;
+- the submit-reset branch disposition: either a fail-fast invariant whose
+  unreachability a negative oracle establishes, or a justified-and-tested
+  legal transition — silent normalization is not acceptable;
+- **W-03 admission**: the external-event-loop notification/acknowledge path
+  under the derived count (`W03_AB = NOT_RUN` in M2; a W-02 gain does not
+  certify W-03 wakeup/liveness);
+- full deterministic suite plus the parity test and mutant kill, with
+  zero-length I/O, concurrent submission, cancellation and shutdown called
+  out;
 - counter parity under every set/clear path and concurrent producers;
 - BACKEND-04 audit: teardown still authoritative;
 - paired A/B at C=64/256/1024, 4 KiB and 64 KiB, 15 valid pairs, oracle and

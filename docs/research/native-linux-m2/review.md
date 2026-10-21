@@ -60,3 +60,27 @@ Both reviews closed with no mechanism-level blocking finding. The decisions in
 - H2a: `MECHANISM_IMPROVEMENT_CONFIRMED`, not selected.
 - H2b: `MECHANISM_IMPROVEMENT_CONFIRMED`; minimal candidate only, not applied.
 - H2ab: not selected (no repeatable gain over H2b).
+
+## External owner review of the delivered PR (2026-10-21)
+
+A third review (GitHub review `5599795090`, verdict REVISE) examined the
+delivered PR head `1b37d835` — the research patches, `pipeline_ab.cpp`,
+`run.sh`, the paired-validation records and the base production paths — and
+confirmed the W-02 finding (H2b paired ratio 0.478, 95% CI [0.474, 0.497],
+replicated). Its two P2 findings and their closeout in this commit:
+
+| # | Finding | Closeout |
+|---|---|---|
+| 1 | W-03 coverage was requested but absent: the harness only drives `RequestScope::submit_read` → `wait_for` → `take` with `--backend=uring`; the 20 configurations are W-02 combinations, not W-02 × W-03, so a W-02 gain cannot certify W-03 wakeup/liveness | `W03_AB = NOT_RUN` is now recorded explicitly in `end-to-end-ab.md` §1, `protocol.md` §1 and `README.md`; W-03 admission is added to the H2b productization checklist as an outstanding gate (`h2-results.md` §6), and the scope delimitation is posted on Issue #561 |
+| 2 | H2b's submit-reset branch silently normalizes an impossible state: if it were reachable, silently dropping an undelivered owed record while updating the derived count could mask a lifetime/control-ref bug | The obligation is now explicit in `h2-results.md` §5/§6: a product proposal must either justify the transition as legal with an independent test that reaches it, or replace the branch with an invariant-fail (fail-fast) whose unreachability a negative oracle establishes; silent normalization is not acceptable. This strengthens the earlier A5 disposition ("retained as defensive parity") |
+
+Evidence framing accepted and now stated with the results: the 0.478 ratio is
+a sparse-occupancy case (C=1024, depth 1, 64 MiB tmpfs, one pinned CPU) on
+warm tmpfs, not a general 52% gain or a block-device speedup; the paired A/B
+ratios are the performance claim and user-only perf shares are attribution
+context only; kernel-symbol attribution is unavailable at
+`perf_event_paranoid=2`.
+
+Dependency path executed: #560 was closed out (`2e998fba`) and merged first
+(merge commit on `master`), then this PR was retargeted to `master` so its
+diff is M2-only.
