@@ -1,0 +1,13 @@
+campaign=idle-window replication
+source_commit=8fdcd99c5f9a42dadfe5aa0c095bf96c756aeb01
+harness_source_sha256=6aa9e30c2b98d53c08a8a0843083b49a80b88f9a6e979a3c9737d60c32645223
+binaries=ab-15 (same binaries, no rebuild)
+runner=replicate.sh (inline loop)
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+kernel=7.2.9-201.fc44.x86_64
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+pinned_cpu=2
+reps=15
+configs=4096:1024:1,4096:1024:4,4096:1024:8,4096:64:1,4096:64:8,65536:1024:1,65536:64:8
+fixture=/tmp/sluice-m2-fixture/data.bin (tmpfs)
+loadavg1_range=0.17-1.54

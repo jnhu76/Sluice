@@ -1,0 +1,6 @@
+campaign=primary
+rows=1500
+freq_before_khz min=1196947 median=3192890 max=3450634
+freq_after_khz min=1196928 median=3192826 max=3488095
+loadavg1 min=1.15 median=2.48 max=3.20
+loadavg1_ge_1=1500 ge_2=1405 ge_3=133

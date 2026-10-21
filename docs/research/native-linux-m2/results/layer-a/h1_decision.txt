@@ -1,0 +1,25 @@
+H1 negative control (no-verify direct lookup, churn mix): CAUGHT (oracle rejects stale hit after slot reuse)
+H1 positive control (verified direct lookup, same sequence): PASS
+== H1 router lookup: scan vs direct index ==
+cap=   8 mix=lookup baseline=     9.77 direct=     7.96 ns/op ratio=0.82x spread=[0.13/0.12] oracle=PASS
+cap=   8 mix=churn  baseline=    30.95 direct=    20.41 ns/op ratio=0.66x spread=[0.03/0.03] oracle=PASS
+cap=   8 mix=miss   baseline=    21.12 direct=    14.48 ns/op ratio=0.69x spread=[0.09/0.08] oracle=PASS
+cap=  16 mix=lookup baseline=    10.66 direct=     7.88 ns/op ratio=0.74x spread=[0.03/0.08] oracle=PASS
+cap=  16 mix=churn  baseline=    36.45 direct=    20.86 ns/op ratio=0.57x spread=[0.09/0.07] oracle=PASS
+cap=  16 mix=miss   baseline=    23.47 direct=    14.34 ns/op ratio=0.61x spread=[0.01/0.01] oracle=PASS
+cap=  32 mix=lookup baseline=    12.63 direct=     7.86 ns/op ratio=0.62x spread=[0.03/0.02] oracle=PASS
+cap=  32 mix=churn  baseline=    44.71 direct=    20.97 ns/op ratio=0.47x spread=[0.07/0.04] oracle=PASS
+cap=  32 mix=miss   baseline=    30.64 direct=    14.42 ns/op ratio=0.47x spread=[0.10/0.14] oracle=PASS
+cap=  64 mix=lookup baseline=    16.68 direct=     7.90 ns/op ratio=0.47x spread=[0.10/0.10] oracle=PASS
+cap=  64 mix=churn  baseline=    62.54 direct=    20.95 ns/op ratio=0.33x spread=[0.08/0.06] oracle=PASS
+cap=  64 mix=miss   baseline=    41.27 direct=    14.33 ns/op ratio=0.35x spread=[0.03/0.05] oracle=PASS
+cap= 128 mix=lookup baseline=    23.30 direct=     7.90 ns/op ratio=0.34x spread=[0.04/0.08] oracle=PASS
+cap= 128 mix=churn  baseline=   104.07 direct=    20.92 ns/op ratio=0.20x spread=[0.13/0.02] oracle=PASS
+cap= 128 mix=miss   baseline=    59.68 direct=    14.32 ns/op ratio=0.24x spread=[0.01/0.01] oracle=PASS
+cap= 256 mix=lookup baseline=    36.33 direct=     7.88 ns/op ratio=0.22x spread=[0.03/0.10] oracle=PASS
+cap= 256 mix=churn  baseline=   190.80 direct=    20.95 ns/op ratio=0.11x spread=[0.26/0.04] oracle=PASS
+cap= 256 mix=miss   baseline=    96.85 direct=    14.34 ns/op ratio=0.15x spread=[0.06/0.07] oracle=PASS
+cap=1024 mix=lookup baseline=   122.90 direct=     7.85 ns/op ratio=0.06x spread=[0.02/0.09] oracle=PASS
+cap=1024 mix=churn  baseline=   481.89 direct=    20.97 ns/op ratio=0.04x spread=[0.49/0.06] oracle=PASS
+cap=1024 mix=miss   baseline=   338.09 direct=    14.33 ns/op ratio=0.04x spread=[0.09/0.09] oracle=PASS
+H1 failed checks: 0

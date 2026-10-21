@@ -1,0 +1,10 @@
+git_sha=
+git_dirty=0
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+kernel=7.2.9-201.fc44.x86_64
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+pinned_cpu=2
+reps=15
+governor=schedutil
+harness_flags=-std=c++20 -O3 -DNDEBUG
+fixture=/tmp/sluice-m2-fixture/data.bin

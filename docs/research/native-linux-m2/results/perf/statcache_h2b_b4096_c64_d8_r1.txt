@@ -1,0 +1,15 @@
+# started on Wed Oct 21 13:38:15 2026
+
+
+ Performance counter stats for '/home/jnhu/sluice-m2/out/ab-15/pipeline_ab_h2b --arm=h2b --backend=uring --block=4096 --depth=8 --capacity=64 --requests=50000 --warmup=1 --fixture=/tmp/sluice-m2-fixture/data.bin':
+
+            751.02 msec task-clock:u                                                          
+           6539462      cache-references:u                                                    
+             15549      cache-misses:u                                                        
+
+       0.751372451 seconds time elapsed
+
+       0.226213000 seconds user
+       0.523169000 seconds sys
+
+

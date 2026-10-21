@@ -1,0 +1,124 @@
+
+block=4096 capacity=16 depth=1 base_wall=121941.2us base_cpu=6080ns/op
+  h1    pairs=15 wall x0.990 [0.972,1.000] cpu x0.990 p99 x0.985
+  h2a   pairs=15 wall x0.970 [0.967,0.987] cpu x0.970 p99 x0.950
+  h2b   pairs=15 wall x0.953 [0.940,0.956] cpu x0.953 p99 x0.951
+  h2ab  pairs=15 wall x0.960 [0.945,0.966] cpu x0.960 p99 x0.940
+
+block=4096 capacity=16 depth=4 base_wall=86391.9us base_cpu=4305ns/op
+  h1    pairs=15 wall x0.997 [0.984,1.006] cpu x0.997 p99 x0.989
+  h2a   pairs=15 wall x0.986 [0.981,0.994] cpu x0.986 p99 x0.989
+  h2b   pairs=15 wall x0.956 [0.947,0.973] cpu x0.956 p99 x0.982
+  h2ab  pairs=15 wall x0.979 [0.962,0.995] cpu x0.979 p99 x0.970
+
+block=4096 capacity=16 depth=8 base_wall=74006.1us base_cpu=3691ns/op
+  h1    pairs=15 wall x1.003 [0.994,1.013] cpu x1.003 p99 x0.986
+  h2a   pairs=15 wall x1.001 [0.981,1.007] cpu x1.000 p99 x1.000
+  h2b   pairs=15 wall x0.960 [0.944,0.972] cpu x0.960 p99 x0.956
+  h2ab  pairs=15 wall x0.978 [0.970,0.990] cpu x0.978 p99 x0.992
+
+block=4096 capacity=64 depth=1 base_wall=134902.2us base_cpu=6728ns/op
+  h1    pairs=15 wall x0.988 [0.971,0.995] cpu x0.988 p99 x0.985
+  h2a   pairs=15 wall x0.918 [0.900,0.919] cpu x0.918 p99 x0.895
+  h2b   pairs=15 wall x0.880 [0.874,0.901] cpu x0.879 p99 x0.847
+  h2ab  pairs=15 wall x0.895 [0.885,0.906] cpu x0.894 p99 x0.847
+
+block=4096 capacity=64 depth=4 base_wall=93887.0us base_cpu=4679ns/op
+  h1    pairs=15 wall x0.986 [0.978,0.996] cpu x0.987 p99 x0.991
+  h2a   pairs=15 wall x0.953 [0.941,0.970] cpu x0.953 p99 x0.973
+  h2b   pairs=15 wall x0.906 [0.895,0.916] cpu x0.906 p99 x0.959
+  h2ab  pairs=15 wall x0.924 [0.909,0.946] cpu x0.925 p99 x0.961
+
+block=4096 capacity=64 depth=8 base_wall=80746.1us base_cpu=4026ns/op
+  h1    pairs=15 wall x1.001 [0.983,1.010] cpu x1.001 p99 x1.006
+  h2a   pairs=15 wall x0.970 [0.959,0.991] cpu x0.971 p99 x0.986
+  h2b   pairs=15 wall x0.914 [0.903,0.934] cpu x0.914 p99 x0.935
+  h2ab  pairs=15 wall x0.947 [0.935,0.953] cpu x0.947 p99 x0.965
+
+block=4096 capacity=256 depth=1 base_wall=173355.0us base_cpu=8645ns/op
+  h1    pairs=15 wall x0.992 [0.982,0.994] cpu x0.991 p99 x0.975
+  h2a   pairs=15 wall x0.806 [0.804,0.821] cpu x0.806 p99 x0.688
+  h2b   pairs=15 wall x0.731 [0.710,0.745] cpu x0.731 p99 x0.614
+  h2ab  pairs=15 wall x0.743 [0.725,0.747] cpu x0.743 p99 x0.626
+
+block=4096 capacity=256 depth=4 base_wall=116119.8us base_cpu=5791ns/op
+  h1    pairs=15 wall x0.988 [0.980,0.993] cpu x0.988 p99 x1.000
+  h2a   pairs=15 wall x0.872 [0.850,0.880] cpu x0.873 p99 x0.899
+  h2b   pairs=15 wall x0.807 [0.790,0.820] cpu x0.807 p99 x0.883
+  h2ab  pairs=15 wall x0.819 [0.809,0.841] cpu x0.819 p99 x0.872
+
+block=4096 capacity=256 depth=8 base_wall=99959.5us base_cpu=4983ns/op
+  h1    pairs=15 wall x0.995 [0.964,1.005] cpu x0.996 p99 x0.991
+  h2a   pairs=15 wall x0.881 [0.857,0.906] cpu x0.882 p99 x0.926
+  h2b   pairs=15 wall x0.832 [0.815,0.842] cpu x0.831 p99 x0.873
+  h2ab  pairs=15 wall x0.854 [0.837,0.876] cpu x0.854 p99 x0.884
+
+block=4096 capacity=1024 depth=1 base_wall=333102.1us base_cpu=16616ns/op
+  h1    pairs=15 wall x0.967 [0.952,0.984] cpu x0.967 p99 x0.971
+  h2a   pairs=15 wall x0.589 [0.577,0.604] cpu x0.589 p99 x0.475
+  h2b   pairs=15 wall x0.487 [0.471,0.492] cpu x0.487 p99 x0.358
+  h2ab  pairs=15 wall x0.484 [0.480,0.495] cpu x0.484 p99 x0.357
+
+block=4096 capacity=1024 depth=4 base_wall=180260.1us base_cpu=8989ns/op
+  h1    pairs=15 wall x0.976 [0.968,0.988] cpu x0.977 p99 x0.990
+  h2a   pairs=15 wall x0.765 [0.752,0.766] cpu x0.765 p99 x0.703
+  h2b   pairs=15 wall x0.676 [0.668,0.683] cpu x0.676 p99 x0.641
+  h2ab  pairs=15 wall x0.699 [0.679,0.705] cpu x0.699 p99 x0.631
+
+block=4096 capacity=1024 depth=8 base_wall=150056.2us base_cpu=7484ns/op
+  h1    pairs=15 wall x0.982 [0.968,1.001] cpu x0.982 p99 x0.977
+  h2a   pairs=15 wall x0.813 [0.801,0.821] cpu x0.812 p99 x0.819
+  h2b   pairs=15 wall x0.751 [0.740,0.760] cpu x0.751 p99 x0.767
+  h2ab  pairs=15 wall x0.757 [0.743,0.768] cpu x0.756 p99 x0.771
+
+block=65536 capacity=64 depth=1 base_wall=37950.1us base_cpu=18903ns/op
+  h1    pairs=15 wall x0.996 [0.985,0.999] cpu x0.995 p99 x1.003
+  h2a   pairs=15 wall x0.946 [0.943,0.955] cpu x0.946 p99 x0.982
+  h2b   pairs=15 wall x0.930 [0.920,0.937] cpu x0.930 p99 x0.966
+  h2ab  pairs=15 wall x0.943 [0.940,0.951] cpu x0.944 p99 x0.963
+
+block=65536 capacity=64 depth=8 base_wall=26279.2us base_cpu=13074ns/op
+  h1    pairs=15 wall x0.998 [0.994,1.002] cpu x0.998 p99 x0.999
+  h2a   pairs=15 wall x0.997 [0.993,1.001] cpu x0.998 p99 x0.993
+  h2b   pairs=15 wall x0.985 [0.981,0.986] cpu x0.984 p99 x1.000
+  h2ab  pairs=15 wall x0.999 [0.991,1.004] cpu x0.997 p99 x0.986
+
+block=65536 capacity=1024 depth=1 base_wall=64157.4us base_cpu=31983ns/op
+  h1    pairs=15 wall x0.982 [0.977,0.996] cpu x0.982 p99 x0.992
+  h2a   pairs=15 wall x0.741 [0.731,0.749] cpu x0.741 p99 x0.738
+  h2b   pairs=15 wall x0.640 [0.634,0.652] cpu x0.639 p99 x0.668
+  h2ab  pairs=15 wall x0.643 [0.640,0.650] cpu x0.643 p99 x0.650
+
+block=65536 capacity=1024 depth=8 base_wall=32619.8us base_cpu=16253ns/op
+  h1    pairs=15 wall x0.993 [0.987,1.009] cpu x0.992 p99 x1.000
+  h2a   pairs=15 wall x0.894 [0.878,0.903] cpu x0.893 p99 x0.854
+  h2b   pairs=15 wall x0.864 [0.854,0.871] cpu x0.864 p99 x0.752
+  h2ab  pairs=15 wall x0.871 [0.850,0.875] cpu x0.870 p99 x0.834
+
+block=1048576 capacity=64 depth=1 base_wall=84922.3us base_cpu=169071ns/op
+  h1    pairs=15 wall x0.995 [0.990,1.001] cpu x0.995 p99 x1.002
+  h2a   pairs=15 wall x0.978 [0.975,0.986] cpu x0.979 p99 x0.994
+  h2b   pairs=15 wall x0.991 [0.989,0.995] cpu x0.991 p99 x0.997
+  h2ab  pairs=15 wall x0.994 [0.993,0.998] cpu x0.994 p99 x1.001
+
+block=1048576 capacity=64 depth=8 base_wall=83753.0us base_cpu=166678ns/op
+  h1    pairs=15 wall x1.003 [0.991,1.006] cpu x1.003 p99 x0.999
+  h2a   pairs=15 wall x1.000 [0.998,1.003] cpu x1.000 p99 x1.000
+  h2b   pairs=15 wall x1.002 [0.991,1.006] cpu x1.002 p99 x0.999
+  h2ab  pairs=15 wall x0.998 [0.991,1.013] cpu x0.999 p99 x0.999
+
+block=1048576 capacity=1024 depth=1 base_wall=93678.1us base_cpu=186660ns/op
+  h1    pairs=15 wall x0.988 [0.981,1.000] cpu x0.988 p99 x1.004
+  h2a   pairs=15 wall x0.912 [0.903,0.917] cpu x0.912 p99 x0.939
+  h2b   pairs=15 wall x0.905 [0.903,0.918] cpu x0.905 p99 x0.921
+  h2ab  pairs=15 wall x0.910 [0.907,0.918] cpu x0.910 p99 x0.919
+
+block=1048576 capacity=1024 depth=8 base_wall=86834.2us base_cpu=172842ns/op
+  h1    pairs=15 wall x0.993 [0.987,0.999] cpu x0.994 p99 x1.000
+  h2a   pairs=15 wall x0.982 [0.977,0.985] cpu x0.982 p99 x0.999
+  h2b   pairs=15 wall x0.976 [0.964,0.978] cpu x0.976 p99 x0.998
+  h2ab  pairs=15 wall x0.977 [0.975,0.983] cpu x0.977 p99 x0.998
+
+validation: all repetitions PASS (oracle, timed phase, op count, zero timed allocations)
+rows=4500 oracle_failures=0 timed_failures=0 timed_rows_with_allocations=0
+VALIDATION PASSED
