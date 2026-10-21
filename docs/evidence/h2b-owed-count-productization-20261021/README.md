@@ -238,6 +238,14 @@ resolutions).
 - The asan cell's tail-shim conflict is a pre-existing host issue, recorded
   with base-reproduction evidence.
 - `owed_count_` remains a derived summary: correctness never depends on it
-  (the delivery records and the authoritative scan decide); a drifted counter
-  can only cost performance or trip a parity test, and the submit-reset guard
-  converts the one dangerous drift class into a loud termination.
+  (the delivery records and the authoritative scan decide). Its parity is,
+  however, liveness-load-bearing, not merely a performance hint: were the
+  counter to drift below the true owed count, `immediate_work_remains` could
+  read false while the authoritative scan still sees owed records and the
+  settlement driver would park forever instead of converging — the M1 kill
+  demonstrates exactly this failure mode as a hang, bounded by the in-test
+  `alarm(120)` (Review A reproduced the parked driver on the notification
+  fd). The invariant proof (§2) is what makes the skip safe, the parity
+  oracle pins the counter to the authoritative scan and external deliveries,
+  and the submit-reset guard converts the one dangerous drift class into a
+  loud termination.
