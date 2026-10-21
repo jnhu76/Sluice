@@ -1,0 +1,340 @@
+# H2b productization — derived owed-event count eliminates empty sweeps (#564)
+
+Correctness-preserving performance change for the io_uring backend. The
+`poll()` delivery sweep previously scanned all `capacity_` delivery records on
+every pass; H2b adds a derived counter `owed_count_` so the sweep runs only
+when at least one owed event exists, and `poll_progress()`'s
+`immediate_work_remains` verdict consults the same summary.
+
+- Issue: #564 (references #563, #559, #561, PR #560, PR #562 / M2 research)
+- Branch: `perf/uring-owed-count-skip`; BASE = master `c8970702`
+  (`c8970702aad4fa74d4053d00ae941409e709ce67`)
+- Commits: `d3603249` perf(uring): skip empty owed-event sweeps;
+  `4edb957d` test(uring): admit owed-count parity and W-03 oracles;
+  docs commit (this record + ledger).
+- PR: held OPEN for owner merge. Auto-merge is forbidden.
+
+Affected root IDs: PROG-01 (finite pass bound + honest residue — the
+uring owed-residue row), PROG-02 (no lost wake — unchanged and re-evidenced),
+W-02/W-03 invocation forms (unchanged), THREAD-01 (progress owner; concurrent
+submit — unchanged), BACKEND-04 (mechanism-not-contract: `owed_count_` is a
+derived summary and is NOT settlement, shutdown or destruction authority —
+`~UringAsyncBackend` and `internal_work_retired()` keep the authoritative
+`any_event_owed_locked_()` scan).
+
+## 1. The O(C) scan and the minimal change
+
+Source of the scan: `UringAsyncBackend::poll()` iterated
+`for i in [0, capacity_)` over `delivery_` records on every pass, taking and
+releasing `dispatch_mtx_` per slot, to find `event_owed` records left by
+inline-published zero-length ops. In scan-heavy shapes (4 KiB reads,
+C = 1024, depth 1) most passes have zero owed records, so the scan is pure
+overhead proportional to capacity.
+
+Change (see `h2b-production.diff`):
+
+1. New member `std::size_t owed_count_ = 0;` next to `delivery_`.
+2. `publish_zero_op_inline`: inside the existing single `dispatch_mtx_`
+   critical section that sets `record.event_owed = true`, also `++owed_count_`.
+3. `poll()` sweep: read `owed_count_ != 0` once under `dispatch_mtx_`; run the
+   per-slot sweep only when nonzero; decrement inside the same critical
+   section that clears `record.event_owed`.
+4. `poll_progress()`: `immediate_work_remains` uses
+   `!publication_pending_->empty() || owed_visible_locked_()` (the counter
+   guarded by `SLUICE_URING_MUTANT_OWED_EMPTY_VERDICT_ALWAYS`).
+5. `submit_request` delivery-record reset: if a freshly reserved slot still
+   carries `event_owed`, call `detail::uring_core_handoff_fail_fast()` (P3
+   below). No silent normalization.
+6. Test seams `owed_count_for_test()` / `owed_scan_for_test()` (locked
+   readers) next to the existing `*_for_test` seams.
+
+No dynamic allocation, no new mutex/atomics/threads, no configuration, no
+public API change. `any_event_owed_locked_()` remains the authority;
+`owed_count_` never decides settlement, shutdown or destruction.
+
+## 2. Invariant and transition table (P1)
+
+Invariant I: at every `dispatch_mtx_`-protected observation point,
+`owed_count_ == Σ_i [delivery_[i].event_owed]`.
+
+| # | Transition | Site | Counter effect |
+|---|---|---|---|
+| T1 | Init | backend construction | `owed_count_ = 0`, all records false — I holds |
+| T2 | Zero-op publish | `publish_zero_op_inline`, one `dispatch_mtx_` CS sets flag + `++owed_count_` together; the slot's control reference is acquired (`core_->acquire_control`) before the CS | flag and count move together — I preserved |
+| T3 | Consume | `poll()` sweep, one CS per record clears flag + `--owed_count_`, then delivers and releases the control ref | I preserved; count hits 0 exactly when no flags remain |
+| T4 | Duplicate publish (slot reset) | `submit_request` reset block under `dispatch_mtx_` | reserved slot must be flag-free (T7); fail-fast otherwise; no counter change |
+| T5 | Slot reuse before delivery | `RequestCore::reclaimable_` requires `control_refs == 0`; the owed control ref pins the slot until T3 releases it, so `reserve()` cannot hand out a flagged slot | T4's guard is protocol-unreachable in pristine code; reachable only under the M4 mutant, where it fires (receipt below) |
+| T6 | Cancellation of an owed request | zero-op cancel is already-terminal at submit; the publication and owed event stay intact; delivery happens exactly once in T3 | counter untouched — parity suite `cancel_leaves_owed_delivery_intact` |
+| T7 | Publish during a pass | `publish_zero_op_inline` may run while a sweep is in progress: the snapshot `owed_present` may already have been read as false | the record flag is authority; `signal_ready_progress()` makes the pass's owner re-poll; the next pass delivers. PROG-02 re-evidenced by W-03 oracles |
+| T8 | Shutdown / destruction with owed outstanding | `~UringAsyncBackend` and `internal_work_retired()` keep the full authoritative scan | no counter involvement (BACKEND-04) |
+| T9 | Concurrent producers | every counter mutation is inside a `dispatch_mtx_` CS together with its flag mutation | I holds under any interleaving — parity suite `concurrent_producers_keep_exactly_once` (500 ops, C = 64, 2 threads) |
+
+No legal observable state has `owed_count_ == 0` with an undelivered
+`event_owed == true` record: the count and the flags only change together
+inside one mutex CS (T2/T3), so `owed_count_ == 0` implies all flags false
+under the same lock the sweep uses to decide entry.
+
+## 3. The submit-reset branch — Scheme B (unreachable, loud)
+
+Claim: in `submit_request`'s reset block, `record.event_owed` is always false
+for a reserved slot. Proof sketch: `publish_zero_op_inline` acquires one core
+control reference BEFORE setting `event_owed` (T2); the only release of an
+owed control reference is the sweep, strictly after clearing the flag (T3);
+`RequestCore::reclaimable_` requires `control_refs == 0`; only
+`release_slot_` returns slots to the free list and `reserve()` only pops free
+slots — therefore `reserve()` cannot return a flagged slot. The branch is
+implemented as a fail-fast (reusing `uring_core_handoff_fail_fast`), not a
+silent decrement or an assert: if any future mechanism breaks the pinning
+chain, the context terminates loudly instead of double-decrementing or
+corrupting delivery. The M4 mutant
+(`SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS`) makes the state
+reachable and the guard fires — proving the guard is load-bearing, not
+defensive insurance for a state that could never be observed by any means.
+
+## 4. Counter parity oracle and mutant receipts (P4)
+
+`tests/uring_owed_counter_parity_test.cpp` — the parity oracle grounds the
+counter in external observations (publication, delivery counts, control
+release, results, slot reuse, shutdown convergence), never in internal call
+sequences; `counter_matches_authority` compares the seam value against the
+authoritative scan AND requires the scan to be empty iff the count is zero.
+Eight scenarios: K=3 zero-op reads incl. no-op re-poll; data ops ignored;
+zero-length write owed; K=C=8 full capacity sweeps exactly once; slot reuse
+before delivery (C=1, also the M4 killer); cancellation keeps owed delivery
+intact; owed-during-pass via DeliverySweepEpiloguePauseGate; 500-op
+concurrent producers.
+
+W-03 admission: 4 new scenarios in `tests/uring_external_loop_test.cpp` —
+ack does not consume undelivered owed obligations (exactly-once after ack);
+zero-op submitted from another thread during a paused pass is served and
+leaves honest residue (owner transfer checked); wait_one serves owed without
+parking past it; observer + zero-op + shutdown settle together (notification
+interest detached before shutdown, per SHUT contract). No sleeps: pause gates
+and atomic events only. Suite: 9/9 scenarios, 5 consecutive runs stable.
+
+Mutants (receipts in `mutant-receipts.txt`, run on the clean releasedbg
+build; killed deterministically):
+
+| Mutant | Break | Killer | Exit |
+|---|---|---|---|
+| M1 `SLUICE_URING_MUTANT_OWED_COUNT_MISSING_INCREMENT` | publish does not count | parity suite: counter under-reports; settlement cannot converge; in-test `alarm(120)` fires | 142 (SIGALRM) |
+| M2 `SLUICE_URING_MUTANT_OWED_COUNT_MISSING_DECREMENT` | sweep does not uncount | parity suite: `counter_matches_authority` fails (`counter_tracks_zero_op_reads`) | 1 |
+| M3 `SLUICE_URING_MUTANT_OWED_EMPTY_VERDICT_ALWAYS` | false empty verdict | residue oracle `uring_owed_residue_test` (`a_zero_op_after_sweep_is_immediate_residue`), NOT a counter comparison | 1 |
+| M4 `SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS` | reclaim ignores owed pin | parity suite reaches the submit-reset fail-fast → SIGABRT | 134 |
+| M5 `SLUICE_URING_MUTANT_ZERO_OP_PUBLICATION_DROPS_WAKE` | lost wake | W-03 external loop suite: fd-readability oracle fails → named `FAIL: external_host_sees_userspace_publication_wake`; the scenario helper retires its progress binding on every unwind (review r2), so the kill is the direct oracle failure (r1 surfaced the same detection only as a destructor SIGABRT, exit 134) | 1 |
+
+Negative control: M4 deliberately breaks the control-ref precondition and the
+system detects it loudly rather than proceeding.
+
+## 5. Validation battery (P6)
+
+Per-cell receipts in `battery-*.txt` (commands + result). Full suite:
+`xmake build -y && xmake test`.
+
+| Cell | Result |
+|---|---|
+| releasedbg + liburing=y | 75/75 |
+| release + liburing=y | 75/75 |
+| release + liburing=n | 56/56 |
+| debug + liburing=y | 75/75 |
+| tsan + liburing=y | 75/75 |
+| asan + liburing=y | 74/75 — `app_tail_cli_oracle_test` fails identically at BASE `c8970702` (pre-existing ASAN/LD_PRELOAD shim conflict on this host; both trees pass the other 74) |
+
+Process note recorded for honesty: an intermediate reconfiguration in this
+session left `sanitizers = "asan"` persisted from the asan matrix cell, which
+first surfaced as the tail-shim failure in an ostensibly clean cell and cost
+one investigation round (root cause: xmake option persistence, not the
+change; base worktree without the flag passed, then `xmake f -c` + rebuild
+made all non-asan cells green again). All receipts above were captured AFTER
+the clean reconfiguration.
+
+Formal correspondence: no model change. H2b adds an implementation-local
+derived summary; the semantic actions PublishOwed / ConsumeOwed / SkipScan map
+to existing core model actions (publish, deliver, no-op pass) — the modeled
+action alphabet and protocol transitions are unchanged, so the existing
+bounded results remain the model evidence; this record documents the mapping.
+
+## 6. Performance (P7)
+
+### 6.1 Provisional paired A/B — WSL2 host (status: PROVISIONAL_WSL2_NOT_E5)
+
+Host: AMD Ryzen 7 5800H, kernel
+6.18.54.1-microsoft-standard-WSL2, g++ 15.2.0, `-O3 -DNDEBUG`, CPU 2 pinned,
+15 reps, paired interleaved arms with rotation, byte oracle gated every
+repetition (870/870 rows ok). Arms: base = worktree at `c8970702`, h2b =
+worktree at `4edb957d`, both `-m release --liburing=y`, `sanitizers = ""`
+(verified in both worktree configs). Frozen script, provenance and reduced
+summary in `provisional-wsl2-ab/` (script, provenance.txt, ab-summary.json,
+zero_burst_ab.cpp source; raw 870-row ab.jsonl regenerated by the script).
+
+Median h2b/base ratios (15 pairs each; `cpu_ns_per_op`, wall agrees):
+
+| block | cap | depth | cpu median [min,max] |
+|---|---|---|---|
+| 4096 | 1024 | 1 | **0.569** [0.495, 0.612] |
+| 4096 | 1024 | 8 | 0.664 [0.626, 0.721] |
+| 4096 | 256 | 1 | 0.805 [0.771, 1.026] |
+| 65536 | 1024 | 1 | 0.681 [0.595, 0.746] |
+| 4096 | 64 | 1 | 0.920 [0.881, 0.943] |
+| 65536 | 64 | 1 | 0.955 [0.860, 0.993] |
+| 4096 | 16 | 1 | 0.980 [0.901, 1.145] |
+| 4096 | 16 | 8 | 0.980 [0.895, 1.106] |
+| 1048576 | 64 | 1 | 1.002 [0.590, 1.215] (I/O-dominated, 500 reqs) |
+| 0 (K>0 zero burst) | 1024 | 8 | 0.936 [0.845, 0.986] |
+| 0 (K>0 zero burst) | 1024 | 64 | 0.978 [0.920, 1.141] |
+
+No config regresses at median; the K>0 zero-op burst (negative performance
+workload) is neutral-to-better, confirming the K>0 delivery path keeps its
+baseline. Wins scale with capacity exactly where the O(C) scan predicts.
+Higher `poll_calls` on h2b in some configs are expected: cheaper polls allow
+more driver iterations over the same phase. 0 allocations both arms.
+
+Limitations of this run: WSL2 host, not the E5 native Linux environment;
+`perf` hardware counters unavailable (perf_event_paranoid=2, no interactive
+sudo in this autonomous session) so instructions/cycles attribution was not
+captured; CPU frequency not governed. Provenance note (Review B finding B1):
+the campaign script predated the per-arm hash capture step, and the base
+worktree's persisted xmake config was mutated after the campaign by the
+sanitizer incident documented in §5 — the sanitizer-cleanliness of the
+campaign arms is therefore substantiated by binary inspection (zero ASAN
+symbols in all four campaign binaries; `nm` symbol delta between arms is
+exactly one symbol), and the formal E5 script below restores the
+`arm-identity.txt` hash step and refuses to run on a sanitizer-tainted
+config.
+
+### 6.2 Formal E5 acceptance — PASS (2026-10-22)
+
+Round-2 review (P1-A/P1-B) rejected the r1 runner as an acceptance
+mechanism: it recorded arm identity without verifying it (stale libraries
+could be measured, dirty trees accepted, identical arms undetectable) and it
+computed no verdict (a uniformly regressing h2b could still exit 0). The
+runner in this directory was revised to r2 with fail-closed behavior:
+
+- Identity gates run before any build or measurement: exact expected SHAs
+  are command-line pins; HEAD, clean status and path distinctness are
+  enforced; identical pins or identical paths are refused. For the open PR:
+  base = `c8970702` (frozen pre-PR master), candidate = the PR branch HEAD
+  under test. A post-merge re-acceptance must pin the actual merge commit
+  and its actual base — never a GitHub-precomputed merge SHA.
+- Both arms rebuild from an empty `build/` and a cleared xmake config on
+  every invocation, so stale artifacts cannot reach a measurement; the
+  sanitizer-taint refusal stays. The libraries are built by explicit
+  per-target commands (`sluice_async` is not an xmake default target — r1's
+  plain `xmake build -y` silently skipped it, a latent defect the first r2
+  gate run caught, and the multi-target form is rejected by xmake 3.0.6 on
+  the E5 host).
+- Harnesses compile from single read-only sources; the trees under test are
+  never written by the harness step (r1 copied the data harness into the
+  worktrees, dirtying them). The data harness must hash-match across trees,
+  and the arms' async libraries must differ — otherwise the run is refused
+  as "not an A/B".
+- Acceptance is computed only by `e5_verdict.py` (fail-closed): it
+  reconstructs the complete arm/config/rep/phase cell set (missing rows,
+  duplicated rows, failed byte oracles, illegal measurements and unknown
+  configs all fail), cross-checks `arm-identity.txt` against the pins,
+  applies the pre-declared rule per config, and writes `verdict.json`. A run
+  that ends without a `verdict.json` is not an acceptance.
+- Statistical erratum and strengthening note (review P2-A + runner-audit
+  N1): the pair-count clause (≤ 10 of 15 pairs above 1.03) is an engineering
+  bound whose one-sided binomial level is P(X ≥ 11 | n = 15, p = 0.5) =
+  0.059 — not an exact 5% test — and on 15 pairs it is additionally
+  subsumed by the median clause: a median ≤ 1.03 already forces at most 7
+  pairs above 1.03, so the effective acceptance gate is the median rule and
+  majority regressions are rejected deterministically, not statistically.
+  Both clauses were kept because they are the rule as pre-declared before
+  any E5 data existed; the subsumption is recorded here rather than by
+  editing the runner after its SHA was frozen into the run provenance.
+- Hardware-counter attribution is decoupled from acceptance (review P2-C):
+  `perf stat` runs only when a probe succeeds and is otherwise recorded as
+  `perf_stat_status=NOT_AVAILABLE`; the paired CPU-time experiment alone
+  decides PASS/FAIL. On the E5 host the probe succeeded, so attribution was
+  captured (see `formal-e5-ab/`).
+
+Gate receipts: `e5-runner-r2-receipts.txt` — reducer selftest 9/9
+counterfactuals (clean dataset PASS; regression, missing row, duplicate row,
+failed oracle, illegal measurement, unknown config, same-arm identity and
+SHA mismatch each FAIL); runner refusals for identical pins, HEAD mismatch,
+malformed pin, dirty tree and identical paths (exit 2 before any build); and
+a planted stale artifact destroyed by the forced empty-build rebuild with
+both worktrees still clean afterwards. An independent adversarial audit of
+the r2 runner and reducer (7 attack classes, ~40 live mutations) found no
+path to a false PASS or a silently accepted measurement; verdict
+RUNNER_ACCEPTED with tamper-hardening notes recorded in §7.
+
+Execution: the formal run was executed on the E5 native Linux host on
+2026-10-22 with base `c8970702` and candidate `eb465c4f` — **PASS**:
+870/870 rows, 0 reasons, all 11 configs pass, headline 4 KiB / C = 1024 /
+depth 1 median ratio **0.495**, capacity dose-response intact (0.956 at
+C = 16 → 0.495 at C = 1024), 1 MiB I/O control neutral (0.994), K>0
+zero-op burst 0.956/0.990, and perf attribution on the headline shape shows
+instructions and cycles at ~0.26x of base (mechanism-consistent). Full
+record: `formal-e5-ab/` (provenance, arm identity, verdict.json, raw 870-row
+ab.jsonl, perf files). The ledger PROG-01 row records this evidence.
+
+## 7. Reviews
+
+See `review-A-concurrency.md` and `review-B-performance.md` in this
+directory (independent reviews; verdicts recorded verbatim with findings and
+resolutions).
+
+Round 2 (2026-10-22): an external review of the PR accepted the production
+mechanism (correctness/W-03 APPROVED, WSL2 performance PROVISIONAL PASS) and
+returned 2×P1 / 3×P2 findings against the acceptance protocol — P1-A the
+runner computed no verdict, P1-B arm identity recorded but not verified,
+P2-A the binomial claim, P2-B the M5 kill surfacing only as a teardown
+abort, P2-C perf gating conflating attribution with acceptance. All five are
+addressed in this record (§4 M5 receipt, §6.2); no change to the H2b
+production mechanism was required or made.
+
+Round 2 runner audit (2026-10-22): an independent adversarial audit of the
+r2 runner and reducer — stale artifacts, identical arms, incomplete or
+corrupt datasets, uniform 20% regression, dirty or mismatched trees,
+reducer logic holes, shell-level holes (7 attack classes, ~40 live
+mutations against the reducer) — returned RUNNER_ACCEPTED: no path to a
+false PASS or a silently accepted measurement. Findings and dispositions:
+
+- N1 (P2): the ≤10/15 pair-count clause is mathematically subsumed by the
+  median clause on 15 pairs. Accepted as a documentation issue: the rule as
+  pre-declared was executed unchanged, and it is strictly stronger than the
+  sign test alone; the subsumption is recorded in §6.2 rather than by
+  editing the runner after its SHA entered the run provenance.
+- N2 (P3): the runner does not refuse an output directory placed inside a
+  worktree (which would write into the measured tree post-gate, undetected).
+  Accepted as a recorded operational limitation of the frozen runner: the
+  executed run used `~/h2b-e5-results`, disjoint from both trees. Not
+  patched post-run, for the same provenance-freeze reason.
+- N3 (P3, tamper-only): first-vs-last match divergence between the runner's
+  identity extractor and the reducer's on a hand-duplicated identity file;
+  unreachable from the honest pipeline (the file is truncated and written
+  once per arm).
+- N4/N5/N8 (P3, tamper-only): non-standard JSON constants, type-confused
+  rows and forged request counts are either rejected or crash fail-closed
+  (nonzero exit, no verdict.json); none are producible by the harness
+  pipeline; none enable a false acceptance.
+- N6 (P3): a perf failure after a successful probe aborts post-campaign
+  before the verdict — fail-closed, contrary to the decoupling spirit; the
+  executed run completed attribution normally.
+- N7 (nit): `model name` parsing is x86-specific; irrelevant to the E5 host.
+
+## 8. Remaining limitations
+
+- None open on the acceptance path: the formal E5 A/B executed with a PASS
+  verdict (§6.2, `formal-e5-ab/`).
+- The asan cell's tail-shim conflict is a pre-existing host issue, recorded
+  with base-reproduction evidence.
+- `owed_count_` remains a derived summary: correctness never depends on it
+  (the delivery records and the authoritative scan decide). Its parity is,
+  however, liveness-load-bearing, not merely a performance hint: were the
+  counter to drift below the true owed count, `immediate_work_remains` could
+  read false while the authoritative scan still sees owed records and the
+  settlement driver would park forever instead of converging — the M1 kill
+  demonstrates exactly this failure mode as a hang, bounded by the in-test
+  `alarm(120)` (Review A reproduced the parked driver on the notification
+  fd). The invariant proof (§2) is what makes the skip safe, the parity
+  oracle pins the counter to the authoritative scan and external deliveries,
+  and the submit-reset guard converts the one dangerous drift class into a
+  loud termination.
+- Frozen-runner hardening notes (runner-audit N2–N8, §7) are recorded but
+  deliberately not patched post-run: the runner's SHA-256 is part of the E5
+  provenance chain, and none of the notes enables a wrong acceptance. Any
+  future re-acceptance run should fold them in first.

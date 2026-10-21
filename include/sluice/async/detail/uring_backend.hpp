@@ -96,6 +96,8 @@ class UringAsyncBackend : public AsyncBackend {
     std::uint64_t submit_flushes_for_test() const noexcept;
     std::size_t live_cookies_for_test() const noexcept;
     std::uint64_t peek_next_cookie_for_test() const noexcept;
+    std::size_t owed_count_for_test() const noexcept;
+    bool owed_scan_for_test() const noexcept;
     std::optional<std::uint64_t>
     live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept;
 
@@ -246,6 +248,14 @@ class UringAsyncBackend : public AsyncBackend {
 
     bool any_event_owed_locked_() const noexcept;
 
+    bool owed_visible_locked_() const noexcept {
+#if defined(SLUICE_URING_MUTANT_OWED_EMPTY_VERDICT_ALWAYS)
+        return false;
+#else
+        return owed_count_ != 0;
+#endif
+    }
+
     void handle_one_cqe(std::uint64_t user_data, int res) noexcept;
 
     void finalize_operation_terminal_(RouterEntry& route, std::size_t router_index,
@@ -281,6 +291,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t capacity_ = 0;
     std::vector<PreparedUringOp> prepared_ops_;
     std::vector<DeliveryRecord> delivery_;
+    std::size_t owed_count_ = 0;
     std::vector<RouterEntry> router_;
     std::vector<detail::SlotIndex> cookie_free_list_;
     std::vector<struct ::statx> statx_buffers_;

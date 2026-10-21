@@ -309,7 +309,8 @@ ProgressPass UringAsyncBackend::poll_progress() {
 #endif
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        pass.immediate_work_remains = !publication_pending_->empty() || any_event_owed_locked_();
+        pass.immediate_work_remains =
+            !publication_pending_->empty() || owed_visible_locked_();
 #if defined(SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
         pass.dispatch_retry_remains = false;
 #else
@@ -487,6 +488,12 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         DeliveryRecord& record = delivery_[h.slot.value];
+        // A reserved slot cannot carry an owed event: the owed control
+        // reference pins the slot against reclaim until the delivery sweep
+        // clears the flag.
+        if (record.event_owed) {
+            detail::uring_core_handoff_fail_fast();
+        }
         record.kind = kind;
         record.event_owed = false;
         record.owed_key = {};
@@ -560,8 +567,13 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
         DeliveryRecord& record = delivery_[h.slot.value];
         record.event_owed = true;
         record.owed_key = id;
+#if !defined(SLUICE_URING_MUTANT_OWED_COUNT_MISSING_INCREMENT)
+        ++owed_count_;
+#endif
     }
+#if !defined(SLUICE_URING_MUTANT_ZERO_OP_PUBLICATION_DROPS_WAKE)
     signal_ready_progress();
+#endif
 }
 
 void UringAsyncBackend::publish_one(detail::RequestReservation h) {
@@ -633,24 +645,34 @@ std::size_t UringAsyncBackend::poll() {
         publish_one(h);
         ++published;
     }
-    for (std::uint32_t i = 0; i < capacity_; ++i) {
-        detail::RequestKey owed{};
-        detail::OperationKind owed_kind = detail::OperationKind::read;
-        {
-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
-            DeliveryRecord& record = delivery_[i];
-            if (!record.event_owed)
-                continue;
-            record.event_owed = false;
-            owed = record.owed_key;
-            record.owed_key = {};
-            owed_kind = record.kind;
+    bool owed_present = false;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        owed_present = owed_count_ != 0;
+    }
+    if (owed_present) {
+        for (std::uint32_t i = 0; i < capacity_; ++i) {
+            detail::RequestKey owed{};
+            detail::OperationKind owed_kind = detail::OperationKind::read;
+            {
+                std::lock_guard<std::mutex> lk(dispatch_mtx_);
+                DeliveryRecord& record = delivery_[i];
+                if (!record.event_owed)
+                    continue;
+                record.event_owed = false;
+#if !defined(SLUICE_URING_MUTANT_OWED_COUNT_MISSING_DECREMENT)
+                --owed_count_;
+#endif
+                owed = record.owed_key;
+                record.owed_key = {};
+                owed_kind = record.kind;
+            }
+            deliver_event(owed, owed_kind);
+            if (core_->release_control(owed) != detail::ControlRelease::released) {
+                detail::uring_core_handoff_fail_fast();
+            }
+            ++published;
         }
-        deliver_event(owed, owed_kind);
-        if (core_->release_control(owed) != detail::ControlRelease::released) {
-            detail::uring_core_handoff_fail_fast();
-        }
-        ++published;
     }
 
     return published;

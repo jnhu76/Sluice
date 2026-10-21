@@ -1,0 +1,5 @@
+# started on Thu Oct 22 01:01:38 2026
+
+0.85,msec,task-clock:u,846523,100.00,,
+137503,,instructions:u,846523,100.00,,
+251360,,cycles:u,846523,100.00,,

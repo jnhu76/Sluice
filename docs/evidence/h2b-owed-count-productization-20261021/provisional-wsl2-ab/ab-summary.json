@@ -1,0 +1,185 @@
+{
+ "status": "PROVISIONAL_WSL2_NOT_E5",
+ "reps": 15,
+ "note": "Paired interleaved arms, rotation by repetition; cpu_s is CLOCK_PROCESS_CPUTIME_ID; pinned CPU 2; byte-oracle rows all ok",
+ "configs": [
+  {
+   "block": 0,
+   "capacity": 1024,
+   "depth": 8,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.9361,
+    "min": 0.8446,
+    "max": 0.9857
+   },
+   "wall_ratio": {
+    "median": 0.9354,
+    "min": 0.8435,
+    "max": 0.9892
+   }
+  },
+  {
+   "block": 0,
+   "capacity": 1024,
+   "depth": 64,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.9783,
+    "min": 0.9203,
+    "max": 1.1408
+   },
+   "wall_ratio": {
+    "median": 0.9783,
+    "min": 0.9235,
+    "max": 1.1407
+   }
+  },
+  {
+   "block": 4096,
+   "capacity": 16,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.98,
+    "min": 0.901,
+    "max": 1.1451
+   },
+   "wall_ratio": {
+    "median": 0.98,
+    "min": 0.9008,
+    "max": 1.1451
+   }
+  },
+  {
+   "block": 4096,
+   "capacity": 16,
+   "depth": 8,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.98,
+    "min": 0.8949,
+    "max": 1.1056
+   },
+   "wall_ratio": {
+    "median": 0.9802,
+    "min": 0.8948,
+    "max": 1.1056
+   }
+  },
+  {
+   "block": 4096,
+   "capacity": 64,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.9198,
+    "min": 0.8806,
+    "max": 0.9431
+   },
+   "wall_ratio": {
+    "median": 0.9198,
+    "min": 0.8581,
+    "max": 0.9431
+   }
+  },
+  {
+   "block": 4096,
+   "capacity": 256,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.8048,
+    "min": 0.771,
+    "max": 1.0261
+   },
+   "wall_ratio": {
+    "median": 0.8048,
+    "min": 0.7711,
+    "max": 1.0261
+   }
+  },
+  {
+   "block": 4096,
+   "capacity": 1024,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.5694,
+    "min": 0.4947,
+    "max": 0.612
+   },
+   "wall_ratio": {
+    "median": 0.5694,
+    "min": 0.4947,
+    "max": 0.612
+   }
+  },
+  {
+   "block": 4096,
+   "capacity": 1024,
+   "depth": 8,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.6636,
+    "min": 0.6258,
+    "max": 0.7206
+   },
+   "wall_ratio": {
+    "median": 0.6636,
+    "min": 0.6258,
+    "max": 0.7205
+   }
+  },
+  {
+   "block": 65536,
+   "capacity": 64,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.9546,
+    "min": 0.8599,
+    "max": 0.9927
+   },
+   "wall_ratio": {
+    "median": 0.9546,
+    "min": 0.8599,
+    "max": 0.9929
+   }
+  },
+  {
+   "block": 65536,
+   "capacity": 1024,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 0.6809,
+    "min": 0.5951,
+    "max": 0.7457
+   },
+   "wall_ratio": {
+    "median": 0.6809,
+    "min": 0.595,
+    "max": 0.7458
+   }
+  },
+  {
+   "block": 1048576,
+   "capacity": 64,
+   "depth": 1,
+   "pairs": 15,
+   "cpu_ratio": {
+    "median": 1.0019,
+    "min": 0.5896,
+    "max": 1.2147
+   },
+   "wall_ratio": {
+    "median": 1.0021,
+    "min": 0.5897,
+    "max": 1.2147
+   }
+  }
+ ],
+ "rows": 870,
+ "all_ok": true
+}

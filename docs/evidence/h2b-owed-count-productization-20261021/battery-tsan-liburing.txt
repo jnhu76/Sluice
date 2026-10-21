@@ -1,0 +1,4 @@
+cell: tsan-liburing | config: -m release --liburing=y --sanitizers=tsan
+command: xmake build -y && xmake test
+date: 2026-10-21T23:21:31+08:00
+result: 100% tests passed, 0 test(s) failed out of 75, spent 2.846s

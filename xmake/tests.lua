@@ -478,6 +478,8 @@ if has_config("liburing") then
                               R .. "tests/uring_registration_lifecycle_test.cpp")
     uring_progress_target("uring_owed_residue_test",
                               R .. "tests/uring_owed_residue_test.cpp")
+    uring_progress_target("uring_owed_counter_parity_test",
+                              R .. "tests/uring_owed_counter_parity_test.cpp")
 
     -- Corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of
@@ -501,6 +503,29 @@ if has_config("liburing") then
     uring_progress_target("uring_external_loop_mut_host_ignores_dispatch_retry",
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_URING_EXTERNAL_LOOP_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
+
+    -- Owed-count mutation builds. Each breaks one edge of the derived
+    -- owed_count_ summary or its supporting invariant and must be killed by
+    -- the named oracle: the parity suite grounds the counter in the
+    -- authoritative delivery-record scan and external deliveries, the residue
+    -- suite owns the post-pass report verdict, the external-loop suite owns
+    -- the notification wake, and the control-ref reclaim mutant turns the
+    -- submit-reset invariant violation into a loud failure.
+    uring_progress_target("uring_owed_mut_missing_increment",
+                              R .. "tests/uring_owed_counter_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_OWED_COUNT_MISSING_INCREMENT")
+    uring_progress_target("uring_owed_mut_missing_decrement",
+                              R .. "tests/uring_owed_counter_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_OWED_COUNT_MISSING_DECREMENT")
+    uring_progress_target("uring_owed_mut_empty_verdict_always",
+                              R .. "tests/uring_owed_residue_test.cpp",
+                              "SLUICE_URING_MUTANT_OWED_EMPTY_VERDICT_ALWAYS")
+    uring_progress_target("uring_owed_mut_reclaim_ignoring_control_refs",
+                              R .. "tests/uring_owed_counter_parity_test.cpp",
+                              "SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS")
+    uring_progress_target("uring_owed_mut_zero_op_wake_dropped",
+                              R .. "tests/uring_external_loop_test.cpp",
+                              "SLUICE_URING_MUTANT_ZERO_OP_PUBLICATION_DROPS_WAKE")
 end
 
 -- Public Request<T> evidence. Same self-contained seam-build shape as

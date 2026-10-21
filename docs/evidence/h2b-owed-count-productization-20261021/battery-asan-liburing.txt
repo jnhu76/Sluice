@@ -1,0 +1,13 @@
+cell: asan + liburing=y | config: -m release --liburing=y --sanitizers=asan
+command: xmake build -y && xmake test
+date: 2026-10-21 (see git log for exact time)
+result: 74/75 passed — app_tail_cli_oracle_test FAILS under ASAN at BOTH the
+h2b branch (74+1 new parity test) and the BASE commit c8970702 (74 tests,
+identical single failure, ~21.7s = two 10s event deadlines burned). The
+failing cases are cli_pending_sigint/cli_pending_sigterm reporting
+"no ENTERED event (LD_PRELOAD intercept failed?)": a pre-existing
+ASAN/LD_PRELOAD interposition conflict in the tail-shim harness on this
+WSL2 host, reproducing identically without the H2b change. All other 74
+tests pass at both commits. Occasionally a rerun passes 75/75 (flake in
+the shim handoff under ASAN), which matches the interposition-race nature.
+Not caused by H2b; recorded as an environmental limitation of this host.
