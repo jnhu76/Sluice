@@ -192,32 +192,39 @@ more driver iterations over the same phase. 0 allocations both arms.
 Limitations of this run: WSL2 host, not the E5 native Linux environment;
 `perf` hardware counters unavailable (perf_event_paranoid=2, no interactive
 sudo in this autonomous session) so instructions/cycles attribution was not
-captured; CPU frequency not governed.
+captured; CPU frequency not governed. Provenance note (Review B finding B1):
+the campaign script predated the per-arm hash capture step, and the base
+worktree's persisted xmake config was mutated after the campaign by the
+sanitizer incident documented in §5 — the sanitizer-cleanliness of the
+campaign arms is therefore substantiated by binary inspection (zero ASAN
+symbols in all four campaign binaries; `nm` symbol delta between arms is
+exactly one symbol), and the formal E5 script below restores the
+`arm-identity.txt` hash step and refuses to run on a sanitizer-tainted
+config.
 
 ### 6.2 Formal E5 acceptance — NOT_RUN
 
 The E5 credentials are supplied by the execution environment's interactive
 authentication and were not available in this autonomous session (same
-disposition as M2's `W03_AB = NOT_RUN`). Commands for the owner, on the E5
-host, after `git fetch`:
+disposition as M2's `W03_AB = NOT_RUN`). The formal protocol is frozen as a
+runnable script, `run_e5_ab.frozen.sh` in this directory (Review B findings
+B1/B3): it parameterizes worktree root / output dir / reps / cpu, records
+per-arm worktree SHA + binary/library SHA-256 into `arm-identity.txt`, refuses
+a sanitizer-tainted config, runs the same 9 data + 2 zero-burst configs with
+rotation and the byte-oracle gate, captures `perf stat`
+(task-clock, instructions, cycles) on the 4096/C=1024/d=1 headline when
+counters are permitted, and states the acceptance rule in advance:
 
-```
-git worktree add /tmp/e5-h2b/base c8970702
-git worktree add /tmp/e5-h2b/h2b  <h2b-merge-sha>
-cd /tmp/e5-h2b/base && xmake f -m release --liburing=y -y && xmake build -y
-cd /tmp/e5-h2b/h2b  && xmake f -m release --liburing=y -y && xmake build -y
-# build both arms of pipeline_ab and zero_burst_ab from
-# bench/native-linux-m2/pipeline_ab.cpp and the evidence-record
-# zero_burst_ab.cpp against each arm's static libs, then run
-# docs/evidence/h2b-owed-count-productization-20261021/provisional-wsl2-ab/run_campaign.frozen.sh
-# with the worktree/output paths adapted; keep 15 paired reps, rotation and
-# the byte oracle gate; add `perf stat` (task-clock,instructions,cycles) on
-# the 4096/C=1024/d=1 headline if perf_event_paranoid permits.
-```
+- median `cpu_ns_per_op` ratio ≤ 1.03 for every config, AND
+- sign test over the 15 paired ratios: at most 10 of 15 pairs above 1.03 per
+  config (majority-regression rejected at the 5% level).
 
 BASE is the unmodified current master — the E5 numbers must be regenerated,
-not imported from M2's recorded SHA-specific data. Include the K>0 zero burst
-in every E5 run.
+not imported from M2's recorded SHA-specific data. The K>0 zero burst is
+mandatory in every run. Owner steps: create `base`/`h2b` worktrees (base =
+`c8970702`, h2b = the merge SHA), configure both
+`xmake f -m release --liburing=y -y`, then run the script; record the PASS/FAIL
+verdict in the ledger PROG-01 row.
 
 ## 7. Reviews
 

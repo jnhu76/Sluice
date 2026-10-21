@@ -34,6 +34,25 @@ index 03ecf5d1..42d1a652 100644
      std::vector<RouterEntry> router_;
      std::vector<detail::SlotIndex> cookie_free_list_;
      std::vector<struct ::statx> statx_buffers_;
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index 48bc3b06..cdee02fd 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -586,8 +586,13 @@ bool RequestCore::observer_retirement_acquired(RequestKey id) const noexcept {
+ }
+ 
+ bool RequestCore::reclaimable_(const Slot& slot) const noexcept {
++#if defined(SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS)
++    const bool control_retired = true;
++#else
++    const bool control_retired = slot.control_refs == 0;
++#endif
+     return slot.phase == SlotPhase::accepted && slot.published && !slot.binding_live &&
+-           slot.execution_refs == 0 && slot.control_refs == 0 && !slot.publication_inflight &&
++           control_retired && slot.execution_refs == 0 && !slot.publication_inflight &&
+            (slot.observer_phase == ObserverPhase::unattached ||
+             slot.observer_phase == ObserverPhase::retired);
+ }
 diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
 index e11a3931..ede2b034 100644
 --- a/src/async/uring_backend.cpp
