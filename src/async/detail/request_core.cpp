@@ -586,8 +586,13 @@ bool RequestCore::observer_retirement_acquired(RequestKey id) const noexcept {
 }
 
 bool RequestCore::reclaimable_(const Slot& slot) const noexcept {
+#if defined(SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS)
+    const bool control_retired = true;
+#else
+    const bool control_retired = slot.control_refs == 0;
+#endif
     return slot.phase == SlotPhase::accepted && slot.published && !slot.binding_live &&
-           slot.execution_refs == 0 && slot.control_refs == 0 && !slot.publication_inflight &&
+           control_retired && slot.execution_refs == 0 && !slot.publication_inflight &&
            (slot.observer_phase == ObserverPhase::unattached ||
             slot.observer_phase == ObserverPhase::retired);
 }

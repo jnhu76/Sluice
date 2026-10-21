@@ -88,6 +88,16 @@ inline std::uint64_t UringAsyncBackend::peek_next_cookie_for_test() const noexce
     return next_cookie_;
 }
 
+inline std::size_t UringAsyncBackend::owed_count_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    return owed_count_;
+}
+
+inline bool UringAsyncBackend::owed_scan_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    return any_event_owed_locked_();
+}
+
 inline std::optional<std::uint64_t>
 UringAsyncBackend::live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
     for (const auto& entry : router_) {
