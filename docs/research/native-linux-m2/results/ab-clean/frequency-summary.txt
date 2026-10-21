@@ -1,0 +1,6 @@
+campaign=idle-window replication
+rows=525
+freq_before_khz min=1197023 median=2175905 max=3489206
+freq_after_khz min=1196957 median=3192272 max=6405489
+loadavg1 min=0.17 median=1.35 max=1.54
+loadavg1_ge_1=415 ge_2=0 ge_3=0

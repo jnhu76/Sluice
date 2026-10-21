@@ -1,0 +1,979 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cycles:u'
+# Event count (approx.): 2204915457
+#
+# Overhead  Symbol                                                                                                                                                                                                                                                                                                                                                           IPC   [IPC Coverage]
+# ........  ...............................................................................................................................................................................................................................................................................................................................................................  ....................
+#
+    32.50%  [.] sluice::async::UringAsyncBackend::service_pending_controls_locked_()                                                                                                                                                                                                                                                                                         -      -            
+            |
+            ---sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+    28.46%  [.] sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)                                                                                                                                                                                                                                                           -      -            
+            |
+            ---sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+               sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     3.99%  [.] pthread_mutex_lock@@GLIBC_2.2.5                                                                                                                                                                                                                                                                                                                              -      -            
+            |          
+            |--0.79%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.72%--sluice::async::detail::RequestCore::outstanding_summary() const
+            |          |          
+            |          |--0.61%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          |          main
+            |          |          __libc_start_call_main
+            |          |          __libc_start_main@@GLIBC_2.34
+            |          |          _start
+            |          |          
+            |           --0.11%--sluice::async::UringAsyncBackend::poll_progress()
+            |                     sluice::async::AsyncIoContext::run_progress_pass_()
+            |                     sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |                     sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |                     (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |                     main
+            |                     __libc_start_call_main
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+            |--0.40%--std::mutex::lock()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.34%--sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.23%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+            |          sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.22%--sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.18%--sluice::async::detail::RequestCore::health_failed() const
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.17%--sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.17%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+            |          sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.16%--sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)
+            |          sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.11%--sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.11%--sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.11%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.11%--sluice::async::detail::RequestCore::reserve()
+                       sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+                       sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+                       sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     2.57%  [.] sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)                                                                                                                                                                                                                                                             -      -            
+            |
+            ---sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+               sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+               sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     2.30%  [.] __GI___pthread_mutex_unlock_usercnt                                                                                                                                                                                                                                                                                                                          -      -            
+            |          
+            |--0.61%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.39%--sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.18%--sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+            |          sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.17%--sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.17%--sluice::async::detail::RequestCore::outstanding_summary() const
+            |          |          
+            |           --0.11%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |                     sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |                     (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |                     main
+            |                     __libc_start_call_main
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+            |--0.12%--sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.11%--sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.11%--sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+            |          sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::poll() [clone .part.0]
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.11%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                       sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     1.64%  [.] 0x0000000000000a8c                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+               |          
+               |--0.80%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               |          main
+               |          __libc_start_call_main
+               |          __libc_start_main@@GLIBC_2.34
+               |          _start
+               |          
+               |--0.67%--sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               |          main
+               |          __libc_start_call_main
+               |          __libc_start_main@@GLIBC_2.34
+               |          _start
+               |          
+                --0.17%--(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                          main
+                          __libc_start_call_main
+                          __libc_start_main@@GLIBC_2.34
+                          _start
+
+     1.62%  [.] sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)                                                                                                                                                                     -      -            
+            |
+            ---sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+               sluice::async::UringAsyncBackend::reap_cqes()
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     1.54%  [.] (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)                                                                                                                                                                                   -      -            
+            |
+            ---main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     1.13%  [.] pthread_mutex_unlock@@GLIBC_2.2.5                                                                                                                                                                                                                                                                                                                            -      -            
+            |          
+            |--0.50%--sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |          sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.29%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+            |--0.11%--sluice::async::detail::RequestCore::outstanding_summary() const
+            |          sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.11%--sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)
+                       sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+                       sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+                       sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     1.07%  [.] sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)                                                                                                                                                                                                                                                                                         -      -            
+            |
+            ---sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     1.07%  [.] sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)                                                                                                                                                                                                                                                                                 -      -            
+            |
+            ---sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+               sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+               sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     1.07%  [.] sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)                                                                                                                                                                                                                                                                     -      -            
+            |
+            ---sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     1.06%  [.] sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)                                                                                                                                                                                                                                                           -      -            
+            |
+            ---sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.97%  [.] clock_gettime@@GLIBC_2.17                                                                                                                                                                                                                                                                                                                                    -      -            
+            |
+            ---std::chrono::_V2::steady_clock::now()
+               |          
+               |--0.45%--sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               |          main
+               |          __libc_start_call_main
+               |          __libc_start_main@@GLIBC_2.34
+               |          _start
+               |          
+               |--0.40%--(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               |          main
+               |          __libc_start_call_main
+               |          __libc_start_main@@GLIBC_2.34
+               |          _start
+               |          
+                --0.11%--sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                          main
+                          __libc_start_call_main
+                          __libc_start_main@@GLIBC_2.34
+                          _start
+
+     0.95%  [.] sluice::async::UringAsyncBackend::reap_cqes()                                                                                                                                                                                                                                                                                                                -      -            
+            |
+            ---sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.87%  [.] sluice::async::AsyncIoContext::run_progress_pass_()                                                                                                                                                                                                                                                                                                          -      -            
+            |
+            ---sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.84%  [.] sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)                                                                                                                                                                                                           -      -            
+            |
+            ---(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.84%  [.] sluice::async::UringAsyncBackend::poll() [clone .part.0]                                                                                                                                                                                                                                                                                                     -      -            
+            |
+            ---sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.83%  [.] sluice::async::RequestScope::submit_read(sluice::async::ReadOp)                                                                                                                                                                                                                                                                                              -      -            
+            |
+            ---(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.80%  [.] __memcmp_avx2_movbe                                                                                                                                                                                                                                                                                                                                          -      -            
+            |
+            ---(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.74%  [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)                                                                                                                                                                                                                                                                  -      -            
+            |
+            ---sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.73%  [.] sluice::async::detail::RequestCore::try_reclaim_(sluice::async::detail::RequestCore::Slot&, unsigned long)                                                                                                                                                                                                                                                   -      -            
+            |          
+             --0.67%--sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+                       sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     0.69%  [.] sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)                                                                                                                                                                                                                                                                          -      -            
+            |
+            ---(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.68%  [.] sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)                                                                                                                                                                                                                                                                                         -      -            
+            |
+            ---sluice::async::UringAsyncBackend::reap_cqes()
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.67%  [k] 0xffffffffb8a00080                                                                                                                                                                                                                                                                                                                                           -      -            
+            |          
+            |--0.45%--__io_uring_submit
+            |          sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+            |          sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+            |          |          
+            |           --0.33%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+            |                     sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+            |                     (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |                     main
+            |                     __libc_start_call_main
+            |                     __libc_start_main@@GLIBC_2.34
+            |                     _start
+            |          
+             --0.22%--__internal_syscall_cancel
+                       __syscall_cancel
+                       |          
+                       |--0.11%--__poll
+                       |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       |          main
+                       |          __libc_start_call_main
+                       |          __libc_start_main@@GLIBC_2.34
+                       |          _start
+                       |          
+                        --0.11%--read
+                                  sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                                  sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                                  (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                                  main
+                                  __libc_start_call_main
+                                  __libc_start_main@@GLIBC_2.34
+                                  _start
+
+     0.62%  [.] sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)                                                                                                                                                                                                                                                                                        -      -            
+            |
+            ---sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+               sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+               sluice::async::UringAsyncBackend::reap_cqes()
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.56%  [.] sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)                                                                                                                                                                                                                                                                                            -      -            
+            |
+            ---sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.56%  [.] sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)                                                                                                                                                                                                                                                               -      -            
+            |
+            ---sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.56%  [.] sluice::async::detail::RequestCore::reserve()                                                                                                                                                                                                                                                                                                                -      -            
+            |
+            ---sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+               sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.51%  [.] sluice::async::UringAsyncBackend::poll_progress()                                                                                                                                                                                                                                                                                                            -      -            
+            |
+            ---sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.50%  [.] sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)                                                                                                                                                                                                       -      -            
+            |
+            ---sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               |          
+                --0.45%--main
+                          __libc_start_call_main
+                          __libc_start_main@@GLIBC_2.34
+                          _start
+
+     0.45%  [.] pthread_mutex_lock@plt                                                                                                                                                                                                                                                                                                                                       -      -            
+            |          
+            |--0.11%--std::mutex::lock()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.11%--sluice::async::UringAsyncBackend::poll() [clone .part.0]
+                       sluice::async::UringAsyncBackend::poll_progress()
+                       sluice::async::AsyncIoContext::run_progress_pass_()
+                       sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     0.45%  [.] sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)                                                                                                                                                                                                                                      -      -            
+            |
+            ---sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.44%  [.] __internal_syscall_cancel                                                                                                                                                                                                                                                                                                                                    -      -            
+            |
+            ---__syscall_cancel
+               |          
+                --0.11%--__poll
+                          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                          main
+                          __libc_start_call_main
+                          __libc_start_main@@GLIBC_2.34
+                          _start
+
+     0.40%  [.] __syscall_cancel                                                                                                                                                                                                                                                                                                                                             -      -            
+            |          
+            |--0.23%--read
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.17%--__poll
+                       sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     0.34%  [.] sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)                                                                                                                                                                                                                         -      -            
+            |
+            ---sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.29%  [.] sluice::async::detail::RequestCore::outstanding_summary() const                                                                                                                                                                                                                                                                                              -      -            
+            |          
+            |--0.18%--sluice::async::UringAsyncBackend::poll_progress()
+            |          sluice::async::AsyncIoContext::run_progress_pass_()
+            |          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+            |          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.11%--sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+                       sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     0.28%  [.] sluice::async::UringAsyncBackend::outstanding() const                                                                                                                                                                                                                                                                                                        -      -            
+            |
+            ---sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.28%  [.] sluice::async::detail::RequestCore::health_failed() const                                                                                                                                                                                                                                                                                                    -      -            
+            |
+            ---sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.28%  [.] std::chrono::_V2::steady_clock::now()                                                                                                                                                                                                                                                                                                                        -      -            
+            |          
+             --0.17%--sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                       (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     0.28%  [.] sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)                                                                                                                                                                                                                                                              -      -            
+            |
+            ---sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.24%  [.] void std::__introsort_loop<__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void> >(__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void>) [clone .isra.0]  -      -            
+            |          
+            |--0.13%--(anonymous namespace)::emit((anonymous namespace)::Params const&, char const*, (anonymous namespace)::PhaseOutcome const&)
+            |          main
+            |          __libc_start_call_main
+            |          __libc_start_main@@GLIBC_2.34
+            |          _start
+            |          
+             --0.11%--void std::__introsort_loop<__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void> >(__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void>) [clone .isra.0]
+                       void std::__introsort_loop<__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void> >(__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void>) [clone .isra.0]
+                       void std::__introsort_loop<__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void> >(__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void>) [clone .isra.0]
+                       void std::__introsort_loop<__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void> >(__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void>) [clone .isra.0]
+                       (anonymous namespace)::emit((anonymous namespace)::Params const&, char const*, (anonymous namespace)::PhaseOutcome const&)
+                       main
+                       __libc_start_call_main
+                       __libc_start_main@@GLIBC_2.34
+                       _start
+
+     0.23%  [.] sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const                                                                                                                                                                                                                                                                                     -      -            
+            |
+            ---sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.23%  [.] __GI___pthread_self                                                                                                                                                                                                                                                                                                                                          -      -            
+            |
+            ---sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.23%  [.] sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)                                                                                                                                                                                                                                                                     -      -            
+            |
+            ---sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+               sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+               sluice::async::UringAsyncBackend::reap_cqes()
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.22%  [.] sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)                                                                                                                                                                                   -      -            
+            |
+            ---sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+               sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+               sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.17%  [.] sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const                                                                                                                                                                                                                                                                              -      -            
+            |
+            ---sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+               sluice::async::UringAsyncBackend::reap_cqes()
+               sluice::async::UringAsyncBackend::poll() [clone .part.0]
+               sluice::async::UringAsyncBackend::poll_progress()
+               sluice::async::AsyncIoContext::run_progress_pass_()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.17%  [.] sluice::async::UringAsyncBackend::has_immediate_physical_work() const                                                                                                                                                                                                                                                                                        -      -            
+            |
+            ---sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.17%  [.] 0x0000000000000ab0                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+               |          
+                --0.11%--(anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                          main
+                          __libc_start_call_main
+                          __libc_start_main@@GLIBC_2.34
+                          _start
+
+     0.17%  [.] 0x0000000000000ac2                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+               |          
+                --0.11%--sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+                          (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+                          main
+                          __libc_start_call_main
+                          __libc_start_main@@GLIBC_2.34
+                          _start
+
+     0.12%  [.] 0x0000000000000afd                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+               sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.11%  [.] 0x0000000000000a76                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.11%  [.] read                                                                                                                                                                                                                                                                                                                                                         -      -            
+            |
+            ---sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.11%  [.] pthread_mutex_unlock@plt                                                                                                                                                                                                                                                                                                                                     -      -            
+     0.11%  [.] __poll                                                                                                                                                                                                                                                                                                                                                       -      -            
+            |
+            ---sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.11%  [.] 0x0000000000000aba                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+               sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+               (anonymous namespace)::run_phase((anonymous namespace)::Params const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool)
+               main
+               __libc_start_call_main
+               __libc_start_main@@GLIBC_2.34
+               _start
+
+     0.11%  [.] 0x0000000000000ac8                                                                                                                                                                                                                                                                                                                                           -      -            
+            |
+            ---clock_gettime@@GLIBC_2.17
+               std::chrono::_V2::steady_clock::now()
+
+
+
+#
+# (Tip: Treat branches as callchains: perf record -b ... ; perf report --branch-history)
+#

@@ -1,0 +1,63 @@
+solo_run=h1:baseline_scan
+# started on Wed Oct 21 12:26:16 2026
+
+4557.96,msec,task-clock:u,4557962909,100.00,,
+15604215230,,cycles:u,4557962909,100.00,,
+35063446142,,instructions:u,4557962909,100.00,,
+6447088,,cache-references:u,4557962909,100.00,,
+4051,,cache-misses:u,4557962909,100.00,,
+212975940,,branch-misses:u,4557962909,100.00,,
+solo_run=h1:direct_index
+# started on Wed Oct 21 12:26:21 2026
+
+760.74,msec,task-clock:u,760737940,100.00,,
+2423535861,,cycles:u,760737940,100.00,,
+3122237100,,instructions:u,760737940,100.00,,
+5342804,,cache-references:u,760737940,100.00,,
+3179,,cache-misses:u,760737940,100.00,,
+30963917,,branch-misses:u,760737940,100.00,,
+solo_run=h2:baseline_single_lock_sweep
+# started on Wed Oct 21 12:26:22 2026
+
+7136.42,msec,task-clock:u,7136419089,100.00,,
+24804860359,,cycles:u,7136419089,100.00,,
+39347905941,,instructions:u,7136419089,100.00,,
+70736,,cache-references:u,7136419089,100.00,,
+2916,,cache-misses:u,7136419089,100.00,,
+217030368,,branch-misses:u,7136419089,100.00,,
+solo_run=h2:baseline_per_slot_lock_sweep
+# started on Wed Oct 21 12:26:29 2026
+
+10990.37,msec,task-clock:u,10990368303,100.00,,
+38193615118,,cycles:u,10990368303,100.00,,
+81630281819,,instructions:u,10990368303,100.00,,
+74349,,cache-references:u,10990368303,100.00,,
+2877,,cache-misses:u,10990368303,100.00,,
+217728487,,branch-misses:u,10990368303,100.00,,
+solo_run=h2:counter_snapshot_sweep
+# started on Wed Oct 21 12:26:40 2026
+
+7235.77,msec,task-clock:u,7235770530,100.00,,
+25142811366,,cycles:u,7235770530,100.00,,
+38386079638,,instructions:u,7235770530,100.00,,
+65968,,cache-references:u,7235770530,100.00,,
+3080,,cache-misses:u,7235770530,100.00,,
+217310601,,branch-misses:u,7235770530,100.00,,
+solo_run=h3:baseline_first_free_scan
+# started on Wed Oct 21 12:26:47 2026
+
+4017.27,msec,task-clock:u,4017269031,100.00,,
+13846340406,,cycles:u,4017269031,100.00,,
+32055611362,,instructions:u,4017269031,100.00,,
+1001445,,cache-references:u,4017269031,100.00,,
+3357,,cache-misses:u,4017269031,100.00,,
+88096751,,branch-misses:u,4017269031,100.00,,
+solo_run=h3:freelist_lifo
+# started on Wed Oct 21 12:26:51 2026
+
+3780.59,msec,task-clock:u,3780588282,100.00,,
+12995872884,,cycles:u,3780588282,100.00,,
+29290327849,,instructions:u,3780588282,100.00,,
+1597483,,cache-references:u,3780588282,100.00,,
+2837,,cache-misses:u,3780588282,100.00,,
+90134625,,branch-misses:u,3780588282,100.00,,

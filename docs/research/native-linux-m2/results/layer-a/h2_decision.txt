@@ -1,0 +1,89 @@
+H2 negative control (counter without deliver-side decrement): CAUGHT (stale residue verdict diverged from model)
+H2 positive control (counter arm, same driver): PASS
+== H2 / baseline_single_lock_sweep ==
+cap=   8 mix=idle       61.93 ns/pass spread=0.059 oracle=PASS
+cap=   8 mix=sparse     87.15 ns/pass spread=0.073 oracle=PASS
+cap=   8 mix=half      162.59 ns/pass spread=0.037 oracle=PASS
+cap=   8 mix=full      245.57 ns/pass spread=0.073 oracle=PASS
+cap=  16 mix=idle       79.16 ns/pass spread=0.077 oracle=PASS
+cap=  16 mix=sparse    107.25 ns/pass spread=0.011 oracle=PASS
+cap=  16 mix=half      295.40 ns/pass spread=0.005 oracle=PASS
+cap=  16 mix=full      456.91 ns/pass spread=0.015 oracle=PASS
+cap=  32 mix=idle      123.88 ns/pass spread=0.005 oracle=PASS
+cap=  32 mix=sparse    156.06 ns/pass spread=0.007 oracle=PASS
+cap=  32 mix=half      549.51 ns/pass spread=0.059 oracle=PASS
+cap=  32 mix=full      873.86 ns/pass spread=0.008 oracle=PASS
+cap=  64 mix=idle      205.86 ns/pass spread=0.010 oracle=PASS
+cap=  64 mix=sparse    236.25 ns/pass spread=0.074 oracle=PASS
+cap=  64 mix=half     1029.32 ns/pass spread=0.009 oracle=PASS
+cap=  64 mix=full     1688.70 ns/pass spread=0.025 oracle=PASS
+cap= 128 mix=idle      384.14 ns/pass spread=0.115 oracle=PASS
+cap= 128 mix=sparse    369.34 ns/pass spread=0.004 oracle=PASS
+cap= 128 mix=half     1972.94 ns/pass spread=0.028 oracle=PASS
+cap= 128 mix=full     3293.91 ns/pass spread=0.022 oracle=PASS
+cap= 256 mix=idle      617.18 ns/pass spread=0.001 oracle=PASS
+cap= 256 mix=sparse    645.88 ns/pass spread=0.145 oracle=PASS
+cap= 256 mix=half     3890.17 ns/pass spread=0.022 oracle=PASS
+cap= 256 mix=full     6514.29 ns/pass spread=0.014 oracle=PASS
+cap=1024 mix=idle     2290.85 ns/pass spread=0.196 oracle=PASS
+cap=1024 mix=sparse   2310.76 ns/pass spread=0.040 oracle=PASS
+cap=1024 mix=half    15632.90 ns/pass spread=0.010 oracle=PASS
+cap=1024 mix=full    26928.09 ns/pass spread=0.005 oracle=PASS
+== H2 / baseline_per_slot_lock_sweep ==
+cap=   8 mix=idle      101.54 ns/pass spread=0.004 oracle=PASS
+cap=   8 mix=sparse    129.60 ns/pass spread=0.004 oracle=PASS
+cap=   8 mix=half      218.22 ns/pass spread=0.011 oracle=PASS
+cap=   8 mix=full      288.86 ns/pass spread=0.003 oracle=PASS
+cap=  16 mix=idle      185.21 ns/pass spread=0.015 oracle=PASS
+cap=  16 mix=sparse    213.43 ns/pass spread=0.009 oracle=PASS
+cap=  16 mix=half      406.04 ns/pass spread=0.075 oracle=PASS
+cap=  16 mix=full      549.95 ns/pass spread=0.009 oracle=PASS
+cap=  32 mix=idle      321.09 ns/pass spread=0.009 oracle=PASS
+cap=  32 mix=sparse    348.72 ns/pass spread=0.082 oracle=PASS
+cap=  32 mix=half      771.12 ns/pass spread=0.011 oracle=PASS
+cap=  32 mix=full     1062.72 ns/pass spread=0.033 oracle=PASS
+cap=  64 mix=idle      601.90 ns/pass spread=0.010 oracle=PASS
+cap=  64 mix=sparse    632.01 ns/pass spread=0.042 oracle=PASS
+cap=  64 mix=half     1493.46 ns/pass spread=0.047 oracle=PASS
+cap=  64 mix=full     2080.10 ns/pass spread=0.020 oracle=PASS
+cap= 128 mix=idle     1141.63 ns/pass spread=0.033 oracle=PASS
+cap= 128 mix=sparse   1165.94 ns/pass spread=0.052 oracle=PASS
+cap= 128 mix=half     2908.86 ns/pass spread=0.032 oracle=PASS
+cap= 128 mix=full     4092.28 ns/pass spread=0.017 oracle=PASS
+cap= 256 mix=idle     2221.41 ns/pass spread=0.021 oracle=PASS
+cap= 256 mix=sparse   2246.54 ns/pass spread=0.025 oracle=PASS
+cap= 256 mix=half     5754.23 ns/pass spread=0.017 oracle=PASS
+cap= 256 mix=full     8152.96 ns/pass spread=0.013 oracle=PASS
+cap=1024 mix=idle     8749.30 ns/pass spread=0.011 oracle=PASS
+cap=1024 mix=sparse   8764.88 ns/pass spread=0.010 oracle=PASS
+cap=1024 mix=half    22919.46 ns/pass spread=0.009 oracle=PASS
+cap=1024 mix=full    32342.15 ns/pass spread=0.004 oracle=PASS
+== H2 / counter_snapshot_sweep ==
+cap=   8 mix=idle       54.83 ns/pass spread=0.076 oracle=PASS
+cap=   8 mix=sparse     83.48 ns/pass spread=0.008 oracle=PASS
+cap=   8 mix=half      163.04 ns/pass spread=0.029 oracle=PASS
+cap=   8 mix=full      247.61 ns/pass spread=0.016 oracle=PASS
+cap=  16 mix=idle       67.86 ns/pass spread=0.009 oracle=PASS
+cap=  16 mix=sparse    102.96 ns/pass spread=0.005 oracle=PASS
+cap=  16 mix=half      296.72 ns/pass spread=0.015 oracle=PASS
+cap=  16 mix=full      468.90 ns/pass spread=0.054 oracle=PASS
+cap=  32 mix=idle      101.54 ns/pass spread=0.072 oracle=PASS
+cap=  32 mix=sparse    151.64 ns/pass spread=0.005 oracle=PASS
+cap=  32 mix=half      560.48 ns/pass spread=0.018 oracle=PASS
+cap=  32 mix=full      905.34 ns/pass spread=0.053 oracle=PASS
+cap=  64 mix=idle      166.58 ns/pass spread=0.014 oracle=PASS
+cap=  64 mix=sparse    224.20 ns/pass spread=0.063 oracle=PASS
+cap=  64 mix=half     1055.66 ns/pass spread=0.054 oracle=PASS
+cap=  64 mix=full     1754.86 ns/pass spread=0.033 oracle=PASS
+cap= 128 mix=idle      263.11 ns/pass spread=0.006 oracle=PASS
+cap= 128 mix=sparse    335.65 ns/pass spread=0.107 oracle=PASS
+cap= 128 mix=half     2039.54 ns/pass spread=0.028 oracle=PASS
+cap= 128 mix=full     3444.68 ns/pass spread=0.022 oracle=PASS
+cap= 256 mix=idle      473.18 ns/pass spread=0.018 oracle=PASS
+cap= 256 mix=sparse    584.75 ns/pass spread=0.143 oracle=PASS
+cap= 256 mix=half     3997.30 ns/pass spread=0.014 oracle=PASS
+cap= 256 mix=full     6809.74 ns/pass spread=0.014 oracle=PASS
+cap=1024 mix=idle     1734.95 ns/pass spread=0.035 oracle=PASS
+cap=1024 mix=sparse   2122.55 ns/pass spread=0.169 oracle=PASS
+cap=1024 mix=half    15981.24 ns/pass spread=0.017 oracle=PASS
+cap=1024 mix=full    27865.06 ns/pass spread=0.005 oracle=PASS

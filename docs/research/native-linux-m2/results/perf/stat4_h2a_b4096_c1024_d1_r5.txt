@@ -1,0 +1,17 @@
+# started on Wed Oct 21 13:39:24 2026
+
+
+ Performance counter stats for '/home/jnhu/sluice-m2/out/ab-15/pipeline_ab_h2a --arm=h2a --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=50000 --warmup=1 --fixture=/tmp/sluice-m2-fixture/data.bin':
+
+           2125.80 msec task-clock:u                                                          
+        3225397894      cycles:u                                                              
+        9071709718      instructions:u                                                        
+        2108597094      branches:u                                                            
+           2412365      branch-misses:u                                                       
+
+       2.126328339 seconds time elapsed
+
+       0.996316000 seconds user
+       1.124992000 seconds sys
+
+

@@ -1,0 +1,72 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 03ecf5d1..978435f8 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -191,6 +191,11 @@ class UringAsyncBackend : public AsyncBackend {
+         detail::RequestKey owed_key{};
+     };
+ 
++    struct OwedEvent {
++        detail::RequestKey key{};
++        detail::OperationKind kind = detail::OperationKind::read;
++    };
++
+     class BoundedDispatchQueue;
+ 
+     class TransportLedger;
+@@ -281,6 +286,7 @@ class UringAsyncBackend : public AsyncBackend {
+     std::size_t capacity_ = 0;
+     std::vector<PreparedUringOp> prepared_ops_;
+     std::vector<DeliveryRecord> delivery_;
++    std::vector<OwedEvent> owed_batch_;
+     std::vector<RouterEntry> router_;
+     std::vector<detail::SlotIndex> cookie_free_list_;
+     std::vector<struct ::statx> statx_buffers_;
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index e11a3931..a9b2cfe1 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -160,8 +160,9 @@ UringConfig UringAsyncBackend::validate_config_(UringConfig config) {
+ 
+ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     : capacity_(config.request_capacity), prepared_ops_(config.request_capacity),
+-      delivery_(config.request_capacity), router_(config.request_capacity),
+-      cookie_free_list_(config.request_capacity), statx_buffers_(config.request_capacity),
++      delivery_(config.request_capacity), owed_batch_(config.request_capacity),
++      router_(config.request_capacity), cookie_free_list_(config.request_capacity),
++      statx_buffers_(config.request_capacity),
+       ring_state_(std::make_unique<UringRingState>()) {
+     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
+         cookie_free_list_[i] = detail::SlotIndex{i};
+@@ -633,21 +634,22 @@ std::size_t UringAsyncBackend::poll() {
+         publish_one(h);
+         ++published;
+     }
+-    for (std::uint32_t i = 0; i < capacity_; ++i) {
+-        detail::RequestKey owed{};
+-        detail::OperationKind owed_kind = detail::OperationKind::read;
+-        {
+-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
++    std::size_t owed_bound = 0;
++    {
++        std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        for (std::uint32_t i = 0; i < capacity_; ++i) {
+             DeliveryRecord& record = delivery_[i];
+             if (!record.event_owed)
+                 continue;
+             record.event_owed = false;
+-            owed = record.owed_key;
++            owed_batch_[owed_bound] = OwedEvent{record.owed_key, record.kind};
+             record.owed_key = {};
+-            owed_kind = record.kind;
++            ++owed_bound;
+         }
+-        deliver_event(owed, owed_kind);
+-        if (core_->release_control(owed) != detail::ControlRelease::released) {
++    }
++    for (std::size_t n = 0; n < owed_bound; ++n) {
++        deliver_event(owed_batch_[n].key, owed_batch_[n].kind);
++        if (core_->release_control(owed_batch_[n].key) != detail::ControlRelease::released) {
+             detail::uring_core_handoff_fail_fast();
+         }
+         ++published;
