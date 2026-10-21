@@ -56,6 +56,10 @@ class ExternalLoopHost {
         owner_.reset();
     }
 
+    // A failed scenario must unwind with its own diagnostic, not abort in
+    // the context destructor over the still-live binding.
+    ~ExternalLoopHost() { stop_and_detach(); }
+
     bool retry_scheduled() const noexcept { return retry_deadline_.has_value(); }
     std::size_t delivered() const noexcept { return delivered_; }
     std::size_t passes() const noexcept { return passes_; }
