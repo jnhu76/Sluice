@@ -83,6 +83,7 @@ Evidence (SHA/config) · Missing proof or gap · Next owner.
 | BACKEND-02/03 io_uring profile (statx metadata, sticky cancel intent, poison convergence, availability gate) | `src/async/uring_backend.cpp`, `detail/uring_submit.hpp` | Required profile incl. statx probe gate; `-ECANCELED` terminal with unknown remainder; transport/completion split | Root §15 | VERIFIED (carried) | B1-C/E1/C2-C records; xmake target `backend_contract_conformance_uring_test` from `tests/backend_contract_conformance_test.cpp` (15 tests, real kernel WSL2 6.18.40.1, liburing 2.14, gcc 15.2.0, tmpfs; target renamed 2026-10-17, evidence unchanged); the suite runs in all 4 liburing=y release-matrix cells on Fedora 44 / kernel 7.2.9 / liburing 2.13 at the convergence head (`docs/evidence/v2-release-acceptance-20261017/matrix/matrix.json`), satisfying the declared-Linux-configurations requirement | Discharged 2026-10-17 (G10 release matrix; WSL2 record retained as dated evidence) | — |
 | PROG-02 io_uring settlement notification | `uring_backend.cpp` + ProgressSource | Deterministic no-lost-wake oracle suite (23 named oracles) covering 17 notification-timing classes, including a registered final-probe mutation kill and a real-kernel cancel-race/quiescence oracle; no production change required for the gate itself. H2b (#564) adds real-eventfd W-03 admission for inline zero-op owed events: ack interleave, submit-during-paused-pass with owner transfer, wait_one serve-without-overpark, observer+shutdown settle | Root §11 PROG-02 for both backends | VERIFIED (at `6411cff3` + `5fd8e109`; H2b W-03 admission 2026-10-21) | `docs/evidence/v2-release-acceptance-20261017/prog02-settlement-notification-oracle.md` (coverage table, two-notions separation, mutant discrimination); oracles in `tests/uring_progress_race_test.cpp`, companion `tests/uring_owed_residue_test.cpp`; matrix cells run them every pass; H2b scenarios in `tests/uring_external_loop_test.cpp` 9/9 ×5 stable, M5 wake-drop mutant killed by direct named oracle failure, exit 1 (`docs/evidence/h2b-owed-count-productization-20261021/`) | Mutant kill is a registered mutation build, re-run per VERIFY-06 on probe/oracle change (not a regular test) | — |
 | PROG-01 uring owed-delivery residue (V29) | `uring_backend.cpp` | Owed-delivery events reported as immediate residue; fixed by PR #543. H2b (#564): empty owed sweep skipped via derived `owed_count_` (non-authoritative per BACKEND-04; destructor and `internal_work_retired()` keep the full scan); counter parity is liveness-load-bearing (drift-below would park settlement; parity oracle + submit-reset fail-fast pin it); submit-reset invariant guarded by fail-fast (Scheme-B unreachable, M4-load-bearing) | Root §11 PROG-01 | VERIFIED (live 2026-10-16; H2b evidence 2026-10-21/22) | `tests/uring_owed_residue_test.cpp` merged at `b870a7c0`, 3/3 PASS; `tests/uring_owed_counter_parity_test.cpp` 8/8 (incl. concurrent producers, slot-reuse-before-delivery, owed-during-pass) + 4 W-03 admission scenarios in `uring_external_loop_test.cpp` (9/9 ×5 runs); 5 mutants killed (M5 by direct named oracle failure, exit 1); 6-cell battery (non-asan 100%, asan 74/75 base-identical pre-existing shim conflict); provisional WSL2 paired A/B 15 reps no-regression, 4KiB/C=1024/d=1 median 0.569; **formal E5 A/B PASS 2026-10-22** — fail-closed r2 runner (pinned SHAs `c8970702`/`eb465c4f`, forced clean rebuilds, `e5_verdict.py` PASS over 870 rows with 0 reasons, all 11 configs median ≤ 0.994, headline 4KiB/C=1024/d=1 **0.495**, perf attribution instructions/cycles ≈ 0.26x; `docs/evidence/h2b-owed-count-productization-20261021/formal-e5-ab/`) | — | — |
+| CANCEL-01 sticky-intent servicing + zero-pending scan elimination (E1, #568) | `src/async/uring_transport.cpp` | `service_pending_controls_locked_()` returns immediately when the derived `pending_control_count_` (owned by `dispatch_mtx_`) is zero; a nonzero count keeps the full authoritative router scan and retry semantics. Router `control_pending` flags remain the semantic authority (BACKEND-04, TERM-01): settlement, `internal_work_retired()` and the destructor never read the counter; repeated cancel stays idempotent; sticky intents survive SQE pressure, retirement, poison recovery and slot reuse with parity `count == #{route \| in_use && control_pending}` pinned by named oracles | Root §14 CANCEL-01 (sticky intent retained and serviced), §11 PROG-01/02 unchanged at the boundary | VERIFIED (productization evidence 2026-10-23; P>0 native cost explicitly NOT_MEASURED on the E5 stack — seam-bound only, scope-limited admission) | `tests/uring_pending_control_parity_test.cpp` 7/7 (sticky lifecycle, repeated-cancel idempotence, retire+slot-reuse identity, steady state, latch-gated 8-thread cancel storm with in-lock snapshot monitor, poison-with-pending-intent, shutdown-after-settle); 5 registered mutants killed by named parity/protocol oracles (missing increment/decrement, always-skipping gate, double increment, retire-stale count; exit 1 with named messages); battery release 18/18, debug 11/11, asanubsan 9/9, tsan 5/5, liburing=n build ok; product A/B verdict PASS (`docs/evidence/e1-pending-control-productization-20261023/product-ab/results/verdict.json`): W-02 headline 0.698/0.620 (15/15 wins), negative controls ≤1.0004; W-03 real epoll+eventfd 0.799/0.609/0.920 with 5+5 `no_lost_wake` verify rows; kernel boundary identical (`io_uring_enter` 60003 both arms, instructions ratio 0.743); P>0 seam bound 0.938–0.961 vs the 1.05 line with P>0 proven in-lock 15/15 reps | Native-kernel P>0 sticky-state cost unmeasured on kernel 7.2.9/liburing 2.13 (reachability analysis + probe archived; a seam-based mechanism bound is the recorded evidence class) | Owner merge gate |
 
 ### G7 Shutdown, cancellation and destruction
 
@@ -328,3 +329,74 @@ prefixes and the ADR-0004 M-numbers were deliberately kept. The audit
 classification, the negative package-boundary evidence and the validation
 battery are recorded in
 `docs/evidence/v2-pre-release-residue-cleanup-20261018/audit-record.md`.
+
+## Dated E1 pending-control zero-scan productization (2026-10-23)
+
+Evidence directory: `docs/evidence/e1-pending-control-productization-20261023/`
+(productization issue #568, umbrella #563; research provenance #566/#567).
+Production change: derived `pending_control_count_` + zero-count gate in
+`service_pending_controls_locked_()` on branch
+`perf/e1-pending-control-zero-scan` (base `859e4b56`). The G6 row above
+carries the obligation mapping; this section records the mechanism
+justification and the authority-contraction audit per AGENTS.md.
+
+### Mechanism Justification Gate — `pending_control_count_`
+
+1. **Fact represented**: the number of live router entries holding a sticky
+   cancel intent — a derived summary of `#{route | route.in_use &&
+   route.control_pending}`.
+2. **Semantic authority**: the router entries' `control_pending` flags (and
+   `control_state` for prepared/submitted controls), all transitions under
+   `dispatch_mtx_`. The counter owns no fact; it cannot admit, settle,
+   publish or retire anything.
+3. **Why not derivable on demand**: it is derived on demand today — by the
+   O(C) router scan in `service_pending_controls_locked_()` executed on
+   every dispatch-accept and every poll pass. On W-02 C1024/D1 that scan
+   iterated ≈8 666 entries per op (≈173 M per 20 K-op run) while being
+   empty in steady state; the counter replaces the repeated query with
+   one integer move per true/false edge (four production sites + the
+   retire site).
+4. **Why not a linear scan kept**: measured — the scan's user-space
+   instructions dominated the removed work (instructions/op ratio 0.743 at
+   the headline config, kernel syscall count identical); a cache or index
+   would add more state than one `size_t`.
+5. **Classification**: derived summary (BACKEND-04), materialized because
+   the query frequency (every accept + every poll pass) is orders of
+   magnitude above the update frequency (only under SQE-exhausted cancels,
+   never observed natively on this stack).
+6. **Replaces**: nothing; no existing mechanism is removed. The
+   unconditional scan remains in force whenever the count is nonzero.
+7. **Cost and evidence**: one integer update at five guarded sites under
+   the existing lock (no new synchronization); zero-count gate read once
+   per service call. Cost bounds: P=0 paths measured faster end-to-end
+   (verdict PASS above); P>0 paths bounded by the controlled seam campaign
+   (medians 0.938–0.961 ≤ the 1.05 line, P>0 observed in-lock 15/15 reps,
+   `seam-bound/`); **native P>0 cost remains NOT_MEASURED** on
+   kernel 7.2.9/liburing 2.13 (reachability analysis + probe:
+   `reachability.md`, `native-p5-probe/`).
+8. **Load-bearing parity**: drift below actual would skip a needed scan
+   (CANCEL-01 violation); drift above would only waste a scan. Parity is
+   pinned by named oracles and five killed mutants, and concurrent
+   monitoring reads the single-critical-section snapshot seam only.
+
+### Authority-contraction audit
+
+- E1 adds no authority: no new admission, settlement, publication,
+  retirement or wake decision reads the counter. Settlement paths
+  (`internal_work_retired()`, `retire_execution_resources()`, destructor,
+  shutdown driver) still consult the authoritative queues/scans/atomics
+  only.
+- No legacy mechanism became removable by this slice: `control_pending`
+  flags remain the authority (needed whenever count>0 and by the
+  deterministic oracles); `control_state`, the transport ledger,
+  `live_control_sqes_` and the sticky-intent fail-fast guards protect
+  real legal interleavings (original-CQE-first retirement, control-CQE
+  ordering, poison Class-A recovery) and stay.
+- The coalesced-cancel clear site (`issue_running_cancel_locked_` early
+  return) is provably defensive under the control-state exclusivity
+  invariant; it is retained with a guarded decrement so a hypothetical
+  violation fails toward parity (control-flow proof in
+  `evidence/.../transition-closure.md`, INV-2).
+- Second-authority risk explicitly rejected: no parallel cancellation
+  state machine exists; the gate is a physical-work skip, not a semantic
+  decision point.
