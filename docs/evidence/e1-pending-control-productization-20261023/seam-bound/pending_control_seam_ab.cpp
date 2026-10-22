@@ -91,19 +91,40 @@ struct Params {
     unsigned rep = 0;
     std::string phase = "high_p";
 };
+void bail(const Params& p, const Counters& counters, std::uint64_t cancel_ns,
+          const char* why) {
+    std::printf(
+        "{\"arm\":\"%s\",\"phase\":\"%s\",\"rep\":%u,\"repeat\":0,\"ok\":false,"
+        "\"cpu_ns\":0,\"wall_ns\":0,\"cancel_ns\":%llu,"
+        "\"cycles\":%zu,\"cancel_attempts\":%llu,\"cancel_requested\":%llu,"
+        "\"sticky_transitions\":%llu,\"control_prepared\":%llu,"
+        "\"control_submitted\":%llu,\"settled\":%llu,\"p_max\":%zu,"
+        "\"parity_violations\":%llu,\"failure\":\"%s\"}\n",
+        p.arm.c_str(), p.phase.c_str(), p.rep,
+        static_cast<unsigned long long>(cancel_ns), p.cycles,
+        static_cast<unsigned long long>(counters.cancel_attempts),
+        static_cast<unsigned long long>(counters.cancel_requested),
+        static_cast<unsigned long long>(counters.sticky_transitions),
+        static_cast<unsigned long long>(counters.control_prepared),
+        static_cast<unsigned long long>(counters.control_submitted),
+        static_cast<unsigned long long>(counters.settled), counters.p_max,
+        static_cast<unsigned long long>(counters.parity_violations), why);
+    std::fflush(stdout);
+    std::_Exit(1);
+}
+
 
 bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
-                std::uint64_t& wall_ns, std::uint64_t& cancel_ns, std::string& failure) {
+                std::uint64_t& wall_ns, std::uint64_t& cancel_ns) {
+    cancel_ns = 0;
     FILE* backing = ::tmpfile();
     if (backing == nullptr) {
-        failure = "tmpfile failed";
-        return false;
+        bail(p, counters, cancel_ns, "tmpfile failed");
     }
     std::byte content[4096];
     std::memset(content, 0x33, sizeof(content));
     if (::fwrite(content, 1, sizeof(content), backing) != sizeof(content)) {
-        failure = "fixture write failed";
-        return false;
+        bail(p, counters, cancel_ns, "fixture write failed");
     }
     ::rewind(backing);
 
@@ -121,19 +142,32 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
                       offset};
     };
 
+    // The SQ ring must be full before the cancels so the control path finds
+    // no SQE and retains sticky intents: `pressured` canceled operations plus
+    // `queue_depth - pressured` uncanceled fillers fill it exactly.
+    const std::size_t pressured = p.pressured < p.queue_depth ? p.pressured : p.queue_depth;
+    const std::size_t fillers = p.queue_depth - pressured;
+
     const std::uint64_t cpu_start = thread_cpu_ns();
     const std::uint64_t wall_start = mono_ns();
     for (std::size_t cycle = 0; cycle < p.cycles; ++cycle) {
         hold->store(true, std::memory_order_release);
 
         std::deque<Request<std::size_t>> window;
+        std::deque<Request<std::size_t>> filler_window;
         std::byte buffers[16][4];
-        const std::size_t pressured = p.pressured < 16 ? p.pressured : 16;
-        for (std::size_t i = 0; i < pressured; ++i) {
-            auto made = ctx->submit_read(data_op(buffers[i], static_cast<std::uint64_t>(i) * 8));
+        for (std::size_t i = 0; i < fillers; ++i) {
+            auto made = ctx->submit_read(data_op(buffers[i], 256 + static_cast<std::uint64_t>(i) * 8));
             if (!made.has_value()) {
-                failure = "submit rejected";
-                return false;
+                bail(p, counters, cancel_ns, "filler submit rejected");
+            }
+            filler_window.push_back(std::move(made).value());
+        }
+        for (std::size_t i = 0; i < pressured; ++i) {
+            auto made = ctx->submit_read(data_op(buffers[fillers + i],
+                                                 static_cast<std::uint64_t>(i) * 8));
+            if (!made.has_value()) {
+                bail(p, counters, cancel_ns, "submit rejected");
             }
             window.push_back(std::move(made).value());
         }
@@ -144,8 +178,7 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
                 ++counters.cancel_attempts;
                 const auto seen = ctx->cancel(window.front().id());
                 if (!seen.has_value() || seen.value() != CancelDisposition::requested) {
-                    failure = "cancel not requested";
-                    return false;
+                    bail(p, counters, cancel_ns, "cancel not requested");
                 }
                 ++counters.cancel_requested;
             }
@@ -165,8 +198,11 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
         }
 #else
         if (raw->live_control_sqes_for_test() != 0) {
-            failure = "control SQE prepared while SQ ring was held";
-            return false;
+            bail(p, counters, cancel_ns, "control SQE submitted while SQ ring was held");
+        }
+        if (raw->transport_ledger_size_for_test() != p.queue_depth) {
+            bail(p, counters, cancel_ns,
+                 "control SQE prepared while SQ ring was held (ledger cardinality)");
         }
         counters.sticky_transitions += pressured;
 #endif
@@ -181,14 +217,12 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
             if (snap.derived_count != snap.authoritative_pending)
                 ++counters.parity_violations;
             if (snap.derived_count != pressured) {
-                failure = "sticky intents lost across pressure passes";
-                return false;
+                bail(p, counters, cancel_ns, "sticky intents lost across pressure passes");
             }
         }
 #else
         if (raw->live_control_sqes_for_test() != 0) {
-            failure = "control SQE escaped during hold";
-            return false;
+            bail(p, counters, cancel_ns, "control SQE escaped during hold");
         }
 #endif
 
@@ -196,34 +230,47 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
         (void)ctx->poll();
         (void)ctx->poll();
         if (raw->live_control_sqes_for_test() != pressured) {
-            failure = "retained intents were not issued after release";
-            return false;
+            bail(p, counters, cancel_ns, "retained intents were not issued after release");
         }
         counters.control_prepared += pressured;
         counters.control_submitted += pressured;
 
         for (std::size_t i = 0; i < pressured; ++i) {
-            const auto identity = raw->live_cookie_for_offset_for_test(static_cast<std::uint64_t>(i) * 8);
+            const auto identity =
+                raw->live_cookie_for_offset_for_test(static_cast<std::uint64_t>(i) * 8);
             if (!identity.has_value()) {
-                failure = "cookie missing at settle";
-                return false;
+                bail(p, counters, cancel_ns, "cookie missing at settle");
             }
             raw->inject_cqe_for_test(kControlTag | *identity, 0);
         }
         for (std::size_t i = 0; i < pressured; ++i) {
-            const auto identity = raw->live_cookie_for_offset_for_test(static_cast<std::uint64_t>(i) * 8);
+            const auto identity =
+                raw->live_cookie_for_offset_for_test(static_cast<std::uint64_t>(i) * 8);
             if (!identity.has_value()) {
-                failure = "cookie missing at original CQE";
-                return false;
+                bail(p, counters, cancel_ns, "cookie missing at original CQE");
             }
             raw->inject_cqe_for_test(*identity, -ECANCELED);
+        }
+        for (std::size_t i = 0; i < fillers; ++i) {
+            const auto identity =
+                raw->live_cookie_for_offset_for_test(256 + static_cast<std::uint64_t>(i) * 8);
+            if (!identity.has_value()) {
+                bail(p, counters, cancel_ns, "filler cookie missing at settle");
+            }
+            raw->inject_cqe_for_test(*identity, 4);
         }
         (void)ctx->poll();
 
         for (auto& request : window) {
             if (!request.ready()) {
-                failure = "request did not settle through the control path";
-                return false;
+                bail(p, counters, cancel_ns, "request did not settle through the control path");
+            }
+            (void)request.take_result();
+            ++counters.settled;
+        }
+        for (auto& request : filler_window) {
+            if (!request.ready()) {
+                bail(p, counters, cancel_ns, "filler request did not settle");
             }
             (void)request.take_result();
             ++counters.settled;
@@ -233,14 +280,12 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
         {
             const auto snap = raw->pending_control_snapshot_for_test();
             if (snap.derived_count != snap.authoritative_pending || snap.derived_count != 0) {
-                failure = "count did not return to zero after settle";
-                return false;
+                bail(p, counters, cancel_ns, "count did not return to zero after settle");
             }
         }
 #endif
         if (!raw->internal_work_retired()) {
-            failure = "internal work not retired after cycle";
-            return false;
+            bail(p, counters, cancel_ns, "internal work not retired after cycle");
         }
     }
     wall_ns += mono_ns() - wall_start;
@@ -248,12 +293,12 @@ bool run_cycles(const Params& p, Counters& counters, std::uint64_t& cpu_ns,
 
     const auto shutdown = ctx->shutdown(ShutdownPolicy::drain);
     if (!shutdown.has_value()) {
-        failure = "shutdown failed";
-        return false;
+        bail(p, counters, cancel_ns, "shutdown failed");
     }
     ::fclose(backing);
     return true;
 }
+
 
 std::size_t parse_size(const std::string& v) {
     return static_cast<std::size_t>(std::strtoull(v.c_str(), nullptr, 10));
@@ -293,8 +338,7 @@ int main(int argc, char** argv) {
         std::uint64_t cpu_ns = 0;
         std::uint64_t wall_ns = 0;
         std::uint64_t cancel_ns = 0;
-        std::string failure;
-        const bool ok = run_cycles(p, counters, cpu_ns, wall_ns, cancel_ns, failure);
+        const bool ok = run_cycles(p, counters, cpu_ns, wall_ns, cancel_ns);
         std::printf(
             "{\"arm\":\"%s\",\"phase\":\"%s\",\"rep\":%u,\"repeat\":%zu,\"ok\":%s,"
             "\"cpu_ns\":%llu,\"wall_ns\":%llu,\"cancel_ns\":%llu,"
@@ -311,7 +355,7 @@ int main(int argc, char** argv) {
             static_cast<unsigned long long>(counters.control_prepared),
             static_cast<unsigned long long>(counters.control_submitted),
             static_cast<unsigned long long>(counters.settled), counters.p_max,
-            static_cast<unsigned long long>(counters.parity_violations), failure.c_str());
+            static_cast<unsigned long long>(counters.parity_violations), "");
         std::fflush(stdout);
         if (!ok)
             return 1;
