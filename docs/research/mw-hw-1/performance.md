@@ -43,8 +43,9 @@ Reading:
   patch touches the I/O path.
 - E1 absolute saving: 1.79 µs/op (4k/D1/C1024), 1.36 µs/op (4k/D8/C1024) —
   matching the C-sweep delta (+1.3 µs/op from C=16→1024) and the perf
-  attribution (41% of user cycles; user time 0.22 s → 0.07–0.10 s per 80k
-  ops, −61%, system unchanged).
+  attribution (55.4% of user-only cycles after leakage renormalization —
+  syscall-census.md §4; paired user-CPU ratio 0.438, system 0.983 —
+  syscall-census.md §3).
 
 ## 2. Capacity sweep isolating the C-dependent component (base arm, D=1, 4 KiB)
 
@@ -56,8 +57,8 @@ Reading:
 | 1024 | 9.72 |
 
 Δ(C16→C1024) ≈ +1.3 µs/op (means; medians 1.2) — the C-dependent component
-E1 deletes, ~2·(1024−16)·24 B of router walk at ~0.5 ns/entry-scan. This is
-an independent order-of-magnitude estimate at D=1 only (see §1 for the
+E1 deletes: ~2.5·(1024−16)·24 B of router walk at ~0.5 ns per entry visit
+(2.48 scans/op measured at this config; work-ledger.md W1). This is an independent order-of-magnitude estimate at D=1 only (see §1 for the
 per-config scans/op reconciliation and the D=8 gap).
 
 ## 3. Correctness gates (all arms)
@@ -70,10 +71,11 @@ Deterministic suites run per arm before timing (9 targets):
 (includes the sticky-intent scenario),
 `request_core_ownership_uring_test`. All PASS on base, e1, e2, e3.
 
-E1 additionally carries `uring_pending_control_parity_test` (4 scenarios:
+E1 additionally carries `uring_pending_control_parity_test` (5 scenarios:
 zero-pending steady state; SQE-pressure cancel sets and keeps P=1 across
-passes; P serviced when SQE frees — cancel issued, count returns to 0, both
-requests settle through control + original CQEs; pending retired with route)
+passes; repeated SQE-pressure cancels do not double-count; P serviced when
+SQE frees — cancel issued, count returns to 0, both requests settle through
+control + original CQEs; pending retired with route)
 with parity `pending_control_count_ == |{i : router_[i].control_pending ∧
 in_use}|` asserted at every checkpoint.
 
@@ -98,6 +100,8 @@ Negative controls (required CAUGHT):
 - W-02 only. W-03 external-loop A/B was NOT run (same gap as M2); W-03
   correctness is covered by `uring_external_loop_test` passing on e1.
 - Zero-op (K>0) has no A/B row (harness rejects block=0); E1 does not touch
-  the owed path (verified by the owed suites) and the zero-op census shows
-  the pipeline is already syscall-free.
+  the owed path (verified by the owed suites). The zero-op path being
+  syscall-free is source-derived and owed-suite-covered only — no valid
+  zero-op syscall census exists (the attempted trace captured process
+  startup; retracted per review B F5, path-dag.md §5).
 - No tail-latency claims (WSL2 multi-ms outliers, per M1 precedent).

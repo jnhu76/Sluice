@@ -90,10 +90,12 @@ All mutex pairs uncontended in this shape (whole-census futex count = 2).
 
 Key structural facts established this round:
 
-1. **Two full router scans per op** (`service_pending_controls_locked_` at
-   submit AND at each pass) dominate the C-dependent userspace cost at low
-   depth. RouterEntry ≈ 24 B ⇒ 2·C·24 B walked per op (C=1024: 48 KiB ≈ 768
-   cache lines).
+1. **The router scans dominate the C-dependent userspace cost at low depth**
+   (`service_pending_controls_locked_` at submit AND at each pass; the
+   measured 2.48 scans/op at 4k/D1/C1024 is 1 + poll_calls/op — work-ledger
+   W1). RouterEntry ≈ 24 B, so the code inspects ≈ 2.48·C·24 B ≈ 59.5 KiB of
+   router entries per op at C=1024 — a logical traversal range, not an
+   equal amount of DRAM traffic (at D=1 live entries cluster near the top).
 2. `io_uring_get_sqe`/`peek_cqe` are mmap-ring userspace helpers, not
    syscalls; the ONLY steady-state syscall is one `io_uring_submit`
    (`io_uring_enter`) per op.

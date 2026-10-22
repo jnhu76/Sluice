@@ -1,0 +1,336 @@
+=== rep=1 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.17
+	System time (seconds): 0.61
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.79
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5380
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 789
+	Voluntary context switches: 80060
+	Involuntary context switches: 79951
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=1 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.08
+	System time (seconds): 0.59
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.67
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5368
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 788
+	Voluntary context switches: 80056
+	Involuntary context switches: 79956
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=2 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.22
+	System time (seconds): 0.55
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.77
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5400
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 790
+	Voluntary context switches: 80062
+	Involuntary context switches: 79950
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=2 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.09
+	System time (seconds): 0.58
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.67
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5396
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 790
+	Voluntary context switches: 80042
+	Involuntary context switches: 79969
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=3 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.17
+	System time (seconds): 0.60
+	Percent of CPU this job got: 100%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.78
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5388
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 786
+	Voluntary context switches: 80077
+	Involuntary context switches: 79937
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=3 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.05
+	System time (seconds): 0.62
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.67
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5416
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 786
+	Voluntary context switches: 80053
+	Involuntary context switches: 79958
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=4 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.16
+	System time (seconds): 0.60
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.77
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5408
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 788
+	Voluntary context switches: 80058
+	Involuntary context switches: 79955
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=4 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.07
+	System time (seconds): 0.58
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.66
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5348
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 788
+	Voluntary context switches: 80085
+	Involuntary context switches: 79926
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=5 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.16
+	System time (seconds): 0.60
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.77
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5412
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 787
+	Voluntary context switches: 80048
+	Involuntary context switches: 79962
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=5 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.07
+	System time (seconds): 0.59
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.67
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5380
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 788
+	Voluntary context switches: 80066
+	Involuntary context switches: 79947
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=6 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.17
+	System time (seconds): 0.59
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.77
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5420
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 790
+	Voluntary context switches: 80077
+	Involuntary context switches: 79935
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=6 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.08
+	System time (seconds): 0.58
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.67
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5420
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 790
+	Voluntary context switches: 80069
+	Involuntary context switches: 79944
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=7 arm=base ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_base --arm=base --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.18
+	System time (seconds): 0.60
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.78
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5312
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 789
+	Voluntary context switches: 80067
+	Involuntary context switches: 79946
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0
+=== rep=7 arm=e1 ===
+	Command being timed: "taskset -c 2 ./bin/pipeline_ab_e1 --arm=e1 --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 --warmup=1 --fixture=/tmp/mw-hw-1-out/fixture/data.bin"
+	User time (seconds): 0.07
+	System time (seconds): 0.61
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.68
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5416
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 790
+	Voluntary context switches: 80061
+	Involuntary context switches: 79952
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

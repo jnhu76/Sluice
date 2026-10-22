@@ -35,8 +35,9 @@ BASE: master `8e2aa5ab94670a318288c77da796825cfa9f3cfe` (post-H2b, PR #565).
 - **E2/E3 falsifiers**: ≈1.00 — dispatch mediation and publication lock
   pairs are NOT hidden hotspots. NO_CHANGE_JUSTIFIED.
 - **Kernel boundary floor**: exactly 1 `io_uring_enter` per op at every
-  sliding-window depth; park path cold on warm tmpfs; zero-op path is
-  syscall-free. ThreadPool pays ~2.3 futex/op by contrast.
+  sliding-window depth; park path cold on warm tmpfs; zero-op path
+  syscall-free (source-derived, no valid census — syscall-census.md §1).
+  ThreadPool pays ~2.3 futex/op by contrast.
 
 ## Reproduction
 
@@ -48,7 +49,9 @@ g++ -std=c++20 -O3 -DNDEBUG -Iinclude -Ibench \
   build/linux/x86_64/release/libsluice_{async,core}.a -luring -lpthread \
   -o pipeline_ab_<arm>
 ./pipeline_ab_base --fixture=<f> --create-fixture
-ab/run_ab_mwhw1.sh 9 2            # paired rotated campaign (retained raw)
+evidence/ab/run_ab_mwhw1.sh 9 2        # paired rotated campaign (raw rows archived)
+python3 evidence/analysis/analyze_ab.py evidence/ab/rows.jsonl
+python3 evidence/analysis/analyze_time_v.py evidence/time-v-paired.txt
 # census
 strace -f -c -o census.txt taskset -c 2 ./pipeline_ab_base --arm=base \
   --backend=uring --block=4096 --depth=1 --capacity=1024 --requests=20000 \
@@ -64,15 +67,17 @@ renormalization, paired user/system rerun with receipts, per-config
 scan/op counts, zero-op census retraction, E2/E3 resolution-bounded
 phrasing).
 
-Raw evidence (untracked, outside Git)
+Raw evidence (archived in-repo)
 
-Directory: `/tmp/mw-hw-1-out/` (131 MiB; `SHA256SUMS.txt` lists all 32 files,
-including `ab/rows.jsonl` (216 timed rows + oracle/latency),
-`ab/analysis.txt`, `strace-*.txt` censuses, `perf-base-g.data` /
-`perf-e1-g.data`, `c-sweep-d1.txt`, `test-gates.txt`, `e1-mutant-receipts.txt`,
-`baseline-identity.txt`, `ab/arm-identity.txt`). The directory is disposable
-after the PR is reviewed; the committed documents above carry every number
-used in a claim. Regenerate with the commands in this file.
+`evidence/` carries the lightweight raw outputs: the 216-row `ab/rows.jsonl`,
+the paired runner, both analysis scripts (each regenerates its archived
+output byte-for-byte), the time-v paired logs, strace censuses, the two
+attribution profiles (`perf-base-g.data`, `perf-e1-g.data`), identity
+receipts and gate/mutant receipts — see `evidence/README.md` for contents,
+verification commands and the external-only artifact hashes (arm binaries,
+64 MiB fixture, 64 MiB base profile). The committed documents carry every
+number used in a claim; the scratch directory `/tmp/mw-hw-1-out/` is a
+disposable working copy.
 
 ## Honest limitations
 

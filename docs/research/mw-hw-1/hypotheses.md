@@ -8,9 +8,11 @@ C (end-to-end gain) are separated throughout.
 
 - **Obligation**: sticky cancellation intents created under SQE pressure must
   be retried by later passes (`service_pending_controls_locked_`).
-- **Existing physical work**: full `[scan C]` router walk, 2× per request
-  (submit + pass), at P=0 in every non-cancelling workload. RouterEntry
-  24 B × 2C per op; C=1024: 48 KiB, ~768 cache lines.
+- **Existing physical work**: full `[scan C]` router walk per submit and per
+  pass (measured 1 + poll_calls/op = 2.48 scans at 4k/D1/C1024 — work-ledger
+  W1), at P=0 in every non-cancelling workload. RouterEntry ≈ 24 B; the code
+  inspects ≈ 2.48·C·24 B ≈ 59.5 KiB of router entries per op at C=1024 — a
+  logical traversal range, not an equivalent amount of DRAM traffic.
 - **Counterfactual (COALESCE / derived summary)**: 8-byte
   `pending_control_count_` maintained under `dispatch_mtx_` at the audited
   transition set (set at the SQE-exhausted sticky site; clear at
@@ -22,7 +24,7 @@ C (end-to-end gain) are separated throughout.
   C=1024/D=1, leakage-renormalized) and the paired A/B (0.858 / 0.731 at
   C=1024; Wilcoxon p = 0.0039 both).
 - **B (semantics)**: 9 deterministic uring suites PASS incl. W-03 external
-  loop and the sticky-intant conformance scenario; new parity oracle (4
+  loop and the sticky-intant conformance scenario; new parity oracle (5
   scenarios) PASS; both mutants CAUGHT. Increment-site completeness is the
   residual risk: the audited transition set is closed under
   grep-diffable inspection (all `control_pending` writes live in

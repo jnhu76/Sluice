@@ -1,0 +1,17 @@
+=== tool availability ===
+perf      : perf version 6.18.54.1.g26d1ceb55087
+strace    : strace -- version 6.19
+pidstat   : MISSING
+bpftrace  : bpftrace v0.25.0
+gcc       : gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+clang++   : Ubuntu clang version 21.1.8 (6ubuntu1)
+xmake     : [0m[1mxmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua[0m[0m
+
+perf_event_paranoid: 2
+kptr_restrict: 1
+tracefs: 
+
+=== filesystem ===
+Filesystem     Type   1K-blocks      Used Available Use% Mounted on
+/dev/sdd       ext4  1055762868 175828748 826230648  18% /
+tmpfs          tmpfs    8189792   1189968   6999824  15% /tmp

@@ -17,7 +17,7 @@ Frequencies are per request unless marked /pass.
 | W6 | Scope first-free/resolve scans | `request_scope.cpp:46`, `request_scope.hpp:114` | `[scan S]` | 2-3/op | hot at S=1 trivial; H3 free-list REJECTED (M1) |
 | W7 | ThreadPool owed scans without count | `threadpool_backend.cpp:567-572,599` | `[scan C]` ×2/pass | 2/pass | warm; H2b was uring-only — same candidate class as E1, unmeasured here |
 | W8 | Clock reads in wait path | `async_io_context.cpp:589`, `request_scope.hpp:152`, `progress_source.hpp:112` | O(1) | 2-3/op | vdso 4.2% of user cycles; bounded-wait deadline math even when no park happens |
-| W9 | `delivery_` owed sweep | `uring_backend.cpp:653-676` | `[scan C]` only when K>0 | 0 in data-op workload | eliminated by H2b (merged); zero-op census confirms 0 syscalls |
+| W9 | `delivery_` owed sweep | `uring_backend.cpp:653-676` | `[scan C]` only when K>0 | 0 in data-op workload | eliminated by H2b (merged); 0 syscalls at K>0 is source-derived + owed-suite-covered (no valid zero-op census) |
 | W10 | Settlement/occupancy/poison scans | `async_io_context.cpp:457+`, `uring_transport.cpp:337+` | `[scan N]`, `[scan L×C]` | per-context teardown / failure only | cold — correctly off the per-request path |
 
 ## H-K1 — pending control scan (W1): confirmed
@@ -56,7 +56,8 @@ load-bearing. KEEP.
 ## H-K3 — kernel boundary floor: 1 enter/op is the floor for this shape
 
 Census: exactly 1 `io_uring_enter` per op at every depth; park/poll/read
-eventfd cold; zero-op is 0 syscalls. System CPU (72% of total at 4k/D1/C1024
+eventfd cold; zero-op syscall-freedom is source-derived (no valid zero-op
+census). System CPU (72% of total at 4k/D1/C1024
 on base) = enter + inline tmpfs read + CQE post + eventfd signal + WSL2
 scheduler accounting (~1 involuntary switch/op, WSL2 artifact). No batchable
 SQE backlog exists in the sliding-window steady state, so DEFER/BATCH of
