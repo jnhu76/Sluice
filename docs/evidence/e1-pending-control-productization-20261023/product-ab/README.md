@@ -57,8 +57,17 @@ in 15/15 E1 reps and retained-intent-proven in 15/15 BASE reps.
 
 ## Attribution (headline 4096/C1024/D1)
 
-- `perf stat :u` over 3×20 000 ops: instructions 552 804 305 (base) →
-  410 779 352 (e1), ratio **0.743**; cycles 668 188 248 → 234 099 483.
+- `perf stat :u` over 3×20 000 ops: cycles 668 188 248 (base) →
+  234 099 483 (e1), ratio **0.350**.
+- Correction 2026-10-23 (independent review B, F-1): the previously quoted
+  instruction figures 552 804 305 → 410 779 352 ("ratio 0.743") were a
+  perf-CSV field misread — that field is the time-enabled column (ns),
+  byte-identical on the instructions and cycles lines of each file and
+  equal to the run durations (0.5528 s / 0.4108 s ≈ the 3-phase wall
+  sums). The field-1 instruction counts (1 845 898 997 → 350 946 663)
+  imply an IPC shift (2.76 → 1.50) inconsistent with the cycle and
+  rusage ratios, so this run's instruction counters are not used as
+  attribution. Cycles, rusage and the strace census carry the attribution.
 - Timed-phase rusage: `utime` 4136.6 → 1598.2 ns/op (the user-space scan
   is the removed work); `stime` 4937.9 → 5101.2 ns/op (kernel side
   unchanged within noise).

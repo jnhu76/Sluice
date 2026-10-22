@@ -308,6 +308,10 @@ def run(args: argparse.Namespace) -> int:
         if out_path.resolve() == Path(input_path).resolve():
             print(f"refusing to write verdict over input {input_path}", file=sys.stderr)
             return 1
+    if out_path.exists():
+        print(f"refusing to overwrite existing verdict {out_path}; choose a fresh --out path",
+              file=sys.stderr)
+        return 1
     out_path.write_text(json.dumps(out, indent=2, sort_keys=False) + "\n")
     print(json.dumps({"overall": out["overall"], "issues": verdict.issues}, indent=2))
     return 0 if verdict.ok() else 1

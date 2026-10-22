@@ -10,12 +10,12 @@ router flags remain the semantic authority (BACKEND-04, TERM-01).
 | R0 baseline / scope | Issue #568 body (frozen scope, requirement IDs, gates) |
 | R1 production diff | `e1-production.diff` (5 files: backend header, transport, seams, tests.lua, parity test) |
 | R2 state-transition closure | `transition-closure.md` (write sites, invariants, proofs, oracle map) |
-| R3 deterministic tests + mutation gate | `mutant-receipts.txt` (5 named kills, exit 1, binary hashes), `battery.txt` (release 18/18, debug 11/11, asanubsan 9/9, tsan 5/5, liburing=n build) |
+| R3 deterministic tests + mutation gate | `mutant-receipts.txt` (5 named kills, exit 1, binary hashes), `battery.txt` (release 18/18, debug 11/11, asanubsan 9/9, tsan 5/5, liburing=n build). Reproduction note: switching modes with `xmake config -m <mode>` drops a prior `--liburing=y`, and per-mode binaries land in `build/linux/x86_64/<mode>/` — re-pass `--liburing=y` and run the binary from the mode directory, not `release/` |
 | R4 P>0 reachability + cost | `reachability.md`; `native-p5-probe/` (real-kernel probe, 0 sticky observations); `seam-bound/` (Path B: verdict `P_POSITIVE_SEAM_BOUND = PASS`, medians 0.938–0.961 vs 1.05, P>0 proven 15/15 both arms) |
 | R5 product A/B | `product-ab/` (runner, provenance, raw jsonl, verdict **PASS**; W-02 headline 0.698/0.620, W-03 0.799/0.609/0.920, kernel boundary identical) |
 | R6 acceptance reducer | `e1_product_verdict.py` + `e1_product_verdict_selftest.py` (16/16 counterfactuals incl. the rank-vs-rep pairing discriminator; research-data replay reproduces the frozen research per-rep medians) |
 | R7 ledger | `docs/roadmap/v2-conformance.md`: G6 row + dated section (mechanism justification, authority-contraction audit) |
-| R8 independent reviews | `review-A-concurrency.md`, `review-B-performance.md` |
+| R8 independent reviews | `review-A-concurrency.md` (**APPROVE**, 0 P1/P2), `review-B-performance.md` (**APPROVE_WITH_CONDITIONS**, 1 P2 + 5 P3), `review-disposition.md` (P2 fixed: perf instruction attribution was a CSV field misread, corrected to cycles/utime; P3 dispositions) |
 
 Standing scope limits (never silently closed):
 
