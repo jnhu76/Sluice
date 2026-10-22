@@ -151,7 +151,8 @@ def read_provenance(path: Path) -> dict[str, str]:
 
 
 def reduce_w02(rows: list[dict], verdict: Verdict) -> dict:
-    cells = check_arms_and_cells(rows, verdict, "w02")
+    cells = check_arms_and_cells(rows, verdict, "w02",
+                                 phases=("timed", "oracle", "latency"))
     block: dict[str, dict] = {}
     for cfg in sorted({row["cfg"] for row in rows}):
         if verdict.issues:
@@ -181,7 +182,7 @@ def reduce_w03(rows: list[dict], verify_rows: list[dict], verdict: Verdict) -> d
         if row.get("loop_kind") != "epoll+eventfd":
             verdict.reject(f"w03: row without a real epoll+eventfd loop: loop_kind="
                            f"{row.get('loop_kind')!r}")
-    cells = check_arms_and_cells(rows, verdict, "w03")
+    cells = check_arms_and_cells(rows, verdict, "w03", phases=("timed", "oracle"))
     block: dict[str, dict] = {}
     for cfg in sorted({row["cfg"] for row in rows}):
         if verdict.issues:
