@@ -101,6 +101,16 @@ class UringAsyncBackend : public AsyncBackend {
     std::optional<std::uint64_t>
     live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept;
 
+    struct PendingControlSnapshot {
+        std::size_t derived_count = 0;
+        std::size_t authoritative_pending = 0;
+        std::size_t live_routes = 0;
+        std::size_t prepared_controls = 0;
+        std::size_t submitted_controls = 0;
+    };
+
+    PendingControlSnapshot pending_control_snapshot_for_test() const noexcept;
+
     std::size_t dispatch_size_for_test() const noexcept;
     std::size_t transport_ledger_size_for_test() const noexcept;
     std::size_t sq_ready_for_test() const noexcept;
@@ -292,6 +302,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::vector<PreparedUringOp> prepared_ops_;
     std::vector<DeliveryRecord> delivery_;
     std::size_t owed_count_ = 0;
+    std::size_t pending_control_count_ = 0;
     std::vector<RouterEntry> router_;
     std::vector<detail::SlotIndex> cookie_free_list_;
     std::vector<struct ::statx> statx_buffers_;

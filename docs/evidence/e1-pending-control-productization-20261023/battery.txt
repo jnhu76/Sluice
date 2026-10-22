@@ -1,0 +1,8 @@
+# E1 productization deterministic battery receipts (gate R3)
+recorded_utc=2026-10-22T16:38:49Z
+worktree=f62adb919fd68e3c6c44ff965b398bcaf7f32ed6
+mode=release liburing=y: pass=18 fail=0
+mode=debug liburing=y: pass=11 fail=0
+mode=asanubsan liburing=y: pass=9 fail=0
+mode=tsan liburing=y: pass=5 fail=0
+mode=release liburing=n: build+public_request_test ok

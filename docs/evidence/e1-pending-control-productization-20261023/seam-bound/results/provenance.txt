@@ -1,0 +1,15 @@
+runner=run_e1_seam_ab.sh
+runner_sha256=70cf09b9d4365ff8da487e9ba085459a10d58a612222fd5c55e169753b78e6d4
+harness_sha256=7a36640e028e124586c74f76e5a91026db5d4c7f44d68bda31ef7ff5d8cb7460
+seam_base_sha256=82d7cb350da4c5252678d10ff6c150f707e84bc5701cfa8f4c1f162c330c710c
+seam_e1_sha256=e2910640f5c6ecd6487f25675cb2cad152ac5226b6858dba0fcf6225bb7d4161
+host=E5
+kernel=7.2.9-201.fc44.x86_64
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+pinned_cpu=2
+reps=15 cycles=200 repeats_per_invocation=2
+base_sha=859e4b5603002792d1c4efa116a68f400bc5d297
+e1_sha=d59a266b7ad2bc46056eb870d4614e0434fb362f
+started_utc=2026-10-22T16:52:17Z
+finished_utc=2026-10-22T16:52:19Z
+rows=240

@@ -1,0 +1,8 @@
+probe_sha256=0396749ad6a2606da1342b8ef0b4223461309daba8ca72bea3f6d9327d4be11e
+source_sha256=d7e0c0c377f8f347f7ddb2b7d70b6f381a545331d75e9e9ac2e83f03e0aa99d6
+product_head=d59a266b7ad2bc46056eb870d4614e0434fb362f
+libsluice_core_sha256=489104b5819cdaca251471d5e0b10c20051071bca88dcb7bfc198f1336c99c5a
+kernel=7.2.9-201.fc44.x86_64
+liburing=liburing-2.13-2.fc44.x86_64
+pinned_cpu=2
+recorded_utc=2026-10-22T16:56:04Z

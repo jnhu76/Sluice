@@ -1,0 +1,33 @@
+# E1 productization mutant receipts (gate R3)
+recorded_utc=2026-10-22T16:38:31Z
+worktree=f62adb919fd68e3c6c44ff965b398bcaf7f32ed6
+mode=release liburing=y, xmake uring_progress_target mutation builds
+
+## uring_pending_control_mut_missing_increment (define SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_INCREMENT)
+binary_sha256=7b342f06dbeb83817005f0bd0a8220e21c517ffd0a35e5ad156edad1b59f699e
+exit_code=1
+kill_evidence=FAIL parity oracle at sticky_lifecycle: derived pending_control_count_=0 but authoritative router scan=1
+
+## uring_pending_control_mut_missing_decrement (define SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_DECREMENT)
+binary_sha256=f1082de46075e373f5d20553eba1d68d706150907634b3d9af9507e0842955d9
+exit_code=1
+kill_evidence=FAIL parity oracle at sticky_lifecycle: derived pending_control_count_=1 but authoritative router scan=0
+
+## uring_pending_control_mut_gate_always_skips (define SLUICE_URING_MUTANT_PENDING_CONTROL_GATE_ALWAYS_SKIPS)
+binary_sha256=fcc6d83d99dbb7ffae290cebb861edb0ae4b005dbae8eecdbf0fbd4a599e7098
+exit_code=1
+kill_evidence=FAIL protocol oracle: released pressure did not issue the pending control SQE (lost intent)
+
+## uring_pending_control_mut_double_increment (define SLUICE_URING_MUTANT_PENDING_CONTROL_DOUBLE_INCREMENT)
+binary_sha256=027ad555001cd38db1322fe4a5d11839503a09fc8a2e4552d47d51bc2236a5ca
+exit_code=1
+kill_evidence=FAIL parity oracle at sticky_lifecycle: derived pending_control_count_=2 but authoritative router scan=1
+
+## uring_pending_control_mut_retire_stale_count (define SLUICE_URING_MUTANT_PENDING_CONTROL_RETIRE_STALE_COUNT)
+binary_sha256=1bdde5b75141124452e2c441453c204e425b798f458e908a5196b772a3330fec
+exit_code=1
+kill_evidence=FAIL parity oracle at repeated_cancel: derived pending_control_count_=1 but authoritative router scan=0
+
+## healthy control uring_pending_control_parity_test
+binary_sha256=a1dce96f66009f881edae7ce37550eeb4ca2205286154413f3db85497ba29b36
+exit_code=0
