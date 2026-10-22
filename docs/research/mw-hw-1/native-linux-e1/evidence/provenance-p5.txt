@@ -1,0 +1,14 @@
+runner=run_e1_p5.sh
+runner_sha256=1b3feb59eb6a3ba6889d2fff6a24853ee7650076ef8ad3b45775f9f310c2d7b8
+harness_source_sha256=6ac88585efca50418fc68ab63d4040927e45d265b375148d061c4c28a8e1d8fc
+host=E5
+kernel=7.2.9-201.fc44.x86_64
+pinned_cpu=2
+reps=15
+workload=file-cancel-congestion C32-Q8-W24
+base_sha=381756370980f75e4beaf47310db4b8b9a99053d
+e1_sha=2caead59f9317665510af72968439f1252bc5bb9
+started_utc=2026-10-22T09:26:07Z
+finished_utc=2026-10-22T09:26:09Z
+p5_jsonl_sha256=b63a9dff41c1c5f9bec323f50ed2d9b62055da6d223acf0f8f1cf442a0525c12
+p5_probe_sha256=3b75fc79cb342392d2f871a41e0c03dedab51d3f3e2e6c83ef797444649ab203

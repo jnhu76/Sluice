@@ -1,0 +1,11 @@
+supplement=POST_REVIEW_PROBE (recorded after Review A P2: the formal probe run finished too fast for the monitor thread to accumulate samples)
+recorded_utc=2026-10-22T11:13:19Z
+binary=results-p5/pending_control_pressure_probe (frozen, unchanged since campaign)
+probe_binary_sha256=87c99ff2849d3a2d138eff6bf5c4734de39466a62618543fa412f7a260847437  pending_control_pressure_probe
+host=E5
+kernel=7.2.9-201.fc44.x86_64
+pinned_cpu=2
+requests=runs 1-10 at 20000, runs 11-12 at 1000 (formal-shape replay); window=24 both
+fixture_sha256=1cdf83d6f6d97d740b0f6e0a10077f2ccde01172631885147705335f532744e6  /tmp/sluice-e1-fixture/data.bin
+note=exit code 1 per run is the frozen probe's no-positives convention (rc=0 iff p_positive_samples>0)
+supplement_jsonl_sha256=c1f4685640f476e667b5dcaa7cea07633b245e1ff873d2c933c28deba51f285e  p5-probe-supplement.jsonl

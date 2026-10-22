@@ -1,0 +1,6 @@
+ok zero_pending_steady_state
+ok sqe_pressure_cancel_sets_and_keeps_pending
+ok repeated_cancel_does_not_double_count
+ok pending_control_is_serviced_when_sqe_frees
+ok pending_control_retired_with_route
+all 5 uring pending-control parity tests passed

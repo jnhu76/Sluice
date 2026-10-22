@@ -1,0 +1,18 @@
+runner=run_e1_e5.sh
+runner_sha256=2de6822577f193285f3312ce09f10043968686b37a444c55a16c94dab121176e
+harness_source_sha256=9fb07bc33d0f89e22bad91230621cc7988953d5ec7f3abe55d62b5455b3eae72
+bench_common_sha256=0d3f63a5a56e85cf7a01b4cccf791056f3b0bcdd1fa385450bd5dec6bf0c0e84
+host=E5
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+kernel=7.2.9-201.fc44.x86_64
+pinned_cpu=2
+reps=15
+governor=schedutil
+harness_flags=-std=c++20 -O3 -DNDEBUG
+fixture=/tmp/sluice-e1-fixture/data.bin
+base_sha=381756370980f75e4beaf47310db4b8b9a99053d
+e1_sha=2caead59f9317665510af72968439f1252bc5bb9
+started_utc=2026-10-22T08:55:04Z
+finished_utc=2026-10-22T08:57:38Z
+ab_jsonl_sha256=076dd3019a6d5eecfd4d023f51d84e7177b19cdd736e4f89e3bc2143b9bc6d45
+frequency_sha256=8bf2aae1bd6f53971123d679c6e5c3c910d0928a731e21effa371b5b2cdf8f85

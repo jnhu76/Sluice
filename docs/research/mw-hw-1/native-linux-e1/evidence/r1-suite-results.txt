@@ -1,0 +1,12 @@
+uring_backend_smoke_test rc=0 ms=6
+uring_progress_race_test rc=0 ms=266
+uring_external_loop_test rc=0 ms=781
+uring_registration_lifecycle_test rc=0 ms=7
+uring_owed_residue_test rc=0 ms=6
+uring_owed_counter_parity_test rc=0 ms=8
+uring_pending_control_parity_test rc=0 ms=5
+uring_request_core_integration_test rc=0 ms=8
+uring_submit_boundary_test rc=0 ms=4
+request_core_ownership_uring_test rc=0 ms=6
+progress_source_ownership_uring_test rc=0 ms=5
+backend_contract_conformance_uring_test rc=0 ms=7

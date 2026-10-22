@@ -1,0 +1,15 @@
+runner=run_e1_w03.sh
+runner_sha256=cb8c110641853738c9e9cb787def4b65feac0a679b353f8a510e46cd34271543
+harness_source_sha256=f34d20ad5ca167fab1635e0c56f5c271f599fcae6331702dcef2706b8df31499
+host=E5
+kernel=7.2.9-201.fc44.x86_64
+pinned_cpu=2
+reps=15
+loop_kind=epoll+eventfd
+base_sha=381756370980f75e4beaf47310db4b8b9a99053d
+e1_sha=2caead59f9317665510af72968439f1252bc5bb9
+started_utc=2026-10-22T09:12:44Z
+finished_utc=2026-10-22T09:13:34Z
+w03_jsonl_sha256=3b949905f481dd5342810314ea3a374fb603ab0ce8c394bd2d6c9e4adefaaf93
+w03_verify_sha256=38652227c459f5b88d290efa660675bf36cf85f46d61da27e5607acb05276690
+9ed02432dfe49925a4c41f19ceb6dece7d869b360a5323ed767904ca241c0b67  /home/jnhu/sluice-e1-e5/results-w03/w03-combined.jsonl

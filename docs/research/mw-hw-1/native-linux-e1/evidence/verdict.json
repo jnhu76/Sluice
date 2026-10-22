@@ -1,0 +1,328 @@
+{
+  "exit_rule": "exit 0 iff identity, correctness and W-02 gates pass; W-03/P>0 presence downgrades the overall research verdict to CONDITIONAL, never to a silent NATIVE_GO",
+  "issues": [],
+  "multiple_comparison_note": "each cfg is a separate paired test; headline and non-regression gates are preregistered, but 11 simultaneous comparisons inflate the family-wise error rate and ratios are not independent",
+  "overall": "CONDITIONAL",
+  "p_positive": {
+    "issues": [
+      "p5: no row shows an actual P>0 observation; cost evidence is missing"
+    ],
+    "p_events_total": 0,
+    "p_max": 0,
+    "reason": "P>0 never actually occurred",
+    "status": "NOT_MEASURED"
+  },
+  "schema": "sluice-e1-native-linux-verdict/1",
+  "semantic": {
+    "adversarial_pass": true,
+    "adversarial_scenarios": [
+      "concurrent_cancel_storm (8 latch-gated threads + continuous parity monitor)",
+      "poison_with_pending_intent (real -EINVAL submit-hook poison with sticky intent present)",
+      "shutdown_after_pending_intent_settles (sticky intent issued, settled, then drain)",
+      "slot_reuse_after_retirement (in e1_mutant_oracle_test)",
+      "original_cqe_vs_control_cqe_races (both orderings, in stock parity suite and mutant oracle)",
+      "wedged_transport_shutdown probe (behaviorally identical on BASE and E1: no convergence; pre-existing drain semantics, not an E1 regression)"
+    ],
+    "mutants": [
+      "uring_pending_control_mut_missing_increment (rc=134 stock kill; named parity-oracle kill by e1_mutant_oracle_test)",
+      "uring_pending_control_mut_missing_decrement (named parity-oracle kill by e1_mutant_oracle_test)",
+      "backend_contract_conformance_mut_sticky_intent_dropped (rc=134)",
+      "uring_owed_mut_reclaim_ignoring_control_refs (rc=134)",
+      "uring_core_integration_mut_reclaim_before_control (rc=134)"
+    ],
+    "mutants_all_killed": true,
+    "named_oracle_kills": 2,
+    "suites": [
+      "uring_backend_smoke_test",
+      "uring_progress_race_test",
+      "uring_external_loop_test",
+      "uring_registration_lifecycle_test",
+      "uring_owed_residue_test",
+      "uring_owed_counter_parity_test",
+      "uring_pending_control_parity_test",
+      "uring_request_core_integration_test",
+      "uring_submit_boundary_test",
+      "request_core_ownership_uring_test",
+      "progress_source_ownership_uring_test",
+      "backend_contract_conformance_uring_test"
+    ],
+    "suites_all_pass": true
+  },
+  "w02": {
+    "base_sha": "381756370980f75e4beaf47310db4b8b9a99053d",
+    "e1_sha": "2caead59f9317665510af72968439f1252bc5bb9",
+    "per_cfg": {
+      "1048576-64-8": {
+        "median_ratio": 0.9958394533729563,
+        "pairs_below_1": 10,
+        "ratios": [
+          0.99323,
+          0.986428,
+          1.014929,
+          0.990086,
+          0.980989,
+          0.967848,
+          0.999435,
+          0.995839,
+          0.99742,
+          1.02273,
+          0.995077,
+          1.010977,
+          1.001961,
+          0.986591,
+          1.005106
+        ],
+        "valid_pairs": 15
+      },
+      "4096-1024-1": {
+        "median_ratio": 0.6930303734027846,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.707065,
+          0.710627,
+          0.67522,
+          0.683335,
+          0.705427,
+          0.675814,
+          0.661632,
+          0.71093,
+          0.685811,
+          0.698258,
+          0.700508,
+          0.697978,
+          0.69303,
+          0.681731,
+          0.69183
+        ],
+        "valid_pairs": 15
+      },
+      "4096-1024-64": {
+        "median_ratio": 0.5927696118570707,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.57465,
+          0.601347,
+          0.592759,
+          0.591365,
+          0.603836,
+          0.592296,
+          0.604096,
+          0.59277,
+          0.605892,
+          0.586681,
+          0.589225,
+          0.58614,
+          0.605611,
+          0.594151,
+          0.615687
+        ],
+        "valid_pairs": 15
+      },
+      "4096-1024-8": {
+        "median_ratio": 0.6239300905095122,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.618576,
+          0.657062,
+          0.604746,
+          0.599916,
+          0.647299,
+          0.628406,
+          0.61021,
+          0.645765,
+          0.631295,
+          0.61454,
+          0.612402,
+          0.610218,
+          0.62393,
+          0.62491,
+          0.632443
+        ],
+        "valid_pairs": 15
+      },
+      "4096-16-1": {
+        "median_ratio": 0.9961748148738678,
+        "pairs_below_1": 9,
+        "ratios": [
+          0.980935,
+          0.951016,
+          1.017405,
+          1.017327,
+          1.004863,
+          0.988732,
+          1.017605,
+          0.996175,
+          0.981485,
+          0.988711,
+          0.965677,
+          1.017162,
+          0.997554,
+          0.965306,
+          1.026207
+        ],
+        "valid_pairs": 15
+      },
+      "4096-16-8": {
+        "median_ratio": 0.9723955362944743,
+        "pairs_below_1": 14,
+        "ratios": [
+          0.955085,
+          0.983631,
+          0.979058,
+          0.974742,
+          1.003387,
+          0.961039,
+          0.978218,
+          0.948171,
+          0.967847,
+          0.987619,
+          0.972396,
+          0.934988,
+          0.952863,
+          0.931251,
+          0.979269
+        ],
+        "valid_pairs": 15
+      },
+      "4096-256-1": {
+        "median_ratio": 0.872271926462756,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.880981,
+          0.867203,
+          0.846313,
+          0.890146,
+          0.875779,
+          0.870546,
+          0.896344,
+          0.893269,
+          0.864743,
+          0.884401,
+          0.870009,
+          0.872272,
+          0.871271,
+          0.817246,
+          0.879456
+        ],
+        "valid_pairs": 15
+      },
+      "4096-64-1": {
+        "median_ratio": 0.9533069404222716,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.953705,
+          0.953307,
+          0.939873,
+          0.986763,
+          0.96493,
+          0.972256,
+          0.946078,
+          0.903875,
+          0.952232,
+          0.929368,
+          0.958557,
+          0.931358,
+          0.962288,
+          0.969359,
+          0.930902
+        ],
+        "valid_pairs": 15
+      },
+      "4096-64-64": {
+        "median_ratio": 0.8976540837695874,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.895542,
+          0.895373,
+          0.918931,
+          0.897654,
+          0.866793,
+          0.911896,
+          0.893809,
+          0.902955,
+          0.925472,
+          0.902071,
+          0.868661,
+          0.919951,
+          0.891058,
+          0.910103,
+          0.893877
+        ],
+        "valid_pairs": 15
+      },
+      "65536-1024-1": {
+        "median_ratio": 0.8611502554119687,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.852654,
+          0.854677,
+          0.841376,
+          0.891274,
+          0.907123,
+          0.86115,
+          0.852733,
+          0.841991,
+          0.867438,
+          0.884747,
+          0.817995,
+          0.881453,
+          0.846146,
+          0.864132,
+          0.873836
+        ],
+        "valid_pairs": 15
+      },
+      "65536-1024-8": {
+        "median_ratio": 0.9171357077377617,
+        "pairs_below_1": 15,
+        "ratios": [
+          0.925178,
+          0.93142,
+          0.881397,
+          0.849914,
+          0.917218,
+          0.862447,
+          0.896086,
+          0.956738,
+          0.917136,
+          0.942277,
+          0.884716,
+          0.91141,
+          0.9169,
+          0.937512,
+          0.918602
+        ],
+        "valid_pairs": 15
+      }
+    },
+    "status": "PASS",
+    "thresholds": {
+      "headline_gain_max": 0.95,
+      "headline_pairs_below": 12,
+      "nonreg_max": 1.03
+    },
+    "valid_pairs_required": 15
+  },
+  "w03": {
+    "issues": [],
+    "per_cfg": {
+      "4096-1024-1": {
+        "base_runs": 15,
+        "e1_runs": 15,
+        "median_ratio": 0.8587021865621596
+      },
+      "4096-1024-8": {
+        "base_runs": 15,
+        "e1_runs": 15,
+        "median_ratio": 0.6170695351262713
+      },
+      "65536-1024-8": {
+        "base_runs": 15,
+        "e1_runs": 15,
+        "median_ratio": 0.9205736948352925
+      }
+    },
+    "status": "PASS",
+    "verify_rows": 10
+  }
+}
