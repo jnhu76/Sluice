@@ -86,7 +86,7 @@ validate_w02_row() {
 import json, sys
 row = json.loads(sys.argv[1])
 assert row.get("ok") is True, "row not ok"
-assert row.get("phase") in ("timed", "oracle"), "unknown phase"
+assert row.get("phase") in ("timed", "oracle", "latency"), "unknown phase"
 assert row.get("arm") in ("base", "e1"), "unknown arm"
 assert isinstance(row.get("cpu_ns_per_op"), (int, float)) and row["cpu_ns_per_op"] > 0
 assert row.get("completion_errors", 0) == 0 and row.get("invalid_state_rejections", 0) == 0
