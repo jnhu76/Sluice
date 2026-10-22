@@ -63,10 +63,10 @@ build_arm "$E1_WT" "-DSLUICE_E1_SEAM_ARM" "$RESULTS_DIR/seam_e1"
 
 phase_params() {
     case "$1" in
-        low_p)           echo "pressured=1" ;;
-        high_p)          echo "pressured=8" ;;
-        repeated_cancel) echo "pressured=8 cancels=3" ;;
-        high_rotation)   echo "pressured=8 cycles=400" ;;
+        low_p)           echo "--pressured=1" ;;
+        high_p)          echo "--pressured=8" ;;
+        repeated_cancel) echo "--pressured=8 --cancels=3" ;;
+        high_rotation)   echo "--pressured=8 --cycles=400" ;;
         *) die "unknown phase $1" ;;
     esac
 }
