@@ -160,6 +160,9 @@ syscall per operation plus the caller's buffer.
 `submit_request` with zero_op bypasses `dispatch_after_accept` entirely:
 `publish_zero_op_inline` (acquire_control + begin/complete_publication, core
 ×3, dispatch lock ×1) sets `event_owed` + `owed_count_`, signals. The next
-pass sweeps and delivers. Census at block=0: **0 `io_uring_enter`, 176 total
-syscalls for 200k ops** — a pure userspace pipeline; the eventfd write is
-deduped by `notification_pending_` until a drain runs.
+pass sweeps and delivers. Source-derived: this path never touches ring
+state, so it performs no `io_uring_enter`; the eventfd write is deduped by
+`notification_pending_` until a drain runs. **No syscall census backs this**
+— the shared harness rejects `--block=0`, so the attempted zero-op trace
+captured only process startup (per review B F5); coverage is by the owed
+suites (SMOKE/parity/residue/external-loop), not by a census.

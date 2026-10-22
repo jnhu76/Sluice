@@ -17,15 +17,19 @@ BASE: master `8e2aa5ab94670a318288c77da796825cfa9f3cfe` (post-H2b, PR #565).
    correctness gates, mutants.
 6. `hypotheses.md` — candidate ranking + counterfactuals + NO_CHANGE list.
 7. `decision.md` — verdicts and next gates.
-8. `review-A-concurrency.md`, `review-B-performance.md` — independent
-   reviews.
+8. `review-A-concurrency.md` (verdict ACCEPT), `review-B-performance.md`
+   (verdict SOUND_WITH_REQUALIFICATIONS; every P2 applied in-round) —
+   independent reviews.
 
 ## Headline results
 
 - **E1 (skip empty pending-control sweeps via derived count)**: wall ratio
-  0.851 [0.811,0.940] at 4 KiB/D1/C1024, 0.738 at D8, 0.919 at 64 KiB/D8;
-  ≈1.00 at C=16 and 1 MiB (mechanism signature); user time −61%, system
-  unchanged, syscall census identical. All deterministic suites pass; parity
+  0.858 (9/9 paired reps < 1.0, Wilcoxon p=0.0039, bootstrap 95% CI
+  [0.763,0.910]) at 4 KiB/D1/C1024, 0.731 (9/9) at D8, 0.917 (8/9) at
+  64 KiB/D8; null at C=16 and 1 MiB (mechanism signature); paired user-CPU
+  ratio 0.438 (7/7), system 0.983 (no detectable change); syscall census
+  identical; 55% of user-only cycles attributed to the scan (leakage-
+  renormalized). All deterministic suites pass; parity
   oracle + 2 CAUGHT mutants. **PROPOSE_UPSTREAM** (gates: native-Linux A/B,
   W-03 A/B).
 - **E2/E3 falsifiers**: ≈1.00 — dispatch mediation and publication lock
@@ -54,7 +58,13 @@ xmake build -y uring_pending_control_parity_test uring_pending_control_mut_missi
   uring_pending_control_mut_missing_increment && ...
 ```
 
-## Raw evidence (untracked, outside Git)
+## Reviews A (concurrency) and B (performance/attribution) completed; all P2
+findings fixed in these documents (rep-paired statistics, leakage
+renormalization, paired user/system rerun with receipts, per-config
+scan/op counts, zero-op census retraction, E2/E3 resolution-bounded
+phrasing).
+
+Raw evidence (untracked, outside Git)
 
 Directory: `/tmp/mw-hw-1-out/` (131 MiB; `SHA256SUMS.txt` lists all 32 files,
 including `ab/rows.jsonl` (216 timed rows + oracle/latency),

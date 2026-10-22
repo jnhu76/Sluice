@@ -18,8 +18,9 @@ C (end-to-end gain) are separated throughout.
   re-cancel). Skip the scan at 0. The flags stay authoritative; the count is
   never consulted by settlement/destruction (`internal_work_retired` and the
   destructor keep their own checks). Exactly the H2b pattern (BACKEND-04).
-- **A (removable)**: proven by census + perf (41% of user cycles at
-  C=1024/D=1) and the paired A/B (0.851 / 0.738 at C=1024).
+- **A (removable)**: proven by census + perf (55% of user-only cycles at
+  C=1024/D=1, leakage-renormalized) and the paired A/B (0.858 / 0.731 at
+  C=1024; Wilcoxon p = 0.0039 both).
 - **B (semantics)**: 9 deterministic uring suites PASS incl. W-03 external
   loop and the sticky-intant conformance scenario; new parity oracle (4
   scenarios) PASS; both mutants CAUGHT. Increment-site completeness is the
@@ -29,10 +30,13 @@ C (end-to-end gain) are separated throughout.
   increment mutant pin it. Remaining gate before product: `SEMANTIC_PROOF_
   REQUIRED` items — a reviewer-hardened enumeration of every future
   `control_pending` writer, plus W-03 A/B on native Linux.
-- **C (end-to-end)**: −15% wall at 4k/D1/C1024, −26% at 4k/D8/C1024, −8% at
-  64k/D8/C1024 on WSL2; whole CI below 1.0 at C=1024 configs.
-- **Falsifier**: C=16 (0.984 — no gain where the scan is small) and 1 MiB
-  (0.957, overlapping 1.0 — I/O-dominated). A P>0 burst (SQE pressure +
+- **C (end-to-end)**: −14% wall at 4k/D1/C1024 (9/9 paired reps below 1.0,
+  sign-test p≈0.004; bootstrap 95% CI [0.763, 0.910]), −27% at 4k/D8/C1024
+  (9/9), −8% at 64k/D8/C1024 (8/9; one rep at 1.017 — no whole-interval
+  claim) on WSL2; paired user-CPU ratio 0.438 (7/7), paired system ratio
+  0.983 (no detectable change); syscall census identical.
+- **Falsifier**: C=16 (0.999, 6/9 — no gain where the scan is small) and
+  1 MiB (0.975, 5/9 — I/O-dominated, null). A P>0 burst (SQE pressure +
   cancel storm) pays one extra counter update per transition; the parity
   suite covers the transitions but no P>0 *timing* row exists (workload not
   constructible in this harness).

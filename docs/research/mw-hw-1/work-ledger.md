@@ -9,7 +9,7 @@ Frequencies are per request unless marked /pass.
 
 | # | Work | Where (file:line) | Cardinality | Frequency | Classification |
 |---|---|---|---|---|---|
-| W1 | Full router scan for pending controls | `uring_transport.cpp:666` `service_pending_controls_locked_` | `[scan C]` | **2/op** (submit via `dispatch_after_accept:88`, every pass via `poll:622`) | hot; P=0 in every non-cancelling workload ⇒ pure waste |
+| W1 | Full router scan for pending controls | `uring_transport.cpp:666` `service_pending_controls_locked_` | `[scan C]` | 1/submit + 1/pass = **1 + poll_calls/op**: 2.48 (4k/D1/C1024), 2.64 (4k/D1/C16), 1.31 (4k/D8/C1024), 1.04 (4k/D64/C64), 2.81 (64k/D8/C1024) — from the rows' own `poll_calls` counters | hot; P=0 in every non-cancelling workload ⇒ pure waste |
 | W2 | Dispatch-queue mediation push→immediate drain→remove | `uring_transport.cpp:72,201` | O(1) push + `[scan D+shift]` remove | 1/op each | hot but tiny at low D (~25-35 instr/op) |
 | W3 | Reverse router lookup per CQE | `uring_transport.cpp:551` | `[scan C]` worst | 1/CQE | hot; ~1 probe at D=1 (LIFO reuse clusters live entries at top); grows with D (H1 refuted for product; domain narrowing) |
 | W4 | Publication drain lock pairs | `uring_backend.cpp:630-647` | (pass_bound+1) dispatch-mutex pairs/pass | ~2/op at D=1 | warm; ThreadPool already uses single-lock snapshot shape |
@@ -32,8 +32,10 @@ prepared), 658 (control issued); entries reset in `retire_router_entry_`
 (559) and initialized in `dispatch_one_locked` (191). Sticky semantics are
 retry-based: the scan IS the retry mechanism, so the scan cannot be deleted —
 only skipped at P=0 (exactly the H2b shape, BACKEND-04 derived summary).
-Measured cost at C=1024: 41.4% of user-space cycles (perf attribution),
-1.3–1.8 µs/op.
+Measured cost at C=1024: 55.4% of user-only cycles (perf attribution,
+leakage-renormalized per review B F2), absolute saving 1.4–1.8 µs/op
+(paired A/B); the C-sweep independently brackets it at ~1.35 µs/op (D=1
+only, order-of-magnitude).
 
 ## H-K2 — submission mediation (W2 + submit path): measured negligible
 

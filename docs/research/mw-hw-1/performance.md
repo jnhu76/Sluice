@@ -8,24 +8,33 @@ Raw rows: `ab/rows.jsonl` in the raw output directory (see README).
 
 ## 1. Paired wall/CPU ratios (timed phase, ratio = arm/base per repetition)
 
-| Config (block/D/C) | e1 med [min,max] | e2 med | e3 med | base wall µs/op |
+| Config (block/D/C) | e1 med [min,max] reps<1.0 | e2 med | e3 med | base wall µs/op |
 |---|---|---|---|---:|
-| 4 KiB / 1 / 1024 | **0.851 [0.811, 0.940]** | 0.994 | 0.986 | 11.11 |
-| 4 KiB / 1 / 16 | 0.984 [0.908, 1.046] | 1.007 | 1.001 | 9.01 |
-| 4 KiB / 8 / 1024 | **0.738 [0.713, 0.993]** | 1.043 | 1.010 | 5.03 |
-| 4 KiB / 64 / 64 | 0.955 [0.909, 1.075] | 1.006 | 0.974 | 2.96 |
-| 64 KiB / 8 / 1024 | **0.919 [0.902, 0.928]** | 1.009 | 0.995 | 19.35 |
-| 1 MiB / 8 / 64 | 0.957 [0.918, 1.234] | 1.130 | 0.980 | 196.76 |
+| 4 KiB / 1 / 1024 | **0.858 [0.763, 0.940] 9/9** | 1.005 | 0.992 | 11.11 |
+| 4 KiB / 1 / 16 | 0.999 [0.825, 1.046] 6/9 | 1.007 | 0.995 | 9.01 |
+| 4 KiB / 8 / 1024 | **0.731 [0.708, 0.993] 9/9** | 1.018 | 0.997 | 5.03 |
+| 4 KiB / 64 / 64 | 0.966 [0.785, 1.082] 7/9 | 1.012 | 0.976 | 2.96 |
+| 64 KiB / 8 / 1024 | **0.917 [0.847, 1.017] 8/9** | 1.018 | 0.995 | 19.35 |
+| 1 MiB / 8 / 64 | 0.975 [0.842, 1.286] 5/9 | 0.996 | 1.019 | 196.76 |
 
-CPU-time ratios are within 0.005 of wall ratios in every cell (single-thread
-steady state).
+Ratios are per-repetition pairs (rep-index pairing reconstructed from run
+order; the campaign's arm rotation makes each rep an independent paired
+block — per review B, an earlier rank-paired reduction is retained only as
+a cross-check and agrees on all medians). `reps<1.0` is the sign-test count;
+exact two-sided Wilcoxon on log-ratios gives p = 0.0039 (4k/D1/C1024),
+0.0039 (4k/D8/C1024), 0.0078 (64k/D8/C1024), and p ≥ 0.43 at C=16, C=64
+and 1 MiB (no effect). Bootstrap 95% CI for the decisive 4k/D1/C1024 median:
+[0.763, 0.910]. The 64k/D8 rep range includes one rep above 1.0 (1.017), so
+no "whole-interval-below-1.0" claim is made anywhere. CPU-time ratios track
+wall ratios within 0.007 in every cell (single-thread steady state).
 
 Reading:
 
 - **E1's gain carries the exact C-scaling signature of the router scans**:
-  ≈0 at C=16 (scan of 16 entries), −15% at C=1024/D=1, −26% at C=1024/D=8
-  (fixed scan cost over a smaller kernel-amortized base), −8% at 64 KiB,
-  noise-level at C=64 or 1 MiB (I/O-dominated / small router).
+  null at C=16 (scan of 16 entries), −14% at C=1024/D=1 (9/9), −27% at
+  C=1024/D=8 (9/9; fixed scan cost over a smaller kernel-amortized base),
+  −8% at 64 KiB/D8 (8/9), borderline at C=64 (7/9) and null at 1 MiB (5/9,
+  I/O-dominated).
 - **E2 and E3 are falsifiers**: both sit at 1.00 within noise at 4 KiB —
   confirming the analytical prediction that dispatch mediation and
   publication lock pairs are negligible per-op costs, not hidden hotspots.
@@ -39,15 +48,17 @@ Reading:
 
 ## 2. Capacity sweep isolating the C-dependent component (base arm, D=1, 4 KiB)
 
-| C | wall µs/op (median of 3) |
+| C | wall µs/op (mean of 3; medians 8.365/8.536/8.761/9.593) |
 |---:|---:|
 | 16 | 8.40 |
 | 64 | 8.64 |
 | 256 | 8.76 |
 | 1024 | 9.72 |
 
-Δ(C16→C1024) ≈ +1.3 µs/op ≈ 2·(1024−16)·24 B of router walk — the component
-E1 deletes (measured 1.4–1.8 µs/op including loop/branch overhead).
+Δ(C16→C1024) ≈ +1.3 µs/op (means; medians 1.2) — the C-dependent component
+E1 deletes, ~2·(1024−16)·24 B of router walk at ~0.5 ns/entry-scan. This is
+an independent order-of-magnitude estimate at D=1 only (see §1 for the
+per-config scans/op reconciliation and the D=8 gap).
 
 ## 3. Correctness gates (all arms)
 
@@ -71,13 +82,19 @@ Negative controls (required CAUGHT):
 | Mutant | Killing oracle | Result |
 |---|---|---|
 | `uring_pending_control_mut_missing_decrement` | parity test scenario 2 | CAUGHT (exit 1, `FAIL: sqe_pressure_cancel_sets_and_keeps_pending`) |
-| `uring_pending_control_mut_missing_increment` | parity test scenario 2 | CAUGHT (exit 134; count 0 vs authoritative scan 1, then nonterminal-responsibility fail-fast on early return) |
+| `uring_pending_control_mut_missing_increment` | parity test scenario 2 | CAUGHT (exit 134; the parity mismatch fires first, and the early return's fixture teardown hits the nonterminal-responsibility fail-fast before the FAIL line prints — per review A finding 9, the recorded killer is the fail-fast, with the count-vs-scan divergence as the underlying cause) |
 
 ## 4. Limits
 
 - WSL2 only; absolute µs/op are host-specific; ratios are the claim.
 - The missing-increment mutant's exit is an abort (fail-fast) rather than a
   clean FAIL print — loud, but the receipt records the masking.
+- perf-record profiles are n=1 per arm; the E1 profile is majority
+  kernel-leakage samples (53.5%) under cycles:u on WSL2, so only
+  user-only-renormalized shares and the vanish/no-vanish contrast are used.
+- E2/E3 medians sit at 1.00 within a ≥5–10% per-rep noise floor; a real
+  effect of that size (including E2's 1MiB median 1.16 from 500-op runs)
+  cannot be excluded — the decision is "no detectable win", not "no effect".
 - W-02 only. W-03 external-loop A/B was NOT run (same gap as M2); W-03
   correctness is covered by `uring_external_loop_test` passing on e1.
 - Zero-op (K>0) has no A/B row (harness rejects block=0); E1 does not touch

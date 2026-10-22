@@ -9,14 +9,26 @@ attribution. All runs pinned `taskset -c 2`, 4 phases × N requests each
 
 ## 1. io_uring census (backend=uring, 80,000 timed+warmup+oracle+latency ops)
 
-| Config | io_uring_enter | enter/op | poll(2) | read(eventfd) | futex | total |
+| Config | io_uring_enter | enter/op | poll(2) | read | futex | total |
 |---|---:|---:|---:|---:|---:|---:|
-| 4 KiB, D=1, C=1024 | 80,004 | **1.000** | 0 | 6 | 2 | 80,261 |
-| 4 KiB, D=8, C=1024 | 80,004 | **1.000** | 0 | 6 | 2 | 80,262 |
-| 4 KiB, D=64, C=1024 | 80,004 | **1.000** | 0 | 6 | 2 | 80,258 |
-| 64 KiB, D=8, C=1024 | 8,004 | **1.000** | 0 | 6 | 2 | 8,264 |
-| 0 B (zero-op), D=1 | **0** | **0.000** | 0 | 6 | 2 | 176 |
-| E1 arm, 4 KiB, D=1 | 80,004 | **1.000** | 0 | 6 | 2 | 80,261 |
+| 4 KiB, D=1, C=1024 | 80,004 | **1.00005** | 0 | 6 | 2 | 80,261 |
+| 4 KiB, D=8, C=1024 | 80,004 | **1.00005** | 0 | 6 | 2 | 80,262 |
+| 4 KiB, D=64, C=1024 | 80,004 | **1.00005** | 0 | 6 | 2 | 80,258 |
+| 64 KiB, D=8, C=1024 | 8,004 | **1.0005** | 0 | 6 | 2 | 8,264 |
+| E1 arm, 4 KiB, D=1 | 80,004 | **1.00005** | 0 | 6 | 2 | 80,261 |
+
+enter/op = 80,004 / (4 phases × 20,000 ops) = 1.00005: exactly 1.0 in the
+steady state plus one teardown enter per phase (4 phases; per review B F5).
+The six `read` calls are process-startup artifacts, not eventfd park drains
+— a trace in which the harness rejected its arguments shows the identical
+six — so the park-cold conclusion rests on 0 `poll(2)` and 6 reads ≪ 80,000
+ops, not on the read labels. Sluice's own userspace counters corroborate
+that strace missed nothing: `submit_calls`/ops = 1.0000 and
+`queue_full_retries` = 0 in every timed row. The zero-op (len=0) workload
+has **no census row**: the shared harness rejects `--block=0`
+(`main` argument validation), so an attempted zero-op trace captured only
+process startup. The zero-op statement in path-dag.md §5 is source-derived
+and suite-covered, not census-backed (per review B F5).
 
 Findings:
 
@@ -32,8 +44,10 @@ Findings:
    `system` share below; function-level kernel attribution is unavailable
    (`KERNEL_ATTRIBUTION_UNAVAILABLE`: paranoid=2, kptr_restrict=1, no
    tracepoints).
-3. Zero-op requests never enter the kernel at all: the owed pipeline is pure
-   userspace (H2b's counter made the empty sweep O(1); E1 does not touch it).
+3. Zero-op requests never enter the kernel on the source path
+   (`submit_request` routes len=0 to `publish_zero_op_inline`, which touches
+   no ring state — uring_backend.cpp:520-577); no syscall census backs this
+   because the harness rejects block=0 (see table note).
 
 ## 2. ThreadPool census (contrast, 20,000 ops)
 
@@ -48,41 +62,47 @@ The worker-handoff condvar chain (submit notify → worker wake → completion
 signal) costs ~2.3 futex round trips per operation — the structural reason
 io_uring (1 enter/op) wins on this host, independent of any Sluice-side work.
 
-## 3. CPU split (time -v, 4 KiB, D=1, C=1024, 80k ops)
+## 3. CPU split (paired interleaved time -v, 7 pairs; see performance.md §3)
 
-| Arm | user s | system s | involuntary ctx switches |
-|---|---:|---:|---:|
-| base | 0.22 | 0.57 | 79,958 (~1/op) |
-| e1 | 0.07–0.10 | 0.65–0.66 | ~79,950 (~1/op) |
-
-E1 removes userspace scan work only; system time and the ~1/op involuntary
-switch pattern (WSL2 scheduler behavior on the enter/completion path) are
-unchanged. After E1, userspace is ~12–15% of total CPU at this config; the
+base user 0.170 s / system 0.600 s vs E1 user 0.070 s / system 0.590 s
+medians; paired user ratio 0.438 [0.294,0.471] 7/7, paired system ratio
+0.983 [0.967,1.055] (no detectable change); involuntary ctx switches
+identical (~1/op, WSL2 artifact; voluntary ~1/op too at 80,060 in both
+arms). After E1, userspace is ~11% of total CPU at this config; the
 remaining floor is kernel-side: 1 enter + inline tmpfs read + CQE + eventfd
 signal per op.
 
 `perf stat` user-space counters (base, 3 runs): 3.07–3.08 giga-instructions
-total ⇒ **38.5k user instructions/op**, IPC 3.13–3.18.
+total ⇒ **38.5k user instructions/op**, IPC 3.13–3.18. (The perf-stat raw
+stdout was not retained; the instruction total is reproducible from the
+command in README — flagged per review B F3.)
 
 ## 4. User-space symbol attribution (perf record cycles:u)
 
-Base arm, 4 KiB/D=1/C=1024 (`perf-base-g.data`, ~3k samples):
+Base arm, 4 KiB/D=1/C=1024 (`perf-base-g.data`, 3,892 samples; E1 arm
+3,856). Raw-sample re-parse per review B F2: kernel `[unknown]` leakage
+under cycles:u is 22.9% of base samples and 53.5% of E1 samples (WSL2
+anomaly — the E1 profile is majority leakage because the user-side hotspot
+vanished). Shares below are therefore renormalized to **user-only** cycles:
 
-| Symbol (resolved via nm) | share |
+| Symbol (resolved via nm symbol extents) | share of user-only cycles |
 |---|---:|
-| `service_pending_controls_locked_` (outlined copy, called from `poll()`) | 30.0% |
-| `dispatch_after_accept` +506..+545 (inlined scan/drain region) | 11.4% |
-| `[vdso]` clock_gettime (harness deadline + park math) | 4.2% |
-| `dispatch_one_locked` +197 | 1.8% |
-| `reap_cqes` +63 | 0.5% |
-| kernel `[unknown]` leakage under cycles:u (WSL2 anomaly) | ~5.9% |
+| `service_pending_controls_locked_` (outlined copy, from `poll()`) | 40.2% |
+| `dispatch_after_accept` +506..+545 (inlined scan region) | 15.2% |
+| `[vdso]` clock_gettime (harness deadline + park math) | ~6% |
+| `dispatch_one_locked` +197 | ~2.4% |
+| `reap_cqes` +63 | ~0.7% |
 
-E1 arm (`perf-e1-g.data`): `service_pending_controls_locked_` and the
-`dispatch_after_accept` scan region vanish from the top symbols; the largest
-user symbol becomes `dispatch_one_locked`+197 (2.1%) — SQE preparation, i.e.
-real dispatch work. This matches the C-sweep: user wall/op at C=16 is 8.4 µs
-vs 9.7 µs at C=1024 (Δ ≈ +1.3 µs/op, the C-dependent component E1 deletes;
-paired A/B measured the saving at 1.4–1.8 µs/op).
+The two scan symbols together are **55.4% of user-only cycles** (count basis
+55.2%) — the corrected headline (an earlier draft said 41% of total samples,
+mixing denominators; per review B F2). E1 arm: `service_pending_controls`
+samples go 1203 → 0 and the +506..+545 cluster (454 samples) disappears
+while neighboring non-scan code (e.g. `dispatch_one_locked`+197, 91
+samples) persists — the vanish is PC-specific, excluding code-layout
+confounding; `dispatch_one_locked` becomes the top user symbol (~10.7% of
+E1's user-only cycles). Cross-check at sample-count level: base user samples
+3000 − 1203 (service_pending) = 1797 ≈ 1794 observed in E1 — the vanished
+samples are almost exactly the scan's.
 
 ## 5. Ineffective-interaction verdicts (§5.3 of the charter)
 

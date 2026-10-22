@@ -117,10 +117,10 @@ index efaee658..1e306add 100644
          if (route.in_use && route.control_state == RouterEntry::ControlState::none &&
 diff --git a/tests/uring_pending_control_parity_test.cpp b/tests/uring_pending_control_parity_test.cpp
 new file mode 100644
-index 00000000..ef8d0ed3
+index 00000000..fff4c150
 --- /dev/null
 +++ b/tests/uring_pending_control_parity_test.cpp
-@@ -0,0 +1,259 @@
+@@ -0,0 +1,295 @@
 +#include <sluice/async/async_io_context.hpp>
 +#include <sluice/async/detail/uring_backend.hpp>
 +#include <sluice/async/request.hpp>
@@ -322,6 +322,41 @@ index 00000000..ef8d0ed3
 +           second_seen.result.value() == sizeof(b);
 +}
 +
++// A second public cancel while the intent is already pending is legal
++// (RequestCore reports requested on every call while execution is claimed)
++// and must not double-count: the count stays at one and the intent survives.
++bool repeated_cancel_does_not_double_count() {
++    Fixture made = Fixture::create(4, 1);
++    if (!made.ok())
++        return false;
++    std::byte a[4];
++    auto first = made.ctx->submit_read(made.data_op(a, sizeof(a), 0));
++    if (!first.has_value())
++        return false;
++    for (int attempt = 0; attempt < 3; ++attempt) {
++        if (made.ctx->cancel(first.value().id()).value_or(CancelDisposition::not_found) !=
++            CancelDisposition::requested)
++            return false;
++    }
++    if (made.raw->pending_control_count_for_test() != 1 || !parity(made.raw))
++        return false;
++    (void)made.ctx->poll();
++    if (made.raw->pending_control_count_for_test() != 1 || !parity(made.raw))
++        return false;
++
++    const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!identity.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(*identity, static_cast<int>(sizeof(a)));
++    (void)made.ctx->poll();
++    if (made.raw->pending_control_count_for_test() != 0 || !parity(made.raw))
++        return false;
++    (void)first.value().take_result();
++    made.hold->store(false, std::memory_order_release);
++    (void)made.ctx->poll();
++    return parity(made.raw) && made.raw->internal_work_retired();
++}
++
 +// A pending control whose operation completes first dies with the route: the
 +// retirement decrements the count and the sticky intent is not resurrected.
 +bool pending_control_retired_with_route() {
@@ -364,6 +399,7 @@ index 00000000..ef8d0ed3
 +    const NamedTest tests[] = {
 +        {"zero_pending_steady_state", zero_pending_steady_state},
 +        {"sqe_pressure_cancel_sets_and_keeps_pending", sqe_pressure_cancel_sets_and_keeps_pending},
++        {"repeated_cancel_does_not_double_count", repeated_cancel_does_not_double_count},
 +        {"pending_control_is_serviced_when_sqe_frees", pending_control_is_serviced_when_sqe_frees},
 +        {"pending_control_retired_with_route", pending_control_retired_with_route},
 +    };
