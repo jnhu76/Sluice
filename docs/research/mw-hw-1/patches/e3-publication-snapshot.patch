@@ -1,0 +1,56 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 42d1a652..db76904e 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -309,6 +309,7 @@ class UringAsyncBackend : public AsyncBackend {
+     mutable std::mutex dispatch_mtx_;
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
++    std::vector<detail::RequestReservation> publish_batch_;
+ 
+     std::atomic<std::uint64_t> submit_flushes_{0};
+     std::atomic<std::size_t> live_cookies_{0};
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index ede2b034..e4ce7c78 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -168,6 +168,7 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     }
+     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
++    publish_batch_.resize(config.request_capacity);
+     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) != 0) {
+         throw std::runtime_error(
+             "sluice::async::UringAsyncBackend: io_uring ring construction failed "
+@@ -629,20 +630,19 @@ std::size_t UringAsyncBackend::poll() {
+     std::size_t pass_bound = 0;
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-        pass_bound = publication_pending_->size();
++        // Same pass boundary as the reap: entries pushed during this pass are
++        // the next pass's immediate work.
++        const std::size_t queued = publication_pending_->size();
++        pass_bound = 0;
++        for (std::size_t n = 0; n < queued; ++n) {
++            detail::RequestReservation h{};
++            if (!publication_pending_->pop_front(h))
++                break;
++            publish_batch_[pass_bound++] = h;
++        }
+     }
+-    // Same pass boundary as the reap: entries pushed during this pass are the
+-    // next pass's immediate work.
+     for (std::size_t n = 0; n < pass_bound; ++n) {
+-        detail::RequestReservation h{};
+-        bool have = false;
+-        {
+-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-            have = publication_pending_->pop_front(h);
+-        }
+-        if (!have)
+-            break;
+-        publish_one(h);
++        publish_one(publish_batch_[n]);
+         ++published;
+     }
+     bool owed_present = false;

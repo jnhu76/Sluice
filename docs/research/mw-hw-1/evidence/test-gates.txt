@@ -1,0 +1,33 @@
+########## e1 ##########
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 17.098s[0m
+PASS uring_backend_smoke_test
+PASS uring_progress_race_test
+PASS uring_external_loop_test
+PASS uring_owed_residue_test
+PASS uring_owed_counter_parity_test
+PASS uring_registration_lifecycle_test
+PASS uring_request_core_integration_test
+PASS backend_contract_conformance_uring_test
+PASS request_core_ownership_uring_test
+########## e2 ##########
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 17.895s[0m
+PASS uring_backend_smoke_test
+PASS uring_progress_race_test
+PASS uring_external_loop_test
+PASS uring_owed_residue_test
+PASS uring_owed_counter_parity_test
+PASS uring_registration_lifecycle_test
+PASS uring_request_core_integration_test
+PASS backend_contract_conformance_uring_test
+PASS request_core_ownership_uring_test
+########## e3 ##########
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 19.41s[0m
+PASS uring_backend_smoke_test
+PASS uring_progress_race_test
+PASS uring_external_loop_test
+PASS uring_owed_residue_test
+PASS uring_owed_counter_parity_test
+PASS uring_registration_lifecycle_test
+PASS uring_request_core_integration_test
+PASS backend_contract_conformance_uring_test
+PASS request_core_ownership_uring_test

@@ -1,0 +1,444 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 42d1a652..a5a54dfa 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -98,6 +98,8 @@ class UringAsyncBackend : public AsyncBackend {
+     std::uint64_t peek_next_cookie_for_test() const noexcept;
+     std::size_t owed_count_for_test() const noexcept;
+     bool owed_scan_for_test() const noexcept;
++    std::size_t pending_control_count_for_test() const noexcept;
++    std::size_t pending_control_scan_for_test() const noexcept;
+     std::optional<std::uint64_t>
+     live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept;
+ 
+@@ -292,6 +294,7 @@ class UringAsyncBackend : public AsyncBackend {
+     std::vector<PreparedUringOp> prepared_ops_;
+     std::vector<DeliveryRecord> delivery_;
+     std::size_t owed_count_ = 0;
++    std::size_t pending_control_count_ = 0;
+     std::vector<RouterEntry> router_;
+     std::vector<detail::SlotIndex> cookie_free_list_;
+     std::vector<struct ::statx> statx_buffers_;
+diff --git a/src/async/uring_test_seams.hpp b/src/async/uring_test_seams.hpp
+index e21b3a93..b6d75949 100644
+--- a/src/async/uring_test_seams.hpp
++++ b/src/async/uring_test_seams.hpp
+@@ -98,6 +98,22 @@ inline bool UringAsyncBackend::owed_scan_for_test() const noexcept {
+     return any_event_owed_locked_();
+ }
+ 
++inline std::size_t UringAsyncBackend::pending_control_count_for_test() const noexcept {
++    std::lock_guard<std::mutex> lk(dispatch_mtx_);
++    return pending_control_count_;
++}
++
++inline std::size_t UringAsyncBackend::pending_control_scan_for_test() const noexcept {
++    std::lock_guard<std::mutex> lk(dispatch_mtx_);
++    std::size_t pending = 0;
++    for (const RouterEntry& route : router_) {
++        if (route.in_use && route.control_pending) {
++            ++pending;
++        }
++    }
++    return pending;
++}
++
+ inline std::optional<std::uint64_t>
+ UringAsyncBackend::live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
+     for (const auto& entry : router_) {
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index efaee658..1e306add 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -570,6 +570,10 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept
+         std::fflush(stderr);
+         std::terminate();
+     }
++    if (entry.control_pending) {
++        entry.control_pending = false;
++        --pending_control_count_;
++    }
+     entry = RouterEntry{};
+     cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
+     live_cookies_.fetch_sub(1, std::memory_order_relaxed);
+@@ -620,7 +624,10 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+         return;
+     RouterEntry& route = router_[idx];
+     if (route.control_state != RouterEntry::ControlState::none) {
+-        route.control_pending = false;
++        if (route.control_pending) {
++            route.control_pending = false;
++            --pending_control_count_;
++        }
+         return;
+     }
+ 
+@@ -642,7 +649,17 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+         sqe = ::io_uring_get_sqe(&ring_state_->ring);
+     }
+     if (sqe == nullptr) {
+-        route.control_pending = sticky_intent_retained();
++        if (sticky_intent_retained()) {
++            if (!route.control_pending) {
++                route.control_pending = true;
++#if !defined(SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_INCREMENT)
++                ++pending_control_count_;
++#endif
++            }
++        } else if (route.control_pending) {
++            route.control_pending = false;
++            --pending_control_count_;
++        }
+         return;
+     }
+ 
+@@ -655,7 +672,12 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+     ::io_uring_prep_cancel64(sqe, target_cookie, 0);
+     ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
+     route.control_state = RouterEntry::ControlState::prepared;
+-    route.control_pending = false;
++    if (route.control_pending) {
++        route.control_pending = false;
++#if !defined(SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_DECREMENT)
++        --pending_control_count_;
++#endif
++    }
+     const auto& sq = ring_state_->ring.sq;
+     const std::uint32_t physical_position =
+         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+@@ -666,6 +688,8 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+ void UringAsyncBackend::service_pending_controls_locked_() noexcept {
+     if (fatal_error_.has_value())
+         return;
++    if (pending_control_count_ == 0)
++        return;
+     for (std::size_t i = 0; i < router_.size(); ++i) {
+         const RouterEntry& route = router_[i];
+         if (route.in_use && route.control_state == RouterEntry::ControlState::none &&
+diff --git a/tests/uring_pending_control_parity_test.cpp b/tests/uring_pending_control_parity_test.cpp
+new file mode 100644
+index 00000000..fff4c150
+--- /dev/null
++++ b/tests/uring_pending_control_parity_test.cpp
+@@ -0,0 +1,295 @@
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/file_resource.hpp>
++#include <sluice/result.hpp>
++
++#include <liburing.h>
++
++#include <atomic>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <memory>
++#include <optional>
++#include <vector>
++
++namespace {
++
++using namespace sluice::async;
++
++constexpr std::uint64_t kControlTag = std::uint64_t{1} << 63u;
++
++// Hold mode consumes nothing: SQEs prepared by the backend stay unconsumed so
++// io_uring_get_sqe keeps failing once the ring is full. Release mode mimics a
++// kernel submit that consumed every pending SQE.
++int switchable_submit(void* context, ::io_uring* ring) noexcept {
++    auto* hold = static_cast<std::atomic<bool>*>(context);
++    if (hold->load(std::memory_order_acquire)) {
++        return 0;
++    }
++    const unsigned ready = ::io_uring_sq_ready(ring);
++    *ring->sq.ktail = ring->sq.sqe_tail;
++    *ring->sq.khead = ring->sq.sqe_tail;
++    return static_cast<int>(ready);
++}
++
++struct Fixture {
++    std::unique_ptr<AsyncIoContext> ctx;
++    UringAsyncBackend* raw = nullptr;
++    FILE* backing = nullptr;
++    std::unique_ptr<std::atomic<bool>> hold{std::make_unique<std::atomic<bool>>(true)};
++
++    static Fixture create(std::size_t capacity, unsigned queue_depth) {
++        Fixture made;
++        made.backing = ::tmpfile();
++        if (made.backing == nullptr)
++            return made;
++        std::byte content[4096];
++        std::memset(content, 0x33, sizeof(content));
++        if (::fwrite(content, 1, sizeof(content), made.backing) != sizeof(content))
++            return Fixture{};
++        ::rewind(made.backing);
++        UringBackendSubmitTestHooks hooks;
++        hooks.submit = switchable_submit;
++        hooks.context = made.hold.get();
++        auto owned = std::make_unique<UringAsyncBackend>(UringConfig{capacity, queue_depth}, hooks);
++        made.raw = owned.get();
++        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(owned)));
++        return made;
++    }
++
++    bool ok() const { return ctx != nullptr && raw != nullptr && backing != nullptr; }
++
++    ReadOp data_op(std::byte* buffer, std::size_t len, std::uint64_t offset) {
++        return ReadOp{NativeFileRef(::fileno(backing), sluice::FileAccess::read_only), buffer, len,
++                      offset};
++    }
++};
++
++// pending_control_count_ is a derived summary; the authoritative router scan
++// must agree with it at every checkpoint this test observes.
++bool parity(UringAsyncBackend* raw) {
++    return raw->pending_control_count_for_test() == raw->pending_control_scan_for_test();
++}
++
++// Steady state without cancellations: the count stays zero across
++// submit/dispatch/complete/publish cycles and repeated passes.
++bool zero_pending_steady_state() {
++    Fixture made = Fixture::create(4, 8);
++    if (!made.ok())
++        return false;
++    made.hold->store(false, std::memory_order_release);
++    std::byte buffer[4];
++    for (int cycle = 0; cycle < 5; ++cycle) {
++        auto submitted = made.ctx->submit_read(made.data_op(buffer, sizeof(buffer), 0));
++        if (!submitted.has_value() || !parity(made.raw))
++            return false;
++        const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++        if (!identity.has_value())
++            return false;
++        made.raw->inject_cqe_for_test(*identity, static_cast<int>(sizeof(buffer)));
++        (void)made.ctx->poll();
++        if (!submitted.value().ready() || !parity(made.raw))
++            return false;
++        if (made.raw->pending_control_count_for_test() != 0)
++            return false;
++        (void)submitted.value().take_result();
++    }
++    return parity(made.raw) && made.raw->internal_work_retired();
++}
++
++// SQE pressure plus a running cancel creates exactly the sticky pending
++// control the derived count must track; repeated passes under continued
++// pressure keep it pending without dropping or double counting.
++bool sqe_pressure_cancel_sets_and_keeps_pending() {
++    Fixture made = Fixture::create(4, 1);
++    if (!made.ok())
++        return false;
++    std::byte a[4];
++    std::byte b[4];
++    auto first = made.ctx->submit_read(made.data_op(a, sizeof(a), 0));
++    if (!first.has_value() || !parity(made.raw))
++        return false;
++    auto second = made.ctx->submit_read(made.data_op(b, sizeof(b), 8));
++    if (!second.has_value() || !parity(made.raw))
++        return false;
++    if (made.raw->dispatch_size_for_test() != 1)
++        return false;
++
++    const auto disposition = made.ctx->cancel(first.value().id());
++    if (!disposition.has_value() || disposition.value() != CancelDisposition::requested)
++        return false;
++    if (made.raw->pending_control_count_for_test() != 1 || !parity(made.raw))
++        return false;
++
++    for (int pass = 0; pass < 3; ++pass) {
++        (void)made.ctx->poll();
++        if (made.raw->pending_control_count_for_test() != 1 || !parity(made.raw))
++            return false;
++    }
++
++    made.hold->store(false, std::memory_order_release);
++    (void)made.ctx->poll();
++    (void)made.ctx->poll();
++    const auto first_cookie = made.raw->live_cookie_for_offset_for_test(0);
++    const auto second_cookie = made.raw->live_cookie_for_offset_for_test(8);
++    if (!first_cookie.has_value() || !second_cookie.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(kControlTag | *first_cookie, 0);
++    made.raw->inject_cqe_for_test(*first_cookie, -ECANCELED);
++    made.raw->inject_cqe_for_test(*second_cookie, static_cast<int>(sizeof(b)));
++    (void)made.ctx->poll();
++    if (!parity(made.raw) || !made.raw->internal_work_retired())
++        return false;
++    const auto first_seen = first.value().take_result();
++    const auto second_seen = second.value().take_result();
++    return first_seen.readiness == RequestReadiness::ready &&
++           second_seen.readiness == RequestReadiness::ready;
++}
++
++// Releasing the SQE pressure lets a later pass service the pending control:
++// the intent is issued (not dropped), the count returns to zero, and the
++// request settles through the real control + original CQE paths.
++bool pending_control_is_serviced_when_sqe_frees() {
++    Fixture made = Fixture::create(4, 1);
++    if (!made.ok())
++        return false;
++    std::byte a[4];
++    std::byte b[4];
++    auto first = made.ctx->submit_read(made.data_op(a, sizeof(a), 0));
++    auto second = made.ctx->submit_read(made.data_op(b, sizeof(b), 8));
++    if (!first.has_value() || !second.has_value())
++        return false;
++    if (made.ctx->cancel(first.value().id()).value_or(CancelDisposition::not_found) !=
++        CancelDisposition::requested)
++        return false;
++    if (made.raw->pending_control_count_for_test() != 1)
++        return false;
++
++    made.hold->store(false, std::memory_order_release);
++    (void)made.ctx->poll();
++    // The queued dispatch drained and the pending cancel was issued as a
++    // prepared control SQE; the count retired with the intent.
++    if (made.raw->dispatch_size_for_test() != 0)
++        return false;
++    if (made.raw->pending_control_count_for_test() != 0 || !parity(made.raw))
++        return false;
++
++    // Submitting the control SQE to the (fake) kernel flips prepared to
++    // submitted; then both CQEs arrive and settle both requests.
++    (void)made.ctx->poll();
++    if (made.raw->live_control_sqes_for_test() != 1)
++        return false;
++    const auto first_cookie = made.raw->live_cookie_for_offset_for_test(0);
++    const auto second_cookie = made.raw->live_cookie_for_offset_for_test(8);
++    if (!first_cookie.has_value() || !second_cookie.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(kControlTag | *first_cookie, 0);
++    made.raw->inject_cqe_for_test(*first_cookie, -ECANCELED);
++    made.raw->inject_cqe_for_test(*second_cookie, static_cast<int>(sizeof(b)));
++    (void)made.ctx->poll();
++    if (!parity(made.raw) || !made.raw->internal_work_retired())
++        return false;
++    const auto first_seen = first.value().take_result();
++    const auto second_seen = second.value().take_result();
++    return first_seen.readiness == RequestReadiness::ready &&
++           second_seen.readiness == RequestReadiness::ready &&
++           second_seen.result.has_value() &&
++           second_seen.result.value() == sizeof(b);
++}
++
++// A second public cancel while the intent is already pending is legal
++// (RequestCore reports requested on every call while execution is claimed)
++// and must not double-count: the count stays at one and the intent survives.
++bool repeated_cancel_does_not_double_count() {
++    Fixture made = Fixture::create(4, 1);
++    if (!made.ok())
++        return false;
++    std::byte a[4];
++    auto first = made.ctx->submit_read(made.data_op(a, sizeof(a), 0));
++    if (!first.has_value())
++        return false;
++    for (int attempt = 0; attempt < 3; ++attempt) {
++        if (made.ctx->cancel(first.value().id()).value_or(CancelDisposition::not_found) !=
++            CancelDisposition::requested)
++            return false;
++    }
++    if (made.raw->pending_control_count_for_test() != 1 || !parity(made.raw))
++        return false;
++    (void)made.ctx->poll();
++    if (made.raw->pending_control_count_for_test() != 1 || !parity(made.raw))
++        return false;
++
++    const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!identity.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(*identity, static_cast<int>(sizeof(a)));
++    (void)made.ctx->poll();
++    if (made.raw->pending_control_count_for_test() != 0 || !parity(made.raw))
++        return false;
++    (void)first.value().take_result();
++    made.hold->store(false, std::memory_order_release);
++    (void)made.ctx->poll();
++    return parity(made.raw) && made.raw->internal_work_retired();
++}
++
++// A pending control whose operation completes first dies with the route: the
++// retirement decrements the count and the sticky intent is not resurrected.
++bool pending_control_retired_with_route() {
++    Fixture made = Fixture::create(4, 1);
++    if (!made.ok())
++        return false;
++    std::byte a[4];
++    auto first = made.ctx->submit_read(made.data_op(a, sizeof(a), 0));
++    if (!first.has_value())
++        return false;
++    if (made.ctx->cancel(first.value().id()).value_or(CancelDisposition::not_found) !=
++        CancelDisposition::requested)
++        return false;
++    if (made.raw->pending_control_count_for_test() != 1)
++        return false;
++
++    const auto identity = made.raw->live_cookie_for_offset_for_test(0);
++    if (!identity.has_value())
++        return false;
++    made.raw->inject_cqe_for_test(*identity, static_cast<int>(sizeof(a)));
++    (void)made.ctx->poll();
++    if (made.raw->pending_control_count_for_test() != 0 || !parity(made.raw))
++        return false;
++    if (!first.value().ready())
++        return false;
++    (void)first.value().take_result();
++    made.hold->store(false, std::memory_order_release);
++    (void)made.ctx->poll();
++    return parity(made.raw) && made.raw->internal_work_retired();
++}
++
++} // namespace
++
++int main() {
++    ::alarm(120);
++    struct NamedTest {
++        const char* name;
++        bool (*fn)();
++    };
++    const NamedTest tests[] = {
++        {"zero_pending_steady_state", zero_pending_steady_state},
++        {"sqe_pressure_cancel_sets_and_keeps_pending", sqe_pressure_cancel_sets_and_keeps_pending},
++        {"repeated_cancel_does_not_double_count", repeated_cancel_does_not_double_count},
++        {"pending_control_is_serviced_when_sqe_frees", pending_control_is_serviced_when_sqe_frees},
++        {"pending_control_retired_with_route", pending_control_retired_with_route},
++    };
++    std::size_t passed = 0;
++    for (const NamedTest& t : tests) {
++        if (!t.fn()) {
++            std::fprintf(stderr, "FAIL: %s\n", t.name);
++            return 1;
++        }
++        ++passed;
++        std::printf("ok %s\n", t.name);
++        std::fflush(stdout);
++    }
++    std::printf("all %zu uring pending-control parity tests passed\n", passed);
++    return 0;
++}
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index e4ed402b..4226800e 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -480,6 +480,8 @@ if has_config("liburing") then
+                               R .. "tests/uring_owed_residue_test.cpp")
+     uring_progress_target("uring_owed_counter_parity_test",
+                               R .. "tests/uring_owed_counter_parity_test.cpp")
++    uring_progress_target("uring_pending_control_parity_test",
++                              R .. "tests/uring_pending_control_parity_test.cpp")
+ 
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of
+@@ -511,6 +513,12 @@ if has_config("liburing") then
+     -- suite owns the post-pass report verdict, the external-loop suite owns
+     -- the notification wake, and the control-ref reclaim mutant turns the
+     -- submit-reset invariant violation into a loud failure.
++    uring_progress_target("uring_pending_control_mut_missing_decrement",
++                              R .. "tests/uring_pending_control_parity_test.cpp",
++                              "SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_DECREMENT")
++    uring_progress_target("uring_pending_control_mut_missing_increment",
++                              R .. "tests/uring_pending_control_parity_test.cpp",
++                              "SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_INCREMENT")
+     uring_progress_target("uring_owed_mut_missing_increment",
+                               R .. "tests/uring_owed_counter_parity_test.cpp",
+                               "SLUICE_URING_MUTANT_OWED_COUNT_MISSING_INCREMENT")

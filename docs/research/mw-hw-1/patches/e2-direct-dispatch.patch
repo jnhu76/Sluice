@@ -1,0 +1,113 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 42d1a652..dd65d3d2 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -225,7 +225,7 @@ class UringAsyncBackend : public AsyncBackend {
+     void deliver_event(detail::RequestKey key, detail::OperationKind kind);
+     detail::PublicCancel cancel_key(detail::RequestKey key) noexcept;
+ 
+-    bool dispatch_one_locked(detail::RequestReservation h) noexcept;
++    bool dispatch_one_locked(detail::RequestReservation h, bool via_queue) noexcept;
+ 
+     // Reservations pushed after poison never took an SQE (dispatch refuses
+     // under fatal_error_ before any ring access), so they are provably
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index ede2b034..4e040bba 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -612,7 +612,7 @@ std::size_t UringAsyncBackend::poll() {
+         if (!fatal_error_.has_value()) {
+             while (!dispatch_->empty()) {
+                 detail::RequestReservation h = dispatch_->front();
+-                if (!dispatch_one_locked(h))
++                if (!dispatch_one_locked(h, true))
+                     break;
+             }
+         }
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index efaee658..a3347ae0 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -69,26 +69,35 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+         } else
+ #endif
+         {
+-            dispatch_->push_back(h);
+-
+             const bool poisoned_before = fatal_error_.has_value();
+-            if (poisoned_before) {
+-                retire_undispatched_after_poison_locked_();
+-                post_poison_push_retired = true;
+-            } else {
+-                for (;;) {
+-                    if (dispatch_->empty())
+-                        break;
+-                    const detail::RequestReservation front = dispatch_->front();
+-                    if (!dispatch_one_locked(front))
+-                        break;
+-                }
+-                if (!fatal_error_.has_value()) {
+-                    (void)submit_transport_locked();
+-                    service_pending_controls_locked_();
++            bool dispatched_directly = false;
++            if (!poisoned_before && dispatch_->empty() &&
++                ::io_uring_get_sqe(&ring_state_->ring) != nullptr) {
++                // Release the SQE reservation: the direct attempt below
++                // re-acquires the same slot inside the same critical section.
++                --ring_state_->ring.sq.sqe_tail;
++                dispatched_directly = dispatch_one_locked(h, false);
++            }
++            if (!dispatched_directly) {
++                dispatch_->push_back(h);
++                if (poisoned_before) {
++                    retire_undispatched_after_poison_locked_();
++                    post_poison_push_retired = true;
++                } else {
++                    for (;;) {
++                        if (dispatch_->empty())
++                            break;
++                        const detail::RequestReservation front = dispatch_->front();
++                        if (!dispatch_one_locked(front, true))
++                            break;
++                    }
+                 }
+-                newly_poisoned = !poisoned_before && fatal_error_.has_value();
+             }
++            if (!fatal_error_.has_value()) {
++                (void)submit_transport_locked();
++                service_pending_controls_locked_();
++            }
++            newly_poisoned = !poisoned_before && fatal_error_.has_value();
+         }
+ #if !defined(SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
+         unsubmitted_after_dispatch =
+@@ -127,7 +136,8 @@ void UringAsyncBackend::retire_undispatched_after_poison_locked_() noexcept {
+     }
+ }
+ 
+-bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexcept {
++bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h,
++                                            bool via_queue) noexcept {
+     if (fatal_error_.has_value())
+         return false;
+ 
+@@ -154,7 +164,9 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+         // submission occurred, so returning it to the userspace tail keeps
+         // the ring accounting exact.
+         --ring_state_->ring.sq.sqe_tail;
+-        (void)dispatch_->remove_exact(h);
++        if (via_queue) {
++            (void)dispatch_->remove_exact(h);
++        }
+         return true;
+     }
+ 
+@@ -198,7 +210,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
+ 
+-    if (!dispatch_->remove_exact(h)) {
++    if (via_queue && !dispatch_->remove_exact(h)) {
+         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
+                              "remove_exact miss after claim (invariant violation)\n");
+         std::fflush(stderr);

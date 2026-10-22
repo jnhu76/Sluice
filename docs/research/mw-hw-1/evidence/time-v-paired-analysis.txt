@@ -1,0 +1,6 @@
+parsed: 7 base, 7 e1
+user   e1/base ratio: med=0.438 range=[0.294,0.471] reps<1: 7/7
+system e1/base ratio: med=0.983 range=[0.967,1.055] reps<1: 4/7
+base user med=0.170s system med=0.600s
+e1   user med=0.070s system med=0.590s
+invol med: base=79950 e1=79952
