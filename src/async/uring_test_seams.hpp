@@ -98,6 +98,25 @@ inline bool UringAsyncBackend::owed_scan_for_test() const noexcept {
     return any_event_owed_locked_();
 }
 
+inline UringAsyncBackend::PendingControlSnapshot
+UringAsyncBackend::pending_control_snapshot_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    PendingControlSnapshot snap;
+    snap.derived_count = pending_control_count_;
+    for (const RouterEntry& route : router_) {
+        if (!route.in_use)
+            continue;
+        ++snap.live_routes;
+        if (route.control_state == RouterEntry::ControlState::prepared)
+            ++snap.prepared_controls;
+        else if (route.control_state == RouterEntry::ControlState::submitted)
+            ++snap.submitted_controls;
+        if (route.control_pending)
+            ++snap.authoritative_pending;
+    }
+    return snap;
+}
+
 inline std::optional<std::uint64_t>
 UringAsyncBackend::live_cookie_for_offset_for_test(std::uint64_t offset) const noexcept {
     for (const auto& entry : router_) {

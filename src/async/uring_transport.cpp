@@ -570,6 +570,12 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept 
         std::fflush(stderr);
         std::terminate();
     }
+    if (entry.control_pending) {
+        entry.control_pending = false;
+#if !defined(SLUICE_URING_MUTANT_PENDING_CONTROL_RETIRE_STALE_COUNT)
+        --pending_control_count_;
+#endif
+    }
     entry = RouterEntry{};
     cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
     live_cookies_.fetch_sub(1, std::memory_order_relaxed);
@@ -620,7 +626,10 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation 
         return;
     RouterEntry& route = router_[idx];
     if (route.control_state != RouterEntry::ControlState::none) {
-        route.control_pending = false;
+        if (route.control_pending) {
+            route.control_pending = false;
+            --pending_control_count_;
+        }
         return;
     }
 
@@ -642,7 +651,22 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation 
         sqe = ::io_uring_get_sqe(&ring_state_->ring);
     }
     if (sqe == nullptr) {
-        route.control_pending = sticky_intent_retained();
+        if (sticky_intent_retained()) {
+#if defined(SLUICE_URING_MUTANT_PENDING_CONTROL_DOUBLE_INCREMENT)
+            ++pending_control_count_;
+            route.control_pending = true;
+#else
+            if (!route.control_pending) {
+                route.control_pending = true;
+#if !defined(SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_INCREMENT)
+                ++pending_control_count_;
+#endif
+            }
+#endif
+        } else if (route.control_pending) {
+            route.control_pending = false;
+            --pending_control_count_;
+        }
         return;
     }
 
@@ -655,7 +679,12 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation 
     ::io_uring_prep_cancel64(sqe, target_cookie, 0);
     ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
     route.control_state = RouterEntry::ControlState::prepared;
-    route.control_pending = false;
+    if (route.control_pending) {
+        route.control_pending = false;
+#if !defined(SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_DECREMENT)
+        --pending_control_count_;
+#endif
+    }
     const auto& sq = ring_state_->ring.sq;
     const std::uint32_t physical_position =
         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
@@ -666,6 +695,12 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation 
 void UringAsyncBackend::service_pending_controls_locked_() noexcept {
     if (fatal_error_.has_value())
         return;
+#if defined(SLUICE_URING_MUTANT_PENDING_CONTROL_GATE_ALWAYS_SKIPS)
+    return;
+#else
+    if (pending_control_count_ == 0)
+        return;
+#endif
     for (std::size_t i = 0; i < router_.size(); ++i) {
         const RouterEntry& route = router_[i];
         if (route.in_use && route.control_state == RouterEntry::ControlState::none &&

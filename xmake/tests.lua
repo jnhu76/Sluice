@@ -480,6 +480,8 @@ if has_config("liburing") then
                               R .. "tests/uring_owed_residue_test.cpp")
     uring_progress_target("uring_owed_counter_parity_test",
                               R .. "tests/uring_owed_counter_parity_test.cpp")
+    uring_progress_target("uring_pending_control_parity_test",
+                              R .. "tests/uring_pending_control_parity_test.cpp")
 
     -- Corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of
@@ -526,6 +528,27 @@ if has_config("liburing") then
     uring_progress_target("uring_owed_mut_zero_op_wake_dropped",
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_URING_MUTANT_ZERO_OP_PUBLICATION_DROPS_WAKE")
+
+    -- Pending-control mutation builds. Each breaks one edge of the derived
+    -- pending_control_count_ summary or its zero-count scan gate and must be
+    -- killed by the named parity/protocol oracle of the pending-control
+    -- parity suite; they are executed and recorded manually, never run as
+    -- regular tests.
+    uring_progress_target("uring_pending_control_mut_missing_increment",
+                              R .. "tests/uring_pending_control_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_INCREMENT")
+    uring_progress_target("uring_pending_control_mut_missing_decrement",
+                              R .. "tests/uring_pending_control_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_DECREMENT")
+    uring_progress_target("uring_pending_control_mut_gate_always_skips",
+                              R .. "tests/uring_pending_control_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_PENDING_CONTROL_GATE_ALWAYS_SKIPS")
+    uring_progress_target("uring_pending_control_mut_double_increment",
+                              R .. "tests/uring_pending_control_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_PENDING_CONTROL_DOUBLE_INCREMENT")
+    uring_progress_target("uring_pending_control_mut_retire_stale_count",
+                              R .. "tests/uring_pending_control_parity_test.cpp",
+                              "SLUICE_URING_MUTANT_PENDING_CONTROL_RETIRE_STALE_COUNT")
 end
 
 -- Public Request<T> evidence. Same self-contained seam-build shape as
