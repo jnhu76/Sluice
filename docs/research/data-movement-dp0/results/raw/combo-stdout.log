@@ -1,0 +1,8 @@
+[1/7] zop x dp1dp2b: instr median 36.30/iter +15/15, wall med -14 ns
+[2/7] cons4k x dp1dp2b: instr median 159.26/iter +8/15, wall med -125 ns
+[3/7] thr64 x dp1dp2b: instr median 1593.90/iter +8/15, wall med -178 ns
+[4/7] write4k x dp1dp2b: instr median -2308.38/iter +6/15, wall med 304 ns
+[5/7] finfo x dp1dp2b: instr median 8432.38/iter +11/15, wall med -1038 ns
+[6/7] constp x dp1dp2b: instr median 9312.40/iter +11/15, wall med -2587 ns
+[7/7] w01ctl x dp1dp2b: instr median -1.10/iter +0/15, wall med 18 ns
+DONE

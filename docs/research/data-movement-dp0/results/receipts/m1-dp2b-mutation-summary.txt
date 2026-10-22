@@ -1,0 +1,16 @@
+# M1 mutation oracle — dp2b arm (counterfactual B), run 2026-10-23 ~05:15+08:00
+# Mutation: k_result_uses_metadata_ forced to `false` for all T in
+# /tmp/dp0/arms/dp2b/include/sluice/async/request.hpp (temporary edit).
+# Result: the production library still compiles, but every consumer TU that
+# instantiates Request<FileInfo> / Request<FileSize> FAILS TO COMPILE:
+#   include/sluice/async/request.hpp:229:56: error: cannot convert
+#   'const uint64_t' {aka 'const long unsigned int'} to 'sluice::FileKind'
+#   in initialization
+#   include/sluice/async/request.hpp:229:72: error: no matching function for
+#   call to 'sluice::Result<sluice::FileInfo>::Result(<brace-enclosed initializer list>)'
+# (full compiler log: m1-dp2b-mutation-compile-error.log)
+# So a wrong metadata-skip in the dp2b shape is rejected at compile time in
+# consumer TUs — a stronger backstop than dp2's runtime test failure.
+# Restore: 76/76 pass; bench_w02_pipeline sha256 returned to
+# 4c5e08ea110ba9d09e5e908281bb596aa02a67abce72bb767bd9e318b6a41dd4
+# (byte-identical to the pre-mutation validated build).

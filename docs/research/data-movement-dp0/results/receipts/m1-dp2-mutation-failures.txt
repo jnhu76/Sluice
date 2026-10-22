@@ -1,0 +1,13 @@
+# M1 mutation oracle — dp2 arm (counterfactual A), run 2026-10-23 ~05:05+08:00
+# Mutation: k_result_uses_metadata_ forced to `false` for all T in
+# /tmp/dp0/arms/dp2/include/sluice/async/request.hpp (temporary edit).
+# Build: OK. Test suite result: 2/76 test binaries failed:
+#   - backend_contract_conformance_threadpool_test
+#   - backend_contract_conformance_uring_test
+# Direct binary output (backend_contract_conformance_threadpool_test):
+FAIL [file_info_and_size_match_the_kernel_record] a regular file reports the regular kind
+FAIL [file_info_and_size_match_the_kernel_record] file_info reports the file length
+FAIL [file_info_and_size_match_the_kernel_record] file_info reports the kernel device and inode identity
+FAIL [file_info_and_size_match_the_kernel_record] size reports the file length through its own carrier
+4 backend conformance failures
+# Restore (correct constexpr re-applied; NOT git checkout): 76/76 pass again.

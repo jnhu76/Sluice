@@ -1,0 +1,28 @@
+# DP-0 perf counter calibration receipt (2026-10-23 ~05:52+08:00, WSL2 6.18)
+# Counter semantics under `perf stat -x,`: field 1 = COUNT, field 4 = time-enabled ns
+# (SHARED by all counters on the line). The E1 review (docs/evidence/
+# e1-pending-control-productization-20261023/review-B-performance.md F-1) recorded a
+# misread where field 4 was taken as the instruction count; DP-0's parser reads field 1
+# keyed by field 3 (event name).
+
+$ perf stat -x, -e instructions:u,cycles:u -- ./calib2 3000000
+12117572,,instructions:u,1402094,100.00,3.63,insn per cycle
+ 3337567,,cycles:u,1402094,100.00,,
+
+$ perf stat -x, -e instructions:u -- ./calib2 6000000
+24117570,,instructions:u,1771295,100.00,,
+
+# Linearity: I(n) = 4.0*n + 117572 (two-point solve). work() inner loop is exactly
+# 4 instructions (x+=i; i+=1; cmp; jb); the constant is process startup.
+# => instructions:u is linear and semantically correct on this host.
+
+# Counter spread on an identical binary doing identical work (main matrix,
+# w01ctl x base, 30 runs): 28130921..28131009  (relative spread 3.1e-6).
+
+# Unavailable/inconsistent events on this host (probed earlier in this study):
+#   L1-dcache-load{,s,-misses}, dTLB-*:      perf returns <not supported> -> NOT COLLECTED
+#   cache-references / cache-misses:         values obtained but inconsistent across
+#                                            repetitions on this kernel -> judged
+#                                            INVALID, NOT COLLECTED
+# Consequence: every cache/TLB statement in this study is analytical (assembly +
+# layout arithmetic), never a PMU measurement.

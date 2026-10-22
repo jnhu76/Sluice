@@ -1,0 +1,28 @@
+[0m[38;5;2;1m[ 16%]:[0m [38;5;5;1m<app_copy_pipeline_oracle_test>[0m compiling.release tests/app_copy_pipeline_oracle_test.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_threadpool_test>[0m compiling.release tests/backend_contract_conformance_test.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_threadpool_test>[0m compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_threadpool_test>[0m compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_threadpool_test>[0m compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_uring_test>[0m compiling.release tests/backend_contract_conformance_test.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_uring_test>[0m compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 19%]:[0m [38;5;5;1m<backend_contract_conformance_uring_test>[0m compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<backend_contract_conformance_uring_test>[0m compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<backend_contract_conformance_uring_test>[0m compiling.release src/async/uring_backend.cpp[0m
+[0m[1;38;5;1;1merror: [0m/tmp/dp0/arms/dp2b/include/sluice/async/request.hpp:229:56: error: cannot convert ‘const uint64_t’ {aka ‘const long unsigned int’} to ‘sluice::FileKind’ in initialization
+  229 |                 return Result<U>{static_cast<U>(effect.confirmed_bytes)};
+      |                                                 ~~~~~~~^~~~~~~~~~~~~~~
+      |                                                        |
+      |                                                        const uint64_t {aka const long unsigned int}
+/tmp/dp0/arms/dp2b/include/sluice/async/request.hpp:229:72: error: no matching function for call to ‘sluice::Result<sluice::FileInfo>::Result(<brace-enclosed initializer list>)’
+  229 |                 return Result<U>{static_cast<U>(effect.confirmed_bytes)};
+      |                                                                        ^
+/tmp/dp0/arms/dp2b/include/sluice/async/request.hpp:229:72: note: there are 5 candidates
+In file included from /tmp/dp0/arms/dp2b/include/sluice/file_resource.hpp:4,
+                 from /tmp/dp0/arms/dp2b/include/sluice/async/request.hpp:5:
+/tmp/dp0/arms/dp2b/include/sluice/result.hpp:121:5: note: candidate 1: ‘sluice::Result<T>::Result(sluice::Result<T>&&) [with T = sluice::FileInfo]’
+  121 |     Result(Result&&) noexcept(std::is_nothrow_move_constructible_v<T>) = default;
+      |     ^~~~~~
+/tmp/dp0/arms/dp2b/include/sluice/result.hpp:121:5: note: conversion of argument 1 would be ill-formed:
+/tmp/dp0/arms/dp2b/include/sluice/result.hpp:120:5: note: candidate 2: ‘sluice::Result<T>::Result(const sluice::Result<T>&) [with T = sluice::FileInfo]’
+  120 |     Result(const Result&) = default;
+  [38;5;3m> in [1mtests/backend_contract_conformance_test.cpp[0m

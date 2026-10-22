@@ -1,0 +1,16 @@
+[1/15] constp x dp3a: 1.340% instr, pairs 15/15
+[2/15] zop x dp3a: 0.516% instr, pairs 15/15
+[3/15] write4k x dp3a: 6.475% instr, pairs 15/15
+[4/15] thr64 x dp1: 6.777% instr, pairs 15/15
+[5/15] thr64 x dp3a: 0.375% instr, pairs 15/15
+[6/15] cons4k x dp3a: 1.086% instr, pairs 15/15
+[7/15] w01ctl x dp3a: -0.000% instr, pairs 15/15
+[8/15] cons4k x dp1: 6.177% instr, pairs 15/15
+[9/15] cons4k x base: -0.725% instr, pairs 15/15
+[10/15] finfo x dp1: 4.403% instr, pairs 15/15
+[11/15] write4k x dp1: 6.183% instr, pairs 15/15
+[12/15] zop x dp1: 0.860% instr, pairs 15/15
+[13/15] finfo x dp3a: 1.143% instr, pairs 15/15
+[14/15] constp x dp1: 3.224% instr, pairs 15/15
+[15/15] w01ctl x dp1: 0.000% instr, pairs 15/15
+DONE raw=/tmp/dp0/results/raw/dp0_fixedbt_20261023T054006.jsonl summary=/tmp/dp0/results/raw/dp0_fixedbt_summary_20261023T054006.jsonl excluded_runs=0
