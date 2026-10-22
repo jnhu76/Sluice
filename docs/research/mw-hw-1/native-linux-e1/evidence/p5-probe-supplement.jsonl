@@ -1,0 +1,12 @@
+{"run":1,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":176,"parity_violations":0,"control_sqe_observations":0,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":2,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":151,"parity_violations":0,"control_sqe_observations":0,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":3,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":158,"parity_violations":0,"control_sqe_observations":1,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":4,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":196,"parity_violations":0,"control_sqe_observations":0,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":5,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":173,"parity_violations":0,"control_sqe_observations":1,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":6,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":211,"parity_violations":0,"control_sqe_observations":1,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":7,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":170,"parity_violations":0,"control_sqe_observations":1,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":8,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":164,"parity_violations":0,"control_sqe_observations":1,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":9,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":173,"parity_violations":0,"control_sqe_observations":1,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":10,"requests":20000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":159,"parity_violations":0,"control_sqe_observations":0,"canceled":0,"ops":20000,"ok":true,"failure":""}
+{"run":11,"requests":1000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":0,"parity_violations":0,"control_sqe_observations":0,"canceled":0,"ops":1000,"ok":true,"failure":""}
+{"run":12,"requests":1000,"arm":"e1-probe","mode":"probe","p_max":0,"p_positive_samples":0,"samples":0,"parity_violations":0,"control_sqe_observations":0,"canceled":0,"ops":1000,"ok":true,"failure":""}

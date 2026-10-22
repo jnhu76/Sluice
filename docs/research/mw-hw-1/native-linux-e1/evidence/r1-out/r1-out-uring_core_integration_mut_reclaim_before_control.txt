@@ -1,0 +1,6 @@
+FAIL [cancel_cqe_first_never_becomes_the_terminal] the late original CQE canonicalizes the real outcome on the same slot
+FAIL [cancel_cqe_first_never_becomes_the_terminal] the final publication carries the physical byte count
+FAIL [cancel_cqe_first_never_becomes_the_terminal] the slot fully reclaims
+sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
+terminate called without an active exception
+timeout: the monitored command dumped core

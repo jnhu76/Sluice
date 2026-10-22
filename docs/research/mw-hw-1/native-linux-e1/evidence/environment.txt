@@ -1,0 +1,24 @@
+host=E5
+captured_utc=2026-10-22T08:16:39Z
+os=Fedora Linux 44 (KDE Plasma Desktop Edition)
+kernel=7.2.9-201.fc44.x86_64
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+cpus=20; cores=10; threads_per_core=2; numa_nodes=1
+pinned_cpu=2
+cpu2_smt_siblings=2,12
+cpu2_governor=schedutil
+cpu2_driver=intel_cpufreq
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+xmake=xmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua
+liburing_dev=2.13
+perf=perf version 7.2.9-201.fc44.x86_64
+strace=strace -- version 7.2
+perf_event_paranoid=2
+kptr_restrict=0
+tracefs_readable=no (permission denied for normal user)
+tracefs_events=NOT_RUN (permission; protocol forbids sudo)
+0.15 0.13 0.09 3/814 5053
+           224,948      cycles:u                                                              
+           145,870      instructions:u                                                        
+              0.81 msec task-clock:u                                                          
+perf_probe_exit=0

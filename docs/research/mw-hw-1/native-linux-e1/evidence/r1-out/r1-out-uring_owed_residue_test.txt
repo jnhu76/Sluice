@@ -1,0 +1,4 @@
+ok a_zero_op_after_sweep_is_immediate_residue
+ok b_wait_one_serves_owed_delivery_within_the_wait
+ok c_zero_op_after_sweep_still_delivers_exactly_once_and_retires
+all 3 uring owed-residue tests passed

@@ -1,0 +1,5 @@
+ok standalone_backend_registers_nothing
+ok attachment_registers_kernel_notification_once
+ok forced_registration_failure_fails_context_construction
+ok teardown_unregisters_before_ring_exit
+all 4 uring registration lifecycle tests passed

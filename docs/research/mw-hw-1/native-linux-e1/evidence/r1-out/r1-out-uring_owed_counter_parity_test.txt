@@ -1,0 +1,9 @@
+ok counter_tracks_zero_op_reads
+ok counter_ignores_data_ops
+ok zero_length_write_is_owed
+ok full_capacity_sweeps_exactly_once
+ok slot_reuse_before_delivery_keeps_parity
+ok cancel_leaves_owed_delivery_intact
+ok owed_during_pass_is_counted_and_reported
+ok concurrent_producers_keep_exactly_once
+all 8 uring owed-count parity tests passed

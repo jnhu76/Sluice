@@ -1,0 +1,7 @@
+ok counter_tracks_zero_op_reads
+ok counter_ignores_data_ops
+ok zero_length_write_is_owed
+ok full_capacity_sweeps_exactly_once
+sluice::async::UringAsyncBackend: core handoff reached a protocol-unreachable state (invariant violation)
+terminate called without an active exception
+timeout: the monitored command dumped core
