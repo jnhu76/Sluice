@@ -41,8 +41,11 @@ Primary = wall ns/op paired-ratio median; secondary = cpu ns/op.
 
 Verdict: **Case A.** The +0.7 % (CI entirely above 1) residual from the old
 three-arm campaign does not exist against the true incremental baseline: the
-direct incremental effect is +0.14 % with the CI spanning 1, an order of
-magnitude below this round's base-vs-base noise floor. 0/15 pairs exceed the
+direct incremental effect is +0.14 % with the CI spanning 1. At the shipped
+bootstrap seed the signal sits an order of magnitude below the m2 noise-floor
+lower bound, and the stronger seed-robust statement is containment: m1's
+entire CI lies inside m2's CI (an independent reviewer's multi-seed sweep
+confirmed the containment holds at every seed tried). 0/15 pairs exceed the
 1.03 engineering bound. Deterministic work strictly decreases (zop −20.9
 instr/op; whole-process perf on m1 pair 0: −192 instr/op, −1128 cyc/op).
 
@@ -76,16 +79,22 @@ disclosed here as measured.
 
 Stats-on pollmetrics (5 pairs, `SLUICE_BENCH_STATS=1`): poll/op 1.5007 vs
 1.4848 (d1) and 0.1593 vs 0.1598 (d16) — timing-dependent coalescing counts,
-arm-independent within noise; 20000 requests fully accounted
-(submits/waits/completions) in every record.
+arm-independent within noise (an all-record-median aggregation gives 1.5007
+vs 1.4866 and 0.1595 vs 0.1598; the conclusion is aggregation-independent);
+20000 requests fully accounted (submits/waits/completions) in every record.
+
+W-01 aggregates the 15 sub-cases of the W-01 suite into one per-invocation
+median (both sides run the identical case mix), which is the right shape for
+a negative control but not a single-shape comparison.
 
 Regression battery on the ARM tree (E5, GCC 16): release+liburing **78/78**,
 debug+liburing **78/78** (includes the initialization-closure oracle).
 
 Mutants on GCC 16: all six named DP-3A mutants killed with signatures
-identical to WSL2/GCC 15 (`mutant-signatures/`, failure counts 28/1/1/3/9/8,
-exit 255; rollback and exhausted-reuse mutants end in the teardown fail-fast
-by design).
+identical to WSL2/GCC 15 (`mutant-signatures/` for full stderr,
+`gate/e5-mutants.txt` for the corrected exit-code record: 28/1/1/3/9/8
+failures, exit 255; rollback and exhausted-reuse mutants end in the teardown
+fail-fast by design).
 
 Machine code (`../reserve.e5.objdump.txt`): in the measured release archive
 (GCC 16.2.1), ARM `RequestCore::reserve()`'s pop path keeps exactly one slot
@@ -107,4 +116,7 @@ is the measured code.
   The s5 battery and all measurements used correct paths and are unaffected.
 - W-03 gate numbers are unpinned by design (W-02/W-01 and both negative
   controls are CPU2-pinned); the pinned confirmation row isolates affinity
-  sensitivity for the one outlier shape.
+  sensitivity for the one outlier shape. The stage-1 campaign log carries the
+  full host header (perf_paranoid, liburing, governor, CPU2 siblings); the
+  confirmation and W-01 logs are name/stamp-only — the runner scripts in
+  `scripts/` show the exact env and pinning each comparison used.

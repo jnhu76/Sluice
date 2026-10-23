@@ -1,0 +1,11 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=3 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-uring-4k-d4 rep=0 warmup] ops=20000 wall=0.1041s 192106 ops/s 750.4 MiB/s cpu=0.204s util=196.3% | lat p50=12086 p95=20014 p99=27901 max=106236 ns (n=20000)
+  [W03-uring-4k-d4 rep=0] ops=20000 wall=0.0919s 217743 ops/s 850.6 MiB/s cpu=0.161s util=175.6% | lat p50=14140 p95=21137 p99=22681 max=37096 ns (n=20000)
+  [W03-uring-4k-d4 rep=1] ops=20000 wall=0.0961s 208222 ops/s 813.4 MiB/s cpu=0.174s util=180.8% | lat p50=14229 p95=21452 p99=24305 max=41300 ns (n=20000)
+  [W03-uring-4k-d4 rep=2] ops=20000 wall=0.0922s 216939 ops/s 847.4 MiB/s cpu=0.166s util=180.2% | lat p50=14833 p95=20663 p99=27458 max=43150 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===

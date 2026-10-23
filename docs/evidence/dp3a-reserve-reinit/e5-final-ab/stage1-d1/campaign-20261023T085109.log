@@ -1,0 +1,138 @@
+campaign=dp3a-stage1 stamp=20261023T085109 pairs=15 stats=off cpu=2
+base_sha=4221c7e3339fe8d03d861b2a2caf6e4f1f1d9b78
+arm_sha=da602ccc3888b715ae18886189df769c31a242b7
+governor=schedutil cpu2_siblings=2,12
+perf_paranoid=2
+Linux 7.2.9-201.fc44.x86_64 x86_64 GNU/Linux
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+liburing=2.13
+  binary /home/jnhu/Source/e5r2/wt-base/build/linux/x86_64/release/bench_w02_pipeline 913ce2eee5cd4c05ee600902c55105d3dbb109f24ed57199ba1ef731232138d8
+  binary /home/jnhu/Source/e5r2/wt-arm/build/linux/x86_64/release/bench_w02_pipeline e07a1bd2503e1ff88bd653c520c7ca491dac41249e139a2b3199780efbdbf484
+  binary /tmp/dp3a-tools/bench_dp0_wt-base b4e38e84f9bc45c34d1e94f21e48c47a531735501ce5f9d13667fb31c2b89750
+  binary /tmp/dp3a-tools/bench_dp0_wt-arm 44fc3103a143de5a7e9112d2e4de465b76385c79048c1310a77d37a164f9c157
+	liburing.so.2 => /lib64/liburing.so.2 (0x00007fc34a0fe000)
+  zop_harness /tmp/dp3a-tools/bench_dp0_movement.cpp 61f84454828d99987ed7536d96919fde8447be97b95a8f66d87280d445156212
+08:51:11 m1/W02-uring-4k-d1-p0-a loadavg=0.12
+08:51:13 m1/W02-uring-4k-d1-p0-b loadavg=0.27
+08:51:14 m1/W02-uring-4k-d1-p1-b loadavg=0.27
+08:51:16 m1/W02-uring-4k-d1-p1-a loadavg=0.27
+08:51:18 m1/W02-uring-4k-d1-p2-a loadavg=0.41
+08:51:20 m1/W02-uring-4k-d1-p2-b loadavg=0.41
+08:51:22 m1/W02-uring-4k-d1-p3-b loadavg=0.41
+08:51:23 m1/W02-uring-4k-d1-p3-a loadavg=0.46
+08:51:25 m1/W02-uring-4k-d1-p4-a loadavg=0.46
+08:51:27 m1/W02-uring-4k-d1-p4-b loadavg=0.46
+08:51:29 m1/W02-uring-4k-d1-p5-b loadavg=0.58
+08:51:30 m1/W02-uring-4k-d1-p5-a loadavg=0.58
+08:51:32 m1/W02-uring-4k-d1-p6-a loadavg=0.69
+08:51:34 m1/W02-uring-4k-d1-p6-b loadavg=0.69
+08:51:36 m1/W02-uring-4k-d1-p7-b loadavg=0.69
+08:51:37 m1/W02-uring-4k-d1-p7-a loadavg=0.80
+08:51:39 m1/W02-uring-4k-d1-p8-a loadavg=0.80
+08:51:41 m1/W02-uring-4k-d1-p8-b loadavg=0.80
+08:51:43 m1/W02-uring-4k-d1-p9-b loadavg=0.90
+08:51:44 m1/W02-uring-4k-d1-p9-a loadavg=0.90
+08:51:46 m1/W02-uring-4k-d1-p10-a loadavg=0.90
+08:51:48 m1/W02-uring-4k-d1-p10-b loadavg=0.98
+08:51:50 m1/W02-uring-4k-d1-p11-b loadavg=0.98
+08:51:51 m1/W02-uring-4k-d1-p11-a loadavg=0.98
+08:51:53 m1/W02-uring-4k-d1-p12-a loadavg=1.23
+08:51:55 m1/W02-uring-4k-d1-p12-b loadavg=1.23
+08:51:57 m1/W02-uring-4k-d1-p13-b loadavg=1.23
+08:51:58 m1/W02-uring-4k-d1-p13-a loadavg=1.21
+08:52:00 m1/W02-uring-4k-d1-p14-a loadavg=1.21
+08:52:02 m1/W02-uring-4k-d1-p14-b loadavg=1.27
+M1 DONE 08:52:02
+08:52:04 m2-base/W02-uring-4k-d1-p0-a loadavg=1.27
+08:52:06 m2-base/W02-uring-4k-d1-p0-b loadavg=1.27
+08:52:07 m2-base/W02-uring-4k-d1-p1-b loadavg=1.33
+08:52:09 m2-base/W02-uring-4k-d1-p1-a loadavg=1.33
+08:52:11 m2-base/W02-uring-4k-d1-p2-a loadavg=1.33
+08:52:13 m2-base/W02-uring-4k-d1-p2-b loadavg=1.30
+08:52:14 m2-base/W02-uring-4k-d1-p3-b loadavg=1.30
+08:52:16 m2-base/W02-uring-4k-d1-p3-a loadavg=1.30
+08:52:18 m2-base/W02-uring-4k-d1-p4-a loadavg=1.36
+08:52:20 m2-base/W02-uring-4k-d1-p4-b loadavg=1.36
+08:52:22 m2-base/W02-uring-4k-d1-p5-b loadavg=1.36
+08:52:23 m2-base/W02-uring-4k-d1-p5-a loadavg=1.33
+08:52:25 m2-base/W02-uring-4k-d1-p6-a loadavg=1.33
+08:52:27 m2-base/W02-uring-4k-d1-p6-b loadavg=1.33
+08:52:29 m2-base/W02-uring-4k-d1-p7-b loadavg=1.30
+08:52:30 m2-base/W02-uring-4k-d1-p7-a loadavg=1.30
+08:52:32 m2-base/W02-uring-4k-d1-p8-a loadavg=1.36
+08:52:34 m2-base/W02-uring-4k-d1-p8-b loadavg=1.36
+08:52:36 m2-base/W02-uring-4k-d1-p9-b loadavg=1.36
+08:52:38 m2-base/W02-uring-4k-d1-p9-a loadavg=1.41
+08:52:39 m2-base/W02-uring-4k-d1-p10-a loadavg=1.41
+08:52:41 m2-base/W02-uring-4k-d1-p10-b loadavg=1.41
+08:52:43 m2-base/W02-uring-4k-d1-p11-b loadavg=1.46
+08:52:45 m2-base/W02-uring-4k-d1-p11-a loadavg=1.46
+08:52:46 m2-base/W02-uring-4k-d1-p12-a loadavg=1.46
+08:52:48 m2-base/W02-uring-4k-d1-p12-b loadavg=1.50
+08:52:50 m2-base/W02-uring-4k-d1-p13-b loadavg=1.50
+08:52:52 m2-base/W02-uring-4k-d1-p13-a loadavg=1.50
+08:52:54 m2-base/W02-uring-4k-d1-p14-a loadavg=1.54
+08:52:55 m2-base/W02-uring-4k-d1-p14-b loadavg=1.54
+M2 DONE 08:52:55
+08:52:56 m3-zop/zop-dp3a-p0-a loadavg=1.54
+08:52:56 m3-zop/zop-dp3a-p0-b loadavg=1.54
+08:52:56 m3-zop/zop-dp3a-p1-b loadavg=1.54
+08:52:56 m3-zop/zop-dp3a-p1-a loadavg=1.54
+08:52:56 m3-zop/zop-dp3a-p2-a loadavg=1.54
+08:52:57 m3-zop/zop-dp3a-p2-b loadavg=1.54
+08:52:57 m3-zop/zop-dp3a-p3-b loadavg=1.54
+08:52:57 m3-zop/zop-dp3a-p3-a loadavg=1.50
+08:52:57 m3-zop/zop-dp3a-p4-a loadavg=1.50
+08:52:57 m3-zop/zop-dp3a-p4-b loadavg=1.50
+08:52:58 m3-zop/zop-dp3a-p5-b loadavg=1.50
+08:52:58 m3-zop/zop-dp3a-p5-a loadavg=1.50
+08:52:58 m3-zop/zop-dp3a-p6-a loadavg=1.50
+08:52:58 m3-zop/zop-dp3a-p6-b loadavg=1.50
+08:52:58 m3-zop/zop-dp3a-p7-b loadavg=1.50
+08:52:59 m3-zop/zop-dp3a-p7-a loadavg=1.50
+08:52:59 m3-zop/zop-dp3a-p8-a loadavg=1.50
+08:52:59 m3-zop/zop-dp3a-p8-b loadavg=1.50
+08:52:59 m3-zop/zop-dp3a-p9-b loadavg=1.50
+08:52:59 m3-zop/zop-dp3a-p9-a loadavg=1.50
+08:53:00 m3-zop/zop-dp3a-p10-a loadavg=1.50
+08:53:00 m3-zop/zop-dp3a-p10-b loadavg=1.50
+08:53:00 m3-zop/zop-dp3a-p11-b loadavg=1.50
+08:53:00 m3-zop/zop-dp3a-p11-a loadavg=1.50
+08:53:00 m3-zop/zop-dp3a-p12-a loadavg=1.50
+08:53:01 m3-zop/zop-dp3a-p12-b loadavg=1.50
+08:53:01 m3-zop/zop-dp3a-p13-b loadavg=1.50
+08:53:01 m3-zop/zop-dp3a-p13-a loadavg=1.50
+08:53:01 m3-zop/zop-dp3a-p14-a loadavg=1.50
+08:53:01 m3-zop/zop-dp3a-p14-b loadavg=1.50
+08:53:02 m3-zop/w01ctl-base-p0-a loadavg=1.50
+08:53:02 m3-zop/w01ctl-base-p0-b loadavg=1.46
+08:53:02 m3-zop/w01ctl-base-p1-b loadavg=1.46
+08:53:03 m3-zop/w01ctl-base-p1-a loadavg=1.46
+08:53:03 m3-zop/w01ctl-base-p2-a loadavg=1.46
+08:53:03 m3-zop/w01ctl-base-p2-b loadavg=1.46
+08:53:04 m3-zop/w01ctl-base-p3-b loadavg=1.46
+08:53:04 m3-zop/w01ctl-base-p3-a loadavg=1.46
+08:53:04 m3-zop/w01ctl-base-p4-a loadavg=1.46
+08:53:04 m3-zop/w01ctl-base-p4-b loadavg=1.46
+08:53:05 m3-zop/w01ctl-base-p5-b loadavg=1.46
+08:53:05 m3-zop/w01ctl-base-p5-a loadavg=1.46
+08:53:05 m3-zop/w01ctl-base-p6-a loadavg=1.46
+08:53:06 m3-zop/w01ctl-base-p6-b loadavg=1.46
+08:53:06 m3-zop/w01ctl-base-p7-b loadavg=1.46
+08:53:06 m3-zop/w01ctl-base-p7-a loadavg=1.46
+08:53:07 m3-zop/w01ctl-base-p8-a loadavg=1.46
+08:53:07 m3-zop/w01ctl-base-p8-b loadavg=1.46
+08:53:07 m3-zop/w01ctl-base-p9-b loadavg=1.42
+08:53:07 m3-zop/w01ctl-base-p9-a loadavg=1.42
+08:53:08 m3-zop/w01ctl-base-p10-a loadavg=1.42
+08:53:08 m3-zop/w01ctl-base-p10-b loadavg=1.42
+08:53:08 m3-zop/w01ctl-base-p11-b loadavg=1.42
+08:53:09 m3-zop/w01ctl-base-p11-a loadavg=1.42
+08:53:09 m3-zop/w01ctl-base-p12-a loadavg=1.42
+08:53:09 m3-zop/w01ctl-base-p12-b loadavg=1.42
+08:53:10 m3-zop/w01ctl-base-p13-b loadavg=1.42
+08:53:10 m3-zop/w01ctl-base-p13-a loadavg=1.42
+08:53:10 m3-zop/w01ctl-base-p14-a loadavg=1.42
+08:53:10 m3-zop/w01ctl-base-p14-b loadavg=1.42
+M3 DONE 08:53:10
+STAGE1_ALL_DONE 08:53:10

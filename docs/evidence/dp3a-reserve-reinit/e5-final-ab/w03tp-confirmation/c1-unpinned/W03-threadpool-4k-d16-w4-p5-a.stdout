@@ -1,0 +1,11 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=3 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-threadpool-4k-d16-w4 rep=0 warmup] ops=20000 wall=0.0866s 230871 ops/s 901.8 MiB/s cpu=0.288s util=332.0% | lat p50=49955 p95=78299 p99=89237 max=140904 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=0] ops=20000 wall=0.0960s 208268 ops/s 813.5 MiB/s cpu=0.311s util=323.8% | lat p50=46667 p95=74451 p99=86133 max=143553 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=1] ops=20000 wall=0.0994s 201255 ops/s 786.2 MiB/s cpu=0.317s util=318.6% | lat p50=54979 p95=86157 p99=97602 max=140693 ns (n=20000)
+  [W03-threadpool-4k-d16-w4 rep=2] ops=20000 wall=0.0922s 216819 ops/s 846.9 MiB/s cpu=0.294s util=318.8% | lat p50=41401 p95=64820 p99=73879 max=96243 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===

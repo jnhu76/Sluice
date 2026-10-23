@@ -1,0 +1,20 @@
+{
+  "W02-uring-4k-d1": {
+    "pairs": 5,
+    "wall_ratio_median": 1.0018797339646441,
+    "wall_ratio_ci95": [
+      0.9908619254334174,
+      1.023470072065134
+    ],
+    "cpu_ratio_median": 1.002226688022341,
+    "cpu_ratio_ci95": [
+      0.9910816148457785,
+      1.0234196407327736
+    ],
+    "poll_per_op_threearm_median": 1.50065,
+    "poll_per_op_base_median": 1.48475,
+    "delta_notif_per_op_median": null,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": null
+  }
+}
