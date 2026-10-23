@@ -44,20 +44,19 @@ retired slots never resurfacing, and closed-admission/poison refusals.
 
 | mutant | observed kill |
 |---|---|
-| `RELEASE_SKIPS_OUTCOME_CLEAR` | 28 named assertion failures (stale outcome/descriptor leaks into re-acquire) |
+| `RELEASE_SKIPS_OUTCOME_CLEAR` | 28 named assertion failures (stale outcome leaks into re-acquire) |
 | `RELEASE_SKIPS_METADATA_CLEAR` | metadata assertion of the closure oracle (SlotObservation metadata) |
 | `RELEASE_SKIPS_OBSERVER_CLEAR` | stale `queued` observer phase blocks reclaim, named failure |
 | `ROLLBACK_WITHOUT_RELEASE` | "rolled-back slot is clean", "the reservation identity is dead", "rolled-back slot returns to service" (then teardown fail-fast) |
 | `EXHAUSTED_SLOT_REUSED` | 9 named failures — the saturated slot re-enters service and the exhausted status never reports |
 | `CONSTRUCTOR_DIRTY_SLOTS` | 8 failures — dirty constructed slots are caught at the first-reserve/accept assertions |
 
-The `control_refs` clear skip is structurally unobservable through any legal
-protocol path (`reclaimable_` gates the free-list push on
-`control_refs == 0`), so no mutant is registered for it; the release-side
-clear is retained by this PR as defense-in-depth for the SlotObservation
-oracle, consistent with the DP-0 single-site re-init discipline. Binding-
-lifetime violations are owned by the existing
-`public_request_release_violation_test` (green on this arm).
+A `RELEASE_SKIPS_CONTROL_REFS_CLEAR` seam was reviewed and removed: the skip
+is structurally unobservable through any legal protocol path (`reclaimable_`
+gates the free-list push on `control_refs == 0`), so it cannot register a
+distinguishing failure and stayed dead in the guard set. The unconditional
+release-side clear is retained. Binding-lifetime violations are owned by the
+existing `public_request_release_violation_test` (green on this arm).
 
 ## Instruction effect
 

@@ -614,9 +614,7 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.observer_phase = ObserverPhase::unattached;
 #endif
     slot.execution_refs = 0;
-#if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_CONTROL_REFS_CLEAR)
     slot.control_refs = 0;
-#endif
     slot.descriptor = {};
     slot.borrow = {};
 #if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OUTCOME_CLEAR)
