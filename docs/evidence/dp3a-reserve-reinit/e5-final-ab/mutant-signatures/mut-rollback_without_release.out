@@ -1,0 +1,4 @@
+FAIL rolled-back slot is clean with generation+1
+FAIL the reservation identity is dead
+FAIL rolled-back slot returns to service
+terminate called without an active exception

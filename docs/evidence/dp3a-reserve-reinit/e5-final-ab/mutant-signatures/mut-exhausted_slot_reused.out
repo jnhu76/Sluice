@@ -1,0 +1,10 @@
+FAIL the pre-saturated generation is served
+FAIL the slot re-enters the free list at the saturated generation
+FAIL the pre-saturated generation is served
+FAIL the slot re-enters the free list at the saturated generation
+FAIL the pre-saturated generation is served
+FAIL the slot re-enters the free list at the saturated generation
+FAIL no slot remains on the free list
+FAIL every slot retired
+FAIL the exhausted core refuses reserve
+terminate called without an active exception

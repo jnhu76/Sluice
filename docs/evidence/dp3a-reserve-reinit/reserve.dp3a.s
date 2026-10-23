@@ -1,4 +1,4 @@
-
+_ZN6sluice5async6detail11RequestCore7reserveEv:
 .LFB6970:
 	.cfi_startproc
 	endbr64
@@ -87,3 +87,4 @@ _ZN6sluice5async6detail11RequestCore7reserveEv.cold:
 	.cfi_endproc
 .LFE6970:
 	.text
+	.size	_ZN6sluice5async6detail11RequestCore7reserveEv, .-_ZN6sluice5async6detail11RequestCore7reserveEv

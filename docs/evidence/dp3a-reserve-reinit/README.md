@@ -1,9 +1,9 @@
 # DP-3A redundant reserve-time slot reset — compiler proof and oracle evidence
 
-Baseline: B0 `9445bc82` + DP-1 `ee23c479` (stacked; the reserve change is one
-independent hunk of `src/async/detail/request_core.cpp` and is revertible on
-its own). Compiler: WSL2 `g++ (Ubuntu) 15.2.0`, release `-O3`, `-std=c++20`,
-NDEBUG, no LTO.
+Baseline: master `4221c7e3` (the merge-base of this PR; includes DP-1 via
+#572 and the #571 bench fixes). The reserve change is one independent hunk of
+`src/async/detail/request_core.cpp` and is revertible on its own. Compiler:
+WSL2 `g++ (Ubuntu) 15.2.0`, release `-O3`, `-std=c++20`, NDEBUG, no LTO.
 
 Reproduction:
 
@@ -14,14 +14,20 @@ Reproduction:
 ## Findings
 
 - BASE `reserve()` re-stores the whole cleared field set of the popped slot:
-  eight 16-byte `movups` zero stores (offsets 0/40/49/72/96/112/128/144) plus
-  seven scalar zero stores (16/24/28/72(=-1)/88/160, `movb`) — the ~132 B the
-  DP-0 study measured as dp3a's target.
+  seven 16-byte `movups` zero stores (offsets 40/49/72/96/112/128/144) plus
+  eight scalar stores (`movq $0` at 16/28/88/160, `movb $0` at 24, `movl $-1`
+  at 72, `movb $1` at 128) — the re-initialization the free-list invariant
+  makes redundant.
 - The dp3a `reserve()` keeps exactly one slot store: `movb $1, (%rax)`
   (`phase = SlotPhase::reserved`). Every other slot-field store is gone; the
   remaining stores build the returned `ReserveAttempt` in the result buffer.
 - No new allocation, no hidden temporary of comparable size; the function
-  body shrinks 104 → 89 lines.
+  body shrinks 105 → 90 lines (including the `.cold` section).
+- On the E5 release binaries (GCC 16.2.1) the same conclusion holds in the
+  final linked code: the ARM pop path has the single `movb $0x1,(%rax)` slot
+  store and no zeroing stores; see `reserve.e5.objdump.txt`. The direct
+  incremental A/B and full native gate on that baseline are recorded in
+  `e5-final-ab/README.md`.
 
 ## Initialization-closure oracle
 
@@ -61,6 +67,7 @@ existing `public_request_release_violation_test` (green on this arm).
 ## Instruction effect
 
 Research measurement (WSL2/GCC 15, zop deterministic instrument, 15/15
-pairs): −16.5 instructions/op; the E5 native stage measured the three-arm
-combination at 62.7 instr/op removed (GCC 16). This PR carries the
-single-mechanism hunk of that arm.
+pairs): −16.5 instructions/op; the final-candidate E5 native A/B (GCC 16,
+master baseline, 15/15 pairs) measured −20.9 instructions/op for this
+mechanism alone, with the d1 wall ratio at 1.00142 [0.99349, 1.00539] —
+see `e5-final-ab/README.md`.
