@@ -246,6 +246,7 @@ class RequestCore {
         std::uint64_t requested_bytes = 0;
         bool has_outcome = false;
         IoOutcome outcome{};
+        sluice::FileInfo metadata{};
     };
 
     std::optional<SlotObservation> observe_slot(SlotIndex slot) const noexcept;

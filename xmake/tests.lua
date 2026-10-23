@@ -288,6 +288,32 @@ do
                         R .. "tests/request_core_publication_test.cpp", true)
     request_core_target("request_core_consumer_probe",
                         R .. "tests/request_core_consumer_probe.cpp", false)
+    request_core_target("request_core_init_closure_test",
+                        R .. "tests/request_core_init_closure_test.cpp", true)
+
+    -- DP-3A initialization-closure mutants. reserve() trusts the free-list
+    -- precondition (release_slot_ is the single re-initialization site), so
+    -- each mutant breaks one edge of that precondition and must be killed by
+    -- the named assertion of the closure oracle. Executed and recorded
+    -- manually, never run as regular tests.
+    request_core_target("request_core_mut_release_skips_outcome_clear",
+                        R .. "tests/request_core_init_closure_test.cpp", true,
+                        "SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OUTCOME_CLEAR")
+    request_core_target("request_core_mut_release_skips_metadata_clear",
+                        R .. "tests/request_core_init_closure_test.cpp", true,
+                        "SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_METADATA_CLEAR")
+    request_core_target("request_core_mut_release_skips_observer_clear",
+                        R .. "tests/request_core_init_closure_test.cpp", true,
+                        "SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OBSERVER_CLEAR")
+    request_core_target("request_core_mut_rollback_without_release",
+                        R .. "tests/request_core_init_closure_test.cpp", true,
+                        "SLUICE_REQUEST_CORE_MUTANT_ROLLBACK_WITHOUT_RELEASE")
+    request_core_target("request_core_mut_exhausted_slot_reused",
+                        R .. "tests/request_core_init_closure_test.cpp", true,
+                        "SLUICE_REQUEST_CORE_MUTANT_EXHAUSTED_SLOT_REUSED")
+    request_core_target("request_core_mut_constructor_dirty_slots",
+                        R .. "tests/request_core_init_closure_test.cpp", true,
+                        "SLUICE_REQUEST_CORE_MUTANT_CONSTRUCTOR_DIRTY_SLOTS")
 
     -- Named mutation builds. Each flips one load-bearing arm of
     -- the attach/publication resolution and must be killed by the named
