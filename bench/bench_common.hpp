@@ -8,8 +8,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include <sluice/measurement.hpp>
 
 #include <sys/resource.h>
 #include <time.h>
@@ -434,6 +437,9 @@ struct EnvConfig {
     std::string tmp_dir = "/tmp/sluice-bench";
     std::string disk_dir;
     bool include_disk = true;
+    // Default matches the pre-stats G0 benchmark: accounting is opt-in via
+    // SLUICE_BENCH_STATS=1 so default runs stay comparable with old data.
+    bool stats_enabled = false;
 };
 
 inline EnvConfig env_config() {
@@ -455,6 +461,9 @@ inline EnvConfig env_config() {
     }
     if (const char* v = std::getenv("SLUICE_BENCH_SKIP_DISK")) {
         cfg.include_disk = v[0] == '0';
+    }
+    if (const char* v = std::getenv("SLUICE_BENCH_STATS")) {
+        cfg.stats_enabled = v[0] != '0';
     }
     cfg.include_disk = cfg.include_disk && !cfg.disk_dir.empty();
     return cfg;
@@ -579,6 +588,35 @@ inline Record make_record(const CaseMeta& meta, const EnvConfig& cfg, std::size_
     r.order_index = order_index;
     r.measured = measured;
     return r;
+}
+
+// Named failure when the recorded delta cannot describe the phase it came
+// from: a wired AsyncStats must advance on real work and partition submit
+// calls into accepted or rejected outcomes, an unwired one must stay at zero.
+inline std::optional<std::string> stats_wiring_failure(const sluice::AsyncStats& delta,
+                                                       bool stats_enabled) {
+    if (!stats_enabled) {
+        const std::uint64_t total = delta.submit_calls + delta.submitted_ops +
+                                    delta.poll_calls + delta.wait_calls +
+                                    delta.completed_ops + delta.queue_full_retries +
+                                    delta.invalid_state_rejections;
+        if (total != 0) {
+            return std::string("stats wiring oracle: counters advanced while the stats "
+                               "switch is off");
+        }
+        return std::nullopt;
+    }
+    if (delta.submit_calls == 0) {
+        return std::string("stats wiring oracle: submit_calls is zero on a phase that "
+                           "submitted work; the AsyncStats handle is not connected");
+    }
+    const std::uint64_t accounted =
+        delta.submitted_ops + delta.queue_full_retries + delta.invalid_state_rejections;
+    if (accounted != delta.submit_calls) {
+        return std::string("stats wiring oracle: submit_calls is not partitioned by "
+                           "accepted and rejected outcomes");
+    }
+    return std::nullopt;
 }
 
 // Records the gate outcome in the raw evidence and exits non-zero if it failed.

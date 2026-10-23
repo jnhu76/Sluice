@@ -101,13 +101,14 @@ struct BackendChoice {
 };
 
 std::optional<AsyncIoContext> make_context(const BackendChoice& choice, std::size_t depth,
-                                            std::size_t workers, std::string& failure) {
+                                            std::size_t workers, std::string& failure,
+                                            AsyncStats* stats) {
     if (choice.name == "threadpool") {
         ThreadPoolConfig config;
         config.request_capacity = depth;
         config.worker_count = workers;
         try {
-            return sluice::async::make_threadpool_context(config);
+            return sluice::async::make_threadpool_context(config, stats);
         } catch (const std::exception& error) {
             failure = error.what();
             return std::nullopt;
@@ -117,7 +118,7 @@ std::optional<AsyncIoContext> make_context(const BackendChoice& choice, std::siz
         sluice::async::UringConfig config;
         config.request_capacity = depth;
         config.queue_depth = static_cast<unsigned>(depth);
-        auto made = sluice::async::make_uring_context(config);
+        auto made = sluice::async::make_uring_context(config, stats);
         if (!made.has_value()) {
             failure = "io_uring backend not available in this build profile";
             return std::nullopt;
@@ -187,7 +188,7 @@ AsyncStats stats_diff(const AsyncStats& after, const AsyncStats& before) {
 // One bounded sliding-window pipeline phase; `instrument` adds per-operation
 // submit/settle timestamps and `verify` checks returned bytes against the oracle.
 PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& path,
-                               bool instrument, bool verify) {
+                               bool instrument, bool verify, bool stats_enabled) {
     PhaseResult phase;
 
     auto opened = File::open(path, rw_open_existing());
@@ -205,8 +206,8 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
             ? params.core_capacity
             : std::max(params.depth,
                        params.scope_capacity != 0 ? params.scope_capacity : params.depth);
-    auto context =
-        make_context(*params.backend, backend_capacity, params.workers, backend_failure);
+    auto context = make_context(*params.backend, backend_capacity, params.workers,
+                                backend_failure, stats_enabled ? &stats : nullptr);
     if (!context.has_value()) {
         phase.ok = false;
         phase.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
@@ -232,6 +233,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
     if (params.saturating) {
         // Backpressure shape: fill the bound until admission refuses, then settle
         // the accepted window; rejection at the bound is counted, not failed.
+        const AsyncStats before = stats;
         const double start = bench::now_ns() * 1e-9;
         for (std::size_t round = 0; round < kSaturationRounds; ++round) {
             const std::size_t scope_capacity =
@@ -312,7 +314,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& 
             result.failure = "shutdown failed";
             return result;
         }
-        result.stats_delta = stats;
+        result.stats_delta = stats_diff(stats, before);
         return result;
     }
 
@@ -497,7 +499,7 @@ void fill_stats(bench::Record& record, const AsyncStats& s) {
 
 bool uring_constructible(const BackendChoice& choice, std::string& reason) {
     std::string failure;
-    auto context = make_context(choice, 8, 1, failure);
+    auto context = make_context(choice, 8, 1, failure, nullptr);
     if (!context.has_value()) {
         reason = failure.empty() ? "construction failed" : failure;
         return false;
@@ -520,7 +522,8 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
     }
 
     const double cpu_before = bench::process_cpu_seconds();
-    const PhaseResult phase = run_pipeline_phase(params, path, false, false);
+    const PhaseResult phase =
+        run_pipeline_phase(params, path, false, false, cfg.stats_enabled);
     const double cpu_after = bench::process_cpu_seconds();
 
     int failed = 0;
@@ -546,16 +549,44 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
     record.waits = phase.counters.waits;
     record.extra_a = phase.counters.accepted_at_saturation;
     record.extra_b = phase.counters.rejected_at_saturation;
+
+    std::optional<std::string> stats_failure =
+        bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+    if (!stats_failure.has_value() && cfg.stats_enabled) {
+        if (phase.stats_delta.completed_ops != phase.ops) {
+            stats_failure = "stats wiring oracle: completed_ops does not match the "
+                            "operations settled by this phase";
+        } else if (phase.stats_delta.wait_calls == 0) {
+            stats_failure = "stats wiring oracle: wait_calls is zero on a phase that "
+                            "blocked on results";
+        } else if (phase.stats_delta.max_outstanding == 0) {
+            stats_failure = "stats wiring oracle: max_outstanding is zero on a phase "
+                            "with accepted operations";
+        } else if (phase.stats_delta.completion_errors != 0 ||
+                   phase.stats_delta.short_completions != 0) {
+            stats_failure = "stats wiring oracle: a successful phase recorded completion "
+                            "errors or short completions";
+        }
+    }
+    if (stats_failure.has_value()) {
+        record.ok = false;
+        record.failure = stats_failure.value();
+        bench::emit_record(record);
+        bench::print_record(record);
+        return 1;
+    }
     fill_stats(record, phase.stats_delta);
 
-    const PhaseResult oracle = run_pipeline_phase(params, path, false, true);
+    const PhaseResult oracle =
+        run_pipeline_phase(params, path, false, true, cfg.stats_enabled);
     if (!oracle.ok) {
         record.ok = false;
         record.failure = "correctness oracle: " + oracle.failure;
         failed = 1;
     }
 
-    const PhaseResult instrumented = run_pipeline_phase(params, path, true, false);
+    const PhaseResult instrumented =
+        run_pipeline_phase(params, path, true, false, cfg.stats_enabled);
     if (!instrumented.ok) {
         record.ok = false;
         record.failure = "latency pass: " + instrumented.failure;
@@ -575,7 +606,8 @@ int main() {
     const bench::EnvConfig cfg = bench::env_config();
     std::printf("========================================================\n");
     std::printf("G0 W-02 bounded RequestScope pipeline benchmark\n");
-    std::printf("warmup=%zu measured_repetitions=%zu\n", cfg.warmup, cfg.measured);
+    std::printf("warmup=%zu measured_repetitions=%zu stats_wiring=%s\n", cfg.warmup,
+                cfg.measured, cfg.stats_enabled ? "on" : "off");
     std::printf("========================================================\n");
 
     bench::ensure_dir(cfg.tmp_dir);
