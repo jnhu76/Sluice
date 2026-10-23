@@ -527,6 +527,18 @@ if has_config("liburing") then
                               R .. "tests/uring_external_loop_test.cpp",
                               "SLUICE_URING_EXTERNAL_LOOP_MUTANT_HOST_IGNORES_DISPATCH_RETRY")
 
+    -- DP-1 publication delivery mutants. The payload-free publish path must
+    -- grant, complete and deliver with the in-scope request key; each mutant
+    -- breaks one edge and must be killed by the conformance/race suites
+    -- (occupancy teardown fail-fast for the foreign key, not_in_flight
+    -- fail-fast for the skipped grant). Executed and recorded manually.
+    uring_progress_target("uring_publish_mut_foreign_key",
+                              R .. "tests/uring_external_loop_test.cpp",
+                              "SLUICE_URING_MUTANT_PUBLISH_DELIVERS_FOREIGN_KEY")
+    uring_progress_target("uring_publish_mut_begin_skipped",
+                              R .. "tests/uring_external_loop_test.cpp",
+                              "SLUICE_URING_MUTANT_PUBLICATION_BEGIN_SKIPPED")
+
     -- Owed-count mutation builds. Each breaks one edge of the derived
     -- owed_count_ summary or its supporting invariant and must be killed by
     -- the named oracle: the parity suite grounds the counter in the
