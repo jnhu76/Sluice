@@ -97,13 +97,14 @@ struct BackendChoice {
 };
 
 std::optional<AsyncIoContext> make_context(const BackendChoice& choice, std::size_t depth,
-                                            std::size_t workers, std::string& failure) {
+                                            std::size_t workers, std::string& failure,
+                                            AsyncStats* stats) {
     if (choice.name == "threadpool") {
         ThreadPoolConfig config;
         config.request_capacity = depth;
         config.worker_count = workers;
         try {
-            return sluice::async::make_threadpool_context(config);
+            return sluice::async::make_threadpool_context(config, stats);
         } catch (const std::exception& error) {
             failure = error.what();
             return std::nullopt;
@@ -113,7 +114,7 @@ std::optional<AsyncIoContext> make_context(const BackendChoice& choice, std::siz
         sluice::async::UringConfig config;
         config.request_capacity = depth;
         config.queue_depth = static_cast<unsigned>(depth);
-        auto made = sluice::async::make_uring_context(config);
+        auto made = sluice::async::make_uring_context(config, stats);
         if (!made.has_value()) {
             failure = "io_uring backend not available in this build profile";
             return std::nullopt;
@@ -257,7 +258,7 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
 }
 
 PhaseResult run_external_phase(const LoopParams& params, const std::string& path,
-                               bool instrument, bool verify) {
+                               bool instrument, bool verify, bool stats_enabled) {
     PhaseResult phase;
 
     auto opened = File::open(path, rw_open_existing());
@@ -270,7 +271,8 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
 
     AsyncStats stats;
     std::string backend_failure;
-    auto context = make_context(*params.backend, params.depth, params.workers, backend_failure);
+    auto context = make_context(*params.backend, params.depth, params.workers, backend_failure,
+                                stats_enabled ? &stats : nullptr);
     if (!context.has_value()) {
         phase.ok = false;
         phase.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
@@ -515,7 +517,8 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     }
 
     const double cpu_before = bench::process_cpu_seconds();
-    const PhaseResult phase = run_external_phase(params, path, false, false);
+    const PhaseResult phase =
+        run_external_phase(params, path, false, false, cfg.stats_enabled);
     const double cpu_after = bench::process_cpu_seconds();
 
     if (!phase.ok) {
@@ -540,18 +543,54 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     record.empty_wakes = phase.empty_wakes;
     record.passes = phase.passes;
     record.extra_a = phase.retry_scheduled;
+
+    std::optional<std::string> stats_failure =
+        bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+    if (!stats_failure.has_value() && cfg.stats_enabled) {
+        if (phase.stats_delta.submit_calls != phase.submits ||
+            phase.stats_delta.submitted_ops != phase.submits) {
+            stats_failure = "stats wiring oracle: submit counters do not match the "
+                            "submissions issued by this phase";
+        } else if (phase.stats_delta.completed_ops != phase.ops) {
+            stats_failure = "stats wiring oracle: completed_ops does not match the "
+                            "operations settled by this phase";
+        } else if (phase.stats_delta.poll_calls == 0) {
+            stats_failure = "stats wiring oracle: poll_calls is zero on a phase driven "
+                            "through poll_progress";
+        } else if (phase.stats_delta.wait_calls != 0) {
+            stats_failure = "stats wiring oracle: the external driver recorded wait "
+                            "calls although it never parks in wait_progress";
+        } else if (phase.stats_delta.queue_full_retries != 0 ||
+                   phase.stats_delta.invalid_state_rejections != 0) {
+            stats_failure = "stats wiring oracle: a successful phase recorded rejected "
+                            "submissions";
+        } else if (phase.stats_delta.max_outstanding == 0 ||
+                   phase.stats_delta.max_outstanding > params.depth) {
+            stats_failure = "stats wiring oracle: max_outstanding outside the phase "
+                            "window";
+        }
+    }
+    if (stats_failure.has_value()) {
+        record.ok = false;
+        record.failure = stats_failure.value();
+        bench::emit_record(record);
+        bench::print_record(record);
+        return 1;
+    }
     fill_stats(record, phase.stats_delta);
 
     int failed = 0;
 
-    const PhaseResult oracle = run_external_phase(params, path, false, true);
+    const PhaseResult oracle =
+        run_external_phase(params, path, false, true, cfg.stats_enabled);
     if (!oracle.ok) {
         record.ok = false;
         record.failure = "correctness oracle: " + oracle.failure;
         failed = 1;
     }
 
-    const PhaseResult instrumented = run_external_phase(params, path, true, false);
+    const PhaseResult instrumented =
+        run_external_phase(params, path, true, false, cfg.stats_enabled);
     if (!instrumented.ok) {
         record.ok = false;
         record.failure = "latency pass: " + instrumented.failure;
@@ -571,7 +610,8 @@ int main() {
     const bench::EnvConfig cfg = bench::env_config();
     std::printf("========================================================\n");
     std::printf("G0 W-03 external event loop benchmark\n");
-    std::printf("warmup=%zu measured_repetitions=%zu\n", cfg.warmup, cfg.measured);
+    std::printf("warmup=%zu measured_repetitions=%zu stats_wiring=%s\n", cfg.warmup,
+                cfg.measured, cfg.stats_enabled ? "on" : "off");
     std::printf("========================================================\n");
 
     bench::ensure_dir(cfg.tmp_dir);
@@ -586,7 +626,7 @@ int main() {
     BackendChoice uring{"uring", true, {}};
     {
         std::string reason;
-        auto context = make_context(uring, 8, 0, reason);
+        auto context = make_context(uring, 8, 0, reason, nullptr);
         if (!context.has_value()) {
             uring.available = false;
             uring.unavailable_reason = reason;

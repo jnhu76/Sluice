@@ -440,6 +440,27 @@ do
                         R .. "tests/threadpool_external_loop_test.cpp")
 end
 
+-- W-03 stop-order protocol: the external driver re-checks the shared stop
+-- flag only between epoll_wait returns, so the flag must be published before
+-- request_stop's unconditional wake. The mutant build reverts the order and
+-- must report the stranded driver; it is executed and recorded manually,
+-- never run as a regular test.
+sluice_one_file_target("binary", "test", "external_loop_stop_order_test", "tests",
+                       {"sluice_core", "sluice_async"})
+do
+    local path = R .. "tests/external_loop_stop_order_test.cpp"
+    if os.isfile(path) then
+        target("external_loop_stop_order_mut_stop_flag_after_wake")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core", "sluice_async")
+            add_includedirs(R .. "include")
+            add_defines("SLUICE_EXTERNAL_LOOP_MUTANT_STOP_FLAG_AFTER_WAKE")
+            add_files(path)
+    end
+end
+
 -- io_uring readiness convergence evidence: kernel-style
 -- no-lost-wake race campaign, real-ring external-loop W-03 half, and the
 -- kernel eventfd registration lifecycle. Real ring required; registered only
