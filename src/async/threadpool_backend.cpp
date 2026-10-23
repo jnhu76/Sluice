@@ -335,8 +335,7 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Re
     if (!core_->acquire_control(id)) {
         detail::threadpool_core_handoff_fail_fast();
     }
-    detail::PublicationPayload payload;
-    if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
+    if (core_->begin_publication(id, nullptr) != detail::PublicationGrant::granted) {
         detail::threadpool_core_handoff_fail_fast();
     }
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
@@ -353,8 +352,7 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Re
 
 void ThreadPoolBackend::publish_one(detail::RequestReservation h) {
     const detail::RequestKey key{core_->context(), h.slot, h.generation};
-    detail::PublicationPayload payload;
-    if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
+    if (core_->begin_publication(key, nullptr) != detail::PublicationGrant::granted) {
         threadpool_publication_invariant_fail_fast();
     }
     DeliveryRecord& record = delivery_[h.slot.value];
@@ -369,7 +367,7 @@ void ThreadPoolBackend::publish_one(detail::RequestReservation h) {
     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
         threadpool_publication_invariant_fail_fast();
     }
-    deliver_event(payload.id, kind);
+    deliver_event(key, kind);
 }
 
 void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {

@@ -555,8 +555,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
     if (!core_->acquire_control(id)) {
         detail::uring_core_handoff_fail_fast();
     }
-    detail::PublicationPayload payload;
-    if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
+    if (core_->begin_publication(id, nullptr) != detail::PublicationGrant::granted) {
         detail::uring_core_handoff_fail_fast();
     }
     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
@@ -578,8 +577,13 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
 
 void UringAsyncBackend::publish_one(detail::RequestReservation h) {
     const detail::RequestKey key{core_->context(), h.slot, h.generation};
-    detail::PublicationPayload payload;
-    if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
+#if defined(SLUICE_URING_MUTANT_PUBLICATION_BEGIN_SKIPPED)
+    const bool publication_granted = true;
+#else
+    const bool publication_granted =
+        core_->begin_publication(key, nullptr) == detail::PublicationGrant::granted;
+#endif
+    if (!publication_granted) {
         detail::uring_core_handoff_fail_fast();
     }
     DeliveryRecord& record = delivery_[h.slot.value];
@@ -594,7 +598,13 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
         detail::uring_core_handoff_fail_fast();
     }
-    deliver_event(payload.id, kind);
+#if defined(SLUICE_URING_MUTANT_PUBLISH_DELIVERS_FOREIGN_KEY)
+    deliver_event(detail::RequestKey{key.context, key.slot,
+                                     detail::Generation{key.generation.value + 1}},
+                  kind);
+#else
+    deliver_event(key, kind);
+#endif
 }
 
 void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
