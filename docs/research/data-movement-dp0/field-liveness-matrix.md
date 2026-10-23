@@ -26,10 +26,22 @@ any production/test consumer; ✓ written today.
 
 Reading: for the four `size_t`-carried forms (read/write/zero-op and the
 blocking read), the 40-byte `FileInfo` and the payload body are **required by
-nothing** — they are written three times each (slot store, payload copy,
-result copy) and never read. `FileSize` reads 8 of the 40 metadata bytes.
-Only `FileInfo` results consume metadata wholly (and `identity` only because
-the conformance suite asserts kernel device+inode).
+nothing**. `FileSize` reads 8 of the 40 metadata bytes. Only `FileInfo`
+results consume metadata wholly (and `identity` only because the conformance
+suite asserts kernel device+inode).
+
+Erratum (2026-10-23, second review): this paragraph originally said the
+metadata is "written three times each (slot store, payload copy, result
+copy)" per `size_t` op. The slot-store member of that claim is wrong
+against baseline source: `offer_terminal`'s metadata store is gated on
+`candidate.has_metadata`, set only for `file_info`/`size` completions
+(`request_core.cpp`, `uring_completion.cpp`, `threadpool_backend.cpp`), and
+zero-ops are made terminal at `accept()` and never reach
+`offer_terminal`. What every `size_t`-carrying op does execute on base:
+the publication payload copy (DP-1), the result-bridge copy (DP-2,
+removed for non-metadata T by dp2b), and 40 B of `Slot::metadata`
+zeroing at the `reserve()`/`release_slot_()` initialization sites.
+The required-by-nothing conclusion above is unchanged.
 
 ## Counterfactual A (dp2 arm): runtime flag gates the metadata copy
 
@@ -66,7 +78,10 @@ by the type system in this shape.
 3. `outcome.effect.confirmed_bytes` is carried into `FileInfo`/`FileSize`
    results without being read — harmless (32 B slot field) but the matrix
    marks it ○ for those columns; a future specialized file_info publication
-   (DP-3C sketch in dp3-slot-layout.md) need not write it.
+   (corrected DP-3C in dp3-slot-layout.md) need not write it, and must not
+   drop the metadata write for `size` ops: `FileSize` requires
+   `metadata.size`, so any op-kind gate must be `file_info || size`, not
+   `file_info` alone.
 4. `FileSize` could be served by an 8-byte carrier instead of the 40-byte
    metadata copy; not implemented (would add a third overload for one type —
    cost/benefit recorded as negative at current metadata volumes).

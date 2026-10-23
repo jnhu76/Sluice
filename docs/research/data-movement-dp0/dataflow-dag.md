@@ -15,7 +15,7 @@ candidate analyses (dp1/dp2/dp3) cite back to these rows.
 | `RequestDescriptor` (in Slot @0x28, 32 B) | 32 B | slot | accept ← submit args → backend SQE build | 1 store + SQE field copies | mutex | core (backend caches its own SQE view) |
 | `BorrowFacts` (in Slot @0x48, 24 B) | 24 B | slot | accept → **never read in production** | 1 store + zeroing | mutex | duplicated in backend `prepared_ops_` (live authority) |
 | `IoOutcome` (in Slot @0x60, 32 B) | 32 B | slot | offer_terminal ← backend completion → publication, observe/consume | 1 store, 2 loads, 2 stack copies | mutex | core |
-| `FileInfo` (in Slot @0x80, 40 B) | 40 B | slot | offer_terminal ← backend statx result → publication, observe/consume | 1 store, 2 loads, 2 stack copies | mutex | core |
+| `FileInfo` (in Slot @0x80, 40 B) | 40 B | slot | offer_terminal ← backend statx result (file_info/size ops only: `has_metadata` gate; zero-ops bypass offer_terminal) → publication, observe/consume | 1 store on metadata ops only, 2 loads, 2 stack copies; 40 B zeroing at reserve/release init sites on every op | mutex | core |
 | `PublicationPayload` | 120 B | caller stack | backend publish form + begin_publication → publisher reads `.id` only | init (120 B) + copy-in (96 B) per op | none (local) | — (derived snapshot) |
 | `RequestResultData` | 72 B | caller stack (`Request<T>`) | default-init + observe/consume fill → `result_of_` | init (72 B) + slot copy-in | none (local) | — |
 | backend `prepared_ops_` entry | per in-flight op | backend map | accept → completion | 0 (in-place) | backend mutex | backend |
@@ -33,7 +33,7 @@ claim_execution (backend)       [mutex]  phase/refs
   └─ io_uring_enter(sqe)        — kernel
 kernel completes CQE
 poll() → backend reap
-  └─ core.offer_terminal(key,outcome)   [mutex] 32 B outcome store (+40 B metadata if file_info)
+  └─ core.offer_terminal(key,outcome)   [mutex] 32 B outcome store (+40 B metadata if file_info/size)
   └─ backend.erase prepared_ops_
   └─ begin_publication(key,&payload)    [mutex]
         payload ← 24 B args + slot 32 B + slot 40 B                        (DP-1)
@@ -57,7 +57,7 @@ Blocking W-01: `precheck → pread → Result<size_t>` stores. Nothing else.
 | slot zeroing (release) | ~168 B | 16 stores, 3 lines |
 | descriptor + borrow stores | 56 B | borrow write-only |
 | outcome store + payload copy-in | 32+32 B | outcome copied twice |
-| metadata store + copy-in (×2 sites) | 40×3 B | **unread by `size_t` consumers** |
+| metadata load-side copy-in (payload + bridge) | 40×2 B | **unread by `size_t` consumers**; the slot-side producer store does not execute (`has_metadata` gate — erratum 2026-10-23); metadata zeroing is counted in the zeroing rows above |
 | payload init | 120 B | pure dead weight |
 | RequestResultData init + fill | 72+72 B | 40 B of it metadata |
 | Result<T> materialization | 8 B used | from the 72 B |

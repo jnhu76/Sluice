@@ -63,3 +63,58 @@ All blocking findings resolved before commit. The reviewer's structural
 findings (verdicts, controls, oracle evidence) stood unchanged. Verdict on
 the corrected set: **APPROVE** (disposition recorded here rather than
 re-running the agent; the corrections are mechanical and receipt-verified).
+
+## Second review round (erratum pass), 2026-10-23
+
+An external reviewer re-derived the pairing statistics directly from the
+three raw JSONL families (same case/config/rep pairing; no document summary
+used as input) and confirmed: dp1 −27.50015 (15/15), dp2 +12.10004 (0/15),
+dp2b −8.80001 (14/15), dp3a −16.50006 (15/15), dp1+dp2b −36.30015 (15/15);
+the fixed-bench-TU family reproduced dp1 −27.5 and dp3a −16.5. The three
+measured arms stand.
+
+Three findings accepted as errata (all corrected in this revision):
+
+1. **DP-3C source-model error (blocking for the research narrative, not for
+   the measured arms).** `dp3-slot-layout.md` and
+   `field-liveness-matrix.md` claimed `offer_terminal()` writes 40 B of
+   `FileInfo` into the slot on every ordinary read/write. Baseline source
+   refutes this: `request_core.cpp` gates the store on
+   `candidate.has_metadata` (default `false`); `uring_completion.cpp`'s
+   byte-op success branch never sets it; `threadpool_backend.cpp` sets it
+   only for `file_info || size`; zero-ops are made terminal at `accept()`
+   and bypass `offer_terminal` entirely. The sketched
+   `descriptor.op == file_info` gate would additionally have broken
+   `FileSize` (size ops require `metadata.size`). DP-3C is redefined as a
+   per-site audit of `Slot::metadata` initialization/write sites vs
+   `TerminalCandidate::metadata`. RESEARCH ONLY; no measured result
+   depended on the false premise.
+2. **52.8 instr/op relabeled as a projected sum.** The only measured
+   combined arm is DP-1+DP-2B (−36.3). Now recorded as
+   `THREE_ARM_PROJECTED_SUM = 52.8 instr/op`,
+   `THREE_ARM_COMBINED_MEASURED = NOT_RUN`. The ≈500 B figure is relabeled
+   a static-analysis logical load/store elimination estimate, not a
+   memory-bus/DRAM-traffic measurement.
+3. **DP-3B cache-line argument shrunk.** 168 B slots are not 64 B aligned;
+   consecutive slot starts drift across the arena (168 mod 64 = 40), so
+   slot offset 0x80 does not map to a fixed third physical cache line.
+   With no cache/TLB PMU data and no implemented DP-3B/DP-3C arms, the
+   cross-workload domination claim is withdrawn; at most, under the
+   analyzed capacities and traffic model there is no demonstrated reason
+   to implement the hot/cold split.
+
+### Stage disposition
+
+- DP-1, DP-2B, DP-3A: PRODUCTIZATION CANDIDATE — separate PRs in the order
+  dp1 → dp2b → dp3a, each independently passing v2 conformance, the
+  lifetime/concurrency gates, and real performance validation at final
+  HEAD; dp3a additionally owes first-reserve, rollback,
+  generation-exhaustion and slot-reuse initialization-safety evidence.
+- DP-3B, DP-3C: RESEARCH ONLY.
+- PR #570: REVISE DOCS / KEEP DRAFT; no merge.
+- Next stage: E5 native-Linux pre-productization validation — real release
+  build, GCC 16, W-02/W-03, ThreadPool, non-spinning result consumption,
+  and the DP-1+DP-2B+DP-3A three-arm combo; the claimed second-order
+  benefit ("completion visible earlier, one fewer poll") must be evidenced
+  by recorded `poll_calls/op`, completion visibility and CPU/wall at equal
+  request counts, not inferred from total-instruction deltas alone.

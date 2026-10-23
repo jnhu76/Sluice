@@ -9,6 +9,12 @@ field. Arena of N slots is contiguous; 64-slot cores = 10.5 KB (L1), 4096
 slots = 672 KB (L2). **All cache-line statements here are analytical** — this
 host exposes no usable cache counters (hardware-attribution.md).
 
+Erratum (2026-10-23, second review): every "line N" below is a
+**slot-relative** 64 B window, not a physical line. 168 is not a multiple
+of 64 (168 mod 64 = 40), so consecutive slot starts drift by 40 B across
+the arena and the slot offset 0x80 does not map to any fixed physical
+cache line. No statement here may be read as a physical-line claim.
+
 ## DP-3A — redundant reserve() re-initialization (measured arm)
 
 Base re-zeros ~132 B of the slot in `reserve()` (~14 stores) that
@@ -35,8 +41,10 @@ free-list path to a single store (`phase = reserved`; receipt §B).
 - **Classification: ELIMINATED_CONFIRMED** (the re-zeroing is gone; the
   effect is exact on the deterministic instrument).
 
-Residual per-op zeroing after dp3a: `release_slot_`'s 16 stores (3 lines)
-— see DP-3C for the only remaining line-2 traffic.
+Residual per-op zeroing after dp3a: `release_slot_`'s 16 stores (3 slot-
+relative lines) — for non-metadata ops the only remaining unconditional
+line-2 movement (see the corrected DP-3C; the producer metadata store
+claimed by the original text does not exist on non-metadata ops).
 
 ## DP-3B — hot/cold slot split (analytical; NOT implemented)
 
@@ -46,12 +54,15 @@ shrinking the hot record to 128 B (2 lines).
 Assessment against the measured evidence:
 
 1. After DP-1 (no payload) + DP-2B (no consumer copies), line 2's remaining
-   traffic for non-file_info ops is: the `offer_terminal` metadata store,
-   `begin_publication`'s slot load (dp1 skips via null out — so this read is
-   already gone on inline paths), and `release_slot_`'s two zeroing stores.
-   The split cannot remove the store or the zeroing (they address the slot
-   by index; a cold array is touched just the same). **The split saves
-   nothing that DP-3C (below) does not already remove at the source.**
+   traffic for non-metadata ops is: `release_slot_`'s two zeroing stores,
+   and nothing else — the `offer_terminal` metadata store named by the
+   original text is withdrawn by the DP-3C erratum below (the store is
+   `has_metadata`-gated and does not execute on non-metadata ops).
+   The split cannot remove the zeroing either (both layouts address the
+   slot/array by index). With DP-3C's premise corrected, the earlier
+   "the split saves nothing that DP-3C does not already remove" statement
+   is withdrawn: neither candidate has an implemented arm and this host has
+   no cache/TLB PMU data, so no cross-workload domination is claimed.
 2. Footprint: 168→128 B = 24 % smaller arena. At benchmarked capacities the
    arena is already L1-resident; the benefit would only appear at very large
    `request_capacity` (672 KB → 512 KB at 4096 slots, L2) — no benchmarked
@@ -62,40 +73,61 @@ Assessment against the measured evidence:
    allocation), and a second set of zeroing sites. Under the root's
    "smallest mechanism" discipline the split is dominated.
 
-**Classification: ANALYTICAL_ONLY_NOT_IMPLEMENTED — dominated by DP-3C on
-traffic; footprint benefit unproven at any exercised capacity.**
+**Classification: ANALYTICAL_ONLY_NOT_IMPLEMENTED — no implemented arm and
+no cache/TLB PMU evidence; under the analyzed capacities and traffic model
+there is no demonstrated reason to implement the split, and the earlier
+"dominated by DP-3C" comparison is withdrawn (see DP-3C erratum).**
 
-## DP-3C — specialized payload storage / don't-write-unread-metadata (analytical; NOT implemented; sketch)
+## DP-3C — metadata write-site audit (analytical; NOT implemented; redefined
+## by the 2026-10-23 erratum)
 
-Idea: the producer side of line 2. `offer_terminal` stores the backend's
-40 B FileInfo into the slot on **every** op; only file_info ops ever read
-it. The backend knows the op kind statically at publish time
-(`publish_one`/`publish_zero_op_inline` vs the file_info publisher), and the
-slot's own `descriptor.op` already carries the same fact (existing authority
-— no new state).
+**Erratum (2026-10-23, second review).** The original sketch claimed
+`offer_terminal` stores the backend's 40 B FileInfo into the slot on
+**every** op. Baseline source refutes this:
 
-Sketch: gate the metadata store (and release_slot_'s two line-2 zeroing
-stores) on `descriptor.op == file_info`, or split `offer_terminal` into
-with/without-metadata forms selected by the existing descriptor. Effects
-per non-file_info op: −40 B stores, −40 B zeroing, line 2 untouched over
-the whole lifecycle (with dp1+dp2b already removing the loads).
+- `request_core.cpp` gates the store: `if (candidate.has_metadata)
+  { slot->metadata = candidate.metadata; }`, and
+  `TerminalCandidate::has_metadata` defaults to `false`.
+- `uring_completion.cpp`: the byte-op (read/write) success branch never
+  sets the flag; only the metadata-op branch (`file_info`/`size`) does.
+- `threadpool_backend.cpp`: same gate, `file_info || size` only.
+- Zero-ops never reach `offer_terminal` at all: `accept()` makes them
+  terminal and the backend publishes them inline.
 
-Overlap checks required by the task:
-- With `statx_buffers_`/prepared storage: the metadata's source is the
-  backend's statx buffer; the slot copy is the only redundant write. The
-  backend's prepared entry does not need the metadata (it is produced by the
-  kernel after the backend's bookkeeping) — no overlap conflict.
-- With dp2b: complementary, not overlapping — dp2b removes consumer-side
-  loads/copies, DP-3C removes producer-side stores. Together with dp1 they
-  reduce line-2 traffic to zero for non-file_info ops.
-- Risk: `SlotObservation` and cancellation/diagnostic paths read slot
-  metadata for in-flight ops; the gate must confirm which of those consumers
-  are load-bearing before a product patch (this is precisely the
-  mechanism-justification work, and why it was not rushed into an arm in
-  this round).
+The claimed per-non-metadata-op 40 B producer store therefore does not
+exist, and no measured result in this study depended on it (the DP-1, DP-2B
+and DP-3A receipts and verdicts are untouched by this correction). The
+original gate sketch (`descriptor.op == file_info`) would additionally
+have been a correctness break: `size` ops produce metadata too, and
+`FileSize` results require `metadata.size` (field-liveness-matrix.md ●).
 
-**Classification: ANALYTICAL_ONLY_NOT_IMPLEMENTED — concrete sketch, derived
-from existing authority, with named consumers to clear through the gate.**
+**Redefined candidate.** First separate the two metadata objects and their
+write sites, then audit each site for machine work that non-metadata ops
+actually execute:
+
+- `Slot::metadata`: reserve-side zeroing (base only; already removed by
+  dp3a), `offer_terminal`'s gated store (metadata ops only), release-side
+  zeroing (`release_slot_`, every op).
+- `TerminalCandidate::metadata`: caller-stack object, filled only on
+  `file_info`/`size` completions.
+
+On current source the only unconditional per-non-metadata-op line-2
+movement is `release_slot_`'s 40 B zeroing (part of the 16-store re-init;
+dp3a already removed the reserve-side twin). A successor candidate targeting
+that site must clear the same named consumers through the mechanism gate
+(`SlotObservation`, cancellation/diagnostic paths) **plus** size-op metadata
+liveness: `FileSize` reads `metadata.size`, and the specialized 8-byte size
+carrier remains the recorded alternative (field-liveness-matrix.md
+residual 4).
+
+Overlap checks from the original sketch are superseded by this redefinition;
+the statx-buffer overlap note remains valid but is now about where the
+metadata-op copy originates, not about a per-op elimination.
+
+**Classification: ANALYTICAL_ONLY_NOT_IMPLEMENTED — corrected source model;
+no implemented arm; no measured figure. The DP-3B/DP-3C dominance
+comparison is withdrawn: neither has an arm, and the remaining shared
+target (release-side zeroing) is unmeasured.**
 
 ## Authority-contraction audit for this slice (required by AGENTS.md)
 

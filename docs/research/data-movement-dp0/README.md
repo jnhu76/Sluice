@@ -35,9 +35,16 @@ bridge whose 40-byte metadata half is unread by `size_t`-carried results
 (DP-2), and a double slot re-initialization (DP-3A). Research arms removed
 each independently; interleaved A/B matrices on a deterministic instrument
 confirm the assembly-predicted per-op instruction deltas to within a few
-instructions (−27.5 / −8.8 / −16.5, additive to −36.3 for the DP-1+DP-2B
-combo), with second-order 0.9–11.9 % whole-loop reductions on poll-spinning
-workloads. W-01 (blocking) is already clean. DP-3B (slot split) is dominated;
-DP-3C (producer-side metadata gating) is sketched but not implemented. All
+instructions (−27.5 / −8.8 / −16.5, additive to −36.3 for the measured
+DP-1+DP-2B combo; the three-arm 52.8 instr/op figure is a projected sum —
+combined arm NOT_RUN), with second-order 0.9–11.9 % whole-loop reductions
+on poll-spinning
+workloads. W-01 (blocking) is already clean. DP-3B (slot split) and DP-3C
+are analytical only; both were corrected by the 2026-10-23 erratum
+(decision.md): the DP-3C producer metadata store is already
+`has_metadata`-gated in source and does not execute on non-metadata ops,
+so the remaining non-metadata line-2 work is initialization/zeroing, and
+the DP-3B domination claim is withdrawn. The ~500 B figure is a static
+logical load/store estimate, not a memory-traffic measurement. All
 cache/TLB attribution is analytical — the host exposes no usable cache
 counters and its cache-miss counters are marked INVALID.
