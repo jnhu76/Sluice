@@ -197,6 +197,15 @@ struct LoopFixture {
             lock, kCompletionBudget, [&] { return fixture->shared.driver_attached; });
         lock.unlock();
         if (!attached) {
+            // The driver thread references this fixture; join it before the
+            // unique_ptr below may destroy the fixture.
+            {
+                std::lock_guard<std::mutex> relock(fixture->shared.mutex);
+                fixture->shared.stop = true;
+            }
+            fixture->shared.cv.notify_all();
+            fixture->ctx.request_stop(ShutdownPolicy::drain);
+            fixture->driver.join();
             return nullptr;
         }
         return fixture;
@@ -337,7 +346,7 @@ void completed_phase_stop_joins() {
             check(observed.result.has_value() && observed.result.value() == kLen,
                   "driven read completed with full length");
         } else {
-            fail_hard("request ready after its completion was counted");
+            fail_hard("request not ready after its completion was counted");
         }
     }
     ::close(fd);
@@ -393,8 +402,14 @@ int run_fixed_suite() {
     // still false; from here no further wake exists and the driver can never
     // observe the flag.
     fixture->ctx.request_stop(ShutdownPolicy::drain);
+    const auto reParkDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     std::uint32_t parks = fixture->shared.park_generation.load(std::memory_order_acquire);
     while (parks < 2) {
+        if (std::chrono::steady_clock::now() > reParkDeadline) {
+            std::fprintf(stderr, "MUTANT UNTESTABLE: driver never re-parked twice\n");
+            std::fflush(stderr);
+            ::_exit(3);
+        }
         fixture->shared.park_generation.wait(parks, std::memory_order_acquire);
         parks = fixture->shared.park_generation.load(std::memory_order_acquire);
     }
