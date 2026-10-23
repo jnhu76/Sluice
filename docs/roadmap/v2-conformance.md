@@ -403,3 +403,50 @@ justification and the authority-contraction audit per AGENTS.md.
 - Second-authority risk explicitly rejected: no parallel cancellation
   state machine exists; the gate is a physical-work skip, not a semantic
   decision point.
+## Dated v0.0.3 release validation (2026-10-23)
+
+The v0.0.3 release candidate (`release/v0.0.3` head `3a108176`; product
+content identical to master `5a75e303` except `CHANGELOG.md` and one
+test-only compile fix in `tests/external_loop_stop_order_test.cpp`) passed
+the full release gate on the native E5 host (Fedora 44, kernel 7.2.11,
+GCC 16.2.1, clang 22.1.8, xmake 3.1.2, system liburing 2.13):
+
+- 8-cell matrix (GCC debug/release × liburing y/n, clang asanubsan × y/n,
+  GCC tsan × y/n; isolated builddirs, `--ccache=n`): configure, build and
+  the full test suite exit 0 in every cell; 58/58 tests (liburing=n) and
+  78/78 (liburing=y) pass with zero skipped. The first matrix round
+  reproduced a clang-only `-Werror -Wunused-const-variable` failure in the
+  registered W-03 stop-order mutant build (test-only; GCC never compiled
+  that mutant with the constant live); the constant moved into the
+  fixed-order arm and all 8 cells re-ran clean on `3a108176`.
+- Clean-room package verification PASS in both profiles (11-header install
+  set, standalone-header probes, core-only and async consumers, archive
+  baselines, ODR macro-independence, negative removed-header/seam probes,
+  `not_supported` under liburing=n), plus the verifier self-test.
+- Formal gates re-run on the release candidate: `scripts/verify_tla.sh`
+  PASS (RequestCore, ObserverCore, ShutdownCore safety/liveness and their
+  named-mutant expectations) and `scripts/verify_progress_source_model.sh`
+  PASS. Re-run because `src/async/detail/request_core.cpp` changed in this
+  delta (DP-1 observation metadata, DP-3A reserve reset removal); the
+  modeled transitions are unchanged — reserve still draws a fully cleared
+  slot, and the publication out-form is retained — so the fresh PASS
+  replaces the frozen-`28f0fe33` carry for this release.
+- All 19 registered mutation targets re-run on the release candidate and
+  killed with their expected signatures (stop-order mutant exit 2;
+  begin-skipped publication fail-fast 134; foreign-key publication
+  bounded-liveness watchdog 142; 16 parity/closure kills exit 1 with named
+  messages), with the five healthy suite controls exit 0.
+- Reference applications accepted on both release profiles: copy
+  default/pipeline/syncall byte-identical to the fixture (including the
+  liburing=n binary), hash equals the fixture digest, grep/tail parity
+  with coreutils, follow mode observes appended data.
+- Performance sentinels (W-01 negative control, the full default W-02 case
+  set, W-03 on both backends) ran clean with stats accounting off. No
+  full v0.0.2-vs-v0.0.3 paired A/B was attempted for this release, so the
+  release notes cite each mechanism's scoped evidence only.
+
+No requirement row changed status; the G6 rows above carry the H2b and E1
+evidence. DP-1/DP-3A evidence remains in their dated evidence directories
+(`docs/evidence/dp1-publication-payload-elimination/`,
+`docs/evidence/dp3a-reserve-reinit/`); their compiler proofs apply to this
+candidate because the production tree is identical to master `5a75e303`.
