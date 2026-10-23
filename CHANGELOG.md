@@ -15,6 +15,99 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-10-23
+
+**Performance and reliability maintenance release.** No public API change:
+the eleven installed headers and the install configuration are byte-identical
+to v0.0.2, and no dependency, runtime or build requirement changed. This is a
+source release; consumers rebuild against the same 11-header SDK surface. No
+v1 compatibility surface exists or returns.
+
+### Performance
+
+Four redundant-work eliminations on the request hot paths. Each removes
+machine work that a named oracle proved redundant; none changes protocol
+semantics, adds authoritative state, or removes a legal-interleaving guard.
+Each carries named mutation kills and a deterministic parity or closure
+oracle.
+
+- **io_uring: empty owed-event sweep skipped (H2b, #565).** `poll()` no
+  longer sweeps the full delivery-record table when no owed event exists,
+  and `poll_progress()` derives immediate-work from a maintained
+  `owed_count_` summary instead of a full scan; the full authoritative scan
+  remains in force whenever the count is nonzero, and settlement, shutdown
+  and destruction never consult the counter. Formal paired A/B on the E5
+  native host (fail-closed runner, 870 recorded rows) PASSED across all 11
+  measured configs (paired wall median ≤ 0.994); the headline
+  4 KiB / C1024 / D1 shape measured 0.495. Claimed only for the measured
+  configurations and workloads.
+- **io_uring: empty pending-control router scan skipped (E1, #569).**
+  `service_pending_controls_locked_()` returns immediately when the derived
+  `pending_control_count_` is zero; the router `control_pending` flags
+  remain the semantic authority, and sticky cancel intent is retained and
+  serviced unchanged. Product A/B on the E5 host: W-02 headline 0.698/0.620
+  (15/15 wins), negative controls ≤ 1.0004, user-space cycles 0.350x at an
+  identical kernel boundary (same `io_uring_enter` count). The native cost
+  on sticky-intent (P>0) paths is NOT MEASURED; a controlled seam bound
+  (0.938–0.961 against the 1.05 acceptance line) is the recorded evidence
+  class.
+- **Publication payload materialization eliminated (DP-1, #572).** The
+  publish paths no longer construct a 120-byte `PublicationPayload`;
+  publication keeps its protocol out-form (`begin_publication` is still
+  called, now with `nullptr`) and delivery uses the in-scope request key.
+  Compiler proof: the payload initialization is gone from every publish
+  function on both backends (frame 232→96 bytes, no new allocation).
+  End-to-end W-02/W-03 neutral; only the redundant machine work is claimed.
+- **Redundant reserve-time slot reset eliminated (DP-3A, #573).** `reserve()`
+  trusts the free-list invariant (`release_slot_` is the single
+  re-initialization site) instead of re-storing 16 slot fields; the E5
+  release binary shows a single slot store remains. Direct incremental A/B
+  against the master+DP-1 baseline: wall 1.00142 [0.99349, 1.00539]
+  (neutral), −20.9 instructions/op of deterministic work.
+
+### Fixed
+
+- The W-03 external-loop benchmark now publishes its stop flag before
+  `request_stop` wakes the driver, closing a stop-order race that could
+  strand the driver between `epoll_wait` returns (#571). The defect was in
+  the benchmark harness, not the library; a deterministic stop-order
+  regression test and a named mutant now guard the protocol.
+- The v0.0.2 known issue — `threadpool_progress_race_test` flaky under CPU
+  load (#550) — is resolved. The root cause was a test-harness
+  synchronization defect (a missing happens-before edge between the worker
+  completion signal and fixture release), not a production defect. The
+  repair adds deterministic oracle holds, was verified red→green on WSL2
+  and cross-validated on native Linux with three mutation kills, and the
+  repaired oracles run in every matrix cell of this release.
+
+### Testing and verification
+
+- New deterministic oracles: io_uring owed-counter parity, io_uring
+  pending-control parity (including an 8-thread cancel storm with in-lock
+  snapshot monitoring), RequestCore initialization closure, the
+  external-loop stop-order protocol, four W-03 admission scenarios for
+  inline zero-op owed events, and causal worker-signal witnesses for the
+  threadpool progress race oracles.
+- Named mutation builds guard each new mechanism (owed count, pending-control
+  count, payload-free publication, reserve closure, stop order); each is
+  killed by its named oracle with recorded receipts, executed manually and
+  never run as regular tests.
+- Benchmarks: stats accounting is opt-in (`SLUICE_BENCH_STATS`, default
+  off) with the AsyncStats wiring verified; isolated mechanism benches and
+  a paired native A/B harness with an independent validator were added as
+  research-evidence infrastructure.
+
+### Documentation and research evidence
+
+- `llms.txt` navigation index for LLM/coding agents (an index only, with no
+  normative force); the README links it.
+- New dated evidence records under `docs/evidence/` for all four performance
+  mechanisms, the #550 repair, and the state-complexity research campaigns.
+  The v2 conformance ledger gains the H2b PROG-01/PROG-02 updates and the
+  E1 CANCEL-01 row with its mechanism-justification record.
+- The DP-2B data-movement research and the #575–#582 optimization candidates
+  remain open research; none of their code or claims are in this release.
+
 ## [0.0.2] - 2026-10-19
 
 **v2 re-architecture (breaking).** This is the first release line on the
