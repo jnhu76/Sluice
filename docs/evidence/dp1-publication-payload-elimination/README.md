@@ -53,11 +53,13 @@ campaign's E5 stage.
   Killed with the named fail-fast "core handoff reached a protocol-unreachable
   state (invariant violation)", rc=134 (SIGABRT).
 - `uring_publish_mut_foreign_key`
-  (`SLUICE_URING_MUTANT_PUBLISH_DELIVERS_FOREIGN_KEY`): delivers a
-  wrong-generation ReadyEvent; the real key's observer phase is never retired,
-  settlement never completes, and the external-loop harness's own `alarm(120)`
-  watchdog terminates the run (rc=142 after test 8/9 passed) — the bounded
-  supervision kill for the lost-retirement state.
+  (`SLUICE_URING_MUTANT_PUBLISH_DELIVERS_FOREIGN_KEY`):
+  `BOUNDED_LIVENESS_KILL` — delivers a wrong-generation ReadyEvent; the real
+  key's observer phase is never retired, settlement never completes, and the
+  external-loop harness's own `alarm(120)` watchdog terminates the run
+  (rc=142 after test 8/9 passed). This is the bounded-supervision kill for
+  the lost-retirement state, not an eager identity check: no oracle rejects
+  the foreign key up front.
 - Premature reclaim is owned by the existing `public_request_test`
   publication-epilogue pause-gate oracle (pauses `publish_one` between grant
   and completion, requires pending for the consumer) and the existing
