@@ -423,12 +423,15 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
         phase.failure = failure;
     }
 
-    ctx.request_stop(ShutdownPolicy::drain);
+    // stop must be observable before request_stop wakes the driver: the
+    // driver re-checks it only between epoll_wait returns, and a wake
+    // consumed while it is still false parks the driver forever.
     {
         std::lock_guard<std::mutex> lock(shared.mutex);
         shared.stop = true;
     }
     shared.cv.notify_all();
+    ctx.request_stop(ShutdownPolicy::drain);
     driver.join();
     ::close(epoll_fd);
 
