@@ -437,7 +437,9 @@ struct EnvConfig {
     std::string tmp_dir = "/tmp/sluice-bench";
     std::string disk_dir;
     bool include_disk = true;
-    bool stats_enabled = true;
+    // Default matches the pre-stats G0 benchmark: accounting is opt-in via
+    // SLUICE_BENCH_STATS=1 so default runs stay comparable with old data.
+    bool stats_enabled = false;
 };
 
 inline EnvConfig env_config() {
