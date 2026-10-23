@@ -118,3 +118,45 @@ Three findings accepted as errata (all corrected in this revision):
   benefit ("completion visible earlier, one fewer poll") must be evidenced
   by recorded `poll_calls/op`, completion visibility and CPU/wall at equal
   request counts, not inferred from total-instruction deltas alone.
+
+## E5 validation round (native Linux), 2026-10-23
+
+The E5 stage demanded by the disposition above was executed on the same
+bare-metal server as M2 (Fedora 44, kernel 7.2.9, GCC 16.2.1, release
+build, `--liburing=y`; five trees at the branch commit with the arm
+patches applied, each 76/76). Full record: e5-native-validation.md; raw
+evidence committed under results/raw/e5/ and results/receipts/e5/.
+
+Outcomes against the demanded checks:
+
+- **Three-arm combo measured**: 62.7 instr/op removed on the zop
+  instrument (15/15 interleaved pairs; negative control 0/5).
+  `THREE_ARM_COMBINED_MEASURED` is no longer NOT_RUN.
+- **W-02/W-03 + ThreadPool + non-spinning consumption**: driven; W-02
+  pinned, W-03 unpinned (recorded deviation, see below). W02-uring-4k-d1
+  regresses for the three-arm tree (+2.9 %, CI wholly > 1).
+- **Attribution of that regression**: dp1 alone improves (0.9821), dp2b
+  alone is neutral (0.9919) — the regression is a dp1×dp2b interaction;
+  dp3a adds ≈ +0.5 % (noise). The dp2b PR's final-HEAD-on-dp1 gate is
+  now evidence-backed with W02-uring-4k-d1 as the arbitrating shape.
+- **poll_calls/op + completion visibility**: recorded via a stats-wired
+  harness (the campaign also found and recorded that both W-02/W-03
+  harnesses never wired their `AsyncStats` into the context factory, so
+  their `stats_delta` was identically zero). The claimed second-order
+  poll benefit is absent on W-02 shapes and real only on
+  W03-uring-4k-d4 (−9.5 % poll passes); empty wakes are zero everywhere.
+- **W-03 pinned-run stall**: root-caused to a stop-protocol race in the
+  W-03 bench harness (it set `shared.stop` after `request_stop`, whose
+  unconditional progress wake could be consumed and re-parked on by the
+  driver before the flag became visible; single-CPU affinity opens the
+  window ~1/3 of phases). fdinfo at hang proved all 20000 ops completed,
+  were reaped and published (SqHead=SqTail=CqHead=CqTail=20001,
+  eventfd-count 0); a Sluice-free ring repro hung 0/30; the reordered
+  harness hung 0/15 vs 8/15 — causal. The library's notification paths
+  were audited line by line and no missing-wake path exists. The bench
+  is fixed in-tree by this branch; W-03 figures are unpinned (recorded
+  deviation).
+
+Stage disposition unchanged: DP-1/DP-2B/DP-3A remain productization
+candidates as separate PRs (dp1 → dp2b → dp3a) with the full gates; PR
+#570 remains draft with docs + bench fix + evidence only.

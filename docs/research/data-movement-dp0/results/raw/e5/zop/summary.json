@@ -1,0 +1,23 @@
+{
+  "w01ctl": {
+    "pairs_ok": 5,
+    "median_instr_per_op_delta": -2.2001649999999984,
+    "positive_instr_pairs": 0,
+    "median_cycles_per_op_delta": 0.12296999999998093,
+    "median_wall_delta_s": 0.0010307609999999912
+  },
+  "zop-dp1dp2b": {
+    "pairs_ok": 15,
+    "median_instr_per_op_delta": 41.800205000000005,
+    "positive_instr_pairs": 15,
+    "median_cycles_per_op_delta": 29.51302499999997,
+    "median_wall_delta_s": -0.0014550069999999943
+  },
+  "zop-threearm": {
+    "pairs_ok": 15,
+    "median_instr_per_op_delta": 62.700214999999844,
+    "positive_instr_pairs": 15,
+    "median_cycles_per_op_delta": 39.04146500000002,
+    "median_wall_delta_s": -0.0018946479999999988
+  }
+}

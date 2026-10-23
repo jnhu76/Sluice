@@ -1,0 +1,7 @@
+campaign_stage=zop stamp=20261023T020931
+Linux 7.2.9-201.fc44.x86_64 x86_64 GNU/Linux
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+2
+5708209e568b14b611640a19459eb48ffbedea86ce45bd6a3763bdfe697a61a8  /tmp/e5/bin/dp0e5_base
+5557dfdd53ba9b41775bb5f00b80fcd9be33aa15037021334942fa6d66846d1c  /tmp/e5/bin/dp0e5_dp1dp2b
+e12f40ee8ddb91cf6a9365d905a5f846821f6eb2b56f941456614596d8542575  /tmp/e5/bin/dp0e5_threearm

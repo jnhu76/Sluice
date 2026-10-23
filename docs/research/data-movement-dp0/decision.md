@@ -36,8 +36,11 @@ not merge without explicit instruction.
 Projected combined effect of the accepted set (dp1+dp2b+dp3a), per
 non-metadata op: `THREE_ARM_PROJECTED_SUM = 52.8 instr/op` (additivity of
 measured parts: −36.3 combo + −16.5 dp3a) —
-`THREE_ARM_COMBINED_MEASURED = NOT_RUN`; no three-arm binary was built in
-this round. The ≈ **500 B** figure is a static-analysis estimate of logical
+`THREE_ARM_COMBINED_MEASURED = 62.7 instr/op` on the E5 native-Linux
+validation host (GCC 16, release, 15/15 pairs; the 52.8 projection was
+measured on WSL2/GCC 15 and is superseded by the measured figure on that
+host — e5-native-validation.md §1). The ≈ **500 B** figure is a
+static-analysis estimate of logical
 load/store elimination (payload 216 B, result bridge 152 B, reserve re-init
 132 B), not a measured memory-bus or DRAM-traffic quantity. Measured:
 the second-order poll-loop
@@ -62,14 +65,40 @@ corrections, all applied in this revision:
    audit of `Slot::metadata` initialization/write sites vs
    `TerminalCandidate::metadata`; no measured figure depended on the old
    premise.
-2. **52.8 instr/op is a projected sum.** The only combined arm measured is
-   DP-1+DP-2B (−36.3). `THREE_ARM_COMBINED_MEASURED = NOT_RUN`. The ≈500 B
-   figure is a static logical load/store estimate, not a memory-traffic
-   measurement.
+2. **52.8 instr/op is a projected sum.** The only combined arm measured
+   in the WSL round is DP-1+DP-2B (−36.3). The ≈500 B figure is a static
+   logical load/store estimate, not a memory-traffic measurement. The
+   three-arm combo was subsequently measured on the E5 native-Linux host:
+   62.7 instr/op (e5-native-validation.md §1).
 3. **DP-3B cache-line argument shrunk.** 168 B slots are not 64 B aligned;
    consecutive slot starts drift (168 mod 64 = 40), so slot offset 0x80
    never maps to a fixed physical cache line. Without cache/TLB PMU data or
    implemented DP-3B/DP-3C arms, no cross-workload domination is claimed.
+
+## E5 validation (2026-10-23)
+
+The agreed native-Linux pre-productization stage ran to completion
+(e5-native-validation.md; raw evidence under results/raw/e5/ and
+results/receipts/e5/). Headlines:
+
+- Three-arm combo measured: 62.7 instr/op removed (zop, 15/15),
+  negative control clean; W-02/W-03 and ThreadPool driven; stats-wired
+  `poll_calls/op` recorded.
+- The claimed second-order poll benefit does not appear on W-02 shapes
+  (poll/op unchanged to slightly up) and is real only on
+  W03-uring-4k-d4 (−9.5 % poll passes).
+- W02-uring-4k-d1 regresses +2.9 % (CI wholly > 1) for the three-arm
+  tree. Attribution: dp1 alone improves (0.9821), dp2b alone is neutral
+  (0.9919) — the regression is a dp1×dp2b interaction; dp3a adds ≈ +0.5 %
+  (noise). The dp2b productization PR must therefore validate on top of
+  dp1 at final HEAD, with W02-uring-4k-d1 as the arbitrating shape.
+- W-03 pinned runs exposed a stop-protocol race in the
+  bench_w03_external_loop harness (driver consumes request_stop's wake
+  before `shared.stop` is set and re-parks in epoll_wait(-1) forever;
+  join never returns). Investigated to root cause with a causal fix
+  (e5-native-validation.md §6); bench fixed in-tree by this branch; the
+  library's notification paths audited — no missing-wake path found.
+  W-03 numbers are unpinned (recorded deviation).
 
 ## The seven final questions
 
@@ -131,8 +160,9 @@ Wall-time and cycles are context, never verdicts: the self-pair control
 proved the frozen thresholds' noise assumption miscalibrated for
 poll-spinning cases, so no verdict rests on them. Honest total: the
 measured confirmed set is dp1+dp2b (−36.3 measured, additive) plus dp3a
-(−16.5 measured on an independent arm); their three-arm sum of 52.8 is a
-PROJECTED figure — no combined three-arm binary was run — and ≈500 B is a
+(−16.5 measured on an independent arm); their three-arm sum was projected
+at 52.8 on WSL2/GCC 15 and measured at 62.7 instr/op removed on the E5
+native-Linux host (e5-native-validation.md §1), and ≈500 B is a
 static logical load/store estimate per non-metadata op
 (≈1.6 % of the measured zop loop,
 direct; 0.9–11.9 % across families including the second-order completion-visibility effect),
@@ -150,18 +180,18 @@ implementation.
 
 ## Known gaps (recorded, not hidden)
 
-- No W-03 (external-loop eventfd/epoll) performance A/B was run; its
-  publication/result path is the one measured via zop/constp, and its
-  correctness is covered by the suite's external-loop tests, but no
-  loop-specific delta was measured.
-- The three-arm combined figure is projected, not measured
-  (THREE_ARM_COMBINED_MEASURED = NOT_RUN); native-Linux pre-productization
-  validation (release, GCC 16, W-02/W-03, ThreadPool, non-spinning
-  consumption, three-arm combo, poll_calls/op + completion visibility +
-  CPU/wall) is the agreed next stage before any productization merge.
+- W-03 A/B ran unpinned only (pinned runs trip a stop-protocol race in
+  the W-03 bench harness — investigated and fixed in-tree by this
+  branch, e5-native-validation.md §6); its loop-specific delta is
+  measured on unpinned runs and the single-CPU shape remains unmeasured.
+- The three-arm combined figure is measured on the E5 native-Linux host
+  (62.7 instr/op, e5-native-validation.md §1); it remains unmeasured on
+  the WSL host, and the W-02 uring d1 regression carries the dp1×dp2b
+  interaction finding into the dp2b productization gate.
 - DP-3B/3C are analytical only.
-- All numbers are statements about this WSL2/GCC 15.2.0 host; the
-  receipts define the reproduction path for any other host.
+- Instruction-verdict numbers are statements about their measurement
+  host (WSL2/GCC 15.2.0 for the arm deltas, native Linux/GCC 16.2.1 for
+  E5); the receipts define the reproduction path for any other host.
 - The frozen threshold rule proved miscalibrated for spinning cases
   (self-pair control); verdicts rest on the deterministic instrument and
   assembly accounting instead, and this deviation-in-spirit is documented
@@ -181,12 +211,22 @@ verdicts: DP-1 ELIMINATED_CONFIRMED (-27.5 instr/op zop, 15/15);
           DP-3B/DP-3C ANALYTICAL_ONLY_NOT_IMPLEMENTED (2026-10-23 erratum: DP-3C premise corrected —
           producer store already has_metadata-gated; DP-3B domination claim withdrawn);
           W-01 ALREADY_OPTIMAL
-THREE_ARM_PROJECTED_SUM = 52.8 instr/op; THREE_ARM_COMBINED_MEASURED = NOT_RUN;
+THREE_ARM_PROJECTED_SUM = 52.8 instr/op (WSL2/GCC 15);
+          THREE_ARM_COMBINED_MEASURED = 62.7 instr/op removed (E5 native Linux, GCC 16, 15/15,
+          e5-native-validation.md);
           static logical load/store elimination estimate ~500 B per non-metadata op
           (payload 216 B + result bridge 152 B + reserve re-init 132 B) — not a
           memory-traffic measurement;
           second-order poll-loop reductions 0.9-11.9% across families (3.2-6.8% artifact-free) (above self-pair floor)
-correctness: 76/76 tests on all 6 arms incl. combo; W-01 negative control byte-identical b3c403c0...;
+E5 stage: native-Linux validation complete (e5-native-validation.md); W02-uring-4k-d1 wall
+          arm/base: dp1 alone 0.9821 (improve), dp2b alone 0.9919 (neutral), dp1dp2b 1.0244,
+          threearm 1.0292 — d1 regression is a dp1×dp2b interaction, arbitrating shape for the
+          dp2b PR's final-HEAD gate; poll/op: W-02 shapes unchanged (claimed poll benefit absent),
+          W03-uring-4k-d4 −9.5% poll passes; W-03 pinned stall root-caused to the bench's
+          stop-after-request_stop race (bench fixed in-tree; library notification paths audited,
+          no missing-wake path); W-03 deltas unpinned (recorded deviation)
+correctness: 76/76 tests on all 6 arms incl. combo; 76/76 on all 5 E5 trees; W-01 negative control
+          byte-identical b3c403c0...;
           wrong metadata-skip caught at runtime (dp2 shape) and at compile time (dp2b shape)
 invalid-marked: L1-dcache-*/dTLB-* unavailable on host; cache-references/cache-misses INVALID;
           wall/cycle medians context only; frozen thresholds demonstrated miscalibrated for

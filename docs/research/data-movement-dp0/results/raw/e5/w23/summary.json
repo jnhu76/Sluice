@@ -1,0 +1,74 @@
+{
+  "W02-threadpool-4k-d16-w4": {
+    "pairs": 15,
+    "wall_ratio_median": 0.9866632565300136,
+    "wall_ratio_ci95": [
+      0.982489212357316,
+      0.9904837173233197
+    ],
+    "cpu_ratio_median": 0.9867857979922349,
+    "cpu_ratio_ci95": [
+      0.9828239544007631,
+      0.9907866980722712
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": null,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": null
+  },
+  "W02-uring-4k-d1": {
+    "pairs": 15,
+    "wall_ratio_median": 1.0291600640290572,
+    "wall_ratio_ci95": [
+      1.0138935700511578,
+      1.032850007710057
+    ],
+    "cpu_ratio_median": 1.0290886836389797,
+    "cpu_ratio_ci95": [
+      1.0107365713908418,
+      1.035965978619366
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": null,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": null
+  },
+  "W02-uring-4k-d16": {
+    "pairs": 15,
+    "wall_ratio_median": 1.0023778250008506,
+    "wall_ratio_ci95": [
+      0.9972559416640812,
+      1.0123435788026995
+    ],
+    "cpu_ratio_median": 1.0020474939066804,
+    "cpu_ratio_ci95": [
+      0.9969722100130064,
+      1.0121259351437886
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": null,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": null
+  },
+  "W02-uring-64k-d16": {
+    "pairs": 15,
+    "wall_ratio_median": 0.9968784189252221,
+    "wall_ratio_ci95": [
+      0.9957086644690677,
+      0.998493083029424
+    ],
+    "cpu_ratio_median": 0.9966177590958202,
+    "cpu_ratio_ci95": [
+      0.9956173218293868,
+      0.9995468264304763
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": null,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": null
+  }
+}

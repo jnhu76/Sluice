@@ -1,0 +1,68 @@
+pollmetrics stamp=20261023T025258 pairs=5
+02:52:59 W02-uring-4k-d1-p0-a done
+02:53:01 W02-uring-4k-d1-p0-b done
+02:53:02 W02-uring-4k-d1-p1-b done
+02:53:03 W02-uring-4k-d1-p1-a done
+02:53:05 W02-uring-4k-d1-p2-a done
+02:53:06 W02-uring-4k-d1-p2-b done
+02:53:08 W02-uring-4k-d1-p3-b done
+02:53:09 W02-uring-4k-d1-p3-a done
+02:53:10 W02-uring-4k-d1-p4-a done
+02:53:12 W02-uring-4k-d1-p4-b done
+CASE_DONE W02-uring-4k-d1
+02:53:13 W02-uring-4k-d16-p0-a done
+02:53:13 W02-uring-4k-d16-p0-b done
+02:53:14 W02-uring-4k-d16-p1-b done
+02:53:15 W02-uring-4k-d16-p1-a done
+02:53:16 W02-uring-4k-d16-p2-a done
+02:53:17 W02-uring-4k-d16-p2-b done
+02:53:17 W02-uring-4k-d16-p3-b done
+02:53:18 W02-uring-4k-d16-p3-a done
+02:53:19 W02-uring-4k-d16-p4-a done
+02:53:20 W02-uring-4k-d16-p4-b done
+CASE_DONE W02-uring-4k-d16
+02:53:21 W02-threadpool-4k-d16-w4-p0-a done
+02:53:22 W02-threadpool-4k-d16-w4-p0-b done
+02:53:23 W02-threadpool-4k-d16-w4-p1-b done
+02:53:24 W02-threadpool-4k-d16-w4-p1-a done
+02:53:25 W02-threadpool-4k-d16-w4-p2-a done
+02:53:27 W02-threadpool-4k-d16-w4-p2-b done
+02:53:28 W02-threadpool-4k-d16-w4-p3-b done
+02:53:29 W02-threadpool-4k-d16-w4-p3-a done
+02:53:30 W02-threadpool-4k-d16-w4-p4-a done
+02:53:31 W02-threadpool-4k-d16-w4-p4-b done
+CASE_DONE W02-threadpool-4k-d16-w4
+02:53:32 W03-uring-4k-d4-p0-a done
+02:53:34 W03-uring-4k-d4-p0-b done
+02:53:35 W03-uring-4k-d4-p1-b done
+02:53:36 W03-uring-4k-d4-p1-a done
+02:53:38 W03-uring-4k-d4-p2-a done
+02:53:39 W03-uring-4k-d4-p2-b done
+02:53:41 W03-uring-4k-d4-p3-b done
+02:53:42 W03-uring-4k-d4-p3-a done
+02:53:43 W03-uring-4k-d4-p4-a done
+02:53:45 W03-uring-4k-d4-p4-b done
+CASE_DONE W03-uring-4k-d4
+02:53:46 W03-uring-4k-d16-p0-a done
+02:53:47 W03-uring-4k-d16-p0-b done
+02:53:48 W03-uring-4k-d16-p1-b done
+02:53:49 W03-uring-4k-d16-p1-a done
+02:53:50 W03-uring-4k-d16-p2-a done
+02:53:51 W03-uring-4k-d16-p2-b done
+02:53:52 W03-uring-4k-d16-p3-b done
+02:53:54 W03-uring-4k-d16-p3-a done
+02:53:55 W03-uring-4k-d16-p4-a done
+02:53:56 W03-uring-4k-d16-p4-b done
+CASE_DONE W03-uring-4k-d16
+02:53:57 W03-threadpool-4k-d16-w4-p0-a done
+02:53:58 W03-threadpool-4k-d16-w4-p0-b done
+02:53:59 W03-threadpool-4k-d16-w4-p1-b done
+02:54:00 W03-threadpool-4k-d16-w4-p1-a done
+02:54:02 W03-threadpool-4k-d16-w4-p2-a done
+02:54:03 W03-threadpool-4k-d16-w4-p2-b done
+02:54:04 W03-threadpool-4k-d16-w4-p3-b done
+02:54:05 W03-threadpool-4k-d16-w4-p3-a done
+02:54:06 W03-threadpool-4k-d16-w4-p4-a done
+02:54:08 W03-threadpool-4k-d16-w4-p4-b done
+CASE_DONE W03-threadpool-4k-d16-w4
+POLLMETRICS_DONE

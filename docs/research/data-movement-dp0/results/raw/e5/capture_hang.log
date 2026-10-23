@@ -1,0 +1,12 @@
+attempt=1 completed rc=0
+attempt=2 completed rc=0
+attempt=3 HUNG pid=25558
+=== attempt=3 pid=25558 2026-10-23T11:30:49+08:00
+--- threads
+TID=25558 comm=timeout state=S wchan=sigsuspend.isra.0
+  syscall: 130 0x7ffec28504a0 0x8 0x0 0x0 0x0 0x0 0x7ffec2850370 0x7f34b18b456e
+--- fds
+--- jsonl
+{"case_id":"CAL-oracle-self-test","workload":"calibration","backend":"n/a","dataset":"pattern table + verify_pattern discrimination","cache_policy":"n/a","filesystem":"n/a","notes":"must pass before any case; a degenerate pattern or a non-biting comparison fails here","block_size":0,"request_count":0,"concurrency":0,"queue_depth":0,"worker_count":0,"warmup":0,"rep":0,"order_index":0,"measured":false,"ok":true,"failure":"","wall_s":0.000000000,"ops":0,"bytes":0,"ops_per_sec":0.000,"mib_per_sec":0.000,"cpu_s":0.000000000,"cpu_util":0.000000,"rss_kb":0,"peak_rss_kb":0,"lat_n":0,"lat_min_ns":0.0,"lat_p50_ns":0.0,"lat_p95_ns":0.0,"lat_p99_ns":0.0,"lat_max_ns":0.0,"lat_mean_ns":0.0,"lat_stddev_ns":0.0,"submits":0,"would_block":0,"notifications":0,"empty_wakes":0,"passes":0,"waits":0,"extra_a":0,"extra_b":0,"stats_submit_calls":0,"stats_submitted_ops":0,"stats_poll_calls":0,"stats_wait_calls":0,"stats_completed_ops":0,"stats_canceled_ops":0,"stats_completion_errors":0,"stats_short_completions":0,"stats_max_outstanding":0,"stats_queue_full_retries":0,"stats_invalid_state":0}
+CAPTURED
+CAPTURE_DONE

@@ -1,0 +1,220 @@
+diff --git a/include/sluice/async/request.hpp b/include/sluice/async/request.hpp
+index c5df1fb2..15c1068c 100644
+--- a/include/sluice/async/request.hpp
++++ b/include/sluice/async/request.hpp
+@@ -87,8 +87,13 @@ struct RequestBridge {
+     static RequestReadiness observe(const RequestCore* core, const RequestId& id,
+                                     RequestResultData* out) noexcept;
+ 
++    static RequestReadiness observe(const RequestCore* core, const RequestId& id, bool* succeeded,
++                                    IoError* error, sluice::EffectReport* effect) noexcept;
++
+     static RequestReadiness consume(RequestCore* core, const RequestId& id,
+                                     RequestResultData* out) noexcept;
++    static RequestReadiness consume(RequestCore* core, const RequestId& id, bool* succeeded,
++                                    IoError* error, sluice::EffectReport* effect) noexcept;
+ 
+     // Releases the public binding; nonterminal and stale releases fail fast.
+     static void discard(RequestCore* core, const RequestId& id) noexcept;
+@@ -135,27 +140,54 @@ template <class T> class Request {
+         if (core_ == nullptr) {
+             return {};
+         }
+-        RequestResultData data;
+-        const RequestReadiness readiness = detail::RequestBridge::observe(core_, id_, &data);
+-        if (readiness == RequestReadiness::pending) {
+-            return {RequestReadiness::pending};
++        if constexpr (k_result_uses_metadata_<T>) {
++            RequestResultData data;
++            const RequestReadiness readiness = detail::RequestBridge::observe(core_, id_, &data);
++            if (readiness == RequestReadiness::pending) {
++                return {RequestReadiness::pending};
++            }
++            return {RequestReadiness::ready, result_of_(data), data.effect};
++        } else {
++            bool succeeded = false;
++            IoError error{};
++            sluice::EffectReport effect{};
++            const RequestReadiness readiness =
++                detail::RequestBridge::observe(core_, id_, &succeeded, &error, &effect);
++            if (readiness == RequestReadiness::pending) {
++                return {RequestReadiness::pending};
++            }
++            return {RequestReadiness::ready, result_of_split_<T>(succeeded, error, effect), effect};
+         }
+-        return {RequestReadiness::ready, result_of_(data), data.effect};
+     }
+ 
+     RequestObservation<T> take_result() noexcept {
+         if (core_ == nullptr) {
+             return {};
+         }
+-        RequestResultData data;
+-        const RequestReadiness readiness = detail::RequestBridge::consume(core_, id_, &data);
++        RequestReadiness readiness = RequestReadiness::empty;
++        bool succeeded = false;
++        IoError error{};
++        sluice::EffectReport effect{};
++        Result<T> payload{make_unexpected<T>(IoError{IoError::Code::invalid_state})};
++        if constexpr (k_result_uses_metadata_<T>) {
++            RequestResultData data;
++            readiness = detail::RequestBridge::consume(core_, id_, &data);
++            if (readiness == RequestReadiness::ready) {
++                payload = result_of_(data);
++            }
++        } else {
++            readiness = detail::RequestBridge::consume(core_, id_, &succeeded, &error, &effect);
++            if (readiness == RequestReadiness::ready) {
++                payload = result_of_split_<T>(succeeded, error, effect);
++            }
++        }
+         if (readiness == RequestReadiness::pending) {
+             return {RequestReadiness::pending};
+         }
+         core_ = nullptr;
+         backend_ = nullptr;
+         id_ = RequestId{};
+-        return {RequestReadiness::ready, result_of_(data), data.effect};
++        return {RequestReadiness::ready, std::move(payload), effect};
+     }
+ 
+     void discard() noexcept { release_responsibility_(); }
+@@ -184,6 +216,26 @@ template <class T> class Request {
+         id_ = RequestId{};
+     }
+ 
++    template <class U>
++    static Result<U> result_of_split_(bool succeeded, const IoError& error,
++                                      const sluice::EffectReport& effect) noexcept {
++        if constexpr (std::is_void_v<U>) {
++            if (succeeded) {
++                return {};
++            }
++            return make_unexpected<U>(error);
++        } else {
++            if (succeeded) {
++                return Result<U>{static_cast<U>(effect.confirmed_bytes)};
++            }
++            return make_unexpected<U>(error);
++        }
++    }
++
++    template <class U>
++    static constexpr bool k_result_uses_metadata_ =
++        std::is_same_v<U, sluice::FileInfo> || std::is_same_v<U, sluice::FileSize>;
++
+     static Result<T> result_of_(const RequestResultData& data) noexcept {
+         if constexpr (std::is_void_v<T>) {
+             if (data.succeeded) {
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index cdee02fd..9c62a165 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -732,6 +732,41 @@ RequestReadiness RequestBridge::observe(const RequestCore* core, const RequestId
+     return RequestReadiness::ready;
+ }
+ 
++RequestReadiness RequestBridge::observe(const RequestCore* core, const RequestId& id,
++                                        bool* succeeded, IoError* error,
++                                        sluice::EffectReport* effect) noexcept {
++    IoOutcome outcome;
++    const PublicObservation observed =
++        core->observe_public_result(RequestBridge::key_of(id), &outcome, nullptr);
++    if (observed == PublicObservation::pending) {
++        return RequestReadiness::pending;
++    }
++    if (observed == PublicObservation::stale) {
++        request_binding_invariant_fail_fast();
++    }
++    *succeeded = outcome.succeeded;
++    *error = outcome.error;
++    *effect = outcome.effect;
++    return RequestReadiness::ready;
++}
++
++RequestReadiness RequestBridge::consume(RequestCore* core, const RequestId& id, bool* succeeded,
++                                        IoError* error, sluice::EffectReport* effect) noexcept {
++    IoOutcome outcome;
++    const PublicConsumption consumed =
++        core->consume_public_result(RequestBridge::key_of(id), &outcome, nullptr);
++    if (consumed == PublicConsumption::pending) {
++        return RequestReadiness::pending;
++    }
++    if (consumed == PublicConsumption::stale) {
++        request_binding_invariant_fail_fast();
++    }
++    *succeeded = outcome.succeeded;
++    *error = outcome.error;
++    *effect = outcome.effect;
++    return RequestReadiness::ready;
++}
++
+ RequestReadiness RequestBridge::consume(RequestCore* core, const RequestId& id,
+                                         RequestResultData* out) noexcept {
+     IoOutcome outcome;
+diff --git a/src/async/threadpool_backend.cpp b/src/async/threadpool_backend.cpp
+index 2977a734..515822ad 100644
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -335,8 +335,7 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Re
+     if (!core_->acquire_control(id)) {
+         detail::threadpool_core_handoff_fail_fast();
+     }
+-    detail::PublicationPayload payload;
+-    if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
++    if (core_->begin_publication(id, nullptr) != detail::PublicationGrant::granted) {
+         detail::threadpool_core_handoff_fail_fast();
+     }
+     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
+@@ -353,8 +352,7 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Re
+ 
+ void ThreadPoolBackend::publish_one(detail::RequestReservation h) {
+     const detail::RequestKey key{core_->context(), h.slot, h.generation};
+-    detail::PublicationPayload payload;
+-    if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
++    if (core_->begin_publication(key, nullptr) != detail::PublicationGrant::granted) {
+         threadpool_publication_invariant_fail_fast();
+     }
+     DeliveryRecord& record = delivery_[h.slot.value];
+@@ -369,7 +367,7 @@ void ThreadPoolBackend::publish_one(detail::RequestReservation h) {
+     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
+         threadpool_publication_invariant_fail_fast();
+     }
+-    deliver_event(payload.id, kind);
++    deliver_event(key, kind);
+ }
+ 
+ void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index ede2b034..0381c9a0 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -555,8 +555,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+     if (!core_->acquire_control(id)) {
+         detail::uring_core_handoff_fail_fast();
+     }
+-    detail::PublicationPayload payload;
+-    if (core_->begin_publication(id, &payload) != detail::PublicationGrant::granted) {
++    if (core_->begin_publication(id, nullptr) != detail::PublicationGrant::granted) {
+         detail::uring_core_handoff_fail_fast();
+     }
+     if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
+@@ -578,8 +577,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+ 
+ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
+     const detail::RequestKey key{core_->context(), h.slot, h.generation};
+-    detail::PublicationPayload payload;
+-    if (core_->begin_publication(key, &payload) != detail::PublicationGrant::granted) {
++    if (core_->begin_publication(key, nullptr) != detail::PublicationGrant::granted) {
+         detail::uring_core_handoff_fail_fast();
+     }
+     DeliveryRecord& record = delivery_[h.slot.value];
+@@ -594,7 +592,7 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
+     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
+         detail::uring_core_handoff_fail_fast();
+     }
+-    deliver_event(payload.id, kind);
++    deliver_event(key, kind);
+ }
+ 
+ void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {

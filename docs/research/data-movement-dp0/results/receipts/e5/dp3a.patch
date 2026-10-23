@@ -1,0 +1,26 @@
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index cdee02fd..cc6d4622 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -170,21 +170,6 @@ ReserveAttempt RequestCore::reserve() {
+     free_slots_.pop_back();
+     Slot& slot = slots_[index];
+     slot.phase = SlotPhase::reserved;
+-    slot.accepted = false;
+-    slot.binding_live = false;
+-    slot.terminal_chosen = false;
+-    slot.published = false;
+-    slot.publication_inflight = false;
+-    slot.execution_claimed = false;
+-    slot.cancel_intent = false;
+-    slot.zero_op = false;
+-    slot.observer_phase = ObserverPhase::unattached;
+-    slot.execution_refs = 0;
+-    slot.control_refs = 0;
+-    slot.descriptor = {};
+-    slot.borrow = {};
+-    slot.outcome = {};
+-    slot.metadata = {};
+     return ReserveAttempt{ReserveStatus::reserved,
+                           RequestReservation{SlotIndex{index}, slot.generation}};
+ }

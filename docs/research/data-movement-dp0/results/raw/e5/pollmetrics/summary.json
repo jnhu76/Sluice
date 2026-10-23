@@ -1,0 +1,68 @@
+{
+  "W02-threadpool-4k-d16-w4": {
+    "pairs": 5,
+    "poll_per_op_arm_median": 0.103,
+    "poll_per_op_base_median": 0.1024,
+    "notif_per_op_arm_median": 0.0,
+    "notif_per_op_base_median": 0.0,
+    "empty_wake_per_op_arm_median": 0.0,
+    "empty_wake_per_op_base_median": 0.0,
+    "passes_per_op_arm_median": 0.0,
+    "passes_per_op_base_median": 0.0
+  },
+  "W02-uring-4k-d1": {
+    "pairs": 5,
+    "poll_per_op_arm_median": 1.3893,
+    "poll_per_op_base_median": 1.3439,
+    "notif_per_op_arm_median": 0.0,
+    "notif_per_op_base_median": 0.0,
+    "empty_wake_per_op_arm_median": 0.0,
+    "empty_wake_per_op_base_median": 0.0,
+    "passes_per_op_arm_median": 0.0,
+    "passes_per_op_base_median": 0.0
+  },
+  "W02-uring-4k-d16": {
+    "pairs": 5,
+    "poll_per_op_arm_median": 0.14995,
+    "poll_per_op_base_median": 0.15065,
+    "notif_per_op_arm_median": 0.0,
+    "notif_per_op_base_median": 0.0,
+    "empty_wake_per_op_arm_median": 0.0,
+    "empty_wake_per_op_base_median": 0.0,
+    "passes_per_op_arm_median": 0.0,
+    "passes_per_op_base_median": 0.0
+  },
+  "W03-threadpool-4k-d16-w4": {
+    "pairs": 5,
+    "poll_per_op_arm_median": 0.1535,
+    "poll_per_op_base_median": 0.1525,
+    "notif_per_op_arm_median": 0.1165,
+    "notif_per_op_base_median": 0.11585,
+    "empty_wake_per_op_arm_median": 0.0,
+    "empty_wake_per_op_base_median": 0.0,
+    "passes_per_op_arm_median": 0.1165,
+    "passes_per_op_base_median": 0.11585
+  },
+  "W03-uring-4k-d16": {
+    "pairs": 5,
+    "poll_per_op_arm_median": 0.17035,
+    "poll_per_op_base_median": 0.17225,
+    "notif_per_op_arm_median": 0.11175,
+    "notif_per_op_base_median": 0.1124,
+    "empty_wake_per_op_arm_median": 0.0,
+    "empty_wake_per_op_base_median": 0.0,
+    "passes_per_op_arm_median": 0.11175,
+    "passes_per_op_base_median": 0.1124
+  },
+  "W03-uring-4k-d4": {
+    "pairs": 5,
+    "poll_per_op_arm_median": 0.46305,
+    "poll_per_op_base_median": 0.51175,
+    "notif_per_op_arm_median": 0.39545,
+    "notif_per_op_base_median": 0.4052,
+    "empty_wake_per_op_arm_median": 0.0,
+    "empty_wake_per_op_base_median": 0.0,
+    "passes_per_op_arm_median": 0.39545,
+    "passes_per_op_base_median": 0.4052
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "W03-threadpool-4k-d16-w4": {
+    "pairs": 15,
+    "wall_ratio_median": 1.0140082733210036,
+    "wall_ratio_ci95": [
+      0.9208709326059845,
+      1.0343675662399638
+    ],
+    "cpu_ratio_median": 1.006883131768052,
+    "cpu_ratio_ci95": [
+      0.9516072602871515,
+      1.1246793812711795
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": 0.00040000000000001146,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": 0.00040000000000001146
+  },
+  "W03-uring-4k-d16": {
+    "pairs": 15,
+    "wall_ratio_median": 1.0063246401848522,
+    "wall_ratio_ci95": [
+      0.8969203000019302,
+      1.0162366624934014
+    ],
+    "cpu_ratio_median": 0.995227421962563,
+    "cpu_ratio_ci95": [
+      0.8979636039309883,
+      1.033377976516774
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": -0.003500000000000003,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": -0.003500000000000003
+  },
+  "W03-uring-4k-d4": {
+    "pairs": 15,
+    "wall_ratio_median": 0.9724863490551366,
+    "wall_ratio_ci95": [
+      0.9530781817635591,
+      0.9965263592636622
+    ],
+    "cpu_ratio_median": 0.9515969364245614,
+    "cpu_ratio_ci95": [
+      0.8750031955882492,
+      1.0381254435027665
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": 4.999999999999449e-05,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": 4.999999999999449e-05
+  }
+}

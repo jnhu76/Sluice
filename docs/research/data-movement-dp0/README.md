@@ -36,10 +36,15 @@ bridge whose 40-byte metadata half is unread by `size_t`-carried results
 each independently; interleaved A/B matrices on a deterministic instrument
 confirm the assembly-predicted per-op instruction deltas to within a few
 instructions (−27.5 / −8.8 / −16.5, additive to −36.3 for the measured
-DP-1+DP-2B combo; the three-arm 52.8 instr/op figure is a projected sum —
-combined arm NOT_RUN), with second-order 0.9–11.9 % whole-loop reductions
+DP-1+DP-2B combo), with second-order 0.9–11.9 % whole-loop reductions
 on poll-spinning
-workloads. W-01 (blocking) is already clean. DP-3B (slot split) and DP-3C
+workloads. The E5 native-Linux validation stage (e5-native-validation.md)
+measured the three-arm combo directly: 62.7 instr/op removed on GCC 16
+(15/15 pairs, negative control clean), drove W-02/W-03 and ThreadPool with
+recorded `poll_calls/op`, and attributed the W02-uring-4k-d1 wall
+regression to a dp1×dp2b interaction (each arm alone is neutral or better)
+— the arbitrating shape for the dp2b productization gate.
+W-01 (blocking) is already clean. DP-3B (slot split) and DP-3C
 are analytical only; both were corrected by the 2026-10-23 erratum
 (decision.md): the DP-3C producer metadata store is already
 `has_metadata`-gated in source and does not execute on non-metadata ops,

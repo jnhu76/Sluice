@@ -1,0 +1,49 @@
+attempt=1 completed rc=0
+attempt=2 HUNG timeout_pid=25899 bench_pid=25901
+=== attempt=2 bench_pid=25901 2026-10-23T11:35:00+08:00
+--- bench threads
+TID=25901 comm=bench_w03_exter state=S wchan=futex_do_wait
+  syscall: 202 0x7f04b36efce8 0x109 0x2 0x0 0x0 0xffffffff 0x7ffc95ca9e68 0x7f04b376b352
+TID=25903 comm=iou-wrk-25901 state=S wchan=io_wq_worker
+  syscall: 426 0x3 0x1 0x1 0x1 0x0 0x8 0x0 0x0
+TID=25906 comm=bench_w03_exter state=S wchan=ep_poll
+  syscall: 232 0x7 0x7f04b36eed90 0x4 0xffffffffffffffff 0x0 0x0 0x7f04b36eecb8 0x7f04b376b352
+--- fds
+lrwx------. 1 jnhu jnhu 64 Oct 23 11:35 5 -> anon_inode:[io_uring]
+lrwx------. 1 jnhu jnhu 64 Oct 23 11:35 6 -> anon_inode:[eventfd]
+lrwx------. 1 jnhu jnhu 64 Oct 23 11:35 7 -> anon_inode:[eventpoll]
+-- fd 5 -> anon_inode:[io_uring]
+pos:	0
+flags:	02000002
+mnt_id:	19
+ino:	111100
+SqMask:	0x3
+SqHead:	20001
+SqTail:	20001
+CachedSqHead:	20001
+CqMask:	0x7
+CqHead:	20001
+CqTail:	20001
+CachedCqTail:	20001
+SQEs:	0
+CQEs:	0
+SqThread:	-1
+SqThreadCpu:	-1
+SqTotalTime:	0
+SqWorkTime:	0
+UserFiles:	0
+UserBufs:	0
+PollList:
+CqOverflowList:
+NAPI:	disabled
+-- fd 6 -> anon_inode:[eventfd]
+pos:	0
+flags:	02004002
+mnt_id:	19
+ino:	1098
+eventfd-count:                0
+eventfd-id: 63
+eventfd-semaphore: 0
+--- jsonl lines: 1
+CAPTURED
+CAPTURE_DONE
