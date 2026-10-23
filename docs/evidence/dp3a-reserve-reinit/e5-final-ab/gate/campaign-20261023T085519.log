@@ -1,0 +1,252 @@
+campaign=dp3a-stage2 stamp=20261023T085519 pairs=15
+base_sha=4221c7e3339fe8d03d861b2a2caf6e4f1f1d9b78
+arm_sha=da602ccc3888b715ae18886189df769c31a242b7
+cpu=2 pinned for W-02/W-01; W-03 UNPINNED by design
+perf_paranoid=2
+Linux 7.2.9-201.fc44.x86_64 x86_64 GNU/Linux
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+  binary /home/jnhu/Source/e5r2/wt-base/build/linux/x86_64/release/bench_w02_pipeline 913ce2eee5cd4c05ee600902c55105d3dbb109f24ed57199ba1ef731232138d8
+  binary /home/jnhu/Source/e5r2/wt-arm/build/linux/x86_64/release/bench_w02_pipeline e07a1bd2503e1ff88bd653c520c7ca491dac41249e139a2b3199780efbdbf484
+  binary /home/jnhu/Source/e5r2/wt-base/build/linux/x86_64/release/bench_w03_external_loop 50d11a7f657dab9deb17bb120373ac2793ef0f2971d84c9e622785ddde6a9706
+  binary /home/jnhu/Source/e5r2/wt-arm/build/linux/x86_64/release/bench_w03_external_loop 80992f4bc366600375bd6846182dff96409e6a3f4ab819e04668236a3f41a3ab
+  binary /home/jnhu/Source/e5r2/wt-base/build/linux/x86_64/release/bench_w01_direct c4ff79c5d19aa5e342a61219b863a6a0e0bdf2dd021d910e35400f623e4ea140
+  binary /home/jnhu/Source/e5r2/wt-arm/build/linux/x86_64/release/bench_w01_direct c4ff79c5d19aa5e342a61219b863a6a0e0bdf2dd021d910e35400f623e4ea140
+08:55:20 s1-w02-d16/W02-uring-4k-d16-p0-a loadavg=0.27
+08:55:21 s1-w02-d16/W02-uring-4k-d16-p0-b loadavg=0.27
+08:55:21 s1-w02-d16/W02-uring-4k-d16-p1-b loadavg=0.27
+08:55:22 s1-w02-d16/W02-uring-4k-d16-p1-a loadavg=0.41
+08:55:23 s1-w02-d16/W02-uring-4k-d16-p2-a loadavg=0.41
+08:55:24 s1-w02-d16/W02-uring-4k-d16-p2-b loadavg=0.41
+08:55:25 s1-w02-d16/W02-uring-4k-d16-p3-b loadavg=0.41
+08:55:26 s1-w02-d16/W02-uring-4k-d16-p3-a loadavg=0.41
+08:55:27 s1-w02-d16/W02-uring-4k-d16-p4-a loadavg=0.41
+08:55:27 s1-w02-d16/W02-uring-4k-d16-p4-b loadavg=0.54
+08:55:28 s1-w02-d16/W02-uring-4k-d16-p5-b loadavg=0.54
+08:55:29 s1-w02-d16/W02-uring-4k-d16-p5-a loadavg=0.54
+08:55:30 s1-w02-d16/W02-uring-4k-d16-p6-a loadavg=0.54
+08:55:31 s1-w02-d16/W02-uring-4k-d16-p6-b loadavg=0.54
+08:55:32 s1-w02-d16/W02-uring-4k-d16-p7-b loadavg=0.54
+08:55:33 s1-w02-d16/W02-uring-4k-d16-p7-a loadavg=0.58
+08:55:33 s1-w02-d16/W02-uring-4k-d16-p8-a loadavg=0.58
+08:55:34 s1-w02-d16/W02-uring-4k-d16-p8-b loadavg=0.58
+08:55:35 s1-w02-d16/W02-uring-4k-d16-p9-b loadavg=0.58
+08:55:36 s1-w02-d16/W02-uring-4k-d16-p9-a loadavg=0.58
+08:55:37 s1-w02-d16/W02-uring-4k-d16-p10-a loadavg=0.58
+08:55:38 s1-w02-d16/W02-uring-4k-d16-p10-b loadavg=0.61
+08:55:38 s1-w02-d16/W02-uring-4k-d16-p11-b loadavg=0.61
+08:55:39 s1-w02-d16/W02-uring-4k-d16-p11-a loadavg=0.61
+08:55:40 s1-w02-d16/W02-uring-4k-d16-p12-a loadavg=0.61
+08:55:41 s1-w02-d16/W02-uring-4k-d16-p12-b loadavg=0.61
+08:55:42 s1-w02-d16/W02-uring-4k-d16-p13-b loadavg=0.61
+08:55:43 s1-w02-d16/W02-uring-4k-d16-p13-a loadavg=0.72
+08:55:44 s1-w02-d16/W02-uring-4k-d16-p14-a loadavg=0.72
+08:55:44 s1-w02-d16/W02-uring-4k-d16-p14-b loadavg=0.72
+COMPARISON s1-w02-d16 DONE 08:55:44
+08:55:45 s1-w02-64k/W02-uring-64k-d16-p0-a loadavg=0.72
+08:55:45 s1-w02-64k/W02-uring-64k-d16-p0-b loadavg=0.72
+08:55:46 s1-w02-64k/W02-uring-64k-d16-p1-b loadavg=0.72
+08:55:46 s1-w02-64k/W02-uring-64k-d16-p1-a loadavg=0.72
+08:55:46 s1-w02-64k/W02-uring-64k-d16-p2-a loadavg=0.72
+08:55:47 s1-w02-64k/W02-uring-64k-d16-p2-b loadavg=0.72
+08:55:47 s1-w02-64k/W02-uring-64k-d16-p3-b loadavg=0.83
+08:55:47 s1-w02-64k/W02-uring-64k-d16-p3-a loadavg=0.83
+08:55:48 s1-w02-64k/W02-uring-64k-d16-p4-a loadavg=0.83
+08:55:48 s1-w02-64k/W02-uring-64k-d16-p4-b loadavg=0.83
+08:55:49 s1-w02-64k/W02-uring-64k-d16-p5-b loadavg=0.83
+08:55:49 s1-w02-64k/W02-uring-64k-d16-p5-a loadavg=0.83
+08:55:49 s1-w02-64k/W02-uring-64k-d16-p6-a loadavg=0.83
+08:55:50 s1-w02-64k/W02-uring-64k-d16-p6-b loadavg=0.83
+08:55:50 s1-w02-64k/W02-uring-64k-d16-p7-b loadavg=0.83
+08:55:51 s1-w02-64k/W02-uring-64k-d16-p7-a loadavg=0.83
+08:55:51 s1-w02-64k/W02-uring-64k-d16-p8-a loadavg=0.83
+08:55:51 s1-w02-64k/W02-uring-64k-d16-p8-b loadavg=0.83
+08:55:52 s1-w02-64k/W02-uring-64k-d16-p9-b loadavg=0.83
+08:55:52 s1-w02-64k/W02-uring-64k-d16-p9-a loadavg=0.92
+08:55:52 s1-w02-64k/W02-uring-64k-d16-p10-a loadavg=0.92
+08:55:53 s1-w02-64k/W02-uring-64k-d16-p10-b loadavg=0.92
+08:55:53 s1-w02-64k/W02-uring-64k-d16-p11-b loadavg=0.92
+08:55:54 s1-w02-64k/W02-uring-64k-d16-p11-a loadavg=0.92
+08:55:54 s1-w02-64k/W02-uring-64k-d16-p12-a loadavg=0.92
+08:55:54 s1-w02-64k/W02-uring-64k-d16-p12-b loadavg=0.92
+08:55:55 s1-w02-64k/W02-uring-64k-d16-p13-b loadavg=0.92
+08:55:55 s1-w02-64k/W02-uring-64k-d16-p13-a loadavg=0.92
+08:55:55 s1-w02-64k/W02-uring-64k-d16-p14-a loadavg=0.92
+08:55:56 s1-w02-64k/W02-uring-64k-d16-p14-b loadavg=0.92
+COMPARISON s1-w02-64k DONE 08:55:56
+08:55:57 s1-w02-tp/W02-threadpool-4k-d16-w4-p0-a loadavg=1.01
+08:55:58 s1-w02-tp/W02-threadpool-4k-d16-w4-p0-b loadavg=1.01
+08:55:59 s1-w02-tp/W02-threadpool-4k-d16-w4-p1-b loadavg=1.01
+08:56:01 s1-w02-tp/W02-threadpool-4k-d16-w4-p1-a loadavg=1.01
+08:56:02 s1-w02-tp/W02-threadpool-4k-d16-w4-p2-a loadavg=1.01
+08:56:03 s1-w02-tp/W02-threadpool-4k-d16-w4-p2-b loadavg=1.09
+08:56:04 s1-w02-tp/W02-threadpool-4k-d16-w4-p3-b loadavg=1.09
+08:56:06 s1-w02-tp/W02-threadpool-4k-d16-w4-p3-a loadavg=1.09
+08:56:07 s1-w02-tp/W02-threadpool-4k-d16-w4-p4-a loadavg=1.09
+08:56:08 s1-w02-tp/W02-threadpool-4k-d16-w4-p4-b loadavg=1.24
+08:56:09 s1-w02-tp/W02-threadpool-4k-d16-w4-p5-b loadavg=1.24
+08:56:10 s1-w02-tp/W02-threadpool-4k-d16-w4-p5-a loadavg=1.24
+08:56:12 s1-w02-tp/W02-threadpool-4k-d16-w4-p6-a loadavg=1.24
+08:56:13 s1-w02-tp/W02-threadpool-4k-d16-w4-p6-b loadavg=1.22
+08:56:14 s1-w02-tp/W02-threadpool-4k-d16-w4-p7-b loadavg=1.22
+08:56:15 s1-w02-tp/W02-threadpool-4k-d16-w4-p7-a loadavg=1.22
+08:56:16 s1-w02-tp/W02-threadpool-4k-d16-w4-p8-a loadavg=1.22
+08:56:18 s1-w02-tp/W02-threadpool-4k-d16-w4-p8-b loadavg=1.52
+08:56:19 s1-w02-tp/W02-threadpool-4k-d16-w4-p9-b loadavg=1.52
+08:56:20 s1-w02-tp/W02-threadpool-4k-d16-w4-p9-a loadavg=1.52
+08:56:21 s1-w02-tp/W02-threadpool-4k-d16-w4-p10-a loadavg=1.52
+08:56:22 s1-w02-tp/W02-threadpool-4k-d16-w4-p10-b loadavg=1.80
+08:56:24 s1-w02-tp/W02-threadpool-4k-d16-w4-p11-b loadavg=1.80
+08:56:25 s1-w02-tp/W02-threadpool-4k-d16-w4-p11-a loadavg=1.80
+08:56:26 s1-w02-tp/W02-threadpool-4k-d16-w4-p12-a loadavg=1.80
+08:56:27 s1-w02-tp/W02-threadpool-4k-d16-w4-p12-b loadavg=2.06
+08:56:29 s1-w02-tp/W02-threadpool-4k-d16-w4-p13-b loadavg=2.06
+08:56:30 s1-w02-tp/W02-threadpool-4k-d16-w4-p13-a loadavg=2.06
+08:56:31 s1-w02-tp/W02-threadpool-4k-d16-w4-p14-a loadavg=2.06
+08:56:32 s1-w02-tp/W02-threadpool-4k-d16-w4-p14-b loadavg=2.05
+COMPARISON s1-w02-tp DONE 08:56:32
+08:56:33 s2-w03-d4/W03-uring-4k-d4-p0-a loadavg=2.05
+08:56:35 s2-w03-d4/W03-uring-4k-d4-p0-b loadavg=2.05
+08:56:36 s2-w03-d4/W03-uring-4k-d4-p1-b loadavg=2.05
+08:56:37 s2-w03-d4/W03-uring-4k-d4-p1-a loadavg=2.05
+08:56:39 s2-w03-d4/W03-uring-4k-d4-p2-a loadavg=2.05
+08:56:40 s2-w03-d4/W03-uring-4k-d4-p2-b loadavg=2.05
+08:56:41 s2-w03-d4/W03-uring-4k-d4-p3-b loadavg=2.05
+08:56:43 s2-w03-d4/W03-uring-4k-d4-p3-a loadavg=2.04
+08:56:44 s2-w03-d4/W03-uring-4k-d4-p4-a loadavg=2.04
+08:56:45 s2-w03-d4/W03-uring-4k-d4-p4-b loadavg=2.04
+08:56:47 s2-w03-d4/W03-uring-4k-d4-p5-b loadavg=2.04
+08:56:48 s2-w03-d4/W03-uring-4k-d4-p5-a loadavg=2.12
+08:56:50 s2-w03-d4/W03-uring-4k-d4-p6-a loadavg=2.12
+08:56:51 s2-w03-d4/W03-uring-4k-d4-p6-b loadavg=2.12
+08:56:52 s2-w03-d4/W03-uring-4k-d4-p7-b loadavg=2.11
+08:56:54 s2-w03-d4/W03-uring-4k-d4-p7-a loadavg=2.11
+08:56:55 s2-w03-d4/W03-uring-4k-d4-p8-a loadavg=2.11
+08:56:56 s2-w03-d4/W03-uring-4k-d4-p8-b loadavg=2.11
+08:56:58 s2-w03-d4/W03-uring-4k-d4-p9-b loadavg=2.10
+08:56:59 s2-w03-d4/W03-uring-4k-d4-p9-a loadavg=2.10
+08:57:01 s2-w03-d4/W03-uring-4k-d4-p10-a loadavg=2.10
+08:57:02 s2-w03-d4/W03-uring-4k-d4-p10-b loadavg=2.17
+08:57:03 s2-w03-d4/W03-uring-4k-d4-p11-b loadavg=2.17
+08:57:05 s2-w03-d4/W03-uring-4k-d4-p11-a loadavg=2.17
+08:57:06 s2-w03-d4/W03-uring-4k-d4-p12-a loadavg=2.17
+08:57:07 s2-w03-d4/W03-uring-4k-d4-p12-b loadavg=2.32
+08:57:09 s2-w03-d4/W03-uring-4k-d4-p13-b loadavg=2.32
+08:57:10 s2-w03-d4/W03-uring-4k-d4-p13-a loadavg=2.32
+08:57:11 s2-w03-d4/W03-uring-4k-d4-p14-a loadavg=2.32
+08:57:13 s2-w03-d4/W03-uring-4k-d4-p14-b loadavg=2.29
+COMPARISON s2-w03-d4 DONE 08:57:13
+08:57:14 s2-w03-d16/W03-uring-4k-d16-p0-a loadavg=2.29
+08:57:15 s2-w03-d16/W03-uring-4k-d16-p0-b loadavg=2.29
+08:57:16 s2-w03-d16/W03-uring-4k-d16-p1-b loadavg=2.29
+08:57:17 s2-w03-d16/W03-uring-4k-d16-p1-a loadavg=2.29
+08:57:18 s2-w03-d16/W03-uring-4k-d16-p2-a loadavg=2.27
+08:57:19 s2-w03-d16/W03-uring-4k-d16-p2-b loadavg=2.27
+08:57:20 s2-w03-d16/W03-uring-4k-d16-p3-b loadavg=2.27
+08:57:21 s2-w03-d16/W03-uring-4k-d16-p3-a loadavg=2.27
+08:57:22 s2-w03-d16/W03-uring-4k-d16-p4-a loadavg=2.25
+08:57:24 s2-w03-d16/W03-uring-4k-d16-p4-b loadavg=2.25
+08:57:25 s2-w03-d16/W03-uring-4k-d16-p5-b loadavg=2.25
+08:57:26 s2-w03-d16/W03-uring-4k-d16-p5-a loadavg=2.25
+08:57:27 s2-w03-d16/W03-uring-4k-d16-p6-a loadavg=2.25
+08:57:28 s2-w03-d16/W03-uring-4k-d16-p6-b loadavg=2.23
+08:57:29 s2-w03-d16/W03-uring-4k-d16-p7-b loadavg=2.23
+08:57:30 s2-w03-d16/W03-uring-4k-d16-p7-a loadavg=2.23
+08:57:31 s2-w03-d16/W03-uring-4k-d16-p8-a loadavg=2.23
+08:57:32 s2-w03-d16/W03-uring-4k-d16-p8-b loadavg=2.37
+08:57:33 s2-w03-d16/W03-uring-4k-d16-p9-b loadavg=2.37
+08:57:35 s2-w03-d16/W03-uring-4k-d16-p9-a loadavg=2.37
+08:57:36 s2-w03-d16/W03-uring-4k-d16-p10-a loadavg=2.37
+08:57:37 s2-w03-d16/W03-uring-4k-d16-p10-b loadavg=2.37
+08:57:38 s2-w03-d16/W03-uring-4k-d16-p11-b loadavg=2.42
+08:57:39 s2-w03-d16/W03-uring-4k-d16-p11-a loadavg=2.42
+08:57:40 s2-w03-d16/W03-uring-4k-d16-p12-a loadavg=2.42
+08:57:41 s2-w03-d16/W03-uring-4k-d16-p12-b loadavg=2.42
+08:57:42 s2-w03-d16/W03-uring-4k-d16-p13-b loadavg=2.39
+08:57:43 s2-w03-d16/W03-uring-4k-d16-p13-a loadavg=2.39
+08:57:45 s2-w03-d16/W03-uring-4k-d16-p14-a loadavg=2.39
+08:57:46 s2-w03-d16/W03-uring-4k-d16-p14-b loadavg=2.39
+COMPARISON s2-w03-d16 DONE 08:57:46
+08:57:47 s2-w03-tp/W03-threadpool-4k-d16-w4-p0-a loadavg=2.39
+08:57:48 s2-w03-tp/W03-threadpool-4k-d16-w4-p0-b loadavg=2.44
+08:57:49 s2-w03-tp/W03-threadpool-4k-d16-w4-p1-b loadavg=2.44
+08:57:50 s2-w03-tp/W03-threadpool-4k-d16-w4-p1-a loadavg=2.44
+08:57:52 s2-w03-tp/W03-threadpool-4k-d16-w4-p2-a loadavg=2.44
+08:57:53 s2-w03-tp/W03-threadpool-4k-d16-w4-p2-b loadavg=2.72
+08:57:54 s2-w03-tp/W03-threadpool-4k-d16-w4-p3-b loadavg=2.72
+08:57:55 s2-w03-tp/W03-threadpool-4k-d16-w4-p3-a loadavg=2.72
+08:57:56 s2-w03-tp/W03-threadpool-4k-d16-w4-p4-a loadavg=2.72
+08:57:57 s2-w03-tp/W03-threadpool-4k-d16-w4-p4-b loadavg=2.83
+08:57:58 s2-w03-tp/W03-threadpool-4k-d16-w4-p5-b loadavg=2.83
+08:58:00 s2-w03-tp/W03-threadpool-4k-d16-w4-p5-a loadavg=2.83
+08:58:01 s2-w03-tp/W03-threadpool-4k-d16-w4-p6-a loadavg=2.83
+08:58:02 s2-w03-tp/W03-threadpool-4k-d16-w4-p6-b loadavg=2.83
+08:58:03 s2-w03-tp/W03-threadpool-4k-d16-w4-p7-b loadavg=2.68
+08:58:04 s2-w03-tp/W03-threadpool-4k-d16-w4-p7-a loadavg=2.68
+08:58:05 s2-w03-tp/W03-threadpool-4k-d16-w4-p8-a loadavg=2.68
+08:58:07 s2-w03-tp/W03-threadpool-4k-d16-w4-p8-b loadavg=2.68
+08:58:08 s2-w03-tp/W03-threadpool-4k-d16-w4-p9-b loadavg=2.70
+08:58:09 s2-w03-tp/W03-threadpool-4k-d16-w4-p9-a loadavg=2.70
+08:58:10 s2-w03-tp/W03-threadpool-4k-d16-w4-p10-a loadavg=2.70
+08:58:11 s2-w03-tp/W03-threadpool-4k-d16-w4-p10-b loadavg=2.70
+08:58:13 s2-w03-tp/W03-threadpool-4k-d16-w4-p11-b loadavg=2.89
+08:58:14 s2-w03-tp/W03-threadpool-4k-d16-w4-p11-a loadavg=2.89
+08:58:15 s2-w03-tp/W03-threadpool-4k-d16-w4-p12-a loadavg=2.89
+08:58:16 s2-w03-tp/W03-threadpool-4k-d16-w4-p12-b loadavg=2.89
+08:58:17 s2-w03-tp/W03-threadpool-4k-d16-w4-p13-b loadavg=2.74
+08:58:18 s2-w03-tp/W03-threadpool-4k-d16-w4-p13-a loadavg=2.74
+08:58:19 s2-w03-tp/W03-threadpool-4k-d16-w4-p14-a loadavg=2.74
+08:58:21 s2-w03-tp/W03-threadpool-4k-d16-w4-p14-b loadavg=2.74
+COMPARISON s2-w03-tp DONE 08:58:21
+08:58:22 s3-w01/W01-p0-a loadavg=2.68
+08:58:24 s3-w01/W01-p0-b loadavg=2.68
+08:58:25 s3-w01/W01-p1-b loadavg=2.68
+08:58:26 s3-w01/W01-p1-a loadavg=2.68
+08:58:48 s3-w01/W01-p2-a loadavg=2.37
+08:59:31 s3-w01/W01-p2-b loadavg=2.56
+08:59:52 s3-w01/W01-p3-b loadavg=2.51
+08:59:54 s3-w01/W01-p3-a loadavg=2.51
+08:59:55 s3-w01/W01-p4-a loadavg=2.51
+09:00:17 s3-w01/W01-p4-b loadavg=2.50
+09:00:18 s3-w01/W01-p5-b loadavg=2.38
+09:00:20 s3-w01/W01-p5-a loadavg=2.38
+09:00:41 s3-w01/W01-p6-a loadavg=2.27
+09:00:43 s3-w01/W01-p6-b loadavg=2.33
+09:00:53 s3-w01/W01-p7-b loadavg=2.35
+09:01:20 s3-w01/W01-p7-a loadavg=2.83
+COMPARISON s3-w01 DONE 09:01:20
+09:01:22 s4-poll-d1/W02-uring-4k-d1-p0-a loadavg=2.83
+09:01:24 s4-poll-d1/W02-uring-4k-d1-p0-b loadavg=2.76
+09:01:25 s4-poll-d1/W02-uring-4k-d1-p1-b loadavg=2.76
+09:01:27 s4-poll-d1/W02-uring-4k-d1-p1-a loadavg=2.76
+09:01:29 s4-poll-d1/W02-uring-4k-d1-p2-a loadavg=2.54
+09:01:31 s4-poll-d1/W02-uring-4k-d1-p2-b loadavg=2.54
+09:01:32 s4-poll-d1/W02-uring-4k-d1-p3-b loadavg=2.49
+09:01:34 s4-poll-d1/W02-uring-4k-d1-p3-a loadavg=2.49
+09:01:36 s4-poll-d1/W02-uring-4k-d1-p4-a loadavg=2.49
+09:01:38 s4-poll-d1/W02-uring-4k-d1-p4-b loadavg=2.37
+COMPARISON s4-poll-d1 DONE 09:01:38
+09:01:39 s4-poll-d16/W02-uring-4k-d16-p0-a loadavg=2.37
+09:01:39 s4-poll-d16/W02-uring-4k-d16-p0-b loadavg=2.37
+09:01:40 s4-poll-d16/W02-uring-4k-d16-p1-b loadavg=2.37
+09:01:41 s4-poll-d16/W02-uring-4k-d16-p1-a loadavg=2.37
+09:01:42 s4-poll-d16/W02-uring-4k-d16-p2-a loadavg=2.37
+09:01:43 s4-poll-d16/W02-uring-4k-d16-p2-b loadavg=2.34
+09:01:44 s4-poll-d16/W02-uring-4k-d16-p3-b loadavg=2.34
+09:01:45 s4-poll-d16/W02-uring-4k-d16-p3-a loadavg=2.34
+09:01:45 s4-poll-d16/W02-uring-4k-d16-p4-a loadavg=2.34
+09:01:46 s4-poll-d16/W02-uring-4k-d16-p4-b loadavg=2.34
+COMPARISON s4-poll-d16 DONE 09:01:46
+cell: release-liburing | config: -m release --liburing=y
+command: xmake build -y && xmake test
+date: 2026-10-23T09:01:46+0000
+[38;5;2;1m100%[0m tests passed, [38;5;1;1m0[0m test(s) failed out of [1m78[0m, spent [1m2.645s[0m
+S5 RELEASE BATTERY DONE 09:02:15
+cell: debug-liburing | config: -m debug --liburing=y
+command: xmake f -m debug --liburing=y && xmake build -y && xmake test
+date: 2026-10-23T09:02:15+0000
+[38;5;2;1m100%[0m tests passed, [38;5;1;1m0[0m test(s) failed out of [1m78[0m, spent [1m2.664s[0m
+S5 DEBUG BATTERY DONE 09:02:41
+S5 REBUILD RELEASE ARMS DONE 09:02:47
+S6 MUTANTS DONE 09:02:50
+S7 OBJDUMP DONE 09:02:50
+STAGE2_ALL_DONE 09:02:50

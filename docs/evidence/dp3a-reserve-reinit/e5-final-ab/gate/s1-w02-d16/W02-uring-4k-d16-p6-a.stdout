@@ -1,0 +1,11 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=3 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0 warmup] ops=20000 wall=0.0637s 313841 ops/s 1225.9 MiB/s cpu=0.064s util=99.9% | lat p50=50857 p95=64447 p99=82273 max=184468 ns (n=20000)
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0593s 337073 ops/s 1316.7 MiB/s cpu=0.059s util=99.9% | lat p50=53692 p95=71323 p99=94604 max=130167 ns (n=20000)
+  [W02-uring-4k-d16 rep=1] ops=20000 wall=0.0627s 319095 ops/s 1246.5 MiB/s cpu=0.063s util=100.0% | lat p50=51470 p95=62767 p99=70415 max=126282 ns (n=20000)
+  [W02-uring-4k-d16 rep=2] ops=20000 wall=0.0602s 332174 ops/s 1297.6 MiB/s cpu=0.060s util=100.0% | lat p50=52262 p95=61558 p99=67608 max=104407 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===

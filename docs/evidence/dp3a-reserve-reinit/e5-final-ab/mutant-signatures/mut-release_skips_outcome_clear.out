@@ -1,0 +1,29 @@
+FAIL zero-op slot reclaimed clean
+FAIL reclaimed slot is indistinguishable from a fresh slot with generation+1
+FAIL consumed slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+FAIL interleaved slot reclaimed clean
+request_core_init_closure: failures=28

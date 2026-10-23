@@ -1,0 +1,101 @@
+campaign=dp3a-w03tp-conf stamp=20261023T090432 pairs=15
+base_sha=4221c7e3339fe8d03d861b2a2caf6e4f1f1d9b78
+arm_sha=da602ccc3888b715ae18886189df769c31a242b7
+Linux 7.2.9-201.fc44.x86_64 x86_64 GNU/Linux
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+  binary /home/jnhu/Source/e5r2/wt-base/build/linux/x86_64/release/bench_w03_external_loop 50d11a7f657dab9deb17bb120373ac2793ef0f2971d84c9e622785ddde6a9706
+  binary /home/jnhu/Source/e5r2/wt-arm/build/linux/x86_64/release/bench_w03_external_loop 80992f4bc366600375bd6846182dff96409e6a3f4ab819e04668236a3f41a3ab
+09:04:33 c1-unpinned/W03-threadpool-4k-d16-w4-p0-a loadavg=1.97
+09:04:34 c1-unpinned/W03-threadpool-4k-d16-w4-p0-b loadavg=1.97
+09:04:36 c1-unpinned/W03-threadpool-4k-d16-w4-p1-b loadavg=1.97
+09:04:37 c1-unpinned/W03-threadpool-4k-d16-w4-p1-a loadavg=1.97
+09:04:38 c1-unpinned/W03-threadpool-4k-d16-w4-p2-a loadavg=1.98
+09:04:39 c1-unpinned/W03-threadpool-4k-d16-w4-p2-b loadavg=1.98
+09:04:41 c1-unpinned/W03-threadpool-4k-d16-w4-p3-b loadavg=1.98
+09:04:42 c1-unpinned/W03-threadpool-4k-d16-w4-p3-a loadavg=1.98
+09:04:43 c1-unpinned/W03-threadpool-4k-d16-w4-p4-a loadavg=2.78
+09:04:44 c1-unpinned/W03-threadpool-4k-d16-w4-p4-b loadavg=2.78
+09:04:46 c1-unpinned/W03-threadpool-4k-d16-w4-p5-b loadavg=2.78
+09:04:47 c1-unpinned/W03-threadpool-4k-d16-w4-p5-a loadavg=2.78
+09:04:48 c1-unpinned/W03-threadpool-4k-d16-w4-p6-a loadavg=2.96
+09:04:49 c1-unpinned/W03-threadpool-4k-d16-w4-p6-b loadavg=2.96
+09:04:51 c1-unpinned/W03-threadpool-4k-d16-w4-p7-b loadavg=2.96
+09:04:52 c1-unpinned/W03-threadpool-4k-d16-w4-p7-a loadavg=2.96
+09:04:53 c1-unpinned/W03-threadpool-4k-d16-w4-p8-a loadavg=3.04
+09:04:54 c1-unpinned/W03-threadpool-4k-d16-w4-p8-b loadavg=3.04
+09:04:55 c1-unpinned/W03-threadpool-4k-d16-w4-p9-b loadavg=3.04
+09:04:57 c1-unpinned/W03-threadpool-4k-d16-w4-p9-a loadavg=3.04
+09:04:58 c1-unpinned/W03-threadpool-4k-d16-w4-p10-a loadavg=3.12
+09:04:59 c1-unpinned/W03-threadpool-4k-d16-w4-p10-b loadavg=3.12
+09:05:00 c1-unpinned/W03-threadpool-4k-d16-w4-p11-b loadavg=3.12
+09:05:01 c1-unpinned/W03-threadpool-4k-d16-w4-p11-a loadavg=3.12
+09:05:02 c1-unpinned/W03-threadpool-4k-d16-w4-p12-a loadavg=3.11
+09:05:04 c1-unpinned/W03-threadpool-4k-d16-w4-p12-b loadavg=3.11
+09:05:05 c1-unpinned/W03-threadpool-4k-d16-w4-p13-b loadavg=3.11
+09:05:06 c1-unpinned/W03-threadpool-4k-d16-w4-p13-a loadavg=3.11
+09:05:07 c1-unpinned/W03-threadpool-4k-d16-w4-p14-a loadavg=3.18
+09:05:09 c1-unpinned/W03-threadpool-4k-d16-w4-p14-b loadavg=3.18
+COMPARISON c1-unpinned DONE 09:05:09
+09:05:10 c2-pinned/W03-threadpool-4k-d16-w4-p0-a loadavg=3.18
+09:05:11 c2-pinned/W03-threadpool-4k-d16-w4-p0-b loadavg=3.18
+09:05:12 c2-pinned/W03-threadpool-4k-d16-w4-p1-b loadavg=3.17
+09:05:14 c2-pinned/W03-threadpool-4k-d16-w4-p1-a loadavg=3.17
+09:05:15 c2-pinned/W03-threadpool-4k-d16-w4-p2-a loadavg=3.17
+09:05:16 c2-pinned/W03-threadpool-4k-d16-w4-p2-b loadavg=3.17
+09:05:17 c2-pinned/W03-threadpool-4k-d16-w4-p3-b loadavg=3.15
+09:05:19 c2-pinned/W03-threadpool-4k-d16-w4-p3-a loadavg=3.15
+09:05:20 c2-pinned/W03-threadpool-4k-d16-w4-p4-a loadavg=3.15
+09:05:21 c2-pinned/W03-threadpool-4k-d16-w4-p4-b loadavg=3.15
+09:05:22 c2-pinned/W03-threadpool-4k-d16-w4-p5-b loadavg=3.06
+09:05:24 c2-pinned/W03-threadpool-4k-d16-w4-p5-a loadavg=3.06
+09:05:25 c2-pinned/W03-threadpool-4k-d16-w4-p6-a loadavg=3.06
+09:05:26 c2-pinned/W03-threadpool-4k-d16-w4-p6-b loadavg=3.06
+09:05:27 c2-pinned/W03-threadpool-4k-d16-w4-p7-b loadavg=3.30
+09:05:29 c2-pinned/W03-threadpool-4k-d16-w4-p7-a loadavg=3.30
+09:05:30 c2-pinned/W03-threadpool-4k-d16-w4-p8-a loadavg=3.30
+09:05:31 c2-pinned/W03-threadpool-4k-d16-w4-p8-b loadavg=3.30
+09:05:32 c2-pinned/W03-threadpool-4k-d16-w4-p9-b loadavg=3.35
+09:05:34 c2-pinned/W03-threadpool-4k-d16-w4-p9-a loadavg=3.35
+09:05:35 c2-pinned/W03-threadpool-4k-d16-w4-p10-a loadavg=3.35
+09:05:36 c2-pinned/W03-threadpool-4k-d16-w4-p10-b loadavg=3.35
+09:05:37 c2-pinned/W03-threadpool-4k-d16-w4-p11-b loadavg=3.32
+09:05:39 c2-pinned/W03-threadpool-4k-d16-w4-p11-a loadavg=3.32
+09:05:40 c2-pinned/W03-threadpool-4k-d16-w4-p12-a loadavg=3.32
+09:05:41 c2-pinned/W03-threadpool-4k-d16-w4-p12-b loadavg=3.32
+09:05:42 c2-pinned/W03-threadpool-4k-d16-w4-p13-b loadavg=3.46
+09:05:44 c2-pinned/W03-threadpool-4k-d16-w4-p13-a loadavg=3.46
+09:05:45 c2-pinned/W03-threadpool-4k-d16-w4-p14-a loadavg=3.46
+09:05:46 c2-pinned/W03-threadpool-4k-d16-w4-p14-b loadavg=3.46
+COMPARISON c2-pinned DONE 09:05:46
+09:05:47 c3-baseline/W03-threadpool-4k-d16-w4-p0-a loadavg=3.26
+09:05:48 c3-baseline/W03-threadpool-4k-d16-w4-p0-b loadavg=3.26
+09:05:50 c3-baseline/W03-threadpool-4k-d16-w4-p1-b loadavg=3.26
+09:05:51 c3-baseline/W03-threadpool-4k-d16-w4-p1-a loadavg=3.26
+09:05:52 c3-baseline/W03-threadpool-4k-d16-w4-p2-a loadavg=3.26
+09:05:53 c3-baseline/W03-threadpool-4k-d16-w4-p2-b loadavg=3.40
+09:05:54 c3-baseline/W03-threadpool-4k-d16-w4-p3-b loadavg=3.40
+09:05:55 c3-baseline/W03-threadpool-4k-d16-w4-p3-a loadavg=3.40
+09:05:57 c3-baseline/W03-threadpool-4k-d16-w4-p4-a loadavg=3.40
+09:05:58 c3-baseline/W03-threadpool-4k-d16-w4-p4-b loadavg=3.29
+09:05:59 c3-baseline/W03-threadpool-4k-d16-w4-p5-b loadavg=3.29
+09:06:00 c3-baseline/W03-threadpool-4k-d16-w4-p5-a loadavg=3.29
+09:06:01 c3-baseline/W03-threadpool-4k-d16-w4-p6-a loadavg=3.29
+09:06:02 c3-baseline/W03-threadpool-4k-d16-w4-p6-b loadavg=3.43
+09:06:03 c3-baseline/W03-threadpool-4k-d16-w4-p7-b loadavg=3.43
+09:06:05 c3-baseline/W03-threadpool-4k-d16-w4-p7-a loadavg=3.43
+09:06:06 c3-baseline/W03-threadpool-4k-d16-w4-p8-a loadavg=3.43
+09:06:07 c3-baseline/W03-threadpool-4k-d16-w4-p8-b loadavg=3.43
+09:06:08 c3-baseline/W03-threadpool-4k-d16-w4-p9-b loadavg=3.55
+09:06:09 c3-baseline/W03-threadpool-4k-d16-w4-p9-a loadavg=3.55
+09:06:11 c3-baseline/W03-threadpool-4k-d16-w4-p10-a loadavg=3.55
+09:06:12 c3-baseline/W03-threadpool-4k-d16-w4-p10-b loadavg=3.55
+09:06:13 c3-baseline/W03-threadpool-4k-d16-w4-p11-b loadavg=3.67
+09:06:14 c3-baseline/W03-threadpool-4k-d16-w4-p11-a loadavg=3.67
+09:06:15 c3-baseline/W03-threadpool-4k-d16-w4-p12-a loadavg=3.67
+09:06:17 c3-baseline/W03-threadpool-4k-d16-w4-p12-b loadavg=3.67
+09:06:18 c3-baseline/W03-threadpool-4k-d16-w4-p13-b loadavg=3.69
+09:06:19 c3-baseline/W03-threadpool-4k-d16-w4-p13-a loadavg=3.69
+09:06:20 c3-baseline/W03-threadpool-4k-d16-w4-p14-a loadavg=3.69
+09:06:21 c3-baseline/W03-threadpool-4k-d16-w4-p14-b loadavg=3.69
+COMPARISON c3-baseline DONE 09:06:22
+CONF_ALL_DONE 09:06:22

@@ -1,0 +1,20 @@
+{
+  "W03-threadpool-4k-d16-w4": {
+    "pairs": 15,
+    "wall_ratio_median": 1.0631009521827053,
+    "wall_ratio_ci95": [
+      1.0156772244500458,
+      1.1190256488057282
+    ],
+    "cpu_ratio_median": 1.0528966616527422,
+    "cpu_ratio_ci95": [
+      1.0011218168765186,
+      1.134037189237752
+    ],
+    "poll_per_op_threearm_median": 0.0,
+    "poll_per_op_base_median": 0.0,
+    "delta_notif_per_op_median": 0.0009500000000000064,
+    "delta_empty_wake_per_op_median": null,
+    "delta_passes_per_op_median": 0.0009500000000000064
+  }
+}

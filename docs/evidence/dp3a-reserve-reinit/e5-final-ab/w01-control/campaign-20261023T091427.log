@@ -1,0 +1,18 @@
+campaign=dp3a-w01-redo stamp=20261023T091427 pairs=8 filter=W01 substring
+09:14:47 W01-p0-a loadavg=0.41
+09:15:07 W01-p0-b loadavg=1.01
+09:15:28 W01-p1-b loadavg=1.00
+09:15:49 W01-p1-a loadavg=1.00
+09:16:10 W01-p2-a loadavg=1.00
+09:17:42 W01-p2-b loadavg=1.25
+09:18:18 W01-p3-b loadavg=1.66
+09:19:29 W01-p3-a loadavg=1.62
+09:19:50 W01-p4-a loadavg=1.53
+09:20:10 W01-p4-b loadavg=1.45
+09:20:32 W01-p5-b loadavg=1.63
+09:20:52 W01-p5-a loadavg=1.42
+09:21:13 W01-p6-a loadavg=1.64
+09:21:34 W01-p6-b loadavg=1.45
+09:23:09 W01-p7-b loadavg=1.50
+09:23:47 W01-p7-a loadavg=1.35
+W01_REDO_DONE 09:23:47

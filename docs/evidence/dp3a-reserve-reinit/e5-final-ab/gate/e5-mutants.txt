@@ -1,0 +1,18 @@
+# DP-3A mutants on E5 GCC 16.2.1 — corrected record
+
+The stage-2 runner's s6 step had a working-directory defect and captured no
+output (disclosed in README); the six mutant targets were re-built and re-run
+in the ARM worktree (`~/Source/e5r2/wt-arm`, tree da602ccc, release+liburing)
+with full capture. Per-mutant exit code and named-assertion failure count
+(full stderr in ../mutant-signatures/):
+
+| mutant | exit | FAIL lines | note |
+|---|---|---|---|
+| request_core_mut_release_skips_outcome_clear | 255 | 28 | stale outcome leaks into re-acquire |
+| request_core_mut_release_skips_metadata_clear | 255 | 1 | metadata assertion of the closure oracle |
+| request_core_mut_release_skips_observer_clear | 255 | 1 | stale observer phase blocks reclaim |
+| request_core_mut_rollback_without_release | 255 | 3 | then teardown fail-fast (destructor invariant) |
+| request_core_mut_exhausted_slot_reused | 255 | 9 | then teardown fail-fast (destructor invariant) |
+| request_core_mut_constructor_dirty_slots | 255 | 8 | dirty constructed slots caught early |
+
+Signatures identical to the WSL2/GCC 15 kills recorded in the parent README.

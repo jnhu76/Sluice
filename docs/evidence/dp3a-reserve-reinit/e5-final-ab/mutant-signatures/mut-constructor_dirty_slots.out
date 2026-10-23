@@ -1,0 +1,9 @@
+FAIL constructed slot is clean
+FAIL constructed slot is clean
+FAIL constructed slot is clean
+FAIL constructed slot is clean
+FAIL free list unchanged by shutdown
+FAIL free list unchanged by shutdown
+FAIL free list unchanged by shutdown
+FAIL free list unchanged by shutdown
+request_core_init_closure: failures=8

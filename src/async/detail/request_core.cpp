@@ -42,6 +42,13 @@ RequestCore::RequestCore(ContextIdentity context, std::size_t request_capacity)
     for (std::size_t i = request_capacity; i > 0; --i) {
         free_slots_.push_back(static_cast<std::uint32_t>(i - 1));
     }
+#if defined(SLUICE_REQUEST_CORE_MUTANT_CONSTRUCTOR_DIRTY_SLOTS)
+    for (Slot& slot : slots_) {
+        slot.descriptor = RequestDescriptor{RequestOp::write, 0xdeadbeef, 0x1234, false};
+        slot.outcome = IoOutcome::success(0x5678);
+        slot.metadata = sluice::FileInfo{sluice::FileKind::regular, 0x9abc, {}};
+    }
+#endif
 }
 
 RequestCore::~RequestCore() {
@@ -170,21 +177,6 @@ ReserveAttempt RequestCore::reserve() {
     free_slots_.pop_back();
     Slot& slot = slots_[index];
     slot.phase = SlotPhase::reserved;
-    slot.accepted = false;
-    slot.binding_live = false;
-    slot.terminal_chosen = false;
-    slot.published = false;
-    slot.publication_inflight = false;
-    slot.execution_claimed = false;
-    slot.cancel_intent = false;
-    slot.zero_op = false;
-    slot.observer_phase = ObserverPhase::unattached;
-    slot.execution_refs = 0;
-    slot.control_refs = 0;
-    slot.descriptor = {};
-    slot.borrow = {};
-    slot.outcome = {};
-    slot.metadata = {};
     return ReserveAttempt{ReserveStatus::reserved,
                           RequestReservation{SlotIndex{index}, slot.generation}};
 }
@@ -225,8 +217,12 @@ bool RequestCore::rollback(RequestReservation reservation) noexcept {
     if (slot == nullptr) {
         return false;
     }
+#if defined(SLUICE_REQUEST_CORE_MUTANT_ROLLBACK_WITHOUT_RELEASE)
+    return true;
+#else
     release_slot_(*slot, reservation.slot.value);
     return true;
+#endif
 }
 
 bool RequestCore::close_admission() noexcept {
@@ -614,16 +610,25 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.execution_claimed = false;
     slot.cancel_intent = false;
     slot.zero_op = false;
+#if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OBSERVER_CLEAR)
     slot.observer_phase = ObserverPhase::unattached;
+#endif
     slot.execution_refs = 0;
     slot.control_refs = 0;
     slot.descriptor = {};
     slot.borrow = {};
+#if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OUTCOME_CLEAR)
     slot.outcome = {};
+#endif
+#if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_METADATA_CLEAR)
     slot.metadata = {};
+#endif
     if (slot.generation.value == std::numeric_limits<std::uint64_t>::max()) {
         slot.phase = SlotPhase::retired;
         ++retired_count_;
+#if defined(SLUICE_REQUEST_CORE_MUTANT_EXHAUSTED_SLOT_REUSED)
+        free_slots_.push_back(static_cast<std::uint32_t>(index));
+#endif
         return;
     }
     slot.generation = Generation{slot.generation.value + 1};
@@ -656,6 +661,7 @@ std::optional<RequestCore::SlotObservation> RequestCore::observe_slot(SlotIndex 
     observation.requested_bytes = s.descriptor.length;
     observation.has_outcome = s.terminal_chosen;
     observation.outcome = s.outcome;
+    observation.metadata = s.metadata;
     return observation;
 }
 

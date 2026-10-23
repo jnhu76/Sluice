@@ -1,0 +1,134 @@
+=== ARM (da602ccc) RequestCore::reserve from the measured release libsluice_async.a (GCC 16.2.1, -O3, NDEBUG) ===
+0000000000000910 <_ZN6sluice5async6detail11RequestCore7reserveEv>:
+     910:	sub    $0x18,%rsp
+     914:	mov    %rbx,(%rsp)
+     918:	mov    %rdi,%rbx
+     91b:	lea    0x58(%rsi),%rdi
+     91f:	mov    %rbp,0x8(%rsp)
+     924:	mov    %rsi,%rbp
+     927:	call   92c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x1c>
+     92c:	test   %eax,%eax
+     92e:	jne    934 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x24>
+     934:	cmpb   $0x0,0x50(%rbp)
+     938:	jne    970 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x60>
+     93a:	movb   $0x1,(%rbx)
+     93d:	movl   $0x0,0x8(%rbx)
+     944:	movq   $0x0,0x10(%rbx)
+     94c:	lea    0x58(%rbp),%rdi
+     950:	call   955 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x45>
+     955:	mov    %rbx,%rax
+     958:	mov    0x8(%rsp),%rbp
+     95d:	mov    (%rsp),%rbx
+     961:	add    $0x18,%rsp
+     965:	ret
+     966:	cs nopw 0x0(%rax,%rax,1)
+     970:	mov    0x30(%rbp),%rax
+     974:	cmp    %rax,0x28(%rbp)
+     978:	je     9b0 <_ZN6sluice5async6detail11RequestCore7reserveEv+0xa0>
+     97a:	mov    -0x4(%rax),%edx
+     97d:	sub    $0x4,%rax
+     981:	movb   $0x0,(%rbx)
+     984:	mov    %rax,0x30(%rbp)
+     988:	mov    %edx,%eax
+     98a:	movl   $0x0,0xc(%rbx)
+     991:	imul   $0xa8,%rax,%rax
+     998:	add    0x10(%rbp),%rax
+     99c:	mov    %edx,0x8(%rbx)
+     99f:	movb   $0x1,(%rax)
+     9a2:	mov    0x8(%rax),%rax
+     9a6:	mov    %rax,0x10(%rbx)
+     9aa:	jmp    94c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x3c>
+     9ac:	nopl   0x0(%rax)
+     9b0:	mov    0x8(%rbp),%rax
+     9b4:	cmp    %rax,0x40(%rbp)
+     9b8:	je     9d8 <_ZN6sluice5async6detail11RequestCore7reserveEv+0xc8>
+     9ba:	movb   $0x2,(%rbx)
+     9bd:	movl   $0x0,0x8(%rbx)
+     9c4:	movq   $0x0,0x10(%rbx)
+     9cc:	jmp    94c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x3c>
+     9d1:	nopl   0x0(%rax)
+     9d8:	movb   $0x3,(%rbx)
+     9db:	movl   $0x0,0x8(%rbx)
+     9e2:	movq   $0x0,0x10(%rbx)
+     9ea:	jmp    94c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x3c>
+     9ef:	nop
+
+
+=== BASE (4221c7e3) RequestCore::reserve from the measured release libsluice_async.a ===
+0000000000000910 <_ZN6sluice5async6detail11RequestCore7reserveEv>:
+     910:	sub    $0x18,%rsp
+     914:	mov    %rbx,(%rsp)
+     918:	mov    %rdi,%rbx
+     91b:	lea    0x58(%rsi),%rdi
+     91f:	mov    %rbp,0x8(%rsp)
+     924:	mov    %rsi,%rbp
+     927:	call   92c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x1c>
+     92c:	test   %eax,%eax
+     92e:	jne    934 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x24>
+     934:	cmpb   $0x0,0x50(%rbp)
+     938:	jne    970 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x60>
+     93a:	movb   $0x1,(%rbx)
+     93d:	movl   $0x0,0x8(%rbx)
+     944:	movq   $0x0,0x10(%rbx)
+     94c:	lea    0x58(%rbp),%rdi
+     950:	call   955 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x45>
+     955:	mov    %rbx,%rax
+     958:	mov    0x8(%rsp),%rbp
+     95d:	mov    (%rsp),%rbx
+     961:	add    $0x18,%rsp
+     965:	ret
+     966:	cs nopw 0x0(%rax,%rax,1)
+     970:	mov    0x30(%rbp),%rax
+     974:	cmp    %rax,0x28(%rbp)
+     978:	je     a30 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x120>
+     97e:	mov    -0x4(%rax),%edx
+     981:	sub    $0x4,%rax
+     985:	pxor   %xmm0,%xmm0
+     989:	movb   $0x0,(%rbx)
+     98c:	mov    %rax,0x30(%rbp)
+     990:	mov    %edx,%eax
+     992:	movl   $0x0,0xc(%rbx)
+     999:	imul   $0xa8,%rax,%rax
+     9a0:	add    0x10(%rbp),%rax
+     9a4:	mov    %edx,0x8(%rbx)
+     9a7:	movups %xmm0,0x80(%rax)
+     9ae:	movb   $0x1,(%rax)
+     9b1:	movq   $0x0,0x10(%rax)
+     9b9:	movb   $0x0,0x18(%rax)
+     9bd:	movq   $0x0,0x1c(%rax)
+     9c5:	movb   $0x0,0x28(%rax)
+     9c9:	movb   $0x0,0x40(%rax)
+     9cd:	movl   $0xffffffff,0x48(%rax)
+     9d4:	movq   $0x0,0x50(%rax)
+     9dc:	movq   $0x0,0x58(%rax)
+     9e4:	movb   $0x0,0x60(%rax)
+     9e8:	movq   $0x0,0x68(%rax)
+     9f0:	movb   $0x0,0x70(%rax)
+     9f4:	movb   $0x0,0x78(%rax)
+     9f8:	movl   $0x0,0x7c(%rax)
+     9ff:	movq   $0x0,0xa0(%rax)
+     a0a:	movb   $0x1,0x80(%rax)
+     a11:	movups %xmm0,0x30(%rax)
+     a15:	movups %xmm0,0x90(%rax)
+     a1c:	mov    0x8(%rax),%rax
+     a20:	mov    %rax,0x10(%rbx)
+     a24:	jmp    94c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x3c>
+     a29:	nopl   0x0(%rax)
+     a30:	mov    0x8(%rbp),%rax
+     a34:	cmp    %rax,0x40(%rbp)
+     a38:	je     a58 <_ZN6sluice5async6detail11RequestCore7reserveEv+0x148>
+     a3a:	movb   $0x2,(%rbx)
+     a3d:	movl   $0x0,0x8(%rbx)
+     a44:	movq   $0x0,0x10(%rbx)
+     a4c:	jmp    94c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x3c>
+     a51:	nopl   0x0(%rax)
+     a58:	movb   $0x3,(%rbx)
+     a5b:	movl   $0x0,0x8(%rbx)
+     a62:	movq   $0x0,0x10(%rbx)
+     a6a:	jmp    94c <_ZN6sluice5async6detail11RequestCore7reserveEv+0x3c>
+     a6f:	nop
+
+
+binaries sha256:
+e07a1bd2503e1ff88bd653c520c7ca491dac41249e139a2b3199780efbdbf484  /home/jnhu/Source/e5r2/wt-arm/build/linux/x86_64/release/bench_w02_pipeline
+913ce2eee5cd4c05ee600902c55105d3dbb109f24ed57199ba1ef731232138d8  /home/jnhu/Source/e5r2/wt-base/build/linux/x86_64/release/bench_w02_pipeline
