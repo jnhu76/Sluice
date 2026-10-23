@@ -37,8 +37,6 @@ int g_failures = 0;
     }
 }
 
-
-constexpr auto kDriverExitBudget = std::chrono::seconds(10);
 constexpr auto kCompletionBudget = std::chrono::seconds(20);
 
 // Model of the bench_w03_external_loop driver: the driver re-checks the
@@ -213,6 +211,8 @@ struct LoopFixture {
 };
 
 #if !defined(SLUICE_EXTERNAL_LOOP_MUTANT_STOP_FLAG_AFTER_WAKE)
+
+constexpr auto kDriverExitBudget = std::chrono::seconds(10);
 
 // The fixed stop ordering under test. The flag write happens under the same
 // mutex the driver reads it from, before request_stop; the wake therefore
