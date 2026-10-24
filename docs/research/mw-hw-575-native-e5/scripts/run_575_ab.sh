@@ -76,6 +76,22 @@ case "$CAMPAIGN" in
       "W02-uring-4k-d16|w02|2"
     )
     ;;
+  tp-attrib)
+    ARMS=(base tp-ctrl tp-oponly)
+    CONFIGS=(
+      "W02-threadpool-4k-d1-w1|w02|2"
+      "W02-threadpool-4k-d16-w8|w02|2-9"
+      "W03-threadpool-4k-d16-w4|w03|2-5"
+    )
+    ;;
+  ur-attrib)
+    ARMS=(base ur-ctrl ur-oponly)
+    CONFIGS=(
+      "W02-uring-4k-d1|w02|2"
+      "W02-uring-4k-d16|w02|2"
+      "W03-uring-4k-d16|w03|2"
+    )
+    ;;
   w01)
     ARMS=(base tp-oponly tp-full)
     CONFIGS=("W01-read_at-4k-seq|w01|2")
