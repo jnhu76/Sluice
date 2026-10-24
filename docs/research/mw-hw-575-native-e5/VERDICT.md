@@ -8,6 +8,18 @@ PRODUCT_CHANGE_AUTHORIZED = NO
 MERGED = NO
 ```
 
+Closeout revision (2026-10-24): after issue closeout, the research records
+were revised for evidence integrity — the withdrawn "~0.4–1 % UR locked-
+RMW cost" phrasing was removed from the README (it contradicted this
+verdict's retraction), the multi-worker TP plain-increment control rows
+were marked `INVALID_FOR_CAUSAL_INFERENCE` as undefined-behavior
+observations, code-shape findings were relabeled
+`CODE_SHAPE_CONFOUNDING_SUPPORTED` (no specific layout mechanism claimed),
+the W-03 proxy-calibration limitation was restated, and the statistics
+language was tightened (exact computation, not exact coverage). No verdict
+changes; no raw measurement was altered. The UR positive-count oracle gap
+found by the campaign was closed on master via PR #585 (test-only).
+
 ## What was established
 
 1. **Semantics (R1, confirmed by Review A's independent re-verification):**
@@ -29,8 +41,10 @@ MERGED = NO
    - Mechanism level: removal eliminates ~1 instruction per counted event
      (−0.022 % at the highest-frequency TP config; assembly-proven).
    - Runtime level: no established locked-RMW cost for either backend
-     (TP control arm ≈ BASE; UR's suggestive W-03 trend overlaps the A/A
-     band; the first-draft UR d1 claim is retracted as a CI artifact).
+     (TP control arm ≈ BASE at the single-worker attribution config, with
+     the multi-worker ctrl rows `INVALID_FOR_CAUSAL_INFERENCE` as data-race
+     observations; UR's suggestive W-03 trend overlaps the A/A band; the
+     first-draft UR d1 claim is retracted as a CI artifact).
    - Product level: **no material end-to-end benefit.** The measured
      ±0.7–3.8 % swings between arms are binary-specific code-shape
      artifacts — proven by the plain-increment control arms and consistent

@@ -16,10 +16,13 @@
   involuntary context switches, CPU frequency before/after, loadavg, binary
   SHA-256. All rows preserved verbatim in `ab.jsonl`.
 - **Reduction:** `scripts/reduce_575.py` — paired per-rep ratios, median
-  ratio, per-pair direction counts, bootstrap 95% CI of the median ratio
-  (10 000 resamples, fixed seed), median absolute difference. Self-tested
-  against 5 synthetic fixtures (exact-ratio, alternating-direction,
-  missing-rep drop, zero-value drop, group isolation) — all pass
+  ratio, per-pair direction counts, exact percentile-bootstrap 95% CI of the
+  median ratio (closed-form order statistics v4/v12 at n=15; the first
+  published version used a 10 000-resample Monte Carlo, replaced per Review
+  B P1-2 — see R6's statistics note), median absolute difference.
+  Self-tested against 7 synthetic fixtures (exact-ratio,
+  alternating-direction, missing-rep drop, zero-value drop, group isolation,
+  exact-CI order statistics, exact-vs-Monte-Carlo agreement) — all pass
   (`--selftest`). No imputation of missing pairs, no exclusion of
   inconvenient repetitions.
 - **Pinning:** io_uring/W-01 → cpu2; TP W1 → cpu2; W4 → cpus 2-5; W8 →
@@ -98,7 +101,12 @@ cycles median 0.9973) — the A/A CIs are the reference against which every
 R6/R7 contrast is read; a contrast is only reported as an effect when its
 CI separates from both 1.0 **and** the corresponding A/A calibration band.
 Recorded limitation: no W-03 A/A calibration was run; W-03 contrasts are
-read against the same backend's W-02 bands by proxy.
+read against the same backend's W-02 bands by proxy — a proxy calibration,
+not a same-workload W-03 calibration. The current data is therefore
+insufficient to exclude every sub-percent W-03 effect; this is a
+limitation of the evidence, not a reason to continue optimizing or to
+productize, and not a claim that the benefit is mathematically zero (see
+R8's limitations).
 
 ## Warm-up and environment behavior
 

@@ -77,7 +77,14 @@ processing):
   a material, configuration-robust product win.
 - Control-arm caveats mirror R6's (the ctrl patch is itself a code-shape
   perturbation; all UR counter writers hold `dispatch_mtx_`, so the ur-ctrl
-  field access is race-free, unlike the TP control).
+  field access is race-free, unlike the TP control — the TP control's
+  multi-worker rows are `INVALID_FOR_CAUSAL_INFERENCE` per R6's revised
+  caveat; no UR attribution row is affected). As in R6, the W-03 reading
+  rests on W-02 A/A bands applied by proxy (no W-03 A/A was run), so
+  sub-percent W-03 effects are not excluded — a limitation of the evidence
+  (R8), not a reason to continue optimizing or to productize, not a claim
+  that the benefit is mathematically zero, and the evidence still does not
+  support `PROPOSE_UPSTREAM`.
 
 ## Verdict for the io_uring candidate
 

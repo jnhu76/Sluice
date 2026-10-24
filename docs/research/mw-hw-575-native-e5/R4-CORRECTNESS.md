@@ -46,14 +46,17 @@ production-linked suites (which link the patched production library).
 ### Counter semantics preserved in the internal test builds
 
 - TP: exact positive totals asserted in-tree (`== 1`, `== 2`, `== 4`,
-  `+1`/`+0` deltas across 18 sites) — all green on every arm, so the seam
+  `+1`/`+0` deltas across 16 sites) — all green on every arm, so the seam
   builds execute the guarded increment identically to BASE.
 - UR: the new oracle pins the positive semantics the pre-existing suite
   lacked (see mutation receipts for why that mattered): exactly one flush per
   accepted non-zero data submission (`== 1`), monotonic across sequential
   submissions (`== 2`), completion/polling add none, zero-length never
   flushes (`== 0`), dispatch-failure never flushes (existing integration
-  assertion). Green on BASE and every arm.
+  assertion). Green on BASE and every arm. At closeout this oracle was
+  productized on master via test-only PR #585
+  (`1df8b4b82f9078dab824a4559684c40503d3e2cd`); the 78/78→79/79 counts
+  above are the research-time records and are not rewritten.
 - Release binary has no target RMW (R3 assembly oracle: 0 matching locked
   instructions per arm object and absent at linked-binary target sites) while
   the seam-built test binaries still exercise the counting — the two facts

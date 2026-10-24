@@ -41,12 +41,24 @@ material end-to-end benefit.
 3. The macro-guard patches are semantically safe: all-green deterministic suite (78/78 at first run, 79/79 with the new oracle)
    on every arm, stats on/off parity, mutants killed by their intended
    counter assertions (R3/R4). One real oracle gap was found and closed
-   (`tests/uring_flush_count_oracle_test.cpp`).
-4. End-to-end, removal produces **no material benefit** (R6/R7/R8): the
-   genuine locked-RMW cost is ~0 (TP) or ~0.4–1 % on submit-path regimes
-   (UR), but deleting the instructions re-shapes the binary and swings
-   results by ±0.7–3.8 % in both directions — reproducibly per binary
-   pair, but not transferable, and netting to ≈ 0 or slightly negative.
+   (`tests/uring_flush_count_oracle_test.cpp`); the test counts above are
+   the research-time records. **Productized at closeout:** the oracle was
+   extracted to master as a test-only PR — #585, squash-merged as
+   `1df8b4b82f9078dab824a4559684c40503d3e2cd` (based on the v0.0.3 master
+   `3df10dc4`, same as this campaign's baseline; the merged file is this
+   branch's oracle with the leading comment scoped to the deterministic
+   fixture). No research-branch-only code is required by the merged test.
+4. End-to-end, removal produces **no material benefit** (R6/R7/R8).
+   `URING_LOCKED_RMW_COST = NOT_ESTABLISHED` — and for TP likewise no
+   established cost: the UR submit-path regimes show only suggestive
+   ~0.5–1 %-class trends that do not pass the full effect gate (part of
+   the exact CIs overlap the A/A noise band; the trends are attributable
+   to lock semantics by no available evidence), and no material
+   end-to-end product benefit was reached. Deleting the instructions
+   re-shapes the binary and swings results by ±0.7–3.8 % in both
+   directions — reproducibly per binary pair, but not transferable
+   (`CODE_SHAPE_CONFOUNDING_SUPPORTED`), and netting to ≈ 0 or slightly
+   negative.
 5. Methodological findings: a one-character difference in the benchmark's
    tmpfs path name biased identical binaries by ~1 % (R5); the campaign's
    control-arm protocol (plain-increment controls) separates lock-semantics

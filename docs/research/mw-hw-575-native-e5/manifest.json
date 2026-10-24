@@ -7,19 +7,17 @@
   "R1-AUTHORITY-AND-DAG.md": "281aae6f7a87592dabbb86e2d53b881b3715cec567b904f14512f66166093bca",
   "R2-BASELINE-CODEGEN.md": "a871b60e8806c7fe1a34fcacf847faee3c59bfb8c08d8b8a2d1cefd017028a33",
   "R3-ARMS.md": "6ed6f06c3e851722a2dc244466776b799c5a2bf0c803f346248e8a194467ca8b",
-  "R4-CORRECTNESS.md": "140511979db0bbacea0db584779dcd221d72962239ff2e99d46060df671f5824",
-  "R4-MUTATION-RECEIPTS.md": "c238af863de53e57f6341457bda47628c1facd3a2ec118bf1ab0b2130bde8ae1",
-  "R5-CALIBRATION.md": "5a02dd60f863582c4b61c26cc8e18916f3cc3a428667161e88939aee03702095",
-  "R6-THREADPOOL.md": "0eebdabe44dfdf06cf08c8aaefd1ffb6fbab5a39fcf503b7291e6e894d8f8133",
-  "R7-URING.md": "feee93559731962b79012001956c88c5b84c0e12962a4d9f8f852ca933437e28",
-  "R8-CAUSAL-ANALYSIS.md": "4ff46ac9521c00acde0a2e037d23d22655ac43cd1608ecd0e7f0480020d93c48",
-  "R9-REVIEWS.md": "55085ca6b02a8a87ea4a11e88f63a3ab5b115a1fcbd1ab9eac97d4d7b302c195",
-  "README.md": "4af89091f56b9275fb3dd72c1513c5fe5fac54abfc9b03515f010c0b2d45784f",
-  "VERDICT.md": "ffd3a56861454907c19b3e1a6d446f6551114a00bfb24ae98f8c94e5e1a65ab7",
+  "R4-CORRECTNESS.md": "83f398cff8a8c0f046ea603c4a61ec2fa501208f9b1ac9dbef7057a71335243c",
+  "R4-MUTATION-RECEIPTS.md": "e4b983f32c8bc1c5a9a84364510cb14983a9c4475ea4d6b400812579fc2238c7",
+  "R5-CALIBRATION.md": "1d04040d436de8369550e06c3f80b2dce500d7dacd3e39ea7bce2e9fb7bc6dda",
+  "R6-THREADPOOL.md": "f1246de4d7498eaaebf86d5cc2910fa4c3ab710e825f55994fba46fde562bb49",
+  "R7-URING.md": "3bc29107c7048ed0a374f29be33f9c01d58933c0d0fb6995fcbb3dfaee0b5500",
+  "R8-CAUSAL-ANALYSIS.md": "a13b075146043766298d7b1e67decea6dad137610b987415bdf1072385b2a9f2",
+  "R9-REVIEWS.md": "7965c4d23a2afdef58c5e9996ff79dee23c221625f582dd5e3d7b8897d9417ed",
+  "README.md": "3c504cb3588f5233e5cc5f4292f4474d518fa50968f7d987b73bac01ce7b39bc",
+  "VERDICT.md": "2e1614cdbd9058f07ef311912b000574b2903baa1c1791e9c75d3175d95a8194",
   "assembly/base/gimple-threadpool_backend.worker_loop.optimized": "4162dd6dde5303affb4d96c425b73a8b5d8ecc007ad2c38113432f1a6dad94f2",
   "assembly/base/gimple-uring_transport.submit_transport_locked.optimized": "a2f5daa27ae9e50598de370838ed6eaa80982d2c11df844260da9d0cf269ccec",
-  "assembly/base/ir-rebuild-threadpool_backend.o": "222b8c2c6963667351393bcd5b2196062f97aeb24cc36df697ef395b654e0397",
-  "assembly/base/ir-rebuild-uring_transport.o": "3e10790052d577342ac7c27c46864ee6bc01c23f9f7ae1ee2020eee963ea7d96",
   "assembly/base/linked-bench_w02-lockadd-sites.txt": "912f46e449a55b5fa723d5a59931e97990bfe44a3647bfae00451a8b7f897d72",
   "assembly/base/objdump-threadpool_backend.release.txt": "02610481f375cb3d20b38043d296b14a4b308c2f5757c020442117ac8564ff7d",
   "assembly/base/objdump-uring_transport.release.txt": "caed922c1f0a318c7e76f6e765cb6fc2dd3e9e78171df43519e4c7be7ff7ba63",
@@ -123,5 +121,9 @@
   "issue_575": "NO_CHANGE_JUSTIFIED",
   "threadpool": "NO_CHANGE_JUSTIFIED",
   "uring": "NO_CHANGE_JUSTIFIED"
+ },
+ "errata": {
+  "closeout_revision_2026-10-24": "Research-record revision at issue closeout (evidence-integrity repairs; no raw measurement, assembly, patch or script file was modified \u2014 their checksums are unchanged from the pre-revision manifest): README/R4/R5/R6/R7/R8/R9/VERDICT revised to (1) remove the withdrawn ~0.4-1 % UR locked-RMW cost attribution (URING_LOCKED_RMW_COST = NOT_ESTABLISHED), (2) mark the multi-worker ThreadPool plain-increment control rows INVALID_FOR_CAUSAL_INFERENCE as undefined-behavior observations, (3) relabel code-shape findings CODE_SHAPE_CONFOUNDING_SUPPORTED with no specific layout mechanism claimed, (4) restate the W-03 proxy-calibration limitation, (5) tighten the statistics language (exact computation, not exact coverage), (6) record the oracle productization (PR #585, squash merge 1df8b4b82f9078dab824a4559684c40503d3e2cd). No verdict changed. A stale TP assertion-site count in R4 (18, contradicting the Review-A-corrected 16 in R1/R3) was also fixed.",
+  "removed_declarations": "assembly/base/ir-rebuild-threadpool_backend.o and assembly/base/ir-rebuild-uring_transport.o were declared in the original manifest but never committed to this branch (no file exists at these paths and R2 does not cite them by name); the declarations are removed so that every manifest entry is backed by a committed file. The committed GIMPLE dumps and objdump records in assembly/base/ remain the codegen evidence."
  }
 }

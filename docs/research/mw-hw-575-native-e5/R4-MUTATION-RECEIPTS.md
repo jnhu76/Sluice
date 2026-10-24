@@ -76,7 +76,13 @@ check (R1 reference inventory), so a counter that never increments satisfies
 them all. The new oracle is therefore not redundant: it closes a real
 observation gap and is required for the fail-closed test-observability claim
 of the FULL arm. This finding is recorded as a deliverable of the campaign
-(the oracle test is committed on the research branch).
+(the oracle test is committed on the research branch, and at closeout was
+productized on master via test-only PR #585, squash merge
+`1df8b4b82f9078dab824a4559684c40503d3e2cd`; the UR-M1 counterfactual on
+that base — BASE GREEN → three counter-assertion failures, exit 1 →
+RESTORED GREEN — is receipted in PR #585's description and review-receipt
+comment, including an independent re-execution by the test-correctness
+reviewer).
 
 ## Cross-check: Release binary has no RMW while the test binary still counts
 

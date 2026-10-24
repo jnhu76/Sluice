@@ -64,24 +64,38 @@ decides the question:
 | BASE → tp-ctrl (lock-prefixed RMW replaced by plain load/add/store) | 1.009 [0.998, 1.017] — no gain | no evidence of a lock-semantics cost |
 | tp-ctrl → OP-ONLY (increment code deleted) | 0.968 [0.951, 0.972], 14/15 | the −3.4 % appears only when the instructions are deleted |
 
-**Conclusion:** the −3.4 % at d1-w1 is an artifact of deleting ~7 code bytes
-from `worker_loop` (code-size/alignment/branch-layout luck of these specific
-binaries), not of eliminating synchronization. Symmetrically the +3.8 % for
-FULL (B) is the layout luck swinging the other way (class-size change shifts
-allocation/alignment), and C — the actual product candidate — lands at
-+0.6 % slower [1.000, 1.011]: **neutral to slightly negative**. At d16-w8
-the deletion artifact points the other way (+0.8 % slower, 14/15), and
-tp-ctrl is again ≈ BASE (wall 1.000, cycles 1.010 n.s.).
+**Conclusion (`CODE_SHAPE_CONFOUNDING_SUPPORTED`, not
+`CODE_LAYOUT_CAUSALITY_PROVEN`):** the −3.4 % at d1-w1 is a code-shape
+artifact of changing the code bytes in `worker_loop` (the CTRL→OP-ONLY leg
+deletes the ~7-byte increment encoding), not of eliminating
+synchronization — it appears when the code bytes change and not when only
+the lock prefix is removed (BASE→CTRL). No specific instruction-alignment,
+branch-layout or I-cache mechanism is claimed or proven; "code shape" is
+the best-explanation exclusion label backed by the control arms, the
+instruction metric and the physical bound (R8 §3). Symmetrically the
++3.8 % for FULL (B) is the same binary-pair luck swinging the other way
+(class-size change shifts allocation/alignment), and C — the actual
+product candidate — lands at +0.6 % slower [1.000, 1.011]: **neutral to
+slightly negative**. At d16-w8 the deletion artifact points the other way
+(+0.8 % slower, 14/15), and tp-ctrl is again ≈ BASE (wall 1.000, cycles
+1.010 n.s. — a multi-worker row, observation only,
+`INVALID_FOR_CAUSAL_INFERENCE` per the caveat below).
 
-Control-arm caveats (per Review B P2-4): the ctrl patch is itself a small
-code-shape perturbation (different instruction sequence/encoding length
-than `lock add`), so BASE→CTRL is another binary-pair comparison, not a
-pure lock-semantics isolation; and at multi-worker configs the ctrl arm's
-plain load/store on the shared field is a data race (benign for timing
-purposes on this hardware; the ctrl arm is research-only and never runs
-the deterministic suite). The ctrl conclusion is therefore read as: *no
-evidence* of a lock cost at TP, consistent with the 0.03 % physical prior —
-not as a proof of exactly zero.
+Control-arm caveats (per Review B P2-4, revised at closeout): the ctrl
+patch is itself a small code-shape perturbation (different instruction
+sequence/encoding length than `lock add`), so BASE→CTRL is another
+binary-pair comparison, not a pure lock-semantics isolation. At
+multi-worker configs (d16-w8, W-03 d16-w4) the ctrl arm's plain
+load/store on the shared field is a C++ **data race — undefined
+behavior**, not a benign timing artifact: those rows are retained verbatim
+as raw observations but are `INVALID_FOR_CAUSAL_INFERENCE` and are
+excluded from every causal statement in this record (the ctrl arm is
+research-only and never ran the deterministic suite; the UR control is
+race-free — all its counter writers hold `dispatch_mtx_`, see R7). The
+single-worker attribution legs (d1-w1) carry the causal reading. The ctrl
+conclusion is therefore read as: *no evidence* of a lock cost at TP,
+consistent with the 0.03 % physical prior — not as a proof of exactly
+zero.
 
 ## W-03 external loop
 
@@ -90,9 +104,17 @@ drain/shutdown order are covered by the deterministic suite (all green on
 every arm, R4) and the byte oracle inside every W-03 benchmark repetition.
 No W-03 wall/cycles/instruction contrast separates from the A/A band for
 either candidate arm (A 0.998, C 0.990 [0.978, 1.015]; sys-time and
-context-switch counts unchanged). Note (Review B): no dedicated W-03 A/A
-calibration was run; the A/A bands applied to W-03 contrasts are the W-02
-bands of the same backend by proxy — recorded as a limitation in R8.
+context-switch counts unchanged). Note (Review B, restated at closeout):
+no dedicated W-03 A/A calibration was run; the A/A bands applied to W-03
+contrasts are the W-02 bands of the same backend **by proxy — a proxy
+calibration, not a same-workload W-03 calibration** — recorded as a
+limitation in R8. The current data is therefore **insufficient to exclude
+every sub-percent W-03 effect**; this insufficiency is a limitation of the
+evidence, not a reason to continue optimizing or to productize, and it
+does not change that no W-03 contrast passed the campaign's effect rule —
+the evidence still does not support `PROPOSE_UPSTREAM`. "No evidence of a
+benefit" here and below means exactly that: not established by this data;
+it is **not** a mathematical proof that the benefit is exactly zero.
 
 ## Verdict for the ThreadPool candidate
 
@@ -100,8 +122,10 @@ bands of the same backend by proxy — recorded as a limitation in R8.
   syscall (−0.02 % at the highest relative-frequency config; per-event
   attribution per R2/R3 static evidence).
 - Runtime (lock/coherence) cost of the RMW: **no evidence of a measurable
-  cost** (tp-ctrl indistinguishable from BASE at every config; consistent
-  with the 0.03 % physical estimate).
+  cost** (tp-ctrl indistinguishable from BASE at the single-worker
+  attribution config d1-w1; the multi-worker ctrl rows are
+  `INVALID_FOR_CAUSAL_INFERENCE` per the data-race caveat above;
+  consistent with the 0.03 % physical estimate).
 - End-to-end product effect of the actual patches: none; the measured swings
   are binary-specific code-shape luck (−3.4 % … +3.8 % at one config,
   cancelling to C ≈ +0.6 % [1.000, 1.011] knife-edge slower), and no

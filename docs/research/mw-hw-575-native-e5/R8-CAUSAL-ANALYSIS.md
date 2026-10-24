@@ -9,6 +9,14 @@ intervals (order statistics v4/v12 for n = 15) recomputed from the same
 raw rows. No repetition was excluded; every recorded row is in `raw/ab/`.
 Preregistered reading rule (R5): a contrast is an effect only when its CI
 separates from 1.0 **and** from the corresponding A/A calibration band.
+Statistics-language note (closeout): "exact" qualifies the *computation*
+of the percentile-bootstrap interval — deterministic order statistics of
+the 15 observed ratios, no resampling error, verified against the frozen
+self-tested reducer. It is **not** a claim of exact confidence-interval
+*coverage*: at n = 15 the intervals remain small-sample uncertainty
+estimates, and the many configuration-by-contrast cells in this record
+are exploratory comparisons read against the preregistered separation
+rule, not a family-wise guarantee.
 
 ## Effect inventory (all decision-bearing contrasts, corrected CIs)
 
@@ -40,10 +48,18 @@ recorded limitation); not read as an effect.
 
 ### Attribution campaign (plain-increment control arms, 15 reps, corrected)
 
-| Contrast | TP d1-w1 wall | TP W-03 wall | UR d1 wall | UR W-03 cycles |
+| Contrast | TP d1-w1 wall | TP W-03 wall † | UR d1 wall | UR W-03 cycles |
 |---|---|---|---|---|
 | BASE→CTRL (RMW → plain load/add/store) | +0.9 % [0.998, 1.017] — no gain | −0.9 % (n.s.) | 0.987 [0.978, 1.009] — **no separation** | 0.9916 [0.9888, 0.9974] — separates from 1.0, **overlaps A/A band** |
 | CTRL→OP-ONLY (increment deleted) | **−3.2 %** | +0.1 % | +0.3 % (n.s.; instr +0.43 % [1.002, 1.007]) | +0.4 % |
+
+† = multi-worker plain-counter control — C++ data race (undefined
+behavior); the rows are retained verbatim as raw observations but are
+`INVALID_FOR_CAUSAL_INFERENCE` and contribute to no causal statement in
+this record (closeout revision; the TP d16-w8 attribution rows are invalid
+for the same reason, and the UR control is race-free — all counter writers
+hold `dispatch_mtx_`). The single-worker TP d1-w1 legs remain the valid
+TP attribution evidence.
 
 ## Causal model consistent with all observations (revised per Review B)
 
@@ -53,7 +69,9 @@ recorded limitation); not read as an effect.
    the entire directly-attributable static saving; its per-event
    decomposition rests on the static R2/R3 evidence, not on this dataset.
 2. **Locked-RMW execution cost (level B): no established cost for either
-   backend.** TP: the control arm is indistinguishable from BASE everywhere
+   backend.** TP: at the single-worker attribution config the control arm
+   is indistinguishable from BASE (the multi-worker ctrl rows are
+   `INVALID_FOR_CAUSAL_INFERENCE` — data race, see the attribution note)
    — consistent with the ~0.03 % physical estimate (single writer per op,
    no production reader of the line). UR: one suggestive W-03-cycles trend
    (−0.8 %, 14/15) that overlaps the A/A band, and a d1 wall trend that
@@ -61,7 +79,9 @@ recorded limitation); not read as an effect.
    established nor excluded at the ~0.5–1 % level for UR*; the first-draft
    claim of a real ~0.4–1 % UR lock cost is retracted as
    statistically unsupported.
-3. **Code-shape effects dominate the naive contrasts.** Deleting or adding
+3. **Code-shape effects dominate the naive contrasts
+   (`CODE_SHAPE_CONFOUNDING_SUPPORTED`, not
+   `CODE_LAYOUT_CAUSALITY_PROVEN`).** Deleting or adding
    a few instructions in `worker_loop` / `submit_transport_locked` shifts
    binary code layout; the resulting swings (TP d1-w1: −3.4 % for OP-ONLY
    and +3.8 % for FULL, cancelling to C ≈ +0.6 %; UR d1: +0.43 %
@@ -70,7 +90,8 @@ recorded limitation); not read as an effect.
    change (CTRL→OP-ONLY) and not when only the *lock prefix* is removed
    (BASE→CTRL). "Code shape" is used as a best-explanation exclusion label
    backed by the control arms and the physical bound — no specific
-   alignment mechanism is claimed. These effects would not transfer to a
+   instruction-alignment, branch-layout or I-cache-set mechanism is
+   claimed or proven. These effects would not transfer to a
    different compiler, flag set or surrounding code, so they cannot be
    claimed as the cost of the counter.
 4. **Kernel side is untouched.** Context-switch census identical (±7 of
@@ -105,13 +126,22 @@ recorded limitation); not read as an effect.
   measurement (verified from git history and provenance timestamps by
   Review B), (3) the D8 supplement's warmup=1 (disclosed in its script).
 - **Limitations recorded for the owner:** no W-03 A/A calibration exists —
-  W-03 contrasts are read against W-02 A/A bands by proxy; DVFS sag inside
+  W-03 contrasts are read against W-02 A/A bands by proxy (a proxy
+  calibration, not a same-workload W-03 calibration), so the current data
+  is **insufficient to exclude every sub-percent W-03 effect**; this is a
+  limitation of the evidence, not a reason to continue optimizing or to
+  productize, and the evidence still does not support `PROPOSE_UPSTREAM`
+  ("no evidence of a benefit" is not a mathematical proof that the benefit
+  is exactly zero). DVFS sag inside
   measured invocations is real (7–58 of the per-campaign records ended
   below 3 GHz) and is a plausible contributor to the ±2 % wall floor;
   1-minute load reached 1.9–3.0 during campaigns on a 20-CPU host; the
   control arms are themselves small code-shape perturbations; the TP
-  control's plain field access is a data race at multi-worker configs
-  (research-only arm, never run under the deterministic suite).
+  control's plain field access is a data race (undefined behavior) at
+  multi-worker configs — research-only arm, never run under the
+  deterministic suite, and its multi-worker rows are
+  `INVALID_FOR_CAUSAL_INFERENCE` (closeout revision: previously described
+  as "benign for timing", which understated undefined behavior).
 
 ## Verdict input
 

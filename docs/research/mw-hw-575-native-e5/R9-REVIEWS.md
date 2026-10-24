@@ -166,7 +166,7 @@ substance; the five P2 items are resolved as follows.
 | B-P2-1 | R8 level B downgraded to "not established; suggestive W-03 trend only"; W-03 A/A gap recorded as a limitation |
 | B-P2-2 | R5 frequency/load statements corrected |
 | B-P2-3 | Actual medians printed (d16-w4 C = 1.012; W-03 C = 0.990) in R6/R8 |
-| B-P2-4 | Control-arm caveats added to R6/R7/R8 (code-shape perturbation; TP ctrl race, research-only) |
+| B-P2-4 | Control-arm caveats added to R6/R7/R8 (code-shape perturbation; TP ctrl race, research-only). Closeout delta: the multi-worker TP ctrl rows are now explicitly `INVALID_FOR_CAUSAL_INFERENCE` (undefined behavior, not "benign for timing"); causal statements rest on the single-worker legs and the race-free UR control |
 | B-P2-5 | Quantification caveat added in R6 ("barely separated"; decomposition rests on static evidence) |
 | B-P2-6 | Runner comment fixed; dead file declarations removed; d8 temp files deleted; d8 warmup=1 documented in R7 |
 
@@ -175,3 +175,45 @@ documentation computed from the same frozen raw data, which Review B's
 integrity audit confirmed row-for-row. The verdict-relevant conclusions
 after revision: mechanism elimination real; no established runtime cost;
 no material end-to-end product improvement for either backend.
+
+## Closeout delta reviews (2026-10-24, post-merge)
+
+At issue closeout the research records received a second revision pass
+(evidence-integrity repairs; no raw data touched) and two additional
+independent delta reviews ran against the initial closeout revision
+(before the Review-C fixes below were folded in; the final revision is
+the pushed one):
+
+- **Review C — Evidence Consistency: REQUEST_CHANGES → resolved.** Verified
+  the withdrawn "~0.4–1 % UR locked-RMW cost" exists only in retraction
+  contexts; every multi-worker TP plain-increment row is marked
+  `INVALID_FOR_CAUSAL_INFERENCE`; code-shape findings consistently carry
+  `CODE_SHAPE_CONFOUNDING_SUPPORTED` with no proven layout mechanism; the
+  oracle's productization (PR #585, `1df8b4b8`) is recorded in
+  README/R4/VERDICT without rewriting the historical 78/78, 79/79 counts;
+  all cross-document numbers reconcile; all verdict statements agree. Four
+  findings (one P2, three P3), all fixed before the push: the W-03
+  proxy-calibration limitation is now stated in full in R5 (and R7 gained
+  the explicit `PROPOSE_UPSTREAM` clause); R4's stale "18 sites" TP
+  assertion-site count was corrected to 16 (matching R1/R3's Review-A
+  correction); R4-MUTATION-RECEIPTS' re-execution claim now cites the PR
+  #585 receipts; this R9 section itself was rewritten to record actual
+  outcomes instead of pre-recorded ones.
+- **Review D — Research Integrity: APPROVE** (no P1/P2). Verified the raw
+  measurement files are byte-identical to the pre-revision tree; every
+  `manifest.json` checksum matches its committed file after the revision,
+  with the two never-committed `ir-rebuild-*.o` declarations removed under
+  an explicit erratum (`git log --all` confirms no commit ever carried
+  them); the published medians/CIs are exactly reproducible from `raw/`
+  with the frozen self-tested `scripts/reduce_575.py` (all spot-checked
+  contrasts, including the five decision-bearing ones); the
+  `INVALID_FOR_CAUSAL_INFERENCE` marking matches the attribution
+  campaign's actual configs (d1-w1 single-worker valid; d16-w8 and W-03
+  d16-w4 multi-worker UB) and the patch's race semantics (sole writer
+  `worker_loop`, sole reader the test seam); the baseline identity
+  (`3df10dc4`, GCC 16.2.1, liburing 2.13, E5 host) is unchanged and the
+  revision is a linear one-commit append on `f209ce88`; no production
+  code, script or raw file was touched.
+
+No blocking finding remains. PR #584 remains OPEN and unmerged by design
+(research evidence only).
