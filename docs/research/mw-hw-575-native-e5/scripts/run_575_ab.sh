@@ -141,7 +141,11 @@ for rep in $(seq 1 "$REPS"); do
         w02) bin="$wt/build/linux/x86_64/release/bench_w02_pipeline" ;;
         w03) bin="$wt/build/linux/x86_64/release/bench_w03_external_loop" ;;
       esac
-      tmpdir="$FIXTURE_ROOT/${arm}_${CASE}"
+      # v3: the tmpdir path must not depend on the arm label. A dedicated A/A
+# experiment (cal2/cal3 vs cal4) showed an arm-derived path string shifts
+# the identical binary's measured wall by ~1% at the W8 config, so both
+# arms of a config share one path, recreated fresh per invocation.
+      tmpdir="$FIXTURE_ROOT/rep${rep}_${CASE}"
       mkdir -p "$tmpdir"
       benchjson="$tmpdir/last.jsonl"
       : > "$benchjson"
