@@ -1,0 +1,20 @@
+campaign=aa-tp
+reps=15
+stats=0
+date=2026-10-24T17:06:56+08:00
+kernel=7.2.11-200.fc44.x86_64
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+governor=schedutil
+perf_paranoid=1
+loadavg_start=0.48 1.08 5.61
+arm=base worktree=/tmp/sluice-575/base
+arm=base bench_w02_sha256=7ea9df984f15991db0da9d321ad1fe0289c9cf662bc421fb4c62f68034558b12
+arm=base bench_w03_sha256=052befc2b56109d7908e5109c97af6981617d0f62afd3867df5584f9269f16e0
+arm=base bench_w01_sha256=f578f0476ed585c4f2bc92243b608620a6c628b153f8133538d83fce49b1740a
+arm=base lib_async_sha256=f1419abe0c594bd513d10dc35495a43f59082571542780897219b75180cd3c7a
+arm=base2 worktree=/tmp/sluice-575/base
+arm=base2 bench_w02_sha256=7ea9df984f15991db0da9d321ad1fe0289c9cf662bc421fb4c62f68034558b12
+arm=base2 bench_w03_sha256=052befc2b56109d7908e5109c97af6981617d0f62afd3867df5584f9269f16e0
+arm=base2 bench_w01_sha256=f578f0476ed585c4f2bc92243b608620a6c628b153f8133538d83fce49b1740a
+arm=base2 lib_async_sha256=f1419abe0c594bd513d10dc35495a43f59082571542780897219b75180cd3c7a
