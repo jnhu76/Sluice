@@ -151,7 +151,7 @@ for rep in $(seq 1 "$REPS"); do
         perf stat -x, -e instructions,cycles,context-switches,cpu-migrations \
           -o "$tmpdir/perf.txt" -- \
         env SLUICE_BENCH_TMP_DIR="$tmpdir" SLUICE_BENCH_STATS="$STATS" \
-            SLUICE_BENCH_WARMUP=1 SLUICE_BENCH_MEASURED=1 SLUICE_BENCH_SKIP_DISK=1 \
+            SLUICE_BENCH_WARMUP=2 SLUICE_BENCH_MEASURED=1 SLUICE_BENCH_SKIP_DISK=1 \
             SLUICE_BENCH_CASE_FILTER="=$CASE" \
             SLUICE_BENCH_JSONL="$benchjson" \
           "$bin" > "$tmpdir/stdout.txt" 2> "$tmpdir/stderr.txt" || {
