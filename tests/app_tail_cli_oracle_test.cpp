@@ -252,14 +252,19 @@ class TailChild {
             if (scan_line(want))
                 return WaitOutcome::matched;
             const int s = poll_state();
-            if (s != 0) {
-                drain_output_bounded();
-                if (scan_line(want))
-                    return WaitOutcome::matched;
-                return s < 0 ? WaitOutcome::wait_error : WaitOutcome::child_exited_before_event;
+            if (s != 0)
+                return terminal_line_outcome(want, s);
+            if (!pump_output(deadline)) {
+                // The stdout pipe closed before the deadline: a child closes
+                // its fds during exit before the zombie is reapable, so the
+                // reap state, not the pump stop, classifies the wait.
+                const int s2 = poll_state();
+                if (s2 != 0)
+                    return terminal_line_outcome(want, s2);
+                if (std::chrono::steady_clock::now() >= deadline)
+                    return WaitOutcome::event_timeout;
+                continue;
             }
-            if (!pump_output(deadline))
-                return pump_stop_outcome(deadline);
         }
     }
 
@@ -270,14 +275,16 @@ class TailChild {
             if (consume_matching_event(prefix, line_out))
                 return WaitOutcome::matched;
             const int s = poll_state();
-            if (s != 0) {
-                consume_evt_available();
-                if (consume_matching_event(prefix, line_out))
-                    return WaitOutcome::matched;
-                return s < 0 ? WaitOutcome::wait_error : WaitOutcome::child_exited_before_event;
+            if (s != 0)
+                return terminal_event_outcome(prefix, line_out, s);
+            if (!pump_fd(evt_fd_, evt_buf_, deadline, evt_eof_)) {
+                const int s2 = poll_state();
+                if (s2 != 0)
+                    return terminal_event_outcome(prefix, line_out, s2);
+                if (std::chrono::steady_clock::now() >= deadline)
+                    return WaitOutcome::event_timeout;
+                continue;
             }
-            if (!pump_fd(evt_fd_, evt_buf_, deadline, evt_eof_))
-                return pump_stop_outcome(deadline);
         }
     }
 
@@ -439,9 +446,18 @@ class TailChild {
         return o;
     }
 
-    WaitOutcome pump_stop_outcome(std::chrono::steady_clock::time_point deadline) const {
-        return std::chrono::steady_clock::now() >= deadline ? WaitOutcome::event_timeout
-                                                            : WaitOutcome::wait_error;
+    WaitOutcome terminal_line_outcome(const std::string& want, int s) {
+        drain_output_bounded();
+        if (scan_line(want))
+            return WaitOutcome::matched;
+        return s < 0 ? WaitOutcome::wait_error : WaitOutcome::child_exited_before_event;
+    }
+
+    WaitOutcome terminal_event_outcome(const std::string& prefix, std::string* line_out, int s) {
+        consume_evt_available();
+        if (consume_matching_event(prefix, line_out))
+            return WaitOutcome::matched;
+        return s < 0 ? WaitOutcome::wait_error : WaitOutcome::child_exited_before_event;
     }
 
     bool consume_matching_event(const std::string& prefix, std::string* line_out) {
@@ -742,6 +758,7 @@ bool finite_tail_and_cli_exit_codes() {
 }
 
 bool cli_removed_workers_and_max_poll_stop() {
+    const int before = g_checks_failed;
     TempFile f("seed\n");
     const std::string bin = exe_dir() + "/sluice-tail";
     for (const auto* value : {"1", "4", "64", "0", "65", "bad", "184467440737095516160"}) {
@@ -763,7 +780,7 @@ bool cli_removed_workers_and_max_poll_stop() {
                       child.out() == "seed\n" && child.err_text().empty(),
                   "max poll: signal stop bypasses 5000 ms deadline");
     }
-    return g_checks_failed == 0;
+    return g_checks_failed == before;
 }
 
 bool follow_clean_signal_exit(int sig, const std::string& tag) {
