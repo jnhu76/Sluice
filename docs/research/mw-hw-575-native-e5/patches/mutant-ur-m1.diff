@@ -1,0 +1,4 @@
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+(research mutant UR-M1: the guarded increment block above replaced by the
+ suppression comment; applied transiently in /tmp/sluice-575/mut-ur)

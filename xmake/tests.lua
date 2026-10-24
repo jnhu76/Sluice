@@ -529,6 +529,8 @@ if has_config("liburing") then
                               R .. "tests/uring_owed_counter_parity_test.cpp")
     uring_progress_target("uring_pending_control_parity_test",
                               R .. "tests/uring_pending_control_parity_test.cpp")
+    uring_progress_target("uring_flush_count_oracle_test",
+                              R .. "tests/uring_flush_count_oracle_test.cpp")
 
     -- Corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of

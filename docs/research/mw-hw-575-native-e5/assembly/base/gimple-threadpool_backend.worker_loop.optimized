@@ -1,0 +1,1468 @@
+;; Function std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::<lambda()> > > >::~_State_impl (_ZNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEED2Ev, funcdef_no=8991, decl_uid=200832, cgraph_uid=6425, symbol_order=6424)
+
+void std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::<lambda()> > > >::~_State_impl (struct _State_impl * const this)
+{
+  struct _State * _1;
+
+  <bb 2> [local count: 1073741824]:
+  this_3(D)->D.200842._vptr._State = &MEM <int (*) ()[5]> [(void *)&_ZTVNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEEE + 16B];
+  _1 = &this_3(D)->D.200842;
+  std::thread::_State::~_State (_1); [tail call]
+  *this_3(D) ={v} {CLOBBER(eob)};
+  return;
+
+}
+
+
+
+;; Function std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::<lambda()> > > >::~_State_impl (_ZNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEED0Ev, funcdef_no=8993, decl_uid=200828, cgraph_uid=6427, symbol_order=6426)
+
+void std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::<lambda()> > > >::~_State_impl (struct _State_impl * const this)
+{
+  struct _State * _4;
+
+  <bb 2> [local count: 1073741824]:
+  this_2(D)->D.200842._vptr._State = &MEM <int (*) ()[5]> [(void *)&_ZTVNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEEE + 16B];
+  _4 = &this_2(D)->D.200842;
+  std::thread::_State::~_State (_4);
+  *this_2(D) ={v} {CLOBBER(eob)};
+  operator delete (this_2(D), 16); [tail call]
+  return;
+
+}
+
+
+
+;; Function sluice::async::ThreadPoolBackend::ThreadPoolBackend (_ZN6sluice5async17ThreadPoolBackendC2ENS0_16ThreadPoolConfigE, funcdef_no=7033, decl_uid=174871, cgraph_uid=4014, symbol_order=4013)
+
+Merging blocks 68 and 69
+Merging blocks 71 and 72
+Merging blocks 82 and 83
+Merging blocks 85 and 86
+void sluice::async::ThreadPoolBackend::ThreadPoolBackend (struct ThreadPoolBackend * const this, struct ThreadPoolConfig config)
+{
+  void * D.213171;
+  unsigned long ivtmp.954;
+  long unsigned int __x$_M_thread;
+  struct thread * __first;
+  struct _State_ptr D.213027;
+  struct thread * __new_finish;
+  ptrdiff_t __dif;
+  const size_type __len;
+  struct thread * __cur;
+  struct thread * __first;
+  struct _State_ptr D.213006;
+  struct PreparedBlockingOp * __first;
+  struct DeliveryRecord * __first;
+  struct thread * SR.772;
+  long unsigned int config$worker_count;
+  long unsigned int config$request_capacity;
+  long unsigned int __x$_M_thread;
+  size_t i;
+  struct condition_variable * _3;
+  void * _6;
+  struct OwedEvent * _10;
+  sizetype _43;
+  void * _53;
+  struct thread * _62;
+  struct thread * _63;
+  struct OwedEvent * _67;
+  struct OwedEvent * _68;
+  long int _69;
+  long unsigned int _70;
+  struct RequestReservation * _71;
+  struct RequestReservation * _72;
+  long int _73;
+  long unsigned int _74;
+  struct RequestReservation * _75;
+  struct RequestReservation * _76;
+  long int _77;
+  long unsigned int _78;
+  struct RequestReservation * _79;
+  struct RequestReservation * _80;
+  long int _81;
+  long unsigned int _82;
+  struct DeliveryRecord * _83;
+  struct DeliveryRecord * _84;
+  long int _85;
+  long unsigned int _86;
+  struct PreparedBlockingOp * _87;
+  struct PreparedBlockingOp * _88;
+  long int _89;
+  long unsigned int _90;
+  struct thread * _127;
+  struct RequestReservation * _148;
+  sizetype _152;
+  struct PreparedBlockingOp * _156;
+  struct PreparedBlockingOp * _161;
+  sizetype _163;
+  long unsigned int _165;
+  struct PreparedBlockingOp * _166;
+  sizetype _170;
+  struct DeliveryRecord * _174;
+  struct RequestReservation * _175;
+  struct RequestReservation * _180;
+  sizetype _185;
+  struct RequestReservation * _187;
+  struct DeliveryRecord * _189;
+  sizetype _190;
+  long unsigned int _191;
+  struct RequestReservation * _192;
+  sizetype _205;
+  sizetype _220;
+  struct RequestReservation * _223;
+  void * _225;
+  struct OwedEvent * _228;
+  sizetype _232;
+  sizetype _244;
+  struct thread * pretmp_254;
+  sizetype _255;
+  sizetype _259;
+  struct thread * _262;
+  long unsigned int _266;
+  struct thread * _267;
+  struct thread * _270;
+  struct thread * _271;
+  void * _274;
+  struct _State * _275;
+  int (*) () * _276;
+  int (*) () _277;
+  struct _State * _278;
+  int (*) () * _279;
+  int (*) () _280;
+  struct thread * _282;
+  long int _283;
+  long unsigned int _285;
+  long unsigned int _286;
+  long unsigned int _288;
+  long unsigned int _291;
+  struct thread * _292;
+  struct OwedEvent * _294;
+  struct thread * _298;
+  long int _299;
+  long unsigned int _300;
+  sizetype _301;
+  struct thread * _302;
+  struct thread * prephitmp_303;
+  struct PreparedBlockingOp * _304;
+  struct RequestReservation * _305;
+  long unsigned int _307;
+  struct thread * _308;
+  void * _309;
+  struct _State * _310;
+  int (*) () * _311;
+  int (*) () _312;
+  struct _State * _313;
+  int (*) () * _314;
+  int (*) () _315;
+  union __native_type * _316;
+  int _317;
+  struct thread * _318;
+  struct thread * _319;
+  sizetype _320;
+  struct thread * _323;
+  long int _324;
+  long unsigned int _325;
+  struct RequestReservation * _332;
+  struct thread * _338;
+  struct thread * prephitmp_353;
+  long unsigned int _354;
+  struct OwedEvent * _357;
+  vector(2) long unsigned int _359;
+  unsigned long _369;
+  struct RequestReservation * _370;
+  unsigned long _371;
+  unsigned long _373;
+  struct RequestReservation * _384;
+  struct thread * prephitmp_406;
+  struct DeliveryRecord * _407;
+  sizetype _409;
+  struct PreparedBlockingOp * _415;
+  long unsigned int _417;
+  struct RequestReservation * _418;
+  struct PreparedBlockingOp * _455;
+
+  <bb 2> [local count: 118111600]:
+  _354 = (long unsigned int) &MEM <int (*) ()[21]> [(void *)&_ZTVN6sluice5async17ThreadPoolBackendE + 16B];
+  _359 = {_354, 0};
+  config$request_capacity_61 = config.request_capacity;
+  config$worker_count_47 = config.worker_count;
+  MEM[(struct AsyncBackend *)this_20(D)].core_ = 0B;
+  MEM <vector(2) long unsigned int> [(void *)this_20(D)] = _359;
+  MEM <vector(2) long unsigned int> [(void *)this_20(D) + 16B] = { 0, 0 };
+  *this_20(D).capacity_ = config$request_capacity_61;
+  if (config$request_capacity_61 > 288230376151711743)
+    goto <bb 3>; [0.00%]
+  else
+    goto <bb 4>; [100.00%]
+
+  <bb 3> [count: 0]:
+  std::__throw_length_error ("cannot create std::vector larger than max_size()");
+
+  <bb 4> [local count: 118111600]:
+  if (config$request_capacity_61 != 0)
+    goto <bb 6>; [54.67%]
+  else
+    goto <bb 5>; [45.33%]
+
+  <bb 5> [local count: 53539989]:
+  MEM <vector(2) long unsigned int> [(void *)this_20(D) + 48B] = { 0, 0 };
+  MEM <vector(2) long unsigned int> [(void *)this_20(D) + 64B] = { 0, 0 };
+  MEM[(struct _Vector_base *)this_20(D) + 72B]._M_impl.D.172184._M_end_of_storage = 0B;
+  goto <bb 10>; [100.00%]
+
+  <bb 6> [local count: 64571611]:
+  _165 = config$request_capacity_61 * 32;
+  _166 = operator new (_165);
+  MEM[(struct _Vector_base *)this_20(D) + 48B]._M_impl.D.171182._M_start = _166;
+  _161 = _166 + _165;
+  MEM[(struct _Vector_base *)this_20(D) + 48B]._M_impl.D.171182._M_end_of_storage = _161;
+
+  <bb 7> [local count: 955630225]:
+  # __first_183 = PHI <_156(7), _166(6)>
+  *__first_183 ={v} {CLOBBER(bob)};
+  *__first_183 = {};
+  MEM[(int *)__first_183 + 4B] = -1;
+  _156 = __first_183 + 32;
+  if (_156 != _161)
+    goto <bb 7>; [89.00%]
+  else
+    goto <bb 8>; [11.00%]
+
+  <bb 8> [local count: 64571611]:
+  _152 = (sizetype) _166;
+  _43 = _152 + _165;
+  _455 = (struct PreparedBlockingOp *) _43;
+  MEM[(struct vector *)this_20(D) + 48B].D.171837._M_impl.D.171182._M_finish = _455;
+  MEM <vector(2) long unsigned int> [(struct DeliveryRecord * *)this_20(D) + 72B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 72B]._M_end_of_storage = 0B;
+  _189 = operator new (_165);
+
+  <bb 9> [local count: 105119324]:
+  MEM[(struct _Vector_base *)this_20(D) + 72B]._M_impl.D.172184._M_start = _189;
+  _174 = _189 + _165;
+  MEM[(struct _Vector_base *)this_20(D) + 72B]._M_impl.D.172184._M_end_of_storage = _174;
+  __builtin_memset (_189, 0, _165);
+  _170 = (sizetype) _189;
+  _163 = _165 + _170;
+  _407 = (struct DeliveryRecord *) _163;
+
+  <bb 10> [local count: 118111600]:
+  # __first_32 = PHI <_407(9), 0B(5)>
+  # _417 = PHI <_165(9), config$request_capacity_61(5)>
+  MEM[(struct vector *)this_20(D) + 72B].D.172839._M_impl.D.172184._M_finish = __first_32;
+  MEM[(struct ReferenceReadySink *)this_20(D) + 96B].D.167894._vptr.SynchronousReadySink = &MEM <int (*) ()[5]> [(void *)&_ZTVN6sluice5async6detail18ReferenceReadySinkE + 16B];
+  MEM <unsigned long> [(union pthread_mutex_t *)this_20(D) + 104B] = 0;
+  MEM <unsigned long> [(union pthread_mutex_t *)this_20(D) + 112B] = 0;
+  MEM <unsigned long> [(union pthread_mutex_t *)this_20(D) + 120B] = 0;
+  MEM <vector(2) long unsigned int> [(union pthread_mutex_t *)this_20(D) + 128B] = { 0, 0 };
+  _3 = &this_20(D)->work_cv_;
+  std::condition_variable::condition_variable (_3);
+  MEM <vector(2) long unsigned int> [(struct RequestReservation * *)this_20(D) + 192B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 192B]._M_end_of_storage = 0B;
+  if (config$request_capacity_61 != 0)
+    goto <bb 12>; [54.67%]
+  else
+    goto <bb 11>; [45.33%]
+
+  <bb 11> [count: 0]:
+  MEM[(struct _Vector_base *)this_20(D) + 192B]._M_impl.D.170081._M_end_of_storage = 0B;
+  MEM <vector(2) long unsigned int> [(long unsigned int *)this_20(D) + 216B] = { 0, 0 };
+  MEM[(struct BoundedHandleRing *)this_20(D) + 192B].capacity_ = 0;
+  MEM[(struct _Vector_base *)this_20(D) + 240B]._M_impl.D.170081._M_end_of_storage = 0B;
+  MEM <vector(2) long unsigned int> [(struct RequestReservation * *)this_20(D) + 240B] = { 0, 0 };
+  MEM <vector(2) long unsigned int> [(long unsigned int *)this_20(D) + 264B] = { 0, 0 };
+  MEM[(struct BoundedHandleRing *)this_20(D) + 240B].capacity_ = 0;
+  MEM[(struct _Vector_base *)this_20(D) + 288B]._M_impl.D.170081._M_end_of_storage = 0B;
+  MEM <vector(2) long unsigned int> [(struct RequestReservation * *)this_20(D) + 288B] = { 0, 0 };
+  MEM <vector(2) long unsigned int> [(long unsigned int *)this_20(D) + 312B] = { 0, 0 };
+  MEM[(struct BoundedHandleRing *)this_20(D) + 288B].capacity_ = 0;
+  MEM[(struct _Vector_base *)this_20(D) + 336B]._M_impl.D.173192._M_start = 0B;
+  _228 = (struct OwedEvent *) _417;
+  MEM[(struct _Vector_base *)this_20(D) + 336B]._M_impl.D.173192._M_end_of_storage = _228;
+  MEM[(struct vector *)this_20(D) + 336B].D.173847._M_impl.D.173192._M_finish = 0B;
+  *this_20(D).active_workers_ = 0;
+  *this_20(D).stopping_ = 0;
+  MEM <vector(2) long unsigned int> [(struct thread * *)this_20(D) + 376B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 376B]._M_end_of_storage = 0B;
+  *this_20(D).syscall_count_.D.57338._M_i = 0;
+  goto <bb 17>; [100.00%]
+
+  <bb 12> [local count: 64571611]:
+  _191 = config$request_capacity_61 * 16;
+  _192 = operator new (_191);
+
+  <bb 13> [local count: 105119324]:
+  MEM[(struct _Vector_base *)this_20(D) + 192B]._M_impl.D.170081._M_start = _192;
+  _187 = _192 + _191;
+  MEM[(struct _Vector_base *)this_20(D) + 192B]._M_impl.D.170081._M_end_of_storage = _187;
+  __builtin_memset (_192, 0, _191);
+  _190 = (sizetype) _192;
+  _185 = _190 + _191;
+  _418 = (struct RequestReservation *) _185;
+  MEM[(struct vector *)this_20(D) + 192B].D.170736._M_impl.D.170081._M_finish = _418;
+  MEM <vector(2) long unsigned int> [(long unsigned int *)this_20(D) + 216B] = { 0, 0 };
+  MEM[(struct BoundedHandleRing *)this_20(D) + 192B].capacity_ = config$request_capacity_61;
+  MEM <vector(2) long unsigned int> [(struct RequestReservation * *)this_20(D) + 240B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 240B]._M_end_of_storage = 0B;
+  _175 = operator new (_191);
+
+  <bb 14> [local count: 105119324]:
+  MEM[(struct _Vector_base *)this_20(D) + 240B]._M_impl.D.170081._M_start = _175;
+  _223 = _175 + _191;
+  MEM[(struct _Vector_base *)this_20(D) + 240B]._M_impl.D.170081._M_end_of_storage = _223;
+  __builtin_memset (_175, 0, _191);
+  _220 = (sizetype) _175;
+  _205 = _191 + _220;
+  _384 = (struct RequestReservation *) _205;
+  MEM[(struct vector *)this_20(D) + 240B].D.170736._M_impl.D.170081._M_finish = _384;
+  MEM <vector(2) long unsigned int> [(long unsigned int *)this_20(D) + 264B] = { 0, 0 };
+  MEM[(struct BoundedHandleRing *)this_20(D) + 240B].capacity_ = config$request_capacity_61;
+  MEM <vector(2) long unsigned int> [(struct RequestReservation * *)this_20(D) + 288B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 288B]._M_end_of_storage = 0B;
+  _180 = operator new (_191);
+
+  <bb 15> [local count: 105119324]:
+  MEM[(struct _Vector_base *)this_20(D) + 288B]._M_impl.D.170081._M_start = _180;
+  _148 = _180 + _191;
+  MEM[(struct _Vector_base *)this_20(D) + 288B]._M_impl.D.170081._M_end_of_storage = _148;
+  __builtin_memset (_180, 0, _191);
+  _244 = (sizetype) _180;
+  _232 = _191 + _244;
+  _370 = (struct RequestReservation *) _232;
+  MEM[(struct vector *)this_20(D) + 288B].D.170736._M_impl.D.170081._M_finish = _370;
+  MEM <vector(2) long unsigned int> [(long unsigned int *)this_20(D) + 312B] = { 0, 0 };
+  MEM[(struct BoundedHandleRing *)this_20(D) + 288B].capacity_ = config$request_capacity_61;
+  MEM <vector(2) long unsigned int> [(struct OwedEvent * *)this_20(D) + 336B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 336B]._M_end_of_storage = 0B;
+  _10 = operator new (_417);
+
+  <bb 16> [local count: 118111600]:
+  MEM[(struct _Vector_base *)this_20(D) + 336B]._M_impl.D.173192._M_start = _10;
+  _294 = _10 + _417;
+  MEM[(struct _Vector_base *)this_20(D) + 336B]._M_impl.D.173192._M_end_of_storage = _294;
+  _409 = config$request_capacity_61 * 32;
+  __builtin_memset (_10, 0, _409);
+  _259 = (sizetype) _10;
+  _255 = _259 + _409;
+  _357 = (struct OwedEvent *) _255;
+  MEM[(struct vector *)this_20(D) + 336B].D.173847._M_impl.D.173192._M_finish = _357;
+  *this_20(D).active_workers_ = 0;
+  *this_20(D).stopping_ = 0;
+  MEM <vector(2) long unsigned int> [(struct thread * *)this_20(D) + 376B] = { 0, 0 };
+  MEM[(struct _Vector_impl_data *)this_20(D) + 376B]._M_end_of_storage = 0B;
+  *this_20(D).syscall_count_.D.57338._M_i = 0;
+  if (config$worker_count_47 == 0)
+    goto <bb 17>; [0.00%]
+  else
+    goto <bb 19>; [100.00%]
+
+  <bb 17> [count: 0]:
+  _53 = __cxa_allocate_exception (16);
+  std::invalid_argument::invalid_argument (_53, "ThreadPoolConfig fields must be > 0");
+
+  <bb 18> [count: 0]:
+  __cxa_throw (_53, &_ZTISt16invalid_argument, __dt_comp );
+
+  <bb 19> [local count: 118111600]:
+  if (config$worker_count_47 > 1152921504606846975)
+    goto <bb 20>; [0.00%]
+  else
+    goto <bb 21>; [100.00%]
+
+  <bb 20> [count: 0]:
+  std::__throw_length_error ("vector::reserve");
+
+  <bb 21> [local count: 59055801]:
+  _266 = config$worker_count_47 * 8;
+  _267 = operator new (_266);
+
+  <bb 22> [local count: 118111600]:
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_start = _267;
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_finish = _267;
+  _262 = _267 + _266;
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_end_of_storage = _262;
+
+  <bb 23> [local count: 955630242]:
+  # i_355 = PHI <i_42(50), 0(22)>
+  # prephitmp_353 = PHI <prephitmp_303(50), _267(22)>
+  # prephitmp_406 = PHI <pretmp_254(50), _262(22)>
+  if (prephitmp_353 != prephitmp_406)
+    goto <bb 24>; [70.00%]
+  else
+    goto <bb 32>; [30.00%]
+
+  <bb 24> [local count: 668941172]:
+  *prephitmp_353 ={v} {CLOBBER(bob)};
+  MEM[(struct id *)prephitmp_353]._M_thread = 0;
+  _274 = operator new (16);
+
+  <bb 25> [local count: 668941172]:
+  MEM[(struct _State_impl *)_274] ={v} {CLOBBER(bob)};
+  MEM[(struct _State_impl *)_274].D.200842._vptr._State = &MEM <int (*) ()[5]> [(void *)&_ZTVNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEEE + 16B];
+  MEM[(struct _Head_base *)_274 + 8B]._M_head_impl.__this = this_20(D);
+  MEM[(struct _State * &)&D.213006] = _274;
+  std::thread::_M_start_thread (prephitmp_353, &D.213006, _M_thread_deps_never_run);
+
+  <bb 26> [local count: 668941172]:
+  _275 = MEM[(struct _State * &)&D.213006];
+  if (_275 != 0B)
+    goto <bb 27>; [70.00%]
+  else
+    goto <bb 28>; [30.00%]
+
+  <bb 27> [local count: 468258823]:
+  _276 = _275->_vptr._State;
+  _277 = MEM[(int (*) () *)_276 + 8B];
+  OBJ_TYPE_REF(_277;(struct _State)_275->1B) (_275);
+
+  <bb 28> [local count: 668941172]:
+  D.213006 ={v} {CLOBBER(eob)};
+  D.213006 ={v} {CLOBBER(eos)};
+  _270 = MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_finish;
+  _271 = _270 + 8;
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_finish = _271;
+  goto <bb 49>; [100.00%]
+
+  <bb 29> [count: 0]:
+<L35>:
+  _278 = MEM[(struct _State * &)&D.213006];
+  if (_278 != 0B)
+    goto <bb 30>; [0.00%]
+  else
+    goto <bb 31>; [0.00%]
+
+  <bb 30> [count: 0]:
+  _279 = _278->_vptr._State;
+  _280 = MEM[(int (*) () *)_279 + 8B];
+  OBJ_TYPE_REF(_280;(struct _State)_278->1B) (_278);
+
+  <bb 31> [count: 0]:
+  D.213006 ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (25, 45);
+  goto <bb 53>; [100.00%]
+
+  <bb 32> [local count: 286689070]:
+  _282 = MEM[(const struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_start;
+  _283 = prephitmp_353 - _282;
+  __dif_284 = _283 /[ex] 8;
+  _285 = (long unsigned int) __dif_284;
+  if (_285 == 1152921504606846975)
+    goto <bb 33>; [0.00%]
+  else
+    goto <bb 34>; [100.00%]
+
+  <bb 33> [count: 0]:
+  std::__throw_length_error ("vector::_M_realloc_append");
+
+  <bb 34> [local count: 286689070]:
+  _286 = MAX_EXPR <_285, 1>;
+  __len_287 = _285 + _286;
+  _288 = MIN_EXPR <__len_287, 1152921504606846975>;
+  _307 = _288 * 8;
+  _308 = operator new (_307);
+
+  <bb 35> [local count: 286689070]:
+  _291 = (long unsigned int) _283;
+  _292 = _308 + _291;
+  *_292 ={v} {CLOBBER(bob)};
+  MEM[(struct id *)_292]._M_thread = 0;
+  _309 = operator new (16);
+
+  <bb 36> [local count: 286689070]:
+  MEM[(struct _State_impl *)_309] ={v} {CLOBBER(bob)};
+  MEM[(struct _State_impl *)_309].D.200842._vptr._State = &MEM <int (*) ()[5]> [(void *)&_ZTVNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEEE + 16B];
+  MEM[(struct _Head_base *)_309 + 8B]._M_head_impl.__this = this_20(D);
+  MEM[(struct _State * &)&D.213027] = _309;
+  std::thread::_M_start_thread (_292, &D.213027, _M_thread_deps_never_run);
+
+  <bb 37> [local count: 286689070]:
+  _310 = MEM[(struct _State * &)&D.213027];
+  if (_310 != 0B)
+    goto <bb 38>; [70.00%]
+  else
+    goto <bb 39>; [30.00%]
+
+  <bb 38> [local count: 200682349]:
+  _311 = _310->_vptr._State;
+  _312 = MEM[(int (*) () *)_311 + 8B];
+  OBJ_TYPE_REF(_312;(struct _State)_310->1B) (_310);
+
+  <bb 39> [local count: 286689070]:
+  D.213027 ={v} {CLOBBER(eob)};
+  D.213027 ={v} {CLOBBER(eos)};
+  if (_282 != prephitmp_353)
+    goto <bb 43>; [89.00%]
+  else
+    goto <bb 86>; [11.00%]
+
+  <bb 40> [count: 0]:
+<L37>:
+  _313 = MEM[(struct _State * &)&D.213027];
+  if (_313 != 0B)
+    goto <bb 41>; [0.00%]
+  else
+    goto <bb 42>; [0.00%]
+
+  <bb 41> [count: 0]:
+  _314 = _313->_vptr._State;
+  _315 = MEM[(int (*) () *)_314 + 8B];
+  OBJ_TYPE_REF(_315;(struct _State)_313->1B) (_313);
+
+  <bb 42> [count: 0]:
+  D.213027 ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (46, 47);
+  goto <bb 48>; [100.00%]
+
+  <bb 43> [local count: 255153272]:
+  _369 = (unsigned long) prephitmp_353;
+  _371 = (unsigned long) _282;
+  _373 = _369 - _371;
+  _127 = _308 + _373;
+
+  <bb 44> [local count: 2319575215]:
+  # __cur_248 = PHI <__cur_296(44), _308(43)>
+  # __first_272 = PHI <__first_295(44), _282(43)>
+  *__cur_248 ={v} {CLOBBER(bob)};
+  MEM[(struct id *)__cur_248] = MEM[(struct id &)__first_272];
+  *__first_272 ={v} {CLOBBER(eob)};
+  __first_295 = __first_272 + 8;
+  __cur_296 = __cur_248 + 8;
+  if (_127 != __cur_296)
+    goto <bb 44>; [89.00%]
+  else
+    goto <bb 45>; [11.00%]
+
+  <bb 45> [local count: 255153272]:
+  _320 = (sizetype) _308;
+  _301 = _320 + _373;
+  __cur_350 = (struct thread *) _301;
+  __new_finish_297 = __cur_350 + 8;
+  if (_282 != 0B)
+    goto <bb 46>; [47.72%]
+  else
+    goto <bb 47>; [52.28%]
+
+  <bb 46> [local count: 153292644]:
+  # __new_finish_327 = PHI <__new_finish_297(45), __new_finish_340(86)>
+  _298 = MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_end_of_storage;
+  _299 = _298 - _282;
+  _300 = (long unsigned int) _299;
+  operator delete (_282, _300);
+
+  <bb 47> [local count: 286689070]:
+  # __new_finish_336 = PHI <__new_finish_297(45), __new_finish_327(46)>
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_start = _308;
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_finish = __new_finish_336;
+  _302 = _308 + _307;
+  MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_end_of_storage = _302;
+  goto <bb 49>; [100.00%]
+
+  <bb 48> [count: 0]:
+<L36>:
+  D.213027 ={v} {CLOBBER};
+  operator delete (_308, _307);
+  __builtin_eh_copy_values (25, 46);
+  goto <bb 53>; [100.00%]
+
+  <bb 49> [local count: 955630244]:
+  # prephitmp_303 = PHI <_271(28), __new_finish_336(47)>
+  i_42 = i_355 + 1;
+  if (i_42 < config$worker_count_47)
+    goto <bb 50>; [87.64%]
+  else
+    goto <bb 51>; [12.36%]
+
+  <bb 50> [local count: 837518642]:
+  pretmp_254 = MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_end_of_storage;
+  goto <bb 23>; [100.00%]
+
+  <bb 51> [local count: 118111602]:
+  return;
+
+  <bb 52> [count: 0]:
+<L12>:
+  __cxa_free_exception (_53);
+  __builtin_eh_copy_values (22, 23);
+  goto <bb 62>; [100.00%]
+
+  <bb 53> [count: 0]:
+<L14>:
+  D.213006 ={v} {CLOBBER};
+  _6 = __builtin_eh_pointer (25);
+  __cxa_begin_catch (_6);
+  _316 = &MEM[(struct mutex *)this_20(D) + 104B].D.141971._M_mutex;
+  _317 = pthread_mutex_lock (_316);
+  if (_317 != 0)
+    goto <bb 54>; [0.00%]
+  else
+    goto <bb 55>; [0.00%]
+
+  <bb 54> [count: 0]:
+  std::__throw_system_error (_317);
+
+  <bb 55> [count: 0]:
+  *this_20(D).stopping_ = 1;
+  pthread_mutex_unlock (_316);
+  std::condition_variable::notify_all (_3);
+  _63 = MEM[(struct thread * const &)this_20(D) + 376];
+  _62 = MEM[(struct thread * const &)this_20(D) + 384];
+  if (_62 != _63)
+    goto <bb 56>; [0.00%]
+  else
+    goto <bb 60>; [0.00%]
+
+  <bb 56> [count: 0]:
+  ivtmp.954_334 = (unsigned long) _63;
+
+  <bb 57> [count: 0]:
+  # ivtmp.954_240 = PHI <ivtmp.954_330(59), ivtmp.954_334(56)>
+  SR.772_167 = (struct thread *) ivtmp.954_240;
+  __x$_M_thread_65 = MEM[(long unsigned int *)SR.772_167];
+  if (__x$_M_thread_65 != 0)
+    goto <bb 58>; [0.00%]
+  else
+    goto <bb 59>; [0.00%]
+
+  <bb 58> [count: 0]:
+  std::thread::join (SR.772_167);
+
+  <bb 59> [count: 0]:
+  ivtmp.954_330 = ivtmp.954_240 + 8;
+  _338 = (struct thread *) ivtmp.954_330;
+  if (_62 != _338)
+    goto <bb 57>; [0.00%]
+  else
+    goto <bb 60>; [0.00%]
+
+  <bb 60> [count: 0]:
+  __cxa_rethrow ();
+
+  <bb 61> [count: 0]:
+<L24>:
+  __cxa_end_catch ();
+  __builtin_eh_copy_values (22, 28);
+
+  <bb 62> [count: 0]:
+<L25>:
+  _318 = MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_finish;
+  _319 = MEM[(struct vector *)this_20(D) + 376B].D.174851._M_impl.D.174196._M_start;
+  if (_318 != _319)
+    goto <bb 63>; [0.00%]
+  else
+    goto <bb 66>; [0.00%]
+
+  <bb 63> [count: 0]:
+  # __first_273 = PHI <__first_322(65), _319(62)>
+  __x$_M_thread_321 = MEM[(long unsigned int *)__first_273];
+  if (__x$_M_thread_321 != 0)
+    goto <bb 64>; [0.00%]
+  else
+    goto <bb 65>; [0.00%]
+
+  <bb 64> [count: 0]:
+  std::terminate ();
+
+  <bb 65> [count: 0]:
+  *__first_273 ={v} {CLOBBER(eob)};
+  __first_322 = __first_273 + 8;
+  if (_318 != __first_322)
+    goto <bb 63>; [0.00%]
+  else
+    goto <bb 66>; [0.00%]
+
+  <bb 66> [count: 0]:
+  if (_319 != 0B)
+    goto <bb 67>; [0.00%]
+  else
+    goto <bb 68>; [0.00%]
+
+  <bb 67> [count: 0]:
+  _323 = MEM[(struct _Vector_base *)this_20(D) + 376B]._M_impl.D.174196._M_end_of_storage;
+  _324 = _323 - _319;
+  _325 = (long unsigned int) _324;
+  operator delete (_319, _325);
+
+  <bb 68> [count: 0]:
+  MEM[(struct vector *)this_20(D) + 376B] ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (21, 22);
+  _68 = MEM[(struct _Vector_base *)this_20(D) + 336B]._M_impl.D.173192._M_start;
+  if (_68 != 0B)
+    goto <bb 69>; [0.00%]
+  else
+    goto <bb 70>; [0.00%]
+
+  <bb 69> [count: 0]:
+  _67 = MEM[(struct _Vector_base *)this_20(D) + 336B]._M_impl.D.173192._M_end_of_storage;
+  _69 = _67 - _68;
+  _70 = (long unsigned int) _69;
+  operator delete (_68, _70);
+
+  <bb 70> [count: 0]:
+  MEM[(struct vector *)this_20(D) + 336B] ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (16, 21);
+  _72 = MEM[(struct _Vector_base *)this_20(D) + 288B]._M_impl.D.170081._M_start;
+  if (_72 != 0B)
+    goto <bb 72>; [0.00%]
+  else
+    goto <bb 73>; [0.00%]
+
+  <bb 71> [count: 0]:
+<L42>:
+  _332 = MEM[(struct _Vector_base *)this_20(D) + 288B]._M_impl.D.170081._M_start;
+
+  <bb 72> [count: 0]:
+  # _305 = PHI <_72(70), _332(71)>
+  _71 = MEM[(struct _Vector_base *)this_20(D) + 288B]._M_impl.D.170081._M_end_of_storage;
+  _73 = _71 - _305;
+  _74 = (long unsigned int) _73;
+  operator delete (_305, _74);
+
+  <bb 73> [count: 0]:
+  MEM[(struct BoundedHandleRing *)this_20(D) + 288B] ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (15, 16);
+
+  <bb 74> [count: 0]:
+<L28>:
+  _76 = MEM[(struct _Vector_base *)this_20(D) + 240B]._M_impl.D.170081._M_start;
+  if (_76 != 0B)
+    goto <bb 75>; [0.00%]
+  else
+    goto <bb 76>; [0.00%]
+
+  <bb 75> [count: 0]:
+  _75 = MEM[(struct _Vector_base *)this_20(D) + 240B]._M_impl.D.170081._M_end_of_storage;
+  _77 = _75 - _76;
+  _78 = (long unsigned int) _77;
+  operator delete (_76, _78);
+
+  <bb 76> [count: 0]:
+  MEM[(struct BoundedHandleRing *)this_20(D) + 240B] ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (14, 15);
+
+  <bb 77> [count: 0]:
+<L29>:
+  _80 = MEM[(struct _Vector_base *)this_20(D) + 192B]._M_impl.D.170081._M_start;
+  if (_80 != 0B)
+    goto <bb 78>; [0.00%]
+  else
+    goto <bb 79>; [0.00%]
+
+  <bb 78> [count: 0]:
+  _79 = MEM[(struct _Vector_base *)this_20(D) + 192B]._M_impl.D.170081._M_end_of_storage;
+  _81 = _79 - _80;
+  _82 = (long unsigned int) _81;
+  operator delete (_80, _82);
+
+  <bb 79> [count: 0]:
+  MEM[(struct BoundedHandleRing *)this_20(D) + 192B] ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (13, 14);
+
+  <bb 80> [count: 0]:
+<L30>:
+  std::condition_variable::~condition_variable (_3);
+  __builtin_eh_copy_values (11, 13);
+  MEM[(struct ReferenceReadySink *)this_20(D) + 96B] ={v} {CLOBBER(eob)};
+  _84 = MEM[(struct _Vector_base *)this_20(D) + 72B]._M_impl.D.172184._M_start;
+  if (_84 != 0B)
+    goto <bb 81>; [0.00%]
+  else
+    goto <bb 82>; [0.00%]
+
+  <bb 81> [count: 0]:
+  _83 = MEM[(struct _Vector_base *)this_20(D) + 72B]._M_impl.D.172184._M_end_of_storage;
+  _85 = _83 - _84;
+  _86 = (long unsigned int) _85;
+  operator delete (_84, _86);
+
+  <bb 82> [count: 0]:
+  MEM[(struct vector *)this_20(D) + 72B] ={v} {CLOBBER(eob)};
+  __builtin_eh_copy_values (6, 11);
+  _88 = MEM[(struct _Vector_base *)this_20(D) + 48B]._M_impl.D.171182._M_start;
+  if (_88 != 0B)
+    goto <bb 84>; [0.00%]
+  else
+    goto <bb 85>; [0.00%]
+
+  <bb 83> [count: 0]:
+<L38>:
+  _415 = MEM[(struct _Vector_base *)this_20(D) + 48B]._M_impl.D.171182._M_start;
+
+  <bb 84> [count: 0]:
+  # _304 = PHI <_88(82), _415(83)>
+  _87 = MEM[(struct _Vector_base *)this_20(D) + 48B]._M_impl.D.171182._M_end_of_storage;
+  _89 = _87 - _304;
+  _90 = (long unsigned int) _89;
+  operator delete (_304, _90);
+
+  <bb 85> [count: 0]:
+  MEM[(struct vector *)this_20(D) + 48B] ={v} {CLOBBER(eob)};
+  _225 = __builtin_eh_pointer (6);
+  __builtin_unwind_resume (_225);
+
+  <bb 86> [local count: 31535798]:
+  __new_finish_340 = _308 + 8;
+  goto <bb 46>; [100.00%]
+
+}
+
+
+
+;; Function sluice::async::ThreadPoolBackend::worker_loop (_ZN6sluice5async17ThreadPoolBackend11worker_loopEv, funcdef_no=7061, decl_uid=170823, cgraph_uid=4047, symbol_order=4046)
+
+void sluice::async::ThreadPoolBackend::worker_loop (struct ThreadPoolBackend * const this)
+{
+  void * D.214268;
+  unsigned char metadata;
+  unsigned char op;
+  long unsigned int h$generation$value;
+  unsigned int h$slot$value;
+  const uint64_t one;
+  size_t pos;
+  const uint64_t one;
+  struct TerminalCandidate candidate;
+  const struct RequestKey key;
+  const struct IoOutcome outcome;
+  struct FileInfo metadata;
+  const struct RequestKey key;
+  struct unique_lock lk;
+  struct PreparedBlockingOp op;
+  struct mutex * _1;
+  struct condition_variable * _2;
+  struct RequestCore * _3;
+  struct RequestCore * _4;
+  ExecutionClaim _5;
+  long unsigned int _6;
+  long unsigned int _7;
+  long unsigned int _8;
+  long unsigned int _9;
+  long unsigned int _10;
+  struct RequestCore * _11;
+  bool _12;
+  bool pretmp_13;
+  unsigned char _14;
+  struct RequestCore * _15;
+  TerminalVerdict _16;
+  struct RequestCore * _17;
+  ExecutionRelease _18;
+  void * _20;
+  struct FILE * stderr.100_21;
+  struct FILE * stderr.101_22;
+  int pretmp_24;
+  int pretmp_26;
+  __int_type * _47;
+  long unsigned int prephitmp_80;
+  bool _98;
+  long unsigned int _99;
+  bool _102;
+  long unsigned int _104;
+  struct RequestReservation * _105;
+  long unsigned int _106;
+  struct value_type & _107;
+  long unsigned int _108;
+  long unsigned int _109;
+  long unsigned int iftmp.2_110;
+  long unsigned int _111;
+  void * _112;
+  struct PreparedBlockingOp * _114;
+  long unsigned int _115;
+  struct value_type & _116;
+  struct ProgressSource * _118;
+  struct ProgressSource * _120;
+  bool _121;
+  union __native_type * _136;
+  long unsigned int pretmp_139;
+  int _151;
+  struct mutex_type * _153;
+  union __native_type * _154;
+  struct mutex_type * _161;
+  long unsigned int _162;
+  long unsigned int _163;
+  long unsigned int _164;
+  long unsigned int _165;
+  int _166;
+  bool _167;
+  union __native_type * _169;
+  int _170;
+  int * _171;
+  int _172;
+  long int _173;
+  struct FILE * stderr.112_177;
+  struct FILE * stderr.113_178;
+  int _180;
+  struct mutex_type * _181;
+  int _182;
+  long unsigned int _183;
+  long unsigned int _184;
+  long unsigned int _185;
+  struct RequestReservation * _188;
+  long unsigned int _190;
+  struct value_type & _191;
+  long unsigned int _192;
+  struct FILE * stderr.0_193;
+  struct FILE * stderr.1_194;
+  long unsigned int _196;
+  long unsigned int _197;
+  long unsigned int _198;
+  long unsigned int _199;
+  int _200;
+  bool _201;
+  union __native_type * _203;
+  int _204;
+  int * _205;
+  int _206;
+  long int _207;
+  struct FILE * stderr.112_211;
+  struct FILE * stderr.113_212;
+  struct mutex_type * _214;
+  union __native_type * _215;
+  union __native_type * _288;
+
+  <bb 2> [local count: 14829378]:
+  _1 = &this_40(D)->work_mtx_;
+  goto <bb 4>; [100.00%]
+
+  <bb 3> [local count: 790476988]:
+  op ={v} {CLOBBER(eos)};
+
+  <bb 4> [local count: 805306368]:
+  lk ={v} {CLOBBER(bob)};
+  lk._M_device = _1;
+  lk._M_owns = 0;
+  _151 = pthread_mutex_lock (_1);
+  if (_151 != 0)
+    goto <bb 5>; [0.00%]
+  else
+    goto <bb 6>; [100.00%]
+
+  <bb 5> [count: 0]:
+  std::__throw_system_error (_151);
+
+  <bb 6> [local count: 805306368]:
+  lk._M_owns = 1;
+  _2 = &this_40(D)->work_cv_;
+
+  <bb 7> [local count: 1073741823]:
+  _98 = this_40(D)->stopping_;
+  if (_98 != 0)
+    goto <bb 10>; [50.00%]
+  else
+    goto <bb 8>; [50.00%]
+
+  <bb 8> [local count: 536870912]:
+  _99 = MEM[(const struct BoundedHandleRing *)this_40(D) + 192B].size_;
+  if (_99 != 0)
+    goto <bb 15>; [50.00%]
+  else
+    goto <bb 9>; [50.00%]
+
+  <bb 9> [local count: 268435456]:
+  std::condition_variable::wait (_2, &lk);
+  goto <bb 7>; [100.00%]
+
+  <bb 10> [local count: 536870912]:
+  pretmp_139 = MEM[(const struct BoundedHandleRing *)this_40(D) + 192B].size_;
+  if (pretmp_139 == 0)
+    goto <bb 11>; [3.66%]
+  else
+    goto <bb 15>; [96.34%]
+
+  <bb 11> [local count: 14737107]:
+  _102 = lk._M_owns;
+  if (_102 != 0)
+    goto <bb 12>; [33.00%]
+  else
+    goto <bb 14>; [67.00%]
+
+  <bb 12> [local count: 4863245]:
+  _153 = lk._M_device;
+  if (_153 != 0B)
+    goto <bb 13>; [53.47%]
+  else
+    goto <bb 14>; [46.53%]
+
+  <bb 13> [local count: 2600377]:
+  _154 = &MEM[(struct mutex *)_153].D.141971._M_mutex;
+  pthread_mutex_unlock (_154);
+
+  <bb 14> [local count: 14737107]:
+  lk ={v} {CLOBBER(eos)};
+  key ={v} {CLOBBER(eos)};
+  op ={v} {CLOBBER(eos)};
+  return;
+
+  <bb 15> [local count: 521775710]:
+  # prephitmp_80 = PHI <_99(8), pretmp_139(10)>
+  _104 = MEM[(struct BoundedHandleRing *)this_40(D) + 192B].head_;
+  _105 = MEM[(struct vector *)this_40(D) + 192B].D.170736._M_impl.D.170081._M_start;
+  _106 = _104 * 16;
+  _107 = _105 + _106;
+  h$slot$value_117 = MEM <uint32_t> [(const struct RequestReservation &)_107];
+  h$generation$value_27 = MEM <uint64_t> [(const struct RequestReservation &)_107 + 8];
+  _108 = _104 + 1;
+  _109 = MEM[(struct BoundedHandleRing *)this_40(D) + 192B].capacity_;
+  if (_108 != _109)
+    goto <bb 17>; [66.00%]
+  else
+    goto <bb 16>; [34.00%]
+
+  <bb 16> [local count: 177403743]:
+
+  <bb 17> [local count: 521775710]:
+  # iftmp.2_110 = PHI <0(16), _108(15)>
+  MEM[(struct BoundedHandleRing *)this_40(D) + 192B].head_ = iftmp.2_110;
+  _111 = prephitmp_80 + 18446744073709551615;
+  MEM[(struct BoundedHandleRing *)this_40(D) + 192B].size_ = _111;
+  key ={v} {CLOBBER(bob)};
+  _3 = this_40(D)->D.174884.core_;
+  key.context = sluice::async::detail::RequestCore::context (_3);
+  MEM[(struct SlotIndex *)&key + 8B] = h$slot$value_117;
+  MEM[(struct Generation *)&key + 16B] = h$generation$value_27;
+  _4 = this_40(D)->D.174884.core_;
+  _5 = sluice::async::detail::RequestCore::claim_execution (_4, key);
+  pretmp_13 = lk._M_owns;
+  if (_5 != 0)
+    goto <bb 18>; [50.00%]
+  else
+    goto <bb 20>; [50.00%]
+
+  <bb 18> [local count: 260887855]:
+  if (pretmp_13 != 0)
+    goto <bb 19>; [33.00%]
+  else
+    goto <bb 24>; [67.00%]
+
+  <bb 19> [local count: 86092991]:
+  _161 = lk._M_device;
+  if (_161 != 0B)
+    goto <bb 22>; [53.47%]
+  else
+    goto <bb 24>; [46.53%]
+
+  <bb 20> [local count: 260887855]:
+  _6 = (long unsigned int) h$slot$value_117;
+  _114 = MEM[(struct vector *)this_40(D) + 48B].D.171837._M_impl.D.171182._M_start;
+  _115 = _6 * 32;
+  _116 = _114 + _115;
+  op = MEM[(const struct PreparedBlockingOp &)_116];
+  op_265 = MEM <unsigned char> [(const struct PreparedBlockingOp &)_116];
+  _7 = this_40(D)->active_workers_;
+  _8 = _7 + 1;
+  this_40(D)->active_workers_ = _8;
+  if (pretmp_13 != 0)
+    goto <bb 21>; [33.00%]
+  else
+    goto <bb 41>; [67.00%]
+
+  <bb 21> [local count: 86092992]:
+  _181 = lk._M_device;
+  if (_181 != 0B)
+    goto <bb 23>; [53.47%]
+  else
+    goto <bb 41>; [46.53%]
+
+  <bb 22> [local count: 46033922]:
+  _136 = &MEM[(struct mutex *)_161].D.141971._M_mutex;
+  pthread_mutex_unlock (_136);
+  goto <bb 24>; [100.00%]
+
+  <bb 23> [local count: 46033923]:
+  _288 = &MEM[(struct mutex *)_181].D.141971._M_mutex;
+  pthread_mutex_unlock (_288);
+  goto <bb 41>; [100.00%]
+
+  <bb 24> [local count: 172185983]:
+  lk ={v} {CLOBBER(eos)};
+  key ={v} {CLOBBER(eos)};
+  _118 = MEM[(struct BackendProgressPort *)this_40(D) + 24B].source_;
+  if (_118 != 0B)
+    goto <bb 25>; [53.47%]
+  else
+    goto <bb 3>; [46.53%]
+
+  <bb 25> [local count: 92067845]:
+  _169 = &MEM[(struct mutex *)_118].D.141971._M_mutex;
+  _170 = pthread_mutex_lock (_169);
+  if (_170 != 0)
+    goto <bb 26>; [0.00%]
+  else
+    goto <bb 27>; [100.00%]
+
+  <bb 26> [count: 0]:
+  std::__throw_system_error (_170);
+
+  <bb 27> [local count: 92067845]:
+  _162 = _118->progress_epoch_;
+  if (_162 != 18446744073709551615)
+    goto <bb 28>; [66.00%]
+  else
+    goto <bb 29>; [34.00%]
+
+  <bb 28> [local count: 60764777]:
+  _163 = _162 + 1;
+  _118->progress_epoch_ = _163;
+  goto <bb 31>; [100.00%]
+
+  <bb 29> [local count: 31303068]:
+  _164 = _118->progress_exhaustion_;
+  if (_164 != 18446744073709551615)
+    goto <bb 30>; [66.00%]
+  else
+    goto <bb 31>; [34.00%]
+
+  <bb 30> [local count: 20660025]:
+  _165 = _164 + 1;
+  _118->progress_exhaustion_ = _165;
+
+  <bb 31> [local count: 92067845]:
+  _166 = _118->notification_fd_;
+  if (_166 < 0)
+    goto <bb 40>; [26.36%]
+  else
+    goto <bb 32>; [73.64%]
+
+  <bb 32> [local count: 67798761]:
+  _167 = _118->notification_pending_;
+  if (_167 != 0)
+    goto <bb 40>; [34.00%]
+  else
+    goto <bb 33>; [66.00%]
+
+  <bb 33> [local count: 44747182]:
+  one = 1;
+  _171 = __errno_location ();
+
+  <bb 34> [local count: 55097558]:
+  *_171 = 0;
+  _172 = _118->notification_fd_;
+  _173 = write (_172, &one, 8);
+  if (_173 == 8)
+    goto <bb 39>; [3.66%]
+  else
+    goto <bb 35>; [96.34%]
+
+  <bb 35> [local count: 53080988]:
+  pretmp_26 = *_171;
+  if (_173 < 0)
+    goto <bb 36>; [96.34%]
+  else
+    goto <bb 38>; [3.66%]
+
+  <bb 36> [local count: 51138223]:
+  if (pretmp_26 == 4)
+    goto <bb 34>; [20.24%]
+  else
+    goto <bb 37>; [79.76%]
+
+  <bb 37> [local count: 42713519]:
+  if (pretmp_26 == 11)
+    goto <bb 39>; [99.96%]
+  else
+    goto <bb 38>; [0.04%]
+
+  <bb 38> [local count: 34178]:
+  stderr.112_177 = stderr;
+  fprintf (stderr.112_177, "sluice::async::detail::ProgressSource: %s failed with errno=%d (wait-domain failure)\n", "write", pretmp_26);
+  stderr.113_178 = stderr;
+  fflush (stderr.113_178);
+  std::terminate ();
+
+  <bb 39> [local count: 44747182]:
+  _118->notification_pending_ = 1;
+  one ={v} {CLOBBER(eos)};
+
+  <bb 40> [local count: 92067845]:
+  pthread_mutex_unlock (_169);
+  goto <bb 3>; [100.00%]
+
+  <bb 41> [local count: 115364609]:
+  lk ={v} {CLOBBER(eos)};
+  key ={v} {CLOBBER(eos)};
+  metadata = {};
+  outcome ={v} {CLOBBER(bob)};
+  MEM <unsigned char> [(void *)&op] = op_265;
+  MEM <unsigned char> [(void *)&metadata] = 1;
+  outcome = sluice::async::ThreadPoolBackend::run_syscall (&op, &metadata); [return slot optimization]
+  metadata_280 = MEM <unsigned char> [(void *)&metadata];
+  _47 = &MEM[(struct __atomic_base *)this_40(D) + 400B]._M_i;
+  __atomic_fetch_add_8 (_47, 1, 0);
+  _180 = pthread_mutex_lock (_1);
+  if (_180 != 0)
+    goto <bb 42>; [0.00%]
+  else
+    goto <bb 43>; [100.00%]
+
+  <bb 42> [count: 0]:
+  std::__throw_system_error (_180);
+
+  <bb 43> [local count: 115364609]:
+  _9 = this_40(D)->active_workers_;
+  _10 = _9 + 18446744073709551615;
+  this_40(D)->active_workers_ = _10;
+  pthread_mutex_unlock (_1);
+  key ={v} {CLOBBER(bob)};
+  _11 = this_40(D)->D.174884.core_;
+  key.context = sluice::async::detail::RequestCore::context (_11);
+  MEM[(struct SlotIndex *)&key + 8B] = h$slot$value_117;
+  MEM[(struct Generation *)&key + 16B] = h$generation$value_27;
+  candidate = {};
+  candidate.metadata.kind = 1;
+  candidate.outcome = outcome;
+  _12 = outcome.succeeded;
+  if (_12 != 0)
+    goto <bb 44>; [50.00%]
+  else
+    goto <bb 46>; [50.00%]
+
+  <bb 44> [local count: 57682305]:
+  _14 = op_265 + 252;
+  if (_14 <= 1)
+    goto <bb 45>; [41.00%]
+  else
+    goto <bb 46>; [59.00%]
+
+  <bb 45> [local count: 23649745]:
+  candidate.has_metadata = 1;
+  MEM <unsigned char> [(struct FileInfo *)&metadata] = metadata_280;
+  candidate.metadata = metadata;
+
+  <bb 46> [local count: 115364609]:
+  _15 = this_40(D)->D.174884.core_;
+  _16 = sluice::async::detail::RequestCore::offer_terminal (_15, key, &candidate);
+  if (_16 != 0)
+    goto <bb 47>; [0.04%]
+  else
+    goto <bb 48>; [99.96%]
+
+  <bb 47> [local count: 92273]:
+  sluice::async::detail::threadpool_core_handoff_fail_fast ();
+
+  <bb 48> [local count: 115318463]:
+  _17 = this_40(D)->D.174884.core_;
+  _18 = sluice::async::detail::RequestCore::release_execution (_17, key);
+  if (_18 != 1)
+    goto <bb 47>; [0.04%]
+  else
+    goto <bb 49>; [99.96%]
+
+  <bb 49> [local count: 115272336]:
+  _182 = pthread_mutex_lock (_1);
+  if (_182 != 0)
+    goto <bb 50>; [0.00%]
+  else
+    goto <bb 51>; [100.00%]
+
+  <bb 50> [count: 0]:
+  std::__throw_system_error (_182);
+
+  <bb 51> [local count: 115272336]:
+  _183 = MEM[(struct BoundedHandleRing *)this_40(D) + 240B].size_;
+  _184 = MEM[(struct BoundedHandleRing *)this_40(D) + 240B].capacity_;
+  if (_183 >= _184)
+    goto <bb 52>; [0.04%]
+  else
+    goto <bb 53>; [99.96%]
+
+  <bb 52> [local count: 46109]:
+  stderr.0_193 = stderr;
+  __builtin_fwrite ("sluice::async::ThreadPoolBackend: post-commit dispatch-ring push exceeded capacity (invariant violation)\n", 1, 105, stderr.0_193);
+  stderr.1_194 = stderr;
+  fflush (stderr.1_194);
+  std::terminate ();
+
+  <bb 53> [local count: 115226227]:
+  _185 = MEM[(struct BoundedHandleRing *)this_40(D) + 240B].head_;
+  pos_186 = _183 + _185;
+  if (_184 <= pos_186)
+    goto <bb 54>; [50.00%]
+  else
+    goto <bb 55>; [50.00%]
+
+  <bb 54> [local count: 57613114]:
+  pos_187 = pos_186 - _184;
+
+  <bb 55> [local count: 115272336]:
+  # pos_189 = PHI <pos_186(53), pos_187(54)>
+  _188 = MEM[(struct vector *)this_40(D) + 240B].D.170736._M_impl.D.170081._M_start;
+  _190 = pos_189 * 16;
+  _191 = _188 + _190;
+  MEM <uint32_t> [(struct value_type *)_191] = h$slot$value_117;
+  MEM <uint64_t> [(struct value_type *)_191 + 8B] = h$generation$value_27;
+  _192 = _183 + 1;
+  MEM[(struct BoundedHandleRing *)this_40(D) + 240B].size_ = _192;
+  pthread_mutex_unlock (_1);
+  _120 = MEM[(struct BackendProgressPort *)this_40(D) + 24B].source_;
+  if (_120 != 0B)
+    goto <bb 56>; [53.47%]
+  else
+    goto <bb 72>; [46.53%]
+
+  <bb 56> [local count: 61636118]:
+  _203 = &MEM[(struct mutex *)_120].D.141971._M_mutex;
+  _204 = pthread_mutex_lock (_203);
+  if (_204 != 0)
+    goto <bb 57>; [0.00%]
+  else
+    goto <bb 58>; [100.00%]
+
+  <bb 57> [count: 0]:
+  std::__throw_system_error (_204);
+
+  <bb 58> [local count: 61636118]:
+  _196 = _120->progress_epoch_;
+  if (_196 != 18446744073709551615)
+    goto <bb 59>; [66.00%]
+  else
+    goto <bb 60>; [34.00%]
+
+  <bb 59> [local count: 40679838]:
+  _197 = _196 + 1;
+  _120->progress_epoch_ = _197;
+  goto <bb 62>; [100.00%]
+
+  <bb 60> [local count: 20956280]:
+  _198 = _120->progress_exhaustion_;
+  if (_198 != 18446744073709551615)
+    goto <bb 61>; [66.00%]
+  else
+    goto <bb 62>; [34.00%]
+
+  <bb 61> [local count: 13831145]:
+  _199 = _198 + 1;
+  _120->progress_exhaustion_ = _199;
+
+  <bb 62> [local count: 61636118]:
+  _200 = _120->notification_fd_;
+  if (_200 < 0)
+    goto <bb 71>; [26.36%]
+  else
+    goto <bb 63>; [73.64%]
+
+  <bb 63> [local count: 45388837]:
+  _201 = _120->notification_pending_;
+  if (_201 != 0)
+    goto <bb 71>; [34.00%]
+  else
+    goto <bb 64>; [66.00%]
+
+  <bb 64> [local count: 29956633]:
+  one = 1;
+  _205 = __errno_location ();
+
+  <bb 65> [local count: 36885839]:
+  *_205 = 0;
+  _206 = _120->notification_fd_;
+  _207 = write (_206, &one, 8);
+  if (_207 == 8)
+    goto <bb 70>; [3.66%]
+  else
+    goto <bb 66>; [96.34%]
+
+  <bb 66> [local count: 35535817]:
+  pretmp_24 = *_205;
+  if (_207 < 0)
+    goto <bb 67>; [96.34%]
+  else
+    goto <bb 69>; [3.66%]
+
+  <bb 67> [local count: 34235206]:
+  if (pretmp_24 == 4)
+    goto <bb 65>; [20.24%]
+  else
+    goto <bb 68>; [79.76%]
+
+  <bb 68> [local count: 28595169]:
+  if (pretmp_24 == 11)
+    goto <bb 70>; [99.96%]
+  else
+    goto <bb 69>; [0.04%]
+
+  <bb 69> [local count: 22881]:
+  stderr.112_211 = stderr;
+  fprintf (stderr.112_211, "sluice::async::detail::ProgressSource: %s failed with errno=%d (wait-domain failure)\n", "write", pretmp_24);
+  stderr.113_212 = stderr;
+  fflush (stderr.113_212);
+  std::terminate ();
+
+  <bb 70> [local count: 29956633]:
+  _120->notification_pending_ = 1;
+  one ={v} {CLOBBER(eos)};
+
+  <bb 71> [local count: 61636118]:
+  pthread_mutex_unlock (_203);
+
+  <bb 72> [local count: 349497454]:
+  metadata ={v} {CLOBBER(eos)};
+  outcome ={v} {CLOBBER(eos)};
+  key ={v} {CLOBBER(eos)};
+  candidate ={v} {CLOBBER(eos)};
+  goto <bb 3>; [100.00%]
+
+  <bb 73> [count: 0]:
+<L37>:
+  _121 = lk._M_owns;
+  if (_121 != 0)
+    goto <bb 74>; [0.00%]
+  else
+    goto <bb 76>; [0.00%]
+
+  <bb 74> [count: 0]:
+  _214 = lk._M_device;
+  if (_214 != 0B)
+    goto <bb 75>; [0.00%]
+  else
+    goto <bb 76>; [0.00%]
+
+  <bb 75> [count: 0]:
+  _215 = &MEM[(struct mutex *)_214].D.141971._M_mutex;
+  pthread_mutex_unlock (_215);
+
+  <bb 76> [count: 0]:
+  __builtin_eh_copy_values (1, 4);
+
+  <bb 77> [count: 0]:
+<L42>:
+  lk ={v} {CLOBBER(eos)};
+  key ={v} {CLOBBER(eos)};
+  metadata ={v} {CLOBBER(eos)};
+  outcome ={v} {CLOBBER(eos)};
+  key ={v} {CLOBBER(eos)};
+  candidate ={v} {CLOBBER(eos)};
+  op ={v} {CLOBBER(eos)};
+  _20 = __builtin_eh_pointer (1);
+  __cxa_begin_catch (_20);
+  stderr.100_21 = stderr;
+  __builtin_fwrite ("sluice::async::ThreadPoolBackend: worker exception escaped (invariant violation)\n", 1, 81, stderr.100_21);
+
+  <bb 78> [count: 0]:
+  stderr.101_22 = stderr;
+  fflush (stderr.101_22);
+
+  <bb 79> [count: 0]:
+  std::terminate ();
+
+  <bb 80> [count: 0]:
+<L45>:
+  __cxa_end_catch ();
+  _112 = __builtin_eh_pointer (16);
+  __builtin_unwind_resume (_112);
+
+}
+
+
+
+;; Function std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::<lambda()> > > >::_M_run (_ZNSt6thread11_State_implINS_8_InvokerISt5tupleIJZN6sluice5async17ThreadPoolBackendC4ENS4_16ThreadPoolConfigEEUlvE_EEEEE6_M_runEv, funcdef_no=8994, decl_uid=200812, cgraph_uid=6901, symbol_order=6900)
+
+void std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::<lambda()> > > >::_M_run (struct _State_impl * const this)
+{
+  struct ThreadPoolBackend * _3;
+
+  <bb 2> [local count: 1073741824]:
+  _3 = MEM[(const struct ._anon_193 *)this_1(D) + 8B].__this;
+  sluice::async::ThreadPoolBackend::worker_loop (_3); [tail call]
+  return;
+
+}
+
+
+
