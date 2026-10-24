@@ -33,7 +33,7 @@ case "$CAMPAIGN" in
       "W02-threadpool-4k-d16-w8|w02|2-9"
       "W02-threadpool-4k-d16-w4|w02|2-5"
       "W02-threadpool-64k-d16-w4|w02|2-5"
-      "W03-threadpool-4k-d16|w03|2-5"
+      "W03-threadpool-4k-d16-w4|w03|2-5"
     )
     ;;
   ur)
