@@ -16,7 +16,7 @@ is listed below — there are no others.
 | Sole read | `src/async/threadpool_test_seams.hpp:102` | `syscall_count_for_test()` body: `return syscall_count_.load();` (seq_cst load) |
 | Getter declaration | `threadpool_backend.hpp:72` | inside `#if defined(SLUICE_ASYNC_INTERNAL_TESTING)` block |
 
-Test assertion sites (18 total):
+Test assertion sites (16 total):
 `tests/request_scope_test.cpp:885,990,1133,1189`;
 `tests/threadpool_request_core_integration_test.cpp:265,289,380,422,463,487,493,522,569,943`;
 `tests/public_request_test.cpp:313,414`.
@@ -92,7 +92,7 @@ unjustified runtime state.
 | Sole read | `src/async/uring_test_seams.hpp:75-76` | `submit_flushes_for_test()`: relaxed load |
 | Getter declaration | `uring_backend.hpp:96` | inside `#if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)` |
 
-Test assertion sites (4 total):
+Test assertion sites (6 total):
 `tests/uring_request_core_integration_test.cpp:406,755,768,904`;
 `tests/shutdown_lifecycle_test.cpp:1138,1156`.
 
@@ -101,10 +101,9 @@ Test assertion sites (4 total):
 ```
 submit paths (submit_read/…/submit_size, cancel, retry)
   └─ under dispatch_mtx_ ("*_locked" methods)
-     ├─ dispatch_one_locked()                  uring_transport.cpp:130
-     │    └─ (SQ full) submit_transport_locked()   :87   [flush to free SQ slots, retry get_sqe]
-     ├─ main submit epilogue                    :143  [flush after preparing the batch]  ← common hot path
-     ├─ cancel-control preparation              :647  [flush before preparing a control SQE]
+     ├─ dispatch_after_accept() epilogue        uring_transport.cpp:87   [flush after preparing the batch]  ← common hot path
+     ├─ dispatch_one_locked()                  :143  [SQ full → flush to free SQ slots, retry get_sqe]
+     ├─ cancel-control preparation (issue_running_cancel_locked_) :647  [flush before preparing a control SQE]
      └─ poll progress pass                      uring_backend.cpp:631  [flush before reap_cqes]
 
 submit_transport_locked()                       uring_transport.cpp:218

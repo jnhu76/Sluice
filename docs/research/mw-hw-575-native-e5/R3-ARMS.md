@@ -2,9 +2,15 @@
 
 ## Arm construction
 
-Five isolated worktrees at baseline `3df10dc4`; each candidate arm carries an
-uncommitted patch (preserved verbatim under `patches/`), so the patch itself
-is the arm's complete identity:
+Five isolated worktrees at baseline `3df10dc4`; each candidate arm carries
+an uncommitted patch. The archived `patches/*.diff` files (whose SHA-256
+values below identify the **production-code component** of each arm — the
+only component that affects the measured binaries) plus one shared,
+arm-identical component: the `tests/uring_flush_count_oracle_test.cpp`
+registration in `xmake/tests.lua` (research-branch commit `45a34296`),
+copied identically into every arm so the oracle runs everywhere. The live
+worktree diffs therefore contain that registration hunk as well; it touches
+no production object.
 
 | Arm | Worktree | Patch | Files |
 |---|---|---|---|
@@ -107,9 +113,12 @@ arms save 8 bytes per context and shift only tail fields.
 
 ## Deterministic suite status (arm green)
 
-`xmake test` on every arm (Release profile, real ring): **78/78 passed** on
-BASE, TP-OP-ONLY, TP-FULL, UR-OP-ONLY and UR-FULL. The suite includes the
-seam builds whose counter assertions (18 TP sites, 6 UR sites) all passed on
+`xmake test` on every arm (Release profile, real ring): **all green** on
+BASE, TP-OP-ONLY, TP-FULL, UR-OP-ONLY and UR-FULL — 78/78 at the moment of
+the arm runs (before the oracle registration was propagated) and 79/79 on
+re-run with the oracle registered (Review A re-executed both FULL arms at
+79/79). The suite includes the
+seam builds whose counter assertions (16 TP sites, 6 UR sites) all passed on
 the patched arms — the internal test builds still count, because the seam
 macro re-enables the guarded increments.
 

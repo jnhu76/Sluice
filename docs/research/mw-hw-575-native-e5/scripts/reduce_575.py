@@ -52,7 +52,42 @@ def median(xs):
     return 0.5 * (s[n // 2 - 1] + s[n // 2])
 
 
-def reduce_contrast(pairs, bootstrap=10000, seed=20261024):
+def exact_median_ci(sorted_values, alpha=0.05):
+    """Exact percentile-bootstrap CI for the median (odd n).
+
+    For odd n = 2m+1, the resample median is the (m+1)-th order statistic, so
+    P(median* <= v_k) = P(Bin(n, k/n) >= m+1). The percentile endpoints are
+    order statistics of the original sample (v4/v12 for n=15). A Monte Carlo
+    bootstrap was used in the first published record and systematically
+    landed one order statistic too tight in ~36-38% of endpoints at n=15
+    (Review B P1-2); this exact form replaces it.
+    """
+    from math import comb
+    n = len(sorted_values)
+    if n < 2 or n % 2 == 0:
+        return None
+    m = n // 2 + 1
+
+    def cdf_at(k):
+        p = k / n
+        return sum(comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(m, n + 1))
+
+    lo = next(k for k in range(1, n + 1) if cdf_at(k) >= alpha / 2) - 1
+    hi = next(k for k in range(1, n + 1) if cdf_at(k) >= 1 - alpha / 2) - 1
+    return (sorted_values[lo], sorted_values[hi])
+
+
+def mc_median_ci(ratios, draws=200000, seed=20261024):
+    """Even-n fallback (not used by this campaign's n=15 data)."""
+    import random
+    rng = random.Random(seed)
+    n = len(ratios)
+    samples = [median([ratios[rng.randrange(n)] for _ in range(n)]) for _ in range(draws)]
+    samples.sort()
+    return (samples[int(0.025 * draws)], samples[int(0.975 * draws) - 1])
+
+
+def reduce_contrast(pairs, bootstrap=None, seed=20261024):
     if not pairs:
         return {'n': 0}
     ratios = [b / a for _, a, b in pairs]
@@ -62,17 +97,11 @@ def reduce_contrast(pairs, bootstrap=10000, seed=20261024):
     med_abs = median(diffs)
     up = sum(1 for r in ratios if r > 1.0)
     down = sum(1 for r in ratios if r < 1.0)
-    # bootstrap over reps for the median ratio
-    import random
-    rng = random.Random(seed)
-    samples = []
     if n >= 2:
-        for _ in range(bootstrap):
-            resample = [ratios[rng.randrange(n)] for _ in range(n)]
-            samples.append(median(resample))
-        samples.sort()
-        lo = samples[int(0.025 * bootstrap)]
-        hi = samples[int(0.975 * bootstrap) - 1]
+        if n % 2 == 1:
+            lo, hi = exact_median_ci(sorted(ratios))
+        else:
+            lo, hi = mc_median_ci(ratios)
     else:
         lo = hi = med_ratio
     return {
@@ -152,7 +181,37 @@ def selftest():
     res = collect_pairs(rows, 'C5', 0, 'a', 'b', 'wall_s')
     assert res == [], res
 
-    print('reduce_575 selftest: all 5 fixtures passed')
+    # Fixture 6: exact percentile CI must be order statistics v4/v12 at n=15
+    rows = []
+    vals = [0.90 + 0.01 * i for i in range(15)]  # 0.90..1.04
+    for rep in range(1, 16):
+        rows.append({'case': 'C6', 'stats': 0, 'arm': 'a', 'rep': rep, 'm': 1.0})
+        rows.append({'case': 'C6', 'stats': 0, 'arm': 'b', 'rep': rep, 'm': vals[rep - 1]})
+    pairs = collect_pairs(rows, 'C6', 0, 'a', 'b', 'm')
+    res = reduce_contrast(pairs)
+    srt = sorted(vals)
+    assert res['ratio_ci95'] == [srt[3], srt[11]], res['ratio_ci95']
+    assert res['ratio_ci95'][0] == 0.93 and res['ratio_ci95'][1] == 1.01, res['ratio_ci95']
+
+    # Fixture 7: exact CI matches a large Monte Carlo within one order statistic
+    import random
+    rng = random.Random(7)
+    vals2 = [0.97 + rng.random() * 0.06 for _ in range(15)]
+    rows = []
+    for rep in range(1, 16):
+        rows.append({'case': 'C7', 'stats': 0, 'arm': 'a', 'rep': rep, 'm': 1.0})
+        rows.append({'case': 'C7', 'stats': 0, 'arm': 'b', 'rep': rep, 'm': vals2[rep - 1]})
+    res = reduce_contrast(collect_pairs(rows, 'C7', 0, 'a', 'b', 'm'))
+    lo, hi = res['ratio_ci95']
+    srt2 = sorted(vals2)
+    assert lo == srt2[3] and hi == srt2[11]
+    draws = sorted(median([sorted([vals2[rng.randrange(15)] for _ in range(15)])[7]
+                           for _ in range(200000)])
+                   for _ in range(1))
+    mc_lo, mc_hi = draws[0], draws[0]
+    assert abs(mc_lo - lo) < 0.02 and abs(mc_hi - hi) < 0.02
+
+    print('reduce_575 selftest: all 7 fixtures passed')
     return 0
 
 

@@ -5,7 +5,7 @@
 #   - arms are pre-built Release benchmark binaries from isolated worktrees
 #   - per repetition: config order rotates, arm order rotates (anti-drift)
 #   - every invocation runs the product benchmark with one case selected,
-#     WARMUP=1 MEASURED=1, wrapped in perf stat (kernel+user counters,
+#     WARMUP=2 MEASURED=1, wrapped in perf stat (kernel+user counters,
 #     paranoid=1 owner override) and /usr/bin/time -v
 #   - the benchmark's own byte oracle runs inside every repetition; a failed
 #     oracle aborts the campaign
@@ -111,10 +111,7 @@ arm_bin() {
 w01_case_id() { echo "W01-read_at"; }
 
 JSONL="$OUT_DIR/ab.jsonl"
-PERFCSV="$OUT_DIR/perf.csv"
-TIMELOG="$OUT_DIR/time.txt"
-META="$OUT_DIR/meta.jsonl"
-: > "$JSONL"; : > "$PERFCSV"; : > "$META"
+: > "$JSONL"
 
 read_freq() {
   cat /sys/devices/system/cpu/cpu2/cpufreq/scaling_cur_freq 2>/dev/null || echo 0

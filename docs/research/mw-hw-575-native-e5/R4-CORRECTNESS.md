@@ -9,10 +9,12 @@ by its intended counter assertion (receipts in `R4-MUTATION-RECEIPTS.md`).
 
 ## Deterministic suite (arm green)
 
-`xmake test` (Release, real ring, E5 native): **78/78 passed** on BASE,
-TP-OP-ONLY, TP-FULL, UR-OP-ONLY, UR-FULL — identical outcome on every arm.
-The 78 include the seam-built suites (which re-enable the guarded counters)
-and the production-linked suites (which link the patched production library).
+`xmake test` (Release, real ring, E5 native): **all green** on BASE,
+TP-OP-ONLY, TP-FULL, UR-OP-ONLY, UR-FULL — identical outcome on every arm
+(78/78 at the time of the arm runs; 79/79 after the oracle registration was
+propagated to the arms, re-verified by Review A). The suite includes the
+seam-built suites (which re-enable the guarded counters) and the
+production-linked suites (which link the patched production library).
 
 ### Oracle coverage mapping (required checklist → existing named tests)
 

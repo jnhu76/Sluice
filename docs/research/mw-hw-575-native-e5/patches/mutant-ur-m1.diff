@@ -1,4 +1,9 @@
 --- a/src/async/uring_transport.cpp
 +++ b/src/async/uring_transport.cpp
-(research mutant UR-M1: the guarded increment block above replaced by the
- suppression comment; applied transiently in /tmp/sluice-575/mut-ur)
+@@ -219,7 +219,7 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
+         return 0;
+ 
+-    submit_flushes_.fetch_add(1, std::memory_order_relaxed);
++    // UR-M1 mutant: increment suppressed
+     int rc = 0;
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)

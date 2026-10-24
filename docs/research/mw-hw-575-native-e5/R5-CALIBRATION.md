@@ -73,12 +73,19 @@ Both arms of a config share one fixture directory (recreated fresh per
 invocation), so every arm runs under byte-identical path/environment shapes.
 Final calibration (`cal5-aa-tp`, `cal5-aa-ur`, 15 pairs each):
 
-| Config | wall_s median [CI95] | instructions median [CI95] | cycles median [CI95] |
+| Config | wall_s median [exact CI95] | instructions median [exact CI95] | cycles median [exact CI95] |
 |---|---|---|---|
-| TP d1-w1 | 0.9964 [0.9848, 1.0034] | 0.99993 [0.99987, 1.00008] | 0.9973 [0.9937, 0.9991] |
-| TP d16-w8 | 1.0021 [0.9833, 1.0138] | 1.0016 [1.0000, 1.0138] | 0.9982 [0.9932, 1.0044] |
-| UR d1 | 0.9975 [0.9789, 1.0199] | 0.99987 [0.9965, 1.0010] | 1.0046 [0.9983, 1.0054] |
-| UR d16 | 0.9942 [0.9908, 0.9997] | 1.0003 [0.9971, 1.0044] | 0.9972 [0.9885, 1.0084] |
+| TP d1-w1 | 0.9964 [0.9848, 1.0039] | 0.99993 [0.99986, 1.00008] | 0.9973 [0.9937, 0.9991] |
+| TP d16-w8 | 1.0021 [0.9833, 1.0153] | 1.0016 [0.9991, 1.0154] | 0.9982 [0.9932, 1.0074] |
+| UR d1 | 0.9975 [0.9775, 1.0199] | 0.99987 [0.9965, 1.0030] | 1.0046 [0.9939, 1.0097] |
+| UR d16 | 0.9942 [0.9849, 1.0077] | 1.0003 [0.9956, 1.0067] | 0.9972 [0.9875, 1.0084] |
+
+(The first published version of this table used a Monte Carlo bootstrap CI
+that is systematically one order statistic too tight at n = 15; these are
+the exact percentile-bootstrap intervals from the same raw rows — see R6's
+statistics note. Under the exact intervals the UR d16 wall upper bound
+moves from 0.9997 to 1.0077, i.e. the earlier "residual drift" reading of
+that cell dissolves; no A/A band conclusion changes materially.)
 
 **Noise floors** (minimum reproducible effect a contrast must exceed):
 - wall/throughput: ~2% (all configs)
@@ -86,19 +93,25 @@ Final calibration (`cal5-aa-tp`, `cal5-aa-ur`, 15 pairs each):
   multi-worker / deeper-queue configs (kernel-path scheduling variance)
 - cycles: ~0.5–0.8%
 
-Residual drift is visible in a few point estimates (e.g. TP d1-w1 cycles CI
-lower bound 0.9937; UR d16 wall CI upper 0.9997) — the A/A CIs are the
-reference against which every R6/R7 contrast is read; a contrast is only
-reported as an effect when its CI separates from both 1.0 **and** the
-corresponding A/A calibration band.
+Point estimates wander up to ~0.5 % inside these bands (e.g. TP d1-w1
+cycles median 0.9973) — the A/A CIs are the reference against which every
+R6/R7 contrast is read; a contrast is only reported as an effect when its
+CI separates from both 1.0 **and** the corresponding A/A calibration band.
+Recorded limitation: no W-03 A/A calibration was run; W-03 contrasts are
+read against the same backend's W-02 bands by proxy.
 
 ## Warm-up and environment behavior
 
-- Two warmup rounds per invocation suffice to bring the pinned CPUs to
-  ~3.19 GHz before the measured round at all configs (freq_after ≈ 3.17–3.5
-  GHz in every record).
-- Concurrent activity during calibration: only this session; load average
-  stayed < 1.5 on a 20-CPU host; no competing benchmarks.
+- Two warmup rounds per invocation bring the pinned CPUs to ~3.19 GHz for
+  the measured round at most configs, but **DVFS sag is real**: 7–58 of the
+  per-campaign records ended below 3 GHz (minimum observed 1.20 GHz), so
+  frequency variance inside measured invocations remains a plausible
+  contributor to the ±2 % wall floor. The paired/rotated design exposes
+  both arms of every pair to the same environment distribution.
+- Concurrent activity during calibration and campaigns: only this session
+  plus the desktop environment; 1-minute load reached 1.9–3.0 on the
+  20-CPU host during measurement bursts (medians ≈ 2). No competing
+  benchmarks were run.
 - W-01 negative control design: `bench_w01_direct` links only
   `sluice_core`, which no arm modifies — its binary is byte-identical
   (SHA `f578f047…`) across all five arms, so any measured arm "difference"
