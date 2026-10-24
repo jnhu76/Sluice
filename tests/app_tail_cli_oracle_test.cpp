@@ -304,6 +304,20 @@ class TailChild {
         return s == 0;
     }
 
+    // Bounded death confirmation that consumes neither stream: a wait issued
+    // afterwards must recover data the child already wrote.
+    bool join_without_consuming(std::chrono::steady_clock::duration timeout) {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        for (;;) {
+            const int s = poll_state();
+            if (s != 0)
+                return s == 1;
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            ::usleep(10000);
+        }
+    }
+
     bool stayed_alive_for(std::chrono::steady_clock::duration window) {
         const auto deadline = std::chrono::steady_clock::now() + window;
         while (std::chrono::steady_clock::now() < deadline) {
@@ -997,10 +1011,16 @@ bool harness_death_aware_event_wait_reports_exit_and_stderr() {
     const auto start = std::chrono::steady_clock::now();
     const TailChild::WaitOutcome o = child.wait_event("ENTERED ", kEventDeadline);
     const auto elapsed = std::chrono::steady_clock::now() - start;
+    const std::string detail =
+        child.wait_failure_detail(o, "first held read ENTERED event");
     check_msg(o == TailChild::WaitOutcome::child_exited_before_event,
               std::string("death-aware: outcome is child_exited_before_event, got ") +
                   wait_outcome_name(o));
     check_msg(elapsed < 5s, "death-aware: fails long before the 10s event deadline");
+    check_msg(detail.find("CHILD_EXITED_BEFORE_EVENT") != std::string::npos &&
+                  detail.find("exited(23)") != std::string::npos &&
+                  detail.find("HARNESS-DEATH-MARKER") != std::string::npos,
+              "death-aware: failure detail carries classification and stderr, got: " + detail);
     const ChildOutcome e = child.wait_exit(kExitDeadline);
     check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 23,
               "death-aware: cached status is exited(23), got " + e.describe());
@@ -1010,6 +1030,9 @@ bool harness_death_aware_event_wait_reports_exit_and_stderr() {
     const pid_t r = ::waitpid(child.pid(), &status, WNOHANG);
     check_msg(r < 0 && errno == ECHILD, "death-aware: child reaped, no zombie remains");
     return o == TailChild::WaitOutcome::child_exited_before_event && elapsed < 5s &&
+           detail.find("CHILD_EXITED_BEFORE_EVENT") != std::string::npos &&
+           detail.find("exited(23)") != std::string::npos &&
+           detail.find("HARNESS-DEATH-MARKER") != std::string::npos &&
            e.kind == ChildOutcome::Kind::exited && e.code == 23 &&
            child.err_text().find("HARNESS-DEATH-MARKER") != std::string::npos && r < 0 &&
            errno == ECHILD;
@@ -1056,8 +1079,34 @@ bool harness_event_fully_written_before_exit_is_still_delivered() {
     const ChildOutcome e = child.wait_exit(kExitDeadline);
     check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 0,
               "event-then-exit: sh exit 0, got " + e.describe());
-    return o == TailChild::WaitOutcome::matched && line == "ENTERED 7 5 0" &&
-           e.kind == ChildOutcome::Kind::exited && e.code == 0;
+    if (!(o == TailChild::WaitOutcome::matched && line == "ENTERED 7 5 0" &&
+          e.kind == ChildOutcome::Kind::exited && e.code == 0))
+        return false;
+    {
+        TailChild child;
+        // Death is confirmed before any consumption: the event was fully
+        // written before exit, so the wait must still recover it from the fifo.
+        if (!child.spawn("/bin/sh",
+                         {"-c", "printf 'ENTERED 9 5 0\\n' > \"$SLUICE_TAIL_TEST_EVT\"; exit 0"})) {
+            check_msg(false, "event-then-exit: spawn sh for ordered arm");
+            return false;
+        }
+        if (!child.join_without_consuming(kEventDeadline)) {
+            check_msg(false, "event-then-exit: deterministic death confirmation");
+            return false;
+        }
+        const TailChild::WaitOutcome oo = child.wait_event("ENTERED ", kEventDeadline, &line);
+        check_msg(oo == TailChild::WaitOutcome::matched,
+                  std::string("event-then-exit: event written before death still recovered, got ") +
+                      wait_outcome_name(oo));
+        check_msg(line == "ENTERED 9 5 0",
+                  "event-then-exit: ordered-arm payload, got: " + line);
+        const ChildOutcome e2 = child.wait_exit(kExitDeadline);
+        check_msg(e2.kind == ChildOutcome::Kind::exited && e2.code == 0,
+                  "event-then-exit: ordered-arm sh exit 0, got " + e2.describe());
+        return oo == TailChild::WaitOutcome::matched && line == "ENTERED 9 5 0" &&
+               e2.kind == ChildOutcome::Kind::exited && e2.code == 0;
+    }
 }
 
 bool harness_non_target_event_before_death_is_not_matched() {
@@ -1093,6 +1142,25 @@ bool harness_last_line_before_death_matched_and_partial_rejected() {
                   "last-line: sh exit 0, got " + e.describe());
         if (!(o == TailChild::WaitOutcome::matched && e.kind == ChildOutcome::Kind::exited &&
               e.code == 0))
+            return false;
+    }
+    {
+        TailChild child;
+        // Death is confirmed before any consumption: the complete line was
+        // fully written before exit, so wait_line must still recover it.
+        if (!child.spawn("/bin/sh", {"-c", "printf 'T5-JOIN\\nT5-FINAL-LINE\\n'"})) {
+            check_msg(false, "last-line: spawn sh for ordered arm");
+            return false;
+        }
+        if (!child.join_without_consuming(kEventDeadline)) {
+            check_msg(false, "last-line: deterministic death confirmation");
+            return false;
+        }
+        const TailChild::WaitOutcome o = child.wait_line("T5-FINAL-LINE", kEventDeadline);
+        check_msg(o == TailChild::WaitOutcome::matched,
+                  std::string("last-line: line written before death still recovered, got ") +
+                      wait_outcome_name(o));
+        if (o != TailChild::WaitOutcome::matched)
             return false;
     }
     {
