@@ -89,6 +89,11 @@
    "sha256": "f5db66e8275e0a5d439911117cfaa771033f56657f2ed2bc1f1bb1aefafe242f"
   },
   {
+   "note": "archive hardening counterfactuals (owner review P2/P3)",
+   "path": "results/archive/hardening-counterfactuals.md",
+   "sha256": "ee6e0ffdf59edcba601b8aa238ae2dc2ffb3579c350814292d7a5b2dc2248432"
+  },
+  {
    "note": "archive-stage receipt, not historical evidence",
    "path": "results/archive/replay-receipt-wsl.json",
    "sha256": "6ba07c4e3e2f5ffc1861e9f1740149892b84be8fdf604b464c3dbe95c61c8cd0"

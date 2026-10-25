@@ -317,3 +317,27 @@ scripts against the PR head (they are reproducible from this record).
 
 **Both reviews: APPROVE. ARCHIVE_VERDICT: ARCHIVE_READY** subject to the
 channel disclosure above.
+
+## Owner review of the archive — P2/P3 hardening (this revision)
+
+The owner reviewed the archive state and confirmed the disposition (#580
+CLOSED; NO_TRIGGER_NO_CHANGE; HOT_PATH_ROBUST scoped; ARCHIVE_READY;
+production change NONE; #592 merge deferred to explicit owner authorization;
+the same-session archive reviews stand as a disclosed limitation). Two
+script defects were flagged and fixed in this revision, verified by the
+counterfactual tests recorded in `results/archive/hardening-counterfactuals.md`:
+
+- **P2** `prepare-research-worktree.sh` cleanup no longer falls back to
+  `rm -rf` when `git worktree remove` fails on a registered worktree; it
+  preserves the directory, reports the registration status and hands the
+  removal to the caller. Counterfactual: a locked worktree is deleted by
+  the old code (stale registration stranded) and preserved with a report
+  by the new code.
+- **P3** the cache smoke now asserts `ok`, `completed_ops` and
+  `warmup_failure` in addition to the timing/ops fields, so the oracle no
+  longer depends on the harness's exit-code convention. Counterfactual:
+  three doctored failed-run rows pass the old assertions (rc=0) and are
+  rejected by the new ones with named messages.
+
+A post-hardening full `--mode verify` run passes; no performance matrix
+was re-run and no historical evidence was modified.

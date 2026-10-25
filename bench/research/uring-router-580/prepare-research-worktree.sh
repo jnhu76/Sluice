@@ -65,8 +65,15 @@ fi
 WORKTREE_OWNED=0
 cleanup() {
     if [ "$WORKTREE_OWNED" = 1 ] && [ "$KEEP" = 0 ]; then
-        git -C "$REPO_ROOT" worktree remove --force "$DEST" >/dev/null 2>&1 || rm -rf "$DEST"
+        if ! git -C "$REPO_ROOT" worktree remove --force "$DEST" >/dev/null 2>&1; then
+            echo "WARNING: could not unregister worktree $DEST; left in place." >&2
+            echo "Registration status:" >&2
+            git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null | grep -A3 "worktree $DEST" >&2 || true
+            echo "Remove it manually with: git -C $REPO_ROOT worktree remove --force $DEST" >&2
+        fi
     elif [ "$MADE_TMP_DEST" = 1 ] && [ "$KEEP" = 0 ]; then
+        # git worktree add either never ran or failed before registering,
+        # so plain removal cannot strand a stale registration.
         rm -rf "$DEST"
     fi
 }
@@ -102,7 +109,7 @@ run_logged() {
         local keep="$REPO_ROOT/build-research/replay-archive/failed-$(date -u +%Y%m%dT%H%M%SZ)"
         mkdir -p "$keep"
         cp "$log" "$keep/" 2>/dev/null || true
-        echo "step failed; log preserved at $keep/$1.log" >&2
+        echo "step failed; log preserved at $keep/$(basename "$log")" >&2
         exit 1
     fi
 }

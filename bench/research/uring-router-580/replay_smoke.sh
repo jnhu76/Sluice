@@ -46,9 +46,12 @@ cache)
         python3 - "$LOG" "$arm" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
+assert d["ok"] is True, f"{sys.argv[2]}: run reported failure: {d.get('failure')}"
+assert d["completed_ops"] == 2000, f"{sys.argv[2]}: completed {d['completed_ops']} of 2000"
+assert not d.get("warmup_failure"), f"{sys.argv[2]}: warmup failure: {d['warmup_failure']}"
 assert d["wall_s"] > 0, f"{sys.argv[2]}: no timing record"
 assert d["ops"] == 2000, f"{sys.argv[2]}: ops mismatch {d['ops']}"
-print(f"{sys.argv[2]} smoke OK: wall_s={d['wall_s']:.3f}")
+print(f"{sys.argv[2]} smoke OK: wall_s={d['wall_s']:.3f} ok=true completed=2000 warmup-clean")
 PY
     done
     ;;
