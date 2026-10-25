@@ -53,9 +53,11 @@ end
 -- ---------------------------------------------------------------------------
 -- Sub-configurations. Each file owns one concern:
 --   helpers.lua        — shared target-declaration helpers
---   uring.lua          — the liburing switch: option, capability detection,
---                        configuration-identity define
---   libraries.lua      — production libs (core, async, bench_common)
+--   uring.lua          — liburing option, capability checks, profile identity
+--   libraries.lua      — production library targets (core and async)
+--   apps.lua           — reference application targets
+--   tests.lua          — correctness and regression test targets
+--   bench.lua          — non-default performance benchmark targets
 -- ---------------------------------------------------------------------------
 
 includes("xmake/helpers.lua")
