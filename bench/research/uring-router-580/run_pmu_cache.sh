@@ -7,9 +7,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/../../.."
 
-OUT=docs/research/uring-router-580/results/pmu
+OUT="${PMU_OUT:-build-research/replay/pmu}"
 mkdir -p "$OUT"
 BIN=build-research/cache_ab
+[ -x "$BIN" ] || { echo "FAIL-CLOSED: missing $BIN (built only by build_cache.sh in a prepare-research-worktree.sh tree)" >&2; exit 2; }
 HOST_TAG=${1:-wsl}
 OPS=40000
 

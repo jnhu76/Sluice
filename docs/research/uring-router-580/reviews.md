@@ -219,3 +219,37 @@ interference result set was never in doubt (it is PMU-independent and
 reproduced independently), and the two boundary conditions are now stated
 with their true magnitudes and uncertainty. `CACHE_VERDICT` within scope:
 `HOT_PATH_ROBUST`.
+
+## Archive stage record (R0–R7 archival commission)
+
+Two integrity events occurred during the archival work, both resolved and
+neither touching committed evidence:
+
+1. **Write-path character corruption.** The rewritten
+   `run_oracle_variants.sh` reached disk with its liburing define missing
+   one character: `SLUCE_` where every production spelling is `SLUICE_` —
+   the third occurrence of this one-character deletion family in this
+   campaign (two prior instances in R9-era scripts). It surfaced as an
+   oracle build failure inside the isolated verify worktree (the undefined
+   macro made all test seams invisible to the compile).
+   Fixed; a sweep for accidental `SLUCE_`-family spellings over `bench/`
+   and `docs/research/` returns only this documented mention. Files written
+   by tooling are byte-checked after write.
+
+2. **Accidental evidence writes, restored byte-identical.** While testing
+   fail-closed behavior, `run_ab.sh` executed twice against leftover
+   historical binaries in the worktree: first (before the replay-safe
+   defaults existed) truncating the committed `results/{ab,aa}-pairs.jsonl`,
+   then a second time appending 30 AA rows to the already-restored
+   aa-pairs file through one hardcoded redirect the default migration had
+   missed. Both files were restored with `git checkout --` and SHA-verified
+   equal to `HEAD`/manifest (`aa-pairs.jsonl` = `525b8081…`); Gate E's
+   reducer rerun confirms the restored data still yields the published
+   figures. Every runner output path now resolves under
+   `build-research/replay/` (grep-verified: no `docs/research` write target
+   remains in any runner), and the replay flow runs inside throwaway
+   worktrees only.
+
+Archive acceptance (Gates A–F) results are recorded in the PR's archival
+commits and the archive index; the replay receipts are kept under
+`results/archive/`, distinct from historical evidence by construction.

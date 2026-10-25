@@ -3,7 +3,11 @@
 # probe; timings are context, not performance claims.
 set -uo pipefail
 cd "$(dirname "$0")/../../.."
-out="docs/research/uring-router-580/results/trigger-matrix.jsonl"
+for bin in build-research/lookup_probe; do
+  [ -x "$bin" ] || { echo "FAIL-CLOSED: missing $bin (built only by build_probe.sh in a prepare-research-worktree.sh tree)" >&2; exit 2; }
+done
+out="${TRIGGER_OUT:-build-research/replay/trigger-matrix.jsonl}"
+mkdir -p "$(dirname "$out")"
 : > "$out"
 run() {
   local tag="$1"; shift

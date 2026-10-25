@@ -4,7 +4,7 @@
 
 | Level | Verdict | Basis |
 |---|---|---|
-| R2 trigger gate (index candidates A/B) | `NO_TRIGGER_NO_CHANGE` | 1 lookup/op; hot-path probes O(D/2) **independent of C** (8.5 @D16, 1.0 @D1); `find_live_router_cookie_` = 1.57-1.69% (WSL) / 2.28% (E5) of user cycles at the worst artificial shape, ~0.4-0.5% of total CPU; zero natural misses in 100k+ completions; theoretical maximum gain (free lookup) < 2% user cycles at every measured shape, below the 5% materiality threshold; corroborated by #561's native ≤3.7% ceiling |
+| R2 trigger gate (index candidates A/B) | `NO_TRIGGER_NO_CHANGE` | 1 lookup/op; hot-path probes O(D/2) **independent of C** (8.5 @D16, 1.0 @D1); `find_live_router_cookie_` = 1.57-1.69% (WSL) / 2.28% (E5) of user cycles at the worst artificial shape, ~0.4-0.5% of total CPU; zero natural misses in 100k+ completions; theoretical maximum gain (free lookup) < 2% user cycles at every shape measured in R0–R8, below the 5% materiality threshold (R9 later measured 5.07–9.8% harness-inclusive at the non-standard D=512 warm shape — see the scope addendum; no R0–R8 shape approaches it); corroborated by #561's native ≤3.7% ceiling |
 | R3 candidate admission | blocked at the gate; A/B recorded as design-level analysis only | protocol stop rule: hotspots confined to synthetic C≫D configurations do not admit product candidates; no #578 real-app evidence exists |
 | WE-2 (scan-direction flip) mechanism | `EXPLORATORY_ONLY / NOT_ADMITTED` | mechanism verified (993→33 probes/cancel at C=1024), semantics fully preserved (23/23 oracle both arms; 20/20 + 21/21 + 8/8 suites; unkillable-by-construction equivalence argument strengthened by Review A), but the end-to-end effect is statistically indistinguishable from the A/A floor on E5 native (wall 0.995 [0.967, 1.021] on the target shape) |
 | Full-domain identity | preserved everywhere | no cookie narrowing, no capacity change, exact 64-bit equality at every consumer; the codegen-identity proof shows production builds are byte-identical with the research patch present |
@@ -41,8 +41,11 @@ hotspot — was never witnessed at any admission-grade configuration.
    host. Analytically: an index pays one insert and one erase (random-access
    writes, tombstone bookkeeping) per operation to accelerate a single
    O(D/2) sequential probe stream that is never the bottleneck — the
-   work is relocated from completion to dispatch/retire, not removed, and the
-   relocation costs more than it saves at every supported configuration. The
+   work is relocated from completion to dispatch/retire, not removed, and
+   the analytic lower-bound argument puts the relocation cost above the
+   saving at every supported configuration (Candidates A/B were never
+   built or measured; `lifecycle-cost.md` holds lower bounds on what such
+   a structure must pay, not measurements). The
    two no-new-state work eliminations (WE-1: router index carried in ledger
    entries, retiring S1/S6; WE-2: scan direction) are strictly smaller
    mechanisms, and even WE-2's measurable benefit is zero at native noise
@@ -62,18 +65,20 @@ hotspot — was never witnessed at any admission-grade configuration.
 ## Product change
 
 `PRODUCT_CHANGE: NONE`. No production `src/`, `include/`, spec, CI or test
-change is requested. The research patch in this branch is compile-time-gated
-and proven codegen-neutral; the owner may drop the `src/` hunk entirely and
-keep only `docs/` + `bench/research/` when archiving.
+change is in this branch: the archival revision restored the three
+`src/async` files byte-identical to master `46157fd1` and moved the
+compile-time-gated research instrumentation/arm/mutant/clflush blocks into
+`patches/research-gates-full.patch` (admitted by round-trip in a fresh
+worktree; replayable via `bench/research/uring-router-580/prepare-research-worktree.sh`).
 
 ## Open items handed back
 
 - #578 (fio + DuckDB real-app baseline) remains the only path that could
   produce a *new* trigger from real application shapes; this round's harness
   shapes cover the supported configuration space, not arbitrary applications.
-- #580 stays open for the owner's verdict; closing it with
-  `NO_TRIGGER_NO_CHANGE` is consistent with this evidence, per the issue's own
-  exit conditions.
+- #580 is CLOSED with `NO_TRIGGER_NO_CHANGE` (closeout comment links the
+  evidence chain); the reopen conditions are the two boundaries above plus
+  the revisit order WE-2 → WE-1 → Candidate A.
 
 ## R9 scope addendum — cache-locality falsification (this revision)
 
@@ -111,9 +116,12 @@ harness-inclusive share is ≈5% (WSL, stable across run lengths) to
 0.21–0.50 µs/op absolute — a measured mechanism hotspot at a
 non-representative shape; (2) under forced eviction of the router before
 *every* lookup (synthetic), the arm costs +26%/+108% wall on E5 — but the
-delta review's capacity sweep decomposed this: ≈90% of it is the clflush
-instruction itself (~30 ns/op on E5), and the scan's genuine cold-refill
-penalty is ≈ +8% (E5) / +29% (WSL) wall at D=512, small because the scan
+   delta review's capacity sweep decomposed this: ≈90% of it is the clflush
+   instruction itself (~30 ns per flushed line on E5 — a per-instruction
+   figure at ⌈C/2⌉ flushes per lookup, not a per-I/O cost), and the scan's
+   genuine cold-refill penalty is ≈ +8% (E5) / +29% (WSL) wall at D=512 —
+   a capacity-gradient differential estimate (cache-results.md §3), not a
+   directly measured pure miss cost — small because the scan
 is sequential over a contiguous live span and hardware prefetch amortizes
 even DRAM refills. Whether any alternative structure (index) would beat
 the scan in that regime is **unmeasured** — no index arm was built — and

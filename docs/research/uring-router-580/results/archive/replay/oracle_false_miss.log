@@ -1,0 +1,10 @@
+ok s1 submit accepted
+ok s1 original completion delivered with exact identity
+ok s1 stale replay left no live route or residue
+ok s2 first submit accepted
+ok s2 successor submit accepted
+FAILED assertion: s2 successor completed within the poll budget
+FAILED assertion: s2 successor unaffected by retired-cookie replay on reused slot
+FAILED assertion: s2 successor retired exactly once
+sluice::async::Request: destroying or overwriting a nonterminal request responsibility is a contract violation
+terminate called without an active exception

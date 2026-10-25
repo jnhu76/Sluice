@@ -8,9 +8,13 @@
 #  - same fixture directory, same pinning (taskset -c 2), same warmup count.
 set -uo pipefail
 cd "$(dirname "$0")/../../.."
+for bin in build-research/router_ab_baseline build-research/router_ab_we2; do
+  [ -x "$bin" ] || { echo "FAIL-CLOSED: missing $bin (built only by build_arms.sh in a prepare-research-worktree.sh tree)" >&2; exit 2; }
+done
 
 REPS=${REPS:-15}
-OUT=${OUT:-docs/research/uring-router-580/results/ab-pairs.jsonl}
+OUT=${OUT:-build-research/replay/ab-pairs.jsonl}
+mkdir -p "$(dirname "$OUT")"
 : > "$OUT"
 
 run_one() { # tag arm_binary extra-args...
@@ -35,7 +39,9 @@ done
 # A/A calibration + path-name bias control: byte-identical copies, two names.
 cp build-research/router_ab_baseline build-research/router_ab_aa_alpha
 cp build-research/router_ab_baseline build-research/router_ab_aa_beta
-: > docs/research/uring-router-580/results/aa-pairs.jsonl
+mkdir -p "$(dirname "${AA_OUT:-build-research/replay/aa-pairs.jsonl}")"
+: > "${AA_OUT:-build-research/replay/aa-pairs.jsonl}"
+AA_PATH="${AA_OUT:-build-research/replay/aa-pairs.jsonl}"
 for shape in "cancel-c1024:cancel:--capacity 1024 --depth 64 --payload 65536 --cancel-ratio 0.2 --ops 6000 --warmup 600" \
              "pipeline-c1024d64:pipeline:--capacity 1024 --depth 64 --payload 4096 --ops 20000 --warmup 2000"; do
   name="${shape%%:*}"; rest="${shape#*:}"; scen="${rest%%:*}"; args="${rest#*:}"
@@ -43,9 +49,9 @@ for shape in "cancel-c1024:cancel:--capacity 1024 --depth 64 --payload 65536 --c
     if [ $((rep % 2)) -eq 1 ]; then first=build-research/router_ab_aa_alpha; second=build-research/router_ab_aa_beta
     else first=build-research/router_ab_aa_beta; second=build-research/router_ab_aa_alpha; fi
     taskset -c 2 "$first" --scenario "$scen" $args --fixture-dir /tmp \
-      | python3 -c "import sys,json;d=json.load(sys.stdin);d['run_tag']='$name-rep$rep-a';d['binary']='$(basename "$first")';print(json.dumps(d))" >> docs/research/uring-router-580/results/aa-pairs.jsonl
+      | python3 -c "import sys,json;d=json.load(sys.stdin);d['run_tag']='$name-rep$rep-a';d['binary']='$(basename "$first")';print(json.dumps(d))" >> "$AA_PATH"
     taskset -c 2 "$second" --scenario "$scen" $args --fixture-dir /tmp \
-      | python3 -c "import sys,json;d=json.load(sys.stdin);d['run_tag']='$name-rep$rep-b';d['binary']='$(basename "$second")';print(json.dumps(d))" >> docs/research/uring-router-580/results/aa-pairs.jsonl
+      | python3 -c "import sys,json;d=json.load(sys.stdin);d['run_tag']='$name-rep$rep-b';d['binary']='$(basename "$second")';print(json.dumps(d))" >> "$AA_PATH"
   done
 done
 echo "done: $OUT + aa-pairs.jsonl"

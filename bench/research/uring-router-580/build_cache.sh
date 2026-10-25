@@ -5,6 +5,19 @@
 #   cache_ab_flush    + SLUICE_580_CLFLUSH_ROUTER (mechanism sensitivity only)
 #   cache_probe       + SLUICE_URING_LOOKUP_INSTRUMENT (counts only, never timing)
 set -euo pipefail
+
+require_gate() {
+    grep -q "defined($1)" "$2" || {
+        echo "FAIL-CLOSED: research gate $1 absent from $2." >&2
+        echo "Run bench/research/uring-router-580/prepare-research-worktree.sh for a patched isolated tree." >&2
+        exit 2
+    }
+}
+require_gate SLUICE_580_CLFLUSH_ROUTER src/async/uring_transport.cpp
+require_gate SLUICE_URING_LOOKUP_INSTRUMENT src/async/uring_internal.hpp
+require_gate SLUICE_URING_LOOKUP_INSTRUMENT src/async/uring_transport.cpp
+require_gate SLUICE_URING_LOOKUP_INSTRUMENT src/async/uring_completion.cpp
+mkdir -p build-research
 cd "$(dirname "$0")/../../.."
 
 TIMING_FLAGS=(-O3 -std=c++20 -DNDEBUG -DSLUICE_HAS_LIBURING -Wall -Iinclude)

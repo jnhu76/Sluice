@@ -8,6 +8,16 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
+require_gate() {
+    grep -q "defined($1)" "$2" || {
+        echo "FAIL-CLOSED: research gate $1 absent from $2." >&2
+        echo "Run bench/research/uring-router-580/prepare-research-worktree.sh for a patched isolated tree." >&2
+        exit 2
+    }
+}
+require_gate SLUICE_580_WE2_REVERSE_CANCEL_SCAN src/async/uring_transport.cpp
+mkdir -p build-research
+
 CXXFLAGS=(-O3 -std=c++20 -DNDEBUG -DSLUICE_HAS_LIBURING -Wall -Iinclude)
 SRCS=(bench/research/uring-router-580/router_ab.cpp
       src/async/async_io_context.cpp src/async/threadpool_backend.cpp

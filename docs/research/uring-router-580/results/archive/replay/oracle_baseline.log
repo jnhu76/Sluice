@@ -1,0 +1,24 @@
+ok s1 submit accepted
+ok s1 original completion delivered with exact identity
+ok s1 stale replay left no live route or residue
+ok s2 first submit accepted
+ok s2 successor submit accepted
+ok s2 successor completed within the poll budget
+ok s2 successor unaffected by retired-cookie replay on reused slot
+ok s2 successor retired exactly once
+ok s3 first terminal delivered
+ok s3 duplicate CQE produced no second publication or residue
+ok s4 submit accepted
+ok s4 running cancel reported requested
+ok s4 live cookie resolved
+ok s4 wrong-target control CQE ignored by exact-cookie routing
+ok s4 request settled within the poll budget
+ok s4 terminal is a legal kernel outcome (success or canceled)
+ok s4 control released and route retired (bounded)
+ok s5 successor submit accepted
+ok s5 settled-generation cancel is not a running cancel
+ok s5 successor completed within the poll budget
+ok s5 live successor completed despite settled-generation cancel on same slot
+ok s5 no control reference leaked by the settled cancel
+ok s6 zero user_data dropped; real completion still delivered
+ALL GREEN: 23/23 oracle assertions passed
