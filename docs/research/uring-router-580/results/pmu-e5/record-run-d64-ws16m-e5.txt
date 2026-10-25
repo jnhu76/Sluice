@@ -1,0 +1,3 @@
+{"kind":"timed","label":"pmu_ws16m","scenario":"pipeline","pin":"single","side":"submitter","capacity":64,"depth":64,"ops":40000,"payload":4096,"ws_bytes":16777216,"ws_per_op":4096,"warmup":2000,"completed_ops":40000,"bytes_verified":163840000,"wall_s":0.246454,"user_s":0.106479,"sys_s":0.139309,"interf_s":0.004026,"net_wall_s":0.242428,"sink":1784875377180662058,"notifications":0,"passes":0,"ok":true,"failure":"","warmup_failure":""}
+[ perf record: Woken up 2 times to write data ]
+[ perf record: Captured and wrote 0.023 MB docs/research/uring-router-580/results/pmu/record-d64-ws16m-e5.data (529 samples) ]

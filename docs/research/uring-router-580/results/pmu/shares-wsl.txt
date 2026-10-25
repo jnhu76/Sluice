@@ -1,0 +1,8 @@
+d64 warm:
+resolved find_live_router_cookie_: self-share 2.56% across 7 address buckets
+d64 ws16m:
+resolved find_live_router_cookie_: self-share 1.73% across 6 address buckets
+d512 warm:
+resolved find_live_router_cookie_: self-share 5.07% across 5 address buckets
+d512 ws16m:
+resolved find_live_router_cookie_: self-share 4.43% across 6 address buckets

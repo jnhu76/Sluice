@@ -21,7 +21,7 @@ lower bounds on what such a structure must pay, not measurements.
 | Router insert (dispatch) | 1.00/op | O(1): free-list pop + entry write + ledger append | +4 B ledger field write | unchanged | **+hash insert (random write, probe seq)** | **+O(D) ordered shift** |
 | Router retirement | 1.00/op | O(1): zero entry + free-list push | unchanged | unchanged | **+hash erase (tombstone write)** | **+O(D) shift** |
 | Pending-control sweep (S5) | only after SQ-full deferral (0 observed) | C probes/pass | unchanged | unchanged | unchanged | unchanged |
-| Extra memory per capacity | — | 24 B × C (router) | +4 B × ring_entries (ledger) | **0** | +(12-16 B) × ~2C table | +16 B × C sorted array |
+| Extra memory per capacity | — | 32 B × C (router) | +4 B × ring_entries (ledger) | **0** | +(12-16 B) × ~2C table | +16 B × C sorted array |
 | Initialization / teardown | once | vector init C entries | +ledger field | **0** | table init + rehash-free proofs | sort-on-build or ordered inserts |
 | Contention / synchronization | — | all under `dispatch_mtx_` (uncontended in measured shapes) | same | same | same + index invariants under same lock | same |
 | Repair / rebuild / tombstones | — | none exist | none | none | **tombstone accumulation bounds + insert-after-erase ordering proofs required** | none |
@@ -40,8 +40,14 @@ erase/op, M ≈ 0:
 - Candidate A pays per op: 1 hash insert + 1 erase (tombstone) ≈ 2 random
   cache-line writes ≈ 30-80 cycles, plus cold-table misses at large C
   (the table is 2-3× the router array and randomly addressed).
-- Net at every measured shape: **zero to negative**. The index converts a
-  short sequential scan over 2-3 hot lines into random-access bookkeeping on
+- Net at every measured shape: **zero to negative** (lower-bound argument:
+  the A/B columns are analytic lower bounds on maintenance, and the saved
+  cost is bounded by the measured attribution; R9 additionally measures the
+  fully-cold-per-lookup regime that could break this bound — see
+  `cache-results.md`). The index converts a
+  short sequential scan over ⌈D/4⌉ lines per average lookup (16 lines at
+  D=64; R9 audit corrected the original "2-3 hot lines" phrasing) into
+  random-access bookkeeping on
   every operation to accelerate a path that is never the bottleneck.
 - Candidate B additionally turns U into O(D) shifts per op: strictly dominated
   by both alternatives at all D ≥ 2.

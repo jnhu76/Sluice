@@ -20,7 +20,10 @@ instrumentation/arm/mutant blocks proven codegen-neutral without their defines
 | `measurement-protocol.md` | R6 protocol as executed |
 | `wsl-results.md` | R6 results: E5 native (primary) + WSL2 (replication) A/B, A/A, attribution, assembly provenance |
 | `reviews.md` | R7: independent Review A (semantics) and Review B (measurement) verdicts |
-| `decision.md` | R8: final verdicts and the three closing questions |
+| `decision.md` | R8: final verdicts and the three closing questions; R9 scope addendum |
+| `cache-locality-audit.md` | R9-A: audit of the five cache-locality claims in the R0-R8 evidence |
+| `cache-experiment.md` | R9-B/C: cache-sensitivity design, interference workload, matrix, PMU plan |
+| `cache-results.md` | R9: probe invariants, paired net-wall vs A/A floors, clflush bound, PMU shares, decision gate |
 | `results/` | raw JSONL, oracle/conformance logs, disassembly, manifest with SHA-256s |
 | `patches/` | archived gated source patch (instrumentation + arm/mutant gates) |
 

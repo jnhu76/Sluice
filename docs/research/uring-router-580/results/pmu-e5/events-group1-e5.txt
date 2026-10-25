@@ -1,0 +1,4 @@
+45988,,cycles:u,619886,66.00,,
+137500,,instructions:u,932679,100.00,,
+33512,,L1-dcache-loads:u,932679,100.00,,
+6154,,L1-dcache-load-misses:u,312793,33.00,,

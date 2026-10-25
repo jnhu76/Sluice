@@ -65,3 +65,64 @@ was a documentation, labeling or reproducibility item. All items above are
 applied in this branch; no measurement, oracle run, mutant or conclusion
 changed as a result. The one numerical correction (A/A β/α vs slot-order) was
 in the direction that makes the prior conservative reading still valid.
+
+## R9 review — methodology (this revision)
+
+**Provenance disclosure:** the independent-agent review channel was
+unavailable for this round — four dispatch attempts failed on the host's
+model-concurrency limit (2026-10-25, attempts logged in the session
+record). The review below is therefore a structured adversarial pass
+performed in the authoring session against the raw JSONL/reduced data, NOT
+an independent review; the owner may commission an independent re-review of
+`cache-*.md` before treating R9 as fully reviewed. All spot-check commands
+are reproducible from `results/cache-{wsl,e5}.jsonl`.
+
+Checklist results (reviewer questions 1–8 of the R9 protocol):
+
+1. **Interference separation / netting.** Sound for the pipeline shape: the
+   sweep runs on the same thread inside the timed region and its seconds
+   are metered with the same clock; measured sweep fraction is 1.1–2.0% of
+   wall on both hosts (checked over all 135 interfered E5 and 135 WSL pair
+   rows). Split-core rows are gross wall — the sweep can overlap I/O wait —
+   and `cache-results.md` §2 discloses this and does not net them.
+2. **Pacing vs locality.** The locality mechanism predicts ws-monotonicity
+   (until LLC) and D-monotonicity; the data violate both on both hosts, and
+   the D=512 inversion (net 0.963 [0.955, 0.970] vs A/A floor median
+   1.007) is corroborated by an independent metric (user cycles −5.5%,
+   sys −1.4%) consistent with deeper CQE batching. No cherry-picked cell is
+   load-bearing: every conclusion cites all five depths or both hosts.
+3. **A/A and pair count.** A/A uses byte-identical binaries under two
+   paths, AB/BA alternation, and the same bootstrap as the effect rows; E5
+   floors are tight (±0.5–0.8% at D64). Claims of *no effect* are stated
+   where intervals overlap floors; the one claimed effect (ws64K +2.1% net
+   E5) has an interval excluding the floor band, and is explicitly
+   classified as non-locality (smallest working set, cannot evict L2).
+4. **Cross-source cyc/probe.** Legitimate after correction: perf scales
+   multiplexed counts (verified: cycles:u ÷ (user_s × 2.90 GHz) ≈ 0.98 on
+   the E5 d64-warm cell), so cycles/op is absolute within a few percent.
+   "Share does not grow under interference" is bounded independently of
+   ±40% sampling noise by the end-to-end net cap (≲ +1 cyc/probe at D64
+   ws16M) — added to `cache-results.md` §4 during this review.
+5. **clflush arm.** The doc states the arm includes the clflush
+   instruction cost itself and therefore overstates even the fully-cold
+   cost; used only as an upper bound for a synthetic regime. Honest.
+6. **Probe invariants.** Spot-checked 12 cells across both hosts (D16/D64/
+   D512 pipelines incl. ws16M, external single/split/driver): 1.00
+   lookups/install, 0 misses, avg within the documented ranges. Two number
+   errors found in the original §1 (D128 lower bound 63.8 → 60.4; ops/cell
+   range 22–42 K → 10.5–22 K) — fixed in this revision.
+7. **Overstatement scan.** The decision addendum's scope (D ≤ 512, ws ≤
+   16 MiB @ ≤ 4 KiB/op, W-02/W-03-replica forms, both hosts) matches what
+   ran; the D=512 share crossing 5% is disclosed with its absolute
+   per-op cost and non-standard-shape status; Candidate A/B remains
+   labeled lower-bound analysis with the clflush regime recorded as its
+   falsifiable escape condition.
+8. **Arithmetic.** ⌈D/4⌉ lines (16 @D64, 128 @D512) ✓; all eight cyc/probe
+   products recomputed ✓; §2 net_wall medians match `cache-e5-reduced.json`
+   ✓.
+
+Verdict: **ACCEPT_WITH_FIXES (same-session review; independence limitation
+disclosed above)** — the two §1 number errors and the §4 scaling/noise
+strengthening were applied during the review. The retained
+`NO_TRIGGER_NO_CHANGE` verdict and its two recorded boundary conditions
+stand on the corrected text.

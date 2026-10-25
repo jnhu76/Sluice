@@ -607,6 +607,14 @@ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) co
     if (cookie >= 2)
         return router_.size();
 #endif
+#if defined(SLUICE_580_CLFLUSH_ROUTER)
+    {
+        char* base =
+            reinterpret_cast<char*>(const_cast<RouterEntry*>(router_.data()));
+        for (std::size_t off = 0; off < router_.size() * sizeof(RouterEntry); off += 64)
+            __builtin_ia32_clflush(base + off);
+    }
+#endif
 #if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
     const std::size_t live0 = live_cookies_.load(std::memory_order_relaxed);
     std::size_t probes0 = 0;

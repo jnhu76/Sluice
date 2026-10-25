@@ -1,0 +1,5 @@
+{"kind":"timed","label":"pmu_warm","scenario":"pipeline","pin":"single","side":"submitter","capacity":512,"depth":512,"ops":40000,"payload":4096,"ws_bytes":0,"ws_per_op":4096,"warmup":2000,"completed_ops":40000,"bytes_verified":163840000,"wall_s":0.346107,"user_s":0.184868,"sys_s":0.159077,"interf_s":0.000000,"net_wall_s":0.346107,"sink":0,"notifications":0,"passes":0,"ok":true,"failure":"","warmup_failure":""}
+625877438,,cycles:u,183194550,50.00,,
+1668163275,,instructions:u,275183210,75.00,,
+412037096,,L1-dcache-loads:u,274848757,74.00,,
+43162115,,L1-dcache-load-misses:u,275598393,75.00,,

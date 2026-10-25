@@ -48,7 +48,11 @@ campaign is reproducible without reading four scripts.
   known since M2); symbols resolved natively; shares reported from the
   no-children report.
 - Bottom-up cross-check: probes/op (instrumented) × 1-2 cycles/probe vs the
-  measured totals; agrees with the perf shares to within a small factor.
+  measured totals. R9 audit note: the attributed cost computed directly from
+  share × cycles/op ÷ probes is ~2-5 cycles/probe warm (1.2-5× the bottom-up
+  figure, sampling noise ~±40%); 1-2 cycles/probe is an L1-resident lower
+  bound, and R9 (`cache-results.md`) replaces it with measured warm and
+  cold-bound values.
 
 ## Correctness (R5)
 

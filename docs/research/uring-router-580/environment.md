@@ -113,3 +113,29 @@ names (E5 native interleaved AB/BA), within this research round.
 | perf | `perf_event_paranoid=2`; `perf record` requires `-m 64` on this host (known from M2, `cpu-attribution.md`) |
 | Load during runs | loadavg(1) 0.18-0.34; `taskset -c 2` pinning (same CPU as M2) |
 | E5 binaries | `router_ab_baseline` SHA-256 `b03f44b0830723a08d04895fa5e4120af0af2a5bb6d6e109d7f8bf4a27b5f25c`, `router_ab_we2` `96417472a4e7238726b228afa96a269e09f03687a1c75143cccbdd054623c990` (gcc 16.2.1; distinct codegen from the WSL gcc 15.2 builds) |
+
+## Addendum (R9 cache-locality round)
+
+R9 runs on both hosts; no host parameter changed (perf_event_paranoid=2
+everywhere, read-only). Cache topology from `lscpu`: WSL2 Ryzen 7 5800H —
+L1d 32 KiB/core, L2 512 KiB/core, L3 16 MiB; E5 Xeon E5-2666 v3 — L1d
+32 KiB/core, L2 256 KiB/core, L3 25 MiB. PMU probe this round: WSL exposes
+cycles:u/instructions:u/L1-dcache-{loads,load-misses}:u/branch-misses:u/
+cache-misses:u, but LLC-loads/-misses are `<not supported>` (partial
+attribution); E5 exposes the full set (multiplexes when >4 events run in
+one group). E5 loadavg(1) 0.10-0.64 during the session.
+
+R9 binaries (`build_cache.sh`; `cache_router.cpp` + async sources):
+
+| Binary | WSL SHA-256 (gcc 15.2.0) | E5 SHA-256 (gcc 16.2.1) |
+|---|---|---|
+| cache_ab (= aa_alpha = aa_beta) | `9301cc5bd4a3356542db1fc024be31a47e0281dfabab3f7847bb8a2de2fcc1fe` | `7523b035ea326c0ee769210b0142630b52b0f866fde26e1ea5389ce76a98c332` |
+| cache_ab_flush | `73486604ecea17f5d1f6da03447ca5a21a1f3de2b2c1323585c27687f8803451` | `d6164e3bd54f793e76501754e2919cb53d218e9b5cac845c6ecec0df14a82380` |
+| cache_probe | `c904e1ea9e778cc723ab47efb34abb8f707c08e3a0cbd3b44d3a6ba5a44ecf7f` | `c8bbb515b24c7b7345dd3dcde1d2197f59b65acf80aef1bfbfa04047929bb33c` |
+
+Codegen identity re-proof (WSL gcc 15.2.0, `-O3 -DNDEBUG`, no research
+defines): worktree `uring_transport.cpp` → `17f7899cae094977db54b8d0c5e2251001c02bfd88e4411228c626e380c8b28d`,
+`uring_completion.cpp` → `fc4b0d198c44370173c8cab40ce172ca0175b97b88c0d60f9099f8101a4c09c4`;
+both byte-identical (`cmp`) to pristine master `46157fd1` objects. The
+E5-toolchain proof is re-run at the end of the R9 session (recorded in
+`cache-results.md`).
