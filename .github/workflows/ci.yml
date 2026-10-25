@@ -98,3 +98,35 @@ jobs:
 
       - name: Test current targets
         run: xmake test -v
+
+  # Targeted regression gate for the dynamic-ASan LD_PRELOAD ordering class:
+  # the tail CLI oracle spawns the real sluice-tail with the test-only pread
+  # shim preloaded, which only passes when the ASan runtime is ordered ahead
+  # of the shim. Single-test scope keeps the gate cheap and avoids making an
+  # unrelated ASan failure anywhere else block every PR.
+  linux-asan-tail-oracle:
+    name: Linux asan tail CLI oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Xmake with build cache
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: "3.0.9"
+          build-cache: true
+          project-path: "."
+          build-cache-key: "linux-asan-tail-oracle"
+
+      - name: Configure asan build
+        run: xmake f -m asan -y
+
+      - name: Build tail CLI oracle
+        run: xmake build -y app_tail_cli_oracle_test
+
+      - name: Run tail CLI oracle under asan
+        run: xmake test -y "app_tail_cli_oracle_test/*"
