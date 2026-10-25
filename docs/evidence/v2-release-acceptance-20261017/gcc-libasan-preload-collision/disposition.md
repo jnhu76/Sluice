@@ -42,3 +42,13 @@ collision (56/74-test cells, 1 harness failure each):
 
 Re-evaluation trigger: if the interposer or the sanitizer toolchain
 changes, re-run a GCC asanubsan cell before relying on this disposition.
+
+Supersession (2026-10-25, branch fix/586-asan-preload-order, commit acff298f):
+the interposer harness change named by the trigger above has happened. The
+tail CLI oracle now preloads the dynamic ASan runtime — resolved at test
+runtime from the test process's own link map — ahead of the shim, and the
+tail CLI oracle passes 19/19 under GCC asan and asanubsan cells on Fedora 44
+/ GCC 16.2.1 (issue #586). The 2026-10-17 clang pinning and the GCC cell
+logs above stay as the honest record of the collision; re-run a GCC
+asanubsan cell per the trigger above before re-admitting GCC asanubsan
+cells to the standing matrix.

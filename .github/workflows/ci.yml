@@ -128,5 +128,12 @@ jobs:
       - name: Build tail CLI oracle
         run: xmake build -y app_tail_cli_oracle_test
 
+      - name: Verify the child links a dynamic ASan runtime
+        run: |
+          set -e
+          bin=$(find build -type f -name sluice-tail | head -1)
+          echo "sluice-tail: $bin"
+          readelf -d "$bin" | grep -E 'NEEDED.*\[(libasan\.so|libclang_rt\.asan)'
+
       - name: Run tail CLI oracle under asan
         run: xmake test -y "app_tail_cli_oracle_test/*"
