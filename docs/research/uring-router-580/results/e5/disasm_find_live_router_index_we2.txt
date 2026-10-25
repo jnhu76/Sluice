@@ -1,0 +1,30 @@
+0000000000416410 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const>:
+  416410:	mov    %rdi,%r8
+  416413:	mov    %rsi,%rcx
+  416416:	mov    %rdx,%rdi
+  416419:	mov    0x70(%r8),%rax
+  41641d:	mov    0x78(%r8),%rsi
+  416421:	sub    %rax,%rsi
+  416424:	mov    %rsi,%r8
+  416427:	sar    $0x5,%r8
+  41642b:	je     416461 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x51>
+  41642d:	lea    -0x1(%r8),%rdx
+  416431:	add    %rsi,%rax
+  416434:	jmp    41644d <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x3d>
+  416436:	cs nopw 0x0(%rax,%rax,1)
+  416440:	sub    $0x20,%rax
+  416444:	test   %rdx,%rdx
+  416447:	je     416461 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x51>
+  416449:	sub    $0x1,%rdx
+  41644d:	cmpb   $0x0,-0x5(%rax)
+  416451:	je     416440 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x30>
+  416453:	cmp    %ecx,-0x18(%rax)
+  416456:	jne    416440 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x30>
+  416458:	cmp    %rdi,-0x10(%rax)
+  41645c:	jne    416440 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x30>
+  41645e:	mov    %rdx,%r8
+  416461:	mov    %r8,%rax
+  416464:	ret
+  416465:	nop
+  416466:	cs nopw 0x0(%rax,%rax,1)
+

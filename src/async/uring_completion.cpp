@@ -99,9 +99,13 @@ void UringAsyncBackend::finalize_operation_terminal_(
 void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcept {
     std::lock_guard<std::mutex> lk(dispatch_mtx_);
     if (is_control_cookie(user_data)) {
+#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
+        research::g_router_counters.cq_control.fetch_add(1, std::memory_order_relaxed);
+#endif
         const std::uint64_t target_cookie = control_target_cookie(user_data);
         if (target_cookie == 0)
             return;
+        SLUICE_LOOKUP_SITE(research::LookupSite::control_cqe);
         const std::size_t router_index = find_live_router_cookie_(target_cookie);
         if (router_index == router_.size())
             return;
@@ -142,9 +146,17 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
 #endif
         return;
     }
-    if (user_data == 0)
+    if (user_data == 0) {
+#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
+        research::g_router_counters.cq_user_zero_dropped.fetch_add(1,
+                                                                   std::memory_order_relaxed);
+#endif
         return;
-
+    }
+#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
+    research::g_router_counters.cq_operation.fetch_add(1, std::memory_order_relaxed);
+#endif
+    SLUICE_LOOKUP_SITE(research::LookupSite::op_cqe);
     const std::size_t router_index = find_live_router_cookie_(user_data);
     if (router_index == router_.size())
         return;

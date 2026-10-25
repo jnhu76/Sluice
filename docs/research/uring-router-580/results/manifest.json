@@ -1,0 +1,187 @@
+{
+ "baseline_master_sha": "46157fd1f4a1a4afec22d8834c86462b245b576b",
+ "codegen_identity_proof": {
+  "claim": "worktree sources compiled with no research defines are byte-identical to pristine master",
+  "host": "E5 gcc 16.2.1",
+  "objects": {
+   "uring_completion.cpp": "da1c76d3ab8ddb350ea6c5c4218f32c6fbdbed61ec7379fe64715b99bfbc5bf3",
+   "uring_transport.cpp": "3a6c6852f29c6d64f0af7c4b53d351b054cd9ecc25edf6a18cb399e0fc508c5d"
+  },
+  "patched_header": "uring_internal.hpp (gated block vanishes at preprocessing)"
+ },
+ "files": [
+  {
+   "bytes": 5188,
+   "path": "correctness-oracles.md",
+   "sha256": "42d7e472e687a6a49e1a2f9e0a00eecc516ad3768cf6d1308c33efe7da8e4a60"
+  },
+  {
+   "bytes": 4481,
+   "path": "design-alternatives.md",
+   "sha256": "7bff1b29ea22051a5d6fefaad149132ceb3715124a4589cdaee93ea4913144c9"
+  },
+  {
+   "bytes": 6055,
+   "path": "environment.md",
+   "sha256": "85262a6186f4094f17f20674caea29d8a5b639b0f60a9010957551316846d54b"
+  },
+  {
+   "bytes": 6078,
+   "path": "lifecycle-cost.md",
+   "sha256": "2bcd572002d2c593d75e2683e892ed06b807bfa5d165665cca8468d31cf39337"
+  },
+  {
+   "bytes": 14885,
+   "path": "source-dag.md",
+   "sha256": "12ccccf8c66f97c57d8aea926b6132947d635eab3bdb79fd95bc79d355b98b46"
+  },
+  {
+   "bytes": 6965,
+   "path": "trigger.md",
+   "sha256": "4cc9af33578ee66992bf512e1bd893a31ad575ef93da1a7557d9f3c6f916914f"
+  },
+  {
+   "bytes": 5328,
+   "path": "wsl-results.md",
+   "sha256": "da97060cd79a5d80aece042b472cae24ea29e60be8fec7de227a16cb7dc3e153"
+  },
+  {
+   "bytes": 10859,
+   "path": "patches/instrumentation-and-arm-gates.patch",
+   "sha256": "69cc2fcba2a1ab7169a58f9328c5dbeec6c29ad335c8341c6b293d1a8e95e291"
+  },
+  {
+   "bytes": 19744,
+   "path": "results/aa-pairs.jsonl",
+   "sha256": "525b808193afeadcb111977fffb967ae9a1ee427d512389a54398cd3efa448fa"
+  },
+  {
+   "bytes": 28980,
+   "path": "results/ab-pairs.jsonl",
+   "sha256": "6270145b0df5a6d19b35da85f80f9d6a0a66bc7476a253f4a2c6acfa27812768"
+  },
+  {
+   "bytes": 1444,
+   "path": "results/disasm_find_live_router_index_baseline.txt",
+   "sha256": "3e26201c9b9d6ebafd56f3db45f4ca003ec530965c35e8ecf20e316fa69bcd44"
+  },
+  {
+   "bytes": 1582,
+   "path": "results/disasm_find_live_router_index_we2.txt",
+   "sha256": "7f25ba41ade67faf5c0b5511d650ca26c4417d9bc5a1f520cd2467fe1ec68673"
+  },
+  {
+   "bytes": 36813,
+   "path": "results/trigger-matrix.jsonl",
+   "sha256": "a953039769400c6e3acdc6f8b9d825d5f737c4f2402c06c0c4fda86b2daf4c53"
+  },
+  {
+   "bytes": 19746,
+   "path": "results/e5/aa-pairs-e5.jsonl",
+   "sha256": "347ca2cd52029423aa42e2195f957322aaa2a45e4f567889f0d9142bbca2d2e4"
+  },
+  {
+   "bytes": 28988,
+   "path": "results/e5/ab-pairs-e5.jsonl",
+   "sha256": "a6eceafc10f8881e76843018221c7602a71006e15b6e8b4871823b44f0e6a8cf"
+  },
+  {
+   "bytes": 1081,
+   "path": "results/e5/conformance_e5_baseline.log",
+   "sha256": "7b2a8b9372a59966df1fb4e3648b15c4fa14097ef9365925c974215a77dc64c2"
+  },
+  {
+   "bytes": 1081,
+   "path": "results/e5/conformance_e5_we2.log",
+   "sha256": "7b2a8b9372a59966df1fb4e3648b15c4fa14097ef9365925c974215a77dc64c2"
+  },
+  {
+   "bytes": 1734,
+   "path": "results/e5/disasm_find_live_router_index_baseline.txt",
+   "sha256": "01bd28281cc2e6661f04189fbea8eb6aef646d51aa36a111b7c846a68ed4ba7b"
+  },
+  {
+   "bytes": 1571,
+   "path": "results/e5/disasm_find_live_router_index_we2.txt",
+   "sha256": "53b33907fbcb3cb6c235d973c1bd34604d67f79c01c532dea5f9f8c6e850980b"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_baseline.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_baseline_restore.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 541,
+   "path": "results/e5/oracle_false_miss.log",
+   "sha256": "d609db05287d082780223d11b8f2bb33f900d1bf39596ee59aecacbb2825d145"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_slot_only.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_we2.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 36820,
+   "path": "results/e5/trigger-matrix-e5.jsonl",
+   "sha256": "1e513596121b00c3a00769f76435afc67a01192bd48bbbf981375f0c11818306"
+  },
+  {
+   "bytes": 36820,
+   "path": "results/e5/trigger-matrix.jsonl",
+   "sha256": "1e513596121b00c3a00769f76435afc67a01192bd48bbbf981375f0c11818306"
+  }
+ ],
+ "hosts": {
+  "e5": {
+   "binaries": {
+    "router_ab_baseline": "b03f44b0830723a08d04895fa5e4120af0af2a5bb6d6e109d7f8bf4a27b5f25c",
+    "router_ab_we2": "96417472a4e7238726b228afa96a269e09f03687a1c75143cccbdd054623c990"
+   },
+   "gcc": "16.2.1",
+   "kernel": "7.2.11-200.fc44.x86_64",
+   "liburing": "2.13"
+  },
+  "wsl2": {
+   "binaries": {
+    "router_ab_baseline": "374097c718826dc7e36afefef9f237c56b7b0fb99951ac9bd8a8bca1aa073c6d4a",
+    "router_ab_we2": "5c344fb790947686c333c5feb80a5c711b8de5239d2753c0082f6de3014dc3c5"
+   },
+   "gcc": "15.2.0",
+   "kernel": "6.18.54.1-microsoft-standard-WSL2",
+   "liburing": "2.14"
+  }
+ },
+ "issue": "jnhu76/Sluice#580",
+ "research_branch": "research/uring-router-580-wsl",
+ "uncommitted_raw_artifacts": [
+  {
+   "paths": [
+    "/tmp/perf580_b.data",
+    "/tmp/perf580_c.data",
+    "/tmp/perf580_c2.data",
+    "/tmp/perf580_d.data"
+   ],
+   "persistence": "tmpfs, not persistent across reboot",
+   "sizes_bytes": "37k-147k",
+   "what": "WSL perf.data"
+  },
+  {
+   "paths": [
+    "E5:/tmp/perf580_e5.data"
+   ],
+   "persistence": "server tmpfs, not persistent across reboot",
+   "sizes_bytes": "~52k",
+   "what": "E5 perf.data"
+  }
+ ]
+}
