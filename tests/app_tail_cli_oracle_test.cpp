@@ -39,6 +39,9 @@ constexpr auto kQuietWindow = 600ms;
 // After the stop signal, the child must still be settling the accepted read
 // for at least this long: a lost stop or an abandoned read retires early.
 constexpr auto kNoRetireWindow = 400ms;
+// Post-death stdout evidence collection never waits longer than this: a
+// descendant holding the write end must not extend any deadline.
+constexpr auto kDeathDrainBound = 400ms;
 
 int g_checks_failed = 0;
 
@@ -137,6 +140,8 @@ struct ChildOutcome {
 
 class TailChild {
   public:
+    enum class WaitOutcome { matched, event_timeout, child_exited_before_event, wait_error };
+
     TailChild() = default;
     TailChild(const TailChild&) = delete;
     TailChild& operator=(const TailChild&) = delete;
@@ -164,6 +169,7 @@ class TailChild {
         std::vector<std::string> env_store;
         for (char** e = environ; e && *e; ++e)
             env_store.emplace_back(*e);
+        env_store.emplace_back("SLUICE_TAIL_TEST_EVT=" + evt_path_);
         if (with_shim) {
             env_store.emplace_back("LD_PRELOAD=" + exe_dir() + "/libtail_pread_shim.so");
             env_store.emplace_back("SLUICE_TAIL_SHIM_DEV=" +
@@ -225,43 +231,67 @@ class TailChild {
         ::close(out_pipe[1]);
         pid_ = pid;
         out_fd_ = out_pipe[0];
-        evt_fd_ = ::open(evt_path_.c_str(), O_RDWR);
-        cmd_fd_ = ::open(cmd_path_.c_str(), O_RDWR);
-        return pid_ > 0;
+        // O_NONBLOCK: the parent holds both fifo ends, so a drained read must
+        // return EAGAIN, never block.
+        evt_fd_ = ::open(evt_path_.c_str(), O_RDWR | O_NONBLOCK);
+        if (evt_fd_ >= 0)
+            cmd_fd_ = ::open(cmd_path_.c_str(), O_RDWR);
+        if (evt_fd_ < 0 || cmd_fd_ < 0) {
+            ::kill(pid_, SIGKILL);
+            int status = 0;
+            while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {}
+            reaped_ = true;
+            return false;
+        }
+        return true;
     }
 
-    bool wait_line(const std::string& want, std::chrono::steady_clock::duration timeout) {
+    WaitOutcome wait_line(const std::string& want, std::chrono::steady_clock::duration timeout) {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         for (;;) {
             if (scan_line(want))
-                return true;
-            if (!pump_output(deadline))
-                return false;
-            if (exited_ && !scan_line(want))
-                return false;
+                return WaitOutcome::matched;
+            const int s = poll_state();
+            if (s != 0)
+                return terminal_line_outcome(want, s);
+            if (!pump_output(deadline)) {
+                // The stdout pipe closed before the deadline: a child closes
+                // its fds during exit before the zombie is reapable, so the
+                // reap state, not the pump stop, classifies the wait.
+                const int s2 = poll_state();
+                if (s2 != 0)
+                    return terminal_line_outcome(want, s2);
+                if (std::chrono::steady_clock::now() >= deadline)
+                    return WaitOutcome::event_timeout;
+                continue;
+            }
         }
     }
 
-    bool wait_event(const std::string& prefix, std::chrono::steady_clock::duration timeout,
-                    std::string* line_out = nullptr) {
+    WaitOutcome wait_event(const std::string& prefix, std::chrono::steady_clock::duration timeout,
+                           std::string* line_out = nullptr) {
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         for (;;) {
-            std::size_t nl;
-            while ((nl = evt_buf_.find('\n')) != std::string::npos) {
-                const std::string line = evt_buf_.substr(0, nl);
-                evt_buf_.erase(0, nl + 1);
-                if (line.rfind(prefix, 0) == 0) {
-                    if (line_out)
-                        *line_out = line;
-                    return true;
-                }
+            if (consume_matching_event(prefix, line_out))
+                return WaitOutcome::matched;
+            const int s = poll_state();
+            if (s != 0)
+                return terminal_event_outcome(prefix, line_out, s);
+            if (!pump_fd(evt_fd_, evt_buf_, deadline, evt_eof_)) {
+                const int s2 = poll_state();
+                if (s2 != 0)
+                    return terminal_event_outcome(prefix, line_out, s2);
+                if (std::chrono::steady_clock::now() >= deadline)
+                    return WaitOutcome::event_timeout;
+                continue;
             }
-            if (!pump_fd(evt_fd_, evt_buf_, deadline))
-                return false;
         }
     }
 
-    void send_signal(int sig) { ::kill(pid_, sig); }
+    void send_signal(int sig) {
+        if (pid_ > 0)
+            ::kill(pid_, sig);
+    }
 
     void release() {
         if (cmd_fd_ < 0)
@@ -272,21 +302,27 @@ class TailChild {
         } while (r < 0 && errno == EINTR);
     }
 
-    // Non-consuming liveness probe: if the child already exited, its status
-    // is captured here so wait_exit can still classify the outcome.
+    // Non-consuming liveness probe; a death observed here is recorded in the
+    // shared reap state so wait_exit can still classify the outcome.
     bool alive() {
-        if (early_exit_)
-            return false;
-        int status = 0;
-        const pid_t r = ::waitpid(pid_, &status, WNOHANG);
-        if (r == pid_) {
-            saved_status_ = status;
-            early_exit_ = true;
-            reaped_ = true;
-            drain_output_eof();
-            return false;
+        const int s = poll_state();
+        if (s == 1)
+            drain_output_bounded();
+        return s == 0;
+    }
+
+    // Bounded death confirmation that consumes neither stream: a wait issued
+    // afterwards must recover data the child already wrote.
+    bool join_without_consuming(std::chrono::steady_clock::duration timeout) {
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        for (;;) {
+            const int s = poll_state();
+            if (s != 0)
+                return s == 1;
+            if (std::chrono::steady_clock::now() >= deadline)
+                return false;
+            ::usleep(10000);
         }
-        return r == 0;
     }
 
     bool stayed_alive_for(std::chrono::steady_clock::duration window) {
@@ -301,43 +337,63 @@ class TailChild {
     }
 
     ChildOutcome wait_exit(std::chrono::steady_clock::duration timeout) {
-        if (early_exit_) {
-            ChildOutcome o = classify(saved_status_);
-            drain_output_eof();
-            return o;
+        if (reaped_) {
+            drain_output_bounded();
+            return outcome_of_termination();
         }
         const auto deadline = std::chrono::steady_clock::now() + timeout;
         for (;;) {
-            int status = 0;
-            const pid_t r = ::waitpid(pid_, &status, WNOHANG);
-            if (r == pid_) {
-                reaped_ = true;
-                drain_output_eof();
-                ChildOutcome o = classify(status);
-                exited_ = true;
-                return o;
+            const int s = poll_state();
+            if (s == 1) {
+                drain_output_bounded();
+                return outcome_of_termination();
             }
-            if (r < 0 && errno != EINTR) {
+            if (s < 0) {
                 ChildOutcome o;
                 o.kind = ChildOutcome::Kind::not_done;
                 return o;
             }
             pump_output(deadline);
             if (std::chrono::steady_clock::now() >= deadline) {
+                watchdog_fired_ = true;
                 ::kill(pid_, SIGKILL);
-                int status2 = 0;
-                while (::waitpid(pid_, &status2, 0) < 0 && errno == EINTR) {}
+                int status = 0;
+                while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {}
+                saved_status_ = status;
                 reaped_ = true;
-                exited_ = true;
-                drain_output_eof();
-                ChildOutcome o;
-                o.kind = ChildOutcome::Kind::watchdog_killed;
-                return o;
+                drain_output_bounded();
+                return outcome_of_termination();
             }
         }
     }
 
     const std::string& out() const { return out_; }
+
+    std::string wait_failure_detail(WaitOutcome o, const std::string& what) const {
+        std::string s = what + ": ";
+        switch (o) {
+        case WaitOutcome::matched:
+            return what + ": matched";
+        case WaitOutcome::event_timeout:
+            s += "EVENT_TIMEOUT; child ";
+            s += reaped_ ? outcome_of_termination().describe() : std::string("still alive");
+            break;
+        case WaitOutcome::child_exited_before_event:
+            s += "CHILD_EXITED_BEFORE_EVENT; child ";
+            s += reaped_ ? outcome_of_termination().describe() : std::string("status unknown");
+            break;
+        case WaitOutcome::wait_error:
+            s += "EVENT_WAIT_ERROR; no waitable status for pid " + std::to_string(pid_);
+            break;
+        }
+        const std::string err = err_text_capped(4096);
+        s += "; stderr[" + std::to_string(err.size()) + "B]=" + err;
+        const std::size_t tail = out_.size() > 256 ? 256 : out_.size();
+        s += "; stdout-tail=\"" + out_.substr(out_.size() - tail) + "\"";
+        if (!evt_buf_.empty())
+            s += "; pending-events=\"" + evt_buf_ + "\"";
+        return s;
+    }
 
     std::string err_text() const {
         std::string s;
@@ -360,6 +416,80 @@ class TailChild {
     pid_t pid() const { return pid_; }
 
   private:
+    // Single reap authority: 1 = terminated (saved_status_ valid, recorded
+    // exactly once), 0 = alive, -1 = status unobtainable for pid_.
+    int poll_state() {
+        if (reaped_)
+            return 1;
+        if (pid_ <= 0)
+            return -1;
+        int status = 0;
+        pid_t r;
+        do {
+            r = ::waitpid(pid_, &status, WNOHANG);
+        } while (r < 0 && errno == EINTR);
+        if (r == pid_) {
+            saved_status_ = status;
+            reaped_ = true;
+            return 1;
+        }
+        if (r == 0)
+            return 0;
+        reap_lost_ = true;
+        return -1;
+    }
+
+    ChildOutcome outcome_of_termination() const {
+        ChildOutcome o = classify(saved_status_);
+        if (watchdog_fired_ && o.kind == ChildOutcome::Kind::signaled && o.code == SIGKILL)
+            o.kind = ChildOutcome::Kind::watchdog_killed;
+        return o;
+    }
+
+    WaitOutcome terminal_line_outcome(const std::string& want, int s) {
+        drain_output_bounded();
+        if (scan_line(want))
+            return WaitOutcome::matched;
+        return s < 0 ? WaitOutcome::wait_error : WaitOutcome::child_exited_before_event;
+    }
+
+    WaitOutcome terminal_event_outcome(const std::string& prefix, std::string* line_out, int s) {
+        consume_evt_available();
+        if (consume_matching_event(prefix, line_out))
+            return WaitOutcome::matched;
+        return s < 0 ? WaitOutcome::wait_error : WaitOutcome::child_exited_before_event;
+    }
+
+    bool consume_matching_event(const std::string& prefix, std::string* line_out) {
+        std::size_t nl;
+        while ((nl = evt_buf_.find('\n')) != std::string::npos) {
+            const std::string line = evt_buf_.substr(0, nl);
+            evt_buf_.erase(0, nl + 1);
+            if (line.rfind(prefix, 0) == 0) {
+                if (line_out)
+                    *line_out = line;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void consume_evt_available() {
+        if (evt_fd_ < 0)
+            return;
+        char buf[4096];
+        for (;;) {
+            const ssize_t n = ::read(evt_fd_, buf, sizeof buf);
+            if (n > 0) {
+                evt_buf_.append(buf, static_cast<std::size_t>(n));
+                continue;
+            }
+            if (n < 0 && errno == EINTR)
+                continue;
+            break;
+        }
+    }
+
     static ChildOutcome classify(int status) {
         ChildOutcome o;
         if (WIFEXITED(status)) {
@@ -372,8 +502,9 @@ class TailChild {
         return o;
     }
 
-    static bool pump_fd(int fd, std::string& into, std::chrono::steady_clock::time_point deadline) {
-        if (fd < 0)
+    static bool pump_fd(int fd, std::string& into, std::chrono::steady_clock::time_point deadline,
+                        bool& eof) {
+        if (fd < 0 || eof)
             return false;
         const auto now = std::chrono::steady_clock::now();
         if (now >= deadline)
@@ -385,18 +516,35 @@ class TailChild {
         pollfd p{};
         p.fd = fd;
         p.events = POLLIN;
-        const int r = ::poll(&p, 1, ms);
+        int r;
+        do {
+            r = ::poll(&p, 1, ms);
+        } while (r < 0 && errno == EINTR);
         if (r <= 0)
             return true;
+        if (!(p.revents & (POLLIN | POLLHUP | POLLERR)))
+            return true;
         char buf[4096];
-        const ssize_t n = ::read(fd, buf, sizeof buf);
-        if (n > 0)
+        ssize_t n;
+        do {
+            n = ::read(fd, buf, sizeof buf);
+        } while (n < 0 && errno == EINTR);
+        if (n > 0) {
             into.append(buf, static_cast<std::size_t>(n));
+            return true;
+        }
+        if (n == 0) {
+            eof = true;
+            return true;
+        }
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            return true;
+        eof = true;
         return true;
     }
 
     bool pump_output(std::chrono::steady_clock::time_point deadline) {
-        return pump_fd(out_fd_, out_, deadline);
+        return pump_fd(out_fd_, out_, deadline, out_eof_);
     }
 
     bool scan_line(const std::string& want) {
@@ -417,20 +565,71 @@ class TailChild {
         return false;
     }
 
-    void drain_output_eof() {
-        if (out_fd_ < 0)
+    // Post-death evidence collection only: stops at EOF, at an idle pipe (a
+    // descendant may still hold the write end), or at the bound.
+    void drain_output_bounded() {
+        if (out_fd_ < 0 || out_eof_)
             return;
+        const auto bound = std::chrono::steady_clock::now() + kDeathDrainBound;
         char buf[4096];
         for (;;) {
-            const ssize_t n = ::read(out_fd_, buf, sizeof buf);
-            if (n <= 0)
+            const auto now = std::chrono::steady_clock::now();
+            if (now >= bound)
                 break;
-            out_.append(buf, static_cast<std::size_t>(n));
+            pollfd p{};
+            p.fd = out_fd_;
+            p.events = POLLIN;
+            int ms = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(bound - now).count());
+            if (ms > 50)
+                ms = 50;
+            const int r = ::poll(&p, 1, ms);
+            if (r < 0) {
+                if (errno == EINTR)
+                    continue;
+                break;
+            }
+            if (r == 0)
+                break;
+            const ssize_t n = ::read(out_fd_, buf, sizeof buf);
+            if (n > 0) {
+                out_.append(buf, static_cast<std::size_t>(n));
+                continue;
+            }
+            if (n == 0) {
+                out_eof_ = true;
+                break;
+            }
+            if (errno != EINTR)
+                break;
         }
     }
 
+    std::string err_text_capped(std::size_t cap) const {
+        if (err_fd_ < 0)
+            return "<stderr-capture-unavailable>";
+        if (::lseek(err_fd_, 0, SEEK_SET) < 0)
+            return "<stderr-capture-unavailable>";
+        std::string s;
+        char buf[4096];
+        for (;;) {
+            const ssize_t n = ::read(err_fd_, buf, sizeof buf);
+            if (n < 0 && errno == EINTR)
+                continue;
+            if (n <= 0)
+                break;
+            s.append(buf, static_cast<std::size_t>(n));
+            if (s.size() > cap) {
+                s.resize(cap);
+                s += "...[truncated]";
+                break;
+            }
+        }
+        return s;
+    }
+
     void cleanup() {
-        if (pid_ > 0 && !reaped_) {
+        if (pid_ > 0 && !reaped_ && !reap_lost_) {
             ::kill(pid_, SIGKILL);
             int status = 0;
             while (::waitpid(pid_, &status, 0) < 0 && errno == EINTR) {}
@@ -466,11 +665,46 @@ class TailChild {
     std::size_t scanned_ = 0;
     int saved_status_ = 0;
     bool reaped_ = false;
-    bool early_exit_ = false;
-    bool exited_ = false;
+    bool reap_lost_ = false;
+    bool watchdog_fired_ = false;
+    bool out_eof_ = false;
+    bool evt_eof_ = false;
 };
 
 // ---------------------------------------------------------------------------
+
+const char* wait_outcome_name(TailChild::WaitOutcome o) {
+    switch (o) {
+    case TailChild::WaitOutcome::matched:
+        return "matched";
+    case TailChild::WaitOutcome::event_timeout:
+        return "event_timeout";
+    case TailChild::WaitOutcome::child_exited_before_event:
+        return "child_exited_before_event";
+    case TailChild::WaitOutcome::wait_error:
+        return "wait_error";
+    }
+    return "unknown";
+}
+
+bool expect_event(TailChild& child, const std::string& prefix,
+                  std::chrono::steady_clock::duration timeout, std::string* line,
+                  const std::string& what) {
+    const TailChild::WaitOutcome o = child.wait_event(prefix, timeout, line);
+    if (o == TailChild::WaitOutcome::matched)
+        return true;
+    check_msg(false, child.wait_failure_detail(o, what));
+    return false;
+}
+
+bool expect_line(TailChild& child, const std::string& want,
+                 std::chrono::steady_clock::duration timeout, const std::string& what) {
+    const TailChild::WaitOutcome o = child.wait_line(want, timeout);
+    if (o == TailChild::WaitOutcome::matched)
+        return true;
+    check_msg(false, child.wait_failure_detail(o, what));
+    return false;
+}
 
 bool file_status_of(const std::string& path, dev_t* dev, ino_t* ino) {
     struct stat st{};
@@ -524,6 +758,7 @@ bool finite_tail_and_cli_exit_codes() {
 }
 
 bool cli_removed_workers_and_max_poll_stop() {
+    const int before = g_checks_failed;
     TempFile f("seed\n");
     const std::string bin = exe_dir() + "/sluice-tail";
     for (const auto* value : {"1", "4", "64", "0", "65", "bad", "184467440737095516160"}) {
@@ -538,14 +773,14 @@ bool cli_removed_workers_and_max_poll_stop() {
         TailChild child;
         check_msg(child.spawn(bin, {"-f", "-n", "1", "--poll-interval", "5000", f.path}),
                   "max poll: spawn");
-        check_msg(child.wait_line("seed", kEventDeadline), "max poll: initial output");
+        expect_line(child, "seed", kEventDeadline, "max poll: initial output");
         child.send_signal(SIGTERM);
         const auto outcome = child.wait_exit(1s);
         check_msg(outcome.kind == ChildOutcome::Kind::exited && outcome.code == 0 &&
                       child.out() == "seed\n" && child.err_text().empty(),
                   "max poll: signal stop bypasses 5000 ms deadline");
     }
-    return g_checks_failed == 0;
+    return g_checks_failed == before;
 }
 
 bool follow_clean_signal_exit(int sig, const std::string& tag) {
@@ -556,9 +791,9 @@ bool follow_clean_signal_exit(int sig, const std::string& tag) {
         check_msg(false, tag + ": spawn");
         return false;
     }
-    check_msg(child.wait_line("seed-2", kEventDeadline), tag + ": seed line delivered");
+    expect_line(child, "seed-2", kEventDeadline, tag + ": seed line delivered");
     check_msg(f.append("live-1\n"), tag + ": append");
-    check_msg(child.wait_line("live-1", kEventDeadline), tag + ": live line delivered");
+    expect_line(child, "live-1", kEventDeadline, tag + ": live line delivered");
 
     child.send_signal(sig);
     const ChildOutcome o = child.wait_exit(kExitDeadline);
@@ -587,7 +822,7 @@ bool cli_double_signal_clean_exit() {
         check_msg(false, "double: spawn");
         return false;
     }
-    check_msg(child.wait_line("seed-2", kEventDeadline), "double: seed line delivered");
+    expect_line(child, "seed-2", kEventDeadline, "double: seed line delivered");
     child.send_signal(SIGINT);
     child.send_signal(SIGTERM);
     const ChildOutcome o = child.wait_exit(kExitDeadline);
@@ -615,17 +850,15 @@ bool pending_read_settlement_case(int sig, const std::string& tag) {
     long fields[3] = {0, 0, 0};
     // Round 1: the child's first follow read is held before any append can
     // land, so it is necessarily the empty-tail EOF probe at offset 5.
-    if (!child.wait_event("ENTERED ", kEventDeadline, &line)) {
-        check_msg(false, tag + ": no ENTERED event (LD_PRELOAD intercept failed?)");
+    if (!expect_event(child, "ENTERED ", kEventDeadline, &line,
+                      tag + ": first held read ENTERED event"))
         return false;
-    }
     check_msg(parse_event(line, "ENTERED ", fields) == 3 && fields[0] == 1 && fields[1] == 5,
               tag + ": first held read is the follow read at offset 5, got: " + line);
     child.release();
-    if (!child.wait_event("EXIT ", kEventDeadline, &line)) {
-        check_msg(false, tag + ": no EXIT event for the first held read");
+    if (!expect_event(child, "EXIT ", kEventDeadline, &line,
+                      tag + ": EXIT event for the first held read"))
         return false;
-    }
     check_msg(parse_event(line, "EXIT ", fields) == 2 && fields[0] == 1 && fields[1] == 0,
               tag + ": first held read was the EOF probe, got: " + line);
 
@@ -633,10 +866,9 @@ bool pending_read_settlement_case(int sig, const std::string& tag) {
     // inside that window, so the next held read is the data read.
     check_msg(f.append("held\n"), tag + ": append");
 
-    if (!child.wait_event("ENTERED ", kEventDeadline, &line)) {
-        check_msg(false, tag + ": no ENTERED event for the data read");
+    if (!expect_event(child, "ENTERED ", kEventDeadline, &line,
+                      tag + ": data read ENTERED event"))
         return false;
-    }
     check_msg(parse_event(line, "ENTERED ", fields) == 3 && fields[0] == 2 && fields[1] == 5,
               tag + ": ENTERED 2 is the data read at offset 5, got: " + line);
 
@@ -647,10 +879,9 @@ bool pending_read_settlement_case(int sig, const std::string& tag) {
 
     child.release();
 
-    if (!child.wait_event("EXIT ", kEventDeadline, &line)) {
-        check_msg(false, tag + ": no EXIT event after release");
+    if (!expect_event(child, "EXIT ", kEventDeadline, &line,
+                      tag + ": EXIT event after release"))
         return false;
-    }
     check_msg(parse_event(line, "EXIT ", fields) == 2 && fields[0] == 2 && fields[1] == 5,
               tag + ": EXIT 2 returned 5 bytes, got: " + line);
 
@@ -688,7 +919,7 @@ bool cli_descriptor_follow_rotation() {
         check_msg(false, "rotation: spawn");
         return false;
     }
-    check_msg(child.wait_line("seed", kEventDeadline), "rotation: seed delivered");
+    expect_line(child, "seed", kEventDeadline, "rotation: seed delivered");
 
     if (::rename(f.path.c_str(), rotated.c_str()) != 0) {
         std::fprintf(stderr, "DEADLINE_ABORT: rename failed\n");
@@ -711,8 +942,7 @@ bool cli_descriptor_follow_rotation() {
             ::close(af);
         check_msg(w == static_cast<ssize_t>(data.size()), "rotation: append to original inode");
     }
-    check_msg(child.wait_line("rot-b", kEventDeadline),
-              "rotation: original-inode append delivered");
+    expect_line(child, "rot-b", kEventDeadline, "rotation: original-inode append delivered");
 
     {
         const int af = ::open(f.path.c_str(), O_WRONLY | O_APPEND);
@@ -778,12 +1008,290 @@ bool harness_split_line_selftest() {
         check_msg(false, "selftest-split: spawn sh");
         return false;
     }
-    const bool got = child.wait_line("split-half-line", kEventDeadline);
-    check_msg(got, "selftest-split: line assembled across read chunks");
+    const TailChild::WaitOutcome got = child.wait_line("split-half-line", kEventDeadline);
+    check_msg(got == TailChild::WaitOutcome::matched,
+              "selftest-split: line assembled across read chunks, got " +
+                  std::string(wait_outcome_name(got)));
     const ChildOutcome o = child.wait_exit(kExitDeadline);
     check_msg(o.kind == ChildOutcome::Kind::exited && o.code == 0,
               "selftest-split: sh exit 0, got " + o.describe());
-    return got && o.kind == ChildOutcome::Kind::exited && o.code == 0;
+    return got == TailChild::WaitOutcome::matched && o.kind == ChildOutcome::Kind::exited &&
+           o.code == 0;
+}
+
+bool harness_death_aware_event_wait_reports_exit_and_stderr() {
+    TailChild child;
+    if (!child.spawn("/bin/sh", {"-c", "echo HARNESS-DEATH-MARKER >&2; exit 23"})) {
+        check_msg(false, "death-aware: spawn sh");
+        return false;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const TailChild::WaitOutcome o = child.wait_event("ENTERED ", kEventDeadline);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const std::string detail =
+        child.wait_failure_detail(o, "first held read ENTERED event");
+    check_msg(o == TailChild::WaitOutcome::child_exited_before_event,
+              std::string("death-aware: outcome is child_exited_before_event, got ") +
+                  wait_outcome_name(o));
+    check_msg(elapsed < 5s, "death-aware: fails long before the 10s event deadline");
+    check_msg(detail.find("CHILD_EXITED_BEFORE_EVENT") != std::string::npos &&
+                  detail.find("exited(23)") != std::string::npos &&
+                  detail.find("HARNESS-DEATH-MARKER") != std::string::npos,
+              "death-aware: failure detail carries classification and stderr, got: " + detail);
+    const ChildOutcome e = child.wait_exit(kExitDeadline);
+    check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 23,
+              "death-aware: cached status is exited(23), got " + e.describe());
+    check_msg(child.err_text().find("HARNESS-DEATH-MARKER") != std::string::npos,
+              "death-aware: stderr death marker captured");
+    int status = 0;
+    const pid_t r = ::waitpid(child.pid(), &status, WNOHANG);
+    check_msg(r < 0 && errno == ECHILD, "death-aware: child reaped, no zombie remains");
+    return o == TailChild::WaitOutcome::child_exited_before_event && elapsed < 5s &&
+           detail.find("CHILD_EXITED_BEFORE_EVENT") != std::string::npos &&
+           detail.find("exited(23)") != std::string::npos &&
+           detail.find("HARNESS-DEATH-MARKER") != std::string::npos &&
+           e.kind == ChildOutcome::Kind::exited && e.code == 23 &&
+           child.err_text().find("HARNESS-DEATH-MARKER") != std::string::npos && r < 0 &&
+           errno == ECHILD;
+}
+
+bool harness_exec_failure_is_detected_and_cached() {
+    TailChild child;
+    const std::string missing = exe_dir() + "/no-such-harness-exec-binary";
+    if (!child.spawn(missing, {"arg"})) {
+        check_msg(false, "exec-fail: spawn reports the forked pid");
+        return false;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const TailChild::WaitOutcome o = child.wait_event("ENTERED ", kEventDeadline);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    check_msg(o == TailChild::WaitOutcome::child_exited_before_event && elapsed < 5s,
+              std::string("exec-fail: fast child_exited_before_event, got ") +
+                  wait_outcome_name(o));
+    const ChildOutcome e = child.wait_exit(kExitDeadline);
+    check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 127,
+              "exec-fail: cached status is exited(127), got " + e.describe());
+    int status = 0;
+    const pid_t r = ::waitpid(child.pid(), &status, WNOHANG);
+    check_msg(r < 0 && errno == ECHILD, "exec-fail: cleanup reaped, no zombie remains");
+    return o == TailChild::WaitOutcome::child_exited_before_event && elapsed < 5s &&
+           e.kind == ChildOutcome::Kind::exited && e.code == 127 && r < 0 && errno == ECHILD;
+}
+
+bool harness_event_fully_written_before_exit_is_still_delivered() {
+    TailChild child;
+    // The child writes the complete event, then exits; the fifo data outlives
+    // the writer because the parent holds the read end (O_RDWR).
+    if (!child.spawn("/bin/sh",
+                     {"-c", "printf 'ENTERED 7 5 0\\n' > \"$SLUICE_TAIL_TEST_EVT\"; exit 0"})) {
+        check_msg(false, "event-then-exit: spawn sh");
+        return false;
+    }
+    std::string line;
+    const TailChild::WaitOutcome o = child.wait_event("ENTERED ", kEventDeadline, &line);
+    check_msg(o == TailChild::WaitOutcome::matched,
+              std::string("event-then-exit: event survives the death race, got ") +
+                  wait_outcome_name(o));
+    check_msg(line == "ENTERED 7 5 0", "event-then-exit: exact payload, got: " + line);
+    const ChildOutcome e = child.wait_exit(kExitDeadline);
+    check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 0,
+              "event-then-exit: sh exit 0, got " + e.describe());
+    if (!(o == TailChild::WaitOutcome::matched && line == "ENTERED 7 5 0" &&
+          e.kind == ChildOutcome::Kind::exited && e.code == 0))
+        return false;
+    {
+        TailChild child;
+        // Death is confirmed before any consumption: the event was fully
+        // written before exit, so the wait must still recover it from the fifo.
+        if (!child.spawn("/bin/sh",
+                         {"-c", "printf 'ENTERED 9 5 0\\n' > \"$SLUICE_TAIL_TEST_EVT\"; exit 0"})) {
+            check_msg(false, "event-then-exit: spawn sh for ordered arm");
+            return false;
+        }
+        if (!child.join_without_consuming(kEventDeadline)) {
+            check_msg(false, "event-then-exit: deterministic death confirmation");
+            return false;
+        }
+        const TailChild::WaitOutcome oo = child.wait_event("ENTERED ", kEventDeadline, &line);
+        check_msg(oo == TailChild::WaitOutcome::matched,
+                  std::string("event-then-exit: event written before death still recovered, got ") +
+                      wait_outcome_name(oo));
+        check_msg(line == "ENTERED 9 5 0",
+                  "event-then-exit: ordered-arm payload, got: " + line);
+        const ChildOutcome e2 = child.wait_exit(kExitDeadline);
+        check_msg(e2.kind == ChildOutcome::Kind::exited && e2.code == 0,
+                  "event-then-exit: ordered-arm sh exit 0, got " + e2.describe());
+        return oo == TailChild::WaitOutcome::matched && line == "ENTERED 9 5 0" &&
+               e2.kind == ChildOutcome::Kind::exited && e2.code == 0;
+    }
+}
+
+bool harness_non_target_event_before_death_is_not_matched() {
+    TailChild child;
+    if (!child.spawn("/bin/sh",
+                     {"-c", "printf 'PRE 1 0 0\\n' > \"$SLUICE_TAIL_TEST_EVT\"; exit 0"})) {
+        check_msg(false, "pre-then-exit: spawn sh");
+        return false;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const TailChild::WaitOutcome o = child.wait_event("ENTERED ", kEventDeadline);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    check_msg(o == TailChild::WaitOutcome::child_exited_before_event,
+              std::string("pre-then-exit: PRE never counts as ENTERED, got ") +
+                  wait_outcome_name(o));
+    check_msg(elapsed < 5s, "pre-then-exit: fast failure after death");
+    return o == TailChild::WaitOutcome::child_exited_before_event && elapsed < 5s;
+}
+
+bool harness_last_line_before_death_matched_and_partial_rejected() {
+    {
+        TailChild child;
+        if (!child.spawn("/bin/sh", {"-c", "printf 'T5-early\\nT5-FINAL-LINE\\n'"})) {
+            check_msg(false, "last-line: spawn sh");
+            return false;
+        }
+        const TailChild::WaitOutcome o = child.wait_line("T5-FINAL-LINE", kEventDeadline);
+        check_msg(o == TailChild::WaitOutcome::matched,
+                  std::string("last-line: complete final line delivered despite death, got ") +
+                      wait_outcome_name(o));
+        const ChildOutcome e = child.wait_exit(kExitDeadline);
+        check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 0,
+                  "last-line: sh exit 0, got " + e.describe());
+        if (!(o == TailChild::WaitOutcome::matched && e.kind == ChildOutcome::Kind::exited &&
+              e.code == 0))
+            return false;
+    }
+    {
+        TailChild child;
+        // Death is confirmed before any consumption: the complete line was
+        // fully written before exit, so wait_line must still recover it.
+        if (!child.spawn("/bin/sh", {"-c", "printf 'T5-JOIN\\nT5-FINAL-LINE\\n'"})) {
+            check_msg(false, "last-line: spawn sh for ordered arm");
+            return false;
+        }
+        if (!child.join_without_consuming(kEventDeadline)) {
+            check_msg(false, "last-line: deterministic death confirmation");
+            return false;
+        }
+        const TailChild::WaitOutcome o = child.wait_line("T5-FINAL-LINE", kEventDeadline);
+        check_msg(o == TailChild::WaitOutcome::matched,
+                  std::string("last-line: line written before death still recovered, got ") +
+                      wait_outcome_name(o));
+        if (o != TailChild::WaitOutcome::matched)
+            return false;
+    }
+    {
+        TailChild child;
+        if (!child.spawn("/bin/sh", {"-c", "printf 'T5-partial-no-newline'"})) {
+            check_msg(false, "last-line: spawn partial sh");
+            return false;
+        }
+        const auto start = std::chrono::steady_clock::now();
+        const TailChild::WaitOutcome o =
+            child.wait_line("T5-partial-no-newline-COMPLETE", kEventDeadline);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        check_msg(o == TailChild::WaitOutcome::child_exited_before_event,
+                  std::string("last-line: unterminated fragment never matches, got ") +
+                      wait_outcome_name(o));
+        check_msg(elapsed < 5s, "last-line: partial-line negative control fails fast");
+        return o == TailChild::WaitOutcome::child_exited_before_event && elapsed < 5s;
+    }
+}
+
+bool harness_live_child_keeps_full_event_deadline() {
+    TailChild child;
+    if (!child.spawn("/bin/sleep", {"60"})) {
+        check_msg(false, "live-timeout: spawn sleep");
+        return false;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const TailChild::WaitOutcome o = child.wait_event("ENTERED ", 600ms);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    check_msg(o == TailChild::WaitOutcome::event_timeout,
+              std::string("live-timeout: outcome is event_timeout, got ") +
+                  wait_outcome_name(o));
+    check_msg(elapsed >= 550ms,
+              "live-timeout: a live child keeps the requested wait window");
+    check_msg(elapsed < 5s, "live-timeout: timeout is bounded");
+    check_msg(child.alive(), "live-timeout: poll silence never classifies as death");
+    return o == TailChild::WaitOutcome::event_timeout && elapsed >= 550ms && elapsed < 5s &&
+           child.alive();
+}
+
+bool harness_watchdog_classification_survives_reentry_and_external_signals() {
+    {
+        TailChild child;
+        if (!child.spawn("/bin/sleep", {"60"})) {
+            check_msg(false, "watchdog-reentry: spawn sleep");
+            return false;
+        }
+        const ChildOutcome o1 = child.wait_exit(400ms);
+        check_msg(o1.kind == ChildOutcome::Kind::watchdog_killed,
+                  "watchdog-reentry: watchdog classification, got " + o1.describe());
+        const ChildOutcome o2 = child.wait_exit(kExitDeadline);
+        check_msg(o2.kind == ChildOutcome::Kind::watchdog_killed,
+                  "watchdog-reentry: re-entry returns the cached classification, got " +
+                      o2.describe());
+        check_msg(child.reaped(), "watchdog-reentry: child reaped");
+        int status = 0;
+        const pid_t r = ::waitpid(child.pid(), &status, WNOHANG);
+        check_msg(r < 0 && errno == ECHILD, "watchdog-reentry: no leftover child, no double reap");
+        if (!(o1.kind == ChildOutcome::Kind::watchdog_killed &&
+              o2.kind == ChildOutcome::Kind::watchdog_killed && child.reaped() && r < 0 &&
+              errno == ECHILD))
+            return false;
+    }
+    {
+        TailChild child;
+        if (!child.spawn("/bin/sleep", {"60"})) {
+            check_msg(false, "watchdog-reentry: spawn sleep for external kill");
+            return false;
+        }
+        ::kill(child.pid(), SIGKILL);
+        const ChildOutcome o = child.wait_exit(kExitDeadline);
+        check_msg(o.kind == ChildOutcome::Kind::signaled && o.code == SIGKILL,
+                  "watchdog-reentry: external SIGKILL is signaled(9), not watchdog_killed, got " +
+                      o.describe());
+        return o.kind == ChildOutcome::Kind::signaled && o.code == SIGKILL;
+    }
+}
+
+bool harness_descendant_holding_stdout_keeps_death_paths_bounded() {
+    {
+        TailChild child;
+        // The backgrounded sleep inherits stdout and holds the pipe write end
+        // for ~2s after sh exits; it self-terminates, so nothing leaks.
+        if (!child.spawn("/bin/sh", {"-c", "sleep 2 & exit 0"})) {
+            check_msg(false, "stdout-holder: spawn sh");
+            return false;
+        }
+        const auto start = std::chrono::steady_clock::now();
+        const ChildOutcome e = child.wait_exit(kExitDeadline);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        check_msg(e.kind == ChildOutcome::Kind::exited && e.code == 0,
+                  "stdout-holder: sh exit 0 while a descendant holds stdout, got " +
+                      e.describe());
+        check_msg(elapsed < 1500ms,
+                  "stdout-holder: reap+drain bounded while the 2s descendant still lives");
+        if (!(e.kind == ChildOutcome::Kind::exited && e.code == 0 && elapsed < 1500ms))
+            return false;
+    }
+    {
+        TailChild child;
+        if (!child.spawn("/bin/sh", {"-c", "sleep 2 & exit 0"})) {
+            check_msg(false, "stdout-holder: spawn sh for probe path");
+            return false;
+        }
+        const auto start = std::chrono::steady_clock::now();
+        while (child.alive() && std::chrono::steady_clock::now() - start < 1s)
+            ::usleep(10000);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        check_msg(elapsed < 1500ms,
+                  "stdout-holder: liveness-probe death path stays bounded");
+        check_msg(!child.alive(),
+                  "stdout-holder: liveness probe must observe the child's death");
+        return elapsed < 1500ms && !child.alive();
+    }
 }
 
 } // namespace
@@ -797,6 +1305,22 @@ int main() {
         {"harness_watchdog_selftest", harness_watchdog_selftest},
         {"harness_stderr_capture_selftest", harness_stderr_capture_selftest},
         {"harness_split_line_selftest", harness_split_line_selftest},
+        {"harness_death_aware_event_wait_reports_exit_and_stderr",
+         harness_death_aware_event_wait_reports_exit_and_stderr},
+        {"harness_exec_failure_is_detected_and_cached",
+         harness_exec_failure_is_detected_and_cached},
+        {"harness_event_fully_written_before_exit_is_still_delivered",
+         harness_event_fully_written_before_exit_is_still_delivered},
+        {"harness_non_target_event_before_death_is_not_matched",
+         harness_non_target_event_before_death_is_not_matched},
+        {"harness_last_line_before_death_matched_and_partial_rejected",
+         harness_last_line_before_death_matched_and_partial_rejected},
+        {"harness_live_child_keeps_full_event_deadline",
+         harness_live_child_keeps_full_event_deadline},
+        {"harness_watchdog_classification_survives_reentry_and_external_signals",
+         harness_watchdog_classification_survives_reentry_and_external_signals},
+        {"harness_descendant_holding_stdout_keeps_death_paths_bounded",
+         harness_descendant_holding_stdout_keeps_death_paths_bounded},
         {"finite_tail_and_cli_exit_codes", finite_tail_and_cli_exit_codes},
         {"cli_removed_workers_and_max_poll_stop", cli_removed_workers_and_max_poll_stop},
         {"cli_sigint_clean_exit", cli_sigint_clean_exit},
