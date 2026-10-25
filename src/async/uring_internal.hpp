@@ -80,57 +80,6 @@ inline constexpr bool cookie_terminal_is_canceled(const sluice::detail::IoOutcom
     return !t.succeeded && terminal_is_kernel_cancel(t.error);
 }
 
-#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
-
-// Research-only lookup probe counters (#580 R2). Not compiled into any
-// production or timing binary; the define exists only in the isolated
-// instrumentation build. All mutation happens under dispatch_mtx_.
-#include <atomic>
-
-namespace research {
-
-enum class LookupSite : unsigned {
-    op_cqe = 0,
-    control_cqe = 1,
-    mark_consumed_control = 2,
-    cancel_by_handle = 3,
-    poison_class_a = 4,
-    kSiteCount = 5,
-};
-
-struct LookupCounters {
-    std::atomic<std::uint64_t> attempts{0};
-    std::atomic<std::uint64_t> hits{0};
-    std::atomic<std::uint64_t> misses{0};
-    std::atomic<std::uint64_t> probe_sum{0};
-    std::atomic<std::uint64_t> probe_max{0};
-    std::atomic<std::uint64_t> live_at_attempt_sum{0};
-    // probe_hist[1..64] exact probe counts; probe_hist[65] = >64 probes.
-    std::atomic<std::uint64_t> probe_hist[66]{};
-};
-
-struct RouterCounters {
-    std::atomic<std::uint64_t> installs{0};
-    std::atomic<std::uint64_t> retires{0};
-    std::atomic<std::uint64_t> cq_operation{0};
-    std::atomic<std::uint64_t> cq_control{0};
-    std::atomic<std::uint64_t> cq_user_zero_dropped{0};
-    std::atomic<std::uint64_t> cancels_prepared{0};
-    std::atomic<std::uint64_t> cancel_intents_deferred{0};
-    std::atomic<std::uint64_t> router_capacity{0};
-};
-
-extern RouterCounters g_router_counters;
-extern LookupCounters g_lookup_counters[static_cast<unsigned>(LookupSite::kSiteCount)];
-extern LookupSite g_current_lookup_site;
-
-} // namespace sluice::async::research
-
-#define SLUICE_LOOKUP_SITE(s) (sluice::async::research::g_current_lookup_site = (s))
-#else
-#define SLUICE_LOOKUP_SITE(s) ((void)0)
-#endif
-
 class UringAsyncBackend::BoundedDispatchQueue {
   public:
     explicit BoundedDispatchQueue(std::size_t capacity) : storage_(capacity), capacity_(capacity) {}
