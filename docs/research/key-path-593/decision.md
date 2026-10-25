@@ -202,7 +202,7 @@ MEASUREMENT_REVIEW: 15 interleaved AB/BA pairs, 2 warmup + 7 measured, fresh pro
 REPRODUCIBILITY: patches rebuildable from BASE_SHA; K4-b round-trip verified, combo patch regenerated from the merge tree; harness archived under bench/research/key-path-593/harness (K2-a/K4-b/combo reducer shared; K1/K3 reducers copied; K4 reducer MISSING; hard-coded workspace paths; one-shot provenance); environment, protocol, reducers and binary hashes recorded; raw evidence (1.4 GB / 6,870 files) persists only at /home/jnhu/sluice-593-research/evidence on the E5 host — single copy, not replicated, not in CI artifacts, and the per-rep JSONL/perf data are NOT hash-anchored; only summaries/patches/identities are. EVIDENCE_PRESERVATION: PARTIAL.
 PRODUCT_CHANGE: NONE
 
-RESEARCH_PR: branch research/593-key-path at the frozen base (PR not opened in this run; push and PR creation are a subsequent step; no PR number exists). Once opened it must remain open and unmerged per brief §14.
+RESEARCH_PR: https://github.com/jnhu76/Sluice/pull/594 (branch research/593-key-path at the frozen base; opened and remains OPEN, unmerged per brief §14).
 PR_STATUS: OPEN_NOT_MERGED
 OWNER_DECISION: PENDING
 
