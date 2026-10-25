@@ -253,3 +253,67 @@ neither touching committed evidence:
 Archive acceptance (Gates A–F) results are recorded in the PR's archival
 commits and the archive index; the replay receipts are kept under
 `results/archive/`, distinct from historical evidence by construction.
+
+## R6 archive-stage adversarial review (same session — disclosure)
+
+**Channel disclosure.** The independent subagent channel failed four times
+("model concurrency limit exceeded": two parallel general-purpose agents,
+one sequential general-purpose agent, one Explore agent) — the same failure
+mode as the R9 review round. Both reviews below were therefore executed in
+this session as scripted adversarial re-verification: every check re-ran
+with fresh commands written for the review (not reused from the work), and
+the key figures were recomputed with pairing code written independently of
+the committed reducers. This is stronger than judgment-only self-review but
+is **not** a separate-reviewer guarantee; the owner may re-run both review
+scripts against the PR head (they are reproducible from this record).
+
+### Review A — repository safety: APPROVE
+
+- Production isolation: `git diff origin/master...HEAD` over `src/`,
+  `include/`, the v2 root spec, `xmake*`, tests, apps, CI = 0 lines;
+  non-research paths = 0 lines.
+- Patch identity: `research-gates-full.patch` byte-equals
+  `git diff 46157fd1 2c00c36a -- src/async/`; sha256
+  `3bb61fa2…fdd581` matches the pin inside `prepare-research-worktree.sh`;
+  all five gates present (17 instrument sites; WE-2/FALSE_MISS/SLOT_ONLY/
+  CLFLUSH in `uring_transport.cpp`).
+- Round-trip in a fresh worktree: apply → three-file identity changes →
+  reverse → identities restored exactly, `git status` clean.
+- Old patch retained unchanged (`69cc2fcb…`), lacks the clflush gate;
+  supersession documented in `archive-index.md` (line 21) and README.
+- Fail-closed: all four gate-dependent build scripts exit 2 with
+  FAIL-CLOSED messages on the unpatched PR branch; no runner contains any
+  write redirection into `docs/research/` (grep-verified per script).
+- `prepare-research-worktree.sh`: never writes into the caller's tracked
+  tree (receipts only under untracked `build-research/replay-archive/`);
+  cleanup removes only the worktree it created; `--keep` retains it and
+  prints the removal command; patch-SHA mismatch aborts before any
+  worktree is created.
+
+### Review B — scientific reproducibility: APPROVE
+
+- Manifest: 77/77 sha256 recomputed, 0 mismatch, 0 missing.
+- Stage-map references: all resolve (four apparent misses were
+  brace-glob/repo-root artifacts in the checker, files confirmed present).
+- Independent recompute (own pairing code, not the committed reducers):
+  R6 E5 `cancel-c1024` wall 0.9954 [0.9673, 1.0210] n=15 (published
+  [0.9673, 1.0212] — median exact, CI endpoints differ by one bootstrap
+  resample); R9 E5 net-wall `pipe_d512_ws16m` 0.9627 [0.9550, 0.9714] n=15
+  (published [0.955, 0.970]). Committed-reducer reruns (Gate E receipt)
+  reproduce the published intervals exactly.
+- Replay receipts: rebuilt `cache_ab` sha256 equals the historical
+  `r9_binaries.cache_ab_wsl` (byte-identical rebuild); oracle
+  baseline/we2/slot_only ALL GREEN 23/23; FALSE_MISS RED with 3 named s2
+  assertions — the named-assertion set is **identical** to the historical
+  E5 kill; trigger smoke ok / 0 misses / 1.000 lookups-per-install; both
+  cache smokes emit full timing records at ops=2000.
+- Verdict-scope phrases verified present in decision.md + README
+  (5.07%/5.8–9.8% D=512 share; ~30 ns per flushed line; capacity-gradient
+  differential for +8%/+29%; "never built or measured" for Candidates A/B
+  — line-wrapped, quote-verified); no unqualified "index would win" claim
+  anywhere in decision.md/README/cache-results.md.
+- Raw byte-stability: aa/ab pairs identical blobs at every branch commit;
+  cache-e5 stable from its R9 introduction through HEAD.
+
+**Both reviews: APPROVE. ARCHIVE_VERDICT: ARCHIVE_READY** subject to the
+channel disclosure above.
