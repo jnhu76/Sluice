@@ -1,0 +1,295 @@
+diff --git a/include/sluice/async/async_io_context.hpp b/include/sluice/async/async_io_context.hpp
+index 99cc5971..99bcb656 100644
+--- a/include/sluice/async/async_io_context.hpp
++++ b/include/sluice/async/async_io_context.hpp
+@@ -289,7 +289,7 @@ class AsyncIoContext {
+ 
+     // Exhaustion closes admission before the epoch domain can wrap; the
+     // source is a leaf and cannot reach the core itself.
+-    void close_admission_on_progress_exhaustion_() noexcept;
++    void close_admission_on_progress_exhaustion_(bool exhausted) noexcept;
+ 
+     bool backend_has_immediate_physical_work_() noexcept;
+ 
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..8a30c955 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -268,6 +268,16 @@ class ProgressSource {
+         return progress_exhaustion_ != 0;
+     }
+ 
++    // K3-a research fusion: wait health and exhaustion in one acquisition.
++    struct WaitVitals {
++        bool health_failed = false;
++        bool exhausted = false;
++    };
++    WaitVitals wait_vitals() const noexcept {
++        std::lock_guard<std::mutex> lk(mtx_);
++        return WaitVitals{health_failed_, progress_exhaustion_ != 0};
++    }
++
+     // The documented stale-readiness acknowledgement operation. Contexts and
+     // hosts drain through this path only; the fd itself is never a second
+     // drain authority.
+diff --git a/include/sluice/async/detail/request_core.hpp b/include/sluice/async/detail/request_core.hpp
+index ae12ff28..3076b90e 100644
+--- a/include/sluice/async/detail/request_core.hpp
++++ b/include/sluice/async/detail/request_core.hpp
+@@ -220,6 +220,13 @@ class RequestCore {
+     PublicationGrant begin_publication(RequestKey id, PublicationPayload* out) noexcept;
+     PublicationCompletion complete_publication(RequestKey id) noexcept;
+ 
++    // K3-a research fusion: health and outstanding in one lock acquisition.
++    struct HealthSummary {
++        bool health_failed = false;
++        std::size_t outstanding = 0;
++    };
++    HealthSummary health_summary() const noexcept;
++
+     ObserverRegistration register_observer(RequestKey id) noexcept;
+     ObserverDeliveryClaim claim_observer_delivery(RequestKey id) noexcept;
+     ObserverCancellation cancel_observer(RequestKey id) noexcept;
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..d48a4b13 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -325,6 +325,20 @@ class UringAsyncBackend : public AsyncBackend {
+     std::atomic<std::size_t> live_cookies_{0};
+     std::atomic<std::size_t> live_control_sqes_{0};
+ 
++    // K3-a research fusion: pass-tail facts written by poll()'s final
++    // critical section and consumed by poll_progress() on the same driver
++    // thread. The version guard keeps the report honest: every cross-thread
++    // mutation of summary-relevant state (dispatch/publication/owed/ledger/
++    // fatal) bumps dispatch_state_version_ under dispatch_mtx_, so a push
++    // after the tail forces the locked recompute instead of a stale report.
++    // The owed-sweep path leaves the facts invalid and recomputes.
++    bool tail_facts_valid_ = false;
++    bool tail_immediate_ = false;
++    bool tail_retry_ = false;
++    bool tail_health_ = false;
++    std::uint64_t tail_version_ = 0;
++    std::atomic<std::uint64_t> dispatch_state_version_{0};
++
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     std::atomic<SubmitEntryPauseGate*> submit_entry_gate_{nullptr};
+diff --git a/src/async/async_io_context.cpp b/src/async/async_io_context.cpp
+index 5105ec28..51067230 100644
+--- a/src/async/async_io_context.cpp
++++ b/src/async/async_io_context.cpp
+@@ -418,11 +418,14 @@ ProgressPass AsyncIoContext::run_progress_pass_() {
+     if (stats_)
+         ++stats_->poll_calls;
+     ProgressPass pass = backend_->poll_progress();
+-    pass.health_failed = pass.health_failed || core_->health_failed() ||
+-                         progress_->wait_health_failed();
++    // K3-a research fusion: the backends fold the core health verdict into
++    // pass.health_failed, and wait health shares one acquisition with the
++    // exhaustion check below.
++    const detail::ProgressSource::WaitVitals wait_vitals = progress_->wait_vitals();
++    pass.health_failed = pass.health_failed || wait_vitals.health_failed;
+     if (stats_)
+         stats_->completed_ops += pass.completed;
+-    close_admission_on_progress_exhaustion_();
++    close_admission_on_progress_exhaustion_(wait_vitals.exhausted);
+     return pass;
+ }
+ 
+@@ -434,8 +437,8 @@ Result<ProgressPass> AsyncIoContext::poll_progress() {
+     return run_progress_pass_();
+ }
+ 
+-void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
+-    if (core_ && progress_ && progress_->exhausted()) {
++void AsyncIoContext::close_admission_on_progress_exhaustion_(bool exhausted) noexcept {
++    if (core_ && exhausted) {
+         (void)core_->close_admission();
+     }
+ }
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index ee2f147a..d0603f3d 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -95,6 +95,11 @@ std::size_t RequestCore::outstanding_summary() const noexcept {
+     return outstanding_;
+ }
+ 
++RequestCore::HealthSummary RequestCore::health_summary() const noexcept {
++    std::lock_guard<std::mutex> lock(mutex_);
++    return HealthSummary{health_failed_, outstanding_};
++}
++
+ void RequestCore::collect_outstanding(std::vector<RequestKey>& out) const noexcept {
+     std::lock_guard<std::mutex> lock(mutex_);
+     for (std::size_t i = 0; i < slots_.size(); ++i) {
+diff --git a/src/async/threadpool_backend.cpp b/src/async/threadpool_backend.cpp
+index 515822ad..f825f243 100644
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -596,7 +596,12 @@ ProgressPass ThreadPoolBackend::poll_progress() {
+         pass.immediate_work_remains =
+             !publication_pending_.empty() || any_event_owed_locked_();
+     }
+-    pass.accepted_work_remains = core_ != nullptr && core_->outstanding_summary() != 0;
++    // K3-a research fusion: outstanding and core health in one core lock; the
++    // context composes the fused core health instead of re-reading it.
++    const detail::RequestCore::HealthSummary vitals =
++        core_ != nullptr ? core_->health_summary() : detail::RequestCore::HealthSummary{};
++    pass.accepted_work_remains = vitals.outstanding != 0;
++    pass.health_failed = vitals.health_failed;
+     return pass;
+ }
+ 
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..ed7fb50a 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -307,7 +307,24 @@ ProgressPass UringAsyncBackend::poll_progress() {
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+     wait_delivery_sweep_epilogue_pause_();
+ #endif
+-    {
++#if defined(SLUICE_K3A_MUTANT_TAIL_STALE_IGNORES_VERSION)
++    if (tail_facts_valid_) {
++#else
++    if (tail_facts_valid_ &&
++        dispatch_state_version_.load(std::memory_order_acquire) == tail_version_) {
++#endif
++        // K3-a research fusion: poll()'s final critical section already read
++        // these facts on this driver thread and no cross-thread mutation has
++        // touched summary-relevant state since; no second dispatch_mtx_ pass.
++        tail_facts_valid_ = false;
++        pass.immediate_work_remains = tail_immediate_;
++#if defined(SLUICE_URING_PROGRESS_MUTANT_TRANSPORT_RETRY_UNADVERTISED)
++        pass.dispatch_retry_remains = false;
++#else
++        pass.dispatch_retry_remains = tail_retry_;
++#endif
++        pass.health_failed = tail_health_;
++    } else {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+         pass.immediate_work_remains =
+             !publication_pending_->empty() || owed_visible_locked_();
+@@ -323,7 +340,12 @@ ProgressPass UringAsyncBackend::poll_progress() {
+     // A capped pass can leave reaped-eligible CQ entries behind; that
+     // leftover is immediate work the next pass owes.
+     pass.immediate_work_remains = pass.immediate_work_remains || has_immediate_physical_work();
+-    pass.accepted_work_remains = outstanding() != 0;
++    // K3-a research fusion: outstanding and core health in one core lock; the
++    // context composes the fused core health instead of re-reading it.
++    const detail::RequestCore::HealthSummary vitals =
++        core_ != nullptr ? core_->health_summary() : detail::RequestCore::HealthSummary{};
++    pass.accepted_work_remains = vitals.outstanding != 0;
++    pass.health_failed = pass.health_failed || vitals.health_failed;
+     return pass;
+ }
+ #endif
+@@ -566,6 +588,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+         DeliveryRecord& record = delivery_[h.slot.value];
+         record.event_owed = true;
+         record.owed_key = id;
++        dispatch_state_version_.fetch_add(1, std::memory_order_release);
+ #if !defined(SLUICE_URING_MUTANT_OWED_COUNT_MISSING_INCREMENT)
+         ++owed_count_;
+ #endif
+@@ -659,6 +682,13 @@ std::size_t UringAsyncBackend::poll() {
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+         owed_present = owed_count_ != 0;
++        if (!owed_present && !tail_facts_valid_) {
++            tail_immediate_ = !publication_pending_->empty() || owed_visible_locked_();
++            tail_retry_ = dispatch_retry_remains_locked_();
++            tail_health_ = fatal_error_.has_value();
++            tail_version_ = dispatch_state_version_.load(std::memory_order_relaxed);
++            tail_facts_valid_ = true;
++        }
+     }
+     if (owed_present) {
+         for (std::uint32_t i = 0; i < capacity_; ++i) {
+diff --git a/src/async/uring_completion.cpp b/src/async/uring_completion.cpp
+index df5b1baf..e5f9433b 100644
+--- a/src/async/uring_completion.cpp
++++ b/src/async/uring_completion.cpp
+@@ -90,6 +90,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
+         detail::uring_core_handoff_fail_fast();
+     }
+     publication_pending_->push_back(route.handle);
++    dispatch_state_version_.fetch_add(1, std::memory_order_release);
+ #endif
+     if (route.control_state == RouterEntry::ControlState::none) {
+         retire_router_entry_(router_index);
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..aa77e008 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -70,6 +70,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+ #endif
+         {
+             dispatch_->push_back(h);
++            dispatch_state_version_.fetch_add(1, std::memory_order_release);
+ 
+             const bool poisoned_before = fatal_error_.has_value();
+             if (poisoned_before) {
+@@ -197,6 +198,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+     const std::uint32_t physical_position =
+         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
++    dispatch_state_version_.fetch_add(1, std::memory_order_release);
+ 
+     if (!dispatch_->remove_exact(h)) {
+         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
+@@ -219,6 +221,7 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
+     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+ 
++    dispatch_state_version_.fetch_add(1, std::memory_order_release);
+     submit_flushes_.fetch_add(1, std::memory_order_relaxed);
+     int rc = 0;
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -338,6 +341,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
+     if (fatal_error_.has_value())
+         return;
+     fatal_error_ = error;
++    dispatch_state_version_.fetch_add(1, std::memory_order_release);
+     core_->note_health_failure();
+ 
+     // Every ledger entry still present here was resolved against the kernel
+@@ -594,6 +598,7 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
+                 detail::uring_core_handoff_fail_fast();
+             }
+             publication_pending_->push_back(detail::RequestReservation{key.slot, key.generation});
++            dispatch_state_version_.fetch_add(1, std::memory_order_release);
+         } else if (disposition == detail::PublicCancel::requested) {
+             issue_running_cancel_locked_(detail::RequestReservation{key.slot, key.generation});
+         }
+@@ -679,6 +684,7 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+     ::io_uring_prep_cancel64(sqe, target_cookie, 0);
+     ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
+     route.control_state = RouterEntry::ControlState::prepared;
++    dispatch_state_version_.fetch_add(1, std::memory_order_release);
+     if (route.control_pending) {
+         route.control_pending = false;
+ #if !defined(SLUICE_URING_MUTANT_PENDING_CONTROL_MISSING_DECREMENT)
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index 70327072..37778238 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -532,6 +532,16 @@ if has_config("liburing") then
+     uring_progress_target("uring_flush_count_oracle_test",
+                               R .. "tests/uring_flush_count_oracle_test.cpp")
+ 
++    -- K3-a research mutation builds (#593): the unlocked pass-tail consume
++    -- without the version guard reports a push-after-tail as absent; killed
++    -- by the owed-residue and external-loop boundary oracles. Manual only.
++    uring_progress_target("uring_owed_residue_mut_tail_stale",
++                              R .. "tests/uring_owed_residue_test.cpp",
++                              "SLUICE_K3A_MUTANT_TAIL_STALE_IGNORES_VERSION")
++    uring_progress_target("uring_external_loop_mut_tail_stale",
++                              R .. "tests/uring_external_loop_test.cpp",
++                              "SLUICE_K3A_MUTANT_TAIL_STALE_IGNORES_VERSION")
++
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of
+     -- the race suite; they are executed and recorded manually, never run as

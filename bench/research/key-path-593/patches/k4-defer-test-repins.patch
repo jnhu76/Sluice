@@ -1,0 +1,25 @@
+diff --git a/tests/uring_progress_race_test.cpp b/tests/uring_progress_race_test.cpp
+index 1cfb74a6..081c0ed2 100644
+--- a/tests/uring_progress_race_test.cpp
++++ b/tests/uring_progress_race_test.cpp
+@@ -996,7 +996,10 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
+         release_parked_owner(ctx, gate, owner);
+         return false;
+     }
+-    const bool peer_acceptance_entered_kernel = backend_ptr->sq_ready_for_test() == 0;
++    // K4-b research arm re-pin: with another accepted op in flight the peer's
++    // acceptance defers the kernel submit to a pass (one prepared SQE); the
++    // residue signal is the wake edge this scenario exercises.
++    const bool peer_acceptance_deferred_transport = backend_ptr->sq_ready_for_test() == 1;
+ 
+     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
+     first.release_bytes(1);
+@@ -1010,7 +1013,7 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
+         std::this_thread::sleep_for(std::chrono::microseconds(200));
+         all_ready = first.request.ready() && second.request.ready();
+     }
+-    const bool ok = peer_acceptance_entered_kernel &&
++    const bool ok = peer_acceptance_deferred_transport &&
+                     driver.value.has_value() &&
+                     driver.value->kind == WaitKind::progress && driver.value->completed >= 1 &&
+                     driver.elapsed_ms < 1000 && all_ready;

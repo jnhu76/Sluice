@@ -1,0 +1,241 @@
+diff --git a/include/sluice/async/detail/request_core.hpp b/include/sluice/async/detail/request_core.hpp
+index ae12ff28..d1c48ffe 100644
+--- a/include/sluice/async/detail/request_core.hpp
++++ b/include/sluice/async/detail/request_core.hpp
+@@ -219,6 +219,10 @@ class RequestCore {
+ 
+     PublicationGrant begin_publication(RequestKey id, PublicationPayload* out) noexcept;
+     PublicationCompletion complete_publication(RequestKey id) noexcept;
++    // Research #593 K1-b: the same transition, also reporting the
++    // armed-observer decision complete_publication already computes.
++    PublicationCompletion complete_publication(RequestKey id,
++                                               bool* observer_queued) noexcept;
+ 
+     ObserverRegistration register_observer(RequestKey id) noexcept;
+     ObserverDeliveryClaim claim_observer_delivery(RequestKey id) noexcept;
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..55640105 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -201,6 +201,9 @@ class UringAsyncBackend : public AsyncBackend {
+         // acquired before this flag is set and released after delivery.
+         bool event_owed = false;
+         detail::RequestKey owed_key{};
++        // K1-b elision: the armed-observer decision of the publication that
++        // owes this event (stable while event_owed pins the slot).
++        bool observer_armed = false;
+     };
+ 
+     class BoundedDispatchQueue;
+@@ -232,7 +235,11 @@ class UringAsyncBackend : public AsyncBackend {
+     void dispatch_after_accept(detail::RequestReservation h) noexcept;
+     void publish_zero_op_inline(detail::RequestKey id, detail::RequestReservation h) noexcept;
+     void publish_one(detail::RequestReservation h);
+-    void deliver_event(detail::RequestKey key, detail::OperationKind kind);
++    // K1-b research arm: `observer_armed` is complete_publication's decision;
++    // the observer claim/retire transitions run only when it can change state
++    // (armed observer, or a routing sink whose adapter observes delivery).
++    void deliver_event(detail::RequestKey key, detail::OperationKind kind,
++                       bool observer_armed);
+     detail::PublicCancel cancel_key(detail::RequestKey key) noexcept;
+ 
+     bool dispatch_one_locked(detail::RequestReservation h) noexcept;
+@@ -320,6 +327,15 @@ class UringAsyncBackend : public AsyncBackend {
+     mutable std::mutex dispatch_mtx_;
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
++    // K1-a elision: pass-boundary snapshot stores, sized once at construction
++    // so a pass performs no allocation after accepted work is queued.
++    std::unique_ptr<BoundedDispatchQueue> publish_batch_;
++    struct OwedDelivery {
++        detail::RequestKey key{};
++        detail::OperationKind kind = detail::OperationKind::read;
++        bool observer_armed = false;
++    };
++    std::vector<OwedDelivery> owed_batch_;
+ 
+     std::atomic<std::uint64_t> submit_flushes_{0};
+     std::atomic<std::size_t> live_cookies_{0};
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index ee2f147a..f3fdf86e 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -464,6 +464,11 @@ PublicationGrant RequestCore::begin_publication(RequestKey id, PublicationPayloa
+ }
+ 
+ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept {
++    return complete_publication(id, nullptr);
++}
++
++PublicationCompletion RequestCore::complete_publication(RequestKey id,
++                                                        bool* observer_queued) noexcept {
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -480,6 +485,9 @@ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept
+ #else
+     const bool queue_armed_observer = slot->observer_phase == ObserverPhase::armed;
+ #endif
++    if (observer_queued != nullptr) {
++        *observer_queued = queue_armed_observer;
++    }
+     if (queue_armed_observer) {
+         slot->observer_phase = ObserverPhase::queued;
+     }
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..53a7854f 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -168,6 +168,8 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     }
+     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
++    publish_batch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
++    owed_batch_.resize(config.request_capacity);
+     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) != 0) {
+         throw std::runtime_error(
+             "sluice::async::UringAsyncBackend: io_uring ring construction failed "
+@@ -558,7 +560,9 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+     if (core_->begin_publication(id, nullptr) != detail::PublicationGrant::granted) {
+         detail::uring_core_handoff_fail_fast();
+     }
+-    if (core_->complete_publication(id) != detail::PublicationCompletion::completed) {
++    bool observer_armed = false;
++    if (core_->complete_publication(id, &observer_armed) !=
++        detail::PublicationCompletion::completed) {
+         detail::uring_core_handoff_fail_fast();
+     }
+     {
+@@ -566,6 +570,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+         DeliveryRecord& record = delivery_[h.slot.value];
+         record.event_owed = true;
+         record.owed_key = id;
++        record.observer_armed = observer_armed;
+ #if !defined(SLUICE_URING_MUTANT_OWED_COUNT_MISSING_INCREMENT)
+         ++owed_count_;
+ #endif
+@@ -595,22 +600,34 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
+ 
+     wait_publication_epilogue_pause_();
+ #endif
+-    if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
++    bool observer_armed = false;
++    if (core_->complete_publication(key, &observer_armed) !=
++        detail::PublicationCompletion::completed) {
+         detail::uring_core_handoff_fail_fast();
+     }
+ #if defined(SLUICE_URING_MUTANT_PUBLISH_DELIVERS_FOREIGN_KEY)
+     deliver_event(detail::RequestKey{key.context, key.slot,
+                                      detail::Generation{key.generation.value + 1}},
+-                  kind);
++                  kind, true);
+ #else
+-    deliver_event(key, kind);
++    // K1-b: with no armed observer (and no routing sink) the claim/retire
++    // pair is a pure no-op query; the decision is the one complete_publication
++    // already made under the same core lock. The sink notification itself is
++    // an independent obligation and always runs.
++    deliver_event(key, kind, observer_armed);
+ #endif
+ }
+ 
+-void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
+-    (void)core_->claim_observer_delivery(key);
++void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind,
++                                      bool observer_armed) {
++    const bool core_transition = observer_armed || routing_sink_ != nullptr;
++    if (core_transition) {
++        (void)core_->claim_observer_delivery(key);
++    }
+     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+-    (void)core_->retire_observer_delivery(key);
++    if (core_transition) {
++        (void)core_->retire_observer_delivery(key);
++    }
+ }
+ 
+ std::size_t UringAsyncBackend::poll() {
+@@ -637,35 +654,22 @@ std::size_t UringAsyncBackend::poll() {
+ 
+     std::size_t published = 0;
+     std::size_t pass_bound = 0;
++    std::size_t owed_bound = 0;
++    // Same pass boundary as the reap: the entry snapshot is the boundary, so
++    // entries pushed during this pass (or during the delivery below) are the
++    // next pass's immediate work. Both snapshot stores are preallocated, and
++    // no hook runs under the lock.
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+         pass_bound = publication_pending_->size();
+-    }
+-    // Same pass boundary as the reap: entries pushed during this pass are the
+-    // next pass's immediate work.
+-    for (std::size_t n = 0; n < pass_bound; ++n) {
+-        detail::RequestReservation h{};
+-        bool have = false;
+-        {
+-            std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-            have = publication_pending_->pop_front(h);
++        for (std::size_t n = 0; n < pass_bound; ++n) {
++            detail::RequestReservation h{};
++            if (!publication_pending_->pop_front(h))
++                break;
++            publish_batch_->push_back(h);
+         }
+-        if (!have)
+-            break;
+-        publish_one(h);
+-        ++published;
+-    }
+-    bool owed_present = false;
+-    {
+-        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-        owed_present = owed_count_ != 0;
+-    }
+-    if (owed_present) {
+-        for (std::uint32_t i = 0; i < capacity_; ++i) {
+-            detail::RequestKey owed{};
+-            detail::OperationKind owed_kind = detail::OperationKind::read;
+-            {
+-                std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        if (owed_count_ != 0) {
++            for (std::uint32_t i = 0; i < capacity_; ++i) {
+                 DeliveryRecord& record = delivery_[i];
+                 if (!record.event_owed)
+                     continue;
+@@ -673,17 +677,28 @@ std::size_t UringAsyncBackend::poll() {
+ #if !defined(SLUICE_URING_MUTANT_OWED_COUNT_MISSING_DECREMENT)
+                 --owed_count_;
+ #endif
+-                owed = record.owed_key;
++                owed_batch_[owed_bound] = OwedDelivery{record.owed_key, record.kind,
++                                                       record.observer_armed};
+                 record.owed_key = {};
+-                owed_kind = record.kind;
++                ++owed_bound;
+             }
+-            deliver_event(owed, owed_kind);
+-            if (core_->release_control(owed) != detail::ControlRelease::released) {
+-                detail::uring_core_handoff_fail_fast();
+-            }
+-            ++published;
+         }
+     }
++    for (std::size_t n = 0; n < pass_bound; ++n) {
++        detail::RequestReservation h{};
++        if (!publish_batch_->pop_front(h))
++            break;
++        publish_one(h);
++        ++published;
++    }
++    for (std::size_t n = 0; n < owed_bound; ++n) {
++        const OwedDelivery& owed = owed_batch_[n];
++        deliver_event(owed.key, owed.kind, owed.observer_armed);
++        if (core_->release_control(owed.key) != detail::ControlRelease::released) {
++            detail::uring_core_handoff_fail_fast();
++        }
++        ++published;
++    }
+ 
+     return published;
+ }
