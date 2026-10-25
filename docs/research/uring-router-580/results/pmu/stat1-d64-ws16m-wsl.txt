@@ -1,0 +1,5 @@
+{"kind":"timed","label":"pmu_ws16m","scenario":"pipeline","pin":"single","side":"submitter","capacity":64,"depth":64,"ops":40000,"payload":4096,"ws_bytes":16777216,"ws_per_op":4096,"warmup":2000,"completed_ops":40000,"bytes_verified":163840000,"wall_s":0.349695,"user_s":0.104614,"sys_s":0.244927,"interf_s":0.003782,"net_wall_s":0.345913,"sink":1784875377180662058,"notifications":0,"passes":0,"ok":true,"failure":"","warmup_failure":""}
+297943452,,cycles:u,375578545,100.00,,
+1267913664,,instructions:u,375578545,100.00,4.26,insn per cycle
+270165854,,L1-dcache-loads,375578545,100.00,,
+5418716,,L1-dcache-load-misses,375578545,100.00,2.01,of all L1-dcache accesses

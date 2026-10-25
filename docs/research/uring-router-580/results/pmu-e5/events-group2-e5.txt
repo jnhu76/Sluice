@@ -1,0 +1,4 @@
+1156,,LLC-loads:u,785393,100.00,,
+86,,LLC-load-misses:u,785393,100.00,,
+2440,,branch-misses:u,785393,100.00,,
+437,,cache-misses:u,785393,100.00,,

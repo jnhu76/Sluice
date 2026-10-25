@@ -1,0 +1,31 @@
+{
+ "what": "sluice #580 research worktree receipt (rebuilt, not historical)",
+ "mode": "replay",
+ "base_sha": "46157fd1f4a1a4afec22d8834c86462b245b576b",
+ "patch_sha256": "3bb61fa211e62721e13b0020cf7a9a67009195d2c1b5375330edcdd4e8fdd581",
+ "instrument_gate_sites": 17,
+ "gates": [
+  "SLUICE_URING_LOOKUP_INSTRUMENT",
+  "SLUICE_580_WE2_REVERSE_CANCEL_SCAN",
+  "SLUICE_580_MUTANT_FALSE_MISS",
+  "SLUICE_580_MUTANT_SLOT_ONLY",
+  "SLUICE_580_CLFLUSH_ROUTER"
+ ],
+ "compiler": "g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+ "binaries": {
+  "cache_ab": "ea2e36373329f58b8540acbb9265d8d804d0c06f30b5c28103629f314b47bfba",
+  "cache_ab_aa_alpha": "ea2e36373329f58b8540acbb9265d8d804d0c06f30b5c28103629f314b47bfba",
+  "cache_ab_aa_beta": "ea2e36373329f58b8540acbb9265d8d804d0c06f30b5c28103629f314b47bfba",
+  "cache_ab_flush": "32024538195a93a65a310cad489dfd1f2ee3fcf94f2be0ee4ddf029e4b041f89",
+  "cache_probe": "99cc0b8b91c50433f5660d03f31a11862077c00fb72cad7fb853fc3cd859c9ab",
+  "lookup_probe": "f4d8764ac4498d43617c23a67bea6e757cf8464b3d0f231d015285dff18a38e6",
+  "oracle_baseline": "1259f5652143f2c79462fbaedf9ad8b24f665a67067e9a574e5dd36953b6a5ec",
+  "oracle_false_miss": "f374da943055c71c3800745315a848ab869a5d54fd3c2254f3f214b2b7584e65",
+  "oracle_slot_only": "7a8e67a9bc7d360516b8c59a6a6959fcc1ef5b3cd3c58aa038e0214bc07a86a7",
+  "oracle_we2": "1fdd7fc06ce7eb79fe8808f50d4930d47bab013ecf5133fc06d5b46a7f50b1e6",
+  "router_ab_baseline": "374097c718826dc7e36afef9f237c56b7b0fb99951ac9bd8a8bca1aa073c6d4a",
+  "router_ab_we2": "5c344fb790947686c333c5feb80a5c711b8de5239d2753c0082f6de3014dc3c5"
+ },
+ "replay": "PASS",
+ "timestamp_utc": "2026-10-25T11:28:49Z"
+}

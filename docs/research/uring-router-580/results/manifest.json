@@ -1,0 +1,503 @@
+{
+ "archive": {
+  "evidence_map": "docs/research/uring-router-580/archive-index.md",
+  "production_src_diff_after_archive": "zero (src/async files byte-identical to master 46157fd1)",
+  "reproduction_entry": "bench/research/uring-router-580/prepare-research-worktree.sh",
+  "research_gates_full_patch": {
+   "admission": "fresh-worktree round-trip: base -> apply -> gates verified -> reverse -> base identities exact",
+   "generated_from": "git diff 46157fd1 2c00c36a -- src/async/",
+   "path": "docs/research/uring-router-580/patches/research-gates-full.patch",
+   "sha256": "3bb61fa211e62721e13b0020cf7a9a67009195d2c1b5375330edcdd4e8fdd581"
+  },
+  "superseded_patch": {
+   "note": "R0-R8-era subset; delta vs full patch is exactly the SLUICE_580_CLFLUSH_ROUTER block; retained for provenance",
+   "path": "docs/research/uring-router-580/patches/instrumentation-and-arm-gates.patch",
+   "sha256": "69cc2fcba2a1ab7169a58f9328c5dbeec6c29ad335c8341c6b293d1a8e95e291"
+  }
+ },
+ "baseline_master_sha": "46157fd1f4a1a4afec22d8834c86462b245b576b",
+ "codegen_identity_proof": {
+  "claim": "worktree sources compiled with no research defines are byte-identical to pristine master",
+  "host": "E5 gcc 16.2.1",
+  "objects": {
+   "uring_completion.cpp": "da1c76d3ab8ddb350ea6c5c4218f32c6fbdbed61ec7379fe64715b99bfbc5bf3",
+   "uring_transport.cpp": "3a6c6852f29c6d64f0af7c4b53d351b054cd9ecc25edf6a18cb399e0fc508c5d"
+  },
+  "patched_header": "uring_internal.hpp (gated block vanishes at preprocessing)"
+ },
+ "correction_notes": [
+  "archive stage: five doc-file entries (source-dag, trigger, lifecycle-cost, correctness-oracles, wsl-results) recorded pre-commit worktree hashes matching no committed state; re-hashed from HEAD, stale values kept as superseded_sha256"
+ ],
+ "files": [
+  {
+   "bytes": 6303,
+   "path": "cache-experiment.md",
+   "sha256": "04d2a8fb70f1c1dd38d2a2ae6bfda5fa472323cf5f4a550c7887220a69058689"
+  },
+  {
+   "bytes": 6951,
+   "path": "cache-locality-audit.md",
+   "sha256": "996de4e6c01c33acdc3b7e9003f8bd9f48e928543d68f8560b55969df1c938ba"
+  },
+  {
+   "bytes": 15977,
+   "path": "cache-results.md",
+   "sha256": "4727e1d73e819e18c657a7af354b1b61a8438dcf9fd7d008a4bb466a6f8e0732"
+  },
+  {
+   "bytes": 5188,
+   "note": "archive correction: stale since the R0-R8 commit; re-hashed from the committed file",
+   "path": "correctness-oracles.md",
+   "sha256": "1f6eee3c83201bc7865e94b0968a2e84a953b6ee6ce23272eb4961d34694a262",
+   "superseded_sha256": "42d7e472e687a6a49e1a2f9e0a00eecc516ad3768cf6d1308c33efe7da8e4a60"
+  },
+  {
+   "bytes": 4481,
+   "path": "design-alternatives.md",
+   "sha256": "7bff1b29ea22051a5d6fefaad149132ceb3715124a4589cdaee93ea4913144c9"
+  },
+  {
+   "bytes": 8115,
+   "path": "environment.md",
+   "sha256": "6d6fd3800fd7c898ab46d7d4be108342da0bf3043a8c1117d30546bf8d469ae5"
+  },
+  {
+   "bytes": 6078,
+   "note": "archive correction: stale since the R0-R8 commit; re-hashed from the committed file",
+   "path": "lifecycle-cost.md",
+   "sha256": "a1bfadb737976b0609d73b45cafec66b73a87bdfec0e0f90e5b72caab8c182d5",
+   "superseded_sha256": "2bcd572002d2c593d75e2683e892ed06b807bfa5d165665cca8468d31cf39337"
+  },
+  {
+   "bytes": 10859,
+   "path": "patches/instrumentation-and-arm-gates.patch",
+   "sha256": "69cc2fcba2a1ab7169a58f9328c5dbeec6c29ad335c8341c6b293d1a8e95e291"
+  },
+  {
+   "bytes": 19744,
+   "path": "results/aa-pairs.jsonl",
+   "sha256": "525b808193afeadcb111977fffb967ae9a1ee427d512389a54398cd3efa448fa"
+  },
+  {
+   "bytes": 28980,
+   "path": "results/ab-pairs.jsonl",
+   "sha256": "6270145b0df5a6d19b35da85f80f9d6a0a66bc7476a253f4a2c6acfa27812768"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/gate-e-reproduction.md",
+   "sha256": "f5db66e8275e0a5d439911117cfaa771033f56657f2ed2bc1f1bb1aefafe242f"
+  },
+  {
+   "note": "archive hardening counterfactuals (owner review P2/P3)",
+   "path": "results/archive/hardening-counterfactuals.md",
+   "sha256": "ee6e0ffdf59edcba601b8aa238ae2dc2ffb3579c350814292d7a5b2dc2248432"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay-receipt-wsl.json",
+   "sha256": "6ba07c4e3e2f5ffc1861e9f1740149892b84be8fdf604b464c3dbe95c61c8cd0"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/cache-smoke-cache_ab.json",
+   "sha256": "379eb7615816a001acd5a1c50e1ca4007805f8fc137ad371c2d499a1dd3acc78"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/cache-smoke-cache_ab_flush.json",
+   "sha256": "5c2e14d94d561f9cd63de358dc9474f91ffc2fbec88808d75ed6eb87756aca70"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/oracle_baseline.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/oracle_false_miss.log",
+   "sha256": "d609db05287d082780223d11b8f2bb33f900d1bf39596ee59aecacbb2825d145"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/oracle_slot_only.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/oracle_we2.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "note": "archive-stage receipt, not historical evidence",
+   "path": "results/archive/replay/trigger-smoke.json",
+   "sha256": "603e48f810baefeb8040d4781ed2c77afec58c32b0685bc534fd958c44a0a1da"
+  },
+  {
+   "bytes": 19140,
+   "path": "results/cache-e5-reduced.json",
+   "sha256": "ea74a2b4024524479a5f92ee1fd0116a6cd39103d5d571250eae2f22c8e96223"
+  },
+  {
+   "bytes": 344581,
+   "path": "results/cache-e5.jsonl",
+   "sha256": "2fe174a3d11a711ae79232ef0a34576214c42579f5f002610845db9fbdeb96b6"
+  },
+  {
+   "bytes": 35649,
+   "path": "results/cache-flush-sweep-e5.jsonl",
+   "sha256": "46aaf06dc57a39821e88799cb591810d9dc1ede1c29ecc6230ea4e20c9cb2f5b"
+  },
+  {
+   "bytes": 35666,
+   "path": "results/cache-flush-sweep-wsl.jsonl",
+   "sha256": "165895abeb87c3533a017cf6bf793a99b14bea4ab38dcd8a7000adbf429161e6"
+  },
+  {
+   "bytes": 19119,
+   "path": "results/cache-wsl-reduced.json",
+   "sha256": "caa2ade809bb9740e3133e99ccd698363d6d2919f2afb34b4035d6763206c22b"
+  },
+  {
+   "bytes": 344738,
+   "path": "results/cache-wsl.jsonl",
+   "sha256": "518c3f56b1bf8e52c8b2742f3dac86c34e0b856d938c84861c2ee9893ddce553"
+  },
+  {
+   "bytes": 1444,
+   "path": "results/disasm_find_live_router_index_baseline.txt",
+   "sha256": "3e26201c9b9d6ebafd56f3db45f4ca003ec530965c35e8ecf20e316fa69bcd44"
+  },
+  {
+   "bytes": 1582,
+   "path": "results/disasm_find_live_router_index_we2.txt",
+   "sha256": "7f25ba41ade67faf5c0b5511d650ca26c4417d9bc5a1f520cd2467fe1ec68673"
+  },
+  {
+   "bytes": 19746,
+   "path": "results/e5/aa-pairs-e5.jsonl",
+   "sha256": "347ca2cd52029423aa42e2195f957322aaa2a45e4f567889f0d9142bbca2d2e4"
+  },
+  {
+   "bytes": 28988,
+   "path": "results/e5/ab-pairs-e5.jsonl",
+   "sha256": "a6eceafc10f8881e76843018221c7602a71006e15b6e8b4871823b44f0e6a8cf"
+  },
+  {
+   "bytes": 1081,
+   "path": "results/e5/conformance_e5_baseline.log",
+   "sha256": "7b2a8b9372a59966df1fb4e3648b15c4fa14097ef9365925c974215a77dc64c2"
+  },
+  {
+   "bytes": 1081,
+   "path": "results/e5/conformance_e5_we2.log",
+   "sha256": "7b2a8b9372a59966df1fb4e3648b15c4fa14097ef9365925c974215a77dc64c2"
+  },
+  {
+   "bytes": 1734,
+   "path": "results/e5/disasm_find_live_router_index_baseline.txt",
+   "sha256": "01bd28281cc2e6661f04189fbea8eb6aef646d51aa36a111b7c846a68ed4ba7b"
+  },
+  {
+   "bytes": 1571,
+   "path": "results/e5/disasm_find_live_router_index_we2.txt",
+   "sha256": "53b33907fbcb3cb6c235d973c1bd34604d67f79c01c532dea5f9f8c6e850980b"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_baseline.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_baseline_restore.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 541,
+   "path": "results/e5/oracle_false_miss.log",
+   "sha256": "d609db05287d082780223d11b8f2bb33f900d1bf39596ee59aecacbb2825d145"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_slot_only.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 1119,
+   "path": "results/e5/oracle_we2.log",
+   "sha256": "6552b4e6f8260348a90608f3bef00132dde036b6fd0367a88c2b17c66beaa121"
+  },
+  {
+   "bytes": 36820,
+   "path": "results/e5/trigger-matrix-e5.jsonl",
+   "sha256": "1e513596121b00c3a00769f76435afc67a01192bd48bbbf981375f0c11818306"
+  },
+  {
+   "bytes": 36820,
+   "path": "results/e5/trigger-matrix.jsonl",
+   "sha256": "1e513596121b00c3a00769f76435afc67a01192bd48bbbf981375f0c11818306"
+  },
+  {
+   "bytes": 202,
+   "path": "results/pmu/events-group1-wsl.txt",
+   "sha256": "b10e8680094c736e98131002b1fd652f51db390305cb8fd055214e24cbab4059"
+  },
+  {
+   "bytes": 157,
+   "path": "results/pmu/events-group2-wsl.txt",
+   "sha256": "6dafcb46d7e3001d4e16f6ec8b1a8f6b18ca193c6aea6b94b37afbcaa1f3696d"
+  },
+  {
+   "bytes": 33984,
+   "path": "results/pmu/record-d512-warm-wsl.data",
+   "sha256": "c65b522998debef85c8e85daa1ae14f7c13bd17cd5669c1ffd961d71da730d3b"
+  },
+  {
+   "bytes": 31704,
+   "path": "results/pmu/record-d512-ws16m-wsl.data",
+   "sha256": "a6d2dbe3436ec859add5a5b8fb2fdaeff6a4b1803aba60bbdab7137b73401cdd"
+  },
+  {
+   "bytes": 34744,
+   "path": "results/pmu/record-d64-warm-wsl.data",
+   "sha256": "30179923ca09db3b1167310a7e45e0311e0a05f5959fb9a4f6aa29956fd6962f"
+  },
+  {
+   "bytes": 35708,
+   "path": "results/pmu/record-d64-ws16m-wsl.data",
+   "sha256": "34c0733064224d269106f02be0f9fcd1516a043ffb86e1a20d00c4fc2cc5652d"
+  },
+  {
+   "bytes": 102228,
+   "path": "results/pmu/record-long-d512-warm-wsl.data",
+   "sha256": "49647f5c40375534735b72c7752570dc81af40cae15a575125d4d286fcfa5e85"
+  },
+  {
+   "bytes": 105228,
+   "path": "results/pmu/record-long-d512-ws16m-wsl.data",
+   "sha256": "72d35f94f69dcc6adcde5fe1ae37002ebfc884ebb57947d3cd8af52540c7895a"
+  },
+  {
+   "bytes": 120988,
+   "path": "results/pmu/record-long-d64-warm-wsl.data",
+   "sha256": "188210beff55390de0710fc303c9ed5e90ce0080f2daf1ba77c361864a5ef8ab"
+  },
+  {
+   "bytes": 608,
+   "path": "results/pmu/record-long-run-d512-warm-wsl.txt",
+   "sha256": "dda5c210893ef1142de5b2e213e9d229888b4e62d660f9ac28aa3e8512d05617"
+  },
+  {
+   "bytes": 635,
+   "path": "results/pmu/record-long-run-d512-ws16m-wsl.txt",
+   "sha256": "1df25e630e1c15904218dee908454f14c1c60d2c0eb185ceaf6b53d50b9420c3"
+  },
+  {
+   "bytes": 604,
+   "path": "results/pmu/record-long-run-d64-warm-wsl.txt",
+   "sha256": "80f5fb1f5afc6f00a38fd036edbf7d21aadc2a2d62ef1711c819370452d64e6e"
+  },
+  {
+   "bytes": 591,
+   "path": "results/pmu/record-run-d512-warm-wsl.txt",
+   "sha256": "be7527913b320bb70c599bf8a842776c88ae31854ba3acbe6368925a1f1929b7"
+  },
+  {
+   "bytes": 618,
+   "path": "results/pmu/record-run-d512-ws16m-wsl.txt",
+   "sha256": "c5f040684bd106a1e4223b7c25cc806c74b523e06a644e8cc793af15fa8db5ec"
+  },
+  {
+   "bytes": 588,
+   "path": "results/pmu/record-run-d64-warm-wsl.txt",
+   "sha256": "c19017f490bc03777c56f27ac75701fcacdeae94179091ce3d503f66d440988f"
+  },
+  {
+   "bytes": 615,
+   "path": "results/pmu/record-run-d64-ws16m-wsl.txt",
+   "sha256": "7a092e74f257f421ce584aacabe3818712d9ac2267337bea5fef57664ac5d3d0"
+  },
+  {
+   "bytes": 10899,
+   "path": "results/pmu/report-d512-warm-wsl.txt",
+   "sha256": "d2d00eebe61d158f3c38c80fe037f466f88da1d8480ead51211a36efff6662d2"
+  },
+  {
+   "bytes": 10899,
+   "path": "results/pmu/report-d512-ws16m-wsl.txt",
+   "sha256": "bc4b81f76678d2133e87acd7f807e92a8cfc13bbd9dac183e5fbd0be33fa5e8b"
+  },
+  {
+   "bytes": 12038,
+   "path": "results/pmu/report-d64-warm-wsl.txt",
+   "sha256": "659fa829e1ea081e2cc747374010e24ad5cc8656096a84ca31bfac91f9c469ff"
+  },
+  {
+   "bytes": 13713,
+   "path": "results/pmu/report-d64-ws16m-wsl.txt",
+   "sha256": "78058bb1b0b0170c75345b55319ada3fb5cac06ea8825e1c3bac42e6f704a39b"
+  },
+  {
+   "bytes": 1181,
+   "path": "results/pmu/report-long--wsl.txt",
+   "sha256": "04d0e8a3212501526ba20ce1a31b591ac76041f259991bae1a428deb7d179151"
+  },
+  {
+   "bytes": 23494,
+   "path": "results/pmu/report-long-d512-warm-wsl.txt",
+   "sha256": "1dc0ecc1389b0083b34e51ebaf7822cc3d0ab62f42d6abe254cb8913bd44f198"
+  },
+  {
+   "bytes": 23025,
+   "path": "results/pmu/report-long-d512-ws16m-wsl.txt",
+   "sha256": "5914c5bf76faca10df4efaea3170a0a99506d52011a25b59c5efd4bb188fa769"
+  },
+  {
+   "bytes": 29256,
+   "path": "results/pmu/report-long-d64-warm-wsl.txt",
+   "sha256": "bc8b45cc3bfdddeffed2b1f08a85d9eb6c80490e1ff311436b9b7d93dcf1f576"
+  },
+  {
+   "bytes": 352,
+   "path": "results/pmu/shares-wsl.txt",
+   "sha256": "ba82cc00632929408625deb4876ce3c032556f5502e39e3bc6f8cdb69cd2979e"
+  },
+  {
+   "bytes": 644,
+   "path": "results/pmu/stat1-d512-warm-wsl.txt",
+   "sha256": "cfb419c8a38145ad2b8c8c286cdd366e6ff7106755b269ddd541dca4e4acf1f7"
+  },
+  {
+   "bytes": 670,
+   "path": "results/pmu/stat1-d512-ws16m-wsl.txt",
+   "sha256": "17b939ef659c6a610e35c813570043a087056ccc01619a4c8aba4939b56cfd21"
+  },
+  {
+   "bytes": 641,
+   "path": "results/pmu/stat1-d64-warm-wsl.txt",
+   "sha256": "384039864c0e4226913a974fc35168c8cb2174501d6c6513316ac605d87626a6"
+  },
+  {
+   "bytes": 667,
+   "path": "results/pmu/stat1-d64-ws16m-wsl.txt",
+   "sha256": "9153f56b906a22dbbc8de0f148717689c217a6b58e53465d26002b6191310b76"
+  },
+  {
+   "bytes": 583,
+   "path": "results/pmu/stat2-d512-warm-wsl.txt",
+   "sha256": "393be09038c15543d565bf75149a0311628f7a581f3de690f93b5d67db95a6ce"
+  },
+  {
+   "bytes": 609,
+   "path": "results/pmu/stat2-d512-ws16m-wsl.txt",
+   "sha256": "180c0f0bd7cf845120143d72a3176cb6471e786e1420486d30e1cc1e786467cc"
+  },
+  {
+   "bytes": 581,
+   "path": "results/pmu/stat2-d64-warm-wsl.txt",
+   "sha256": "cacf5beebbc3034f2093be032c7dbcbfc0bed6de4018389732c6c3f267a39227"
+  },
+  {
+   "bytes": 607,
+   "path": "results/pmu/stat2-d64-ws16m-wsl.txt",
+   "sha256": "ce139fcb615399e342d90e35dd6f12f5d0150645a030c766ecf685ec47272732"
+  },
+  {
+   "bytes": 36813,
+   "path": "results/trigger-matrix.jsonl",
+   "sha256": "a953039769400c6e3acdc6f8b9d825d5f737c4f2402c06c0c4fda86b2daf4c53"
+  },
+  {
+   "bytes": 14885,
+   "note": "archive correction: stale since the R0-R8 commit; re-hashed from the committed file",
+   "path": "source-dag.md",
+   "sha256": "7b020bcf8bd16904a2fa603d6e360fbefeec02094d4fdc7a64568ad3dfcf2ded",
+   "superseded_sha256": "12ccccf8c66f97c57d8aea926b6132947d635eab3bdb79fd95bc79d355b98b46"
+  },
+  {
+   "bytes": 6965,
+   "note": "archive correction: stale since the R0-R8 commit; re-hashed from the committed file",
+   "path": "trigger.md",
+   "sha256": "7f960395c1045833038d609fa15c5d76aed28223f18e44eac0f2ed4263003c7c",
+   "superseded_sha256": "4cc9af33578ee66992bf512e1bd893a31ad575ef93da1a7557d9f3c6f916914f"
+  },
+  {
+   "bytes": 5328,
+   "note": "archive correction: stale since the R0-R8 commit; re-hashed from the committed file",
+   "path": "wsl-results.md",
+   "sha256": "21083c6f51e2a24cfc40bc9d85e729123b49398d258d50563ab23c3f0b371d2a",
+   "superseded_sha256": "da97060cd79a5d80aece042b472cae24ea29e60be8fec7de227a16cb7dc3e153"
+  }
+ ],
+ "hosts": {
+  "e5": {
+   "binaries": {
+    "router_ab_baseline": "b03f44b0830723a08d04895fa5e4120af0af2a5bb6d6e109d7f8bf4a27b5f25c",
+    "router_ab_we2": "96417472a4e7238726b228afa96a269e09f03687a1c75143cccbdd054623c990"
+   },
+   "gcc": "16.2.1",
+   "kernel": "7.2.11-200.fc44.x86_64",
+   "liburing": "2.13"
+  },
+  "wsl2": {
+   "binaries": {
+    "router_ab_baseline": "374097c718826dc7e36afefef9f237c56b7b0fb99951ac9bd8a8bca1aa073c6d4a",
+    "router_ab_we2": "5c344fb790947686c333c5feb80a5c711b8de5239d2753c0082f6de3014dc3c5"
+   },
+   "gcc": "15.2.0",
+   "kernel": "6.18.54.1-microsoft-standard-WSL2",
+   "liburing": "2.14"
+  }
+ },
+ "issue": "jnhu76/Sluice#580",
+ "r9_baseline": {
+  "branch_base_at_r8": "ca1e7c67",
+  "master": "46157fd1f4a1a4afec22d8834c86462b245b576b",
+  "r9_changes": "SLUICE_580_CLFLUSH_ROUTER gate in uring_transport.cpp + bench/research/uring-router-580/cache_router.cpp and R9 scripts"
+ },
+ "r9_binaries": {
+  "cache_ab_e5": "7523b035ea326c0ee769210b0142630b52b0f866fde26e1ea5389ce76a98c332",
+  "cache_ab_flush_e5": "d6164e3bd54f793e76501754e2919cb53d218e9b5cac845c6ecec0df14a82380",
+  "cache_ab_flush_wsl": "32024538195a93a65a310cad489dfd1f2ee3fcf94f2be0ee4ddf029e4b041f89",
+  "cache_ab_wsl": "ea2e36373329f58b8540acbb9265d8d804d0c06f30b5c28103629f314b47bfba",
+  "cache_probe_e5": "c8bbb515b24c7b7345dd3dcde1d2197f59b65acf80aef1bfbfa04047929bb33c",
+  "cache_probe_wsl": "99cc0b8b91c50433f5660d03f31a11862077c00fb72cad7fb853fc3cd859c9ab",
+  "sha_correction_note": "delta review: WSL SHAs re-recorded from the post-rebuild binaries that produced the committed results; see environment.md correction note"
+ },
+ "r9_codegen_identity": {
+  "claim": "worktree sources compiled with no research defines are byte-identical to pristine master",
+  "hosts": {
+   "e5_gcc_16.2.1": {
+    "uring_completion.cpp.o": "0b07a38d07f7bec53dbf16db5d9bbdb04314df8307d09f842ceb34f9cc7632fc",
+    "uring_transport.cpp.o": "3e10790052d577342ac7c27c46864ee6bc01c23f9f7ae1ee2020eee963ea7d96"
+   },
+   "wsl_gcc_15.2.0": {
+    "uring_completion.cpp.o": "fc4b0d198c44370173c8cab40ce172ca0175b97b88c0d60f9099f8101a4c09c4",
+    "uring_transport.cpp.o": "17f7899cae094977db54b8d0c5e2251001c02bfd88e4411228c626e380c8b28d"
+   }
+  }
+ },
+ "research_branch": "research/uring-router-580-wsl",
+ "uncommitted_raw_artifacts": [
+  {
+   "paths": [
+    "/tmp/perf580_b.data",
+    "/tmp/perf580_c.data",
+    "/tmp/perf580_c2.data",
+    "/tmp/perf580_d.data"
+   ],
+   "persistence": "tmpfs, not persistent across reboot",
+   "sizes_bytes": "37k-147k",
+   "what": "WSL perf.data"
+  },
+  {
+   "paths": [
+    "E5:/tmp/perf580_e5.data"
+   ],
+   "persistence": "server tmpfs, not persistent across reboot",
+   "sizes_bytes": "~52k",
+   "what": "E5 perf.data"
+  }
+ ]
+}

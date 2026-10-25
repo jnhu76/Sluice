@@ -1,0 +1,268 @@
+diff --git a/src/async/uring_completion.cpp b/src/async/uring_completion.cpp
+index df5b1baf..45c76dec 100644
+--- a/src/async/uring_completion.cpp
++++ b/src/async/uring_completion.cpp
+@@ -99,9 +99,13 @@ void UringAsyncBackend::finalize_operation_terminal_(
+ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcept {
+     std::lock_guard<std::mutex> lk(dispatch_mtx_);
+     if (is_control_cookie(user_data)) {
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++        research::g_router_counters.cq_control.fetch_add(1, std::memory_order_relaxed);
++#endif
+         const std::uint64_t target_cookie = control_target_cookie(user_data);
+         if (target_cookie == 0)
+             return;
++        SLUICE_LOOKUP_SITE(research::LookupSite::control_cqe);
+         const std::size_t router_index = find_live_router_cookie_(target_cookie);
+         if (router_index == router_.size())
+             return;
+@@ -142,9 +146,17 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
+ #endif
+         return;
+     }
+-    if (user_data == 0)
++    if (user_data == 0) {
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++        research::g_router_counters.cq_user_zero_dropped.fetch_add(1,
++                                                                   std::memory_order_relaxed);
++#endif
+         return;
+-
++    }
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    research::g_router_counters.cq_operation.fetch_add(1, std::memory_order_relaxed);
++#endif
++    SLUICE_LOOKUP_SITE(research::LookupSite::op_cqe);
+     const std::size_t router_index = find_live_router_cookie_(user_data);
+     if (router_index == router_.size())
+         return;
+diff --git a/src/async/uring_internal.hpp b/src/async/uring_internal.hpp
+index 87790411..a72ff00a 100644
+--- a/src/async/uring_internal.hpp
++++ b/src/async/uring_internal.hpp
+@@ -80,6 +80,57 @@ inline constexpr bool cookie_terminal_is_canceled(const sluice::detail::IoOutcom
+     return !t.succeeded && terminal_is_kernel_cancel(t.error);
+ }
+ 
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++
++// Research-only lookup probe counters (#580 R2). Not compiled into any
++// production or timing binary; the define exists only in the isolated
++// instrumentation build. All mutation happens under dispatch_mtx_.
++#include <atomic>
++
++namespace research {
++
++enum class LookupSite : unsigned {
++    op_cqe = 0,
++    control_cqe = 1,
++    mark_consumed_control = 2,
++    cancel_by_handle = 3,
++    poison_class_a = 4,
++    kSiteCount = 5,
++};
++
++struct LookupCounters {
++    std::atomic<std::uint64_t> attempts{0};
++    std::atomic<std::uint64_t> hits{0};
++    std::atomic<std::uint64_t> misses{0};
++    std::atomic<std::uint64_t> probe_sum{0};
++    std::atomic<std::uint64_t> probe_max{0};
++    std::atomic<std::uint64_t> live_at_attempt_sum{0};
++    // probe_hist[1..64] exact probe counts; probe_hist[65] = >64 probes.
++    std::atomic<std::uint64_t> probe_hist[66]{};
++};
++
++struct RouterCounters {
++    std::atomic<std::uint64_t> installs{0};
++    std::atomic<std::uint64_t> retires{0};
++    std::atomic<std::uint64_t> cq_operation{0};
++    std::atomic<std::uint64_t> cq_control{0};
++    std::atomic<std::uint64_t> cq_user_zero_dropped{0};
++    std::atomic<std::uint64_t> cancels_prepared{0};
++    std::atomic<std::uint64_t> cancel_intents_deferred{0};
++    std::atomic<std::uint64_t> router_capacity{0};
++};
++
++extern RouterCounters g_router_counters;
++extern LookupCounters g_lookup_counters[static_cast<unsigned>(LookupSite::kSiteCount)];
++extern LookupSite g_current_lookup_site;
++
++} // namespace sluice::async::research
++
++#define SLUICE_LOOKUP_SITE(s) (sluice::async::research::g_current_lookup_site = (s))
++#else
++#define SLUICE_LOOKUP_SITE(s) ((void)0)
++#endif
++
+ class UringAsyncBackend::BoundedDispatchQueue {
+   public:
+     explicit BoundedDispatchQueue(std::size_t capacity) : storage_(capacity), capacity_(capacity) {}
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..07b6e5cf 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -162,6 +162,11 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+     cookie_free_list_.pop_back();
+ 
+     const std::uint64_t op_cookie = allocate_cookie_();
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    research::g_router_counters.installs.fetch_add(1, std::memory_order_relaxed);
++    research::g_router_counters.router_capacity.store(router_.size(),
++                                                      std::memory_order_relaxed);
++#endif
+     const PreparedUringOp& prep = prepared_ops_[h.slot.value];
+     switch (prep.kind) {
+     case detail::OperationKind::read:
+@@ -280,6 +285,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
+ 
+ void UringAsyncBackend::mark_consumed_control_locked_(std::uint64_t cookie,
+                                                       detail::RequestReservation handle) noexcept {
++    SLUICE_LOOKUP_SITE(research::LookupSite::mark_consumed_control);
+     const std::size_t router_index = find_live_router_cookie_(cookie);
+     if (router_index == router_.size() ||
+         router_[router_index].handle.slot.value != handle.slot.value ||
+@@ -385,6 +391,7 @@ void UringAsyncBackend::poison_and_recover_locked(IoError error) noexcept {
+             std::terminate();
+         }
+ 
++        SLUICE_LOOKUP_SITE(research::LookupSite::poison_class_a);
+         const std::size_t router_index = find_live_router_cookie_(physical.cookie);
+         if (router_index == router_.size() ||
+             router_[router_index].handle.slot.value != physical.handle.slot.value ||
+@@ -537,22 +544,95 @@ std::uint64_t UringAsyncBackend::allocate_cookie_() noexcept {
+     return next_cookie_++;
+ }
+ 
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++namespace research {
++RouterCounters g_router_counters;
++LookupCounters g_lookup_counters[static_cast<unsigned>(LookupSite::kSiteCount)];
++LookupSite g_current_lookup_site = LookupSite::op_cqe;
++} // namespace sluice::async::research
++
++namespace {
++void record_lookup_result(research::LookupSite site, std::size_t probes,
++                          bool hit, std::size_t live) noexcept {
++    using namespace research;
++    auto& c = g_lookup_counters[static_cast<unsigned>(site)];
++    c.attempts.fetch_add(1, std::memory_order_relaxed);
++    (hit ? c.hits : c.misses).fetch_add(1, std::memory_order_relaxed);
++    c.probe_sum.fetch_add(probes, std::memory_order_relaxed);
++    std::uint64_t prev_max = c.probe_max.load(std::memory_order_relaxed);
++    while (probes > prev_max &&
++           !c.probe_max.compare_exchange_weak(prev_max, probes, std::memory_order_relaxed)) {
++    }
++    c.live_at_attempt_sum.fetch_add(live, std::memory_order_relaxed);
++    const std::size_t bucket = probes > 64 ? 65 : probes;
++    c.probe_hist[bucket].fetch_add(1, std::memory_order_relaxed);
++}
++} // namespace
++#endif
++
+ std::size_t UringAsyncBackend::find_live_router_index_(detail::RequestReservation h) const noexcept {
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    const std::size_t live0 = live_cookies_.load(std::memory_order_relaxed);
++    std::size_t probes0 = 0;
++#endif
++#if defined(SLUICE_580_WE2_REVERSE_CANCEL_SCAN)
++    for (std::size_t i = router_.size(); i-- > 0;) {
++#else
+     for (std::size_t i = 0; i < router_.size(); ++i) {
++#endif
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++        ++probes0;
++#endif
+         const RouterEntry& e = router_[i];
++#if defined(SLUICE_580_MUTANT_SLOT_ONLY)
++        if (e.in_use && e.handle.slot.value == h.slot.value) {
++#else
+         if (e.in_use && e.handle.slot.value == h.slot.value &&
+             e.handle.generation.value == h.generation.value) {
++#endif
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++            record_lookup_result(research::g_current_lookup_site, probes0, true, live0);
++#endif
+             return i;
+         }
+     }
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    record_lookup_result(research::g_current_lookup_site, probes0, false, live0);
++#endif
+     return router_.size();
+ }
+ 
+ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
++#if defined(SLUICE_580_MUTANT_FALSE_MISS)
++    if (cookie >= 2)
++        return router_.size();
++#endif
++#if defined(SLUICE_580_CLFLUSH_ROUTER)
++    {
++        char* base =
++            reinterpret_cast<char*>(const_cast<RouterEntry*>(router_.data()));
++        for (std::size_t off = 0; off < router_.size() * sizeof(RouterEntry); off += 64)
++            __builtin_ia32_clflush(base + off);
++    }
++#endif
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    const std::size_t live0 = live_cookies_.load(std::memory_order_relaxed);
++    std::size_t probes0 = 0;
++#endif
+     for (std::size_t i = router_.size(); i-- > 0;) {
+-        if (router_[i].in_use && router_[i].cookie == cookie)
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++        ++probes0;
++#endif
++        if (router_[i].in_use && router_[i].cookie == cookie) {
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++            record_lookup_result(research::g_current_lookup_site, probes0, true, live0);
++#endif
+             return i;
++        }
+     }
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    record_lookup_result(research::g_current_lookup_site, probes0, false, live0);
++#endif
+     return router_.size();
+ }
+ 
+@@ -577,6 +657,9 @@ void UringAsyncBackend::retire_router_entry_(std::size_t router_index) noexcept
+ #endif
+     }
+     entry = RouterEntry{};
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    research::g_router_counters.retires.fetch_add(1, std::memory_order_relaxed);
++#endif
+     cookie_free_list_.push_back(detail::SlotIndex{static_cast<std::uint32_t>(router_index)});
+     live_cookies_.fetch_sub(1, std::memory_order_relaxed);
+ }
+@@ -621,6 +704,7 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+     if (fatal_error_.has_value())
+         return;
+ 
++    SLUICE_LOOKUP_SITE(research::LookupSite::cancel_by_handle);
+     const std::size_t idx = find_live_router_index_(h);
+     if (idx == router_.size())
+         return;
+@@ -652,6 +736,10 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+     }
+     if (sqe == nullptr) {
+         if (sticky_intent_retained()) {
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++            research::g_router_counters.cancel_intents_deferred.fetch_add(1,
++                                                                          std::memory_order_relaxed);
++#endif
+ #if defined(SLUICE_URING_MUTANT_PENDING_CONTROL_DOUBLE_INCREMENT)
+             ++pending_control_count_;
+             route.control_pending = true;
+@@ -677,6 +765,9 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+     }
+ #endif
+     ::io_uring_prep_cancel64(sqe, target_cookie, 0);
++#if defined(SLUICE_URING_LOOKUP_INSTRUMENT)
++    research::g_router_counters.cancels_prepared.fetch_add(1, std::memory_order_relaxed);
++#endif
+     ::io_uring_sqe_set_data64(sqe, make_control_cookie(target_cookie));
+     route.control_state = RouterEntry::ControlState::prepared;
+     if (route.control_pending) {

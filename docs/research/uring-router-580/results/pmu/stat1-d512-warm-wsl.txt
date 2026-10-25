@@ -1,0 +1,5 @@
+{"kind":"timed","label":"pmu_warm","scenario":"pipeline","pin":"single","side":"submitter","capacity":512,"depth":512,"ops":40000,"payload":4096,"ws_bytes":0,"ws_per_op":4096,"warmup":2000,"completed_ops":40000,"bytes_verified":163840000,"wall_s":0.445945,"user_s":0.131286,"sys_s":0.314542,"interf_s":0.000000,"net_wall_s":0.445945,"sink":0,"notifications":0,"passes":0,"ok":true,"failure":"","warmup_failure":""}
+496815333,,cycles:u,472053771,100.00,,
+1746224545,,instructions:u,472053771,100.00,3.51,insn per cycle
+485434869,,L1-dcache-loads,472053771,100.00,,
+40841593,,L1-dcache-load-misses,472053771,100.00,8.41,of all L1-dcache accesses

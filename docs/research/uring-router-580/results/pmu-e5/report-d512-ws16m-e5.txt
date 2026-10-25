@@ -1,0 +1,59 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 673  of event 'cycles:u'
+# Event count (approx.): 588657308
+#
+# Overhead  Command   Shared Object         Symbol                                                                                                                                                                                                                               
+# ........  ........  ....................  .....................................................................................................................................................................................................................................
+#
+    37.53%  cache_ab  cache_ab              [.] (anonymous namespace)::run_pipeline(sluice::async::AsyncIoContext&, sluice::async::RequestScope&, sluice::File const&, unsigned long, (anonymous namespace)::Config const&, (anonymous namespace)::Interference&) [clone .isra.0]
+    12.14%  cache_ab  libc.so.6             [.] __memmove_avx_unaligned_erms
+    10.91%  cache_ab  cache_ab              [.] sluice::async::RequestScope::wait_for(sluice::async::ScopeTicket<unsigned long> const&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+    10.23%  cache_ab  cache_ab              [.] sluice::async::RequestScope::submit_read(sluice::async::ReadOp)
+     6.54%  cache_ab  cache_ab              [.] sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)
+     5.65%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+     1.84%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+     1.44%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)
+     1.22%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+     1.16%  cache_ab  libc.so.6             [.] __GI___pthread_mutex_unlock_usercnt
+     1.07%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+     0.87%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::reserve()
+     0.82%  cache_ab  [vdso]                [.] 0x0000000000000a8c
+     0.75%  cache_ab  cache_ab              [.] sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+     0.70%  cache_ab  libc.so.6             [.] pthread_mutex_lock@@GLIBC_2.2.5
+     0.69%  cache_ab  cache_ab              [.] sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+     0.64%  cache_ab  libc.so.6             [.] clock_gettime@@GLIBC_2.17
+     0.61%  cache_ab  cache_ab              [.] main
+     0.58%  cache_ab  cache_ab              [.] sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+     0.51%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+     0.46%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+     0.32%  cache_ab  libc.so.6             [.] pthread_mutex_unlock@@GLIBC_2.2.5
+     0.32%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)
+     0.30%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)
+     0.29%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+     0.21%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::poll() [clone .part.0]
+     0.20%  cache_ab  libc.so.6             [.] _int_malloc
+     0.20%  cache_ab  [vdso]                [.] 0x0000000000000ab0
+     0.19%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+     0.17%  cache_ab  [vdso]                [.] 0x0000000000000ac2
+     0.15%  cache_ab  liburing.so.2.13      [.] io_uring_peek_batch_cqe
+     0.14%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::outstanding_summary() const
+     0.14%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)
+     0.14%  cache_ab  libstdc++.so.6.0.36   [.] std::chrono::_V2::steady_clock::now()
+     0.14%  cache_ab  liburing.so.2.13      [.] __io_uring_submit
+     0.14%  cache_ab  cache_ab              [.] sluice::async::UringAsyncBackend::outstanding() const
+     0.13%  cache_ab  [vdso]                [.] 0x0000000000000a4f
+     0.13%  cache_ab  ld-linux-x86-64.so.2  [.] do_lookup_x
+     0.12%  cache_ab  [unknown]             [k] 0xffffffff89a00080
+     0.08%  cache_ab  ld-linux-x86-64.so.2  [.] _dl_lookup_symbol_x
+     0.04%  cache_ab  cache_ab              [.] sluice::async::detail::RequestCore::RequestCore(sluice::async::detail::ContextIdentity, unsigned long)
+     0.04%  cache_ab  ld-linux-x86-64.so.2  [.] _dl_relocate_object_no_relro
+     0.04%  cache_ab  [unknown]             [k] 0xffffffff89a01280
+
+
+#
+# (Tip: Print event counts in machine readable CSV format with: perf stat -x\;)
+#

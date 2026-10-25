@@ -1,0 +1,4 @@
+<not supported>,,LLC-loads,0,100.00,,
+<not supported>,,LLC-load-misses,0,100.00,,
+2717,,branch-misses:u,461838,100.00,,
+5152,,cache-misses:u,461838,100.00,,

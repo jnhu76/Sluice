@@ -1,0 +1,28 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 12  of event 'cycles:u'
+# Event count (approx.): 1962756
+#
+# Overhead  Command   Shared Object         Symbol                
+# ........  ........  ....................  ......................
+#
+    31.34%  cache_ab  ld-linux-x86-64.so.2  [.] 0x0000000000010f92
+    30.49%  cache_ab  libm.so.6             [.] 0x0000000000012004
+    29.61%  cache_ab  ld-linux-x86-64.so.2  [.] 0x000000000000c6d4
+     7.62%  cache_ab  [unknown]             [k] 0xffffffffb120cb20
+     0.82%  cache_ab  ld-linux-x86-64.so.2  [.] 0x000000000001b262
+     0.11%  cache_ab  [unknown]             [k] 0xffffffffb036d7e8
+     0.01%  cache_ab  ld-linux-x86-64.so.2  [.] 0x0000000000023f5a
+     0.00%  cache_ab  [unknown]             [k] 0xffffffffb0001c87
+     0.00%  cache_ab  [unknown]             [k] 0xffffffffb0001320
+     0.00%  cache_ab  ld-linux-x86-64.so.2  [.] 0x0000000000023343
+     0.00%  cache_ab  [unknown]             [k] 0xffffffffb0001324
+     0.00%  cache_ab  [unknown]             [k] 0xffffffffb0292534
+
+
+#
+# (Cannot load tips.txt file, please install perf!)
+#

@@ -1,0 +1,4 @@
+363163,,cycles:u,670444,100.00,,
+139511,,instructions:u,670444,100.00,0.38,insn per cycle
+69848,,L1-dcache-loads,670444,100.00,,
+1709,,L1-dcache-load-misses,670444,100.00,2.45,of all L1-dcache accesses
