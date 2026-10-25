@@ -22,8 +22,8 @@
   },
   {
    "path": "cache-results.md",
-   "bytes": 11424,
-   "sha256": "e272ab95b8e4d6962f8c98a4d241ea8d3f7161a2559064b7b9b692111fa17a54"
+   "bytes": 15977,
+   "sha256": "4727e1d73e819e18c657a7af354b1b61a8438dcf9fd7d008a4bb466a6f8e0732"
   },
   {
    "bytes": 5188,
@@ -36,9 +36,9 @@
    "sha256": "7bff1b29ea22051a5d6fefaad149132ceb3715124a4589cdaee93ea4913144c9"
   },
   {
-   "bytes": 6055,
+   "bytes": 8115,
    "path": "environment.md",
-   "sha256": "85262a6186f4094f17f20674caea29d8a5b639b0f60a9010957551316846d54b"
+   "sha256": "6d6fd3800fd7c898ab46d7d4be108342da0bf3043a8c1117d30546bf8d469ae5"
   },
   {
    "bytes": 6078,
@@ -69,6 +69,16 @@
    "path": "results/cache-e5.jsonl",
    "bytes": 344581,
    "sha256": "2fe174a3d11a711ae79232ef0a34576214c42579f5f002610845db9fbdeb96b6"
+  },
+  {
+   "path": "results/cache-flush-sweep-e5.jsonl",
+   "bytes": 35649,
+   "sha256": "46aaf06dc57a39821e88799cb591810d9dc1ede1c29ecc6230ea4e20c9cb2f5b"
+  },
+  {
+   "path": "results/cache-flush-sweep-wsl.jsonl",
+   "bytes": 35666,
+   "sha256": "165895abeb87c3533a017cf6bf793a99b14bea4ab38dcd8a7000adbf429161e6"
   },
   {
    "path": "results/cache-wsl-reduced.json",
@@ -186,6 +196,36 @@
    "sha256": "34c0733064224d269106f02be0f9fcd1516a043ffb86e1a20d00c4fc2cc5652d"
   },
   {
+   "path": "results/pmu/record-long-d512-warm-wsl.data",
+   "bytes": 102228,
+   "sha256": "49647f5c40375534735b72c7752570dc81af40cae15a575125d4d286fcfa5e85"
+  },
+  {
+   "path": "results/pmu/record-long-d512-ws16m-wsl.data",
+   "bytes": 105228,
+   "sha256": "72d35f94f69dcc6adcde5fe1ae37002ebfc884ebb57947d3cd8af52540c7895a"
+  },
+  {
+   "path": "results/pmu/record-long-d64-warm-wsl.data",
+   "bytes": 120988,
+   "sha256": "188210beff55390de0710fc303c9ed5e90ce0080f2daf1ba77c361864a5ef8ab"
+  },
+  {
+   "path": "results/pmu/record-long-run-d512-warm-wsl.txt",
+   "bytes": 608,
+   "sha256": "dda5c210893ef1142de5b2e213e9d229888b4e62d660f9ac28aa3e8512d05617"
+  },
+  {
+   "path": "results/pmu/record-long-run-d512-ws16m-wsl.txt",
+   "bytes": 635,
+   "sha256": "1df25e630e1c15904218dee908454f14c1c60d2c0eb185ceaf6b53d50b9420c3"
+  },
+  {
+   "path": "results/pmu/record-long-run-d64-warm-wsl.txt",
+   "bytes": 604,
+   "sha256": "80f5fb1f5afc6f00a38fd036edbf7d21aadc2a2d62ef1711c819370452d64e6e"
+  },
+  {
    "path": "results/pmu/record-run-d512-warm-wsl.txt",
    "bytes": 591,
    "sha256": "be7527913b320bb70c599bf8a842776c88ae31854ba3acbe6368925a1f1929b7"
@@ -224,6 +264,26 @@
    "path": "results/pmu/report-d64-ws16m-wsl.txt",
    "bytes": 13713,
    "sha256": "78058bb1b0b0170c75345b55319ada3fb5cac06ea8825e1c3bac42e6f704a39b"
+  },
+  {
+   "path": "results/pmu/report-long--wsl.txt",
+   "bytes": 1181,
+   "sha256": "04d0e8a3212501526ba20ce1a31b591ac76041f259991bae1a428deb7d179151"
+  },
+  {
+   "path": "results/pmu/report-long-d512-warm-wsl.txt",
+   "bytes": 23494,
+   "sha256": "1dc0ecc1389b0083b34e51ebaf7822cc3d0ab62f42d6abe254cb8913bd44f198"
+  },
+  {
+   "path": "results/pmu/report-long-d512-ws16m-wsl.txt",
+   "bytes": 23025,
+   "sha256": "5914c5bf76faca10df4efaea3170a0a99506d52011a25b59c5efd4bb188fa769"
+  },
+  {
+   "path": "results/pmu/report-long-d64-warm-wsl.txt",
+   "bytes": 29256,
+   "sha256": "bc8b45cc3bfdddeffed2b1f08a85d9eb6c80490e1ff311436b9b7d93dcf1f576"
   },
   {
    "path": "results/pmu/shares-wsl.txt",
@@ -353,11 +413,12 @@
   }
  },
  "r9_binaries": {
-  "cache_ab_wsl": "9301cc5bd4a3356542db1fc024be31a47e0281dfabab3f7847bb8a2de2fcc1fe",
-  "cache_ab_flush_wsl": "73486604ecea17f5d1f6da03447ca5a21a1f3de2b2c1323585c27f87f8803451",
-  "cache_probe_wsl": "c904e1ea9e778cc723ab47efb34abb8f707c08e3a0cbd3b44d3a6ba5a44ecf7f",
+  "cache_ab_wsl": "ea2e36373329f58b8540acbb9265d8d804d0c06f30b5c28103629f314b47bfba",
+  "cache_ab_flush_wsl": "32024538195a93a65a310cad489dfd1f2ee3fcf94f2be0ee4ddf029e4b041f89",
+  "cache_probe_wsl": "99cc0b8b91c50433f5660d03f31a11862077c00fb72cad7fb853fc3cd859c9ab",
   "cache_ab_e5": "7523b035ea326c0ee769210b0142630b52b0f866fde26e1ea5389ce76a98c332",
   "cache_ab_flush_e5": "d6164e3bd54f793e76501754e2919cb53d218e9b5cac845c6ecec0df14a82380",
-  "cache_probe_e5": "c8bbb515b24c7b7345dd3dcde1d2197f59b65acf80aef1bfbfa04047929bb33c"
+  "cache_probe_e5": "c8bbb515b24c7b7345dd3dcde1d2197f59b65acf80aef1bfbfa04047929bb33c",
+  "sha_correction_note": "delta review: WSL SHAs re-recorded from the post-rebuild binaries that produced the committed results; see environment.md correction note"
  }
 }

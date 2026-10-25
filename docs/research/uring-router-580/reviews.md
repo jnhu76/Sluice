@@ -126,3 +126,96 @@ disclosed above)** — the two §1 number errors and the §4 scaling/noise
 strengthening were applied during the review. The retained
 `NO_TRIGGER_NO_CHANGE` verdict and its two recorded boundary conditions
 stand on the corrected text.
+
+## R9 delta review — independent closeout gate (this revision)
+
+Commissioned by owner instruction after the R9 round ("R9 Independent
+Delta Review & Closeout Gate"), executed as a fresh adversarial pass
+against the raw data with independent recomputation (new script, not the
+campaign reducer), targeted new measurements where evidence gaps were
+found, and no presumption in either direction. Frozen R9 HEAD verified at
+`350e7f7f` (clean); production master `46157fd1` verified pristine; branch
+diff confined to the three gated `src/` TUs, docs, and `bench/research/`.
+
+### Review A — forced eviction
+
+Gate location verified in source (`find_live_router_cookie_` entry, whole
+`router_` array, 64 B stride). The published +108% (E5, D512) conflated
+eviction mechanics with refill cost. **New targeted measurement** (capacity
+sweep, 15 AB/BA pairs per cell, both hosts; `results/cache-flush-sweep-*`):
+the C-slope isolates the `clflush` instruction at ≈30 ns/op on E5
+(consistent at both depths), so ≈7.66 of the 8.25 µs/op flush-arm delta is
+eviction mechanics; the genuine cold-refill penalty of the scan is ≈
++0.59 µs/op (≈+8% wall) on E5 and ≈1.9–2.2 µs (≈+29%) on WSL at D=512.
+The refill is small because the scan is sequential over a contiguous live
+span — hardware prefetch amortizes even DRAM refills. Finding applied: §3
+of `cache-results.md` rewritten; the unsupported "an exact index … would
+win" claim (also present in the decision addendum) removed everywhere —
+no index arm was built, and no cold-regime index claim is made in either
+direction.
+
+### Review B — interference attribution
+
+`net_wall = wall − metered sweep` verified sound for the pipeline shape
+(same thread, same clock, sweep fraction measured 1.1–2.0% of wall);
+external rows correctly not netted and now explicitly caveated. The
+"+1 cycle/probe cap" argument was overstated as strict: net_wall bounds
+lookup growth only modulo offsetting savings (the D=512 inversion proves
+such savings exist at scale). Reworded, with the symbol-share evidence
+carried alongside. The D=512 inversion's batching mechanism **relabeled a
+hypothesis** — no batch-size counter exists in this round; the
+anti-correlation itself is the measured fact. PMU audit: original record
+runs held only 670–705 samples (±1.1–1.7 pp on shares); **new 200 K-op
+records** (1–3 K samples) show WSL shares stable (5.07→5.01% at D512) but
+**E5 shares rising monotonically with run length** (5.80% @42 K → 9.81%
+@202 K) with constant total cycles/op, constant probe counts (254→257,
+instrumented verification at 20 K/100 K/200 K ops), and PMU-independent
+15-rep medians flat — plus evidence of turbo-clock drift between cells
+(≈3.40 vs ≈3.22 GHz from user-time ÷ cycles). Conclusion recorded as a
+band (E5 D512 warm: 5.8–9.8%, condition-dependent), with the instability
+disclosed in §4 rather than resolved — resolving it would need a
+clock-controlled PMU campaign outside this review's scope.
+
+### Review C — materiality at D=512
+
+Four levels, now explicit in §5: **measured mechanism hotspot — yes**
+(≈5% stable WSL, 5.8–9.8% E5 band, ≈0.21–0.50 µs/op at a shape no
+standard bench uses); **representative application trigger — no** (no
+standard form runs D>64; #578 has no baseline); **established avoidable
+cost — no** (no measured alternative; the scan's cold penalty is
+prefetch-amortized, index costs unknown); **product admission — no**.
+`NO_TRIGGER_NO_CHANGE` remains valid as the exit verdict, with sharpened
+revisit conditions: (a) #578 real-app sustained D in the hundreds; (b)
+measured per-lookup L2+ eviction in that application; (c) a measured
+prototype win in that regime — none exists.
+
+### Review D — closeout recomputation and provenance
+
+Independent recomputation from the raw JSONL (fresh script) reproduced
+every load-bearing published number exactly: E5 net_wall medians
+(1.0205/1.0131/1.0054/1.0061/1.0129/0.9627), A/A bands (1.0011/1.0033/
+1.0065/1.0077), flush ratios (1.2623/2.0772), zero invariant violations
+across all 118 counters rows on both hosts, D=512 inversion absolutes
+(7.562→7.258 µs/op; user 0.972, sys 0.974 — the doc's earlier 0.981/0.986
+came from the PMU cells and was replaced). **Provenance defect found and
+fixed**: the manifest and `environment.md` recorded WSL `cache_*` binary
+SHA-256s from a pre-rebuild build; the binaries that produced the
+committed WSL results are the post-offset-fix rebuild (SHAs corrected
+in-place with a correction note; E5 SHAs were correct; the committed
+sources deterministically rebuild the correct binaries). Secondary checks:
+E5 sweep file deduplicated after a double-run during the review; E5
+records re-paired share × cycles from the same run; one stat-derived
+cycles/op figure (14,902 → 14,636, now same-source) corrected.
+
+### Verdict
+
+**REVISE → re-reviewed → APPROVE.** All four review tracks found real
+defects (overstated cold-bound inference, unproven index claim, strict-cap
+overstatement, hypothesis-stated-as-mechanism, stale binary SHAs, E5 share
+instability undisclosed); all were fixed in this revision and re-checked
+against the raw data; no production algorithm, spec, or public surface was
+touched; the corrected evidence still supports the R9 conclusion — the
+interference result set was never in doubt (it is PMU-independent and
+reproduced independently), and the two boundary conditions are now stated
+with their true magnitudes and uncertainty. `CACHE_VERDICT` within scope:
+`HOT_PATH_ROBUST`.

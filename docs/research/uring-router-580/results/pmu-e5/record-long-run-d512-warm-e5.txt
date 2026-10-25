@@ -1,0 +1,3 @@
+{"kind":"timed","label":"pmulong_d512-warm","scenario":"pipeline","pin":"single","side":"submitter","capacity":512,"depth":512,"ops":200000,"payload":4096,"ws_bytes":0,"ws_per_op":4096,"warmup":2000,"completed_ops":200000,"bytes_verified":819200000,"wall_s":1.657026,"user_s":0.936446,"sys_s":0.715974,"interf_s":0.000000,"net_wall_s":1.657026,"sink":0,"notifications":0,"passes":0,"ok":true,"failure":"","warmup_failure":""}
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.124 MB /home/jnhu/Source/Sluice-580-wt/docs/research/uring-router-580/results/pmu-e5/record-long-d512-warm-e5.data (3180 samples) ]

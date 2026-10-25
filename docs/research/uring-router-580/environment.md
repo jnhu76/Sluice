@@ -129,9 +129,16 @@ R9 binaries (`build_cache.sh`; `cache_router.cpp` + async sources):
 
 | Binary | WSL SHA-256 (gcc 15.2.0) | E5 SHA-256 (gcc 16.2.1) |
 |---|---|---|
-| cache_ab (= aa_alpha = aa_beta) | `9301cc5bd4a3356542db1fc024be31a47e0281dfabab3f7847bb8a2de2fcc1fe` | `7523b035ea326c0ee769210b0142630b52b0f866fde26e1ea5389ce76a98c332` |
+| cache_ab (= aa_alpha = aa_beta) | `ea2e36373329f58b8540acbb9265d8d804d0c06f30b5c28103629f314b47bfba` | `7523b035ea326c0ee769210b0142630b52b0f866fde26e1ea5389ce76a98c332` |
 | cache_ab_flush | `73486604ecea17f5d1f6da03447ca5a21a1f3de2b2c1323585c27687f8803451` | `d6164e3bd54f793e76501754e2919cb53d218e9b5cac845c6ecec0df14a82380` |
-| cache_probe | `c904e1ea9e778cc723ab47efb34abb8f707c08e3a0cbd3b44d3a6ba5a44ecf7f` | `c8bbb515b24c7b7345dd3dcde1d2197f59b65acf80aef1bfbfa04047929bb33c` |
+| cache_probe | `99cc0b8b91c50433f5660d03f31a11862077c00fb72cad7fb853fc3cd859c9ab` | `c8bbb515b24c7b7345dd3dcde1d2197f59b65acf80aef1bfbfa04047929bb33c` |
+
+(correction, delta review: the three WSL SHA-256s above were originally
+recorded from a pre-rebuild build; the binaries that produced every
+committed WSL R9 result are the rebuilt ones now listed — the rebuild
+happened after the external-shape offset fix and before any matrix stage
+ran, and the committed sources reproduce them. The E5 SHAs were correct as
+first recorded.)
 
 Codegen identity re-proof (WSL gcc 15.2.0, `-O3 -DNDEBUG`, no research
 defines): worktree `uring_transport.cpp` → `17f7899cae094977db54b8d0c5e2251001c02bfd88e4411228c626e380c8b28d`,

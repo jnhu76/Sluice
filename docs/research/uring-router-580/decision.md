@@ -98,20 +98,29 @@ W-03-replica execution forms, WSL Zen 3 + E5 Haswell. Within that domain:
 lookup counts, probe counts (≈ D/2) and zero-miss behavior are invariant
 under pressure; the lookup's attributed cycles (3–5 cycles/probe warm) do
 not grow under 16 MiB interference on either host; every separable
-end-to-end effect is D-flat or D-anticorrelated (dispatch pacing, not
-locality; D=512 under interference is net *faster*, 0.963 [0.955, 0.970]
-on E5).
+end-to-end effect is D-flat or D-anticorrelated (a pacing-shaped effect,
+not a locality-shaped one; D=512 under interference is net *faster*, 0.963
+[0.955, 0.970] on E5 — the batching mechanism behind it is a hypothesis,
+the anti-correlation itself is measured).
 
 Two measured boundaries qualify the negative verdict and are recorded as
-reopen conditions, not triggers: (1) at D=512 warm — a depth no standard
-W-02/W-03 form uses — the harness-inclusive share is 5.07% (WSL) / 5.80%
-(E5) of user cycles, ≈ 0.21–0.30 µs/op absolute; (2) under forced eviction
-of the router before *every* lookup (clflush, synthetic), the scan costs
-+26% (D=64) to +108% (D=512) wall on E5 — the regime where an exact index
-would win. Reopening Candidate A/B would require a real application form
-(#578) demonstrating sustained D in the hundreds **together with** per-
-lookup L2+ eviction or a denominator leaner than any measured harness;
-neither exists today.
+reopen conditions, not triggers (figures as revised by the delta review):
+(1) at D=512 warm — a depth no standard W-02/W-03 form uses — the
+harness-inclusive share is ≈5% (WSL, stable across run lengths) to
+5.8–9.8% (E5, condition-dependent across run length and clock), ≈
+0.21–0.50 µs/op absolute — a measured mechanism hotspot at a
+non-representative shape; (2) under forced eviction of the router before
+*every* lookup (synthetic), the arm costs +26%/+108% wall on E5 — but the
+delta review's capacity sweep decomposed this: ≈90% of it is the clflush
+instruction itself (~30 ns/op on E5), and the scan's genuine cold-refill
+penalty is ≈ +8% (E5) / +29% (WSL) wall at D=512, small because the scan
+is sequential over a contiguous live span and hardware prefetch amortizes
+even DRAM refills. Whether any alternative structure (index) would beat
+the scan in that regime is **unmeasured** — no index arm was built — and
+is not claimed. Reopening Candidate A/B would require a real application
+form (#578) with sustained D in the hundreds, together with either
+measured per-lookup L2+ eviction in that application or a *measured*
+prototype win; neither exists today.
 
 The issue-level verdict `NO_TRIGGER_NO_CHANGE` and `PRODUCT_CHANGE: NONE`
 are unchanged; PR #592 remains open and unmerged by instruction.
