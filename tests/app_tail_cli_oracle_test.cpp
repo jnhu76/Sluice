@@ -19,6 +19,8 @@
 #include <string>
 #include <vector>
 
+#include <climits>
+
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -65,6 +67,44 @@ std::string exe_dir() {
     const std::string full(buf);
     const std::size_t slash = full.rfind('/');
     return slash == std::string::npos ? std::string(".") : full.substr(0, slash);
+}
+
+// The dynamic ASan runtime mapped into this test process, if the build linked
+// one. sluice-tail is built in the same xmake configuration, so the runtime
+// mapped here is the one the child's DT_NEEDED resolves to; preloading it
+// ahead of the shim restores the link order libasan's preinit check requires.
+// A build with no mapped dynamic runtime (static Clang runtime, non-ASan
+// builds) needs no prepend.
+std::string mapped_dynamic_asan_runtime() {
+    std::FILE* f = std::fopen("/proc/self/maps", "r");
+    if (!f)
+        return {};
+    char line[PATH_MAX];
+    std::string found;
+    while (found.empty() && std::fgets(line, sizeof line, f)) {
+        const char* begin = std::strchr(line, '/');
+        if (!begin)
+            continue;
+        const char* end = begin + std::strlen(begin);
+        while (end > begin && (end[-1] == '\n' || end[-1] == '\r'))
+            --end;
+        const std::string path(begin, static_cast<std::size_t>(end - begin));
+        const std::size_t slash = path.rfind('/');
+        const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
+        if (name.rfind("libasan.so", 0) == 0 || name.rfind("libclang_rt.asan", 0) == 0)
+            found = path;
+    }
+    std::fclose(f);
+    return found;
+}
+
+std::string shim_child_preload() {
+    static const std::string entry = [] {
+        const std::string asan = mapped_dynamic_asan_runtime();
+        return asan.empty() ? exe_dir() + "/libtail_pread_shim.so"
+                            : asan + ":" + exe_dir() + "/libtail_pread_shim.so";
+    }();
+    return entry;
 }
 
 struct TempFile {
@@ -167,11 +207,17 @@ class TailChild {
         }
 
         std::vector<std::string> env_store;
-        for (char** e = environ; e && *e; ++e)
+        for (char** e = environ; e && *e; ++e) {
+            // A shim child's LD_PRELOAD is test-owned: an inherited entry
+            // ahead of the ASan runtime would break libasan's link-order
+            // check, and a duplicate key would leave the shim entry ignored.
+            if (with_shim && std::strncmp(*e, "LD_PRELOAD=", 11) == 0)
+                continue;
             env_store.emplace_back(*e);
+        }
         env_store.emplace_back("SLUICE_TAIL_TEST_EVT=" + evt_path_);
         if (with_shim) {
-            env_store.emplace_back("LD_PRELOAD=" + exe_dir() + "/libtail_pread_shim.so");
+            env_store.emplace_back("LD_PRELOAD=" + shim_child_preload());
             env_store.emplace_back("SLUICE_TAIL_SHIM_DEV=" +
                                    std::to_string(static_cast<unsigned long long>(shim_dev)));
             env_store.emplace_back("SLUICE_TAIL_SHIM_INO=" +
