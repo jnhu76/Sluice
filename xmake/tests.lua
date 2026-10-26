@@ -72,6 +72,31 @@ do
     direct_seam_target("file_close_semantics_test", R .. "tests/file_close_semantics_test.cpp")
     direct_seam_target("direct_composition_fault_test",
                        R .. "tests/direct_composition_fault_test.cpp")
+
+    -- Named mutation builds over the direct data-op admission dispatch.
+    -- Each breaks one load-bearing arm of SEM-03 precedence or SEM-04 range
+    -- admission and must be killed by the named failing assertion of the
+    -- killer suite; executed and recorded manually, never run as regular
+    -- tests.
+    local function direct_mutant_target(name, killer_source, define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_includedirs(R .. "include", R .. "src")
+            add_defines("SLUICE_FILE_INTERNAL_TESTING", define)
+            add_files(killer_source, R .. "src/file_resource.cpp", R .. "src/blocking_file.cpp")
+    end
+
+    direct_mutant_target("blocking_file_mut_admit_invalid_range",
+                         R .. "tests/blocking_file_read_test.cpp",
+                         "SLUICE_SEM_MUTANT_ADMIT_INVALID_RANGE")
+    direct_mutant_target("blocking_file_mut_empty_before_closed",
+                         R .. "tests/blocking_file_sequential_test.cpp",
+                         "SLUICE_SEM_MUTANT_EMPTY_BEFORE_CLOSED")
+    direct_mutant_target("blocking_file_mut_admit_unrepresentable_size",
+                         R .. "tests/blocking_file_state_test.cpp",
+                         "SLUICE_SEM_MUTANT_ADMIT_UNREPRESENTABLE_SIZE")
 end
 
 -- Real io_uring verification: registered only when the liburing build switch

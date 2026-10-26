@@ -42,12 +42,6 @@ constexpr bool size_is_representable(std::uint64_t size) noexcept {
     return size <= kMaxNativeOffset;
 }
 
-inline Result<off_t> checked_posix_offset(std::uint64_t offset) {
-    if (offset > kMaxNativeOffset)
-        return make_unexpected<off_t>(IoError{.code = IoError::Code::invalid_argument});
-    return static_cast<off_t>(offset);
-}
-
 enum class FileOperation : std::uint8_t {
     read,
     write,
@@ -161,12 +155,19 @@ struct DataOpRequest {
 };
 
 constexpr DataOpVerdict precheck_data_op(const DataOpRequest& request) noexcept {
+#if defined(SLUICE_SEM_MUTANT_EMPTY_BEFORE_CLOSED)
+    if (request.length == 0)
+        return DataOpVerdict::complete_empty;
+#endif
     if (request.closed)
         return DataOpVerdict::reject_closed;
     if (!access_allows(request.access, request.operation))
         return DataOpVerdict::reject_access;
     if (request.length == 0)
         return DataOpVerdict::complete_empty;
+#if defined(SLUICE_SEM_MUTANT_ADMIT_INVALID_RANGE)
+    return DataOpVerdict::execute;
+#endif
     if (!range_is_valid(request.offset, request.length))
         return DataOpVerdict::reject_range;
     if (request.length > kMaxNativeTransfer)
@@ -188,8 +189,10 @@ constexpr DataOpVerdict precheck_resize(bool closed, FileAccess access,
     const DataOpVerdict verdict = precheck_state_op(closed, access, FileOperation::resize);
     if (verdict != DataOpVerdict::execute)
         return verdict;
+#if !defined(SLUICE_SEM_MUTANT_ADMIT_UNREPRESENTABLE_SIZE)
     if (!size_is_representable(new_size))
         return DataOpVerdict::reject_range;
+#endif
     return DataOpVerdict::execute;
 }
 

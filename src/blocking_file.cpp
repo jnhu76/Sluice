@@ -22,18 +22,10 @@ namespace {
 using detail::DataOpVerdict;
 using detail::FileOperation;
 
-struct Precheck {
-    std::optional<IoError> rejection;
-    bool complete_empty = false;
-};
-
-Precheck precheck(const File& file, FileOperation operation, std::uint64_t offset,
-                  std::size_t length, const std::byte* buffer) {
-    const DataOpVerdict verdict = detail::precheck_data_op(detail::DataOpRequest{
-        !file.is_open(), file.access(), operation, offset, length});
-    if (verdict == DataOpVerdict::execute && buffer == nullptr)
-        return Precheck{IoError{.code = IoError::Code::invalid_argument}, false};
-    return Precheck{detail::rejection_of(verdict), verdict == DataOpVerdict::complete_empty};
+inline DataOpVerdict admit_data_op(const File& file, FileOperation operation,
+                                   std::uint64_t offset, std::size_t length) {
+    return detail::precheck_data_op(
+        detail::DataOpRequest{!file.is_open(), file.access(), operation, offset, length});
 }
 
 #ifdef SLUICE_FILE_INTERNAL_TESTING
@@ -85,20 +77,18 @@ ssize_t native_pwrite(int fd, const void* buf, std::size_t count, off_t offset) 
 }
 Result<std::size_t> read_at(const File& file, std::uint64_t offset,
                             std::span<std::byte> dst) {
-    const Precheck pre = precheck(file, FileOperation::read, offset, dst.size(), dst.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<std::size_t>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict =
+        admit_data_op(file, FileOperation::read, offset, dst.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return std::size_t{0};
-    }
-
-    const auto native_offset = detail::checked_posix_offset(offset);
-    if (!native_offset.has_value()) {
-        return make_unexpected<std::size_t>(native_offset.error());
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<std::size_t>(detail::rejection_error(verdict));
+    if (dst.data() == nullptr)
+        return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
+    // The execute verdict proved offset fits off_t; the cast cannot lose bits.
     ssize_t n = detail::retry_on_eintr([&] {
-        return native_pread(file.native_handle(), dst.data(), dst.size(), native_offset.value());
+        return native_pread(file.native_handle(), dst.data(), dst.size(),
+                            static_cast<off_t>(offset));
     });
     if (n < 0) {
         return make_unexpected<std::size_t>(from_errno_value(errno));
@@ -108,20 +98,18 @@ Result<std::size_t> read_at(const File& file, std::uint64_t offset,
 
 Result<std::size_t> write_at(const File& file, std::uint64_t offset,
                              std::span<const std::byte> src) {
-    const Precheck pre = precheck(file, FileOperation::write, offset, src.size(), src.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<std::size_t>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict =
+        admit_data_op(file, FileOperation::write, offset, src.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return std::size_t{0};
-    }
-
-    const auto native_offset = detail::checked_posix_offset(offset);
-    if (!native_offset.has_value()) {
-        return make_unexpected<std::size_t>(native_offset.error());
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<std::size_t>(detail::rejection_error(verdict));
+    if (src.data() == nullptr)
+        return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
+    // The execute verdict proved offset fits off_t; the cast cannot lose bits.
     ssize_t n = detail::retry_on_eintr([&] {
-        return native_pwrite(file.native_handle(), src.data(), src.size(), native_offset.value());
+        return native_pwrite(file.native_handle(), src.data(), src.size(),
+                             static_cast<off_t>(offset));
     });
     if (n < 0) {
         return make_unexpected<std::size_t>(from_errno_value(errno));
@@ -130,13 +118,13 @@ Result<std::size_t> write_at(const File& file, std::uint64_t offset,
 }
 
 Result<std::size_t> read(const File& file, std::span<std::byte> dst) {
-    const Precheck pre = precheck(file, FileOperation::read, 0, dst.size(), dst.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<std::size_t>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict = admit_data_op(file, FileOperation::read, 0, dst.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return std::size_t{0};
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<std::size_t>(detail::rejection_error(verdict));
+    if (dst.data() == nullptr)
+        return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
 
     ssize_t n = detail::retry_on_eintr([&] {
         return native_read(file.native_handle(), dst.data(), dst.size());
@@ -148,13 +136,13 @@ Result<std::size_t> read(const File& file, std::span<std::byte> dst) {
 }
 
 Result<std::size_t> write(const File& file, std::span<const std::byte> src) {
-    const Precheck pre = precheck(file, FileOperation::write, 0, src.size(), src.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<std::size_t>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict = admit_data_op(file, FileOperation::write, 0, src.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return std::size_t{0};
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<std::size_t>(detail::rejection_error(verdict));
+    if (src.data() == nullptr)
+        return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
 
     ssize_t n = detail::retry_on_eintr([&] {
         return native_write(file.native_handle(), src.data(), src.size());
@@ -211,18 +199,14 @@ Result<std::uint64_t> size(const File& file) {
 }
 
 Result<void> resize(const File& file, std::uint64_t new_size) {
-    if (auto rejection = detail::rejection_of(
-            detail::precheck_resize(!file.is_open(), file.access(), new_size));
-        rejection.has_value()) {
-        return make_unexpected<void>(*rejection);
+    const DataOpVerdict verdict =
+        detail::precheck_resize(!file.is_open(), file.access(), new_size);
+    if (detail::is_rejection(verdict)) {
+        return make_unexpected<void>(detail::rejection_error(verdict));
     }
-
-    const auto native_size = detail::checked_posix_offset(new_size);
-    if (!native_size.has_value()) {
-        return make_unexpected<void>(native_size.error());
-    }
+    // The execute verdict proved new_size fits off_t; the cast cannot lose bits.
     int rc = detail::retry_on_eintr(
-        [&] { return ::ftruncate(file.native_handle(), native_size.value()); });
+        [&] { return ::ftruncate(file.native_handle(), static_cast<off_t>(new_size)); });
     if (rc < 0) {
         return make_unexpected<void>(from_errno_value(errno));
     }
@@ -301,13 +285,15 @@ Result<CompositionOutcome> compose(CompositionKind kind, std::size_t total,
 }
 Result<CompositionOutcome> read_exact_at(const File& file, std::uint64_t offset,
                                          std::span<std::byte> dst) {
-    const Precheck pre = precheck(file, FileOperation::read, offset, dst.size(), dst.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<CompositionOutcome>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict =
+        admit_data_op(file, FileOperation::read, offset, dst.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return CompositionOutcome{};
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<CompositionOutcome>(detail::rejection_error(verdict));
+    if (dst.data() == nullptr)
+        return make_unexpected<CompositionOutcome>(
+            IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::read_exact, dst.size(), [&](std::size_t confirmed) {
         return read_at(file, offset + confirmed, dst.subspan(confirmed));
     });
@@ -315,38 +301,42 @@ Result<CompositionOutcome> read_exact_at(const File& file, std::uint64_t offset,
 
 Result<CompositionOutcome> write_all_at(const File& file, std::uint64_t offset,
                                         std::span<const std::byte> src) {
-    const Precheck pre = precheck(file, FileOperation::write, offset, src.size(), src.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<CompositionOutcome>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict =
+        admit_data_op(file, FileOperation::write, offset, src.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return CompositionOutcome{};
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<CompositionOutcome>(detail::rejection_error(verdict));
+    if (src.data() == nullptr)
+        return make_unexpected<CompositionOutcome>(
+            IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::write_all, src.size(), [&](std::size_t confirmed) {
         return write_at(file, offset + confirmed, src.subspan(confirmed));
     });
 }
 
 Result<CompositionOutcome> read_exact(const File& file, std::span<std::byte> dst) {
-    const Precheck pre = precheck(file, FileOperation::read, 0, dst.size(), dst.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<CompositionOutcome>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict = admit_data_op(file, FileOperation::read, 0, dst.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return CompositionOutcome{};
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<CompositionOutcome>(detail::rejection_error(verdict));
+    if (dst.data() == nullptr)
+        return make_unexpected<CompositionOutcome>(
+            IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::read_exact, dst.size(),
                    [&](std::size_t confirmed) { return read(file, dst.subspan(confirmed)); });
 }
 
 Result<CompositionOutcome> write_all(const File& file, std::span<const std::byte> src) {
-    const Precheck pre = precheck(file, FileOperation::write, 0, src.size(), src.data());
-    if (pre.rejection.has_value()) {
-        return make_unexpected<CompositionOutcome>(*pre.rejection);
-    }
-    if (pre.complete_empty) {
+    const DataOpVerdict verdict = admit_data_op(file, FileOperation::write, 0, src.size());
+    if (verdict == DataOpVerdict::complete_empty)
         return CompositionOutcome{};
-    }
+    if (detail::is_rejection(verdict))
+        return make_unexpected<CompositionOutcome>(detail::rejection_error(verdict));
+    if (src.data() == nullptr)
+        return make_unexpected<CompositionOutcome>(
+            IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::write_all, src.size(),
                    [&](std::size_t confirmed) { return write(file, src.subspan(confirmed)); });
 }
