@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <utility>
 
 #ifdef SLUICE_FILE_INTERNAL_TESTING
 #include "file_test_seams.hpp"
@@ -74,6 +75,14 @@ ssize_t native_pwrite(int fd, const void* buf, std::size_t count, off_t offset) 
     return ::pwrite(fd, buf, count, offset);
 }
 
+template <class Fn> auto step_retry_on_eintr(Fn&& fn) -> decltype(fn()) {
+#if defined(SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY)
+    return fn();
+#else
+    return detail::retry_on_eintr(std::forward<Fn>(fn));
+#endif
+}
+
 }
 Result<std::size_t> read_at(const File& file, std::uint64_t offset,
                             std::span<std::byte> dst) {
@@ -86,7 +95,7 @@ Result<std::size_t> read_at(const File& file, std::uint64_t offset,
     if (dst.data() == nullptr)
         return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
     // The execute verdict proved offset fits off_t; the cast cannot lose bits.
-    ssize_t n = detail::retry_on_eintr([&] {
+    ssize_t n = step_retry_on_eintr([&] {
         return native_pread(file.native_handle(), dst.data(), dst.size(),
                             static_cast<off_t>(offset));
     });
@@ -107,7 +116,7 @@ Result<std::size_t> write_at(const File& file, std::uint64_t offset,
     if (src.data() == nullptr)
         return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
     // The execute verdict proved offset fits off_t; the cast cannot lose bits.
-    ssize_t n = detail::retry_on_eintr([&] {
+    ssize_t n = step_retry_on_eintr([&] {
         return native_pwrite(file.native_handle(), src.data(), src.size(),
                              static_cast<off_t>(offset));
     });
@@ -126,7 +135,7 @@ Result<std::size_t> read(const File& file, std::span<std::byte> dst) {
     if (dst.data() == nullptr)
         return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
 
-    ssize_t n = detail::retry_on_eintr([&] {
+    ssize_t n = step_retry_on_eintr([&] {
         return native_read(file.native_handle(), dst.data(), dst.size());
     });
     if (n < 0) {
@@ -144,7 +153,7 @@ Result<std::size_t> write(const File& file, std::span<const std::byte> src) {
     if (src.data() == nullptr)
         return make_unexpected<std::size_t>(IoError{.code = IoError::Code::invalid_argument});
 
-    ssize_t n = detail::retry_on_eintr([&] {
+    ssize_t n = step_retry_on_eintr([&] {
         return native_write(file.native_handle(), src.data(), src.size());
     });
     if (n < 0) {
@@ -234,8 +243,12 @@ using detail::CompositionKind;
 using detail::CompositionState;
 
 constexpr EffectCertainty publish_certainty(detail::EffectCertainty certainty) noexcept {
+#if defined(SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED)
+    return EffectCertainty::accounted;
+#else
     return certainty == detail::EffectCertainty::accounted ? EffectCertainty::accounted
                                                            : EffectCertainty::unknown;
+#endif
 }
 
 CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
@@ -277,7 +290,11 @@ Result<CompositionOutcome> compose(CompositionKind kind, std::size_t total,
             state = detail::compose_error(state, step.error());
             break;
         }
+#if defined(SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT)
+        state = detail::compose_progress(kind, total, state, total - confirmed);
+#else
         state = detail::compose_progress(kind, total, state, step.value());
+#endif
     }
     return direct_outcome(state);
 }
