@@ -125,4 +125,13 @@ nothing was skipped.
 
 ## 6. PR record
 
-(filled after PR creation)
+- Research PR: https://github.com/jnhu76/Sluice/pull/610 (state OPEN, base
+  master, head branch `research/direct-beyond-parity-evidence`), description
+  references #603.
+- Archive commit: `292e07348fcbd7b4f2bfc3593f087353bab0c597`
+  (615 files: 613 verbatim evidence files + EVIDENCE_MANIFEST.json + this
+  record), parent = master `bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57`.
+- Verification performed before submission: per-file `sha256` re-check of all
+  manifest entries against the committed tree; `git diff --name-only
+  master...HEAD` confirmed confined to `research/direct-beyond-parity/`.
+
