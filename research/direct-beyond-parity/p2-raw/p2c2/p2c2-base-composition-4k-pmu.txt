@@ -1,0 +1,59 @@
+# PMU diagnostic (P1 §6.2 command shape; never a wall source) — 2026-10-27T22:02:16+08:00 host E5
+# per arm: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 1 /tmp/sluice600/p2-p2c2-base-composition-4k-pmu.bin (per-cell PMU scratch, deleted after)
+# ladder sha256 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8
+== arm w1x ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 4096 0 1 /tmp/sluice600/p2-p2c2-base-composition-4k-pmu.bin':
+
+     1,144,975,649      instructions:u                                                        
+     2,258,949,537      cycles:u                                                              
+
+       0.683277130 seconds time elapsed
+
+       0.657355000 seconds user
+       0.023947000 seconds sys
+
+
+exit=0
+== arm wx ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 4096 0 1 /tmp/sluice600/p2-p2c2-base-composition-4k-pmu.bin':
+
+     1,145,238,109      instructions:u                                                        
+     2,258,234,892      cycles:u                                                              
+
+       0.682183154 seconds time elapsed
+
+       0.656287000 seconds user
+       0.023945000 seconds sys
+
+
+exit=0
+== arm w1c ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1c 4096 4096 0 1 /tmp/sluice600/p2-p2c2-base-composition-4k-pmu.bin':
+
+     1,145,016,695      instructions:u                                                        
+     2,259,119,274      cycles:u                                                              
+
+       0.684922923 seconds time elapsed
+
+       0.655256000 seconds user
+       0.026880000 seconds sys
+
+
+exit=0
+== arm wc ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wc 4096 4096 0 1 /tmp/sluice600/p2-p2c2-base-composition-4k-pmu.bin':
+
+     1,145,202,088      instructions:u                                                        
+     2,258,420,146      cycles:u                                                              
+
+       0.682700883 seconds time elapsed
+
+       0.659689000 seconds user
+       0.020974000 seconds sys
+
+
+exit=0

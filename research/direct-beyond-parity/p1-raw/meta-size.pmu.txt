@@ -1,0 +1,47 @@
+# P1 cell meta-size — PMU diagnostic record (plan §6.2/§6.3: separate PMU section; never the wall source).
+# date=2026-10-27T04:08:37+08:00 host=E5; ops=16384 warmup=0 reps=1; m0fi included as the §4.3 shared floor. Child arm= lines are instrumented-run output, excluded from wall statistics per §5.7.
+# cmd: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1sz 0 16384 0 1 /tmp/sluice600/data64m.bin
+arm=M1_native_size size=0 ops=16384 ns_per_op=530.398 user_ns_per_op=338.135 sys_ns_per_op=191.406 checksum=1099511627776 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1sz 0 16384 0 1 /tmp/sluice600/data64m.bin':
+
+         4,255,445      instructions:u                                                        
+         4,311,922      cycles:u                                                              
+
+       0.010598247 seconds time elapsed
+
+       0.007417000 seconds user
+       0.003186000 seconds sys
+
+
+pmu_exit_m1sz=0
+# cmd: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2sz 0 16384 0 1 /tmp/sluice600/data64m.bin
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=541.723 user_ns_per_op=397.766 sys_ns_per_op=142.822 checksum=1099511627776 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2sz 0 16384 0 1 /tmp/sluice600/data64m.bin':
+
+         3,960,709      instructions:u                                                        
+         3,540,303      cycles:u                                                              
+
+       0.010641478 seconds time elapsed
+
+       0.007310000 seconds user
+       0.003315000 seconds sys
+
+
+pmu_exit_m2sz=0
+# cmd: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0fi 0 16384 0 1 /tmp/sluice600/data64m.bin
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=569.753 user_ns_per_op=264.954 sys_ns_per_op=301.025 checksum=2471802225898536960 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0fi 0 16384 0 1 /tmp/sluice600/data64m.bin':
+
+         3,796,513      instructions:u                                                        
+         3,696,186      cycles:u                                                              
+
+       0.011070786 seconds time elapsed
+
+       0.006025000 seconds user
+       0.005009000 seconds sys
+
+
+pmu_exit_m0fi=0

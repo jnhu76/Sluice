@@ -1,0 +1,45 @@
+=== p3-m2-planner-overhead-g4k arm=rplt pmu run=1 2026-10-28T02:05:09+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=10191.547 user_ns_per_op=38903.320 sys_ns_per_op=7821.289 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=7 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=0':
+
+     1,190,588,790      instructions:u                                                        
+       416,274,531      cycles:u                                                              
+
+       0.146829294 seconds time elapsed
+
+       0.121595000 seconds user
+       0.024076000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-planner-overhead-g4k arm=rplt pmu run=2 2026-10-28T02:05:09+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=10258.042 user_ns_per_op=41918.294 sys_ns_per_op=4574.219 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=7 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=0':
+
+     1,190,588,843      instructions:u                                                        
+       417,183,591      cycles:u                                                              
+
+       0.145290660 seconds time elapsed
+
+       0.130876000 seconds user
+       0.014052000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-planner-overhead-g4k arm=rplt pmu run=3 2026-10-28T02:05:09+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=10168.158 user_ns_per_op=41274.740 sys_ns_per_op=5219.401 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=7 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=0':
+
+     1,190,588,838      instructions:u                                                        
+       417,155,691      cycles:u                                                              
+
+       0.145245401 seconds time elapsed
+
+       0.127040000 seconds user
+       0.017844000 seconds sys
+
+
+PERF_EXIT=0

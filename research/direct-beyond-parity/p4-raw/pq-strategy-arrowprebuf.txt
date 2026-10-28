@@ -1,0 +1,45 @@
+# pq-strategy-arrowprebuf — 2026-10-28T12:19:55+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# process-level ABBA: pair p even invokes A then B, odd B then A; one process per sample; taskset -c 2; cwd /home/jnhu/Source/dududu
+# A = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='T3_fullscan_prebuf/p0_arrow/medium' reps=1
+# B = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='T3_fullscan/p0_arrow/medium' reps=1
+T3_fullscan_prebuf/p0_arrow/medium 362279875
+T3_fullscan/p0_arrow/medium 337876615
+T3_fullscan/p0_arrow/medium 338439837
+T3_fullscan_prebuf/p0_arrow/medium 354146694
+T3_fullscan_prebuf/p0_arrow/medium 363149726
+T3_fullscan/p0_arrow/medium 337405248
+T3_fullscan/p0_arrow/medium 338390059
+T3_fullscan_prebuf/p0_arrow/medium 362656697
+T3_fullscan_prebuf/p0_arrow/medium 367191755
+T3_fullscan/p0_arrow/medium 337894872
+T3_fullscan/p0_arrow/medium 338689970
+T3_fullscan_prebuf/p0_arrow/medium 362101165
+T3_fullscan_prebuf/p0_arrow/medium 365152404
+T3_fullscan/p0_arrow/medium 338405158
+T3_fullscan/p0_arrow/medium 342882170
+T3_fullscan_prebuf/p0_arrow/medium 361748534
+T3_fullscan_prebuf/p0_arrow/medium 353524455
+T3_fullscan/p0_arrow/medium 338825677
+T3_fullscan/p0_arrow/medium 340796464
+T3_fullscan_prebuf/p0_arrow/medium 357295369
+T3_fullscan_prebuf/p0_arrow/medium 363930038
+T3_fullscan/p0_arrow/medium 339610005
+T3_fullscan/p0_arrow/medium 339866928
+T3_fullscan_prebuf/p0_arrow/medium 354178222
+T3_fullscan_prebuf/p0_arrow/medium 363626878
+T3_fullscan/p0_arrow/medium 338897040
+T3_fullscan/p0_arrow/medium 340135497
+T3_fullscan_prebuf/p0_arrow/medium 361672897
+T3_fullscan_prebuf/p0_arrow/medium 363167832
+T3_fullscan/p0_arrow/medium 338872098
+T3_fullscan/p0_arrow/medium 339779266
+T3_fullscan_prebuf/p0_arrow/medium 358268158
+# order-aware analysis (statistic A - B in ms):
+pairs=16
+A: mean=360.880669ms sd=4.142002 median=362.190520
+B: mean=339.172932ms sd=1.343130 median=338.848887
+delta(A-B): median=+23.838916ms mean=+21.707737ms sd=4.648271 pos=16/16
+paired t=+18.68 (df=15)
+CI95_mean=[+19.231371,+24.184103]
+AB_subgroup_median=+24.566549 BA_subgroup_median=+18.677628
+raw_deltas_ms=24.403260,15.706857,25.744478,24.266638,29.296883,23.411195,26.747246,18.866364,14.698778,16.498905,24.320033,14.311294,24.729838,21.537400,24.295734,18.488892

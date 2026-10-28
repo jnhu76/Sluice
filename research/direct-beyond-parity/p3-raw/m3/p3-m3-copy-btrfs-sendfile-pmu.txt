@@ -1,0 +1,45 @@
+=== p3-m3-copy-btrfs-sendfile arm=cp3 pmu run=1 2026-10-28T02:11:57+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=20365.016 user_ns_per_op=0.000 sys_ns_per_op=20240.234 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp3 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-sendfile-diag.bin':
+
+     1,018,677,542      instructions:u                                                        
+       955,250,240      cycles:u                                                              
+
+       0.447243891 seconds time elapsed
+
+       0.276998000 seconds user
+       0.052648000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-sendfile arm=cp3 pmu run=2 2026-10-28T02:11:58+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=19399.480 user_ns_per_op=0.000 sys_ns_per_op=19257.812 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp3 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-sendfile-diag.bin':
+
+     1,018,677,551      instructions:u                                                        
+       954,565,712      cycles:u                                                              
+
+       0.447019604 seconds time elapsed
+
+       0.276182000 seconds user
+       0.050680000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-sendfile arm=cp3 pmu run=3 2026-10-28T02:11:59+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=18894.526 user_ns_per_op=0.000 sys_ns_per_op=18782.227 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp3 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-sendfile-diag.bin':
+
+     1,018,677,715      instructions:u                                                        
+       955,058,005      cycles:u                                                              
+
+       0.450135419 seconds time elapsed
+
+       0.284020000 seconds user
+       0.045679000 seconds sys
+
+
+PERF_EXIT=0

@@ -1,0 +1,50 @@
+# P4 session environment pin — 2026-10-28T11:33:49+08:00
+# host: E5 | producing commands: see each line below
+KERNEL=7.2.11-200.fc44.x86_64
+GOVERNOR=schedutil
+PERF_EVENT_PARANOID=2
+TMP_FSTYPE=tmpfs
+VARTMP_FSTYPE=btrfs
+GCC=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+UPTIME_LOAD=0.06 0.11 0.09 2/887 16611
+# P4 identity gate re-verification — 2026-10-28T11:35:18+08:00 (measurement session)
+cmd: sha256sum ladder ladder-c1 ladder-c2 /home/jnhu/Source/Sluice-600-wt/build/linux/x86_64/release/libsluice_core.a /home/jnhu/Source/Sluice-600-wt-p2c1/build/linux/x86_64/release/libsluice_core.a /home/jnhu/Source/Sluice-600-wt-p2c2/build/linux/x86_64/release/libsluice_core.a /tmp/sluice600/data64m.bin
+8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8  /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder
+8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381  /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1
+8bb6473b0f2455c2b092d94cc55ccaec20fe72ff40103bd9fb5c9151c7740065  /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2
+d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0  /home/jnhu/Source/Sluice-600-wt/build/linux/x86_64/release/libsluice_core.a
+sha256sum: /home/jnhu/Source/Sluice-600-wt-p2c1/build/linux/x86_64/release/libsluice_core.a: No such file or directory
+sha256sum: /home/jnhu/Source/Sluice-600-wt-p2c2/build/linux/x86_64/release/libsluice_core.a: No such file or directory
+bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a  /tmp/sluice600/data64m.bin
+cold fixtures:
+-rw-r--r--. 1 jnhu jnhu 67108864 Oct 27 02:27 /var/tmp/sluice600-p1/cold64m.bin
+-rw-r--r--. 1 jnhu jnhu 67108864 Oct 27 04:13 /var/tmp/sluice600-p1/coldwrite64m.bin
+# P2C1/P2C2 archive re-hash (paths from p4-raw/identity.txt) — 2026-10-28T11:35:39+08:00
+07d0680307c71cc412dfd021fd47c3098de57b580283df189f66dcdc2052049e  /home/jnhu/Source/Sluice-direct-read-compose-prevalidated-steps/build/linux/x86_64/release/libsluice_core.a
+672510281abadba1cbda0a0e89f15e1dbb2c69f5a15bceb306b70196b420a807  /home/jnhu/Source/Sluice-direct-write-compose-exit-staging/build/linux/x86_64/release/libsluice_core.a
+# worktree HEADs:
+deaf03014173e13633a43f4db405c9a9e9860f23
+476bd9ce9780594163350228e066a86b554c157d
+77e5399a45998dea396699fa2e063c94a665945a
+# worktree status (expect clean):
+0
+0
+0
+# kit smoke gate evidence (readiness session, same binary hashes):
+ok: frozen trace unchanged after smoke = a059e58fbc8771d78b23cd74afc3e1e7d26a09e230165b474dfc5b5cf1b53724
+ok: frozen dataset unchanged after smoke = 6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ok: dududu worktree clean = 0
+=== summary: 244 checks, 0 failures ===
+SMOKE_PASS
+# P4 session close — 2026-10-28T12:34:34+08:00
+READ_FIX_after=bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+COLD_FIX_after=bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+kit_binaries_after:
+8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8
+8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+8bb6473b0f2455c2b092d94cc55ccaec20fe72ff40103bd9fb5c9151c7740065
+load_close=0.13 0.84 0.85 2/893 23901
+concurrent_measure_procs_close=0
+dududu_branch=r1-parquet-sluice-bench HEAD=ed053cb status_clean=0
+research_branch_p4-strategy-arms=f8b0967 (local-only, never pushed)
+sluice_main_status_clean=0 (expect 0 — product sources untouched)

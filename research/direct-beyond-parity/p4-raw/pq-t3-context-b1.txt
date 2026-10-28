@@ -1,0 +1,357 @@
+# pq-t3-context-b1 (full R1 three-arm protocol shape at B1 SDK; warmup pass discarded + sampled pass 10 reps; DESCRIPTIVE ONLY — unpaired GB reps, R1 deviation (a), no CI claim) — 2026-10-28T12:24:57+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd warmup: taskset -c 2 /tmp/p4-parquet/b1/build/parquet_bench --small=... --medium=... --trace=... --benchmark_repetitions=1 --benchmark_min_warmup_time=2 (discarded)
+== warmup pass (discarded)
+24
+== sampled pass (10 reps)
+# dataset small path=build/parquet-data/small-none.parquet sha256=c2debb4c16228e5b66c9fbfa75e543b1ecff5e3b90b075db2ef1098a5e9eb3bb
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+2026-10-28T12:26:45+08:00
+Running /tmp/p4-parquet/b1/build/parquet_bench
+Run on (20 X 3500 MHz CPU s)
+CPU Caches:
+  L1 Data 32 KiB (x10)
+  L1 Instruction 32 KiB (x10)
+  L2 Unified 256 KiB (x10)
+  L3 Unified 25600 KiB (x1)
+Load Average: 1.60, 1.07, 0.78
+***WARNING*** CPU scaling is enabled, the benchmark real time measurements may be noisy and will incur extra overhead.
+***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.
+-----------------------------------------------------------------------------------------------------------
+Benchmark                                                 Time             CPU   Iterations UserCounters...
+-----------------------------------------------------------------------------------------------------------
+T1_meta/p0_arrow/small                                80557 ns        80210 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.071513 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                80919 ns        80584 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.071345 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                80116 ns        79779 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.070214 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                80614 ns        80264 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.071434 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                80518 ns        80196 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.072613 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                80230 ns        79889 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.076662 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                79695 ns        79356 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.070878 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                79694 ns        79380 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.071152 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                79516 ns        79177 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.07142 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small                                79714 ns        79380 ns         8736 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.071072 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small_mean                           80157 ns        79822 ns           10 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.0718303 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small_median                         80173 ns        79834 ns           10 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.0713825 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=40k
+T1_meta/p0_arrow/small_stddev                           486 ns          483 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=1.80043m read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=0
+T1_meta/p0_arrow/small_cv                              0.61 %          0.60 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.51% read_errors=0.00% read_ms=0.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T1_meta/p1_native/small                               78860 ns        78541 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069306 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               79025 ns        78693 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069212 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               78958 ns        78611 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069942 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               78615 ns        78307 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069481 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               78032 ns        77718 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.068841 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               77496 ns        77179 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.074888 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               78128 ns        77822 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069363 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               77622 ns        77305 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.068554 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               77852 ns        77530 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069059 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small                               78537 ns        78200 ns         8846 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069198 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small_mean                          78312 ns        77991 ns           10 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.0697844 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small_median                        78332 ns        78011 ns           10 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069259 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p1_native/small_stddev                          561 ns          555 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=1.83096m read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=0
+T1_meta/p1_native/small_cv                             0.72 %          0.71 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.62% read_errors=0.00% read_ms=0.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T1_meta/p2_sluice/small                               79897 ns        79569 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.07075 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               79486 ns        79174 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.070432 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               79544 ns        79237 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069665 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               79200 ns        78885 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.070115 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               79418 ns        79102 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069967 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               79559 ns        79234 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.070033 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               78752 ns        78459 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069762 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               78656 ns        78349 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.06939 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               79014 ns        78695 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.070017 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small                               78956 ns        78661 ns         8841 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069462 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small_mean                          79248 ns        78937 ns           10 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.0699593 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small_median                        79309 ns        78994 ns           10 cells=280k columns_read=7 io_calls=1 open_meta_ms=0.069992 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=40k
+T1_meta/p2_sluice/small_stddev                          398 ns          391 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=418.816u read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=0
+T1_meta/p2_sluice/small_cv                             0.50 %          0.49 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=0.60% read_errors=0.00% read_ms=0.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T1_meta/p0_arrow/medium                              100282 ns        99875 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.089751 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100259 ns        99848 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.08923 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100678 ns       100263 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.089263 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100745 ns       100339 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.090702 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100521 ns       100116 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.09004 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100492 ns       100088 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.089946 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100227 ns        99831 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.090521 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100797 ns       100394 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.089758 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                               99995 ns        99595 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.089975 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium                              100406 ns        99992 ns         7064 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.096117 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium_mean                         100440 ns       100034 ns           10 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.0905303 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium_median                       100449 ns       100040 ns           10 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.0899605 read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=1.2M
+T1_meta/p0_arrow/medium_stddev                          256 ns          254 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=2.01747m read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=0
+T1_meta/p0_arrow/medium_cv                             0.25 %          0.25 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.23% read_errors=0.00% read_ms=0.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T1_meta/p1_native/medium                              98597 ns        98211 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.092747 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98481 ns        98099 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.087232 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              99278 ns        98878 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088531 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98145 ns        97765 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.086662 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98059 ns        97671 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.087905 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98637 ns        98242 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088097 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98447 ns        98063 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.08834 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98743 ns        98342 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.08743 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98188 ns        97808 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.092723 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium                              98677 ns        98293 ns         7071 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088234 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium_mean                         98525 ns        98137 ns           10 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.0887901 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium_median                       98539 ns        98155 ns           10 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.0881655 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p1_native/medium_stddev                         356 ns          350 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=2.15442m read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=0
+T1_meta/p1_native/medium_cv                            0.36 %          0.36 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.43% read_errors=0.00% read_ms=0.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T1_meta/p2_sluice/medium                              99912 ns        99514 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.089096 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              99233 ns        98848 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088912 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              99160 ns        98775 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088899 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              98927 ns        98546 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.089246 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              99056 ns        98672 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.08799 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                             100014 ns        99621 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088898 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              99469 ns        99077 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088723 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              99637 ns        99246 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.089397 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                             100007 ns        99614 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.094788 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium                              99424 ns        99034 ns         6988 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.088331 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium_mean                         99484 ns        99095 ns           10 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.089428 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium_median                       99446 ns        99055 ns           10 cells=8.4M columns_read=7 io_calls=1 open_meta_ms=0.0889055 read_errors=0 read_ms=0 requested_bytes=65.536k returned_bytes=65.536k rows=1.2M
+T1_meta/p2_sluice/medium_stddev                         398 ns          393 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=1.92842m read_errors=0 read_ms=0 requested_bytes=0 returned_bytes=0 rows=0
+T1_meta/p2_sluice/medium_cv                            0.40 %          0.40 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.16% read_errors=0.00% read_ms=0.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T2_projection/p0_arrow/small                        2433627 ns      2419904 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.080306 read_errors=0 read_ms=2.32204 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2436648 ns      2423539 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.078509 read_errors=0 read_ms=1.92528 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2388820 ns      2377060 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.07974 read_errors=0 read_ms=2.22487 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2453857 ns      2439954 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.08048 read_errors=0 read_ms=2.38426 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2435648 ns      2422561 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.07955 read_errors=0 read_ms=2.29083 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2458636 ns      2444638 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.08072 read_errors=0 read_ms=2.3973 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2453250 ns      2439749 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.079294 read_errors=0 read_ms=2.32351 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2459300 ns      2446045 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.08031 read_errors=0 read_ms=2.37909 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2457142 ns      2443745 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.079527 read_errors=0 read_ms=2.30754 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small                        2445375 ns      2432432 ns          288 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.078925 read_errors=0 read_ms=2.37398 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small_mean                   2442230 ns      2428963 ns           10 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.0797361 read_errors=0 read_ms=2.29287 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small_median                 2449313 ns      2436091 ns           10 cells=80k columns_read=2 io_calls=0 open_meta_ms=0.079645 read_errors=0 read_ms=2.32277 requested_bytes=0 returned_bytes=0 rows=40k
+T2_projection/p0_arrow/small_stddev                   21215 ns        20687 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=715.936u read_errors=0 read_ms=0.139453 requested_bytes=0 returned_bytes=0 rows=0
+T2_projection/p0_arrow/small_cv                        0.87 %          0.85 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=0.90% read_errors=0.00% read_ms=6.08% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T2_projection/p1_native/small                       2452532 ns      2439582 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.078829 read_errors=0 read_ms=2.27316 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2455863 ns      2442344 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.07863 read_errors=0 read_ms=2.21899 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2457247 ns      2443526 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079401 read_errors=0 read_ms=2.38364 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2427135 ns      2409869 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079737 read_errors=0 read_ms=2.3169 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2445479 ns      2432083 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079451 read_errors=0 read_ms=2.40904 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2462477 ns      2448561 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080096 read_errors=0 read_ms=2.32623 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2446968 ns      2433459 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080703 read_errors=0 read_ms=2.33409 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2446826 ns      2433865 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.078898 read_errors=0 read_ms=2.28349 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2445894 ns      2432799 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079878 read_errors=0 read_ms=2.30481 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small                       2385100 ns      2372336 ns          286 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.091486 read_errors=0 read_ms=2.51758 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small_mean                  2442552 ns      2428843 ns           10 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.0807109 read_errors=0 read_ms=2.33679 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small_median                2446897 ns      2433662 ns           10 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079594 read_errors=0 read_ms=2.32157 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p1_native/small_stddev                  22325 ns        22429 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=3.83818m read_errors=0 read_ms=0.0832676 requested_bytes=0 returned_bytes=0 rows=0
+T2_projection/p1_native/small_cv                       0.91 %          0.92 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=4.76% read_errors=0.00% read_ms=3.56% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T2_projection/p2_sluice/small                       2444477 ns      2430576 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080229 read_errors=0 read_ms=2.41422 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2447021 ns      2433192 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.094144 read_errors=0 read_ms=2.16398 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2441053 ns      2427529 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079795 read_errors=0 read_ms=2.26941 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2459489 ns      2445991 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080314 read_errors=0 read_ms=2.43242 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2532920 ns      2517909 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.079811 read_errors=0 read_ms=2.39874 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2428781 ns      2416414 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080905 read_errors=0 read_ms=2.31407 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2431550 ns      2419130 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080815 read_errors=0 read_ms=2.31681 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2449594 ns      2437091 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.087038 read_errors=0 read_ms=2.34773 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2428347 ns      2416336 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.080927 read_errors=0 read_ms=2.31034 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small                       2448096 ns      2435519 ns          285 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.088889 read_errors=0 read_ms=2.17144 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small_mean                  2451133 ns      2437969 ns           10 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.0832867 read_errors=0 read_ms=2.31391 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small_median                2445749 ns      2431884 ns           10 cells=80k columns_read=2 io_calls=13 open_meta_ms=0.08086 read_errors=0 read_ms=2.31544 requested_bytes=1.11712M returned_bytes=1.11712M rows=40k
+T2_projection/p2_sluice/small_stddev                  30433 ns        29694 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=4.97938m read_errors=0 read_ms=0.0926325 requested_bytes=0 returned_bytes=0 rows=0
+T2_projection/p2_sluice/small_cv                       1.24 %          1.22 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=5.98% read_errors=0.00% read_ms=4.00% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T2_projection/p0_arrow/medium                      64376385 ns     64142019 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.132998 read_errors=0 read_ms=66.0775 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      58693860 ns     58476532 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.13231 read_errors=0 read_ms=59.3499 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      61455780 ns     61231646 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.133212 read_errors=0 read_ms=62.0716 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      62699670 ns     62469076 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.126384 read_errors=0 read_ms=59.2602 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      59879106 ns     59653661 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.133983 read_errors=0 read_ms=64.6728 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      64815305 ns     64576929 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.131537 read_errors=0 read_ms=59.9836 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      59139339 ns     58923473 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.133601 read_errors=0 read_ms=65.6472 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      62654953 ns     62418404 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.131681 read_errors=0 read_ms=65.4829 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      60800512 ns     60582933 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.131925 read_errors=0 read_ms=62.6527 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium                      63210189 ns     62981475 ns           11 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.126417 read_errors=0 read_ms=60.7447 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium_mean                 61772510 ns     61545615 ns           10 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.131405 read_errors=0 read_ms=62.5943 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium_median               62055366 ns     61825025 ns           10 cells=2.4M columns_read=2 io_calls=0 open_meta_ms=0.132117 read_errors=0 read_ms=62.3622 requested_bytes=0 returned_bytes=0 rows=1.2M
+T2_projection/p0_arrow/medium_stddev                2128791 ns      2121481 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=2.75973m read_errors=0 read_ms=2.71359 requested_bytes=0 returned_bytes=0 rows=0
+T2_projection/p0_arrow/medium_cv                       3.45 %          3.45 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.10% read_errors=0.00% read_ms=4.34% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T2_projection/p1_native/medium                     60999069 ns     60777433 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.13055 read_errors=0 read_ms=57.8905 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     58923210 ns     58709737 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.13015 read_errors=0 read_ms=64.0803 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     61927317 ns     61699276 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.135114 read_errors=0 read_ms=64.0666 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     63685904 ns     63453212 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131332 read_errors=0 read_ms=64.3547 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     60927490 ns     60702786 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131357 read_errors=0 read_ms=59.0561 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     58990697 ns     58770708 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131939 read_errors=0 read_ms=56.5928 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     62031467 ns     61810124 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.130496 read_errors=0 read_ms=65.9733 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     63251446 ns     63020028 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.13028 read_errors=0 read_ms=56.6777 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     61543133 ns     61316725 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131317 read_errors=0 read_ms=61.726 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium                     62523278 ns     62289922 ns           11 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.13264 read_errors=0 read_ms=62.239 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium_mean                61480301 ns     61254995 ns           10 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131518 read_errors=0 read_ms=61.2657 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium_median              61735225 ns     61508001 ns           10 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131325 read_errors=0 read_ms=61.9825 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p1_native/medium_stddev               1594122 ns      1588534 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=1.48525m read_errors=0 read_ms=3.46073 requested_bytes=0 returned_bytes=0 rows=0
+T2_projection/p1_native/medium_cv                      2.59 %          2.59 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=1.13% read_errors=0.00% read_ms=5.65% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T2_projection/p2_sluice/medium                     62030452 ns     61797974 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.132281 read_errors=0 read_ms=60.1973 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     63897036 ns     63661427 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.138864 read_errors=0 read_ms=60.6342 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     61116166 ns     60885291 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.140852 read_errors=0 read_ms=56.0427 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     62503999 ns     62263798 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.130809 read_errors=0 read_ms=60.9251 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     60400984 ns     60184144 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.130983 read_errors=0 read_ms=57.5143 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     61690195 ns     61459054 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.129377 read_errors=0 read_ms=61.9283 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     61789689 ns     61563524 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.132561 read_errors=0 read_ms=61.0484 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     61682073 ns     61455564 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.13066 read_errors=0 read_ms=63.344 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     62079279 ns     61847866 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131358 read_errors=0 read_ms=61.3621 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium                     61257166 ns     61033235 ns           12 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131869 read_errors=0 read_ms=63.3189 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium_mean                61844704 ns     61615188 ns           10 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.132961 read_errors=0 read_ms=60.6315 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium_median              61739942 ns     61511289 ns           10 cells=2.4M columns_read=2 io_calls=17 open_meta_ms=0.131613 read_errors=0 read_ms=60.9867 requested_bytes=31.5386M returned_bytes=31.5386M rows=1.2M
+T2_projection/p2_sluice/medium_stddev                927955 ns       922989 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=3.7739m read_errors=0 read_ms=2.30983 requested_bytes=0 returned_bytes=0 rows=0
+T2_projection/p2_sluice/medium_cv                      1.50 %          1.50 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.84% read_errors=0.00% read_ms=3.81% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan/p0_arrow/small                          6419508 ns      6390079 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.084678 read_errors=0 read_ms=6.10887 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6414662 ns      6386154 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.109375 read_errors=0 read_ms=6.73351 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6392952 ns      6363578 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.08505 read_errors=0 read_ms=6.46825 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6403892 ns      6374308 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.085114 read_errors=0 read_ms=6.19922 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6406258 ns      6376806 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.084474 read_errors=0 read_ms=6.28316 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6398002 ns      6370709 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.084076 read_errors=0 read_ms=6.25652 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6398540 ns      6370624 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.08313 read_errors=0 read_ms=6.31617 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6409752 ns      6381243 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.083478 read_errors=0 read_ms=6.21219 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6408016 ns      6380762 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.084064 read_errors=0 read_ms=6.14446 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small                          6401375 ns      6373415 ns          107 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.082625 read_errors=0 read_ms=6.38966 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small_mean                     6405296 ns      6376768 ns           10 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.0866064 read_errors=0 read_ms=6.3112 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small_median                   6405075 ns      6375557 ns           10 cells=280k columns_read=7 io_calls=0 open_meta_ms=0.084275 read_errors=0 read_ms=6.26984 requested_bytes=0 returned_bytes=0 rows=40k
+T3_fullscan/p0_arrow/small_stddev                      8072 ns         7937 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=8.04097m read_errors=0 read_ms=0.183802 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan/p0_arrow/small_cv                          0.13 %          0.12 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=9.28% read_errors=0.00% read_ms=2.91% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan/p1_native/small                         6409272 ns      6372454 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.0904 read_errors=0 read_ms=6.28833 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6370774 ns      6343144 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.082604 read_errors=0 read_ms=6.26812 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6405223 ns      6376917 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.082812 read_errors=0 read_ms=6.31048 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6407498 ns      6379016 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.098437 read_errors=0 read_ms=6.26958 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6404417 ns      6376777 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083106 read_errors=0 read_ms=6.27466 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6413930 ns      6385919 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.08404 read_errors=0 read_ms=6.29072 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6438166 ns      6409991 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.09124 read_errors=0 read_ms=6.26319 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6426571 ns      6398415 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083606 read_errors=0 read_ms=6.28017 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6381097 ns      6353335 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.082893 read_errors=0 read_ms=6.26085 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small                         6413375 ns      6385598 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083021 read_errors=0 read_ms=6.29512 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small_mean                    6407032 ns      6378157 ns           10 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.0862159 read_errors=0 read_ms=6.28012 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small_median                  6408385 ns      6377967 ns           10 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083356 read_errors=0 read_ms=6.27741 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p1_native/small_stddev                    19555 ns        19488 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=5.36659m read_errors=0 read_ms=0.0158781 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan/p1_native/small_cv                         0.31 %          0.31 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=6.22% read_errors=0.00% read_ms=0.25% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan/p2_sluice/small                         6379498 ns      6352195 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.084596 read_errors=0 read_ms=6.27409 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6404285 ns      6376594 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083943 read_errors=0 read_ms=6.29367 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6396792 ns      6369301 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.086337 read_errors=0 read_ms=6.30293 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6394429 ns      6366900 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.082845 read_errors=0 read_ms=6.1487 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6415185 ns      6387059 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.084019 read_errors=0 read_ms=6.16869 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6409622 ns      6381644 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.082881 read_errors=0 read_ms=6.27215 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6397212 ns      6369598 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083718 read_errors=0 read_ms=6.29198 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6415188 ns      6387680 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083985 read_errors=0 read_ms=6.28687 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6407762 ns      6379877 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.08379 read_errors=0 read_ms=6.2194 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small                         6427497 ns      6399745 ns          109 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.09104 read_errors=0 read_ms=6.72091 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small_mean                    6404747 ns      6377059 ns           10 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.0847154 read_errors=0 read_ms=6.29794 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small_median                  6406023 ns      6378236 ns           10 cells=280k columns_read=7 io_calls=43 open_meta_ms=0.083964 read_errors=0 read_ms=6.28048 requested_bytes=6.1762M returned_bytes=6.1762M rows=40k
+T3_fullscan/p2_sluice/small_stddev                    13469 ns        13308 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=2.42611m read_errors=0 read_ms=0.158285 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan/p2_sluice/small_cv                         0.21 %          0.21 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.86% read_errors=0.00% read_ms=2.51% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan/p0_arrow/medium                       306230013 ns    305112795 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.135467 read_errors=0 read_ms=305.911 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       310727579 ns    309637067 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.12745 read_errors=0 read_ms=313.917 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       312728890 ns    311470986 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.128943 read_errors=0 read_ms=307.569 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       306536478 ns    305379370 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.152964 read_errors=0 read_ms=294.665 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       322174427 ns    321041529 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.123061 read_errors=0 read_ms=307.902 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       320604754 ns    319425598 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.124636 read_errors=0 read_ms=322.021 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       306688442 ns    305523745 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.131382 read_errors=0 read_ms=293.222 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       313025616 ns    311909321 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.13001 read_errors=0 read_ms=299.003 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       323330795 ns    322193585 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.129223 read_errors=0 read_ms=307.169 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium                       314451732 ns    313308635 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.136844 read_errors=0 read_ms=309.039 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium_mean                  313649873 ns    312500263 ns           10 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.131998 read_errors=0 read_ms=306.042 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium_median                312877253 ns    311690154 ns           10 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.129617 read_errors=0 read_ms=307.369 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan/p0_arrow/medium_stddev                  6491837 ns      6490057 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=8.50627m read_errors=0 read_ms=8.67153 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan/p0_arrow/medium_cv                         2.07 %          2.08 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=6.44% read_errors=0.00% read_ms=2.83% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan/p1_native/medium                      321286959 ns    320130905 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.129143 read_errors=0 read_ms=298.748 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      328689053 ns    327533575 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.127153 read_errors=0 read_ms=321.328 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      315621820 ns    314523102 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.130602 read_errors=0 read_ms=316.956 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      313222657 ns    312046569 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.128425 read_errors=0 read_ms=295.228 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      326510281 ns    325351234 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.13487 read_errors=0 read_ms=322.854 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      324010703 ns    322845597 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.133088 read_errors=0 read_ms=318.164 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      312958578 ns    311737024 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.131855 read_errors=0 read_ms=314.218 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      315318974 ns    314161671 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.126427 read_errors=0 read_ms=315.238 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      311382498 ns    310171784 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.127858 read_errors=0 read_ms=308.255 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium                      313927670 ns    312762607 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.126943 read_errors=0 read_ms=307.601 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium_mean                 318292919 ns    317126407 ns           10 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.129636 read_errors=0 read_ms=311.859 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium_median               315470397 ns    314342386 ns           10 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.128784 read_errors=0 read_ms=314.728 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p1_native/medium_stddev                 6273517 ns      6285076 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=2.86268m read_errors=0 read_ms=9.26695 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan/p1_native/medium_cv                        1.97 %          1.98 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.21% read_errors=0.00% read_ms=2.97% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan/p2_sluice/medium                      329256308 ns    328034577 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.12953 read_errors=0 read_ms=322.803 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      330629290 ns    329350358 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.129062 read_errors=0 read_ms=322.237 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      323184532 ns    321980972 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.130196 read_errors=0 read_ms=316.224 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      318901346 ns    317737702 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.139546 read_errors=0 read_ms=326.452 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      315591454 ns    314447702 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.128262 read_errors=0 read_ms=311.439 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      326778615 ns    325596797 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.128698 read_errors=0 read_ms=322.182 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      320806306 ns    319629208 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.128335 read_errors=0 read_ms=308.557 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      315874045 ns    314620548 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.131048 read_errors=0 read_ms=325.014 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      310832695 ns    309688095 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.127686 read_errors=0 read_ms=300.695 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium                      314344784 ns    313171388 ns            2 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.126695 read_errors=0 read_ms=297.923 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium_mean                 320619938 ns    319425735 ns           10 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.129906 read_errors=0 read_ms=315.353 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium_median               319853826 ns    318683455 ns           10 cells=8.4M columns_read=7 io_calls=57 open_meta_ms=0.12888 read_errors=0 read_ms=319.203 requested_bytes=181.996M returned_bytes=181.996M rows=1.2M
+T3_fullscan/p2_sluice/medium_stddev                 6710238 ns      6682660 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=3.60618m read_errors=0 read_ms=10.2578 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan/p2_sluice/medium_cv                        2.09 %          2.09 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=2.78% read_errors=0.00% read_ms=3.25% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%
+T3_fullscan_t4/p0_arrow/medium/threads:4         1376130250 ns    352443740 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1385543627 ns    352583139 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1388363851 ns    353444009 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1389446102 ns    353733258 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1389430298 ns    354086958 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1382171999 ns    352552681 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1357071038 ns    349158648 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1367499032 ns    349654693 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1341653973 ns    346365504 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4         1382891670 ns    352423384 ns            4
+T3_fullscan_t4/p0_arrow/medium/threads:4_mean    1376020184 ns    351644601 ns           10
+T3_fullscan_t4/p0_arrow/medium/threads:4_median  1382531834 ns    352498210 ns           10
+T3_fullscan_t4/p0_arrow/medium/threads:4_stddev    15989369 ns      2461359 ns           10
+T3_fullscan_t4/p0_arrow/medium/threads:4_cv            1.16 %          0.70 %            10
+T3_fullscan_t4/p1_native/medium/threads:4        1368066261 ns    353096211 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1379219832 ns    352370027 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1375623580 ns    352227969 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1372868557 ns    351666505 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1401813014 ns    356706299 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1398586783 ns    356431172 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1384804795 ns    353098376 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1347284195 ns    348976202 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1348228891 ns    348773933 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4        1366305850 ns    350764593 ns            4
+T3_fullscan_t4/p1_native/medium/threads:4_mean   1374280176 ns    352411129 ns           10
+T3_fullscan_t4/p1_native/medium/threads:4_median 1374246068 ns    352298998 ns           10
+T3_fullscan_t4/p1_native/medium/threads:4_stddev   18249775 ns      2664157 ns           10
+T3_fullscan_t4/p1_native/medium/threads:4_cv           1.33 %          0.76 %            10
+T3_fullscan_t4/p2_sluice/medium/threads:4        1395512398 ns    356323980 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1370767477 ns    351162109 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1396586930 ns    356427301 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1390989198 ns    354502496 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1341573696 ns    347826524 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1385220653 ns    354447907 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1388978221 ns    354844117 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1380549059 ns    353087967 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1395907161 ns    354802386 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4        1370574668 ns    352194100 ns            4
+T3_fullscan_t4/p2_sluice/medium/threads:4_mean   1381665946 ns    353561889 ns           10
+T3_fullscan_t4/p2_sluice/medium/threads:4_median 1387099437 ns    354475202 ns           10
+T3_fullscan_t4/p2_sluice/medium/threads:4_stddev   17064028 ns      2612816 ns           10
+T3_fullscan_t4/p2_sluice/medium/threads:4_cv           1.24 %          0.74 %            10
+Replay/native/medium                              233356841 ns    232770781 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233370030 ns    232711229 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233374351 ns    232732008 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233564927 ns    232956859 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              232970866 ns    232332596 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233208365 ns    232557409 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233315058 ns    232713557 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233286641 ns    232635497 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              232749118 ns    232102726 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium                              233524533 ns    232870083 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/native/medium_mean                         233272073 ns    232638275 ns           10 replay_bytes=181.996M replay_requests=57
+Replay/native/medium_median                       233335950 ns    232712393 ns           10 replay_bytes=181.996M replay_requests=57
+Replay/native/medium_stddev                          246547 ns       253720 ns           10 replay_bytes=0 replay_requests=0
+Replay/native/medium_cv                                0.11 %          0.11 %            10 replay_bytes=0.00% replay_requests=0.00%
+Replay/sluice/medium                              233452481 ns    232822890 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233409478 ns    232823831 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233423599 ns    232785284 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233515017 ns    232847170 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233193151 ns    232600835 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233226894 ns    232575701 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233173621 ns    232511848 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233504232 ns    232901005 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              233460546 ns    232822716 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium                              232769191 ns    232118196 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium_mean                         233312821 ns    232680947 ns           10 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium_median                       233416539 ns    232804000 ns           10 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium_stddev                          230236 ns       238137 ns           10 replay_bytes=0 replay_requests=0
+Replay/sluice/medium_cv                                0.10 %          0.10 %            10 replay_bytes=0.00% replay_requests=0.00%
+T3_fullscan_prebuf/p0_arrow/medium                332180913 ns    285704025 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.140142 read_errors=0 read_ms=339.904 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                347235871 ns    294973799 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.137253 read_errors=0 read_ms=316.306 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                334525858 ns    293183501 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.134898 read_errors=0 read_ms=341.842 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                319757089 ns    277822990 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.135409 read_errors=0 read_ms=305.007 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                327323979 ns    286687391 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.13777 read_errors=0 read_ms=331.298 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                322317313 ns    275579772 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.137224 read_errors=0 read_ms=302.655 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                327518073 ns    286198586 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.135885 read_errors=0 read_ms=306.945 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                325583938 ns    281630842 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.13601 read_errors=0 read_ms=311.939 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                326365081 ns    279681695 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.13627 read_errors=0 read_ms=315.685 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium                324467714 ns    280938161 ns            3 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.135782 read_errors=0 read_ms=317.221 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium_mean           328727583 ns    284240076 ns           10 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.136664 read_errors=0 read_ms=318.88 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium_median         326844530 ns    283667434 ns           10 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.13614 read_errors=0 read_ms=315.995 requested_bytes=0 returned_bytes=0 rows=1.2M
+T3_fullscan_prebuf/p0_arrow/medium_stddev           7793922 ns      6340657 ns           10 cells=0 columns_read=0 io_calls=0 open_meta_ms=1.51444m read_errors=0 read_ms=14.1004 requested_bytes=0 returned_bytes=0 rows=0
+T3_fullscan_prebuf/p0_arrow/medium_cv                  2.37 %          2.23 %            10 cells=0.00% columns_read=0.00% io_calls=0.00% open_meta_ms=1.11% read_errors=0.00% read_ms=4.42% requested_bytes=0.00% returned_bytes=0.00% rows=0.00%

@@ -1,0 +1,31 @@
+# P2C1 REVISE cond-1 re-run session — closing integrity gates — 2026-10-28T00:13:57+08:00 (rescan 00:16; first scan matched its own header mid-write, second used a zsh-unsplit var — this pass is the authoritative clean scan)
+$ fixture sha (pinned bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a): MATCH
+bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a  /tmp/sluice600/data64m.bin
+$ binary identity re-check (expect ladder=89450367... recorded B1-linked; ladder-c1=8305d22c... recorded cand-linked):
+8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8  /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder
+8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381  /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1
+$ VERIFY_FAIL scan over the 7 cell files (expect none):
+none
+$ exit-code lines over the 7 cell files (expect 7 x exit=0):
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+$ checksum equality per accepted cell (32/32 expected):
+aa-base(attempt2): 32/32
+aa-cand: 32/32
+negread-4k-rerun: 32/32
+negread-4k-b1side-rerun: 32/32
+negread-1b-rerun: 32/32
+negread-1b-b1side-rerun: 32/32
+$ arm-line counts (expect 32 each):
+p2c1-aa-read-4k-base-rerun.txt: 32
+p2c1-aa-read-4k-base-rerun-attempt1.txt: 32
+p2c1-aa-read-4k-cand-rerun.txt: 32
+p2c1-negread-4k-rerun.txt: 32
+p2c1-negread-4k-b1side-rerun.txt: 32
+p2c1-negread-1b-rerun.txt: 32
+p2c1-negread-1b-b1side-rerun.txt: 32

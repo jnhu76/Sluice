@@ -1,0 +1,84 @@
+=== p3-m1-vectored-4k-k4 arm=av0 run=1 A(reps=1) 2026-10-28T01:52:12+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=52691.357 user_ns_per_op=7519.043 sys_ns_per_op=13168.457 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010083           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010083           1      8194           total
+=== p3-m1-vectored-4k-k4 arm=av0 run=1 B(reps=0) ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=11175.781 sys_ns_per_op=14992.188 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004156           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004156           1      4098           total
+=== p3-m1-vectored-4k-k4 arm=av0 run=2 A(reps=1) 2026-10-28T01:52:12+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=48649.199 user_ns_per_op=7241.211 sys_ns_per_op=13176.758 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010085           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010085           1      8194           total
+=== p3-m1-vectored-4k-k4 arm=av0 run=2 B(reps=0) ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=10333.008 sys_ns_per_op=16381.836 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004587           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004587           1      4098           total
+=== p3-m1-vectored-4k-k4 arm=av0 run=3 A(reps=1) 2026-10-28T01:52:13+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=49855.855 user_ns_per_op=7812.012 sys_ns_per_op=12961.426 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009790           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009790           1      8194           total
+=== p3-m1-vectored-4k-k4 arm=av0 run=3 B(reps=0) ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=11206.055 sys_ns_per_op=15544.922 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004460           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004460           1      4098           total
+=== p3-m1-vectored-4k-k4 arm=av1 run=1 A(reps=1) 2026-10-28T01:52:13+08:00 ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=12962.774 user_ns_per_op=6048.340 sys_ns_per_op=3683.105 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=1 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001022           0      2048           preadv
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001022           0      2048           total
+=== p3-m1-vectored-4k-k4 arm=av1 run=1 B(reps=0) ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=11462.891 sys_ns_per_op=4427.734 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000630           0      1024           preadv
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000630           0      1024           total
+=== p3-m1-vectored-4k-k4 arm=av1 run=2 A(reps=1) 2026-10-28T01:52:13+08:00 ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=12829.625 user_ns_per_op=6773.437 sys_ns_per_op=3209.961 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=1 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002252           1      2048           preadv
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002252           1      2048           total
+=== p3-m1-vectored-4k-k4 arm=av1 run=2 B(reps=0) ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=11136.719 sys_ns_per_op=4810.547 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000673           0      1024           preadv
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000673           0      1024           total
+=== p3-m1-vectored-4k-k4 arm=av1 run=3 A(reps=1) 2026-10-28T01:52:13+08:00 ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=13129.748 user_ns_per_op=6281.738 sys_ns_per_op=3602.051 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=1 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002640           1      2048           preadv
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002640           1      2048           total
+=== p3-m1-vectored-4k-k4 arm=av1 run=3 B(reps=0) ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=12687.500 sys_ns_per_op=2743.164 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000379           0      1024           preadv
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000379           0      1024           total

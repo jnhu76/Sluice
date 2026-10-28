@@ -1,0 +1,48 @@
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s run=1 A(ops=1024) 2026-10-28T02:11:47+08:00 ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=57445.860 user_ns_per_op=137.695 sys_ns_per_op=38274.414 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.63    0.022040          21      1024           pwrite64
+ 49.37    0.021494          18      1154           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.043534          19      2178           total
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s run=1 B(ops=512) ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=512 ns_per_op=57843.281 user_ns_per_op=324.219 sys_ns_per_op=38203.125 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 52.98    0.010964          21       512           pwrite64
+ 47.02    0.009729          16       578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.020693          18      1090           total
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s run=2 A(ops=1024) 2026-10-28T02:11:48+08:00 ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=57100.882 user_ns_per_op=1226.562 sys_ns_per_op=37027.344 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.58    0.021427          20      1024           pwrite64
+ 49.42    0.020938          18      1154           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.042365          19      2178           total
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s run=2 B(ops=512) ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=512 ns_per_op=57032.145 user_ns_per_op=2601.562 sys_ns_per_op=35382.812 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.01    0.010113          17       578           pread64
+ 49.99    0.010110          19       512           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.020223          18      1090           total
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s run=3 A(ops=1024) 2026-10-28T02:11:48+08:00 ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=56299.537 user_ns_per_op=2376.953 sys_ns_per_op=35369.141 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.83    0.020617          20      1024           pwrite64
+ 49.17    0.019942          17      1154           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040559          18      2178           total
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s run=3 B(ops=512) ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=512 ns_per_op=57227.697 user_ns_per_op=154.297 sys_ns_per_op=38273.438 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.56    0.010968          21       512           pwrite64
+ 49.44    0.010727          18       578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.021695          19      1090           total

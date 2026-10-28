@@ -1,0 +1,1966 @@
+
+b1/blocking_file.cpp.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)>:
+       0:	49 89 f9             	mov    %rdi,%r9
+       3:	8b 3e                	mov    (%rsi),%edi
+       5:	49 89 f2             	mov    %rsi,%r10
+       8:	85 ff                	test   %edi,%edi
+       a:	0f 88 50 01 00 00    	js     160 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x160>
+      10:	80 7e 04 01          	cmpb   $0x1,0x4(%rsi)
+      14:	0f 84 26 01 00 00    	je     140 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x140>
+      1a:	4d 85 c0             	test   %r8,%r8
+      1d:	0f 84 fd 00 00 00    	je     120 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x120>
+      23:	48 b8 ff ff ff ff ff 	movabs $0x7fffffffffffffff,%rax
+      2a:	ff ff 7f 
+      2d:	49 89 d3             	mov    %rdx,%r11
+      30:	49 8d 50 ff          	lea    -0x1(%r8),%rdx
+      34:	4c 29 d8             	sub    %r11,%rax
+      37:	48 39 d0             	cmp    %rdx,%rax
+      3a:	0f 82 00 01 00 00    	jb     140 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x140>
+      40:	4c 89 c0             	mov    %r8,%rax
+      43:	4c 09 d8             	or     %r11,%rax
+      46:	0f 88 f4 00 00 00    	js     140 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x140>
+      4c:	48 89 ce             	mov    %rcx,%rsi
+      4f:	48 85 c9             	test   %rcx,%rcx
+      52:	0f 84 18 01 00 00    	je     170 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+      58:	48 83 ec 38          	sub    $0x38,%rsp
+      5c:	4c 89 d9             	mov    %r11,%rcx
+      5f:	4c 89 c2             	mov    %r8,%rdx
+      62:	4c 89 4c 24 08       	mov    %r9,0x8(%rsp)
+      67:	4c 89 54 24 28       	mov    %r10,0x28(%rsp)
+      6c:	4c 89 5c 24 20       	mov    %r11,0x20(%rsp)
+      71:	4c 89 44 24 18       	mov    %r8,0x18(%rsp)
+      76:	48 89 74 24 10       	mov    %rsi,0x10(%rsp)
+      7b:	e8 00 00 00 00       	call   80 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x80>
+			7c: R_X86_64_PLT32	pread-0x4
+      80:	4c 8b 4c 24 08       	mov    0x8(%rsp),%r9
+      85:	48 85 c0             	test   %rax,%rax
+      88:	0f 89 02 01 00 00    	jns    190 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x190>
+      8e:	e8 00 00 00 00       	call   93 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x93>
+			8f: R_X86_64_PLT32	__errno_location-0x4
+      93:	4c 8b 4c 24 08       	mov    0x8(%rsp),%r9
+      98:	48 8b 74 24 10       	mov    0x10(%rsp),%rsi
+      9d:	8b 00                	mov    (%rax),%eax
+      9f:	4c 8b 44 24 18       	mov    0x18(%rsp),%r8
+      a4:	4c 8b 5c 24 20       	mov    0x20(%rsp),%r11
+      a9:	4c 8b 54 24 28       	mov    0x28(%rsp),%r10
+      ae:	83 f8 04             	cmp    $0x4,%eax
+      b1:	0f 84 21 01 00 00    	je     1d8 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1d8>
+      b7:	31 d2                	xor    %edx,%edx
+      b9:	85 c0                	test   %eax,%eax
+      bb:	0f 84 ef 00 00 00    	je     1b0 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1b0>
+      c1:	83 f8 0d             	cmp    $0xd,%eax
+      c4:	0f 84 16 01 00 00    	je     1e0 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1e0>
+      ca:	83 f8 01             	cmp    $0x1,%eax
+      cd:	0f 84 17 01 00 00    	je     1ea <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1ea>
+      d3:	83 f8 02             	cmp    $0x2,%eax
+      d6:	0f 84 ef 00 00 00    	je     1cb <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1cb>
+      dc:	83 f8 14             	cmp    $0x14,%eax
+      df:	0f 84 0f 01 00 00    	je     1f4 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1f4>
+      e5:	83 f8 1c             	cmp    $0x1c,%eax
+      e8:	0f 84 10 01 00 00    	je     1fe <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1fe>
+      ee:	83 f8 7a             	cmp    $0x7a,%eax
+      f1:	0f 84 11 01 00 00    	je     208 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x208>
+      f7:	83 f8 0b             	cmp    $0xb,%eax
+      fa:	0f 85 b0 00 00 00    	jne    1b0 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1b0>
+     100:	b9 00 00 00 00       	mov    $0x0,%ecx
+			101: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     105:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     10c:	00 00 00 00 
+     110:	0f b6 49 04          	movzbl 0x4(%rcx),%ecx
+     114:	e9 9c 00 00 00       	jmp    1b5 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1b5>
+     119:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     120:	49 c7 01 00 00 00 00 	movq   $0x0,(%r9)
+     127:	4c 89 c8             	mov    %r9,%rax
+     12a:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     131:	00 
+     132:	41 c6 41 10 01       	movb   $0x1,0x10(%r9)
+     137:	c3                   	ret
+     138:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     13f:	00 
+     140:	b8 08 00 00 00       	mov    $0x8,%eax
+     145:	41 88 41 08          	mov    %al,0x8(%r9)
+     149:	4c 89 c8             	mov    %r9,%rax
+     14c:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     153:	00 
+     154:	41 c6 41 10 00       	movb   $0x0,0x10(%r9)
+     159:	c3                   	ret
+     15a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     160:	b8 06 00 00 00       	mov    $0x6,%eax
+     165:	eb de                	jmp    145 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x145>
+     167:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+     16e:	00 00 
+     170:	41 c6 41 08 08       	movb   $0x8,0x8(%r9)
+     175:	4c 89 c8             	mov    %r9,%rax
+     178:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     17f:	00 
+     180:	41 c6 41 10 00       	movb   $0x0,0x10(%r9)
+     185:	c3                   	ret
+     186:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+     18d:	00 00 00 
+     190:	49 89 01             	mov    %rax,(%r9)
+     193:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     19a:	00 
+     19b:	41 c6 41 10 01       	movb   $0x1,0x10(%r9)
+     1a0:	4c 89 c8             	mov    %r9,%rax
+     1a3:	48 83 c4 38          	add    $0x38,%rsp
+     1a7:	c3                   	ret
+     1a8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     1af:	00 
+     1b0:	b9 07 00 00 00       	mov    $0x7,%ecx
+     1b5:	88 ca                	mov    %cl,%dl
+     1b7:	48 c1 e0 20          	shl    $0x20,%rax
+     1bb:	41 c6 41 10 00       	movb   $0x0,0x10(%r9)
+     1c0:	89 d2                	mov    %edx,%edx
+     1c2:	48 09 c2             	or     %rax,%rdx
+     1c5:	49 89 51 08          	mov    %rdx,0x8(%r9)
+     1c9:	eb d5                	jmp    1a0 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1a0>
+     1cb:	b9 00 00 00 00       	mov    $0x0,%ecx
+			1cc: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     1d0:	e9 3b ff ff ff       	jmp    110 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     1d5:	0f 1f 00             	nopl   (%rax)
+     1d8:	41 8b 3a             	mov    (%r10),%edi
+     1db:	e9 7c fe ff ff       	jmp    5c <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x5c>
+     1e0:	b9 00 00 00 00       	mov    $0x0,%ecx
+			1e1: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     1e5:	e9 26 ff ff ff       	jmp    110 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     1ea:	b9 00 00 00 00       	mov    $0x0,%ecx
+			1eb: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     1ef:	e9 1c ff ff ff       	jmp    110 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     1f4:	b9 00 00 00 00       	mov    $0x0,%ecx
+			1f5: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     1f9:	e9 12 ff ff ff       	jmp    110 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     1fe:	b9 00 00 00 00       	mov    $0x0,%ecx
+			1ff: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     203:	e9 08 ff ff ff       	jmp    110 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     208:	b9 00 00 00 00       	mov    $0x0,%ecx
+			209: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     20d:	e9 fe fe ff ff       	jmp    110 <sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     212:	0f 1f 00             	nopl   (%rax)
+     215:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     21c:	00 00 00 00 
+
+0000000000000220 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)>:
+     220:	49 89 f9             	mov    %rdi,%r9
+     223:	8b 3e                	mov    (%rsi),%edi
+     225:	49 89 f2             	mov    %rsi,%r10
+     228:	85 ff                	test   %edi,%edi
+     22a:	0f 88 50 01 00 00    	js     380 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x160>
+     230:	80 7e 04 00          	cmpb   $0x0,0x4(%rsi)
+     234:	0f 84 26 01 00 00    	je     360 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x140>
+     23a:	4d 85 c0             	test   %r8,%r8
+     23d:	0f 84 fd 00 00 00    	je     340 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x120>
+     243:	48 b8 ff ff ff ff ff 	movabs $0x7fffffffffffffff,%rax
+     24a:	ff ff 7f 
+     24d:	49 89 d3             	mov    %rdx,%r11
+     250:	49 8d 50 ff          	lea    -0x1(%r8),%rdx
+     254:	4c 29 d8             	sub    %r11,%rax
+     257:	48 39 d0             	cmp    %rdx,%rax
+     25a:	0f 82 00 01 00 00    	jb     360 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x140>
+     260:	4c 89 c0             	mov    %r8,%rax
+     263:	4c 09 d8             	or     %r11,%rax
+     266:	0f 88 f4 00 00 00    	js     360 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x140>
+     26c:	48 89 ce             	mov    %rcx,%rsi
+     26f:	48 85 c9             	test   %rcx,%rcx
+     272:	0f 84 18 01 00 00    	je     390 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+     278:	48 83 ec 38          	sub    $0x38,%rsp
+     27c:	4c 89 d9             	mov    %r11,%rcx
+     27f:	4c 89 c2             	mov    %r8,%rdx
+     282:	4c 89 4c 24 08       	mov    %r9,0x8(%rsp)
+     287:	4c 89 54 24 28       	mov    %r10,0x28(%rsp)
+     28c:	4c 89 5c 24 20       	mov    %r11,0x20(%rsp)
+     291:	4c 89 44 24 18       	mov    %r8,0x18(%rsp)
+     296:	48 89 74 24 10       	mov    %rsi,0x10(%rsp)
+     29b:	e8 00 00 00 00       	call   2a0 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x80>
+			29c: R_X86_64_PLT32	pwrite-0x4
+     2a0:	4c 8b 4c 24 08       	mov    0x8(%rsp),%r9
+     2a5:	48 85 c0             	test   %rax,%rax
+     2a8:	0f 89 02 01 00 00    	jns    3b0 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x190>
+     2ae:	e8 00 00 00 00       	call   2b3 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x93>
+			2af: R_X86_64_PLT32	__errno_location-0x4
+     2b3:	4c 8b 4c 24 08       	mov    0x8(%rsp),%r9
+     2b8:	48 8b 74 24 10       	mov    0x10(%rsp),%rsi
+     2bd:	8b 00                	mov    (%rax),%eax
+     2bf:	4c 8b 44 24 18       	mov    0x18(%rsp),%r8
+     2c4:	4c 8b 5c 24 20       	mov    0x20(%rsp),%r11
+     2c9:	4c 8b 54 24 28       	mov    0x28(%rsp),%r10
+     2ce:	83 f8 04             	cmp    $0x4,%eax
+     2d1:	0f 84 21 01 00 00    	je     3f8 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1d8>
+     2d7:	31 d2                	xor    %edx,%edx
+     2d9:	85 c0                	test   %eax,%eax
+     2db:	0f 84 ef 00 00 00    	je     3d0 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1b0>
+     2e1:	83 f8 0d             	cmp    $0xd,%eax
+     2e4:	0f 84 16 01 00 00    	je     400 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1e0>
+     2ea:	83 f8 01             	cmp    $0x1,%eax
+     2ed:	0f 84 17 01 00 00    	je     40a <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1ea>
+     2f3:	83 f8 02             	cmp    $0x2,%eax
+     2f6:	0f 84 ef 00 00 00    	je     3eb <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1cb>
+     2fc:	83 f8 14             	cmp    $0x14,%eax
+     2ff:	0f 84 0f 01 00 00    	je     414 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1f4>
+     305:	83 f8 1c             	cmp    $0x1c,%eax
+     308:	0f 84 10 01 00 00    	je     41e <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1fe>
+     30e:	83 f8 7a             	cmp    $0x7a,%eax
+     311:	0f 84 11 01 00 00    	je     428 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x208>
+     317:	83 f8 0b             	cmp    $0xb,%eax
+     31a:	0f 85 b0 00 00 00    	jne    3d0 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1b0>
+     320:	b9 00 00 00 00       	mov    $0x0,%ecx
+			321: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     325:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     32c:	00 00 00 00 
+     330:	0f b6 49 04          	movzbl 0x4(%rcx),%ecx
+     334:	e9 9c 00 00 00       	jmp    3d5 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1b5>
+     339:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     340:	49 c7 01 00 00 00 00 	movq   $0x0,(%r9)
+     347:	4c 89 c8             	mov    %r9,%rax
+     34a:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     351:	00 
+     352:	41 c6 41 10 01       	movb   $0x1,0x10(%r9)
+     357:	c3                   	ret
+     358:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     35f:	00 
+     360:	b8 08 00 00 00       	mov    $0x8,%eax
+     365:	41 88 41 08          	mov    %al,0x8(%r9)
+     369:	4c 89 c8             	mov    %r9,%rax
+     36c:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     373:	00 
+     374:	41 c6 41 10 00       	movb   $0x0,0x10(%r9)
+     379:	c3                   	ret
+     37a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     380:	b8 06 00 00 00       	mov    $0x6,%eax
+     385:	eb de                	jmp    365 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x145>
+     387:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+     38e:	00 00 
+     390:	41 c6 41 08 08       	movb   $0x8,0x8(%r9)
+     395:	4c 89 c8             	mov    %r9,%rax
+     398:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     39f:	00 
+     3a0:	41 c6 41 10 00       	movb   $0x0,0x10(%r9)
+     3a5:	c3                   	ret
+     3a6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+     3ad:	00 00 00 
+     3b0:	49 89 01             	mov    %rax,(%r9)
+     3b3:	41 c7 41 0c 00 00 00 	movl   $0x0,0xc(%r9)
+     3ba:	00 
+     3bb:	41 c6 41 10 01       	movb   $0x1,0x10(%r9)
+     3c0:	4c 89 c8             	mov    %r9,%rax
+     3c3:	48 83 c4 38          	add    $0x38,%rsp
+     3c7:	c3                   	ret
+     3c8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     3cf:	00 
+     3d0:	b9 07 00 00 00       	mov    $0x7,%ecx
+     3d5:	88 ca                	mov    %cl,%dl
+     3d7:	48 c1 e0 20          	shl    $0x20,%rax
+     3db:	41 c6 41 10 00       	movb   $0x0,0x10(%r9)
+     3e0:	89 d2                	mov    %edx,%edx
+     3e2:	48 09 c2             	or     %rax,%rdx
+     3e5:	49 89 51 08          	mov    %rdx,0x8(%r9)
+     3e9:	eb d5                	jmp    3c0 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1a0>
+     3eb:	b9 00 00 00 00       	mov    $0x0,%ecx
+			3ec: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     3f0:	e9 3b ff ff ff       	jmp    330 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     3f5:	0f 1f 00             	nopl   (%rax)
+     3f8:	41 8b 3a             	mov    (%r10),%edi
+     3fb:	e9 7c fe ff ff       	jmp    27c <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x5c>
+     400:	b9 00 00 00 00       	mov    $0x0,%ecx
+			401: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     405:	e9 26 ff ff ff       	jmp    330 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     40a:	b9 00 00 00 00       	mov    $0x0,%ecx
+			40b: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     40f:	e9 1c ff ff ff       	jmp    330 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     414:	b9 00 00 00 00       	mov    $0x0,%ecx
+			415: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     419:	e9 12 ff ff ff       	jmp    330 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     41e:	b9 00 00 00 00       	mov    $0x0,%ecx
+			41f: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     423:	e9 08 ff ff ff       	jmp    330 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     428:	b9 00 00 00 00       	mov    $0x0,%ecx
+			429: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     42d:	e9 fe fe ff ff       	jmp    330 <sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     432:	0f 1f 00             	nopl   (%rax)
+     435:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     43c:	00 00 00 00 
+
+0000000000000440 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)>:
+     440:	49 89 f8             	mov    %rdi,%r8
+     443:	8b 3e                	mov    (%rsi),%edi
+     445:	49 89 f1             	mov    %rsi,%r9
+     448:	85 ff                	test   %edi,%edi
+     44a:	0f 88 20 01 00 00    	js     570 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x130>
+     450:	80 7e 04 01          	cmpb   $0x1,0x4(%rsi)
+     454:	0f 84 f6 00 00 00    	je     550 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     45a:	48 85 c9             	test   %rcx,%rcx
+     45d:	0f 84 cd 00 00 00    	je     530 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xf0>
+     463:	0f 8e e7 00 00 00    	jle    550 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+     469:	48 89 d6             	mov    %rdx,%rsi
+     46c:	48 85 d2             	test   %rdx,%rdx
+     46f:	0f 84 0b 01 00 00    	je     580 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x140>
+     475:	48 83 ec 28          	sub    $0x28,%rsp
+     479:	48 89 ca             	mov    %rcx,%rdx
+     47c:	4c 89 04 24          	mov    %r8,(%rsp)
+     480:	4c 89 4c 24 18       	mov    %r9,0x18(%rsp)
+     485:	48 89 4c 24 10       	mov    %rcx,0x10(%rsp)
+     48a:	48 89 74 24 08       	mov    %rsi,0x8(%rsp)
+     48f:	e8 00 00 00 00       	call   494 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x54>
+			490: R_X86_64_PLT32	read-0x4
+     494:	4c 8b 04 24          	mov    (%rsp),%r8
+     498:	48 85 c0             	test   %rax,%rax
+     49b:	0f 89 ff 00 00 00    	jns    5a0 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x160>
+     4a1:	e8 00 00 00 00       	call   4a6 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x66>
+			4a2: R_X86_64_PLT32	__errno_location-0x4
+     4a6:	4c 8b 04 24          	mov    (%rsp),%r8
+     4aa:	48 8b 74 24 08       	mov    0x8(%rsp),%rsi
+     4af:	8b 00                	mov    (%rax),%eax
+     4b1:	48 8b 4c 24 10       	mov    0x10(%rsp),%rcx
+     4b6:	4c 8b 4c 24 18       	mov    0x18(%rsp),%r9
+     4bb:	83 f8 04             	cmp    $0x4,%eax
+     4be:	0f 84 24 01 00 00    	je     5e8 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1a8>
+     4c4:	31 d2                	xor    %edx,%edx
+     4c6:	85 c0                	test   %eax,%eax
+     4c8:	0f 84 f2 00 00 00    	je     5c0 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x180>
+     4ce:	83 f8 0d             	cmp    $0xd,%eax
+     4d1:	0f 84 19 01 00 00    	je     5f0 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1b0>
+     4d7:	83 f8 01             	cmp    $0x1,%eax
+     4da:	0f 84 1a 01 00 00    	je     5fa <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1ba>
+     4e0:	83 f8 02             	cmp    $0x2,%eax
+     4e3:	0f 84 f2 00 00 00    	je     5db <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x19b>
+     4e9:	83 f8 14             	cmp    $0x14,%eax
+     4ec:	0f 84 12 01 00 00    	je     604 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1c4>
+     4f2:	83 f8 1c             	cmp    $0x1c,%eax
+     4f5:	0f 84 13 01 00 00    	je     60e <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1ce>
+     4fb:	83 f8 7a             	cmp    $0x7a,%eax
+     4fe:	0f 84 14 01 00 00    	je     618 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1d8>
+     504:	83 f8 0b             	cmp    $0xb,%eax
+     507:	0f 85 b3 00 00 00    	jne    5c0 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x180>
+     50d:	b9 00 00 00 00       	mov    $0x0,%ecx
+			50e: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     512:	0f 1f 00             	nopl   (%rax)
+     515:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     51c:	00 00 00 00 
+     520:	0f b6 49 04          	movzbl 0x4(%rcx),%ecx
+     524:	e9 9c 00 00 00       	jmp    5c5 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x185>
+     529:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     530:	49 c7 00 00 00 00 00 	movq   $0x0,(%r8)
+     537:	4c 89 c0             	mov    %r8,%rax
+     53a:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     541:	00 
+     542:	41 c6 40 10 01       	movb   $0x1,0x10(%r8)
+     547:	c3                   	ret
+     548:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     54f:	00 
+     550:	b8 08 00 00 00       	mov    $0x8,%eax
+     555:	41 88 40 08          	mov    %al,0x8(%r8)
+     559:	4c 89 c0             	mov    %r8,%rax
+     55c:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     563:	00 
+     564:	41 c6 40 10 00       	movb   $0x0,0x10(%r8)
+     569:	c3                   	ret
+     56a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     570:	b8 06 00 00 00       	mov    $0x6,%eax
+     575:	eb de                	jmp    555 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x115>
+     577:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+     57e:	00 00 
+     580:	41 c6 40 08 08       	movb   $0x8,0x8(%r8)
+     585:	4c 89 c0             	mov    %r8,%rax
+     588:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     58f:	00 
+     590:	41 c6 40 10 00       	movb   $0x0,0x10(%r8)
+     595:	c3                   	ret
+     596:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+     59d:	00 00 00 
+     5a0:	49 89 00             	mov    %rax,(%r8)
+     5a3:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     5aa:	00 
+     5ab:	41 c6 40 10 01       	movb   $0x1,0x10(%r8)
+     5b0:	4c 89 c0             	mov    %r8,%rax
+     5b3:	48 83 c4 28          	add    $0x28,%rsp
+     5b7:	c3                   	ret
+     5b8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     5bf:	00 
+     5c0:	b9 07 00 00 00       	mov    $0x7,%ecx
+     5c5:	88 ca                	mov    %cl,%dl
+     5c7:	48 c1 e0 20          	shl    $0x20,%rax
+     5cb:	41 c6 40 10 00       	movb   $0x0,0x10(%r8)
+     5d0:	89 d2                	mov    %edx,%edx
+     5d2:	48 09 c2             	or     %rax,%rdx
+     5d5:	49 89 50 08          	mov    %rdx,0x8(%r8)
+     5d9:	eb d5                	jmp    5b0 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x170>
+     5db:	b9 00 00 00 00       	mov    $0x0,%ecx
+			5dc: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     5e0:	e9 3b ff ff ff       	jmp    520 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xe0>
+     5e5:	0f 1f 00             	nopl   (%rax)
+     5e8:	41 8b 39             	mov    (%r9),%edi
+     5eb:	e9 89 fe ff ff       	jmp    479 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x39>
+     5f0:	b9 00 00 00 00       	mov    $0x0,%ecx
+			5f1: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     5f5:	e9 26 ff ff ff       	jmp    520 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xe0>
+     5fa:	b9 00 00 00 00       	mov    $0x0,%ecx
+			5fb: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     5ff:	e9 1c ff ff ff       	jmp    520 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xe0>
+     604:	b9 00 00 00 00       	mov    $0x0,%ecx
+			605: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     609:	e9 12 ff ff ff       	jmp    520 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xe0>
+     60e:	b9 00 00 00 00       	mov    $0x0,%ecx
+			60f: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     613:	e9 08 ff ff ff       	jmp    520 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xe0>
+     618:	b9 00 00 00 00       	mov    $0x0,%ecx
+			619: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     61d:	e9 fe fe ff ff       	jmp    520 <sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xe0>
+     622:	0f 1f 00             	nopl   (%rax)
+     625:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     62c:	00 00 00 00 
+
+0000000000000630 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)>:
+     630:	49 89 f8             	mov    %rdi,%r8
+     633:	8b 3e                	mov    (%rsi),%edi
+     635:	49 89 f1             	mov    %rsi,%r9
+     638:	85 ff                	test   %edi,%edi
+     63a:	0f 88 20 01 00 00    	js     760 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x130>
+     640:	80 7e 04 00          	cmpb   $0x0,0x4(%rsi)
+     644:	0f 84 f6 00 00 00    	je     740 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     64a:	48 85 c9             	test   %rcx,%rcx
+     64d:	0f 84 cd 00 00 00    	je     720 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xf0>
+     653:	0f 8e e7 00 00 00    	jle    740 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+     659:	48 89 d6             	mov    %rdx,%rsi
+     65c:	48 85 d2             	test   %rdx,%rdx
+     65f:	0f 84 0b 01 00 00    	je     770 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x140>
+     665:	48 83 ec 28          	sub    $0x28,%rsp
+     669:	48 89 ca             	mov    %rcx,%rdx
+     66c:	4c 89 04 24          	mov    %r8,(%rsp)
+     670:	4c 89 4c 24 18       	mov    %r9,0x18(%rsp)
+     675:	48 89 4c 24 10       	mov    %rcx,0x10(%rsp)
+     67a:	48 89 74 24 08       	mov    %rsi,0x8(%rsp)
+     67f:	e8 00 00 00 00       	call   684 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x54>
+			680: R_X86_64_PLT32	write-0x4
+     684:	4c 8b 04 24          	mov    (%rsp),%r8
+     688:	48 85 c0             	test   %rax,%rax
+     68b:	0f 89 ff 00 00 00    	jns    790 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x160>
+     691:	e8 00 00 00 00       	call   696 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x66>
+			692: R_X86_64_PLT32	__errno_location-0x4
+     696:	4c 8b 04 24          	mov    (%rsp),%r8
+     69a:	48 8b 74 24 08       	mov    0x8(%rsp),%rsi
+     69f:	8b 00                	mov    (%rax),%eax
+     6a1:	48 8b 4c 24 10       	mov    0x10(%rsp),%rcx
+     6a6:	4c 8b 4c 24 18       	mov    0x18(%rsp),%r9
+     6ab:	83 f8 04             	cmp    $0x4,%eax
+     6ae:	0f 84 24 01 00 00    	je     7d8 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1a8>
+     6b4:	31 d2                	xor    %edx,%edx
+     6b6:	85 c0                	test   %eax,%eax
+     6b8:	0f 84 f2 00 00 00    	je     7b0 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x180>
+     6be:	83 f8 0d             	cmp    $0xd,%eax
+     6c1:	0f 84 19 01 00 00    	je     7e0 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1b0>
+     6c7:	83 f8 01             	cmp    $0x1,%eax
+     6ca:	0f 84 1a 01 00 00    	je     7ea <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1ba>
+     6d0:	83 f8 02             	cmp    $0x2,%eax
+     6d3:	0f 84 f2 00 00 00    	je     7cb <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x19b>
+     6d9:	83 f8 14             	cmp    $0x14,%eax
+     6dc:	0f 84 12 01 00 00    	je     7f4 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1c4>
+     6e2:	83 f8 1c             	cmp    $0x1c,%eax
+     6e5:	0f 84 13 01 00 00    	je     7fe <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1ce>
+     6eb:	83 f8 7a             	cmp    $0x7a,%eax
+     6ee:	0f 84 14 01 00 00    	je     808 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1d8>
+     6f4:	83 f8 0b             	cmp    $0xb,%eax
+     6f7:	0f 85 b3 00 00 00    	jne    7b0 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x180>
+     6fd:	b9 00 00 00 00       	mov    $0x0,%ecx
+			6fe: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     702:	0f 1f 00             	nopl   (%rax)
+     705:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     70c:	00 00 00 00 
+     710:	0f b6 49 04          	movzbl 0x4(%rcx),%ecx
+     714:	e9 9c 00 00 00       	jmp    7b5 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x185>
+     719:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     720:	49 c7 00 00 00 00 00 	movq   $0x0,(%r8)
+     727:	4c 89 c0             	mov    %r8,%rax
+     72a:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     731:	00 
+     732:	41 c6 40 10 01       	movb   $0x1,0x10(%r8)
+     737:	c3                   	ret
+     738:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     73f:	00 
+     740:	b8 08 00 00 00       	mov    $0x8,%eax
+     745:	41 88 40 08          	mov    %al,0x8(%r8)
+     749:	4c 89 c0             	mov    %r8,%rax
+     74c:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     753:	00 
+     754:	41 c6 40 10 00       	movb   $0x0,0x10(%r8)
+     759:	c3                   	ret
+     75a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     760:	b8 06 00 00 00       	mov    $0x6,%eax
+     765:	eb de                	jmp    745 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x115>
+     767:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+     76e:	00 00 
+     770:	41 c6 40 08 08       	movb   $0x8,0x8(%r8)
+     775:	4c 89 c0             	mov    %r8,%rax
+     778:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     77f:	00 
+     780:	41 c6 40 10 00       	movb   $0x0,0x10(%r8)
+     785:	c3                   	ret
+     786:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+     78d:	00 00 00 
+     790:	49 89 00             	mov    %rax,(%r8)
+     793:	41 c7 40 0c 00 00 00 	movl   $0x0,0xc(%r8)
+     79a:	00 
+     79b:	41 c6 40 10 01       	movb   $0x1,0x10(%r8)
+     7a0:	4c 89 c0             	mov    %r8,%rax
+     7a3:	48 83 c4 28          	add    $0x28,%rsp
+     7a7:	c3                   	ret
+     7a8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     7af:	00 
+     7b0:	b9 07 00 00 00       	mov    $0x7,%ecx
+     7b5:	88 ca                	mov    %cl,%dl
+     7b7:	48 c1 e0 20          	shl    $0x20,%rax
+     7bb:	41 c6 40 10 00       	movb   $0x0,0x10(%r8)
+     7c0:	89 d2                	mov    %edx,%edx
+     7c2:	48 09 c2             	or     %rax,%rdx
+     7c5:	49 89 50 08          	mov    %rdx,0x8(%r8)
+     7c9:	eb d5                	jmp    7a0 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+     7cb:	b9 00 00 00 00       	mov    $0x0,%ecx
+			7cc: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     7d0:	e9 3b ff ff ff       	jmp    710 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xe0>
+     7d5:	0f 1f 00             	nopl   (%rax)
+     7d8:	41 8b 39             	mov    (%r9),%edi
+     7db:	e9 89 fe ff ff       	jmp    669 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x39>
+     7e0:	b9 00 00 00 00       	mov    $0x0,%ecx
+			7e1: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     7e5:	e9 26 ff ff ff       	jmp    710 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xe0>
+     7ea:	b9 00 00 00 00       	mov    $0x0,%ecx
+			7eb: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     7ef:	e9 1c ff ff ff       	jmp    710 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xe0>
+     7f4:	b9 00 00 00 00       	mov    $0x0,%ecx
+			7f5: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     7f9:	e9 12 ff ff ff       	jmp    710 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xe0>
+     7fe:	b9 00 00 00 00       	mov    $0x0,%ecx
+			7ff: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     803:	e9 08 ff ff ff       	jmp    710 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xe0>
+     808:	b9 00 00 00 00       	mov    $0x0,%ecx
+			809: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     80d:	e9 fe fe ff ff       	jmp    710 <sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xe0>
+     812:	0f 1f 00             	nopl   (%rax)
+     815:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     81c:	00 00 00 00 
+
+0000000000000820 <sluice::blocking::sync_data(sluice::File const&)>:
+     820:	53                   	push   %rbx
+     821:	48 89 fb             	mov    %rdi,%rbx
+     824:	48 83 ec 30          	sub    $0x30,%rsp
+     828:	8b 3f                	mov    (%rdi),%edi
+     82a:	85 ff                	test   %edi,%edi
+     82c:	78 7a                	js     8a8 <sluice::blocking::sync_data(sluice::File const&)+0x88>
+     82e:	e8 00 00 00 00       	call   833 <sluice::blocking::sync_data(sluice::File const&)+0x13>
+			82f: R_X86_64_PLT32	fdatasync-0x4
+     833:	85 c0                	test   %eax,%eax
+     835:	0f 89 95 00 00 00    	jns    8d0 <sluice::blocking::sync_data(sluice::File const&)+0xb0>
+     83b:	e8 00 00 00 00       	call   840 <sluice::blocking::sync_data(sluice::File const&)+0x20>
+			83c: R_X86_64_PLT32	__errno_location-0x4
+     840:	8b 00                	mov    (%rax),%eax
+     842:	83 f8 04             	cmp    $0x4,%eax
+     845:	0f 84 a5 00 00 00    	je     8f0 <sluice::blocking::sync_data(sluice::File const&)+0xd0>
+     84b:	85 c0                	test   %eax,%eax
+     84d:	74 3f                	je     88e <sluice::blocking::sync_data(sluice::File const&)+0x6e>
+     84f:	83 f8 0d             	cmp    $0xd,%eax
+     852:	0f 84 9f 00 00 00    	je     8f7 <sluice::blocking::sync_data(sluice::File const&)+0xd7>
+     858:	83 f8 01             	cmp    $0x1,%eax
+     85b:	0f 84 a5 00 00 00    	je     906 <sluice::blocking::sync_data(sluice::File const&)+0xe6>
+     861:	83 f8 02             	cmp    $0x2,%eax
+     864:	0f 84 a3 00 00 00    	je     90d <sluice::blocking::sync_data(sluice::File const&)+0xed>
+     86a:	83 f8 14             	cmp    $0x14,%eax
+     86d:	0f 84 a1 00 00 00    	je     914 <sluice::blocking::sync_data(sluice::File const&)+0xf4>
+     873:	83 f8 1c             	cmp    $0x1c,%eax
+     876:	0f 84 9f 00 00 00    	je     91b <sluice::blocking::sync_data(sluice::File const&)+0xfb>
+     87c:	83 f8 7a             	cmp    $0x7a,%eax
+     87f:	0f 84 9d 00 00 00    	je     922 <sluice::blocking::sync_data(sluice::File const&)+0x102>
+     885:	83 f8 0b             	cmp    $0xb,%eax
+     888:	0f 84 9b 00 00 00    	je     929 <sluice::blocking::sync_data(sluice::File const&)+0x109>
+     88e:	ba 07 00 00 00       	mov    $0x7,%edx
+     893:	88 54 24 24          	mov    %dl,0x24(%rsp)
+     897:	89 44 24 28          	mov    %eax,0x28(%rsp)
+     89b:	c6 44 24 2c 00       	movb   $0x0,0x2c(%rsp)
+     8a0:	eb 18                	jmp    8ba <sluice::blocking::sync_data(sluice::File const&)+0x9a>
+     8a2:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     8a8:	c6 44 24 24 06       	movb   $0x6,0x24(%rsp)
+     8ad:	c7 44 24 28 00 00 00 	movl   $0x0,0x28(%rsp)
+     8b4:	00 
+     8b5:	c6 44 24 2c 00       	movb   $0x0,0x2c(%rsp)
+     8ba:	8b 4c 24 2c          	mov    0x2c(%rsp),%ecx
+     8be:	48 8b 44 24 24       	mov    0x24(%rsp),%rax
+     8c3:	48 83 c4 30          	add    $0x30,%rsp
+     8c7:	5b                   	pop    %rbx
+     8c8:	48 89 ca             	mov    %rcx,%rdx
+     8cb:	c3                   	ret
+     8cc:	0f 1f 40 00          	nopl   0x0(%rax)
+     8d0:	c6 44 24 20 01       	movb   $0x1,0x20(%rsp)
+     8d5:	8b 44 24 20          	mov    0x20(%rsp),%eax
+     8d9:	48 c7 44 24 24 00 00 	movq   $0x0,0x24(%rsp)
+     8e0:	00 00 
+     8e2:	89 44 24 2c          	mov    %eax,0x2c(%rsp)
+     8e6:	eb d2                	jmp    8ba <sluice::blocking::sync_data(sluice::File const&)+0x9a>
+     8e8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     8ef:	00 
+     8f0:	8b 3b                	mov    (%rbx),%edi
+     8f2:	e9 37 ff ff ff       	jmp    82e <sluice::blocking::sync_data(sluice::File const&)+0xe>
+     8f7:	ba 00 00 00 00       	mov    $0x0,%edx
+			8f8: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     8fc:	0f 1f 40 00          	nopl   0x0(%rax)
+     900:	0f b6 52 04          	movzbl 0x4(%rdx),%edx
+     904:	eb 8d                	jmp    893 <sluice::blocking::sync_data(sluice::File const&)+0x73>
+     906:	ba 00 00 00 00       	mov    $0x0,%edx
+			907: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     90b:	eb f3                	jmp    900 <sluice::blocking::sync_data(sluice::File const&)+0xe0>
+     90d:	ba 00 00 00 00       	mov    $0x0,%edx
+			90e: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     912:	eb ec                	jmp    900 <sluice::blocking::sync_data(sluice::File const&)+0xe0>
+     914:	ba 00 00 00 00       	mov    $0x0,%edx
+			915: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     919:	eb e5                	jmp    900 <sluice::blocking::sync_data(sluice::File const&)+0xe0>
+     91b:	ba 00 00 00 00       	mov    $0x0,%edx
+			91c: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     920:	eb de                	jmp    900 <sluice::blocking::sync_data(sluice::File const&)+0xe0>
+     922:	ba 00 00 00 00       	mov    $0x0,%edx
+			923: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     927:	eb d7                	jmp    900 <sluice::blocking::sync_data(sluice::File const&)+0xe0>
+     929:	ba 00 00 00 00       	mov    $0x0,%edx
+			92a: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     92e:	eb d0                	jmp    900 <sluice::blocking::sync_data(sluice::File const&)+0xe0>
+
+0000000000000930 <sluice::blocking::file_info(sluice::File const&)>:
+     930:	48 81 ec d8 00 00 00 	sub    $0xd8,%rsp
+     937:	48 89 9c 24 c8 00 00 	mov    %rbx,0xc8(%rsp)
+     93e:	00 
+     93f:	48 89 fb             	mov    %rdi,%rbx
+     942:	8b 3e                	mov    (%rsi),%edi
+     944:	85 ff                	test   %edi,%edi
+     946:	0f 88 dc 00 00 00    	js     a28 <sluice::blocking::file_info(sluice::File const&)+0xf8>
+     94c:	66 0f ef c0          	pxor   %xmm0,%xmm0
+     950:	48 89 ac 24 d0 00 00 	mov    %rbp,0xd0(%rsp)
+     957:	00 
+     958:	48 89 f5             	mov    %rsi,%rbp
+     95b:	0f 29 44 24 30       	movaps %xmm0,0x30(%rsp)
+     960:	0f 29 44 24 40       	movaps %xmm0,0x40(%rsp)
+     965:	0f 29 44 24 50       	movaps %xmm0,0x50(%rsp)
+     96a:	0f 29 44 24 60       	movaps %xmm0,0x60(%rsp)
+     96f:	0f 29 44 24 70       	movaps %xmm0,0x70(%rsp)
+     974:	0f 29 84 24 80 00 00 	movaps %xmm0,0x80(%rsp)
+     97b:	00 
+     97c:	0f 29 84 24 90 00 00 	movaps %xmm0,0x90(%rsp)
+     983:	00 
+     984:	0f 29 84 24 a0 00 00 	movaps %xmm0,0xa0(%rsp)
+     98b:	00 
+     98c:	0f 29 84 24 b0 00 00 	movaps %xmm0,0xb0(%rsp)
+     993:	00 
+     994:	48 8d 74 24 30       	lea    0x30(%rsp),%rsi
+     999:	e8 00 00 00 00       	call   99e <sluice::blocking::file_info(sluice::File const&)+0x6e>
+			99a: R_X86_64_PLT32	fstat-0x4
+     99e:	66 0f ef c9          	pxor   %xmm1,%xmm1
+     9a2:	85 c0                	test   %eax,%eax
+     9a4:	0f 89 a6 00 00 00    	jns    a50 <sluice::blocking::file_info(sluice::File const&)+0x120>
+     9aa:	e8 00 00 00 00       	call   9af <sluice::blocking::file_info(sluice::File const&)+0x7f>
+			9ab: R_X86_64_PLT32	__errno_location-0x4
+     9af:	8b 00                	mov    (%rax),%eax
+     9b1:	83 f8 04             	cmp    $0x4,%eax
+     9b4:	0f 84 0e 01 00 00    	je     ac8 <sluice::blocking::file_info(sluice::File const&)+0x198>
+     9ba:	31 d2                	xor    %edx,%edx
+     9bc:	85 c0                	test   %eax,%eax
+     9be:	74 3f                	je     9ff <sluice::blocking::file_info(sluice::File const&)+0xcf>
+     9c0:	83 f8 0d             	cmp    $0xd,%eax
+     9c3:	0f 84 07 01 00 00    	je     ad0 <sluice::blocking::file_info(sluice::File const&)+0x1a0>
+     9c9:	83 f8 01             	cmp    $0x1,%eax
+     9cc:	0f 84 17 01 00 00    	je     ae9 <sluice::blocking::file_info(sluice::File const&)+0x1b9>
+     9d2:	83 f8 02             	cmp    $0x2,%eax
+     9d5:	0f 84 15 01 00 00    	je     af0 <sluice::blocking::file_info(sluice::File const&)+0x1c0>
+     9db:	83 f8 14             	cmp    $0x14,%eax
+     9de:	0f 84 13 01 00 00    	je     af7 <sluice::blocking::file_info(sluice::File const&)+0x1c7>
+     9e4:	83 f8 1c             	cmp    $0x1c,%eax
+     9e7:	0f 84 11 01 00 00    	je     afe <sluice::blocking::file_info(sluice::File const&)+0x1ce>
+     9ed:	83 f8 7a             	cmp    $0x7a,%eax
+     9f0:	0f 84 0f 01 00 00    	je     b05 <sluice::blocking::file_info(sluice::File const&)+0x1d5>
+     9f6:	83 f8 0b             	cmp    $0xb,%eax
+     9f9:	0f 84 0d 01 00 00    	je     b0c <sluice::blocking::file_info(sluice::File const&)+0x1dc>
+     9ff:	b9 07 00 00 00       	mov    $0x7,%ecx
+     a04:	88 ca                	mov    %cl,%dl
+     a06:	48 c1 e0 20          	shl    $0x20,%rax
+     a0a:	c6 43 30 00          	movb   $0x0,0x30(%rbx)
+     a0e:	48 8b ac 24 d0 00 00 	mov    0xd0(%rsp),%rbp
+     a15:	00 
+     a16:	89 d2                	mov    %edx,%edx
+     a18:	48 09 c2             	or     %rax,%rdx
+     a1b:	48 89 53 28          	mov    %rdx,0x28(%rbx)
+     a1f:	eb 16                	jmp    a37 <sluice::blocking::file_info(sluice::File const&)+0x107>
+     a21:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     a28:	c6 43 28 06          	movb   $0x6,0x28(%rbx)
+     a2c:	c7 43 2c 00 00 00 00 	movl   $0x0,0x2c(%rbx)
+     a33:	c6 43 30 00          	movb   $0x0,0x30(%rbx)
+     a37:	48 89 d8             	mov    %rbx,%rax
+     a3a:	48 8b 9c 24 c8 00 00 	mov    0xc8(%rsp),%rbx
+     a41:	00 
+     a42:	48 81 c4 d8 00 00 00 	add    $0xd8,%rsp
+     a49:	c3                   	ret
+     a4a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     a50:	8b 44 24 48          	mov    0x48(%rsp),%eax
+     a54:	0f 29 0c 24          	movaps %xmm1,(%rsp)
+     a58:	f3 0f 7e 44 24 60    	movq   0x60(%rsp),%xmm0
+     a5e:	0f 16 44 24 30       	movhps 0x30(%rsp),%xmm0
+     a63:	0f 11 44 24 08       	movups %xmm0,0x8(%rsp)
+     a68:	48 8b ac 24 d0 00 00 	mov    0xd0(%rsp),%rbp
+     a6f:	00 
+     a70:	25 00 f0 00 00       	and    $0xf000,%eax
+     a75:	c7 43 2c 00 00 00 00 	movl   $0x0,0x2c(%rbx)
+     a7c:	3d 00 80 00 00       	cmp    $0x8000,%eax
+     a81:	48 8b 44 24 38       	mov    0x38(%rsp),%rax
+     a86:	c6 43 30 01          	movb   $0x1,0x30(%rbx)
+     a8a:	0f 95 04 24          	setne  (%rsp)
+     a8e:	66 0f 6f 04 24       	movdqa (%rsp),%xmm0
+     a93:	48 c7 44 24 20 00 00 	movq   $0x0,0x20(%rsp)
+     a9a:	00 00 
+     a9c:	48 89 44 24 18       	mov    %rax,0x18(%rsp)
+     aa1:	c6 44 24 20 01       	movb   $0x1,0x20(%rsp)
+     aa6:	48 8b 44 24 20       	mov    0x20(%rsp),%rax
+     aab:	0f 11 03             	movups %xmm0,(%rbx)
+     aae:	66 0f 6f 44 24 10    	movdqa 0x10(%rsp),%xmm0
+     ab4:	48 89 43 20          	mov    %rax,0x20(%rbx)
+     ab8:	0f 11 43 10          	movups %xmm0,0x10(%rbx)
+     abc:	e9 76 ff ff ff       	jmp    a37 <sluice::blocking::file_info(sluice::File const&)+0x107>
+     ac1:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     ac8:	8b 7d 00             	mov    0x0(%rbp),%edi
+     acb:	e9 c4 fe ff ff       	jmp    994 <sluice::blocking::file_info(sluice::File const&)+0x64>
+     ad0:	b9 00 00 00 00       	mov    $0x0,%ecx
+			ad1: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     ad5:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     adc:	00 00 00 00 
+     ae0:	0f b6 49 04          	movzbl 0x4(%rcx),%ecx
+     ae4:	e9 1b ff ff ff       	jmp    a04 <sluice::blocking::file_info(sluice::File const&)+0xd4>
+     ae9:	b9 00 00 00 00       	mov    $0x0,%ecx
+			aea: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     aee:	eb f0                	jmp    ae0 <sluice::blocking::file_info(sluice::File const&)+0x1b0>
+     af0:	b9 00 00 00 00       	mov    $0x0,%ecx
+			af1: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     af5:	eb e9                	jmp    ae0 <sluice::blocking::file_info(sluice::File const&)+0x1b0>
+     af7:	b9 00 00 00 00       	mov    $0x0,%ecx
+			af8: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     afc:	eb e2                	jmp    ae0 <sluice::blocking::file_info(sluice::File const&)+0x1b0>
+     afe:	b9 00 00 00 00       	mov    $0x0,%ecx
+			aff: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     b03:	eb db                	jmp    ae0 <sluice::blocking::file_info(sluice::File const&)+0x1b0>
+     b05:	b9 00 00 00 00       	mov    $0x0,%ecx
+			b06: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     b0a:	eb d4                	jmp    ae0 <sluice::blocking::file_info(sluice::File const&)+0x1b0>
+     b0c:	b9 00 00 00 00       	mov    $0x0,%ecx
+			b0d: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     b11:	eb cd                	jmp    ae0 <sluice::blocking::file_info(sluice::File const&)+0x1b0>
+     b13:	66 90                	xchg   %ax,%ax
+     b15:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     b1c:	00 00 00 00 
+
+0000000000000b20 <sluice::blocking::size(sluice::File const&)>:
+     b20:	48 81 ec e8 00 00 00 	sub    $0xe8,%rsp
+     b27:	48 89 9c 24 d8 00 00 	mov    %rbx,0xd8(%rsp)
+     b2e:	00 
+     b2f:	48 89 fb             	mov    %rdi,%rbx
+     b32:	8b 3e                	mov    (%rsi),%edi
+     b34:	85 ff                	test   %edi,%edi
+     b36:	0f 88 14 01 00 00    	js     c50 <sluice::blocking::size(sluice::File const&)+0x130>
+     b3c:	66 0f ef c0          	pxor   %xmm0,%xmm0
+     b40:	48 89 ac 24 e0 00 00 	mov    %rbp,0xe0(%rsp)
+     b47:	00 
+     b48:	48 89 f5             	mov    %rsi,%rbp
+     b4b:	0f 29 44 24 40       	movaps %xmm0,0x40(%rsp)
+     b50:	0f 29 44 24 50       	movaps %xmm0,0x50(%rsp)
+     b55:	0f 29 44 24 60       	movaps %xmm0,0x60(%rsp)
+     b5a:	0f 29 44 24 70       	movaps %xmm0,0x70(%rsp)
+     b5f:	0f 29 84 24 80 00 00 	movaps %xmm0,0x80(%rsp)
+     b66:	00 
+     b67:	0f 29 84 24 90 00 00 	movaps %xmm0,0x90(%rsp)
+     b6e:	00 
+     b6f:	0f 29 84 24 a0 00 00 	movaps %xmm0,0xa0(%rsp)
+     b76:	00 
+     b77:	0f 29 84 24 b0 00 00 	movaps %xmm0,0xb0(%rsp)
+     b7e:	00 
+     b7f:	0f 29 84 24 c0 00 00 	movaps %xmm0,0xc0(%rsp)
+     b86:	00 
+     b87:	48 8d 74 24 40       	lea    0x40(%rsp),%rsi
+     b8c:	e8 00 00 00 00       	call   b91 <sluice::blocking::size(sluice::File const&)+0x71>
+			b8d: R_X86_64_PLT32	fstat-0x4
+     b91:	85 c0                	test   %eax,%eax
+     b93:	0f 89 7f 00 00 00    	jns    c18 <sluice::blocking::size(sluice::File const&)+0xf8>
+     b99:	e8 00 00 00 00       	call   b9e <sluice::blocking::size(sluice::File const&)+0x7e>
+			b9a: R_X86_64_PLT32	__errno_location-0x4
+     b9e:	8b 00                	mov    (%rax),%eax
+     ba0:	83 f8 04             	cmp    $0x4,%eax
+     ba3:	0f 84 c7 00 00 00    	je     c70 <sluice::blocking::size(sluice::File const&)+0x150>
+     ba9:	31 c9                	xor    %ecx,%ecx
+     bab:	85 c0                	test   %eax,%eax
+     bad:	74 44                	je     bf3 <sluice::blocking::size(sluice::File const&)+0xd3>
+     baf:	83 f8 0d             	cmp    $0xd,%eax
+     bb2:	0f 84 c0 00 00 00    	je     c78 <sluice::blocking::size(sluice::File const&)+0x158>
+     bb8:	83 f8 01             	cmp    $0x1,%eax
+     bbb:	0f 84 c8 00 00 00    	je     c89 <sluice::blocking::size(sluice::File const&)+0x169>
+     bc1:	83 f8 02             	cmp    $0x2,%eax
+     bc4:	0f 84 c6 00 00 00    	je     c90 <sluice::blocking::size(sluice::File const&)+0x170>
+     bca:	83 f8 14             	cmp    $0x14,%eax
+     bcd:	0f 84 c4 00 00 00    	je     c97 <sluice::blocking::size(sluice::File const&)+0x177>
+     bd3:	83 f8 1c             	cmp    $0x1c,%eax
+     bd6:	0f 84 c2 00 00 00    	je     c9e <sluice::blocking::size(sluice::File const&)+0x17e>
+     bdc:	83 f8 7a             	cmp    $0x7a,%eax
+     bdf:	0f 84 c0 00 00 00    	je     ca5 <sluice::blocking::size(sluice::File const&)+0x185>
+     be5:	ba 00 00 00 00       	mov    $0x0,%edx
+			be6: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     bea:	83 f8 0b             	cmp    $0xb,%eax
+     bed:	0f 84 8d 00 00 00    	je     c80 <sluice::blocking::size(sluice::File const&)+0x160>
+     bf3:	ba 07 00 00 00       	mov    $0x7,%edx
+     bf8:	88 d1                	mov    %dl,%cl
+     bfa:	48 89 c6             	mov    %rax,%rsi
+     bfd:	48 8b ac 24 e0 00 00 	mov    0xe0(%rsp),%rbp
+     c04:	00 
+     c05:	48 c1 e6 20          	shl    $0x20,%rsi
+     c09:	89 c9                	mov    %ecx,%ecx
+     c0b:	48 09 f1             	or     %rsi,%rcx
+     c0e:	48 89 4c 24 28       	mov    %rcx,0x28(%rsp)
+     c13:	eb 42                	jmp    c57 <sluice::blocking::size(sluice::File const&)+0x137>
+     c15:	0f 1f 00             	nopl   (%rax)
+     c18:	48 8b 44 24 70       	mov    0x70(%rsp),%rax
+     c1d:	c7 43 0c 00 00 00 00 	movl   $0x0,0xc(%rbx)
+     c24:	c6 43 10 01          	movb   $0x1,0x10(%rbx)
+     c28:	48 8b ac 24 e0 00 00 	mov    0xe0(%rsp),%rbp
+     c2f:	00 
+     c30:	48 89 03             	mov    %rax,(%rbx)
+     c33:	48 89 d8             	mov    %rbx,%rax
+     c36:	48 8b 9c 24 d8 00 00 	mov    0xd8(%rsp),%rbx
+     c3d:	00 
+     c3e:	48 81 c4 e8 00 00 00 	add    $0xe8,%rsp
+     c45:	c3                   	ret
+     c46:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+     c4d:	00 00 00 
+     c50:	31 c0                	xor    %eax,%eax
+     c52:	ba 06 00 00 00       	mov    $0x6,%edx
+     c57:	88 54 24 28          	mov    %dl,0x28(%rsp)
+     c5b:	89 44 24 2c          	mov    %eax,0x2c(%rsp)
+     c5f:	48 8b 44 24 28       	mov    0x28(%rsp),%rax
+     c64:	c6 43 10 00          	movb   $0x0,0x10(%rbx)
+     c68:	48 89 43 08          	mov    %rax,0x8(%rbx)
+     c6c:	eb c5                	jmp    c33 <sluice::blocking::size(sluice::File const&)+0x113>
+     c6e:	66 90                	xchg   %ax,%ax
+     c70:	8b 7d 00             	mov    0x0(%rbp),%edi
+     c73:	e9 0f ff ff ff       	jmp    b87 <sluice::blocking::size(sluice::File const&)+0x67>
+     c78:	ba 00 00 00 00       	mov    $0x0,%edx
+			c79: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     c7d:	0f 1f 00             	nopl   (%rax)
+     c80:	0f b6 52 04          	movzbl 0x4(%rdx),%edx
+     c84:	e9 6f ff ff ff       	jmp    bf8 <sluice::blocking::size(sluice::File const&)+0xd8>
+     c89:	ba 00 00 00 00       	mov    $0x0,%edx
+			c8a: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     c8e:	eb f0                	jmp    c80 <sluice::blocking::size(sluice::File const&)+0x160>
+     c90:	ba 00 00 00 00       	mov    $0x0,%edx
+			c91: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     c95:	eb e9                	jmp    c80 <sluice::blocking::size(sluice::File const&)+0x160>
+     c97:	ba 00 00 00 00       	mov    $0x0,%edx
+			c98: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     c9c:	eb e2                	jmp    c80 <sluice::blocking::size(sluice::File const&)+0x160>
+     c9e:	ba 00 00 00 00       	mov    $0x0,%edx
+			c9f: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     ca3:	eb db                	jmp    c80 <sluice::blocking::size(sluice::File const&)+0x160>
+     ca5:	ba 00 00 00 00       	mov    $0x0,%edx
+			ca6: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     caa:	eb d4                	jmp    c80 <sluice::blocking::size(sluice::File const&)+0x160>
+     cac:	0f 1f 40 00          	nopl   0x0(%rax)
+
+0000000000000cb0 <sluice::blocking::resize(sluice::File const&, unsigned long)>:
+     cb0:	48 83 ec 48          	sub    $0x48,%rsp
+     cb4:	8b 07                	mov    (%rdi),%eax
+     cb6:	85 c0                	test   %eax,%eax
+     cb8:	0f 88 02 01 00 00    	js     dc0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x110>
+     cbe:	80 7f 04 00          	cmpb   $0x0,0x4(%rdi)
+     cc2:	0f 84 da 00 00 00    	je     da2 <sluice::blocking::resize(sluice::File const&, unsigned long)+0xf2>
+     cc8:	48 89 5c 24 38       	mov    %rbx,0x38(%rsp)
+     ccd:	48 89 f3             	mov    %rsi,%rbx
+     cd0:	4c 89 74 24 40       	mov    %r14,0x40(%rsp)
+     cd5:	49 89 fe             	mov    %rdi,%r14
+     cd8:	48 85 f6             	test   %rsi,%rsi
+     cdb:	0f 88 b7 00 00 00    	js     d98 <sluice::blocking::resize(sluice::File const&, unsigned long)+0xe8>
+     ce1:	48 89 de             	mov    %rbx,%rsi
+     ce4:	89 c7                	mov    %eax,%edi
+     ce6:	e8 00 00 00 00       	call   ceb <sluice::blocking::resize(sluice::File const&, unsigned long)+0x3b>
+			ce7: R_X86_64_PLT32	ftruncate-0x4
+     ceb:	85 c0                	test   %eax,%eax
+     ced:	79 71                	jns    d60 <sluice::blocking::resize(sluice::File const&, unsigned long)+0xb0>
+     cef:	e8 00 00 00 00       	call   cf4 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x44>
+			cf0: R_X86_64_PLT32	__errno_location-0x4
+     cf4:	8b 00                	mov    (%rax),%eax
+     cf6:	83 f8 04             	cmp    $0x4,%eax
+     cf9:	0f 84 d1 00 00 00    	je     dd0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x120>
+     cff:	85 c0                	test   %eax,%eax
+     d01:	74 3f                	je     d42 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x92>
+     d03:	83 f8 0d             	cmp    $0xd,%eax
+     d06:	0f 84 cc 00 00 00    	je     dd8 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x128>
+     d0c:	83 f8 01             	cmp    $0x1,%eax
+     d0f:	0f 84 d4 00 00 00    	je     de9 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x139>
+     d15:	83 f8 02             	cmp    $0x2,%eax
+     d18:	0f 84 d2 00 00 00    	je     df0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x140>
+     d1e:	83 f8 14             	cmp    $0x14,%eax
+     d21:	0f 84 d0 00 00 00    	je     df7 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x147>
+     d27:	83 f8 1c             	cmp    $0x1c,%eax
+     d2a:	0f 84 ce 00 00 00    	je     dfe <sluice::blocking::resize(sluice::File const&, unsigned long)+0x14e>
+     d30:	83 f8 7a             	cmp    $0x7a,%eax
+     d33:	0f 84 cc 00 00 00    	je     e05 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x155>
+     d39:	83 f8 0b             	cmp    $0xb,%eax
+     d3c:	0f 84 ca 00 00 00    	je     e0c <sluice::blocking::resize(sluice::File const&, unsigned long)+0x15c>
+     d42:	ba 07 00 00 00       	mov    $0x7,%edx
+     d47:	48 8b 5c 24 38       	mov    0x38(%rsp),%rbx
+     d4c:	4c 8b 74 24 40       	mov    0x40(%rsp),%r14
+     d51:	88 54 24 24          	mov    %dl,0x24(%rsp)
+     d55:	89 44 24 28          	mov    %eax,0x28(%rsp)
+     d59:	c6 44 24 2c 00       	movb   $0x0,0x2c(%rsp)
+     d5e:	eb 20                	jmp    d80 <sluice::blocking::resize(sluice::File const&, unsigned long)+0xd0>
+     d60:	48 8b 5c 24 38       	mov    0x38(%rsp),%rbx
+     d65:	4c 8b 74 24 40       	mov    0x40(%rsp),%r14
+     d6a:	c6 44 24 20 01       	movb   $0x1,0x20(%rsp)
+     d6f:	48 c7 44 24 24 00 00 	movq   $0x0,0x24(%rsp)
+     d76:	00 00 
+     d78:	8b 44 24 20          	mov    0x20(%rsp),%eax
+     d7c:	89 44 24 2c          	mov    %eax,0x2c(%rsp)
+     d80:	8b 4c 24 2c          	mov    0x2c(%rsp),%ecx
+     d84:	48 8b 44 24 24       	mov    0x24(%rsp),%rax
+     d89:	48 83 c4 48          	add    $0x48,%rsp
+     d8d:	48 89 ca             	mov    %rcx,%rdx
+     d90:	c3                   	ret
+     d91:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+     d98:	48 8b 5c 24 38       	mov    0x38(%rsp),%rbx
+     d9d:	4c 8b 74 24 40       	mov    0x40(%rsp),%r14
+     da2:	b8 08 00 00 00       	mov    $0x8,%eax
+     da7:	88 44 24 24          	mov    %al,0x24(%rsp)
+     dab:	c7 44 24 28 00 00 00 	movl   $0x0,0x28(%rsp)
+     db2:	00 
+     db3:	c6 44 24 2c 00       	movb   $0x0,0x2c(%rsp)
+     db8:	eb c6                	jmp    d80 <sluice::blocking::resize(sluice::File const&, unsigned long)+0xd0>
+     dba:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     dc0:	b8 06 00 00 00       	mov    $0x6,%eax
+     dc5:	eb e0                	jmp    da7 <sluice::blocking::resize(sluice::File const&, unsigned long)+0xf7>
+     dc7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+     dce:	00 00 
+     dd0:	41 8b 06             	mov    (%r14),%eax
+     dd3:	e9 09 ff ff ff       	jmp    ce1 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x31>
+     dd8:	ba 00 00 00 00       	mov    $0x0,%edx
+			dd9: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     ddd:	0f 1f 00             	nopl   (%rax)
+     de0:	0f b6 52 04          	movzbl 0x4(%rdx),%edx
+     de4:	e9 5e ff ff ff       	jmp    d47 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x97>
+     de9:	ba 00 00 00 00       	mov    $0x0,%edx
+			dea: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     dee:	eb f0                	jmp    de0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x130>
+     df0:	ba 00 00 00 00       	mov    $0x0,%edx
+			df1: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     df5:	eb e9                	jmp    de0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x130>
+     df7:	ba 00 00 00 00       	mov    $0x0,%edx
+			df8: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     dfc:	eb e2                	jmp    de0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x130>
+     dfe:	ba 00 00 00 00       	mov    $0x0,%edx
+			dff: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     e03:	eb db                	jmp    de0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x130>
+     e05:	ba 00 00 00 00       	mov    $0x0,%edx
+			e06: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     e0a:	eb d4                	jmp    de0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x130>
+     e0c:	ba 00 00 00 00       	mov    $0x0,%edx
+			e0d: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     e11:	eb cd                	jmp    de0 <sluice::blocking::resize(sluice::File const&, unsigned long)+0x130>
+     e13:	66 90                	xchg   %ax,%ax
+     e15:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+     e1c:	00 00 00 00 
+
+0000000000000e20 <sluice::blocking::sync_all(sluice::File const&)>:
+     e20:	53                   	push   %rbx
+     e21:	48 89 fb             	mov    %rdi,%rbx
+     e24:	48 83 ec 30          	sub    $0x30,%rsp
+     e28:	8b 3f                	mov    (%rdi),%edi
+     e2a:	85 ff                	test   %edi,%edi
+     e2c:	78 7a                	js     ea8 <sluice::blocking::sync_all(sluice::File const&)+0x88>
+     e2e:	e8 00 00 00 00       	call   e33 <sluice::blocking::sync_all(sluice::File const&)+0x13>
+			e2f: R_X86_64_PLT32	fsync-0x4
+     e33:	85 c0                	test   %eax,%eax
+     e35:	0f 89 95 00 00 00    	jns    ed0 <sluice::blocking::sync_all(sluice::File const&)+0xb0>
+     e3b:	e8 00 00 00 00       	call   e40 <sluice::blocking::sync_all(sluice::File const&)+0x20>
+			e3c: R_X86_64_PLT32	__errno_location-0x4
+     e40:	8b 00                	mov    (%rax),%eax
+     e42:	83 f8 04             	cmp    $0x4,%eax
+     e45:	0f 84 a5 00 00 00    	je     ef0 <sluice::blocking::sync_all(sluice::File const&)+0xd0>
+     e4b:	85 c0                	test   %eax,%eax
+     e4d:	74 3f                	je     e8e <sluice::blocking::sync_all(sluice::File const&)+0x6e>
+     e4f:	83 f8 0d             	cmp    $0xd,%eax
+     e52:	0f 84 9f 00 00 00    	je     ef7 <sluice::blocking::sync_all(sluice::File const&)+0xd7>
+     e58:	83 f8 01             	cmp    $0x1,%eax
+     e5b:	0f 84 a5 00 00 00    	je     f06 <sluice::blocking::sync_all(sluice::File const&)+0xe6>
+     e61:	83 f8 02             	cmp    $0x2,%eax
+     e64:	0f 84 a3 00 00 00    	je     f0d <sluice::blocking::sync_all(sluice::File const&)+0xed>
+     e6a:	83 f8 14             	cmp    $0x14,%eax
+     e6d:	0f 84 a1 00 00 00    	je     f14 <sluice::blocking::sync_all(sluice::File const&)+0xf4>
+     e73:	83 f8 1c             	cmp    $0x1c,%eax
+     e76:	0f 84 9f 00 00 00    	je     f1b <sluice::blocking::sync_all(sluice::File const&)+0xfb>
+     e7c:	83 f8 7a             	cmp    $0x7a,%eax
+     e7f:	0f 84 9d 00 00 00    	je     f22 <sluice::blocking::sync_all(sluice::File const&)+0x102>
+     e85:	83 f8 0b             	cmp    $0xb,%eax
+     e88:	0f 84 9b 00 00 00    	je     f29 <sluice::blocking::sync_all(sluice::File const&)+0x109>
+     e8e:	ba 07 00 00 00       	mov    $0x7,%edx
+     e93:	88 54 24 24          	mov    %dl,0x24(%rsp)
+     e97:	89 44 24 28          	mov    %eax,0x28(%rsp)
+     e9b:	c6 44 24 2c 00       	movb   $0x0,0x2c(%rsp)
+     ea0:	eb 18                	jmp    eba <sluice::blocking::sync_all(sluice::File const&)+0x9a>
+     ea2:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+     ea8:	c6 44 24 24 06       	movb   $0x6,0x24(%rsp)
+     ead:	c7 44 24 28 00 00 00 	movl   $0x0,0x28(%rsp)
+     eb4:	00 
+     eb5:	c6 44 24 2c 00       	movb   $0x0,0x2c(%rsp)
+     eba:	8b 4c 24 2c          	mov    0x2c(%rsp),%ecx
+     ebe:	48 8b 44 24 24       	mov    0x24(%rsp),%rax
+     ec3:	48 83 c4 30          	add    $0x30,%rsp
+     ec7:	5b                   	pop    %rbx
+     ec8:	48 89 ca             	mov    %rcx,%rdx
+     ecb:	c3                   	ret
+     ecc:	0f 1f 40 00          	nopl   0x0(%rax)
+     ed0:	c6 44 24 20 01       	movb   $0x1,0x20(%rsp)
+     ed5:	8b 44 24 20          	mov    0x20(%rsp),%eax
+     ed9:	48 c7 44 24 24 00 00 	movq   $0x0,0x24(%rsp)
+     ee0:	00 00 
+     ee2:	89 44 24 2c          	mov    %eax,0x2c(%rsp)
+     ee6:	eb d2                	jmp    eba <sluice::blocking::sync_all(sluice::File const&)+0x9a>
+     ee8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+     eef:	00 
+     ef0:	8b 3b                	mov    (%rbx),%edi
+     ef2:	e9 37 ff ff ff       	jmp    e2e <sluice::blocking::sync_all(sluice::File const&)+0xe>
+     ef7:	ba 00 00 00 00       	mov    $0x0,%edx
+			ef8: R_X86_64_32	sluice::detail::kNativeErrorMappings
+     efc:	0f 1f 40 00          	nopl   0x0(%rax)
+     f00:	0f b6 52 04          	movzbl 0x4(%rdx),%edx
+     f04:	eb 8d                	jmp    e93 <sluice::blocking::sync_all(sluice::File const&)+0x73>
+     f06:	ba 00 00 00 00       	mov    $0x0,%edx
+			f07: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x8
+     f0b:	eb f3                	jmp    f00 <sluice::blocking::sync_all(sluice::File const&)+0xe0>
+     f0d:	ba 00 00 00 00       	mov    $0x0,%edx
+			f0e: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x10
+     f12:	eb ec                	jmp    f00 <sluice::blocking::sync_all(sluice::File const&)+0xe0>
+     f14:	ba 00 00 00 00       	mov    $0x0,%edx
+			f15: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x18
+     f19:	eb e5                	jmp    f00 <sluice::blocking::sync_all(sluice::File const&)+0xe0>
+     f1b:	ba 00 00 00 00       	mov    $0x0,%edx
+			f1c: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x20
+     f20:	eb de                	jmp    f00 <sluice::blocking::sync_all(sluice::File const&)+0xe0>
+     f22:	ba 00 00 00 00       	mov    $0x0,%edx
+			f23: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x28
+     f27:	eb d7                	jmp    f00 <sluice::blocking::sync_all(sluice::File const&)+0xe0>
+     f29:	ba 00 00 00 00       	mov    $0x0,%edx
+			f2a: R_X86_64_32	sluice::detail::kNativeErrorMappings+0x38
+     f2e:	eb d0                	jmp    f00 <sluice::blocking::sync_all(sluice::File const&)+0xe0>
+
+0000000000000f30 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)>:
+     f30:	48 81 ec 98 00 00 00 	sub    $0x98,%rsp
+     f37:	48 89 4c 24 08       	mov    %rcx,0x8(%rsp)
+     f3c:	8b 0e                	mov    (%rsi),%ecx
+     f3e:	4c 89 64 24 78       	mov    %r12,0x78(%rsp)
+     f43:	49 89 fc             	mov    %rdi,%r12
+     f46:	85 c9                	test   %ecx,%ecx
+     f48:	0f 88 72 02 00 00    	js     11c0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x290>
+     f4e:	48 89 6c 24 70       	mov    %rbp,0x70(%rsp)
+     f53:	48 89 f5             	mov    %rsi,%rbp
+     f56:	80 7e 04 01          	cmpb   $0x1,0x4(%rsi)
+     f5a:	0f 84 28 02 00 00    	je     1188 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x258>
+     f60:	4d 85 c0             	test   %r8,%r8
+     f63:	0f 84 df 01 00 00    	je     1148 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x218>
+     f69:	4c 89 bc 24 90 00 00 	mov    %r15,0x90(%rsp)
+     f70:	00 
+     f71:	49 89 d7             	mov    %rdx,%r15
+     f74:	49 8d 40 ff          	lea    -0x1(%r8),%rax
+     f78:	48 ba ff ff ff ff ff 	movabs $0x7fffffffffffffff,%rdx
+     f7f:	ff ff 7f 
+     f82:	4c 29 fa             	sub    %r15,%rdx
+     f85:	48 39 c2             	cmp    %rax,%rdx
+     f88:	0f 82 f2 01 00 00    	jb     1180 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x250>
+     f8e:	4c 89 c0             	mov    %r8,%rax
+     f91:	4c 09 f8             	or     %r15,%rax
+     f94:	0f 88 e6 01 00 00    	js     1180 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x250>
+     f9a:	48 83 7c 24 08 00    	cmpq   $0x0,0x8(%rsp)
+     fa0:	0f 84 2a 02 00 00    	je     11d0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x2a0>
+     fa6:	4c 89 ac 24 80 00 00 	mov    %r13,0x80(%rsp)
+     fad:	00 
+     fae:	4c 89 b4 24 88 00 00 	mov    %r14,0x88(%rsp)
+     fb5:	00 
+     fb6:	48 89 5c 24 68       	mov    %rbx,0x68(%rsp)
+     fbb:	31 db                	xor    %ebx,%ebx
+     fbd:	0f 1f 00             	nopl   (%rax)
+     fc0:	8b 7d 00             	mov    0x0(%rbp),%edi
+     fc3:	85 ff                	test   %edi,%edi
+     fc5:	0f 88 05 03 00 00    	js     12d0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3a0>
+     fcb:	4d 89 c6             	mov    %r8,%r14
+     fce:	4e 8d 2c 3b          	lea    (%rbx,%r15,1),%r13
+     fd2:	49 29 de             	sub    %rbx,%r14
+     fd5:	80 7d 04 01          	cmpb   $0x1,0x4(%rbp)
+     fd9:	0f 84 e1 02 00 00    	je     12c0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x390>
+     fdf:	4c 89 f0             	mov    %r14,%rax
+     fe2:	4c 09 e8             	or     %r13,%rax
+     fe5:	0f 88 d5 02 00 00    	js     12c0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x390>
+     feb:	48 ba ff ff ff ff ff 	movabs $0x7fffffffffffffff,%rdx
+     ff2:	ff ff 7f 
+     ff5:	49 8d 46 ff          	lea    -0x1(%r14),%rax
+     ff9:	4c 29 ea             	sub    %r13,%rdx
+     ffc:	48 39 c2             	cmp    %rax,%rdx
+     fff:	0f 82 bb 02 00 00    	jb     12c0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x390>
+    1005:	48 8b 44 24 08       	mov    0x8(%rsp),%rax
+    100a:	48 01 d8             	add    %rbx,%rax
+    100d:	48 89 44 24 18       	mov    %rax,0x18(%rsp)
+    1012:	48 89 c6             	mov    %rax,%rsi
+    1015:	4c 89 e9             	mov    %r13,%rcx
+    1018:	4c 89 f2             	mov    %r14,%rdx
+    101b:	4c 89 44 24 10       	mov    %r8,0x10(%rsp)
+    1020:	e8 00 00 00 00       	call   1025 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0xf5>
+			1021: R_X86_64_PLT32	pread-0x4
+    1025:	4c 8b 44 24 10       	mov    0x10(%rsp),%r8
+    102a:	48 85 c0             	test   %rax,%rax
+    102d:	0f 89 cd 01 00 00    	jns    1200 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x2d0>
+    1033:	e8 00 00 00 00       	call   1038 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x108>
+			1034: R_X86_64_PLT32	__errno_location-0x4
+    1038:	4c 8b 44 24 10       	mov    0x10(%rsp),%r8
+    103d:	8b 00                	mov    (%rax),%eax
+    103f:	83 f8 04             	cmp    $0x4,%eax
+    1042:	0f 84 98 02 00 00    	je     12e0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3b0>
+    1048:	ba 07 00 00 00       	mov    $0x7,%edx
+    104d:	85 c0                	test   %eax,%eax
+    104f:	74 4f                	je     10a0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+    1051:	83 f8 0d             	cmp    $0xd,%eax
+    1054:	0f 84 b1 02 00 00    	je     130b <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3db>
+    105a:	83 f8 01             	cmp    $0x1,%eax
+    105d:	0f 84 a8 02 00 00    	je     130b <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3db>
+    1063:	83 f8 02             	cmp    $0x2,%eax
+    1066:	0f 84 a9 02 00 00    	je     1315 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3e5>
+    106c:	83 f8 14             	cmp    $0x14,%eax
+    106f:	0f 84 a0 02 00 00    	je     1315 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3e5>
+    1075:	83 f8 1c             	cmp    $0x1c,%eax
+    1078:	0f 84 a1 02 00 00    	je     131f <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3ef>
+    107e:	83 f8 7a             	cmp    $0x7a,%eax
+    1081:	0f 84 98 02 00 00    	je     131f <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3ef>
+    1087:	83 f8 0b             	cmp    $0xb,%eax
+    108a:	0f 95 c2             	setne  %dl
+    108d:	8d 14 95 03 00 00 00 	lea    0x3(,%rdx,4),%edx
+    1094:	90                   	nop
+    1095:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+    109c:	00 00 00 00 
+    10a0:	88 54 24 2c          	mov    %dl,0x2c(%rsp)
+    10a4:	bf 01 00 00 00       	mov    $0x1,%edi
+    10a9:	be 01 00 00 00       	mov    $0x1,%esi
+    10ae:	89 44 24 30          	mov    %eax,0x30(%rsp)
+    10b2:	48 8b 4c 24 2c       	mov    0x2c(%rsp),%rcx
+    10b7:	48 c7 44 24 4a 00 00 	movq   $0x0,0x4a(%rsp)
+    10be:	00 00 
+    10c0:	48 c7 44 24 50 00 00 	movq   $0x0,0x50(%rsp)
+    10c7:	00 00 
+    10c9:	48 89 4c 24 4c       	mov    %rcx,0x4c(%rsp)
+    10ce:	b9 03 00 00 00       	mov    $0x3,%ecx
+    10d3:	48 89 5c 24 40       	mov    %rbx,0x40(%rsp)
+    10d8:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    10dd:	88 4c 24 48          	mov    %cl,0x48(%rsp)
+    10e1:	48 8b 5c 24 68       	mov    0x68(%rsp),%rbx
+    10e6:	40 88 7c 24 49       	mov    %dil,0x49(%rsp)
+    10eb:	4c 8b ac 24 80 00 00 	mov    0x80(%rsp),%r13
+    10f2:	00 
+    10f3:	88 54 24 4c          	mov    %dl,0x4c(%rsp)
+    10f7:	66 0f 6f 44 24 40    	movdqa 0x40(%rsp),%xmm0
+    10fd:	89 44 24 50          	mov    %eax,0x50(%rsp)
+    1101:	4c 8b b4 24 88 00 00 	mov    0x88(%rsp),%r14
+    1108:	00 
+    1109:	40 88 74 24 54       	mov    %sil,0x54(%rsp)
+    110e:	48 8b 44 24 50       	mov    0x50(%rsp),%rax
+    1113:	41 c6 44 24 20 01    	movb   $0x1,0x20(%r12)
+    1119:	4c 8b bc 24 90 00 00 	mov    0x90(%rsp),%r15
+    1120:	00 
+    1121:	49 89 44 24 10       	mov    %rax,0x10(%r12)
+    1126:	4c 89 e0             	mov    %r12,%rax
+    1129:	41 c7 44 24 1c 00 00 	movl   $0x0,0x1c(%r12)
+    1130:	00 00 
+    1132:	41 0f 11 04 24       	movups %xmm0,(%r12)
+    1137:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    113c:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    1143:	c3                   	ret
+    1144:	0f 1f 40 00          	nopl   0x0(%rax)
+    1148:	66 0f ef c0          	pxor   %xmm0,%xmm0
+    114c:	4c 89 e0             	mov    %r12,%rax
+    114f:	c6 47 20 01          	movb   $0x1,0x20(%rdi)
+    1153:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    1158:	48 c7 47 10 00 00 00 	movq   $0x0,0x10(%rdi)
+    115f:	00 
+    1160:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    1165:	c7 47 1c 00 00 00 00 	movl   $0x0,0x1c(%rdi)
+    116c:	0f 11 07             	movups %xmm0,(%rdi)
+    116f:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    1176:	c3                   	ret
+    1177:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    117e:	00 00 
+    1180:	4c 8b bc 24 90 00 00 	mov    0x90(%rsp),%r15
+    1187:	00 
+    1188:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    118d:	b8 08 00 00 00       	mov    $0x8,%eax
+    1192:	41 88 44 24 18       	mov    %al,0x18(%r12)
+    1197:	4c 89 e0             	mov    %r12,%rax
+    119a:	41 c7 44 24 1c 00 00 	movl   $0x0,0x1c(%r12)
+    11a1:	00 00 
+    11a3:	41 c6 44 24 20 00    	movb   $0x0,0x20(%r12)
+    11a9:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    11ae:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    11b5:	c3                   	ret
+    11b6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    11bd:	00 00 00 
+    11c0:	b8 06 00 00 00       	mov    $0x6,%eax
+    11c5:	eb cb                	jmp    1192 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x262>
+    11c7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    11ce:	00 00 
+    11d0:	4c 89 e0             	mov    %r12,%rax
+    11d3:	c6 47 18 08          	movb   $0x8,0x18(%rdi)
+    11d7:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    11dc:	c7 47 1c 00 00 00 00 	movl   $0x0,0x1c(%rdi)
+    11e3:	4c 8b bc 24 90 00 00 	mov    0x90(%rsp),%r15
+    11ea:	00 
+    11eb:	c6 47 20 00          	movb   $0x0,0x20(%rdi)
+    11ef:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    11f4:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    11fb:	c3                   	ret
+    11fc:	0f 1f 40 00          	nopl   0x0(%rax)
+    1200:	49 39 c6             	cmp    %rax,%r14
+    1203:	0f 82 a7 00 00 00    	jb     12b0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x380>
+    1209:	48 01 c3             	add    %rax,%rbx
+    120c:	49 39 d8             	cmp    %rbx,%r8
+    120f:	74 3f                	je     1250 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x320>
+    1211:	48 85 c0             	test   %rax,%rax
+    1214:	75 3a                	jne    1250 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x320>
+    1216:	b8 01 00 00 00       	mov    $0x1,%eax
+    121b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+    1220:	48 c7 44 24 4a 00 00 	movq   $0x0,0x4a(%rsp)
+    1227:	00 00 
+    1229:	48 c7 44 24 50 00 00 	movq   $0x0,0x50(%rsp)
+    1230:	00 00 
+    1232:	3c 04                	cmp    $0x4,%al
+    1234:	0f 84 b6 00 00 00    	je     12f0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x3c0>
+    123a:	31 ff                	xor    %edi,%edi
+    123c:	31 f6                	xor    %esi,%esi
+    123e:	31 c0                	xor    %eax,%eax
+    1240:	31 d2                	xor    %edx,%edx
+    1242:	b9 01 00 00 00       	mov    $0x1,%ecx
+    1247:	e9 87 fe ff ff       	jmp    10d3 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1a3>
+    124c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1250:	31 c0                	xor    %eax,%eax
+    1252:	48 89 5c 24 40       	mov    %rbx,0x40(%rsp)
+    1257:	66 89 44 24 48       	mov    %ax,0x48(%rsp)
+    125c:	c6 44 24 4c 07       	movb   $0x7,0x4c(%rsp)
+    1261:	66 0f 6f 44 24 40    	movdqa 0x40(%rsp),%xmm0
+    1267:	c7 44 24 50 00 00 00 	movl   $0x0,0x50(%rsp)
+    126e:	00 
+    126f:	c7 44 24 30 00 00 00 	movl   $0x0,0x30(%rsp)
+    1276:	00 
+    1277:	0f 29 44 24 20       	movaps %xmm0,0x20(%rsp)
+    127c:	4c 39 c3             	cmp    %r8,%rbx
+    127f:	0f 82 3b fd ff ff    	jb     fc0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x90>
+    1285:	48 c7 44 24 4a 00 00 	movq   $0x0,0x4a(%rsp)
+    128c:	00 00 
+    128e:	31 ff                	xor    %edi,%edi
+    1290:	31 f6                	xor    %esi,%esi
+    1292:	31 c0                	xor    %eax,%eax
+    1294:	48 c7 44 24 50 00 00 	movq   $0x0,0x50(%rsp)
+    129b:	00 00 
+    129d:	31 d2                	xor    %edx,%edx
+    129f:	31 c9                	xor    %ecx,%ecx
+    12a1:	e9 2d fe ff ff       	jmp    10d3 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1a3>
+    12a6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    12ad:	00 00 00 
+    12b0:	b8 04 00 00 00       	mov    $0x4,%eax
+    12b5:	e9 66 ff ff ff       	jmp    1220 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x2f0>
+    12ba:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+    12c0:	31 c0                	xor    %eax,%eax
+    12c2:	ba 08 00 00 00       	mov    $0x8,%edx
+    12c7:	e9 d4 fd ff ff       	jmp    10a0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+    12cc:	0f 1f 40 00          	nopl   0x0(%rax)
+    12d0:	31 c0                	xor    %eax,%eax
+    12d2:	ba 06 00 00 00       	mov    $0x6,%edx
+    12d7:	e9 c4 fd ff ff       	jmp    10a0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+    12dc:	0f 1f 40 00          	nopl   0x0(%rax)
+    12e0:	8b 7d 00             	mov    0x0(%rbp),%edi
+    12e3:	48 8b 74 24 18       	mov    0x18(%rsp),%rsi
+    12e8:	e9 28 fd ff ff       	jmp    1015 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0xe5>
+    12ed:	0f 1f 00             	nopl   (%rax)
+    12f0:	bf 01 00 00 00       	mov    $0x1,%edi
+    12f5:	be 01 00 00 00       	mov    $0x1,%esi
+    12fa:	31 c0                	xor    %eax,%eax
+    12fc:	ba 06 00 00 00       	mov    $0x6,%edx
+    1301:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1306:	e9 c8 fd ff ff       	jmp    10d3 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1a3>
+    130b:	ba 05 00 00 00       	mov    $0x5,%edx
+    1310:	e9 8b fd ff ff       	jmp    10a0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+    1315:	ba 09 00 00 00       	mov    $0x9,%edx
+    131a:	e9 81 fd ff ff       	jmp    10a0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+    131f:	ba 04 00 00 00       	mov    $0x4,%edx
+    1324:	e9 77 fd ff ff       	jmp    10a0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x170>
+    1329:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+
+0000000000001330 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)>:
+    1330:	48 81 ec 98 00 00 00 	sub    $0x98,%rsp
+    1337:	48 89 4c 24 08       	mov    %rcx,0x8(%rsp)
+    133c:	8b 0e                	mov    (%rsi),%ecx
+    133e:	4c 89 64 24 78       	mov    %r12,0x78(%rsp)
+    1343:	49 89 fc             	mov    %rdi,%r12
+    1346:	85 c9                	test   %ecx,%ecx
+    1348:	0f 88 72 02 00 00    	js     15c0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x290>
+    134e:	48 89 6c 24 70       	mov    %rbp,0x70(%rsp)
+    1353:	48 89 f5             	mov    %rsi,%rbp
+    1356:	80 7e 04 00          	cmpb   $0x0,0x4(%rsi)
+    135a:	0f 84 28 02 00 00    	je     1588 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x258>
+    1360:	4d 85 c0             	test   %r8,%r8
+    1363:	0f 84 df 01 00 00    	je     1548 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x218>
+    1369:	4c 89 bc 24 90 00 00 	mov    %r15,0x90(%rsp)
+    1370:	00 
+    1371:	49 89 d7             	mov    %rdx,%r15
+    1374:	49 8d 40 ff          	lea    -0x1(%r8),%rax
+    1378:	48 ba ff ff ff ff ff 	movabs $0x7fffffffffffffff,%rdx
+    137f:	ff ff 7f 
+    1382:	4c 29 fa             	sub    %r15,%rdx
+    1385:	48 39 c2             	cmp    %rax,%rdx
+    1388:	0f 82 f2 01 00 00    	jb     1580 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x250>
+    138e:	4c 89 c0             	mov    %r8,%rax
+    1391:	4c 09 f8             	or     %r15,%rax
+    1394:	0f 88 e6 01 00 00    	js     1580 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x250>
+    139a:	48 83 7c 24 08 00    	cmpq   $0x0,0x8(%rsp)
+    13a0:	0f 84 2a 02 00 00    	je     15d0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x2a0>
+    13a6:	4c 89 ac 24 80 00 00 	mov    %r13,0x80(%rsp)
+    13ad:	00 
+    13ae:	4c 89 b4 24 88 00 00 	mov    %r14,0x88(%rsp)
+    13b5:	00 
+    13b6:	48 89 5c 24 68       	mov    %rbx,0x68(%rsp)
+    13bb:	31 db                	xor    %ebx,%ebx
+    13bd:	0f 1f 00             	nopl   (%rax)
+    13c0:	8b 7d 00             	mov    0x0(%rbp),%edi
+    13c3:	85 ff                	test   %edi,%edi
+    13c5:	0f 88 05 03 00 00    	js     16d0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3a0>
+    13cb:	4d 89 c6             	mov    %r8,%r14
+    13ce:	4e 8d 2c 3b          	lea    (%rbx,%r15,1),%r13
+    13d2:	49 29 de             	sub    %rbx,%r14
+    13d5:	80 7d 04 00          	cmpb   $0x0,0x4(%rbp)
+    13d9:	0f 84 e1 02 00 00    	je     16c0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x390>
+    13df:	4c 89 f0             	mov    %r14,%rax
+    13e2:	4c 09 e8             	or     %r13,%rax
+    13e5:	0f 88 d5 02 00 00    	js     16c0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x390>
+    13eb:	48 ba ff ff ff ff ff 	movabs $0x7fffffffffffffff,%rdx
+    13f2:	ff ff 7f 
+    13f5:	49 8d 46 ff          	lea    -0x1(%r14),%rax
+    13f9:	4c 29 ea             	sub    %r13,%rdx
+    13fc:	48 39 c2             	cmp    %rax,%rdx
+    13ff:	0f 82 bb 02 00 00    	jb     16c0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x390>
+    1405:	48 8b 44 24 08       	mov    0x8(%rsp),%rax
+    140a:	48 01 d8             	add    %rbx,%rax
+    140d:	48 89 44 24 18       	mov    %rax,0x18(%rsp)
+    1412:	48 89 c6             	mov    %rax,%rsi
+    1415:	4c 89 e9             	mov    %r13,%rcx
+    1418:	4c 89 f2             	mov    %r14,%rdx
+    141b:	4c 89 44 24 10       	mov    %r8,0x10(%rsp)
+    1420:	e8 00 00 00 00       	call   1425 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0xf5>
+			1421: R_X86_64_PLT32	pwrite-0x4
+    1425:	4c 8b 44 24 10       	mov    0x10(%rsp),%r8
+    142a:	48 85 c0             	test   %rax,%rax
+    142d:	0f 89 cd 01 00 00    	jns    1600 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x2d0>
+    1433:	e8 00 00 00 00       	call   1438 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x108>
+			1434: R_X86_64_PLT32	__errno_location-0x4
+    1438:	4c 8b 44 24 10       	mov    0x10(%rsp),%r8
+    143d:	8b 00                	mov    (%rax),%eax
+    143f:	83 f8 04             	cmp    $0x4,%eax
+    1442:	0f 84 98 02 00 00    	je     16e0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3b0>
+    1448:	ba 07 00 00 00       	mov    $0x7,%edx
+    144d:	85 c0                	test   %eax,%eax
+    144f:	74 4f                	je     14a0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+    1451:	83 f8 0d             	cmp    $0xd,%eax
+    1454:	0f 84 b1 02 00 00    	je     170b <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3db>
+    145a:	83 f8 01             	cmp    $0x1,%eax
+    145d:	0f 84 a8 02 00 00    	je     170b <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3db>
+    1463:	83 f8 02             	cmp    $0x2,%eax
+    1466:	0f 84 a9 02 00 00    	je     1715 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3e5>
+    146c:	83 f8 14             	cmp    $0x14,%eax
+    146f:	0f 84 a0 02 00 00    	je     1715 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3e5>
+    1475:	83 f8 1c             	cmp    $0x1c,%eax
+    1478:	0f 84 a1 02 00 00    	je     171f <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3ef>
+    147e:	83 f8 7a             	cmp    $0x7a,%eax
+    1481:	0f 84 98 02 00 00    	je     171f <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3ef>
+    1487:	83 f8 0b             	cmp    $0xb,%eax
+    148a:	0f 95 c2             	setne  %dl
+    148d:	8d 14 95 03 00 00 00 	lea    0x3(,%rdx,4),%edx
+    1494:	90                   	nop
+    1495:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
+    149c:	00 00 00 00 
+    14a0:	88 54 24 2c          	mov    %dl,0x2c(%rsp)
+    14a4:	bf 01 00 00 00       	mov    $0x1,%edi
+    14a9:	be 01 00 00 00       	mov    $0x1,%esi
+    14ae:	89 44 24 30          	mov    %eax,0x30(%rsp)
+    14b2:	48 8b 4c 24 2c       	mov    0x2c(%rsp),%rcx
+    14b7:	48 c7 44 24 4a 00 00 	movq   $0x0,0x4a(%rsp)
+    14be:	00 00 
+    14c0:	48 c7 44 24 50 00 00 	movq   $0x0,0x50(%rsp)
+    14c7:	00 00 
+    14c9:	48 89 4c 24 4c       	mov    %rcx,0x4c(%rsp)
+    14ce:	b9 03 00 00 00       	mov    $0x3,%ecx
+    14d3:	48 89 5c 24 40       	mov    %rbx,0x40(%rsp)
+    14d8:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    14dd:	88 4c 24 48          	mov    %cl,0x48(%rsp)
+    14e1:	48 8b 5c 24 68       	mov    0x68(%rsp),%rbx
+    14e6:	40 88 7c 24 49       	mov    %dil,0x49(%rsp)
+    14eb:	4c 8b ac 24 80 00 00 	mov    0x80(%rsp),%r13
+    14f2:	00 
+    14f3:	88 54 24 4c          	mov    %dl,0x4c(%rsp)
+    14f7:	66 0f 6f 44 24 40    	movdqa 0x40(%rsp),%xmm0
+    14fd:	89 44 24 50          	mov    %eax,0x50(%rsp)
+    1501:	4c 8b b4 24 88 00 00 	mov    0x88(%rsp),%r14
+    1508:	00 
+    1509:	40 88 74 24 54       	mov    %sil,0x54(%rsp)
+    150e:	48 8b 44 24 50       	mov    0x50(%rsp),%rax
+    1513:	41 c6 44 24 20 01    	movb   $0x1,0x20(%r12)
+    1519:	4c 8b bc 24 90 00 00 	mov    0x90(%rsp),%r15
+    1520:	00 
+    1521:	49 89 44 24 10       	mov    %rax,0x10(%r12)
+    1526:	4c 89 e0             	mov    %r12,%rax
+    1529:	41 c7 44 24 1c 00 00 	movl   $0x0,0x1c(%r12)
+    1530:	00 00 
+    1532:	41 0f 11 04 24       	movups %xmm0,(%r12)
+    1537:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    153c:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    1543:	c3                   	ret
+    1544:	0f 1f 40 00          	nopl   0x0(%rax)
+    1548:	66 0f ef c0          	pxor   %xmm0,%xmm0
+    154c:	4c 89 e0             	mov    %r12,%rax
+    154f:	c6 47 20 01          	movb   $0x1,0x20(%rdi)
+    1553:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    1558:	48 c7 47 10 00 00 00 	movq   $0x0,0x10(%rdi)
+    155f:	00 
+    1560:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    1565:	c7 47 1c 00 00 00 00 	movl   $0x0,0x1c(%rdi)
+    156c:	0f 11 07             	movups %xmm0,(%rdi)
+    156f:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    1576:	c3                   	ret
+    1577:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    157e:	00 00 
+    1580:	4c 8b bc 24 90 00 00 	mov    0x90(%rsp),%r15
+    1587:	00 
+    1588:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    158d:	b8 08 00 00 00       	mov    $0x8,%eax
+    1592:	41 88 44 24 18       	mov    %al,0x18(%r12)
+    1597:	4c 89 e0             	mov    %r12,%rax
+    159a:	41 c7 44 24 1c 00 00 	movl   $0x0,0x1c(%r12)
+    15a1:	00 00 
+    15a3:	41 c6 44 24 20 00    	movb   $0x0,0x20(%r12)
+    15a9:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    15ae:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    15b5:	c3                   	ret
+    15b6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    15bd:	00 00 00 
+    15c0:	b8 06 00 00 00       	mov    $0x6,%eax
+    15c5:	eb cb                	jmp    1592 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x262>
+    15c7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    15ce:	00 00 
+    15d0:	4c 89 e0             	mov    %r12,%rax
+    15d3:	c6 47 18 08          	movb   $0x8,0x18(%rdi)
+    15d7:	48 8b 6c 24 70       	mov    0x70(%rsp),%rbp
+    15dc:	c7 47 1c 00 00 00 00 	movl   $0x0,0x1c(%rdi)
+    15e3:	4c 8b bc 24 90 00 00 	mov    0x90(%rsp),%r15
+    15ea:	00 
+    15eb:	c6 47 20 00          	movb   $0x0,0x20(%rdi)
+    15ef:	4c 8b 64 24 78       	mov    0x78(%rsp),%r12
+    15f4:	48 81 c4 98 00 00 00 	add    $0x98,%rsp
+    15fb:	c3                   	ret
+    15fc:	0f 1f 40 00          	nopl   0x0(%rax)
+    1600:	49 39 c6             	cmp    %rax,%r14
+    1603:	0f 82 a7 00 00 00    	jb     16b0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x380>
+    1609:	48 01 c3             	add    %rax,%rbx
+    160c:	49 39 d8             	cmp    %rbx,%r8
+    160f:	74 3f                	je     1650 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x320>
+    1611:	48 85 c0             	test   %rax,%rax
+    1614:	75 3a                	jne    1650 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x320>
+    1616:	b8 02 00 00 00       	mov    $0x2,%eax
+    161b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+    1620:	48 c7 44 24 4a 00 00 	movq   $0x0,0x4a(%rsp)
+    1627:	00 00 
+    1629:	48 c7 44 24 50 00 00 	movq   $0x0,0x50(%rsp)
+    1630:	00 00 
+    1632:	3c 04                	cmp    $0x4,%al
+    1634:	0f 84 b6 00 00 00    	je     16f0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x3c0>
+    163a:	31 ff                	xor    %edi,%edi
+    163c:	31 f6                	xor    %esi,%esi
+    163e:	31 c0                	xor    %eax,%eax
+    1640:	31 d2                	xor    %edx,%edx
+    1642:	b9 02 00 00 00       	mov    $0x2,%ecx
+    1647:	e9 87 fe ff ff       	jmp    14d3 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1a3>
+    164c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1650:	31 c0                	xor    %eax,%eax
+    1652:	48 89 5c 24 40       	mov    %rbx,0x40(%rsp)
+    1657:	66 89 44 24 48       	mov    %ax,0x48(%rsp)
+    165c:	c6 44 24 4c 07       	movb   $0x7,0x4c(%rsp)
+    1661:	66 0f 6f 44 24 40    	movdqa 0x40(%rsp),%xmm0
+    1667:	c7 44 24 50 00 00 00 	movl   $0x0,0x50(%rsp)
+    166e:	00 
+    166f:	c7 44 24 30 00 00 00 	movl   $0x0,0x30(%rsp)
+    1676:	00 
+    1677:	0f 29 44 24 20       	movaps %xmm0,0x20(%rsp)
+    167c:	4c 39 c3             	cmp    %r8,%rbx
+    167f:	0f 82 3b fd ff ff    	jb     13c0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x90>
+    1685:	48 c7 44 24 4a 00 00 	movq   $0x0,0x4a(%rsp)
+    168c:	00 00 
+    168e:	31 ff                	xor    %edi,%edi
+    1690:	31 f6                	xor    %esi,%esi
+    1692:	31 c0                	xor    %eax,%eax
+    1694:	48 c7 44 24 50 00 00 	movq   $0x0,0x50(%rsp)
+    169b:	00 00 
+    169d:	31 d2                	xor    %edx,%edx
+    169f:	31 c9                	xor    %ecx,%ecx
+    16a1:	e9 2d fe ff ff       	jmp    14d3 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1a3>
+    16a6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    16ad:	00 00 00 
+    16b0:	b8 04 00 00 00       	mov    $0x4,%eax
+    16b5:	e9 66 ff ff ff       	jmp    1620 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x2f0>
+    16ba:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+    16c0:	31 c0                	xor    %eax,%eax
+    16c2:	ba 08 00 00 00       	mov    $0x8,%edx
+    16c7:	e9 d4 fd ff ff       	jmp    14a0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+    16cc:	0f 1f 40 00          	nopl   0x0(%rax)
+    16d0:	31 c0                	xor    %eax,%eax
+    16d2:	ba 06 00 00 00       	mov    $0x6,%edx
+    16d7:	e9 c4 fd ff ff       	jmp    14a0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+    16dc:	0f 1f 40 00          	nopl   0x0(%rax)
+    16e0:	8b 7d 00             	mov    0x0(%rbp),%edi
+    16e3:	48 8b 74 24 18       	mov    0x18(%rsp),%rsi
+    16e8:	e9 28 fd ff ff       	jmp    1415 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0xe5>
+    16ed:	0f 1f 00             	nopl   (%rax)
+    16f0:	bf 01 00 00 00       	mov    $0x1,%edi
+    16f5:	be 01 00 00 00       	mov    $0x1,%esi
+    16fa:	31 c0                	xor    %eax,%eax
+    16fc:	ba 06 00 00 00       	mov    $0x6,%edx
+    1701:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1706:	e9 c8 fd ff ff       	jmp    14d3 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x1a3>
+    170b:	ba 05 00 00 00       	mov    $0x5,%edx
+    1710:	e9 8b fd ff ff       	jmp    14a0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+    1715:	ba 09 00 00 00       	mov    $0x9,%edx
+    171a:	e9 81 fd ff ff       	jmp    14a0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+    171f:	ba 04 00 00 00       	mov    $0x4,%edx
+    1724:	e9 77 fd ff ff       	jmp    14a0 <sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)+0x170>
+    1729:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+
+0000000000001730 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)>:
+    1730:	48 81 ec 88 00 00 00 	sub    $0x88,%rsp
+    1737:	48 89 6c 24 60       	mov    %rbp,0x60(%rsp)
+    173c:	48 89 fd             	mov    %rdi,%rbp
+    173f:	8b 3e                	mov    (%rsi),%edi
+    1741:	85 ff                	test   %edi,%edi
+    1743:	0f 88 f7 01 00 00    	js     1940 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x210>
+    1749:	48 89 5c 24 58       	mov    %rbx,0x58(%rsp)
+    174e:	48 89 f3             	mov    %rsi,%rbx
+    1751:	80 7e 04 01          	cmpb   $0x1,0x4(%rsi)
+    1755:	0f 84 ba 01 00 00    	je     1915 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1e5>
+    175b:	48 85 c9             	test   %rcx,%rcx
+    175e:	0f 84 7c 01 00 00    	je     18e0 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1b0>
+    1764:	4c 89 6c 24 70       	mov    %r13,0x70(%rsp)
+    1769:	0f 8e a1 01 00 00    	jle    1910 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1e0>
+    176f:	49 89 d5             	mov    %rdx,%r13
+    1772:	48 85 d2             	test   %rdx,%rdx
+    1775:	0f 84 d5 01 00 00    	je     1950 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x220>
+    177b:	4c 89 74 24 78       	mov    %r14,0x78(%rsp)
+    1780:	4c 89 bc 24 80 00 00 	mov    %r15,0x80(%rsp)
+    1787:	00 
+    1788:	4c 89 64 24 68       	mov    %r12,0x68(%rsp)
+    178d:	45 31 e4             	xor    %r12d,%r12d
+    1790:	8b 3b                	mov    (%rbx),%edi
+    1792:	85 ff                	test   %edi,%edi
+    1794:	0f 88 b6 02 00 00    	js     1a50 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x320>
+    179a:	80 7b 04 01          	cmpb   $0x1,0x4(%rbx)
+    179e:	0f 84 9c 02 00 00    	je     1a40 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x310>
+    17a4:	49 89 ce             	mov    %rcx,%r14
+    17a7:	4d 29 e6             	sub    %r12,%r14
+    17aa:	4d 85 f6             	test   %r14,%r14
+    17ad:	0f 8e 8d 02 00 00    	jle    1a40 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x310>
+    17b3:	4f 8d 7c 25 00       	lea    0x0(%r13,%r12,1),%r15
+    17b8:	4c 89 f2             	mov    %r14,%rdx
+    17bb:	4c 89 fe             	mov    %r15,%rsi
+    17be:	48 89 4c 24 08       	mov    %rcx,0x8(%rsp)
+    17c3:	e8 00 00 00 00       	call   17c8 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x98>
+			17c4: R_X86_64_PLT32	read-0x4
+    17c8:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+    17cd:	48 85 c0             	test   %rax,%rax
+    17d0:	0f 89 aa 01 00 00    	jns    1980 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x250>
+    17d6:	e8 00 00 00 00       	call   17db <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0xab>
+			17d7: R_X86_64_PLT32	__errno_location-0x4
+    17db:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+    17e0:	8b 00                	mov    (%rax),%eax
+    17e2:	83 f8 04             	cmp    $0x4,%eax
+    17e5:	0f 84 75 02 00 00    	je     1a60 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x330>
+    17eb:	ba 07 00 00 00       	mov    $0x7,%edx
+    17f0:	85 c0                	test   %eax,%eax
+    17f2:	74 4c                	je     1840 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+    17f4:	83 f8 0d             	cmp    $0xd,%eax
+    17f7:	0f 84 8e 02 00 00    	je     1a8b <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x35b>
+    17fd:	83 f8 01             	cmp    $0x1,%eax
+    1800:	0f 84 85 02 00 00    	je     1a8b <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x35b>
+    1806:	83 f8 02             	cmp    $0x2,%eax
+    1809:	0f 84 86 02 00 00    	je     1a95 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x365>
+    180f:	83 f8 14             	cmp    $0x14,%eax
+    1812:	0f 84 7d 02 00 00    	je     1a95 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x365>
+    1818:	83 f8 1c             	cmp    $0x1c,%eax
+    181b:	0f 84 7e 02 00 00    	je     1a9f <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x36f>
+    1821:	83 f8 7a             	cmp    $0x7a,%eax
+    1824:	0f 84 75 02 00 00    	je     1a9f <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x36f>
+    182a:	83 f8 0b             	cmp    $0xb,%eax
+    182d:	0f 95 c2             	setne  %dl
+    1830:	8d 14 95 03 00 00 00 	lea    0x3(,%rdx,4),%edx
+    1837:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    183e:	00 00 
+    1840:	88 54 24 1c          	mov    %dl,0x1c(%rsp)
+    1844:	bf 01 00 00 00       	mov    $0x1,%edi
+    1849:	be 01 00 00 00       	mov    $0x1,%esi
+    184e:	89 44 24 20          	mov    %eax,0x20(%rsp)
+    1852:	48 8b 4c 24 1c       	mov    0x1c(%rsp),%rcx
+    1857:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    185e:	00 00 
+    1860:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1867:	00 00 
+    1869:	48 89 4c 24 3c       	mov    %rcx,0x3c(%rsp)
+    186e:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1873:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+    1878:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    187d:	88 4c 24 38          	mov    %cl,0x38(%rsp)
+    1881:	4c 8b 64 24 68       	mov    0x68(%rsp),%r12
+    1886:	40 88 7c 24 39       	mov    %dil,0x39(%rsp)
+    188b:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1890:	88 54 24 3c          	mov    %dl,0x3c(%rsp)
+    1894:	66 0f 6f 44 24 30    	movdqa 0x30(%rsp),%xmm0
+    189a:	89 44 24 40          	mov    %eax,0x40(%rsp)
+    189e:	4c 8b 74 24 78       	mov    0x78(%rsp),%r14
+    18a3:	40 88 74 24 44       	mov    %sil,0x44(%rsp)
+    18a8:	48 8b 44 24 40       	mov    0x40(%rsp),%rax
+    18ad:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    18b4:	4c 8b bc 24 80 00 00 	mov    0x80(%rsp),%r15
+    18bb:	00 
+    18bc:	48 89 45 10          	mov    %rax,0x10(%rbp)
+    18c0:	48 89 e8             	mov    %rbp,%rax
+    18c3:	c6 45 20 01          	movb   $0x1,0x20(%rbp)
+    18c7:	0f 11 45 00          	movups %xmm0,0x0(%rbp)
+    18cb:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    18d0:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    18d7:	c3                   	ret
+    18d8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+    18df:	00 
+    18e0:	66 0f ef c0          	pxor   %xmm0,%xmm0
+    18e4:	c6 45 20 01          	movb   $0x1,0x20(%rbp)
+    18e8:	48 89 e8             	mov    %rbp,%rax
+    18eb:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    18f0:	48 c7 45 10 00 00 00 	movq   $0x0,0x10(%rbp)
+    18f7:	00 
+    18f8:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    18ff:	0f 11 45 00          	movups %xmm0,0x0(%rbp)
+    1903:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1908:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    190f:	c3                   	ret
+    1910:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1915:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    191a:	b8 08 00 00 00       	mov    $0x8,%eax
+    191f:	88 45 18             	mov    %al,0x18(%rbp)
+    1922:	48 89 e8             	mov    %rbp,%rax
+    1925:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    192c:	c6 45 20 00          	movb   $0x0,0x20(%rbp)
+    1930:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1935:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    193c:	c3                   	ret
+    193d:	0f 1f 00             	nopl   (%rax)
+    1940:	b8 06 00 00 00       	mov    $0x6,%eax
+    1945:	eb d8                	jmp    191f <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x1ef>
+    1947:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    194e:	00 00 
+    1950:	c6 45 18 08          	movb   $0x8,0x18(%rbp)
+    1954:	48 89 e8             	mov    %rbp,%rax
+    1957:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    195c:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    1963:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1968:	c6 45 20 00          	movb   $0x0,0x20(%rbp)
+    196c:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1971:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    1978:	c3                   	ret
+    1979:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+    1980:	49 39 c6             	cmp    %rax,%r14
+    1983:	0f 82 a7 00 00 00    	jb     1a30 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x300>
+    1989:	49 01 c4             	add    %rax,%r12
+    198c:	4c 39 e1             	cmp    %r12,%rcx
+    198f:	74 3f                	je     19d0 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x2a0>
+    1991:	48 85 c0             	test   %rax,%rax
+    1994:	75 3a                	jne    19d0 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x2a0>
+    1996:	b8 01 00 00 00       	mov    $0x1,%eax
+    199b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+    19a0:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    19a7:	00 00 
+    19a9:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    19b0:	00 00 
+    19b2:	3c 04                	cmp    $0x4,%al
+    19b4:	0f 84 b6 00 00 00    	je     1a70 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x340>
+    19ba:	31 ff                	xor    %edi,%edi
+    19bc:	31 f6                	xor    %esi,%esi
+    19be:	31 c0                	xor    %eax,%eax
+    19c0:	31 d2                	xor    %edx,%edx
+    19c2:	b9 01 00 00 00       	mov    $0x1,%ecx
+    19c7:	e9 a7 fe ff ff       	jmp    1873 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x143>
+    19cc:	0f 1f 40 00          	nopl   0x0(%rax)
+    19d0:	31 c0                	xor    %eax,%eax
+    19d2:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+    19d7:	66 89 44 24 38       	mov    %ax,0x38(%rsp)
+    19dc:	c6 44 24 3c 07       	movb   $0x7,0x3c(%rsp)
+    19e1:	66 0f 6f 44 24 30    	movdqa 0x30(%rsp),%xmm0
+    19e7:	c7 44 24 40 00 00 00 	movl   $0x0,0x40(%rsp)
+    19ee:	00 
+    19ef:	c7 44 24 20 00 00 00 	movl   $0x0,0x20(%rsp)
+    19f6:	00 
+    19f7:	0f 29 44 24 10       	movaps %xmm0,0x10(%rsp)
+    19fc:	49 39 cc             	cmp    %rcx,%r12
+    19ff:	0f 82 8b fd ff ff    	jb     1790 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x60>
+    1a05:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    1a0c:	00 00 
+    1a0e:	31 ff                	xor    %edi,%edi
+    1a10:	31 f6                	xor    %esi,%esi
+    1a12:	31 c0                	xor    %eax,%eax
+    1a14:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1a1b:	00 00 
+    1a1d:	31 d2                	xor    %edx,%edx
+    1a1f:	31 c9                	xor    %ecx,%ecx
+    1a21:	e9 4d fe ff ff       	jmp    1873 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x143>
+    1a26:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    1a2d:	00 00 00 
+    1a30:	b8 04 00 00 00       	mov    $0x4,%eax
+    1a35:	e9 66 ff ff ff       	jmp    19a0 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x270>
+    1a3a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+    1a40:	31 c0                	xor    %eax,%eax
+    1a42:	ba 08 00 00 00       	mov    $0x8,%edx
+    1a47:	e9 f4 fd ff ff       	jmp    1840 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+    1a4c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1a50:	31 c0                	xor    %eax,%eax
+    1a52:	ba 06 00 00 00       	mov    $0x6,%edx
+    1a57:	e9 e4 fd ff ff       	jmp    1840 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+    1a5c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1a60:	8b 3b                	mov    (%rbx),%edi
+    1a62:	e9 51 fd ff ff       	jmp    17b8 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x88>
+    1a67:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    1a6e:	00 00 
+    1a70:	bf 01 00 00 00       	mov    $0x1,%edi
+    1a75:	be 01 00 00 00       	mov    $0x1,%esi
+    1a7a:	31 c0                	xor    %eax,%eax
+    1a7c:	ba 06 00 00 00       	mov    $0x6,%edx
+    1a81:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1a86:	e9 e8 fd ff ff       	jmp    1873 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x143>
+    1a8b:	ba 05 00 00 00       	mov    $0x5,%edx
+    1a90:	e9 ab fd ff ff       	jmp    1840 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+    1a95:	ba 09 00 00 00       	mov    $0x9,%edx
+    1a9a:	e9 a1 fd ff ff       	jmp    1840 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+    1a9f:	ba 04 00 00 00       	mov    $0x4,%edx
+    1aa4:	e9 97 fd ff ff       	jmp    1840 <sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)+0x110>
+    1aa9:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+
+0000000000001ab0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)>:
+    1ab0:	48 81 ec 88 00 00 00 	sub    $0x88,%rsp
+    1ab7:	48 89 6c 24 60       	mov    %rbp,0x60(%rsp)
+    1abc:	48 89 fd             	mov    %rdi,%rbp
+    1abf:	8b 3e                	mov    (%rsi),%edi
+    1ac1:	85 ff                	test   %edi,%edi
+    1ac3:	0f 88 f7 01 00 00    	js     1cc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x210>
+    1ac9:	48 89 5c 24 58       	mov    %rbx,0x58(%rsp)
+    1ace:	48 89 f3             	mov    %rsi,%rbx
+    1ad1:	80 7e 04 00          	cmpb   $0x0,0x4(%rsi)
+    1ad5:	0f 84 ba 01 00 00    	je     1c95 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1e5>
+    1adb:	48 85 c9             	test   %rcx,%rcx
+    1ade:	0f 84 7c 01 00 00    	je     1c60 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1b0>
+    1ae4:	4c 89 6c 24 70       	mov    %r13,0x70(%rsp)
+    1ae9:	0f 8e a1 01 00 00    	jle    1c90 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1e0>
+    1aef:	49 89 d5             	mov    %rdx,%r13
+    1af2:	48 85 d2             	test   %rdx,%rdx
+    1af5:	0f 84 d5 01 00 00    	je     1cd0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x220>
+    1afb:	4c 89 74 24 78       	mov    %r14,0x78(%rsp)
+    1b00:	4c 89 bc 24 80 00 00 	mov    %r15,0x80(%rsp)
+    1b07:	00 
+    1b08:	4c 89 64 24 68       	mov    %r12,0x68(%rsp)
+    1b0d:	45 31 e4             	xor    %r12d,%r12d
+    1b10:	8b 3b                	mov    (%rbx),%edi
+    1b12:	85 ff                	test   %edi,%edi
+    1b14:	0f 88 b6 02 00 00    	js     1dd0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x320>
+    1b1a:	80 7b 04 00          	cmpb   $0x0,0x4(%rbx)
+    1b1e:	0f 84 9c 02 00 00    	je     1dc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x310>
+    1b24:	49 89 ce             	mov    %rcx,%r14
+    1b27:	4d 29 e6             	sub    %r12,%r14
+    1b2a:	4d 85 f6             	test   %r14,%r14
+    1b2d:	0f 8e 8d 02 00 00    	jle    1dc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x310>
+    1b33:	4f 8d 7c 25 00       	lea    0x0(%r13,%r12,1),%r15
+    1b38:	4c 89 f2             	mov    %r14,%rdx
+    1b3b:	4c 89 fe             	mov    %r15,%rsi
+    1b3e:	48 89 4c 24 08       	mov    %rcx,0x8(%rsp)
+    1b43:	e8 00 00 00 00       	call   1b48 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x98>
+			1b44: R_X86_64_PLT32	write-0x4
+    1b48:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+    1b4d:	48 85 c0             	test   %rax,%rax
+    1b50:	0f 89 aa 01 00 00    	jns    1d00 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x250>
+    1b56:	e8 00 00 00 00       	call   1b5b <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0xab>
+			1b57: R_X86_64_PLT32	__errno_location-0x4
+    1b5b:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+    1b60:	8b 00                	mov    (%rax),%eax
+    1b62:	83 f8 04             	cmp    $0x4,%eax
+    1b65:	0f 84 75 02 00 00    	je     1de0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x330>
+    1b6b:	ba 07 00 00 00       	mov    $0x7,%edx
+    1b70:	85 c0                	test   %eax,%eax
+    1b72:	74 4c                	je     1bc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+    1b74:	83 f8 0d             	cmp    $0xd,%eax
+    1b77:	0f 84 8e 02 00 00    	je     1e0b <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x35b>
+    1b7d:	83 f8 01             	cmp    $0x1,%eax
+    1b80:	0f 84 85 02 00 00    	je     1e0b <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x35b>
+    1b86:	83 f8 02             	cmp    $0x2,%eax
+    1b89:	0f 84 86 02 00 00    	je     1e15 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x365>
+    1b8f:	83 f8 14             	cmp    $0x14,%eax
+    1b92:	0f 84 7d 02 00 00    	je     1e15 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x365>
+    1b98:	83 f8 1c             	cmp    $0x1c,%eax
+    1b9b:	0f 84 7e 02 00 00    	je     1e1f <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x36f>
+    1ba1:	83 f8 7a             	cmp    $0x7a,%eax
+    1ba4:	0f 84 75 02 00 00    	je     1e1f <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x36f>
+    1baa:	83 f8 0b             	cmp    $0xb,%eax
+    1bad:	0f 95 c2             	setne  %dl
+    1bb0:	8d 14 95 03 00 00 00 	lea    0x3(,%rdx,4),%edx
+    1bb7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    1bbe:	00 00 
+    1bc0:	88 54 24 1c          	mov    %dl,0x1c(%rsp)
+    1bc4:	bf 01 00 00 00       	mov    $0x1,%edi
+    1bc9:	be 01 00 00 00       	mov    $0x1,%esi
+    1bce:	89 44 24 20          	mov    %eax,0x20(%rsp)
+    1bd2:	48 8b 4c 24 1c       	mov    0x1c(%rsp),%rcx
+    1bd7:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    1bde:	00 00 
+    1be0:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1be7:	00 00 
+    1be9:	48 89 4c 24 3c       	mov    %rcx,0x3c(%rsp)
+    1bee:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1bf3:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+    1bf8:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    1bfd:	88 4c 24 38          	mov    %cl,0x38(%rsp)
+    1c01:	4c 8b 64 24 68       	mov    0x68(%rsp),%r12
+    1c06:	40 88 7c 24 39       	mov    %dil,0x39(%rsp)
+    1c0b:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1c10:	88 54 24 3c          	mov    %dl,0x3c(%rsp)
+    1c14:	66 0f 6f 44 24 30    	movdqa 0x30(%rsp),%xmm0
+    1c1a:	89 44 24 40          	mov    %eax,0x40(%rsp)
+    1c1e:	4c 8b 74 24 78       	mov    0x78(%rsp),%r14
+    1c23:	40 88 74 24 44       	mov    %sil,0x44(%rsp)
+    1c28:	48 8b 44 24 40       	mov    0x40(%rsp),%rax
+    1c2d:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    1c34:	4c 8b bc 24 80 00 00 	mov    0x80(%rsp),%r15
+    1c3b:	00 
+    1c3c:	48 89 45 10          	mov    %rax,0x10(%rbp)
+    1c40:	48 89 e8             	mov    %rbp,%rax
+    1c43:	c6 45 20 01          	movb   $0x1,0x20(%rbp)
+    1c47:	0f 11 45 00          	movups %xmm0,0x0(%rbp)
+    1c4b:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1c50:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    1c57:	c3                   	ret
+    1c58:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+    1c5f:	00 
+    1c60:	66 0f ef c0          	pxor   %xmm0,%xmm0
+    1c64:	c6 45 20 01          	movb   $0x1,0x20(%rbp)
+    1c68:	48 89 e8             	mov    %rbp,%rax
+    1c6b:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    1c70:	48 c7 45 10 00 00 00 	movq   $0x0,0x10(%rbp)
+    1c77:	00 
+    1c78:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    1c7f:	0f 11 45 00          	movups %xmm0,0x0(%rbp)
+    1c83:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1c88:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    1c8f:	c3                   	ret
+    1c90:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1c95:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    1c9a:	b8 08 00 00 00       	mov    $0x8,%eax
+    1c9f:	88 45 18             	mov    %al,0x18(%rbp)
+    1ca2:	48 89 e8             	mov    %rbp,%rax
+    1ca5:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    1cac:	c6 45 20 00          	movb   $0x0,0x20(%rbp)
+    1cb0:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1cb5:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    1cbc:	c3                   	ret
+    1cbd:	0f 1f 00             	nopl   (%rax)
+    1cc0:	b8 06 00 00 00       	mov    $0x6,%eax
+    1cc5:	eb d8                	jmp    1c9f <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x1ef>
+    1cc7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    1cce:	00 00 
+    1cd0:	c6 45 18 08          	movb   $0x8,0x18(%rbp)
+    1cd4:	48 89 e8             	mov    %rbp,%rax
+    1cd7:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    1cdc:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    1ce3:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1ce8:	c6 45 20 00          	movb   $0x0,0x20(%rbp)
+    1cec:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1cf1:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    1cf8:	c3                   	ret
+    1cf9:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+    1d00:	49 39 c6             	cmp    %rax,%r14
+    1d03:	0f 82 a7 00 00 00    	jb     1db0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x300>
+    1d09:	49 01 c4             	add    %rax,%r12
+    1d0c:	4c 39 e1             	cmp    %r12,%rcx
+    1d0f:	74 3f                	je     1d50 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x2a0>
+    1d11:	48 85 c0             	test   %rax,%rax
+    1d14:	75 3a                	jne    1d50 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x2a0>
+    1d16:	b8 02 00 00 00       	mov    $0x2,%eax
+    1d1b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+    1d20:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    1d27:	00 00 
+    1d29:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1d30:	00 00 
+    1d32:	3c 04                	cmp    $0x4,%al
+    1d34:	0f 84 b6 00 00 00    	je     1df0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x340>
+    1d3a:	31 ff                	xor    %edi,%edi
+    1d3c:	31 f6                	xor    %esi,%esi
+    1d3e:	31 c0                	xor    %eax,%eax
+    1d40:	31 d2                	xor    %edx,%edx
+    1d42:	b9 02 00 00 00       	mov    $0x2,%ecx
+    1d47:	e9 a7 fe ff ff       	jmp    1bf3 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x143>
+    1d4c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1d50:	31 c0                	xor    %eax,%eax
+    1d52:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+    1d57:	66 89 44 24 38       	mov    %ax,0x38(%rsp)
+    1d5c:	c6 44 24 3c 07       	movb   $0x7,0x3c(%rsp)
+    1d61:	66 0f 6f 44 24 30    	movdqa 0x30(%rsp),%xmm0
+    1d67:	c7 44 24 40 00 00 00 	movl   $0x0,0x40(%rsp)
+    1d6e:	00 
+    1d6f:	c7 44 24 20 00 00 00 	movl   $0x0,0x20(%rsp)
+    1d76:	00 
+    1d77:	0f 29 44 24 10       	movaps %xmm0,0x10(%rsp)
+    1d7c:	49 39 cc             	cmp    %rcx,%r12
+    1d7f:	0f 82 8b fd ff ff    	jb     1b10 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x60>
+    1d85:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    1d8c:	00 00 
+    1d8e:	31 ff                	xor    %edi,%edi
+    1d90:	31 f6                	xor    %esi,%esi
+    1d92:	31 c0                	xor    %eax,%eax
+    1d94:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1d9b:	00 00 
+    1d9d:	31 d2                	xor    %edx,%edx
+    1d9f:	31 c9                	xor    %ecx,%ecx
+    1da1:	e9 4d fe ff ff       	jmp    1bf3 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x143>
+    1da6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    1dad:	00 00 00 
+    1db0:	b8 04 00 00 00       	mov    $0x4,%eax
+    1db5:	e9 66 ff ff ff       	jmp    1d20 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x270>
+    1dba:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+    1dc0:	31 c0                	xor    %eax,%eax
+    1dc2:	ba 08 00 00 00       	mov    $0x8,%edx
+    1dc7:	e9 f4 fd ff ff       	jmp    1bc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+    1dcc:	0f 1f 40 00          	nopl   0x0(%rax)
+    1dd0:	31 c0                	xor    %eax,%eax
+    1dd2:	ba 06 00 00 00       	mov    $0x6,%edx
+    1dd7:	e9 e4 fd ff ff       	jmp    1bc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+    1ddc:	0f 1f 40 00          	nopl   0x0(%rax)
+    1de0:	8b 3b                	mov    (%rbx),%edi
+    1de2:	e9 51 fd ff ff       	jmp    1b38 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x88>
+    1de7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    1dee:	00 00 
+    1df0:	bf 01 00 00 00       	mov    $0x1,%edi
+    1df5:	be 01 00 00 00       	mov    $0x1,%esi
+    1dfa:	31 c0                	xor    %eax,%eax
+    1dfc:	ba 06 00 00 00       	mov    $0x6,%edx
+    1e01:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1e06:	e9 e8 fd ff ff       	jmp    1bf3 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x143>
+    1e0b:	ba 05 00 00 00       	mov    $0x5,%edx
+    1e10:	e9 ab fd ff ff       	jmp    1bc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+    1e15:	ba 09 00 00 00       	mov    $0x9,%edx
+    1e1a:	e9 a1 fd ff ff       	jmp    1bc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>
+    1e1f:	ba 04 00 00 00       	mov    $0x4,%edx
+    1e24:	e9 97 fd ff ff       	jmp    1bc0 <sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)+0x110>

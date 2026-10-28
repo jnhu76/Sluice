@@ -1,0 +1,2 @@
+# p3-m3-copy-crossfs-cfr — 2026-10-28T02:11:00+08:00
+NOT_RUN_WITH_REASON: copy_file_range cross-filesystem returns EXDEV on this kernel (support-matrix.txt lines 'op=cfr … range=cross_fs ret=-1 errno=18' for both fs=a and fs=b); plan §4.4 mandates NOT_RUN_WITH_REASON per unsupported combination — no substitution.

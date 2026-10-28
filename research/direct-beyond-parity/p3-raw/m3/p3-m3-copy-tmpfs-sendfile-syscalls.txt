@@ -1,0 +1,42 @@
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 run=1 A(ops=1024) 2026-10-28T02:11:44+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=44961.857 user_ns_per_op=1225.586 sys_ns_per_op=33628.906 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.032116          31      1024           sendfile
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.032116          31      1024           total
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 run=1 B(ops=512) ===
+arm=CP3_sendfile size=65536 ops=512 ns_per_op=45984.912 user_ns_per_op=0.000 sys_ns_per_op=35593.750 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016939          33       512           sendfile
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016939          33       512           total
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 run=2 A(ops=1024) 2026-10-28T02:11:45+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=45924.165 user_ns_per_op=0.000 sys_ns_per_op=35688.477 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.034073          33      1024           sendfile
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.034073          33      1024           total
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 run=2 B(ops=512) ===
+arm=CP3_sendfile size=65536 ops=512 ns_per_op=45585.977 user_ns_per_op=101.562 sys_ns_per_op=35298.828 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016882          32       512           sendfile
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016882          32       512           total
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 run=3 A(ops=1024) 2026-10-28T02:11:46+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=45259.465 user_ns_per_op=1150.391 sys_ns_per_op=34048.828 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.032554          31      1024           sendfile
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.032554          31      1024           total
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 run=3 B(ops=512) ===
+arm=CP3_sendfile size=65536 ops=512 ns_per_op=45807.521 user_ns_per_op=0.000 sys_ns_per_op=35818.359 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.017084          33       512           sendfile
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.017084          33       512           total

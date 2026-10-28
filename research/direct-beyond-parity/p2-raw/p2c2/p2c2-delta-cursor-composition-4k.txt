@@ -1,0 +1,39 @@
+# cell p2c2-delta-cursor-composition-4k (P2 plan §4.4 cross-binary cursor cell: wc cand vs B1; cand − baseline) — 2026-10-27T22:20:18+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired2.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wc 4096 1024 1024 5 16 /tmp/sluice600/p2-p2c2-delta-cursor-composition-4k.bin  (per-cell scratch)
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=777.533 user_ns_per_op=0.000 sys_ns_per_op=862.467 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=782.421 user_ns_per_op=172.526 sys_ns_per_op=670.085 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=789.649 user_ns_per_op=9.277 sys_ns_per_op=827.799 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=781.984 user_ns_per_op=332.194 sys_ns_per_op=509.115 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=774.411 user_ns_per_op=166.992 sys_ns_per_op=663.086 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=785.619 user_ns_per_op=134.603 sys_ns_per_op=712.728 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=784.998 user_ns_per_op=510.254 sys_ns_per_op=349.935 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=776.585 user_ns_per_op=340.007 sys_ns_per_op=517.253 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=780.792 user_ns_per_op=597.005 sys_ns_per_op=237.630 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=782.798 user_ns_per_op=168.294 sys_ns_per_op=669.271 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=792.220 user_ns_per_op=0.000 sys_ns_per_op=856.445 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=779.071 user_ns_per_op=169.759 sys_ns_per_op=664.225 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=776.238 user_ns_per_op=166.504 sys_ns_per_op=665.853 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=785.411 user_ns_per_op=500.326 sys_ns_per_op=361.654 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=781.684 user_ns_per_op=488.444 sys_ns_per_op=351.237 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=777.513 user_ns_per_op=333.496 sys_ns_per_op=500.488 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=779.786 user_ns_per_op=645.345 sys_ns_per_op=190.430 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=783.670 user_ns_per_op=652.995 sys_ns_per_op=202.637 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=789.732 user_ns_per_op=335.937 sys_ns_per_op=509.115 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=774.697 user_ns_per_op=486.654 sys_ns_per_op=346.517 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=780.825 user_ns_per_op=288.574 sys_ns_per_op=551.595 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=781.170 user_ns_per_op=8.952 sys_ns_per_op=821.289 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=783.600 user_ns_per_op=333.008 sys_ns_per_op=508.138 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=782.887 user_ns_per_op=0.000 sys_ns_per_op=836.426 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=776.829 user_ns_per_op=168.294 sys_ns_per_op=664.551 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=789.012 user_ns_per_op=607.096 sys_ns_per_op=255.534 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=791.319 user_ns_per_op=143.555 sys_ns_per_op=712.565 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=776.097 user_ns_per_op=645.020 sys_ns_per_op=183.431 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=805.058 user_ns_per_op=436.198 sys_ns_per_op=430.501 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=823.054 user_ns_per_op=666.016 sys_ns_per_op=210.286 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=788.718 user_ns_per_op=509.928 sys_ns_per_op=358.236 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=779.858 user_ns_per_op=168.945 sys_ns_per_op=670.247 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+# --- two-binary order-aware analysis (cand − baseline) ---
+# cand median=778.302 | B1 median=785.515
+# pairs=16 delta median=-8.637 mean=-8.432 sd=5.442 sign=16/16 cand-faster
+# 95% CI on mean delta: [-11.331, -5.533] (EXCLUDES 0)
+# raw 16 deltas: [-4.888, -7.665, -11.208, -8.413, -2.006, -13.149, -9.173, -4.171, -3.884, -15.035, -0.345, -0.713, -12.183, -15.222, -17.996, -8.86]

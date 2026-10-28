@@ -1,0 +1,58 @@
+cmake_minimum_required(VERSION 3.24)
+project(p4_parquet_%ARM% LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
+find_package(Arrow REQUIRED)
+find_package(Parquet REQUIRED)
+find_package(benchmark CONFIG REQUIRED)
+message(STATUS "P4 arm %ARM%: Arrow ${Arrow_VERSION}, Parquet ${Parquet_VERSION}, SDK=%SDK%")
+set(DUDUDU_SRC /home/jnhu/Source/dududu)
+set(PQ ${DUDUDU_SRC}/experiments/parquet)
+add_library(dududu_parquet STATIC
+  ${PQ}/src/sha256.cpp
+  ${PQ}/src/backend_native.cpp
+  ${PQ}/src/backend_sluice.cpp
+  ${PQ}/src/replay_strategy.cpp
+  ${PQ}/src/adapter_file.cpp
+  ${PQ}/src/io_decorators.cpp
+  ${PQ}/src/fixture.cpp
+  ${PQ}/src/oracle.cpp
+  ${PQ}/src/runner.cpp
+  ${PQ}/src/io_trace.cpp)
+target_include_directories(dududu_parquet PUBLIC ${PQ}/include)
+target_link_libraries(dududu_parquet PUBLIC Arrow::arrow_shared Parquet::parquet_shared)
+target_compile_features(dududu_parquet PUBLIC cxx_std_20)
+add_library(sluice_core_frozen STATIC IMPORTED GLOBAL)
+set_target_properties(sluice_core_frozen PROPERTIES
+  IMPORTED_LOCATION "%SDK%/lib/libsluice_core.a"
+  INTERFACE_INCLUDE_DIRECTORIES "%SDK%/include"
+  INTERFACE_COMPILE_FEATURES cxx_std_20)
+target_link_libraries(dududu_parquet PUBLIC sluice_core_frozen)
+add_executable(parquet_fixture ${PQ}/src/tools/fixture_main.cpp)
+target_link_libraries(parquet_fixture PRIVATE dududu_parquet)
+add_executable(parquet_trace ${PQ}/src/tools/trace_main.cpp)
+target_link_libraries(parquet_trace PRIVATE dududu_parquet)
+add_executable(parquet_bench ${PQ}/src/tools/bench_main.cpp)
+target_link_libraries(parquet_bench PRIVATE dududu_parquet benchmark::benchmark)
+enable_testing()
+add_executable(parquet_contract_test ${PQ}/tests/parquet_contract.cpp)
+target_link_libraries(parquet_contract_test PRIVATE dududu_parquet)
+add_test(NAME parquet.contract COMMAND parquet_contract_test)
+add_executable(parquet_oracle_test ${PQ}/tests/parquet_oracle.cpp)
+target_link_libraries(parquet_oracle_test PRIVATE dududu_parquet)
+add_test(NAME parquet.oracle COMMAND parquet_oracle_test)
+add_executable(parquet_trace_test ${PQ}/tests/parquet_trace.cpp)
+target_link_libraries(parquet_trace_test PRIVATE dududu_parquet)
+add_test(NAME parquet.trace COMMAND parquet_trace_test)
+set_tests_properties(parquet.contract parquet.oracle parquet.trace PROPERTIES
+  LABELS "parquet" TIMEOUT 600)
+# Provenance: scratch per-arm CMake used by P4 (Amendment-1-style /tmp scratch,
+# /tmp/p4-parquet/{b1,p2c1,p2c2}); sources = dududu research branch
+# p4-strategy-arms commit f8b0967 (cut from r1-parquet-sluice-bench ed053cb,
+# local-only, never pushed); SDK prefixes = frozen archives staged at
+# build/sluice-sdk/p4-* (hashes in parquet-run-manifest.txt). Scratch removed
+# after the campaign; this template + manifest are the rebuild recipe.

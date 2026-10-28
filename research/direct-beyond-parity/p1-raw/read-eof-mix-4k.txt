@@ -1,0 +1,97 @@
+# read-eof-mix-4k — P1 cell raw series — 2026-10-27T02:44:47+08:00 — host E5 (Xeon E5-2666 v3, Fedora 44, kernel 7.2.11-200.fc44.x86_64, cpu2 pin, perf_event_paranoid=1)
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a (verified pre-run); read fixture /tmp/sluice600/data64m.bin sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (verified pre-run)
+# series 1 command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 a2 4096 1024 1024 5 16 /tmp/sluice600/data64m.bin tail
+# series 2 command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1x ax 4096 1024 1024 5 16 /tmp/sluice600/data64m.bin tail
+# context arm command: taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a0 4096 1024 1024 5 /tmp/sluice600/data64m.bin tail
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=543.218 user_ns_per_op=565.848 sys_ns_per_op=140.346 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=562.199 user_ns_per_op=693.638 sys_ns_per_op=43.527 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=535.768 user_ns_per_op=291.853 sys_ns_per_op=427.037 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=528.373 user_ns_per_op=731.027 sys_ns_per_op=0.000 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=533.457 user_ns_per_op=557.338 sys_ns_per_op=152.762 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=544.181 user_ns_per_op=293.387 sys_ns_per_op=424.944 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=554.169 user_ns_per_op=413.365 sys_ns_per_op=312.640 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=542.763 user_ns_per_op=408.901 sys_ns_per_op=315.011 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=531.080 user_ns_per_op=398.438 sys_ns_per_op=307.478 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=535.775 user_ns_per_op=294.085 sys_ns_per_op=423.410 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=544.259 user_ns_per_op=575.056 sys_ns_per_op=156.110 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=527.093 user_ns_per_op=553.292 sys_ns_per_op=154.018 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=535.005 user_ns_per_op=312.081 sys_ns_per_op=398.577 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=564.275 user_ns_per_op=630.580 sys_ns_per_op=90.123 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=563.564 user_ns_per_op=681.083 sys_ns_per_op=44.782 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=556.598 user_ns_per_op=421.038 sys_ns_per_op=331.752 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=559.502 user_ns_per_op=559.012 sys_ns_per_op=158.343 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=531.575 user_ns_per_op=446.568 sys_ns_per_op=266.183 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=542.442 user_ns_per_op=423.270 sys_ns_per_op=291.992 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=558.031 user_ns_per_op=556.362 sys_ns_per_op=197.824 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=533.516 user_ns_per_op=405.273 sys_ns_per_op=308.733 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=532.549 user_ns_per_op=396.205 sys_ns_per_op=310.407 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=554.756 user_ns_per_op=582.589 sys_ns_per_op=136.440 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=542.770 user_ns_per_op=576.311 sys_ns_per_op=136.161 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=534.706 user_ns_per_op=423.689 sys_ns_per_op=283.761 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=533.290 user_ns_per_op=312.640 sys_ns_per_op=403.181 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=536.436 user_ns_per_op=473.354 sys_ns_per_op=236.468 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=558.821 user_ns_per_op=679.827 sys_ns_per_op=44.643 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=531.446 user_ns_per_op=446.150 sys_ns_per_op=271.484 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=587.173 user_ns_per_op=718.052 sys_ns_per_op=51.897 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=600.644 user_ns_per_op=514.090 sys_ns_per_op=258.650 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=589.965 user_ns_per_op=312.221 sys_ns_per_op=454.520 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+# series 1 (a1 a2) exit=0
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=703.390 user_ns_per_op=569.057 sys_ns_per_op=294.922 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=724.010 user_ns_per_op=557.617 sys_ns_per_op=335.798 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=745.992 user_ns_per_op=598.493 sys_ns_per_op=316.406 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=726.947 user_ns_per_op=835.658 sys_ns_per_op=53.990 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=704.050 user_ns_per_op=437.500 sys_ns_per_op=438.058 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=720.146 user_ns_per_op=445.173 sys_ns_per_op=439.035 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=725.860 user_ns_per_op=502.511 sys_ns_per_op=380.859 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=710.706 user_ns_per_op=414.342 sys_ns_per_op=460.519 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=726.659 user_ns_per_op=716.239 sys_ns_per_op=164.621 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=711.800 user_ns_per_op=439.732 sys_ns_per_op=437.221 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=728.415 user_ns_per_op=694.754 sys_ns_per_op=194.057 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=708.631 user_ns_per_op=279.715 sys_ns_per_op=606.306 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=710.998 user_ns_per_op=440.709 sys_ns_per_op=435.547 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=712.375 user_ns_per_op=604.492 sys_ns_per_op=270.787 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=723.864 user_ns_per_op=472.377 sys_ns_per_op=411.830 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=711.288 user_ns_per_op=581.194 sys_ns_per_op=297.852 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=696.405 user_ns_per_op=394.810 sys_ns_per_op=469.308 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=718.112 user_ns_per_op=552.595 sys_ns_per_op=337.054 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=775.161 user_ns_per_op=470.006 sys_ns_per_op=469.727 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=708.217 user_ns_per_op=314.314 sys_ns_per_op=605.469 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=702.601 user_ns_per_op=627.372 sys_ns_per_op=233.677 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=718.763 user_ns_per_op=569.475 sys_ns_per_op=344.029 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=740.685 user_ns_per_op=619.559 sys_ns_per_op=281.250 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=721.266 user_ns_per_op=750.279 sys_ns_per_op=139.230 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=715.127 user_ns_per_op=716.797 sys_ns_per_op=160.156 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=707.720 user_ns_per_op=434.989 sys_ns_per_op=438.895 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=739.295 user_ns_per_op=839.844 sys_ns_per_op=49.386 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=712.101 user_ns_per_op=714.844 sys_ns_per_op=163.504 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=710.708 user_ns_per_op=576.451 sys_ns_per_op=296.456 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=715.146 user_ns_per_op=690.569 sys_ns_per_op=189.314 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=721.152 user_ns_per_op=693.917 sys_ns_per_op=186.663 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=709.042 user_ns_per_op=296.038 sys_ns_per_op=576.172 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+# series 2 (a1x ax) exit=0
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=550.268 user_ns_per_op=315.151 sys_ns_per_op=387.695 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+# context a0 exit=0
+# --- analysis (analyze_pairs.py takes printed arm names; recomputable: python3 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/analyze_pairs.py <printedA> <printedB> < /home/jnhu/Source/Sluice/research/direct-beyond-parity/p1-raw/read-eof-mix-4k.txt) ---
+# analyze_pairs.py A1_native_read_at A2_sluice_read_at:
+pairs=16
+A1_native_read_at: mean=544.146ns sd=16.682 median=538.884
+A2_sluice_read_at: mean=551.441ns sd=20.209 median=544.220
+delta(A1_native_read_at-A2_sluice_read_at): median=-9.037ns mean=-7.294ns sd=19.868 rel=-1.639% pos=5/16
+paired t=-1.47 (df=15)
+
+# analyze_pairs.py A1x_native_read_exact_at AX_sluice_read_exact_at:
+pairs=16
+A1x_native_read_exact_at: mean=711.134ns sd=8.287 median=710.707
+AX_sluice_read_exact_at: mean=726.781ns sd=16.783 median=722.508
+delta(A1x_native_read_exact_at-AX_sluice_read_exact_at): median=-16.129ns mean=-15.647ns sd=17.669 rel=-2.219% pos=2/16
+paired t=-3.54 (df=15)
+# --- order-effect + CI + rusage summary (from the 16 ABBA pairs above; t(0.975,df=15)=2.131) ---
+# A1 vs A2 : delta mean=-7.294 95%CI=[-17.879,+3.290] (includes 0) median=-9.037ns | AB-subgroup median=-7.709 BA=-9.037
+# A1x vs AX: delta mean=-15.647 95%CI=[-25.061,-6.234] (excludes 0) median=-16.129ns | AB-subgroup median=-10.267 BA=-19.232
+# per-arm medians: A1 wall=538.884 user=499.721 sys=234.654 | A2 wall=544.220 user=459.961 sys=262.416
+#                 A1x wall=710.707 user=572.754 sys=297.154 | AX wall=722.508 user=563.546 sys=336.426
+# a0 context (single invocation): wall=550.268 user=315.151 sys=387.695
+# sign convention: delta = N1 arm - B1 arm (analyzer convention); negative = B1 (Sluice) arm SLOWER by that amount (excess direction)
+# interpretation: A2 excess over A1 median 9.037 ns/op (95%CI [-3.290,+17.879] in A2-A1 terms, includes 0, n.s.; 11/16 pairs A2 slower)
+#                 AX excess over A1x median 16.129 ns/op (95%CI [+6.234,+25.061] in AX-A1x terms, excludes 0; 14/16 pairs AX slower; paired t=3.54)
+# MDE/BELOW_NOISE classification (§5.5) pending session sd_AA from aa-read-4k (not present in p1-raw/ at this cell's completion)

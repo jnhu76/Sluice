@@ -1,0 +1,298 @@
+# P2 ladder smoke verification — 2026-10-27T21:44:55+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# binary sha256 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8 (kit commit 2364be4acf1790baa030afe1730d00ca9222f280, B1 archive d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0)
+# read fixture /tmp/sluice600/data64m.bin sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+# per-arm shape: ops=1024 warmup=64 reps=2 (gate is exit-0 + checksum/content equality; sizes sweep the P1 smoke set)
+wrote 67108864 bytes
+== read seq 0 ==
+arm=A0_raw_pread size=0 ops=1024 ns_per_op=514.659 user_ns_per_op=266.901 sys_ns_per_op=267.538 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=1024 ns_per_op=3.469 user_ns_per_op=5.102 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=1024 ns_per_op=5.259 user_ns_per_op=7.972 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=0 ops=1024 ns_per_op=3.188 user_ns_per_op=5.102 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=0 ops=1024 ns_per_op=8.910 user_ns_per_op=10.204 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=0 ops=1024 ns_per_op=6.051 user_ns_per_op=8.291 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=0 ops=1024 ns_per_op=5.190 user_ns_per_op=0.000 sys_ns_per_op=7.334 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=0 ops=1024 ns_per_op=6.617 user_ns_per_op=8.929 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+== write seq 0 ==
+arm=W0_raw_pwrite size=0 ops=1024 ns_per_op=443.035 user_ns_per_op=469.223 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=1024 ns_per_op=3.472 user_ns_per_op=5.682 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=1024 ns_per_op=4.893 user_ns_per_op=0.000 sys_ns_per_op=8.049 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1x_native_write_all_at size=0 ops=1024 ns_per_op=3.757 user_ns_per_op=12.311 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=WX_sluice_write_all_at size=0 ops=1024 ns_per_op=5.752 user_ns_per_op=0.000 sys_ns_per_op=8.523 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1c_native_write_all size=0 ops=1024 ns_per_op=5.668 user_ns_per_op=8.996 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=WC_sluice_write_all size=0 ops=1024 ns_per_op=6.332 user_ns_per_op=9.470 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+== read seq 1 ==
+arm=A0_raw_pread size=1 ops=1024 ns_per_op=551.970 user_ns_per_op=551.658 sys_ns_per_op=0.000 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=1024 ns_per_op=553.099 user_ns_per_op=0.000 sys_ns_per_op=552.934 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=1024 ns_per_op=523.558 user_ns_per_op=0.000 sys_ns_per_op=554.847 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=1 ops=1024 ns_per_op=3.471 user_ns_per_op=0.000 sys_ns_per_op=4.783 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=1 ops=1024 ns_per_op=569.479 user_ns_per_op=257.972 sys_ns_per_op=314.094 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=1 ops=1024 ns_per_op=544.830 user_ns_per_op=0.000 sys_ns_per_op=589.605 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=1 ops=1024 ns_per_op=603.796 user_ns_per_op=322.704 sys_ns_per_op=279.656 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=1 ops=1024 ns_per_op=544.879 user_ns_per_op=257.334 sys_ns_per_op=312.181 checksum=2112 content_hash=0x0000000000000000 content_ok=-1
+== write seq 1 ==
+arm=W0_raw_pwrite size=1 ops=1024 ns_per_op=589.360 user_ns_per_op=304.924 sys_ns_per_op=289.299 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=1024 ns_per_op=593.930 user_ns_per_op=61.080 sys_ns_per_op=538.352 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=1024 ns_per_op=599.087 user_ns_per_op=536.458 sys_ns_per_op=68.655 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1x_native_write_all_at size=1 ops=1024 ns_per_op=593.351 user_ns_per_op=599.905 sys_ns_per_op=0.000 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=WX_sluice_write_all_at size=1 ops=1024 ns_per_op=613.920 user_ns_per_op=314.867 sys_ns_per_op=303.030 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1c_native_write_all size=1 ops=1024 ns_per_op=606.389 user_ns_per_op=539.299 sys_ns_per_op=72.443 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=WC_sluice_write_all size=1 ops=1024 ns_per_op=615.971 user_ns_per_op=544.981 sys_ns_per_op=77.178 checksum=2112 content_hash=0xdc0b0234a39d0383 content_ok=1
+== read seq 64 ==
+arm=A0_raw_pread size=64 ops=1024 ns_per_op=532.822 user_ns_per_op=203.763 sys_ns_per_op=361.926 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=64 ops=1024 ns_per_op=548.541 user_ns_per_op=570.472 sys_ns_per_op=0.000 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=64 ops=1024 ns_per_op=556.245 user_ns_per_op=313.138 sys_ns_per_op=270.089 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=64 ops=1024 ns_per_op=3.482 user_ns_per_op=0.000 sys_ns_per_op=5.740 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=64 ops=1024 ns_per_op=547.454 user_ns_per_op=261.161 sys_ns_per_op=320.472 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=64 ops=1024 ns_per_op=568.912 user_ns_per_op=451.531 sys_ns_per_op=133.929 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=64 ops=1024 ns_per_op=557.121 user_ns_per_op=259.885 sys_ns_per_op=316.964 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=64 ops=1024 ns_per_op=550.385 user_ns_per_op=0.000 sys_ns_per_op=598.214 checksum=135168 content_hash=0x0000000000000000 content_ok=-1
+== write seq 64 ==
+arm=W0_raw_pwrite size=64 ops=1024 ns_per_op=598.340 user_ns_per_op=537.405 sys_ns_per_op=67.708 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+arm=W1_native_write_at size=64 ops=1024 ns_per_op=599.804 user_ns_per_op=0.000 sys_ns_per_op=609.848 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+arm=W2_sluice_write_at size=64 ops=1024 ns_per_op=607.442 user_ns_per_op=541.193 sys_ns_per_op=71.970 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+arm=W1x_native_write_all_at size=64 ops=1024 ns_per_op=603.399 user_ns_per_op=544.034 sys_ns_per_op=82.860 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+arm=WX_sluice_write_all_at size=64 ops=1024 ns_per_op=622.214 user_ns_per_op=75.284 sys_ns_per_op=555.398 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+arm=W1c_native_write_all size=64 ops=1024 ns_per_op=612.339 user_ns_per_op=619.792 sys_ns_per_op=0.000 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+arm=WC_sluice_write_all size=64 ops=1024 ns_per_op=619.233 user_ns_per_op=545.455 sys_ns_per_op=80.019 checksum=135168 content_hash=0x5587d44fb61d0383 content_ok=1
+== read seq 512 ==
+arm=A0_raw_pread size=512 ops=1024 ns_per_op=576.848 user_ns_per_op=628.189 sys_ns_per_op=34.439 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=512 ops=1024 ns_per_op=563.752 user_ns_per_op=351.084 sys_ns_per_op=308.673 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=512 ops=1024 ns_per_op=561.968 user_ns_per_op=653.699 sys_ns_per_op=0.000 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=512 ops=1024 ns_per_op=3.488 user_ns_per_op=0.000 sys_ns_per_op=5.421 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=512 ops=1024 ns_per_op=560.651 user_ns_per_op=657.526 sys_ns_per_op=0.000 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=512 ops=1024 ns_per_op=582.593 user_ns_per_op=347.577 sys_ns_per_op=319.834 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=512 ops=1024 ns_per_op=594.313 user_ns_per_op=331.314 sys_ns_per_op=340.561 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=512 ops=1024 ns_per_op=629.976 user_ns_per_op=693.559 sys_ns_per_op=0.000 checksum=1081344 content_hash=0x0000000000000000 content_ok=-1
+== write seq 512 ==
+arm=W0_raw_pwrite size=512 ops=1024 ns_per_op=623.036 user_ns_per_op=76.705 sys_ns_per_op=574.811 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+arm=W1_native_write_at size=512 ops=1024 ns_per_op=628.361 user_ns_per_op=358.902 sys_ns_per_op=299.242 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+arm=W2_sluice_write_at size=512 ops=1024 ns_per_op=629.527 user_ns_per_op=555.398 sys_ns_per_op=101.326 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+arm=W1x_native_write_all_at size=512 ops=1024 ns_per_op=629.944 user_ns_per_op=559.659 sys_ns_per_op=96.591 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+arm=WX_sluice_write_all_at size=512 ops=1024 ns_per_op=646.844 user_ns_per_op=526.515 sys_ns_per_op=146.780 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+arm=W1c_native_write_all size=512 ops=1024 ns_per_op=641.208 user_ns_per_op=350.379 sys_ns_per_op=322.917 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+arm=WC_sluice_write_all size=512 ops=1024 ns_per_op=664.777 user_ns_per_op=682.292 sys_ns_per_op=0.000 checksum=1081344 content_hash=0xc52baf6252850383 content_ok=1
+== read seq 4096 ==
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=708.585 user_ns_per_op=1053.253 sys_ns_per_op=393.495 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=704.054 user_ns_per_op=1373.087 sys_ns_per_op=0.000 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=722.129 user_ns_per_op=1388.074 sys_ns_per_op=0.000 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=4096 ops=1024 ns_per_op=3.816 user_ns_per_op=2.870 sys_ns_per_op=2.870 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=713.318 user_ns_per_op=676.020 sys_ns_per_op=706.314 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=722.325 user_ns_per_op=673.151 sys_ns_per_op=703.763 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=705.214 user_ns_per_op=1038.584 sys_ns_per_op=349.809 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=745.512 user_ns_per_op=898.916 sys_ns_per_op=508.610 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+== write seq 4096 ==
+arm=W0_raw_pwrite size=4096 ops=1024 ns_per_op=794.733 user_ns_per_op=461.174 sys_ns_per_op=470.644 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=828.158 user_ns_per_op=471.591 sys_ns_per_op=471.591 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=819.386 user_ns_per_op=473.485 sys_ns_per_op=494.318 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=784.488 user_ns_per_op=0.000 sys_ns_per_op=914.773 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=797.182 user_ns_per_op=2.841 sys_ns_per_op=930.871 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1c_native_write_all size=4096 ops=1024 ns_per_op=812.600 user_ns_per_op=472.538 sys_ns_per_op=481.534 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=792.800 user_ns_per_op=933.712 sys_ns_per_op=9.943 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+== read seq 65536 ==
+arm=A0_raw_pread size=65536 ops=1024 ns_per_op=9050.146 user_ns_per_op=10487.564 sys_ns_per_op=8264.031 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=9024.011 user_ns_per_op=9923.469 sys_ns_per_op=8961.097 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=9126.470 user_ns_per_op=11389.031 sys_ns_per_op=7817.283 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=65536 ops=1024 ns_per_op=3.472 user_ns_per_op=2.870 sys_ns_per_op=2.870 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=65536 ops=1024 ns_per_op=9234.928 user_ns_per_op=11132.653 sys_ns_per_op=7961.735 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=65536 ops=1024 ns_per_op=8985.243 user_ns_per_op=9830.995 sys_ns_per_op=8892.538 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=65536 ops=1024 ns_per_op=9199.540 user_ns_per_op=9512.755 sys_ns_per_op=9507.015 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=65536 ops=1024 ns_per_op=9036.833 user_ns_per_op=10441.645 sys_ns_per_op=8385.523 checksum=138412032 content_hash=0x0000000000000000 content_ok=-1
+== write seq 65536 ==
+arm=W0_raw_pwrite size=65536 ops=1024 ns_per_op=9298.500 user_ns_per_op=0.000 sys_ns_per_op=9385.417 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+arm=W1_native_write_at size=65536 ops=1024 ns_per_op=9381.378 user_ns_per_op=26.515 sys_ns_per_op=9462.121 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+arm=W2_sluice_write_at size=65536 ops=1024 ns_per_op=9536.549 user_ns_per_op=500.947 sys_ns_per_op=9047.822 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+arm=W1x_native_write_all_at size=65536 ops=1024 ns_per_op=9145.987 user_ns_per_op=523.674 sys_ns_per_op=8708.807 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+arm=WX_sluice_write_all_at size=65536 ops=1024 ns_per_op=9474.804 user_ns_per_op=482.955 sys_ns_per_op=9083.807 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+arm=W1c_native_write_all size=65536 ops=1024 ns_per_op=9588.421 user_ns_per_op=445.549 sys_ns_per_op=9124.053 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+arm=WC_sluice_write_all size=65536 ops=1024 ns_per_op=9167.647 user_ns_per_op=924.716 sys_ns_per_op=8306.345 checksum=138412032 content_hash=0xac16c39f5752c383 content_ok=1
+== read seq 1048576 ==
+arm=A0_raw_pread size=1048576 ops=1024 ns_per_op=160054.002 user_ns_per_op=16598.805 sys_ns_per_op=158420.037 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1048576 ops=1024 ns_per_op=160569.841 user_ns_per_op=14553.768 sys_ns_per_op=160457.261 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1048576 ops=1024 ns_per_op=159824.138 user_ns_per_op=13621.324 sys_ns_per_op=160754.136 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=1048576 ops=1024 ns_per_op=3.471 user_ns_per_op=5.974 sys_ns_per_op=0.000 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=1048576 ops=1024 ns_per_op=160124.811 user_ns_per_op=14147.059 sys_ns_per_op=159968.750 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=1048576 ops=1024 ns_per_op=161516.807 user_ns_per_op=15219.210 sys_ns_per_op=160799.173 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=1048576 ops=1024 ns_per_op=159838.778 user_ns_per_op=14027.114 sys_ns_per_op=160204.504 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=1048576 ops=1024 ns_per_op=159650.491 user_ns_per_op=15169.118 sys_ns_per_op=158898.438 checksum=2214592512 content_hash=0x0000000000000000 content_ok=-1
+== write seq 1048576 ==
+arm=W0_raw_pwrite size=1048576 ops=1024 ns_per_op=163320.379 user_ns_per_op=1000.947 sys_ns_per_op=162605.587 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+arm=W1_native_write_at size=1048576 ops=1024 ns_per_op=165939.267 user_ns_per_op=21.780 sys_ns_per_op=167402.462 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+arm=W2_sluice_write_at size=1048576 ops=1024 ns_per_op=163408.235 user_ns_per_op=457.386 sys_ns_per_op=163603.220 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+arm=W1x_native_write_all_at size=1048576 ops=1024 ns_per_op=165829.189 user_ns_per_op=0.000 sys_ns_per_op=166932.292 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+arm=WX_sluice_write_all_at size=1048576 ops=1024 ns_per_op=162765.478 user_ns_per_op=995.739 sys_ns_per_op=161966.856 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+arm=W1c_native_write_all size=1048576 ops=1024 ns_per_op=168311.675 user_ns_per_op=448.864 sys_ns_per_op=168142.992 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+arm=WC_sluice_write_all size=1048576 ops=1024 ns_per_op=165121.997 user_ns_per_op=477.273 sys_ns_per_op=164726.799 checksum=2214592512 content_hash=0x292efbedb795c383 content_ok=1
+== read tail 4096 ==
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=546.311 user_ns_per_op=182.079 sys_ns_per_op=703.763 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=572.114 user_ns_per_op=761.161 sys_ns_per_op=130.102 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=530.848 user_ns_per_op=567.602 sys_ns_per_op=315.370 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=4096 ops=1024 ns_per_op=3.475 user_ns_per_op=0.000 sys_ns_per_op=5.102 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=691.182 user_ns_per_op=380.102 sys_ns_per_op=659.439 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=774.044 user_ns_per_op=1060.268 sys_ns_per_op=0.000 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=1012.578 user_ns_per_op=1334.184 sys_ns_per_op=0.000 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=1027.173 user_ns_per_op=0.000 sys_ns_per_op=1363.202 checksum=4331520 content_hash=0x0000000000000000 content_ok=-1
+== read rand 4096 seed42 ==
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=748.063 user_ns_per_op=772.640 sys_ns_per_op=744.579 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=799.383 user_ns_per_op=1121.811 sys_ns_per_op=305.804 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=750.637 user_ns_per_op=507.015 sys_ns_per_op=889.349 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=4096 ops=1024 ns_per_op=3.472 user_ns_per_op=5.102 sys_ns_per_op=0.000 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=717.126 user_ns_per_op=1054.209 sys_ns_per_op=342.156 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=761.799 user_ns_per_op=901.148 sys_ns_per_op=523.597 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=1192.561 user_ns_per_op=318.240 sys_ns_per_op=1538.265 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=1208.503 user_ns_per_op=1224.809 sys_ns_per_op=647.321 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+== write rand 4096 seed42 ==
+arm=W0_raw_pwrite size=4096 ops=1024 ns_per_op=771.156 user_ns_per_op=0.000 sys_ns_per_op=895.833 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=809.772 user_ns_per_op=468.750 sys_ns_per_op=462.595 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=799.731 user_ns_per_op=0.000 sys_ns_per_op=919.034 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=778.230 user_ns_per_op=453.598 sys_ns_per_op=453.598 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=838.523 user_ns_per_op=475.379 sys_ns_per_op=473.011 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1c_native_write_all size=4096 ops=1024 ns_per_op=1237.454 user_ns_per_op=953.125 sys_ns_per_op=410.038 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=1219.561 user_ns_per_op=1332.386 sys_ns_per_op=0.000 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+== metadata ==
+arm=M0_raw_open_close size=0 ops=2048 ns_per_op=1613.456 user_ns_per_op=695.192 sys_ns_per_op=916.827 checksum=4160 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1632.083 user_ns_per_op=727.885 sys_ns_per_op=908.173 checksum=4160 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1654.843 user_ns_per_op=488.221 sys_ns_per_op=1180.529 checksum=4160 content_hash=0x0000000000000000 content_ok=-1
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=534.006 user_ns_per_op=260.084 sys_ns_per_op=272.226 checksum=4982226361576738560 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=16384 ns_per_op=537.582 user_ns_per_op=366.219 sys_ns_per_op=171.905 checksum=4982226361576738560 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=528.928 user_ns_per_op=321.493 sys_ns_per_op=211.483 checksum=4982226361576738560 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=525.826 user_ns_per_op=198.674 sys_ns_per_op=330.790 checksum=2216203124736 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=543.359 user_ns_per_op=248.123 sys_ns_per_op=299.782 checksum=2216203124736 content_hash=0x0000000000000000 content_ok=-1
+== closed state (diagnostic) ==
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=3.182 user_ns_per_op=3.508 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=5.396 user_ns_per_op=9.247 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=3.178 user_ns_per_op=4.145 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=6.051 user_ns_per_op=0.000 sys_ns_per_op=6.378 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=6.042 user_ns_per_op=5.421 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=6.617 user_ns_per_op=0.000 sys_ns_per_op=5.740 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=3.182 user_ns_per_op=5.208 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=5.990 user_ns_per_op=4.261 sys_ns_per_op=4.261 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=3.465 user_ns_per_op=5.682 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12.744 user_ns_per_op=14.678 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=W1c_native_write_all size=4096 ops=1024 ns_per_op=5.190 user_ns_per_op=8.049 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=WC_sluice_write_all size=4096 ops=1024 ns_per_op=5.778 user_ns_per_op=0.000 sys_ns_per_op=7.576 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=4096 ops=1024 ns_per_op=5.189 user_ns_per_op=7.576 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=4096 ops=1024 ns_per_op=5.477 user_ns_per_op=0.000 sys_ns_per_op=14.205 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=4096 ops=1024 ns_per_op=5.986 user_ns_per_op=8.996 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=4096 ops=1024 ns_per_op=8.898 user_ns_per_op=10.890 sys_ns_per_op=0.000 checksum=3244032 content_hash=0x0000000000000000 content_ok=-1
+== closed state raw floor (kernel EBADF, separate) ==
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=394.677 user_ns_per_op=0.000 sys_ns_per_op=279.018 checksum=18446744073709549504 content_hash=0x0000000000000000 content_ok=-1
+arm=W0_raw_pwrite size=4096 ops=1024 ns_per_op=400.079 user_ns_per_op=420.928 sys_ns_per_op=0.000 checksum=18446744073709549504 content_hash=0x0000000000000000 content_ok=-1
+== eintr state (diagnostic; itimer 3us) ==
+arm=A0_raw_pread size=4096 ops=2048 ns_per_op=2007.058 user_ns_per_op=569.219 sys_ns_per_op=1414.062 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=1836.758 user_ns_per_op=1506.094 sys_ns_per_op=1954.375 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=1908.547 user_ns_per_op=1987.812 sys_ns_per_op=1536.406 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=2048 ns_per_op=1941.255 user_ns_per_op=1998.281 sys_ns_per_op=1547.500 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=2048 ns_per_op=1907.203 user_ns_per_op=2003.750 sys_ns_per_op=1459.062 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1x_native_read_exact_at size=4096 ops=2048 ns_per_op=1801.969 user_ns_per_op=284.219 sys_ns_per_op=1367.812 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1c_native_read_exact size=4096 ops=2048 ns_per_op=1870.926 user_ns_per_op=546.250 sys_ns_per_op=1166.562 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=W0_raw_pwrite size=4096 ops=2048 ns_per_op=2044.884 user_ns_per_op=811.811 sys_ns_per_op=1422.335 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=2013.966 user_ns_per_op=1066.406 sys_ns_per_op=1087.316 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=2084.803 user_ns_per_op=399.816 sys_ns_per_op=1870.175 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WX_sluice_write_all_at size=4096 ops=2048 ns_per_op=2033.194 user_ns_per_op=883.961 sys_ns_per_op=1353.860 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WC_sluice_write_all size=4096 ops=2048 ns_per_op=2109.469 user_ns_per_op=632.812 sys_ns_per_op=1696.921 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1x_native_write_all_at size=4096 ops=2048 ns_per_op=2005.687 user_ns_per_op=1241.498 sys_ns_per_op=931.526 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1c_native_write_all size=4096 ops=2048 ns_per_op=2159.064 user_ns_per_op=1273.438 sys_ns_per_op=1066.406 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+== old-binary bridge (P1 binary 0685c31f functional identity; checksum fields only) ==
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=709.543 user_ns_per_op=904.018 sys_ns_per_op=573.342 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=729.087 user_ns_per_op=517.538 sys_ns_per_op=924.745 checksum=8650752 content_hash=0x0000000000000000 content_ok=-1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=753.072 user_ns_per_op=0.000 sys_ns_per_op=909.564 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=780.937 user_ns_per_op=3.788 sys_ns_per_op=932.292 checksum=8650752 content_hash=0xa2a7b385a4908383 content_ok=1
+bad arm
+EXIT_old_a1c=2 (expected 2: selector absent in P1 binary)
+bad arm
+EXIT_old_ac=2 (expected 2: selector absent in P1 binary)
+bad arm
+EXIT_old_w1c=2 (expected 2: selector absent in P1 binary)
+bad arm
+EXIT_old_wc=2 (expected 2: selector absent in P1 binary)
+# smoke series complete 2026-10-27T21:50:20+08:00
+read seq 0: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('0',)] -> IDENTICAL
+read seq 0: A3 exception checksum=0 (gate group above, matches group)
+write seq 0: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('0', '0x0000000000000000')] -> IDENTICAL
+write seq 0: content_ok NOT all 1: {'-2'}
+read seq 1: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('2112',)] -> IDENTICAL
+read seq 1: A3 exception checksum=2112 (gate group above, matches group)
+write seq 1: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('2112', '0xdc0b0234a39d0383')] -> IDENTICAL
+read seq 64: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('135168',)] -> IDENTICAL
+read seq 64: A3 exception checksum=135168 (gate group above, matches group)
+write seq 64: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('135168', '0x5587d44fb61d0383')] -> IDENTICAL
+read seq 512: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('1081344',)] -> IDENTICAL
+read seq 512: A3 exception checksum=1081344 (gate group above, matches group)
+write seq 512: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('1081344', '0xc52baf6252850383')] -> IDENTICAL
+read seq 4096: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('8650752',)] -> IDENTICAL
+read seq 4096: A3 exception checksum=8650752 (gate group above, matches group)
+write seq 4096: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('8650752', '0xa2a7b385a4908383')] -> IDENTICAL
+read seq 65536: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('138412032',)] -> IDENTICAL
+read seq 65536: A3 exception checksum=138412032 (gate group above, matches group)
+write seq 65536: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('138412032', '0xac16c39f5752c383')] -> IDENTICAL
+read seq 1048576: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('2214592512',)] -> IDENTICAL
+read seq 1048576: A3 exception checksum=2214592512 (gate group above, matches group)
+write seq 1048576: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('2214592512', '0x292efbedb795c383')] -> IDENTICAL
+read tail 4096: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('4331520',)] -> IDENTICAL
+read rand 4096 seed42: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('8650752',)] -> IDENTICAL
+read tail 4096: A3 documented exception checksum=8650752 (fabricates full counts at partial/EOF ops; excluded per plan)
+write rand 4096 seed42: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('8650752', '0xa2a7b385a4908383')] -> IDENTICAL
+metadata oc: group=M0_raw_open_close+M1_native_open_close+M2_sluice_open_close values=[('4160',)] -> IDENTICAL
+metadata fi: group=M0_raw_fstat+M1_native_file_info+M2_sluice_file_info values=[('4982226361576738560',)] -> IDENTICAL
+metadata sz: group=M1_native_size+M2_sluice_size values=[('2216203124736',)] -> IDENTICAL
+closed userspace: group=A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all+M1_native_file_info+M2_sluice_file_info+M1_native_size+M2_sluice_size values=[('3244032',)] -> IDENTICAL
+closed raw floor: [('A0_raw_pread', '18446744073709549504'), ('W0_raw_pwrite', '18446744073709549504')] (documented separately)
+eintr read arms: [('A0_raw_pread', '17825792'), ('A1_native_read_at', '17825792'), ('A2_sluice_read_at', '17825792'), ('AX_sluice_read_exact_at', '17825792'), ('AC_sluice_read_exact', '17825792'), ('A1x_native_read_exact_at', '17825792'), ('A1c_native_read_exact', '17825792')]
+eintr write arms: [('W0_raw_pwrite', '17825792', '1'), ('W1_native_write_at', '17825792', '1'), ('W2_sluice_write_at', '17825792', '1'), ('WX_sluice_write_all_at', '17825792', '1'), ('WC_sluice_write_all', '17825792', '1'), ('W1x_native_write_all_at', '17825792', '1'), ('W1c_native_write_all', '17825792', '1')]
+eintr read userspace checksum equality (diagnostic, excl A0): IDENTICAL
+eintr write userspace checksum/content equality (diagnostic, excl W0): IDENTICAL
+old-binary bridge A1x_native_read_exact_at: old checksum=8650752 new=8650752 -> MATCH
+old-binary bridge AX_sluice_read_exact_at: old checksum=8650752 new=8650752 -> MATCH
+old-binary bridge W1x_native_write_all_at: old checksum=8650752 new=8650752 -> MATCH
+old-binary bridge WX_sluice_write_all_at: old checksum=8650752 new=8650752 -> MATCH
+SUMMARY: FAILURES: ['write seq 0 content_ok']
+
+# audit correction (2026-10-27): size-0 write cells expect content_ok=-2 (skipped readback — 0 bytes written; P1 smoke smoke-ladder.txt write seq 0 rows identical convention). Re-run of the auditor with that documented expectation:
+read seq 0: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('0',)] -> IDENTICAL
+read seq 0: A3 exception checksum=0 (gate group above, matches group)
+write seq 0: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('0', '0x0000000000000000')] -> IDENTICAL
+write seq 0: content_ok=-2 (skipped readback at 0 B, P1 convention)
+read seq 1: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('2112',)] -> IDENTICAL
+read seq 1: A3 exception checksum=2112 (gate group above, matches group)
+write seq 1: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('2112', '0xdc0b0234a39d0383')] -> IDENTICAL
+write seq 1: content_ok=1 (verified)
+read seq 64: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('135168',)] -> IDENTICAL
+read seq 64: A3 exception checksum=135168 (gate group above, matches group)
+write seq 64: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('135168', '0x5587d44fb61d0383')] -> IDENTICAL
+write seq 64: content_ok=1 (verified)
+read seq 512: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('1081344',)] -> IDENTICAL
+read seq 512: A3 exception checksum=1081344 (gate group above, matches group)
+write seq 512: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('1081344', '0xc52baf6252850383')] -> IDENTICAL
+write seq 512: content_ok=1 (verified)
+read seq 4096: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('8650752',)] -> IDENTICAL
+read seq 4096: A3 exception checksum=8650752 (gate group above, matches group)
+write seq 4096: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('8650752', '0xa2a7b385a4908383')] -> IDENTICAL
+write seq 4096: content_ok=1 (verified)
+read seq 65536: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('138412032',)] -> IDENTICAL
+read seq 65536: A3 exception checksum=138412032 (gate group above, matches group)
+write seq 65536: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('138412032', '0xac16c39f5752c383')] -> IDENTICAL
+write seq 65536: content_ok=1 (verified)
+read seq 1048576: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('2214592512',)] -> IDENTICAL
+read seq 1048576: A3 exception checksum=2214592512 (gate group above, matches group)
+write seq 1048576: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('2214592512', '0x292efbedb795c383')] -> IDENTICAL
+write seq 1048576: content_ok=1 (verified)
+read tail 4096: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('4331520',)] -> IDENTICAL
+read rand 4096 seed42: group=A0_raw_pread+A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact values=[('8650752',)] -> IDENTICAL
+read tail 4096: A3 documented exception checksum=8650752 (fabricates full counts at partial/EOF ops; excluded per plan)
+write rand 4096 seed42: group=W0_raw_pwrite+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all values=[('8650752', '0xa2a7b385a4908383')] -> IDENTICAL
+metadata oc: group=M0_raw_open_close+M1_native_open_close+M2_sluice_open_close values=[('4160',)] -> IDENTICAL
+metadata fi: group=M0_raw_fstat+M1_native_file_info+M2_sluice_file_info values=[('4982226361576738560',)] -> IDENTICAL
+metadata sz: group=M1_native_size+M2_sluice_size values=[('2216203124736',)] -> IDENTICAL
+closed userspace: group=A1_native_read_at+A2_sluice_read_at+A1x_native_read_exact_at+AX_sluice_read_exact_at+A1c_native_read_exact+AC_sluice_read_exact+W1_native_write_at+W2_sluice_write_at+W1x_native_write_all_at+WX_sluice_write_all_at+W1c_native_write_all+WC_sluice_write_all+M1_native_file_info+M2_sluice_file_info+M1_native_size+M2_sluice_size values=[('3244032',)] -> IDENTICAL
+closed raw floor: [('A0_raw_pread', '18446744073709549504'), ('W0_raw_pwrite', '18446744073709549504')] (documented separately)
+eintr read arms: [('A0_raw_pread', '17825792'), ('A1_native_read_at', '17825792'), ('A2_sluice_read_at', '17825792'), ('AX_sluice_read_exact_at', '17825792'), ('AC_sluice_read_exact', '17825792'), ('A1x_native_read_exact_at', '17825792'), ('A1c_native_read_exact', '17825792')]
+eintr write arms: [('W0_raw_pwrite', '17825792', '1'), ('W1_native_write_at', '17825792', '1'), ('W2_sluice_write_at', '17825792', '1'), ('WX_sluice_write_all_at', '17825792', '1'), ('WC_sluice_write_all', '17825792', '1'), ('W1x_native_write_all_at', '17825792', '1'), ('W1c_native_write_all', '17825792', '1')]
+eintr read userspace checksum equality (diagnostic, excl A0): IDENTICAL
+eintr write userspace checksum/content equality (diagnostic, excl W0): IDENTICAL
+old-binary bridge A1x_native_read_exact_at: old checksum=8650752 new=8650752 -> MATCH
+old-binary bridge AX_sluice_read_exact_at: old checksum=8650752 new=8650752 -> MATCH
+old-binary bridge W1x_native_write_all_at: old checksum=8650752 new=8650752 -> MATCH
+old-binary bridge WX_sluice_write_all_at: old checksum=8650752 new=8650752 -> MATCH
+SUMMARY: ALL GATED GROUPS IDENTICAL
+
+# INCIDENT (disclosed, 2026-10-27T21:5x): the old-binary bridge section originally ran the write arms w1x/wx against $RF — the read fixture — whose prime pass rewrote data64m.bin with the ladder uniform pattern (pre-incident sha was verified bc020fd1… at smoke start; post-smoke sha fc37759c398eba83a7b71f528c95fded2573b70f58e7d1d9ce25f5f7d6816dc0). Detected immediately: the first A/A cell invocation VERIFY_FAILED on the a1 content oracle (gate worked as designed). Fixture regenerated with mkfixture (deterministic): sha256 back to the pinned bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a. The voided A/A attempt is archived as p2c1/p2c1-aa-read-4k-base-attempt1.txt; the smoke script bridge section now uses a dedicated scratch (repaired). All group audits above the bridge section ran before the corruption and are unaffected; bridge checksum comparisons are file-independent and remain valid.

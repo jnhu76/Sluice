@@ -1,0 +1,44 @@
+# p5-delta-comp-cursor-4k-a — 2026-10-28T11:30:12Z host E5 kernel 7.2.11-200.fc44.x86_64
+# binaries: ladderA=/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 sha 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381; ladderB=/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder sha 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8
+# cmd: paired2.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder ac 4096 1024 1024 5 16 /tmp/sluice600/data64m.bin
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=984.972 user_ns_per_op=711.775 sys_ns_per_op=708.984 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=948.741 user_ns_per_op=1145.368 sys_ns_per_op=147.042 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=923.468 user_ns_per_op=703.683 sys_ns_per_op=559.431 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=897.930 user_ns_per_op=660.714 sys_ns_per_op=587.472 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=911.781 user_ns_per_op=406.390 sys_ns_per_op=843.331 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=936.924 user_ns_per_op=563.756 sys_ns_per_op=707.868 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=913.713 user_ns_per_op=552.176 sys_ns_per_op=701.311 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=902.622 user_ns_per_op=1087.333 sys_ns_per_op=154.715 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=904.380 user_ns_per_op=415.179 sys_ns_per_op=832.310 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=908.727 user_ns_per_op=554.827 sys_ns_per_op=692.941 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=934.133 user_ns_per_op=708.147 sys_ns_per_op=561.384 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=905.257 user_ns_per_op=732.701 sys_ns_per_op=513.114 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=906.736 user_ns_per_op=553.850 sys_ns_per_op=693.917 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=927.773 user_ns_per_op=555.804 sys_ns_per_op=709.542 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=933.094 user_ns_per_op=714.007 sys_ns_per_op=555.943 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=903.502 user_ns_per_op=830.636 sys_ns_per_op=411.551 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=907.586 user_ns_per_op=835.938 sys_ns_per_op=415.876 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=941.361 user_ns_per_op=564.035 sys_ns_per_op=710.938 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=916.899 user_ns_per_op=844.169 sys_ns_per_op=410.854 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=901.815 user_ns_per_op=799.247 sys_ns_per_op=445.592 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=923.277 user_ns_per_op=841.657 sys_ns_per_op=421.317 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=922.320 user_ns_per_op=702.846 sys_ns_per_op=561.105 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=918.118 user_ns_per_op=417.132 sys_ns_per_op=842.076 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=895.447 user_ns_per_op=654.994 sys_ns_per_op=583.426 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=907.529 user_ns_per_op=689.174 sys_ns_per_op=562.081 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=919.834 user_ns_per_op=567.383 sys_ns_per_op=696.150 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=907.648 user_ns_per_op=820.731 sys_ns_per_op=431.083 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=893.589 user_ns_per_op=816.685 sys_ns_per_op=426.200 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=904.731 user_ns_per_op=551.897 sys_ns_per_op=691.546 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=911.726 user_ns_per_op=560.965 sys_ns_per_op=700.614 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=907.515 user_ns_per_op=919.643 sys_ns_per_op=330.218 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=905.859 user_ns_per_op=551.060 sys_ns_per_op=694.057 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+## analysis (order-aware ladderA-ladderB):
+pairs=16
+ladderA: mean=909.813ns sd=21.153 median=904.994
+ladderB: mean=923.250ns sd=12.664 median=921.077
+delta(ladderA-ladderB): median=-14.571ns mean=-13.436ns sd=16.904 pos=2/16
+paired t=-3.18 (df=15)
+CI95_mean=[-22.442,-4.431]
+AB_subgroup_median=-9.650 BA_subgroup_median=-18.877
+raw_deltas=36.231,-25.538,-25.143,-11.091,-4.347,-28.876,-21.037,-29.592,-33.775,-15.084,0.957,-22.671,-12.305,-14.059,-6.995,-1.656

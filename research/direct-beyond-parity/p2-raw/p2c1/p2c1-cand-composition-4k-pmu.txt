@@ -1,0 +1,58 @@
+# PMU diagnostic, candidate binaries (P1 §6.2 shape; never a wall source) — 2026-10-27T22:42:52+08:00 host E5
+# cmd per arm: taskset -c 2 perf stat -e instructions:u,cycles:u <ladder-c*> <arm> 4096 4096 0 1 <file>
+== c1 arm a1x ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1x 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       137,926,374      instructions:u                                                        
+        30,422,255      cycles:u                                                              
+
+       0.016733646 seconds time elapsed
+
+       0.012538000 seconds user
+       0.004173000 seconds sys
+
+
+exit=0
+== c1 arm ax ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 ax 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       138,196,993      instructions:u                                                        
+        30,024,247      cycles:u                                                              
+
+       0.016939567 seconds time elapsed
+
+       0.011918000 seconds user
+       0.004970000 seconds sys
+
+
+exit=0
+== c1 arm a1c ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1c 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       138,009,326      instructions:u                                                        
+        29,925,464      cycles:u                                                              
+
+       0.016993459 seconds time elapsed
+
+       0.011964000 seconds user
+       0.004975000 seconds sys
+
+
+exit=0
+== c1 arm ac ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 ac 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       138,165,194      instructions:u                                                        
+        29,946,000      cycles:u                                                              
+
+       0.016898792 seconds time elapsed
+
+       0.010897000 seconds user
+       0.005949000 seconds sys
+
+
+exit=0

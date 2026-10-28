@@ -1,0 +1,40 @@
+# p3-m4-cold-64k — 2026-10-28T02:16:05+08:00 — btrfs cold, P1 §7 drop before every invocation, warmup=0 reps=1, 16 ABBA pairs
+# cmd: for p 0..15: drop; taskset -c 2 ladder a1|a2 65536 1024 0 1 $COLD_FIX seq (ABBA)
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=151227.229 user_ns_per_op=18385.742 sys_ns_per_op=10377.441 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=165173.947 user_ns_per_op=19396.973 sys_ns_per_op=10350.098 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151414.207 user_ns_per_op=16939.941 sys_ns_per_op=12070.312 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=193615.481 user_ns_per_op=21616.699 sys_ns_per_op=7885.254 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=154267.428 user_ns_per_op=21749.023 sys_ns_per_op=8771.484 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=172324.565 user_ns_per_op=17070.801 sys_ns_per_op=11926.758 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=169964.831 user_ns_per_op=22986.816 sys_ns_per_op=7516.113 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=172187.317 user_ns_per_op=20309.570 sys_ns_per_op=8527.832 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=151177.048 user_ns_per_op=20481.934 sys_ns_per_op=8342.285 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=179486.665 user_ns_per_op=18918.457 sys_ns_per_op=11702.148 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151532.113 user_ns_per_op=19105.957 sys_ns_per_op=9820.801 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=173059.397 user_ns_per_op=19186.523 sys_ns_per_op=9475.586 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=179919.447 user_ns_per_op=21351.074 sys_ns_per_op=8845.703 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151597.628 user_ns_per_op=21068.848 sys_ns_per_op=7619.629 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=150976.453 user_ns_per_op=20021.484 sys_ns_per_op=8931.152 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=195742.717 user_ns_per_op=21651.367 sys_ns_per_op=9181.152 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=151093.229 user_ns_per_op=16775.391 sys_ns_per_op=11885.742 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=217973.558 user_ns_per_op=19679.688 sys_ns_per_op=9782.227 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151295.997 user_ns_per_op=18920.410 sys_ns_per_op=9880.371 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=171890.788 user_ns_per_op=20027.344 sys_ns_per_op=9010.742 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=160805.637 user_ns_per_op=18878.906 sys_ns_per_op=11909.668 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151242.704 user_ns_per_op=21729.980 sys_ns_per_op=7225.098 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151423.076 user_ns_per_op=21034.180 sys_ns_per_op=8046.875 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=206497.307 user_ns_per_op=19075.195 sys_ns_per_op=11616.211 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=152412.259 user_ns_per_op=18974.121 sys_ns_per_op=10243.652 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=157909.838 user_ns_per_op=19116.699 sys_ns_per_op=10512.695 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151342.505 user_ns_per_op=19750.488 sys_ns_per_op=8961.914 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=151190.553 user_ns_per_op=19471.680 sys_ns_per_op=9469.727 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=158610.771 user_ns_per_op=21739.258 sys_ns_per_op=8398.438 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=151131.166 user_ns_per_op=19889.160 sys_ns_per_op=9333.984 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=65536 ops=1024 ns_per_op=153077.001 user_ns_per_op=26337.891 sys_ns_per_op=11673.828 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=65536 ops=1024 ns_per_op=151839.585 user_ns_per_op=20160.645 sys_ns_per_op=8784.180 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+# --- analysis (recomputed 2026-10-28T02:17:47+08:00, armA=a1 armB=a2) ---
+pairs=16
+A1_native_read_at: mean=167221.012ns sd=18373.637 median=159708.204
+A2_sluice_read_at: mean=161116.641ns sd=17753.947 median=151564.871
+delta(A1_native_read_at-A2_sluice_read_at): median=+4851.046ns mean=+6104.371ns sd=30431.029 rel=+3.011% pos=9/16
+paired t=+0.80 (df=15)

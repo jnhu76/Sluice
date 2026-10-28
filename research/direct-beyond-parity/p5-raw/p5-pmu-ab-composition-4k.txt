@@ -1,0 +1,77 @@
+# p5-pmu-ab-composition-4k (PMU diagnostic; never a wall source) — 2026-10-28T11:59:19Z host E5 kernel 7.2.11-200.fc44.x86_64
+# per arm x3: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab <arm> 4096 4096 0 1 /tmp/sluice600/data64m.bin
+# binary: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab sha256 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+== arm a1x ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab a1x 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       137,926,549      instructions:u                                                        
+        30,046,314      cycles:u                                                              
+
+       0.017380883 seconds time elapsed
+
+       0.010202000 seconds user
+       0.007111000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab a1x 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       137,926,327      instructions:u                                                        
+        29,994,788      cycles:u                                                              
+
+       0.016891558 seconds time elapsed
+
+       0.013893000 seconds user
+       0.002975000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab a1x 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       137,926,397      instructions:u                                                        
+        29,980,550      cycles:u                                                              
+
+       0.016801871 seconds time elapsed
+
+       0.013621000 seconds user
+       0.003133000 seconds sys
+
+
+== arm ax ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab ax 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       138,196,561      instructions:u                                                        
+        30,008,489      cycles:u                                                              
+
+       0.016642841 seconds time elapsed
+
+       0.009355000 seconds user
+       0.007251000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab ax 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       138,196,747      instructions:u                                                        
+        30,113,598      cycles:u                                                              
+
+       0.016619817 seconds time elapsed
+
+       0.011702000 seconds user
+       0.004869000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab ax 4096 4096 0 1 /tmp/sluice600/data64m.bin':
+
+       138,196,943      instructions:u                                                        
+        30,004,507      cycles:u                                                              
+
+       0.017201914 seconds time elapsed
+
+       0.011089000 seconds user
+       0.006042000 seconds sys
+
+

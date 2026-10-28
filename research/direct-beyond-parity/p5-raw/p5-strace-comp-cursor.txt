@@ -1,0 +1,163 @@
+# p5-strace-comp-cursor (strace -c integral counts, 3 repeats/arm; never a wall source) — 2026-10-28T12:00:26Z host E5 kernel 7.2.11-200.fc44.x86_64
+--- ladder.ac rep1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12334.507 user_ns_per_op=540.876 sys_ns_per_op=3762.277 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 96.52    0.012580           1      7172           read
+  1.24    0.000162         162         1           execve
+  0.91    0.000119           6        19           mmap
+  0.31    0.000040           6         6           mprotect
+  0.31    0.000040           5         7           openat
+  0.12    0.000015          15         1           munmap
+  0.12    0.000015          15         1           set_robust_list
+  0.10    0.000013           1         7           fstat
+  0.08    0.000010           1         6           lseek
+  0.07    0.000009           1         6           close
+  0.07    0.000009           3         3           brk
+  0.03    0.000004           2         2           pread64
+  0.03    0.000004           4         1         1 access
+  0.02    0.000002           1         2           getrusage
+  0.02    0.000002           2         1           arch_prctl
+  0.02    0.000002           2         1           futex
+  0.02    0.000002           2         1           set_tid_address
+  0.02    0.000002           2         1           prlimit64
+  0.02    0.000002           2         1           getrandom
+  0.02    0.000002           2         1           rseq
+  0.00    0.000000           0         1           write
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013034           1      7241         1 total
+--- ladder.ac rep2
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12115.906 user_ns_per_op=470.982 sys_ns_per_op=3719.866 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.67    0.012297           1      7172           read
+  0.13    0.000016          16         1           write
+  0.10    0.000012           2         6           lseek
+  0.05    0.000006           0         7           fstat
+  0.03    0.000004           2         2           getrusage
+  0.02    0.000003           0         6           close
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012338           1      7241         1 total
+--- ladder.ac rep3
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12244.529 user_ns_per_op=811.523 sys_ns_per_op=3360.910 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.74    0.011023           1      7172           read
+  0.13    0.000014          14         1           write
+  0.07    0.000008           1         6           lseek
+  0.03    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.02    0.000002           1         2           getrusage
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011052           1      7241         1 total
+--- ladder-ab.ac rep1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=11970.322 user_ns_per_op=1240.095 sys_ns_per_op=2996.512 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.77    0.009775           1      7172           read
+  0.11    0.000011          11         1           write
+  0.06    0.000006           1         6           lseek
+  0.02    0.000002           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.02    0.000002           1         2           getrusage
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009798           1      7241         1 total
+--- ladder-ab.ac rep2
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=11977.228 user_ns_per_op=545.340 sys_ns_per_op=3687.779 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 96.47    0.012175           1      7172           read
+  1.13    0.000143         143         1           execve
+  0.97    0.000122           6        19           mmap
+  0.32    0.000040           5         7           openat
+  0.30    0.000038           6         6           mprotect
+  0.13    0.000017           2         7           fstat
+  0.12    0.000015          15         1           write
+  0.12    0.000015          15         1           munmap
+  0.10    0.000013           2         6           close
+  0.07    0.000009           3         3           brk
+  0.06    0.000008           1         6           lseek
+  0.03    0.000004           2         2           pread64
+  0.03    0.000004           4         1         1 access
+  0.03    0.000004           2         2           getrusage
+  0.02    0.000003           3         1           futex
+  0.02    0.000002           2         1           arch_prctl
+  0.02    0.000002           2         1           set_tid_address
+  0.02    0.000002           2         1           prlimit64
+  0.02    0.000002           2         1           getrandom
+  0.01    0.000001           1         1           set_robust_list
+  0.01    0.000001           1         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012620           1      7241         1 total
+--- ladder-ab.ac rep3
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12187.073 user_ns_per_op=708.705 sys_ns_per_op=3562.081 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 96.38    0.011791           1      7172           read
+  1.29    0.000158         158         1           execve
+  1.02    0.000125           6        19           mmap
+  0.33    0.000040           6         6           mprotect
+  0.31    0.000038           5         7           openat
+  0.12    0.000015          15         1           munmap
+  0.11    0.000013           1         7           fstat
+  0.10    0.000012           4         3           brk
+  0.08    0.000010           1         6           close
+  0.07    0.000008           1         6           lseek
+  0.03    0.000004           2         2           pread64
+  0.03    0.000004           4         1         1 access
+  0.02    0.000002           1         2           getrusage
+  0.02    0.000002           2         1           arch_prctl
+  0.02    0.000002           2         1           futex
+  0.02    0.000002           2         1           set_tid_address
+  0.02    0.000002           2         1           set_robust_list
+  0.02    0.000002           2         1           prlimit64
+  0.02    0.000002           2         1           getrandom
+  0.02    0.000002           2         1           rseq
+  0.00    0.000000           0         1           write
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012234           1      7241         1 total

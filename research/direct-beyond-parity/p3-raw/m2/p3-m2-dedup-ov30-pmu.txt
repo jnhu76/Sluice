@@ -1,0 +1,90 @@
+=== p3-m2-dedup-ov30 arm=rpl0 pmu run=1 2026-10-28T02:04:25+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=8504.853 user_ns_per_op=39372.721 sys_ns_per_op=6208.984 checksum=33554432 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=ov30 merge=0 dedup=0':
+
+     1,182,346,443      instructions:u                                                        
+       410,723,369      cycles:u                                                              
+
+       0.142377684 seconds time elapsed
+
+       0.121830000 seconds user
+       0.020213000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-dedup-ov30 arm=rpl0 pmu run=2 2026-10-28T02:04:25+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=8191.629 user_ns_per_op=39879.232 sys_ns_per_op=5538.737 checksum=33554432 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=ov30 merge=0 dedup=0':
+
+     1,182,346,529      instructions:u                                                        
+       411,135,892      cycles:u                                                              
+
+       0.141896513 seconds time elapsed
+
+       0.124528000 seconds user
+       0.017044000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-dedup-ov30 arm=rpl0 pmu run=3 2026-10-28T02:04:26+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=8480.919 user_ns_per_op=42076.497 sys_ns_per_op=3252.279 checksum=33554432 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=ov30 merge=0 dedup=0':
+
+     1,182,346,488      instructions:u                                                        
+       411,824,232      cycles:u                                                              
+
+       0.141606153 seconds time elapsed
+
+       0.131249000 seconds user
+       0.010009000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-dedup-ov30 arm=rpld pmu run=1 2026-10-28T02:04:27+08:00 ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=6127.171 user_ns_per_op=40565.430 sys_ns_per_op=3587.240 checksum=22023451 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=3 issued_per_group=21507 requested_per_group=32768
+
+ Performance counter stats for './ladder rpld 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=ov30 merge=0 dedup=1':
+
+     1,190,029,750      instructions:u                                                        
+       416,109,324      cycles:u                                                              
+
+       0.138808484 seconds time elapsed
+
+       0.126715000 seconds user
+       0.011041000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-dedup-ov30 arm=rpld pmu run=2 2026-10-28T02:04:28+08:00 ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=6325.600 user_ns_per_op=40293.945 sys_ns_per_op=3562.500 checksum=22023451 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=3 issued_per_group=21507 requested_per_group=32768
+
+ Performance counter stats for './ladder rpld 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=ov30 merge=0 dedup=1':
+
+     1,190,029,723      instructions:u                                                        
+       415,256,127      cycles:u                                                              
+
+       0.137082542 seconds time elapsed
+
+       0.125804000 seconds user
+       0.010965000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-dedup-ov30 arm=rpld pmu run=3 2026-10-28T02:04:29+08:00 ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=6116.961 user_ns_per_op=40065.755 sys_ns_per_op=4240.234 checksum=22023451 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=3 issued_per_group=21507 requested_per_group=32768
+
+ Performance counter stats for './ladder rpld 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=ov30 merge=0 dedup=1':
+
+     1,190,029,604      instructions:u                                                        
+       416,188,782      cycles:u                                                              
+
+       0.139393149 seconds time elapsed
+
+       0.124258000 seconds user
+       0.013997000 seconds sys
+
+
+PERF_EXIT=0

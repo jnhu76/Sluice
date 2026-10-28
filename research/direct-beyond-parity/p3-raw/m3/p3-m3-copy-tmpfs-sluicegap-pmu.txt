@@ -1,0 +1,45 @@
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s pmu run=1 2026-10-28T02:11:47+08:00 ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=29180.991 user_ns_per_op=0.000 sys_ns_per_op=29050.781 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp1s 65536 1024 0 1 /tmp/sluice600/data64m.bin dst=/tmp/sluice600/copy-p3-m3-copy-tmpfs-sluicegap-diag.bin':
+
+     1,018,863,013      instructions:u                                                        
+       954,830,277      cycles:u                                                              
+
+       0.331227585 seconds time elapsed
+
+       0.274896000 seconds user
+       0.054702000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s pmu run=2 2026-10-28T02:11:48+08:00 ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=29256.758 user_ns_per_op=918.945 sys_ns_per_op=28193.359 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp1s 65536 1024 0 1 /tmp/sluice600/data64m.bin dst=/tmp/sluice600/copy-p3-m3-copy-tmpfs-sluicegap-diag.bin':
+
+     1,018,864,077      instructions:u                                                        
+       955,658,404      cycles:u                                                              
+
+       0.332266032 seconds time elapsed
+
+       0.275885000 seconds user
+       0.054691000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-tmpfs-sluicegap arm=cp1s pmu run=3 2026-10-28T02:11:49+08:00 ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=29163.816 user_ns_per_op=1018.555 sys_ns_per_op=28017.578 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp1s 65536 1024 0 1 /tmp/sluice600/data64m.bin dst=/tmp/sluice600/copy-p3-m3-copy-tmpfs-sluicegap-diag.bin':
+
+     1,018,864,196      instructions:u                                                        
+       954,972,070      cycles:u                                                              
+
+       0.332372500 seconds time elapsed
+
+       0.277020000 seconds user
+       0.053737000 seconds sys
+
+
+PERF_EXIT=0

@@ -1,0 +1,465 @@
+=== P4 preparation smoke gate 2026-10-28T03:28:58Z ===
+kit=/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder
+kernel=7.2.11-200.fc44.x86_64
+log=/home/jnhu/Source/Sluice/research/direct-beyond-parity/p4-raw/kit-smoke.txt
+ok: fstype /tmp = tmpfs
+ok: fstype /var/tmp = btrfs
+--- identity gate ---
+ok: B1 archive sha256 = d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0
+ok: P2C1 archive sha256 = 07d0680307c71cc412dfd021fd47c3098de57b580283df189f66dcdc2052049e
+ok: P2C2 archive sha256 = 672510281abadba1cbda0a0e89f15e1dbb2c69f5a15bceb306b70196b420a807
+ok: B1 worktree HEAD = 77e5399a45998dea396699fa2e063c94a665945a
+ok: P2C1 worktree HEAD = deaf03014173e13633a43f4db405c9a9e9860f23
+ok: P2C2 worktree HEAD = 476bd9ce9780594163350228e066a86b554c157d
+ok: kit branch = direct-cost-ladder
+kit HEAD=4455d98d9823ec138c904be4c63a1d5a84903e97 (measurement binaries descend from kit source 2364be4acf1790baa030afe1730d00ca9222f280, Amendment 1)
+ok: kit source ladder.cpp sha256 (2364be4a) = 75c19bcc4f2df35e00ac8ea67fb552b007a3eeba62f64d256a4dedf10a61b2fb
+ok: ladder sha256 = 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8
+ok: ladder-c1 sha256 = 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+ok: ladder-c2 sha256 = 8bb6473b0f2455c2b092d94cc55ccaec20fe72ff40103bd9fb5c9151c7740065
+ok: ladder-4455d98d sha256 (P3-era diagnostic build) = 5a53a9ad1ea00a9a26dee98543ef473ca15dcdfda86c2aa647b59cca4ec05507
+ok: remote ref origin/direct-cost-ladder absent = 0
+identity record written: /home/jnhu/Source/Sluice/research/direct-beyond-parity/p4-raw/identity.txt
+--- build gate: reproduce each pinned binary from kit source 2364be4acf1790baa030afe1730d00ca9222f280 ---
+ok: canary build b1 byte-exact (8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8)
+ok: canary build c1 byte-exact (8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381)
+ok: canary build c2 byte-exact (8bb6473b0f2455c2b092d94cc55ccaec20fe72ff40103bd9fb5c9151c7740065)
+--- fixtures ---
+ok: warm fixture sha256 = bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+ok: cold fixture cold64m.bin present = yes
+ok: cold fixture coldwrite64m.bin present = yes
+--- arm inventory (23 arms @ kit source 2364be4a, x3 binaries) ---
+a0    A0_raw_pread              read      Layer A floor (W01 context arm)
+a1    A1_native_read_at         read      Layer B native mirror (N1)
+a2    A2_sluice_read_at         read      Layer B B1 library (W01 cell arm)
+a3    A3_nosyscall_stub         read      diagnostic stub (no cell)
+a1x   A1x_native_read_exact_at  read      Layer B native composition (P2C1 control)
+ax    AX_sluice_read_exact_at   read      Layer B B1 composition (P2C1 primary)
+a1c   A1c_native_read_exact     read      Layer B native cursor twin
+ac    AC_sluice_read_exact      read      Layer B B1 cursor twin (w01-comp-cursor-4k)
+w0    W0_raw_pwrite             write     Layer A floor (context)
+w1    W1_native_write_at        write     Layer B native mirror (N1)
+w2    W2_sluice_write_at        write     Layer B B1 library (w01-write-4k)
+w1x   W1x_native_write_all_at   write     Layer B native composition (control)
+wx    WX_sluice_write_all_at    write     Layer B B1 composition (w01-wcomp-4k)
+w1c   W1c_native_write_all      write     Layer B native cursor twin
+wc    WC_sluice_write_all       write     Layer B B1 cursor twin
+m0oc  M0_raw_open_close         metadata  Layer A floor (context)
+m0fi  M0_raw_fstat              metadata  Layer A floor (context)
+m1oc  M1_native_open_close      metadata  Layer B native mirror (context)
+m1fi  M1_native_file_info       metadata  Layer B native mirror (context)
+m1sz  M1_native_size            metadata  Layer B native mirror
+m2oc  M2_sluice_open_close      metadata  Layer B B1 library (w01-meta-oc)
+m2fi  M2_sluice_file_info       metadata  Layer B B1 library (w01-meta-fi)
+m2sz  M2_sluice_size            metadata  Layer B B1 library
+Layer C (W01): collapses onto Layer B — preregistered structural fact (plan §2).
+Layer C kit probe arms (preadv av*, planner rpl*, copy cp*) exist only in the
+P3 kit-source build (ladder-4455d98d) and enter no P4 cell; PARQUET Layer C
+lives in the dududu strategy arms (plan §4.2/§4.4).
+--- read family group (seq 4k) ---
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=1314.715 user_ns_per_op=1104.167 sys_ns_per_op=1355.903 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=1065.281 user_ns_per_op=907.986 sys_ns_per_op=1406.250 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder] arm=a1 checksum = 1310720
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=984.066 user_ns_per_op=2013.889 sys_ns_per_op=277.778 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder] arm=a2 checksum = 1310720
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1042.977 user_ns_per_op=2331.597 sys_ns_per_op=0.000 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder] arm=a1x checksum = 1310720
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1101.879 user_ns_per_op=0.000 sys_ns_per_op=2385.417 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder] arm=ax checksum = 1310720
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1121.191 user_ns_per_op=579.861 sys_ns_per_op=1777.778 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder] arm=a1c checksum = 1310720
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1093.184 user_ns_per_op=2119.792 sys_ns_per_op=277.778 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder] arm=ac checksum = 1310720
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=1040.426 user_ns_per_op=2111.111 sys_ns_per_op=262.153 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=1084.730 user_ns_per_op=1805.556 sys_ns_per_op=571.181 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c1] arm=a1 checksum = 1310720
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=1183.879 user_ns_per_op=543.403 sys_ns_per_op=1789.931 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c1] arm=a2 checksum = 1310720
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1049.457 user_ns_per_op=1875.000 sys_ns_per_op=493.056 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c1] arm=a1x checksum = 1310720
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1021.000 user_ns_per_op=2065.972 sys_ns_per_op=213.542 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c1] arm=ax checksum = 1310720
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1078.547 user_ns_per_op=248.264 sys_ns_per_op=2135.417 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c1] arm=a1c checksum = 1310720
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1046.023 user_ns_per_op=2095.486 sys_ns_per_op=203.125 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c1] arm=ac checksum = 1310720
+ok: group read-seq-4k cross-binary [ladder-c1] checksum = 1310720
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=1033.609 user_ns_per_op=1835.069 sys_ns_per_op=460.069 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=1039.523 user_ns_per_op=189.236 sys_ns_per_op=2112.847 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c2] arm=a1 checksum = 1310720
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=1278.871 user_ns_per_op=2461.806 sys_ns_per_op=0.000 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c2] arm=a2 checksum = 1310720
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1116.359 user_ns_per_op=0.000 sys_ns_per_op=2387.153 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c2] arm=a1x checksum = 1310720
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1041.016 user_ns_per_op=2032.986 sys_ns_per_op=262.153 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c2] arm=ax checksum = 1310720
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1079.895 user_ns_per_op=2111.111 sys_ns_per_op=272.569 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c2] arm=a1c checksum = 1310720
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1063.887 user_ns_per_op=2138.889 sys_ns_per_op=229.167 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-seq-4k [ladder-c2] arm=ac checksum = 1310720
+ok: group read-seq-4k cross-binary [ladder-c2] checksum = 1310720
+--- read family group (rand 4k, w01-rand-4k shape) ---
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=1418.555 user_ns_per_op=1921.875 sys_ns_per_op=687.500 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=1079.070 user_ns_per_op=236.111 sys_ns_per_op=2104.167 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder] arm=a1 checksum = 1310720
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=1090.871 user_ns_per_op=2354.167 sys_ns_per_op=0.000 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder] arm=a2 checksum = 1310720
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1088.188 user_ns_per_op=1840.278 sys_ns_per_op=526.042 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder] arm=a1x checksum = 1310720
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1094.711 user_ns_per_op=1800.347 sys_ns_per_op=560.764 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder] arm=ax checksum = 1310720
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1842.473 user_ns_per_op=2998.264 sys_ns_per_op=0.000 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder] arm=a1c checksum = 1310720
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1703.996 user_ns_per_op=2489.583 sys_ns_per_op=486.111 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder] arm=ac checksum = 1310720
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=1197.574 user_ns_per_op=2460.069 sys_ns_per_op=0.000 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=1098.227 user_ns_per_op=2145.833 sys_ns_per_op=270.833 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c1] arm=a1 checksum = 1310720
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=1135.090 user_ns_per_op=2182.292 sys_ns_per_op=272.569 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c1] arm=a2 checksum = 1310720
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1099.906 user_ns_per_op=2147.569 sys_ns_per_op=263.889 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c1] arm=a1x checksum = 1310720
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1073.273 user_ns_per_op=1791.667 sys_ns_per_op=538.194 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c1] arm=ax checksum = 1310720
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1722.691 user_ns_per_op=940.972 sys_ns_per_op=2052.083 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c1] arm=a1c checksum = 1310720
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1752.055 user_ns_per_op=0.000 sys_ns_per_op=3079.861 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c1] arm=ac checksum = 1310720
+ok: group read-rand-4k cross-binary [ladder-c1] checksum = 1310720
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=1099.012 user_ns_per_op=251.736 sys_ns_per_op=2111.111 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=1097.438 user_ns_per_op=560.764 sys_ns_per_op=1802.083 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c2] arm=a1 checksum = 1310720
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=1105.977 user_ns_per_op=265.625 sys_ns_per_op=2067.708 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c2] arm=a2 checksum = 1310720
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1063.734 user_ns_per_op=2059.028 sys_ns_per_op=263.889 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c2] arm=a1x checksum = 1310720
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1086.449 user_ns_per_op=2088.542 sys_ns_per_op=258.681 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c2] arm=ax checksum = 1310720
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1834.141 user_ns_per_op=1598.958 sys_ns_per_op=1484.375 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c2] arm=a1c checksum = 1310720
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1688.262 user_ns_per_op=2479.167 sys_ns_per_op=468.750 checksum=1310720 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-rand-4k [ladder-c2] arm=ac checksum = 1310720
+ok: group read-rand-4k cross-binary [ladder-c2] checksum = 1310720
+--- read family group (tail 4k, w01-comp-eofmix-4k shape) ---
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=844.855 user_ns_per_op=0.000 sys_ns_per_op=1465.278 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=745.301 user_ns_per_op=1362.847 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder] arm=a1 checksum = 659456
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=811.254 user_ns_per_op=0.000 sys_ns_per_op=1486.111 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder] arm=a2 checksum = 659456
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=1051.980 user_ns_per_op=1689.236 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder] arm=a1x checksum = 659456
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1011.602 user_ns_per_op=1651.042 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder] arm=ax checksum = 659456
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1330.363 user_ns_per_op=1791.667 sys_ns_per_op=182.292 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder] arm=a1c checksum = 659456
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=2119.859 user_ns_per_op=3039.931 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder] arm=ac checksum = 659456
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=794.359 user_ns_per_op=1461.806 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=774.129 user_ns_per_op=1416.667 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c1] arm=a1 checksum = 659456
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=745.109 user_ns_per_op=1357.639 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c1] arm=a2 checksum = 659456
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=954.137 user_ns_per_op=1572.917 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c1] arm=a1x checksum = 659456
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=960.281 user_ns_per_op=1536.458 sys_ns_per_op=39.931 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c1] arm=ax checksum = 659456
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1518.441 user_ns_per_op=1798.611 sys_ns_per_op=333.333 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c1] arm=a1c checksum = 659456
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1406.699 user_ns_per_op=1876.736 sys_ns_per_op=173.611 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c1] arm=ac checksum = 659456
+ok: group read-tail-4k cross-binary [ladder-c1] checksum = 659456
+arm=A0_raw_pread size=4096 ops=256 ns_per_op=810.723 user_ns_per_op=1482.639 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=807.027 user_ns_per_op=1472.222 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c2] arm=a1 checksum = 659456
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=824.859 user_ns_per_op=0.000 sys_ns_per_op=1418.403 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c2] arm=a2 checksum = 659456
+arm=A1x_native_read_exact_at size=4096 ops=256 ns_per_op=998.719 user_ns_per_op=1600.694 sys_ns_per_op=36.458 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c2] arm=a1x checksum = 659456
+arm=AX_sluice_read_exact_at size=4096 ops=256 ns_per_op=1090.035 user_ns_per_op=10.417 sys_ns_per_op=1710.069 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c2] arm=ax checksum = 659456
+arm=A1c_native_read_exact size=4096 ops=256 ns_per_op=1410.660 user_ns_per_op=1887.153 sys_ns_per_op=166.667 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c2] arm=a1c checksum = 659456
+arm=AC_sluice_read_exact size=4096 ops=256 ns_per_op=1494.637 user_ns_per_op=2128.472 sys_ns_per_op=0.000 checksum=659456 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-tail-4k [ladder-c2] arm=ac checksum = 659456
+ok: group read-tail-4k cross-binary [ladder-c2] checksum = 659456
+--- read family group (1 B, w01-hf-1b shape) ---
+arm=A0_raw_pread size=1 ops=1024 ns_per_op=1312.561 user_ns_per_op=1263.455 sys_ns_per_op=16.493 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=1024 ns_per_op=777.607 user_ns_per_op=776.910 sys_ns_per_op=0.000 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder] arm=a1 checksum = 1280
+arm=A2_sluice_read_at size=1 ops=1024 ns_per_op=778.402 user_ns_per_op=0.000 sys_ns_per_op=777.778 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder] arm=a2 checksum = 1280
+arm=A1x_native_read_exact_at size=1 ops=1024 ns_per_op=794.402 user_ns_per_op=666.667 sys_ns_per_op=135.417 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder] arm=a1x checksum = 1280
+arm=AX_sluice_read_exact_at size=1 ops=1024 ns_per_op=822.433 user_ns_per_op=401.476 sys_ns_per_op=417.969 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder] arm=ax checksum = 1280
+arm=A1c_native_read_exact size=1 ops=1024 ns_per_op=771.804 user_ns_per_op=779.514 sys_ns_per_op=0.000 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder] arm=a1c checksum = 1280
+arm=AC_sluice_read_exact size=1 ops=1024 ns_per_op=816.398 user_ns_per_op=407.118 sys_ns_per_op=406.684 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder] arm=ac checksum = 1280
+arm=A0_raw_pread size=1 ops=1024 ns_per_op=798.811 user_ns_per_op=800.781 sys_ns_per_op=0.000 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=1024 ns_per_op=775.342 user_ns_per_op=384.115 sys_ns_per_op=390.625 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c1] arm=a1 checksum = 1280
+arm=A2_sluice_read_at size=1 ops=1024 ns_per_op=768.798 user_ns_per_op=411.458 sys_ns_per_op=366.753 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c1] arm=a2 checksum = 1280
+arm=A1x_native_read_exact_at size=1 ops=1024 ns_per_op=771.012 user_ns_per_op=381.076 sys_ns_per_op=391.493 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c1] arm=a1x checksum = 1280
+arm=AX_sluice_read_exact_at size=1 ops=1024 ns_per_op=827.202 user_ns_per_op=3.038 sys_ns_per_op=818.142 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c1] arm=ax checksum = 1280
+arm=A1c_native_read_exact size=1 ops=1024 ns_per_op=779.224 user_ns_per_op=0.000 sys_ns_per_op=777.778 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c1] arm=a1c checksum = 1280
+arm=AC_sluice_read_exact size=1 ops=1024 ns_per_op=793.087 user_ns_per_op=0.000 sys_ns_per_op=806.424 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c1] arm=ac checksum = 1280
+ok: group read-1b cross-binary [ladder-c1] checksum = 1280
+arm=A0_raw_pread size=1 ops=1024 ns_per_op=812.248 user_ns_per_op=283.420 sys_ns_per_op=525.174 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=1024 ns_per_op=635.665 user_ns_per_op=644.097 sys_ns_per_op=0.000 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c2] arm=a1 checksum = 1280
+arm=A2_sluice_read_at size=1 ops=1024 ns_per_op=717.487 user_ns_per_op=357.639 sys_ns_per_op=357.205 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c2] arm=a2 checksum = 1280
+arm=A1x_native_read_exact_at size=1 ops=1024 ns_per_op=778.811 user_ns_per_op=271.701 sys_ns_per_op=504.340 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c2] arm=a1x checksum = 1280
+arm=AX_sluice_read_exact_at size=1 ops=1024 ns_per_op=818.299 user_ns_per_op=407.552 sys_ns_per_op=407.118 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c2] arm=ax checksum = 1280
+arm=A1c_native_read_exact size=1 ops=1024 ns_per_op=812.333 user_ns_per_op=403.212 sys_ns_per_op=403.212 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c2] arm=a1c checksum = 1280
+arm=AC_sluice_read_exact size=1 ops=1024 ns_per_op=789.197 user_ns_per_op=394.097 sys_ns_per_op=395.399 checksum=1280 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1b [ladder-c2] arm=ac checksum = 1280
+ok: group read-1b cross-binary [ladder-c2] checksum = 1280
+--- read family group (1 MiB seq, w01-seq-1m shape) ---
+arm=A0_raw_pread size=1048576 ops=16 ns_per_op=190705.188 user_ns_per_op=245650.000 sys_ns_per_op=192200.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1048576 ops=16 ns_per_op=142314.812 user_ns_per_op=213925.000 sys_ns_per_op=164325.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder] arm=a1 checksum = 25165824
+arm=A2_sluice_read_at size=1048576 ops=16 ns_per_op=146911.938 user_ns_per_op=202850.000 sys_ns_per_op=175675.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder] arm=a2 checksum = 25165824
+arm=A1x_native_read_exact_at size=1048576 ops=16 ns_per_op=159137.188 user_ns_per_op=289050.000 sys_ns_per_op=115525.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder] arm=a1x checksum = 25165824
+arm=AX_sluice_read_exact_at size=1048576 ops=16 ns_per_op=166336.938 user_ns_per_op=248500.000 sys_ns_per_op=171350.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder] arm=ax checksum = 25165824
+arm=A1c_native_read_exact size=1048576 ops=16 ns_per_op=166006.500 user_ns_per_op=271425.000 sys_ns_per_op=148625.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder] arm=a1c checksum = 25165824
+arm=AC_sluice_read_exact size=1048576 ops=16 ns_per_op=169744.938 user_ns_per_op=272650.000 sys_ns_per_op=150725.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder] arm=ac checksum = 25165824
+arm=A0_raw_pread size=1048576 ops=16 ns_per_op=151143.938 user_ns_per_op=263500.000 sys_ns_per_op=120300.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1048576 ops=16 ns_per_op=164240.562 user_ns_per_op=245075.000 sys_ns_per_op=172925.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c1] arm=a1 checksum = 25165824
+arm=A2_sluice_read_at size=1048576 ops=16 ns_per_op=149977.875 user_ns_per_op=246850.000 sys_ns_per_op=148650.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c1] arm=a2 checksum = 25165824
+arm=A1x_native_read_exact_at size=1048576 ops=16 ns_per_op=145667.812 user_ns_per_op=246075.000 sys_ns_per_op=131550.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c1] arm=a1x checksum = 25165824
+arm=AX_sluice_read_exact_at size=1048576 ops=16 ns_per_op=165983.875 user_ns_per_op=223600.000 sys_ns_per_op=198500.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c1] arm=ax checksum = 25165824
+arm=A1c_native_read_exact size=1048576 ops=16 ns_per_op=165066.250 user_ns_per_op=293250.000 sys_ns_per_op=121925.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c1] arm=a1c checksum = 25165824
+arm=AC_sluice_read_exact size=1048576 ops=16 ns_per_op=173088.500 user_ns_per_op=234475.000 sys_ns_per_op=190125.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c1] arm=ac checksum = 25165824
+ok: group read-1m cross-binary [ladder-c1] checksum = 25165824
+arm=A0_raw_pread size=1048576 ops=16 ns_per_op=217112.500 user_ns_per_op=283600.000 sys_ns_per_op=255375.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1048576 ops=16 ns_per_op=170314.375 user_ns_per_op=247625.000 sys_ns_per_op=175225.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c2] arm=a1 checksum = 25165824
+arm=A2_sluice_read_at size=1048576 ops=16 ns_per_op=177477.812 user_ns_per_op=276800.000 sys_ns_per_op=152550.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c2] arm=a2 checksum = 25165824
+arm=A1x_native_read_exact_at size=1048576 ops=16 ns_per_op=152156.312 user_ns_per_op=231025.000 sys_ns_per_op=153700.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c2] arm=a1x checksum = 25165824
+arm=AX_sluice_read_exact_at size=1048576 ops=16 ns_per_op=163406.875 user_ns_per_op=241975.000 sys_ns_per_op=176650.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c2] arm=ax checksum = 25165824
+arm=A1c_native_read_exact size=1048576 ops=16 ns_per_op=168238.688 user_ns_per_op=271925.000 sys_ns_per_op=148700.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c2] arm=a1c checksum = 25165824
+arm=AC_sluice_read_exact size=1048576 ops=16 ns_per_op=167514.000 user_ns_per_op=270200.000 sys_ns_per_op=147475.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-1m [ladder-c2] arm=ac checksum = 25165824
+ok: group read-1m cross-binary [ladder-c2] checksum = 25165824
+--- a3 stub inventory (excluded from equality group) ---
+arm=A3_nosyscall_stub size=4096 ops=64 ns_per_op=10.375 user_ns_per_op=18.750 sys_ns_per_op=43.750 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=4096 ops=64 ns_per_op=7.438 user_ns_per_op=25.000 sys_ns_per_op=25.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+arm=A3_nosyscall_stub size=4096 ops=64 ns_per_op=8.609 user_ns_per_op=50.000 sys_ns_per_op=0.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+--- write family group (per-binary scratch, content_ok=1) ---
+wrote 1048576 bytes
+arm=W0_raw_pwrite size=4096 ops=32 ns_per_op=1184.406 user_ns_per_op=666.667 sys_ns_per_op=666.667 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=w0 content_ok = 1
+arm=W1_native_write_at size=4096 ops=32 ns_per_op=964.812 user_ns_per_op=0.000 sys_ns_per_op=1083.333 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=w1 content_ok = 1
+ok: write group [ladder] arm=w1 checksum = 196608
+ok: write group [ladder] arm=w1 content_hash = 0x6320b3b98860d183
+arm=W2_sluice_write_at size=4096 ops=32 ns_per_op=1163.719 user_ns_per_op=0.000 sys_ns_per_op=1375.000 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=w2 content_ok = 1
+ok: write group [ladder] arm=w2 checksum = 196608
+ok: write group [ladder] arm=w2 content_hash = 0x6320b3b98860d183
+arm=W1x_native_write_all_at size=4096 ops=32 ns_per_op=999.094 user_ns_per_op=583.333 sys_ns_per_op=583.333 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=w1x content_ok = 1
+ok: write group [ladder] arm=w1x checksum = 196608
+ok: write group [ladder] arm=w1x content_hash = 0x6320b3b98860d183
+arm=WX_sluice_write_all_at size=4096 ops=32 ns_per_op=1194.812 user_ns_per_op=0.000 sys_ns_per_op=1312.500 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=wx content_ok = 1
+ok: write group [ladder] arm=wx checksum = 196608
+ok: write group [ladder] arm=wx content_hash = 0x6320b3b98860d183
+arm=W1c_native_write_all size=4096 ops=32 ns_per_op=1223.188 user_ns_per_op=666.667 sys_ns_per_op=687.500 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=w1c content_ok = 1
+ok: write group [ladder] arm=w1c checksum = 196608
+ok: write group [ladder] arm=w1c content_hash = 0x6320b3b98860d183
+arm=WC_sluice_write_all size=4096 ops=32 ns_per_op=1222.250 user_ns_per_op=708.333 sys_ns_per_op=708.333 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder] arm=wc content_ok = 1
+ok: write group [ladder] arm=wc checksum = 196608
+ok: write group [ladder] arm=wc content_hash = 0x6320b3b98860d183
+wrote 1048576 bytes
+arm=W0_raw_pwrite size=4096 ops=32 ns_per_op=1140.844 user_ns_per_op=1500.000 sys_ns_per_op=0.000 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=w0 content_ok = 1
+arm=W1_native_write_at size=4096 ops=32 ns_per_op=1004.375 user_ns_per_op=1145.833 sys_ns_per_op=0.000 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=w1 content_ok = 1
+ok: write group [ladder-c1] arm=w1 checksum = 196608
+ok: write group [ladder-c1] arm=w1 content_hash = 0x6320b3b98860d183
+arm=W2_sluice_write_at size=4096 ops=32 ns_per_op=1185.094 user_ns_per_op=1312.500 sys_ns_per_op=0.000 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=w2 content_ok = 1
+ok: write group [ladder-c1] arm=w2 checksum = 196608
+ok: write group [ladder-c1] arm=w2 content_hash = 0x6320b3b98860d183
+arm=W1x_native_write_all_at size=4096 ops=32 ns_per_op=1157.375 user_ns_per_op=645.833 sys_ns_per_op=645.833 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=w1x content_ok = 1
+ok: write group [ladder-c1] arm=w1x checksum = 196608
+ok: write group [ladder-c1] arm=w1x content_hash = 0x6320b3b98860d183
+arm=WX_sluice_write_all_at size=4096 ops=32 ns_per_op=1147.688 user_ns_per_op=625.000 sys_ns_per_op=666.667 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=wx content_ok = 1
+ok: write group [ladder-c1] arm=wx checksum = 196608
+ok: write group [ladder-c1] arm=wx content_hash = 0x6320b3b98860d183
+arm=W1c_native_write_all size=4096 ops=32 ns_per_op=1007.250 user_ns_per_op=562.500 sys_ns_per_op=562.500 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=w1c content_ok = 1
+ok: write group [ladder-c1] arm=w1c checksum = 196608
+ok: write group [ladder-c1] arm=w1c content_hash = 0x6320b3b98860d183
+arm=WC_sluice_write_all size=4096 ops=32 ns_per_op=1227.938 user_ns_per_op=1354.167 sys_ns_per_op=0.000 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c1] arm=wc content_ok = 1
+ok: write group [ladder-c1] arm=wc checksum = 196608
+ok: write group [ladder-c1] arm=wc content_hash = 0x6320b3b98860d183
+ok: write group cross-binary [ladder-c1] checksum = 196608
+ok: write group cross-binary [ladder-c1] content_hash = 0x6320b3b98860d183
+wrote 1048576 bytes
+arm=W0_raw_pwrite size=4096 ops=32 ns_per_op=1181.812 user_ns_per_op=645.833 sys_ns_per_op=666.667 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=w0 content_ok = 1
+arm=W1_native_write_at size=4096 ops=32 ns_per_op=1006.156 user_ns_per_op=1208.333 sys_ns_per_op=0.000 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=w1 content_ok = 1
+ok: write group [ladder-c2] arm=w1 checksum = 196608
+ok: write group [ladder-c2] arm=w1 content_hash = 0x6320b3b98860d183
+arm=W2_sluice_write_at size=4096 ops=32 ns_per_op=1177.000 user_ns_per_op=687.500 sys_ns_per_op=687.500 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=w2 content_ok = 1
+ok: write group [ladder-c2] arm=w2 checksum = 196608
+ok: write group [ladder-c2] arm=w2 content_hash = 0x6320b3b98860d183
+arm=W1x_native_write_all_at size=4096 ops=32 ns_per_op=1000.344 user_ns_per_op=562.500 sys_ns_per_op=562.500 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=w1x content_ok = 1
+ok: write group [ladder-c2] arm=w1x checksum = 196608
+ok: write group [ladder-c2] arm=w1x content_hash = 0x6320b3b98860d183
+arm=WX_sluice_write_all_at size=4096 ops=32 ns_per_op=1192.688 user_ns_per_op=666.667 sys_ns_per_op=666.667 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=wx content_ok = 1
+ok: write group [ladder-c2] arm=wx checksum = 196608
+ok: write group [ladder-c2] arm=wx content_hash = 0x6320b3b98860d183
+arm=W1c_native_write_all size=4096 ops=32 ns_per_op=1050.625 user_ns_per_op=583.333 sys_ns_per_op=583.333 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=w1c content_ok = 1
+ok: write group [ladder-c2] arm=w1c checksum = 196608
+ok: write group [ladder-c2] arm=w1c content_hash = 0x6320b3b98860d183
+arm=WC_sluice_write_all size=4096 ops=32 ns_per_op=1067.094 user_ns_per_op=604.167 sys_ns_per_op=604.167 checksum=196608 content_hash=0x6320b3b98860d183 content_ok=1
+ok: write [ladder-c2] arm=wc content_ok = 1
+ok: write group [ladder-c2] arm=wc checksum = 196608
+ok: write group [ladder-c2] arm=wc content_hash = 0x6320b3b98860d183
+ok: write group cross-binary [ladder-c2] checksum = 196608
+ok: write group cross-binary [ladder-c2] content_hash = 0x6320b3b98860d183
+--- metadata arms (inventory; cross-binary equality per arm) ---
+arm=M0_raw_open_close size=4096 ops=8 ns_per_op=2614.750 user_ns_per_op=3583.333 sys_ns_per_op=0.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+arm=M0_raw_open_close size=4096 ops=8 ns_per_op=2707.000 user_ns_per_op=1833.333 sys_ns_per_op=1833.333 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m0oc cross-binary [ladder-c1] checksum = 12
+arm=M0_raw_open_close size=4096 ops=8 ns_per_op=2545.125 user_ns_per_op=1666.667 sys_ns_per_op=1666.667 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m0oc cross-binary [ladder-c2] checksum = 12
+arm=M0_raw_fstat size=4096 ops=8 ns_per_op=811.500 user_ns_per_op=1500.000 sys_ns_per_op=0.000 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+arm=M0_raw_fstat size=4096 ops=8 ns_per_op=823.625 user_ns_per_op=833.333 sys_ns_per_op=750.000 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m0fi cross-binary [ladder-c1] checksum = 1810402015081800
+arm=M0_raw_fstat size=4096 ops=8 ns_per_op=689.000 user_ns_per_op=1416.667 sys_ns_per_op=0.000 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m0fi cross-binary [ladder-c2] checksum = 1810402015081800
+arm=M1_native_open_close size=4096 ops=8 ns_per_op=2632.125 user_ns_per_op=0.000 sys_ns_per_op=4250.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=4096 ops=8 ns_per_op=2597.625 user_ns_per_op=1833.333 sys_ns_per_op=1750.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m1oc cross-binary [ladder-c1] checksum = 12
+arm=M1_native_open_close size=4096 ops=8 ns_per_op=2576.125 user_ns_per_op=1666.667 sys_ns_per_op=1666.667 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m1oc cross-binary [ladder-c2] checksum = 12
+arm=M1_native_file_info size=4096 ops=8 ns_per_op=673.250 user_ns_per_op=1333.333 sys_ns_per_op=0.000 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=4096 ops=8 ns_per_op=821.875 user_ns_per_op=833.333 sys_ns_per_op=750.000 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m1fi cross-binary [ladder-c1] checksum = 1810402015081800
+arm=M1_native_file_info size=4096 ops=8 ns_per_op=826.875 user_ns_per_op=750.000 sys_ns_per_op=833.333 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m1fi cross-binary [ladder-c2] checksum = 1810402015081800
+arm=M1_native_size size=4096 ops=8 ns_per_op=820.375 user_ns_per_op=833.333 sys_ns_per_op=750.000 checksum=805306368 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=4096 ops=8 ns_per_op=669.000 user_ns_per_op=0.000 sys_ns_per_op=1333.333 checksum=805306368 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m1sz cross-binary [ladder-c1] checksum = 805306368
+arm=M1_native_size size=4096 ops=8 ns_per_op=815.625 user_ns_per_op=750.000 sys_ns_per_op=833.333 checksum=805306368 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m1sz cross-binary [ladder-c2] checksum = 805306368
+arm=M2_sluice_open_close size=4096 ops=8 ns_per_op=2164.250 user_ns_per_op=3000.000 sys_ns_per_op=0.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=4096 ops=8 ns_per_op=2611.875 user_ns_per_op=1666.667 sys_ns_per_op=1666.667 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m2oc cross-binary [ladder-c1] checksum = 12
+arm=M2_sluice_open_close size=4096 ops=8 ns_per_op=2632.375 user_ns_per_op=3333.333 sys_ns_per_op=0.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m2oc cross-binary [ladder-c2] checksum = 12
+arm=M2_sluice_file_info size=4096 ops=8 ns_per_op=828.625 user_ns_per_op=833.333 sys_ns_per_op=833.333 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=4096 ops=8 ns_per_op=821.875 user_ns_per_op=1333.333 sys_ns_per_op=0.000 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m2fi cross-binary [ladder-c1] checksum = 1810402015081800
+arm=M2_sluice_file_info size=4096 ops=8 ns_per_op=819.500 user_ns_per_op=0.000 sys_ns_per_op=1333.333 checksum=1810402015081800 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m2fi cross-binary [ladder-c2] checksum = 1810402015081800
+arm=M2_sluice_size size=4096 ops=8 ns_per_op=682.375 user_ns_per_op=0.000 sys_ns_per_op=1416.667 checksum=805306368 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=4096 ops=8 ns_per_op=670.000 user_ns_per_op=666.667 sys_ns_per_op=666.667 checksum=805306368 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m2sz cross-binary [ladder-c1] checksum = 805306368
+arm=M2_sluice_size size=4096 ops=8 ns_per_op=682.125 user_ns_per_op=666.667 sys_ns_per_op=666.667 checksum=805306368 content_hash=0x0000000000000000 content_ok=-1
+ok: meta arm=m2sz cross-binary [ladder-c2] checksum = 805306368
+--- closed-state spot check (rejection path) ---
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=9.844 user_ns_per_op=62.500 sys_ns_per_op=0.000 checksum=147456 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=10.203 user_ns_per_op=18.750 sys_ns_per_op=18.750 checksum=147456 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=10.141 user_ns_per_op=0.000 sys_ns_per_op=62.500 checksum=147456 content_hash=0x0000000000000000 content_ok=-1
+--- Layer C resolution (plan §2, §4.2) ---
+W01: Layer C collapses onto Layer B for all W01 cells (single-span-one-buffer shape; preregistered structural fact) — no kit Layer C cell arm.
+PARQUET preadv competition arm (pq-strategy-gather-native): dududu-side strategy arm on a new local branch cut from r1-parquet-sluice-bench (plan §4.1) — measurement-phase work; the existing replay arm path is verified runnable below.
+PARQUET copy_file_range (pq-cfr): NOT_APPLICABLE_SHAPE — no file-to-file transfer in a Parquet reader (plan §4.2 row).
+--- Layer C diagnostics via ladder-4455d98d (P3 kit-source build; enters no P4 cell) ---
+wrote 4194304 bytes
+arm=AV0_kpread_group size=4096 ops=64 ns_per_op=3410.781 user_ns_per_op=8254.464 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=4 issued_per_group=4096
+ok: diag av group reference content_ok = 1
+arm=AV1_preadv_group size=4096 ops=64 ns_per_op=1113.406 user_ns_per_op=5366.071 sys_ns_per_op=566.964 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=1 issued_per_group=4096
+ok: diag av arm=av1 checksum = 655360
+ok: diag av arm=av1 content_hash = 0x519a9a04bd59f683
+arm=AVS_sluice_kread_at_group size=4096 ops=64 ns_per_op=2905.484 user_ns_per_op=6861.607 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=4 issued_per_group=4096
+ok: diag av arm=avs checksum = 655360
+ok: diag av arm=avs content_hash = 0x519a9a04bd59f683
+arm=RPL0_unmerged_replay size=4096 ops=64 ns_per_op=10079.891 user_ns_per_op=34354.167 sys_ns_per_op=10208.333 checksum=5242880 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=9338.938 user_ns_per_op=38100.694 sys_ns_per_op=7222.222 checksum=9899736 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=8192 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=1 issued_per_group=61978 requested_per_group=32768
+ok: diag rplt req_digest = 0x4a6717aa27df416a
+ok: diag rplt ref_digest = 0x833be9a54ea3d951
+ok: diag rplt outcome_digest = 0x833be9a54ea3d951
+arm=RPLD_union_dedup size=4096 ops=64 ns_per_op=10779.578 user_ns_per_op=39451.389 sys_ns_per_op=6461.806 checksum=5242880 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=0 dedup=1 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+ok: diag rpld req_digest = 0x4a6717aa27df416a
+ok: diag rpld ref_digest = 0x833be9a54ea3d951
+ok: diag rpld outcome_digest = 0x833be9a54ea3d951
+wrote 2097152 bytes
+arm=CP1_pread_pwrite_loop size=65536 ops=32 ns_per_op=16957.562 user_ns_per_op=0.000 sys_ns_per_op=25319.444 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: diag cp arm=cp1 content_ok = 1
+ok: diag cp arm=cp1 dst==src = 0x854b91b602bbc983
+arm=CP1S_sluice_read_write_loop size=65536 ops=32 ns_per_op=14600.281 user_ns_per_op=2791.667 sys_ns_per_op=17208.333 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: diag cp arm=cp1s content_ok = 1
+ok: diag cp arm=cp1s dst==src = 0x854b91b602bbc983
+ok: diag cp arm=cp1s content_hash = 0x854b91b602bbc983
+ok: diag cp arm=cp1s checksum = 4718592
+arm=CP2_copy_file_range size=65536 ops=32 ns_per_op=16017.406 user_ns_per_op=0.000 sys_ns_per_op=25083.333 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: diag cp arm=cp2 content_ok = 1
+ok: diag cp arm=cp2 dst==src = 0x854b91b602bbc983
+ok: diag cp arm=cp2 content_hash = 0x854b91b602bbc983
+ok: diag cp arm=cp2 checksum = 4718592
+arm=CP3_sendfile size=65536 ops=32 ns_per_op=15784.375 user_ns_per_op=12166.667 sys_ns_per_op=12194.444 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: diag cp arm=cp3 content_ok = 1
+ok: diag cp arm=cp3 dst==src = 0x854b91b602bbc983
+ok: diag cp arm=cp3 content_hash = 0x854b91b602bbc983
+ok: diag cp arm=cp3 checksum = 4718592
+--- Parquet arm runnability (one minimal smoke; frozen trace read-only) ---
+ok: parquet_bench sha256 = e24a6f5b993b95691d53f73730b3014f55f76b92299536516d4cdf9398f91d3a
+ok: frozen trace sha256 = a059e58fbc8771d78b23cd74afc3e1e7d26a09e230165b474dfc5b5cf1b53724
+ok: frozen trace-p2 sha256 = 4c67562626853ec75a9d48cb9626f283342db07c968bb8b7d893dd08a966950d
+ok: frozen dataset sha256 = 6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ok: parquet replay smoke exited 0 (raw: /home/jnhu/Source/Sluice/research/direct-beyond-parity/p4-raw/parquet-smoke-replay.txt)
+Replay/native/medium  235268305 ns    234311024 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium  233111052 ns    232504176 ns            3 replay_bytes=181.996M replay_requests=57
+ok: replay native line present = 1
+ok: replay sluice line present = 1
+ok: replay native requests = 57
+ok: replay sluice requests = 57
+ok: replay native bytes = 181.996M
+ok: replay sluice bytes = 181.996M
+ok: dataset digest self-declared by tool = 6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ok: frozen trace unchanged after smoke = a059e58fbc8771d78b23cd74afc3e1e7d26a09e230165b474dfc5b5cf1b53724
+ok: frozen dataset unchanged after smoke = 6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ok: dududu worktree clean = 0
+=== summary: 244 checks, 0 failures ===
+SMOKE_PASS

@@ -1,0 +1,161 @@
+# P4 W01 PMU diagnostic (perf stat instructions:u,cycles:u; warmup=0 reps=1; whole-process caliber; NEVER a wall source) — 2026-10-28T11:57:51+08:00 host E5 kernel 7.2.11-200.fc44.x86_64 perf_event_paranoid=2
+--- hf-1b.a2.c1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=686.096 user_ns_per_op=584.839 sys_ns_per_op=97.168 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+         3,719,216      instructions:u                                                        
+         4,265,416      cycles:u                                                              
+--- hf-1b.a2.b1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=661.572 user_ns_per_op=442.627 sys_ns_per_op=217.285 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+         3,719,391      instructions:u                                                        
+         3,622,511      cycles:u                                                              
+--- hf-1b.a1.b1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=642.990 user_ns_per_op=259.155 sys_ns_per_op=380.249 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+         3,546,395      instructions:u                                                        
+         3,032,138      cycles:u                                                              
+--- hf-4k.a2.c1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=1128.899 user_ns_per_op=1063.965 sys_ns_per_op=1062.988 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,481,916      instructions:u                                                        
+         9,030,223      cycles:u                                                              
+--- hf-4k.a2.b1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=1079.865 user_ns_per_op=1616.699 sys_ns_per_op=482.910 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,481,713      instructions:u                                                        
+         9,083,676      cycles:u                                                              
+--- hf-4k.a1.b1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=1026.857 user_ns_per_op=78.125 sys_ns_per_op=1993.164 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,437,545      instructions:u                                                        
+         9,027,501      cycles:u                                                              
+--- seq-1m.a2.c1
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=171905.625 user_ns_per_op=115837.500 sys_ns_per_op=172815.625 checksum=268435456 content_hash=0x0000000000000000 content_ok=-1
+       546,888,932      instructions:u                                                        
+       112,980,988      cycles:u                                                              
+--- seq-1m.a2.b1
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=162981.645 user_ns_per_op=97206.250 sys_ns_per_op=158915.625 checksum=268435456 content_hash=0x0000000000000000 content_ok=-1
+       546,888,944      instructions:u                                                        
+       113,059,032      cycles:u                                                              
+--- rand-4k.a2.c1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=1075.406 user_ns_per_op=1854.980 sys_ns_per_op=0.000 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,484,024      instructions:u                                                        
+         9,186,924      cycles:u                                                              
+--- rand-4k.a2.b1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=982.257 user_ns_per_op=1739.258 sys_ns_per_op=83.496 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,484,771      instructions:u                                                        
+         9,062,640      cycles:u                                                              
+--- comp-read.a1x.b1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=926.360 user_ns_per_op=1794.434 sys_ns_per_op=0.000 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,478,661      instructions:u                                                        
+         9,025,079      cycles:u                                                              
+--- comp-read.ax.b1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=891.141 user_ns_per_op=1454.102 sys_ns_per_op=324.219 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,610,833      instructions:u                                                        
+         9,081,409      cycles:u                                                              
+--- comp-read.a1x.c1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=840.361 user_ns_per_op=955.566 sys_ns_per_op=791.992 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,479,427      instructions:u                                                        
+         8,763,305      cycles:u                                                              
+--- comp-read.ax.c1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=897.238 user_ns_per_op=1320.801 sys_ns_per_op=498.535 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,547,296      instructions:u                                                        
+         9,065,280      cycles:u                                                              
+--- eofmix.a1x.b1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=711.654 user_ns_per_op=950.684 sys_ns_per_op=268.555 checksum=2099200 content_hash=0x0000000000000000 content_ok=-1
+        19,763,860      instructions:u                                                        
+         5,673,603      cycles:u                                                              
+--- eofmix.ax.b1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=738.346 user_ns_per_op=921.875 sys_ns_per_op=276.855 checksum=2099200 content_hash=0x0000000000000000 content_ok=-1
+        19,901,088      instructions:u                                                        
+         5,663,904      cycles:u                                                              
+--- eofmix.a1x.c1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=726.651 user_ns_per_op=755.371 sys_ns_per_op=469.238 checksum=2099200 content_hash=0x0000000000000000 content_ok=-1
+        19,763,814      instructions:u                                                        
+         5,580,378      cycles:u                                                              
+--- eofmix.ax.c1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=758.716 user_ns_per_op=1245.117 sys_ns_per_op=0.000 checksum=2099200 content_hash=0x0000000000000000 content_ok=-1
+        19,830,717      instructions:u                                                        
+         5,626,463      cycles:u                                                              
+--- cursor.a1c.b1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=934.386 user_ns_per_op=1499.023 sys_ns_per_op=339.844 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,501,065      instructions:u                                                        
+         8,919,874      cycles:u                                                              
+--- cursor.ac.b1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=951.166 user_ns_per_op=1492.676 sys_ns_per_op=339.844 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,593,317      instructions:u                                                        
+         9,054,804      cycles:u                                                              
+--- cursor.a1c.c1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=856.109 user_ns_per_op=642.090 sys_ns_per_op=1130.371 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,500,972      instructions:u                                                        
+         8,987,020      cycles:u                                                              
+--- cursor.ac.c1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=849.179 user_ns_per_op=1445.801 sys_ns_per_op=312.988 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,540,061      instructions:u                                                        
+         8,974,697      cycles:u                                                              
+--- meta-oc.m2oc.c1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1805.196 user_ns_per_op=1302.246 sys_ns_per_op=497.070 checksum=2048 content_hash=0x0000000000000000 content_ok=-1
+         3,182,981      instructions:u                                                        
+         2,566,443      cycles:u                                                              
+--- meta-oc.m2oc.b1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1760.622 user_ns_per_op=783.203 sys_ns_per_op=958.496 checksum=2048 content_hash=0x0000000000000000 content_ok=-1
+         3,182,874      instructions:u                                                        
+         2,650,259      cycles:u                                                              
+--- meta-oc.m1oc.b1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1761.345 user_ns_per_op=470.215 sys_ns_per_op=1277.344 checksum=2048 content_hash=0x0000000000000000 content_ok=-1
+         3,025,207      instructions:u                                                        
+         2,511,552      cycles:u                                                              
+--- meta-fi.m2fi.c1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=548.592 user_ns_per_op=417.725 sys_ns_per_op=127.502 checksum=2471802217925017600 content_hash=0x0000000000000000 content_ok=-1
+         4,502,206      instructions:u                                                        
+         4,463,365      cycles:u                                                              
+--- meta-fi.m2fi.b1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=537.388 user_ns_per_op=346.924 sys_ns_per_op=188.538 checksum=2471802217925017600 content_hash=0x0000000000000000 content_ok=-1
+         4,502,217      instructions:u                                                        
+         4,300,080      cycles:u                                                              
+--- meta-fi.m1fi.b1
+arm=M1_native_file_info size=0 ops=16384 ns_per_op=545.356 user_ns_per_op=533.569 sys_ns_per_op=10.315 checksum=2471802217925017600 content_hash=0x0000000000000000 content_ok=-1
+         4,501,711      instructions:u                                                        
+         4,323,174      cycles:u                                                              
+--- neg-1b.a1.c1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=547.549 user_ns_per_op=311.401 sys_ns_per_op=235.107 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+         3,546,323      instructions:u                                                        
+         2,767,920      cycles:u                                                              
+--- neg-1b.a2.c1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=567.542 user_ns_per_op=196.899 sys_ns_per_op=362.305 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+         3,719,369      instructions:u                                                        
+         2,984,396      cycles:u                                                              
+--- neg-4k.a1.c1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=968.949 user_ns_per_op=1640.137 sys_ns_per_op=163.574 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,437,704      instructions:u                                                        
+         8,885,363      cycles:u                                                              
+--- neg-4k.a2.c1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=881.949 user_ns_per_op=1298.340 sys_ns_per_op=486.816 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+        36,481,648      instructions:u                                                        
+         8,986,537      cycles:u                                                              
+--- write-4k.w2.c2
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=1088.979 user_ns_per_op=1005.859 sys_ns_per_op=92.773 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,586,510      instructions:u                                                        
+     2,259,868,000      cycles:u                                                              
+--- write-4k.w2.b1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=1063.469 user_ns_per_op=17.578 sys_ns_per_op=1057.617 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,586,492      instructions:u                                                        
+     2,259,632,241      cycles:u                                                              
+--- wcomp.w1x.b1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=1058.814 user_ns_per_op=21.484 sys_ns_per_op=1045.898 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,585,303      instructions:u                                                        
+     2,258,572,975      cycles:u                                                              
+--- wcomp.wx.b1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=1036.798 user_ns_per_op=31.250 sys_ns_per_op=1017.578 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,650,961      instructions:u                                                        
+     2,260,749,805      cycles:u                                                              
+--- wcomp.w1x.c2
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=1023.644 user_ns_per_op=19.531 sys_ns_per_op=1015.625 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,585,389      instructions:u                                                        
+     2,259,878,769      cycles:u                                                              
+--- wcomp.wx.c2
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=1113.357 user_ns_per_op=58.594 sys_ns_per_op=1064.453 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,630,673      instructions:u                                                        
+     2,258,453,846      cycles:u                                                              
+--- negw-4k.w1.c2
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=1274.969 user_ns_per_op=0.000 sys_ns_per_op=1275.391 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,564,190      instructions:u                                                        
+     2,259,755,314      cycles:u                                                              
+--- negw-4k.w2.c2
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=1061.133 user_ns_per_op=13.672 sys_ns_per_op=1053.711 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1
+     1,144,586,500      instructions:u                                                        
+     2,259,652,697      cycles:u                                                              

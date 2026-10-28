@@ -1,0 +1,128 @@
+# cell: write-sweep-64k — PMU + syscall diagnostic runs (plan §6; separate runs, never the wall source; Amendment 1 per-cell scratch)
+# date: 2026-10-27T05:36:40+08:00  host: E5
+# PMU: taskset -c 2 perf stat -e instructions:u,cycles:u $LADDER <arm> 65536 512 0 1 /tmp/sluice600/write-write-sweep-64k.bin
+=== perf stat w1 ===
+arm=W1_native_write_at size=65536 ops=512 ns_per_op=9655.148 user_ns_per_op=0.000 sys_ns_per_op=9646.484 checksum=33554432 content_hash=0xac16c39f5752c383 content_ok=1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 65536 512 0 1 /tmp/sluice600/write-write-sweep-64k.bin':
+
+     1,144,062,274      instructions:u                                                        
+     2,258,990,634      cycles:u                                                              
+
+       0.691744511 seconds time elapsed
+
+       0.659746000 seconds user
+       0.028850000 seconds sys
+
+
+=== perf stat w2 ===
+arm=W2_sluice_write_at size=65536 ops=512 ns_per_op=9557.783 user_ns_per_op=0.000 sys_ns_per_op=9548.828 checksum=33554432 content_hash=0xac16c39f5752c383 content_ok=1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w2 65536 512 0 1 /tmp/sluice600/write-write-sweep-64k.bin':
+
+     1,144,072,052      instructions:u                                                        
+     2,257,425,359      cycles:u                                                              
+
+       0.681745262 seconds time elapsed
+
+       0.659626000 seconds user
+       0.019905000 seconds sys
+
+
+=== perf stat w0 ===
+arm=W0_raw_pwrite size=65536 ops=512 ns_per_op=9239.604 user_ns_per_op=15.625 sys_ns_per_op=9214.844 checksum=33554432 content_hash=0xac16c39f5752c383 content_ok=1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w0 65536 512 0 1 /tmp/sluice600/write-write-sweep-64k.bin':
+
+     1,144,048,586      instructions:u                                                        
+     2,257,152,952      cycles:u                                                              
+
+       0.680543517 seconds time elapsed
+
+       0.656461000 seconds user
+       0.021860000 seconds sys
+
+
+
+# syscall runs: strace -c (ptrace counting, never wall source; prime adds exactly 1024 pwrite64 — timed count = total − 1024)
+=== strace -c w1 ===
+arm=W1_native_write_at size=65536 ops=512 ns_per_op=22590.656 user_ns_per_op=1712.891 sys_ns_per_op=11724.609 checksum=33554432 content_hash=0xac16c39f5752c383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 87.53    0.016023          10      1536           pwrite64
+ 11.35    0.002078          31        66           pread64
+  0.56    0.000103          51         2           munmap
+  0.21    0.000039           6         6           mprotect
+  0.16    0.000029           1        20           mmap
+  0.05    0.000009           9         1           write
+  0.03    0.000005           2         2           getrusage
+  0.02    0.000004           0         6           close
+  0.02    0.000004           0         7           fstat
+  0.01    0.000002           2         1           arch_prctl
+  0.01    0.000002           2         1           set_robust_list
+  0.01    0.000002           2         1           prlimit64
+  0.01    0.000002           2         1           getrandom
+  0.01    0.000002           2         1           rseq
+  0.01    0.000001           1         1           set_tid_address
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         7           openat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.018305          10      1669         1 total
+=== strace -c w2 ===
+arm=W2_sluice_write_at size=65536 ops=512 ns_per_op=23054.816 user_ns_per_op=0.000 sys_ns_per_op=13591.797 checksum=33554432 content_hash=0xac16c39f5752c383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 84.24    0.016261          10      1536           pwrite64
+ 15.64    0.003019          45        66           pread64
+  0.07    0.000013           0        20           mmap
+  0.03    0.000005           2         2           getrusage
+  0.02    0.000004           2         2           munmap
+  0.01    0.000001           1         1           write
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.019303          11      1669         1 total
+=== strace -c w0 ===
+arm=W0_raw_pwrite size=65536 ops=512 ns_per_op=21737.193 user_ns_per_op=0.000 sys_ns_per_op=12869.141 checksum=33554432 content_hash=0xac16c39f5752c383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 83.78    0.016292          10      1536           pwrite64
+ 16.03    0.003118          47        66           pread64
+  0.15    0.000030           1        20           mmap
+  0.03    0.000005           2         2           getrusage
+  0.01    0.000001           1         1           write
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         2           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.019446          11      1669         1 total

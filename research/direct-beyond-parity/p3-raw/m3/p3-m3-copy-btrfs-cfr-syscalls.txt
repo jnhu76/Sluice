@@ -1,0 +1,90 @@
+=== p3-m3-copy-btrfs-cfr arm=cp1 run=1 A(ops=1024) 2026-10-28T02:11:49+08:00 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=48582.228 user_ns_per_op=1117.188 sys_ns_per_op=28412.109 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.90    0.014996          14      1024           pwrite64
+ 49.10    0.014467          12      1154           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.029463          13      2178           total
+=== p3-m3-copy-btrfs-cfr arm=cp1 run=1 B(ops=512) ===
+arm=CP1_pread_pwrite_loop size=65536 ops=512 ns_per_op=53042.545 user_ns_per_op=404.297 sys_ns_per_op=32445.312 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 52.52    0.008819          17       512           pwrite64
+ 47.48    0.007973          13       578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016792          15      1090           total
+=== p3-m3-copy-btrfs-cfr arm=cp1 run=2 A(ops=1024) 2026-10-28T02:11:51+08:00 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=53066.720 user_ns_per_op=1975.586 sys_ns_per_op=31110.352 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 51.98    0.016920          16      1024           pwrite64
+ 48.02    0.015632          13      1154           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.032552          14      2178           total
+=== p3-m3-copy-btrfs-cfr arm=cp1 run=2 B(ops=512) ===
+arm=CP1_pread_pwrite_loop size=65536 ops=512 ns_per_op=54263.672 user_ns_per_op=708.984 sys_ns_per_op=32570.312 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 55.21    0.008890          17       512           pwrite64
+ 44.79    0.007213          12       578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016103          14      1090           total
+=== p3-m3-copy-btrfs-cfr arm=cp1 run=3 A(ops=1024) 2026-10-28T02:11:52+08:00 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=49657.124 user_ns_per_op=1162.109 sys_ns_per_op=29552.734 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.34    0.015960          15      1024           pwrite64
+ 49.66    0.015747          13      1154           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.031707          14      2178           total
+=== p3-m3-copy-btrfs-cfr arm=cp1 run=3 B(ops=512) ===
+arm=CP1_pread_pwrite_loop size=65536 ops=512 ns_per_op=53131.783 user_ns_per_op=3228.516 sys_ns_per_op=29376.953 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 50.01    0.007920          15       512           pwrite64
+ 49.99    0.007917          13       578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015837          14      1090           total
+=== p3-m3-copy-btrfs-cfr arm=cp2 run=1 A(ops=1024) 2026-10-28T02:11:53+08:00 ===
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=22864.960 user_ns_per_op=786.133 sys_ns_per_op=11354.492 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009381           9      1024           copy_file_range
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009381           9      1024           total
+=== p3-m3-copy-btrfs-cfr arm=cp2 run=1 B(ops=512) ===
+arm=CP2_copy_file_range size=65536 ops=512 ns_per_op=23093.535 user_ns_per_op=371.094 sys_ns_per_op=11916.016 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004884           9       512           copy_file_range
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004884           9       512           total
+=== p3-m3-copy-btrfs-cfr arm=cp2 run=2 A(ops=1024) 2026-10-28T02:11:54+08:00 ===
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=22084.072 user_ns_per_op=1307.617 sys_ns_per_op=10683.594 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.008770           8      1024           copy_file_range
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.008770           8      1024           total
+=== p3-m3-copy-btrfs-cfr arm=cp2 run=2 B(ops=512) ===
+arm=CP2_copy_file_range size=65536 ops=512 ns_per_op=21856.311 user_ns_per_op=507.812 sys_ns_per_op=11220.703 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004651           9       512           copy_file_range
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004651           9       512           total
+=== p3-m3-copy-btrfs-cfr arm=cp2 run=3 A(ops=1024) 2026-10-28T02:11:55+08:00 ===
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=21771.343 user_ns_per_op=591.797 sys_ns_per_op=11240.234 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009252           9      1024           copy_file_range
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009252           9      1024           total
+=== p3-m3-copy-btrfs-cfr arm=cp2 run=3 B(ops=512) ===
+arm=CP2_copy_file_range size=65536 ops=512 ns_per_op=22771.113 user_ns_per_op=0.000 sys_ns_per_op=12310.547 checksum=33554432 content_hash=0x44e9e07165896383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x44e9e07165896383 dst_size=33554432
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005040           9       512           copy_file_range
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005040           9       512           total

@@ -1,0 +1,157 @@
+# p5-strace-comp-read (strace -c integral counts, 3 repeats/arm; never a wall source) — 2026-10-28T12:00:25Z host E5 kernel 7.2.11-200.fc44.x86_64
+--- ladder.ax rep1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12928.184 user_ns_per_op=422.712 sys_ns_per_op=4131.278 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 97.78    0.014117           1      7170           pread64
+  0.97    0.000140           7        19           mmap
+  0.34    0.000049           7         7           openat
+  0.14    0.000020           2         7           fstat
+  0.14    0.000020          20         1           munmap
+  0.10    0.000015          15         1           write
+  0.10    0.000015           2         6           close
+  0.10    0.000015           5         3           brk
+  0.09    0.000013           3         4           read
+  0.08    0.000011           1         6           mprotect
+  0.04    0.000006           3         2           getrusage
+  0.03    0.000005           5         1           getrandom
+  0.03    0.000004           4         1         1 access
+  0.03    0.000004           4         1           prlimit64
+  0.02    0.000003           3         1           futex
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.014437           1      7235         1 total
+--- ladder.ax rep2
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12251.493 user_ns_per_op=639.230 sys_ns_per_op=3625.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 97.96    0.011951           1      7170           pread64
+  0.93    0.000113           5        19           mmap
+  0.24    0.000029           4         7           openat
+  0.22    0.000027           4         6           mprotect
+  0.15    0.000018          18         1           write
+  0.11    0.000014           2         7           fstat
+  0.10    0.000012           3         4           read
+  0.09    0.000011           1         6           close
+  0.07    0.000008           8         1           munmap
+  0.03    0.000004           1         3           brk
+  0.02    0.000003           1         2           getrusage
+  0.02    0.000002           2         1           set_tid_address
+  0.02    0.000002           2         1           getrandom
+  0.02    0.000002           2         1           rseq
+  0.01    0.000001           1         1           arch_prctl
+  0.01    0.000001           1         1           futex
+  0.01    0.000001           1         1           set_robust_list
+  0.01    0.000001           1         1           prlimit64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012200           1      7235         1 total
+--- ladder.ax rep3
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12347.562 user_ns_per_op=268.555 sys_ns_per_op=3960.240 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.85    0.012980           1      7170           pread64
+  0.10    0.000013          13         1           write
+  0.02    0.000002           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.02    0.000002           1         2           getrusage
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012999           1      7235         1 total
+--- ladder-ab.ax rep1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=11855.564 user_ns_per_op=1204.939 sys_ns_per_op=3019.252 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010122           1      7170           pread64
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010122           1      7235         1 total
+--- ladder-ab.ax rep2
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12236.038 user_ns_per_op=664.481 sys_ns_per_op=3594.029 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 97.12    0.011627           1      7170           pread64
+  1.23    0.000147         147         1           execve
+  0.82    0.000098           5        19           mmap
+  0.23    0.000027           3         7           openat
+  0.10    0.000012           3         4           read
+  0.10    0.000012           1         7           fstat
+  0.08    0.000010           1         6           close
+  0.08    0.000010           1         6           mprotect
+  0.07    0.000008           8         1           write
+  0.06    0.000007           7         1           munmap
+  0.05    0.000006           2         3           brk
+  0.03    0.000003           3         1         1 access
+  0.02    0.000002           1         2           getrusage
+  0.01    0.000001           1         1           futex
+  0.01    0.000001           1         1           prlimit64
+  0.01    0.000001           1         1           getrandom
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011972           1      7235         1 total
+--- ladder-ab.ax rep3
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=11970.598 user_ns_per_op=416.574 sys_ns_per_op=3779.297 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.48    0.012435           1      7170           pread64
+  0.18    0.000023           3         6           mprotect
+  0.12    0.000015          15         1           munmap
+  0.09    0.000011           1         7           openat
+  0.05    0.000006           2         3           brk
+  0.02    0.000002           0         7           fstat
+  0.02    0.000002           1         2           getrusage
+  0.02    0.000002           2         1           futex
+  0.02    0.000002           2         1           prlimit64
+  0.02    0.000002           2         1           getrandom
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012500           1      7235         1 total

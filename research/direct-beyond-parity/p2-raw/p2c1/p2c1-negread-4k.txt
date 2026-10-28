@@ -1,0 +1,41 @@
+# cell p2c1-negread-4k (P2 plan §3.4 negative control: read_at single-op on candidate binary; pass = PARITY) — 2026-10-27T22:17:17+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1 a2 4096 1024 1024 5 16 /tmp/sluice600/data64m.bin
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=712.956 user_ns_per_op=580.776 sys_ns_per_op=471.959 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=718.331 user_ns_per_op=578.544 sys_ns_per_op=439.453 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=726.202 user_ns_per_op=1024.693 sys_ns_per_op=0.000 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=704.207 user_ns_per_op=692.662 sys_ns_per_op=328.404 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=705.979 user_ns_per_op=726.562 sys_ns_per_op=305.385 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=715.662 user_ns_per_op=752.372 sys_ns_per_op=276.088 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=708.736 user_ns_per_op=464.565 sys_ns_per_op=553.850 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=714.483 user_ns_per_op=439.314 sys_ns_per_op=582.031 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=707.914 user_ns_per_op=551.339 sys_ns_per_op=464.983 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=704.095 user_ns_per_op=874.581 sys_ns_per_op=137.974 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=720.631 user_ns_per_op=440.011 sys_ns_per_op=578.683 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=703.812 user_ns_per_op=574.358 sys_ns_per_op=431.362 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=717.338 user_ns_per_op=597.377 sys_ns_per_op=406.948 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=731.905 user_ns_per_op=553.153 sys_ns_per_op=474.888 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=726.918 user_ns_per_op=579.241 sys_ns_per_op=438.058 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=708.317 user_ns_per_op=571.847 sys_ns_per_op=436.523 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=714.507 user_ns_per_op=820.731 sys_ns_per_op=188.477 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=724.194 user_ns_per_op=829.381 sys_ns_per_op=190.848 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=698.433 user_ns_per_op=598.354 sys_ns_per_op=408.064 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=715.477 user_ns_per_op=553.850 sys_ns_per_op=458.008 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=727.195 user_ns_per_op=465.402 sys_ns_per_op=552.874 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=720.039 user_ns_per_op=961.496 sys_ns_per_op=50.781 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=722.245 user_ns_per_op=693.778 sys_ns_per_op=322.266 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=697.395 user_ns_per_op=713.030 sys_ns_per_op=293.945 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=716.697 user_ns_per_op=621.652 sys_ns_per_op=391.741 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=714.995 user_ns_per_op=549.247 sys_ns_per_op=462.891 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=721.646 user_ns_per_op=827.288 sys_ns_per_op=192.522 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=702.061 user_ns_per_op=598.354 sys_ns_per_op=408.761 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=702.881 user_ns_per_op=439.035 sys_ns_per_op=572.963 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=704.161 user_ns_per_op=701.590 sys_ns_per_op=302.455 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=720.865 user_ns_per_op=685.826 sys_ns_per_op=329.799 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=702.448 user_ns_per_op=545.201 sys_ns_per_op=464.007 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+pairs=16
+A1_native_read_at: mean=709.604ns sd=7.728 median=708.115
+A2_sluice_read_at: mean=717.441ns sd=9.282 median=720.335
+delta(A1_native_read_at-A2_sluice_read_at): median=-9.685ns mean=-7.837ns sd=12.363 rel=-1.350% pos=5/16
+paired t=-2.54 (df=15)
+# --- analysis tail: delta = A1_native_read_at - A2_sluice_read_at; EXCESS(B1-arm) = -delta ---
+# pairs=16 median=-9.685 mean=-7.837 sd=12.363 CI(mean)=[-14.424,-1.250] (EXCL 0) ABmed=-3.327 BAmed=-18.509 N1median=708.115

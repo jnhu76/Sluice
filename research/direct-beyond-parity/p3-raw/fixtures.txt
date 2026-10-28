@@ -1,0 +1,14 @@
+# P3 fixtures (corrected) — 2026-10-28T01:49:49+08:00
+wrote 8388608 bytes
+/tmp/sluice600/ws8m.bin fs=tmpfs size=8388608 sha256_16=33003e54b449ccf8
+wrote 8388608 bytes
+/var/tmp/sluice600-p3/ws8m.bin fs=btrfs size=8388608 sha256_16=33003e54b449ccf8
+wrote 67108864 bytes
+/tmp/sluice600/ws64m.bin fs=tmpfs size=67108864 sha256_16=bc020fd15a622e08
+wrote 67108864 bytes
+/var/tmp/sluice600-p3/ws64m.bin fs=btrfs size=67108864 sha256_16=bc020fd15a622e08
+wrote 268435456 bytes
+/tmp/sluice600/ws256m.bin fs=tmpfs size=268435456 sha256_16=487a0da64bf8478a
+wrote 268435456 bytes
+/var/tmp/sluice600-p3/ws256m.bin fs=btrfs size=268435456 sha256_16=487a0da64bf8478a
+/var/tmp/sluice600-p3/data64m.bin fs=btrfs size=67108864 sha256_16=bc020fd15a622e08

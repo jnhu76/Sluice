@@ -1,0 +1,163 @@
+# p5-strace-negwrite-1b (strace -c integral counts, 3 repeats/arm; never a wall source) — 2026-10-28T12:00:41Z host E5 kernel 7.2.11-200.fc44.x86_64
+--- ladder-ab.w1 rep1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=11640.560 user_ns_per_op=462.606 sys_ns_per_op=3301.310 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00  109.187261           1  67133440           pwrite64
+  0.00    0.002259          34        66           pread64
+  0.00    0.000082          41         2           munmap
+  0.00    0.000019          19         1           write
+  0.00    0.000018           0        20           mmap
+  0.00    0.000003           0         6           close
+  0.00    0.000003           0         7           fstat
+  0.00    0.000002           1         2           getrusage
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00  109.189647           1  67133573         1 total
+--- ladder-ab.w1 rep2
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=11562.993 user_ns_per_op=422.160 sys_ns_per_op=3350.260 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.99  109.385872           1  67133440           pwrite64
+  0.01    0.006804         103        66           pread64
+  0.00    0.000208         208         1           execve
+  0.00    0.000125           6        20           mmap
+  0.00    0.000061          30         2           munmap
+  0.00    0.000038           6         6           mprotect
+  0.00    0.000030           4         7           openat
+  0.00    0.000021          21         1           write
+  0.00    0.000015           2         7           fstat
+  0.00    0.000014           2         6           close
+  0.00    0.000010           2         4           read
+  0.00    0.000004           4         1         1 access
+  0.00    0.000004           2         2           getrusage
+  0.00    0.000002           0         3           brk
+  0.00    0.000002           2         1           arch_prctl
+  0.00    0.000002           2         1           set_tid_address
+  0.00    0.000002           2         1           set_robust_list
+  0.00    0.000002           2         1           rseq
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+------ ----------- ----------- --------- --------- ----------------
+100.00  109.393216           1  67133573         1 total
+--- ladder-ab.w1 rep3
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=11621.422 user_ns_per_op=408.488 sys_ns_per_op=3359.212 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00  110.360580           1  67133440           pwrite64
+  0.00    0.000509           7        66           pread64
+  0.00    0.000032           1        20           mmap
+  0.00    0.000029           4         6           mprotect
+  0.00    0.000008           4         2           munmap
+  0.00    0.000005           0         7           openat
+  0.00    0.000004           1         3           brk
+  0.00    0.000004           2         2           getrusage
+  0.00    0.000002           0         6           close
+  0.00    0.000002           2         1           arch_prctl
+  0.00    0.000002           2         1           set_tid_address
+  0.00    0.000002           2         1           rseq
+  0.00    0.000001           0         7           fstat
+  0.00    0.000001           1         1           futex
+  0.00    0.000001           1         1           set_robust_list
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000001           1         1           getrandom
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00  110.361184           1  67133573         1 total
+--- ladder-ab.w2 rep1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=11521.658 user_ns_per_op=424.927 sys_ns_per_op=3370.850 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00  110.651669           1  67133440           pwrite64
+  0.00    0.003046          46        66           pread64
+  0.00    0.000016           0        20           mmap
+  0.00    0.000013          13         1           write
+  0.00    0.000004           2         2           getrusage
+  0.00    0.000002           0         6           close
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         2           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00  110.654750           1  67133573         1 total
+--- ladder-ab.w2 rep2
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=11969.070 user_ns_per_op=444.336 sys_ns_per_op=3466.431 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00  112.968331           1  67133440           pwrite64
+  0.00    0.004029          61        66           pread64
+  0.00    0.000015           0        20           mmap
+  0.00    0.000014          14         1           write
+  0.00    0.000004           0         6           close
+  0.00    0.000004           2         2           getrusage
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         2           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00  112.972397           1  67133573         1 total
+--- ladder-ab.w2 rep3
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=11470.719 user_ns_per_op=624.674 sys_ns_per_op=3102.865 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00  109.126432           1  67133440           pwrite64
+  0.00    0.002057          31        66           pread64
+  0.00    0.000112           5        20           mmap
+  0.00    0.000025           4         6           mprotect
+  0.00    0.000018           2         7           openat
+  0.00    0.000008           4         2           munmap
+  0.00    0.000006           1         6           close
+  0.00    0.000005           0         7           fstat
+  0.00    0.000004           1         4           read
+  0.00    0.000004           2         2           getrusage
+  0.00    0.000003           1         3           brk
+  0.00    0.000002           2         1           arch_prctl
+  0.00    0.000002           2         1           set_robust_list
+  0.00    0.000001           1         1           futex
+  0.00    0.000001           1         1           set_tid_address
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000001           1         1           getrandom
+  0.00    0.000001           1         1           rseq
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00  109.128683           1  67133573         1 total

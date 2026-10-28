@@ -1,0 +1,37 @@
+# write-eintr-4k PMU caliber — 2026-10-27T04:35:20+08:00 — host E5, taskset cpu2, unprivileged user-space counters
+# command per arm (§6.2 shape with the cell pattern/state args appended): taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 eintr
+# denominator ops=4096 timed ops; whole-process counters (§6.2 caveat) — the untimed prime pass (16384 pwrites) and whole-file readback (64 MiB pread loop) run inside the perf window as constants shared by both arms and cancel in deltas; itimer runs during the timed section; PMU never feeds wall statistics.
+# === arm w1 ===
+arm=W1_native_write_at size=4096 ops=4096 ns_per_op=4739.484 user_ns_per_op=991.943 sys_ns_per_op=1434.326 checksum=16777216 content_hash=0xa2a7b385a4908383 content_ok=1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 eintr':
+
+     1,144,901,841      instructions:u                                                        
+     2,260,787,176      cycles:u                                                              
+
+       1.382507895 seconds time elapsed
+
+       0.668075000 seconds user
+       0.019948000 seconds sys
+
+
+# exit=0
+# === arm w2 ===
+arm=W2_sluice_write_at size=4096 ops=4096 ns_per_op=5614.102 user_ns_per_op=132.324 sys_ns_per_op=2470.459 checksum=16777216 content_hash=0xa2a7b385a4908383 content_ok=1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w2 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 eintr':
+
+     1,144,981,736      instructions:u                                                        
+     2,261,452,572      cycles:u                                                              
+
+       1.386445877 seconds time elapsed
+
+       0.658710000 seconds user
+       0.030922000 seconds sys
+
+
+# exit=0
+# --- per-op summary (÷4096 timed ops; whole-process §6.2 caveat) ---
+# w1: instr/op=279516.1 cyc/op=551950.0 | w2: instr/op=279535.6 cyc/op=552112.4
+# instruction delta w2-w1: +79895 total = +19.5 per timed op — matches the write-reject-closed-4k delta (+20.0): userspace wrapper delta stable under itimer noise
+# absolute counts dominated by arm-shared untimed constants (prime pass + 64MiB readback hash/compare); cycles:u ≈ 2x instructions (IPC ~0.5) — the 3us signal storm wrecks user-mode IPC, consistent with ~3.4-3.8us/op wall

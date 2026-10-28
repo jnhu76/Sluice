@@ -1,0 +1,52 @@
+# write-reject-closed-4k PMU caliber — 2026-10-27T04:12:34+08:00 — host E5, taskset cpu2, unprivileged user-space counters
+# command per arm (§6.2 shape with the cell pattern/state args appended): taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 closed
+# denominator ops=4096 timed ops; whole-process counters (§6.2 caveat); closed userspace arms make no syscall in the timed window; PMU runs never feed wall statistics.
+# === arm w1 ===
+arm=W1_native_write_at size=4096 ops=4096 ns_per_op=2.996 user_ns_per_op=2.441 sys_ns_per_op=2.197 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 closed':
+
+         2,834,230      instructions:u                                                        
+         3,215,656      cycles:u                                                              
+
+       0.002019384 seconds time elapsed
+
+       0.000952000 seconds user
+       0.001105000 seconds sys
+
+
+# exit=0
+# === arm w2 ===
+arm=W2_sluice_write_at size=4096 ops=4096 ns_per_op=4.709 user_ns_per_op=6.104 sys_ns_per_op=0.000 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w2 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 closed':
+
+         2,916,269      instructions:u                                                        
+         2,553,957      cycles:u                                                              
+
+       0.001779634 seconds time elapsed
+
+       0.001781000 seconds user
+       0.000000000 seconds sys
+
+
+# exit=0
+# === arm w0 ===
+arm=W0_raw_pwrite size=4096 ops=4096 ns_per_op=423.926 user_ns_per_op=82.520 sys_ns_per_op=341.064 checksum=18446744073709547520 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w0 4096 4096 0 1 /tmp/sluice600/write64m.bin seq 0 closed':
+
+         2,997,729      instructions:u                                                        
+         2,355,620      cycles:u                                                              
+
+       0.003339059 seconds time elapsed
+
+       0.001116000 seconds user
+       0.002230000 seconds sys
+
+
+# exit=0
+# --- per-op summary (÷4096 timed ops; whole-process §6.2 caveat) ---
+# w1: instr/op=691.9 cyc/op=785.1 | w2: instr/op=712.0 cyc/op=623.5 | w0: instr/op=731.9 cyc/op=575.1
+# instruction delta w2-w1: +82039 total = +20.0 per timed op (matches the read-reject-closed-4k delta +20.0 — same admission mirror path)
+# cycles:u across single runs is noisy relative to instructions (w1 run landed with higher user cycles than w2 despite fewer instructions) — disclosed

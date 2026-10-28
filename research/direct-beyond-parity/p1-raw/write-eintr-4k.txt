@@ -1,0 +1,52 @@
+# write-eintr-4k — P1 cell raw series (§4.4 diagnostic: write EINTR retry under 3us SIGALRM itimer without SA_RESTART; NON-STATIONARY by construction — medians/ranges only, no CI claims per §5.8) — 2026-10-27T04:34:16+08:00 — host E5 (cpu2 pin, perf_event_paranoid=1)
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a (verified pre-run); write scratch /tmp/sluice600/write64m.bin pre-run sha256 fc37759c398eba83a7b71f528c95fded2573b70f58e7d1d9ce25f5f7d6816dc0 (scratch; no pinned hash — prime pass rewrites deterministic uniform content; readback runs after timer stop)
+# series command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 w2 4096 2048 256 2 16 /tmp/sluice600/write64m.bin seq 0 eintr
+# no context arm for this cell (§4.4 table row lists none; ask names none)
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=5074.366 user_ns_per_op=377.987 sys_ns_per_op=1870.175 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3435.019 user_ns_per_op=717.831 sys_ns_per_op=1472.886 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=5056.696 user_ns_per_op=1009.191 sys_ns_per_op=1295.267 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=5091.609 user_ns_per_op=889.476 sys_ns_per_op=1420.726 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3894.773 user_ns_per_op=1539.752 sys_ns_per_op=681.985 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3675.361 user_ns_per_op=254.366 sys_ns_per_op=2066.866 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3918.181 user_ns_per_op=327.206 sys_ns_per_op=1753.906 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3363.349 user_ns_per_op=896.369 sys_ns_per_op=1242.417 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3853.763 user_ns_per_op=804.688 sys_ns_per_op=1458.180 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=5135.715 user_ns_per_op=1038.833 sys_ns_per_op=1295.956 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3392.485 user_ns_per_op=727.482 sys_ns_per_op=1451.746 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3958.017 user_ns_per_op=354.090 sys_ns_per_op=1843.290 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3369.111 user_ns_per_op=1104.779 sys_ns_per_op=966.222 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=4721.148 user_ns_per_op=1383.732 sys_ns_per_op=941.636 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=4934.770 user_ns_per_op=642.693 sys_ns_per_op=1610.754 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3341.508 user_ns_per_op=1290.901 sys_ns_per_op=807.675 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=4500.447 user_ns_per_op=1758.502 sys_ns_per_op=283.548 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=4800.114 user_ns_per_op=438.189 sys_ns_per_op=1780.331 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3415.653 user_ns_per_op=771.140 sys_ns_per_op=1438.649 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3369.582 user_ns_per_op=640.395 sys_ns_per_op=1446.002 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3370.507 user_ns_per_op=928.539 sys_ns_per_op=1171.875 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=4854.720 user_ns_per_op=656.480 sys_ns_per_op=1541.820 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3380.639 user_ns_per_op=779.412 sys_ns_per_op=1371.324 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3385.417 user_ns_per_op=768.612 sys_ns_per_op=1356.618 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3341.239 user_ns_per_op=1051.700 sys_ns_per_op=1022.059 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=4865.848 user_ns_per_op=1227.711 sys_ns_per_op=1032.169 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3367.723 user_ns_per_op=992.877 sys_ns_per_op=1104.779 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3401.218 user_ns_per_op=835.708 sys_ns_per_op=1252.298 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3430.764 user_ns_per_op=612.362 sys_ns_per_op=1573.300 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3410.267 user_ns_per_op=1185.432 sys_ns_per_op=983.226 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W2_sluice_write_at size=4096 ops=2048 ns_per_op=3385.473 user_ns_per_op=1231.388 sys_ns_per_op=958.180 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=2048 ns_per_op=3594.680 user_ns_per_op=1122.243 sys_ns_per_op=1121.783 checksum=17825792 content_hash=0xa2a7b385a4908383 content_ok=1
+# series (w1 w2, eintr) exit=0
+# --- analysis (§5.8 diagnostic caliber: NON-STATIONARY itimer state; medians/ranges only; analyzer t line recorded for reproducibility, NO CI/sign claim) ---
+# analyze_pairs.py W1_native_write_at W2_sluice_write_at:
+pairs=16
+W1_native_write_at: mean=3771.272ns sd=604.574 median=3415.991
+W2_sluice_write_at: mean=4109.363ns sd=747.440 median=3796.771
+delta(W1_native_write_at-W2_sluice_write_at): median=-20.647ns mean=-338.091ns sd=902.222 rel=-0.502% pos=8/16
+paired t=-1.50 (df=15)
+# --- syscalls/op: NOT_MEASURED_WITH_REASON ---
+# strace diagnostic not attempted for this cell: proven non-viable in read-eintr-4k this session (ptrace stops x 3us ITIMER_REAL signal stream stalled >15 min and would yield only a distorted lower bound).
+# structural statement: w1/w2 issue exactly 1 + r pwrite64 per op, r = EINTR interruptions of that op (retry only without a completed count; ladder.cpp n1_write_at and the mirrored Sluice path); baseline r=0 => exactly 1.0000 pwrite64/op; r is non-stationary by construction (§2/§4.4).
+# --- descriptive summary (§5.8: NON-STATIONARY itimer state; medians/ranges only, no CI/sign claims) ---
+# W1 wall median=3415.991 range=[3341.239,5091.609] | user median=892.923 range=[354.090,1758.502] | sys median=1247.358 range=[283.548,1870.175]
+# W2 wall median=3796.771 range=[3367.723,5135.715] | user median=775.276 range=[254.366,1383.732] | sys median=1404.986 range=[941.636,2066.866]
+# paired delta W1-W2 (descriptive only): median=-20.647 range=[-1593.262,+1639.347] n=16 — spread ~3.2us, no claim made (§5.8)
+# content gate: content_ok=1 on all 32 lines, content_hash=0xa2a7b385a4908383 identical; checksum 17825792 = 4352 x 4096 uniform (every write completed full after EINTR retries)

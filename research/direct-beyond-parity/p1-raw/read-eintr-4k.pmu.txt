@@ -1,0 +1,53 @@
+# read-eintr-4k PMU caliber — 2026-10-27T04:16:47+08:00 — host E5, taskset cpu2, unprivileged user-space counters
+# command per arm (§6.2 shape with the cell pattern/state args appended): taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 1 /tmp/sluice600/data64m.bin seq 0 eintr
+# denominator ops=4096 timed ops; whole-process counters (§6.2 caveat); itimer continues running during the PMU run (user-mode signal-handler instructions are included in :u); PMU runs never feed wall statistics.
+# === arm a1 ===
+arm=A1_native_read_at size=4096 ops=4096 ns_per_op=5501.143 user_ns_per_op=2781.982 sys_ns_per_op=1753.662 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 4096 0 1 /tmp/sluice600/data64m.bin seq 0 eintr':
+
+       137,791,643      instructions:u                                                        
+        38,891,278      cycles:u                                                              
+
+       0.083330529 seconds time elapsed
+
+       0.024278000 seconds user
+       0.014436000 seconds sys
+
+
+# exit=0
+# === arm a2 ===
+arm=A2_sluice_read_at size=4096 ops=4096 ns_per_op=4859.708 user_ns_per_op=2606.934 sys_ns_per_op=2174.438 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a2 4096 4096 0 1 /tmp/sluice600/data64m.bin seq 0 eintr':
+
+       137,950,132      instructions:u                                                        
+        40,066,450      cycles:u                                                              
+
+       0.085147690 seconds time elapsed
+
+       0.022810000 seconds user
+       0.018011000 seconds sys
+
+
+# exit=0
+# === arm a0 ===
+arm=A0_raw_pread size=4096 ops=4096 ns_per_op=5367.865 user_ns_per_op=1004.150 sys_ns_per_op=1065.308 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a0 4096 4096 0 1 /tmp/sluice600/data64m.bin seq 0 eintr':
+
+         3,274,797      instructions:u                                                        
+         5,869,082      cycles:u                                                              
+
+       0.040380993 seconds time elapsed
+
+       0.009755000 seconds user
+       0.008816000 seconds sys
+
+
+# exit=0
+# --- per-op summary (÷4096 timed ops; whole-process §6.2 caveat; NON-STATIONARY retry counts shift instr by a few per retry) ---
+# a1: instr/op=33640.5 cyc/op=9495.9 | a2: instr/op=33679.2 cyc/op=9781.8 | a0: instr/op=799.5 cyc/op=1432.9
+# instruction delta a2-a1: +158489 total = +38.7 per timed op — nearly identical to the warm read-eof-mix-4k delta (+38.0), i.e. the userspace wrapper delta is stable even under itimer noise
+# a0's low count is structural: under eintr A0 has no content oracle, verify_read_pass skips verify_pattern (ladder.cpp:567-573); a1/a2 include the ~135M-instruction verify_pattern oracle pass — arms are not instruction-comparable to a0 here
+# DISCLOSED: these PMU runs executed while a sibling measurement unit's paired series (write-sweep-1b) was concurrently pinned to cpu2; instruction counts are load-insensitive except for non-stationary retry counts; PMU never feeds wall statistics

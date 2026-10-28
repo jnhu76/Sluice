@@ -1,0 +1,16 @@
+# P5 A+B one-off kill probe: write-side impossible-count guard (R4 evidence)
+# tree: 08df2b2a24bf220de08fc136de7aa0e8c0002c37  branch: direct-compose-stack-readpreval-writeexit
+# source: tests/direct_composition_fault_test.cpp byte-identical bodies,
+#         write killer registered first (fail-fast suite cannot reach it otherwise)
+# build: xmake targets p5_probe_writefirst_{base,skip} (temporary, tests.lua restored after)
+# earlier hand-g++ probes abandoned: thread_local arming did not propagate to the
+# production TU outside the project build (minprobe2 real-write calls=0 vs minprobe3
+# cross-TU visibility) — seam requires the project build, recorded as probe-method finding
+
+== BASE run ==
+composition read_exact_at/write_all_at: 16 scenarios compared, 5 not drivable, 0 divergences
+composition read_exact/write_all: 11 scenarios compared, 10 not drivable (verdicts needing a caller-supplied offset), 0 divergences
+all 15 direct composition fault-injection tests passed
+exit=0
+== MUTANT (SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT) run ==
+exit=1

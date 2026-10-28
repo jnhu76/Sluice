@@ -1,0 +1,58 @@
+# PMU diagnostic, candidate binary ladder-c2 (P1 §6.2 shape; never a wall source) — 2026-10-27T22:42:52+08:00 host E5
+# cmd per arm: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2 <arm> 4096 4096 0 1 /tmp/sluice600/p2-pmu-c2.bin (per-run scratch, deleted after)
+== c2 arm w1x ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2 w1x 4096 4096 0 1 /tmp/sluice600/p2-pmu-c2.bin':
+
+     1,144,975,633      instructions:u                                                        
+     2,259,680,388      cycles:u                                                              
+
+       0.688124176 seconds time elapsed
+
+       0.657188000 seconds user
+       0.027902000 seconds sys
+
+
+exit=0
+== c2 arm wx ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2 wx 4096 4096 0 1 /tmp/sluice600/p2-pmu-c2.bin':
+
+     1,145,155,960      instructions:u                                                        
+     2,259,063,781      cycles:u                                                              
+
+       0.685183878 seconds time elapsed
+
+       0.655157000 seconds user
+       0.027884000 seconds sys
+
+
+exit=0
+== c2 arm w1c ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2 w1c 4096 4096 0 1 /tmp/sluice600/p2-pmu-c2.bin':
+
+     1,145,017,523      instructions:u                                                        
+     2,259,936,498      cycles:u                                                              
+
+       0.687662580 seconds time elapsed
+
+       0.657928000 seconds user
+       0.026848000 seconds sys
+
+
+exit=0
+== c2 arm wc ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c2 wc 4096 4096 0 1 /tmp/sluice600/p2-pmu-c2.bin':
+
+     1,145,128,366      instructions:u                                                        
+     2,259,523,958      cycles:u                                                              
+
+       0.686319845 seconds time elapsed
+
+       0.661155000 seconds user
+       0.022908000 seconds sys
+
+
+exit=0

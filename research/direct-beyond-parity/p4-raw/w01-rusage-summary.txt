@@ -1,0 +1,103 @@
+== w01-aa-cold (32 arm lines)
+  A1_native_read_at: mean_user=2511.3 mean_sys=1620.8 mean_user+sys=4132.1 n=32
+== w01-aa-read-4k-b1 (64 arm lines)
+  A1_native_read_at: mean_user=695.8 mean_sys=471.7 mean_user+sys=1167.5 n=64
+== w01-aa-read-4k-c1 (64 arm lines)
+  A1_native_read_at: mean_user=669.3 mean_sys=445.4 mean_user+sys=1114.7 n=64
+== w01-aa-write-4k-b1 (64 arm lines)
+  W1_native_write_at: mean_user=321.2 mean_sys=517.3 mean_user+sys=838.5 n=64
+== w01-aa-write-4k-c2 (64 arm lines)
+  W1_native_write_at: mean_user=344.0 mean_sys=498.3 mean_user+sys=842.3 n=64
+== w01-cold-4k (32 arm lines)
+  A2_sluice_read_at: mean_user=2553.2 mean_sys=1584.9 mean_user+sys=4138.1 n=32
+== w01-comp-cursor-4k (98 arm lines)
+  A1c_native_read_exact: mean_user=624.8 mean_sys=444.6 mean_user+sys=1069.3 n=33
+  AC_sluice_read_exact: mean_user=664.7 mean_sys=386.0 mean_user+sys=1050.7 n=65
+== w01-comp-eofmix-4k (96 arm lines)
+  seg0:A1x_native_read_exact_at: mean_user=601.0 mean_sys=468.1 mean_user+sys=1069.1 n=16
+  seg0:AX_sluice_read_exact_at: mean_user=748.1 mean_sys=339.7 mean_user+sys=1087.8 n=16
+  seg1:A1x_native_read_exact_at: mean_user=632.4 mean_sys=443.3 mean_user+sys=1075.7 n=16
+  seg1:AX_sluice_read_exact_at: mean_user=642.4 mean_sys=439.1 mean_user+sys=1081.6 n=16
+  seg2:AX_sluice_read_exact_at: mean_user=678.7 mean_sys=407.2 mean_user+sys=1086.0 n=32
+== w01-comp-read-4k (96 arm lines)
+  seg0:A1x_native_read_exact_at: mean_user=771.0 mean_sys=526.1 mean_user+sys=1297.2 n=16
+  seg0:AX_sluice_read_exact_at: mean_user=856.6 mean_sys=453.0 mean_user+sys=1309.6 n=16
+  seg1:A1x_native_read_exact_at: mean_user=702.7 mean_sys=561.5 mean_user+sys=1264.1 n=16
+  seg1:AX_sluice_read_exact_at: mean_user=731.0 mean_sys=535.7 mean_user+sys=1266.7 n=16
+  seg2:AX_sluice_read_exact_at: mean_user=770.0 mean_sys=505.6 mean_user+sys=1275.5 n=32
+== w01-hf-1b (34 arm lines)
+  A0_raw_pread: mean_user=337.3 mean_sys=266.6 mean_user+sys=603.9 n=1
+  A1_native_read_at: mean_user=350.7 mean_sys=248.4 mean_user+sys=599.1 n=1
+  A2_sluice_read_at: mean_user=340.6 mean_sys=291.5 mean_user+sys=632.1 n=32
+== w01-hf-4k (34 arm lines)
+  A0_raw_pread: mean_user=924.2 mean_sys=332.9 mean_user+sys=1257.1 n=1
+  A1_native_read_at: mean_user=736.0 mean_sys=536.4 mean_user+sys=1272.5 n=1
+  A2_sluice_read_at: mean_user=782.6 mean_sys=493.0 mean_user+sys=1275.6 n=32
+== w01-meta-fi (34 arm lines)
+  M0_raw_fstat: mean_user=271.8 mean_sys=264.6 mean_user+sys=536.5 n=1
+  M1_native_file_info: mean_user=316.6 mean_sys=221.7 mean_user+sys=538.3 n=1
+  M2_sluice_file_info: mean_user=312.2 mean_sys=231.5 mean_user+sys=543.7 n=32
+== w01-meta-oc (34 arm lines)
+  M0_raw_open_close: mean_user=812.1 mean_sys=1055.4 mean_user+sys=1867.6 n=1
+  M1_native_open_close: mean_user=744.3 mean_sys=1120.0 mean_user+sys=1864.3 n=1
+  M2_sluice_open_close: mean_user=758.4 mean_sys=1198.1 mean_user+sys=1956.6 n=32
+== w01-neg-1b (32 arm lines)
+  A1_native_read_at: mean_user=340.6 mean_sys=288.8 mean_user+sys=629.4 n=16
+  A2_sluice_read_at: mean_user=327.7 mean_sys=303.2 mean_user+sys=630.9 n=16
+== w01-neg-4k (32 arm lines)
+  A1_native_read_at: mean_user=698.3 mean_sys=356.9 mean_user+sys=1055.2 n=16
+  A2_sluice_read_at: mean_user=561.8 mean_sys=495.4 mean_user+sys=1057.3 n=16
+== w01-negw-4k (32 arm lines)
+  W1_native_write_at: mean_user=301.0 mean_sys=537.2 mean_user+sys=838.2 n=16
+  W2_sluice_write_at: mean_user=356.2 mean_sys=479.8 mean_user+sys=836.1 n=16
+== w01-physical-work-strace (159 arm lines)
+  A0_raw_pread: mean_user=5898.8 mean_sys=38648.6 mean_user+sys=44547.4 n=12
+  A1_native_read_at: mean_user=3885.0 mean_sys=26558.6 mean_user+sys=30443.6 n=18
+  A1c_native_read_exact: mean_user=658.8 mean_sys=3564.0 mean_user+sys=4222.9 n=12
+  A1x_native_read_exact_at: mean_user=767.3 mean_sys=3933.7 mean_user+sys=4701.0 n=12
+  A2_sluice_read_at: mean_user=4908.7 mean_sys=31574.1 mean_user+sys=36482.8 n=30
+  AC_sluice_read_exact: mean_user=526.0 mean_sys=3664.4 mean_user+sys=4190.4 n=12
+  AX_sluice_read_exact_at: mean_user=704.4 mean_sys=3987.5 mean_user+sys=4691.9 n=12
+  M0_raw_fstat: mean_user=327.5 mean_sys=3222.9 mean_user+sys=3550.4 n=3
+  M0_raw_open_close: mean_user=760.3 mean_sys=7694.0 mean_user+sys=8454.3 n=3
+  M1_native_file_info: mean_user=378.0 mean_sys=3211.3 mean_user+sys=3589.4 n=3
+  M1_native_open_close: mean_user=934.2 mean_sys=7655.9 mean_user+sys=8590.2 n=3
+  M2_sluice_file_info: mean_user=452.1 mean_sys=3167.7 mean_user+sys=3619.9 n=6
+  M2_sluice_open_close: mean_user=818.5 mean_sys=7833.3 mean_user+sys=8651.9 n=6
+  W0_raw_pwrite: mean_user=422.2 mean_sys=3525.4 mean_user+sys=3947.6 n=3
+  W1_native_write_at: mean_user=201.7 mean_sys=3788.8 mean_user+sys=3990.5 n=3
+  W1x_native_write_all_at: mean_user=433.3 mean_sys=3603.8 mean_user+sys=4037.1 n=6
+  W2_sluice_write_at: mean_user=491.8 mean_sys=3469.6 mean_user+sys=3961.4 n=9
+  WX_sluice_write_all_at: mean_user=462.3 mean_sys=3599.8 mean_user+sys=4062.0 n=6
+== w01-pmu-diagnostic (40 arm lines)
+  A1_native_read_at: mean_user=572.2 mean_sys=693.0 mean_user+sys=1265.2 n=4
+  A1c_native_read_exact: mean_user=1070.6 mean_sys=735.1 mean_user+sys=1805.7 n=2
+  A1x_native_read_exact_at: mean_user=1114.0 mean_sys=382.4 mean_user+sys=1496.5 n=4
+  A2_sluice_read_at: mean_user=22184.1 mean_sys=33452.4 mean_user+sys=55636.6 n=10
+  AC_sluice_read_exact: mean_user=1469.2 mean_sys=326.4 mean_user+sys=1795.7 n=2
+  AX_sluice_read_exact_at: mean_user=1235.5 mean_sys=274.9 mean_user+sys=1510.4 n=4
+  M1_native_file_info: mean_user=533.6 mean_sys=10.3 mean_user+sys=543.9 n=1
+  M1_native_open_close: mean_user=470.2 mean_sys=1277.3 mean_user+sys=1747.6 n=1
+  M2_sluice_file_info: mean_user=382.3 mean_sys=158.0 mean_user+sys=540.3 n=2
+  M2_sluice_open_close: mean_user=1042.7 mean_sys=727.8 mean_user+sys=1770.5 n=2
+  W1_native_write_at: mean_user=0.0 mean_sys=1275.4 mean_user+sys=1275.4 n=1
+  W1x_native_write_all_at: mean_user=20.5 mean_sys=1030.8 mean_user+sys=1051.3 n=2
+  W2_sluice_write_at: mean_user=345.7 mean_sys=734.7 mean_user+sys=1080.4 n=3
+  WX_sluice_write_all_at: mean_user=44.9 mean_sys=1041.0 mean_user+sys=1085.9 n=2
+== w01-rand-4k (34 arm lines)
+  A0_raw_pread: mean_user=573.2 mean_sys=738.7 mean_user+sys=1311.9 n=1
+  A1_native_read_at: mean_user=708.0 mean_sys=599.5 mean_user+sys=1307.5 n=1
+  A2_sluice_read_at: mean_user=779.1 mean_sys=557.8 mean_user+sys=1336.9 n=32
+== w01-seq-1m (34 arm lines)
+  A0_raw_pread: mean_user=23743.9 mean_sys=134883.2 mean_user+sys=158627.0 n=1
+  A1_native_read_at: mean_user=21464.0 mean_sys=137019.7 mean_user+sys=158483.7 n=1
+  A2_sluice_read_at: mean_user=21441.8 mean_sys=138717.2 mean_user+sys=160159.0 n=32
+== w01-wcomp-4k (96 arm lines)
+  seg0:W1x_native_write_all_at: mean_user=285.3 mean_sys=556.7 mean_user+sys=842.0 n=16
+  seg0:WX_sluice_write_all_at: mean_user=367.4 mean_sys=479.1 mean_user+sys=846.5 n=16
+  seg1:W1x_native_write_all_at: mean_user=275.5 mean_sys=552.0 mean_user+sys=827.6 n=16
+  seg1:WX_sluice_write_all_at: mean_user=307.7 mean_sys=529.8 mean_user+sys=837.5 n=16
+  seg2:WX_sluice_write_all_at: mean_user=338.9 mean_sys=491.0 mean_user+sys=829.8 n=32
+== w01-write-4k (33 arm lines)
+  W0_raw_pwrite: mean_user=170.2 mean_sys=676.9 mean_user+sys=847.2 n=1
+  W2_sluice_write_at: mean_user=217.4 mean_sys=610.8 mean_user+sys=828.2 n=32

@@ -1,0 +1,90 @@
+=== p3-m2-eof-attribution arm=rpl0 pmu run=1 2026-10-28T02:04:30+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=4646.244 user_ns_per_op=32606.771 sys_ns_per_op=2326.823 checksum=14680064 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=eofmix merge=0 dedup=0':
+
+     1,087,928,565      instructions:u                                                        
+       328,905,544      cycles:u                                                              
+
+       0.109333231 seconds time elapsed
+
+       0.101181000 seconds user
+       0.007999000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-eof-attribution arm=rpl0 pmu run=2 2026-10-28T02:04:30+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=4276.421 user_ns_per_op=32955.078 sys_ns_per_op=1949.544 checksum=14680064 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=eofmix merge=0 dedup=0':
+
+     1,087,928,489      instructions:u                                                        
+       329,430,471      cycles:u                                                              
+
+       0.109260813 seconds time elapsed
+
+       0.103092000 seconds user
+       0.005999000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-eof-attribution arm=rpl0 pmu run=3 2026-10-28T02:04:31+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=4621.767 user_ns_per_op=32878.581 sys_ns_per_op=2267.253 checksum=14680064 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=eofmix merge=0 dedup=0':
+
+     1,087,928,648      instructions:u                                                        
+       329,076,009      cycles:u                                                              
+
+       0.110682703 seconds time elapsed
+
+       0.102829000 seconds user
+       0.006977000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-eof-attribution arm=rplt pmu run=1 2026-10-28T02:04:32+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=1237.496 user_ns_per_op=31016.602 sys_ns_per_op=1625.977 checksum=8388608 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=eofmix merge=4096 dedup=0':
+
+     1,091,096,848      instructions:u                                                        
+       330,396,257      cycles:u                                                              
+
+       0.102300649 seconds time elapsed
+
+       0.097154000 seconds user
+       0.005004000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-eof-attribution arm=rplt pmu run=2 2026-10-28T02:04:32+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=1280.271 user_ns_per_op=31239.258 sys_ns_per_op=1673.503 checksum=8388608 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=eofmix merge=4096 dedup=0':
+
+     1,091,096,889      instructions:u                                                        
+       331,269,741      cycles:u                                                              
+
+       0.103148891 seconds time elapsed
+
+       0.096993000 seconds user
+       0.005983000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-eof-attribution arm=rplt pmu run=3 2026-10-28T02:04:33+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=1162.823 user_ns_per_op=31117.839 sys_ns_per_op=1630.208 checksum=8388608 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=eofmix merge=4096 dedup=0':
+
+     1,091,096,823      instructions:u                                                        
+       330,545,808      cycles:u                                                              
+
+       0.102632853 seconds time elapsed
+
+       0.097468000 seconds user
+       0.005017000 seconds sys
+
+
+PERF_EXIT=0

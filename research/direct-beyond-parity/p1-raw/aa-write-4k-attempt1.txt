@@ -1,0 +1,37 @@
+# cell aa-write-4k (plan P1_MEASUREMENT_PLAN.md §4.6, write-track A/A noise baseline) — 2026-10-27T05:32:38+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 w1 4096 1024 1024 5 16 /tmp/sluice600/write64m.bin  (16 A/A pairs, warm tmpfs scratch, no drop; paired.sh pins taskset -c 2, nominal order alternates per pair)
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a
+# opportunistic window: fired after 8 consecutive 1s probes clear; concurrency sampled every 0.2s → aa-write-4k-window.log (sampler pipeline pre-validated in aa-read-4k unit)
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=799.158 user_ns_per_op=183.105 sys_ns_per_op=672.038 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=768.879 user_ns_per_op=332.682 sys_ns_per_op=508.789 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=822.855 user_ns_per_op=509.603 sys_ns_per_op=366.862 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=763.757 user_ns_per_op=435.059 sys_ns_per_op=388.835 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=776.146 user_ns_per_op=499.837 sys_ns_per_op=348.145 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.413 user_ns_per_op=163.249 sys_ns_per_op=652.018 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=780.214 user_ns_per_op=432.617 sys_ns_per_op=410.319 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=795.594 user_ns_per_op=342.285 sys_ns_per_op=520.671 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=756.655 user_ns_per_op=161.621 sys_ns_per_op=670.736 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=794.648 user_ns_per_op=497.396 sys_ns_per_op=360.514 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=761.766 user_ns_per_op=0.000 sys_ns_per_op=826.009 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=789.866 user_ns_per_op=172.689 sys_ns_per_op=679.199 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=754.805 user_ns_per_op=322.266 sys_ns_per_op=490.885 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=770.521 user_ns_per_op=343.262 sys_ns_per_op=502.116 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=777.868 user_ns_per_op=338.704 sys_ns_per_op=506.673 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=764.896 user_ns_per_op=7.975 sys_ns_per_op=835.938 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=790.204 user_ns_per_op=337.402 sys_ns_per_op=520.671 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=782.074 user_ns_per_op=335.612 sys_ns_per_op=532.878 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=798.496 user_ns_per_op=115.723 sys_ns_per_op=753.092 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=805.667 user_ns_per_op=353.678 sys_ns_per_op=541.016 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=804.062 user_ns_per_op=297.201 sys_ns_per_op=569.987 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=790.867 user_ns_per_op=332.357 sys_ns_per_op=525.065 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=776.111 user_ns_per_op=274.089 sys_ns_per_op=576.335 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=807.988 user_ns_per_op=468.587 sys_ns_per_op=406.576 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.740 user_ns_per_op=329.264 sys_ns_per_op=493.490 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=771.508 user_ns_per_op=331.543 sys_ns_per_op=498.210 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=781.560 user_ns_per_op=130.046 sys_ns_per_op=720.703 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=769.777 user_ns_per_op=330.892 sys_ns_per_op=502.279 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=783.776 user_ns_per_op=657.715 sys_ns_per_op=184.570 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=796.775 user_ns_per_op=353.516 sys_ns_per_op=527.507 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=781.765 user_ns_per_op=326.986 sys_ns_per_op=515.951 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=787.092 user_ns_per_op=10.905 sys_ns_per_op=841.797 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+# §11.10: attempt1 sd_AA=24.885 ns > 10 ns #600 band → cell rerun once after quiescing; canonical record in aa-write-4k.txt (window was verified clean: aa-write-4k-window.log)

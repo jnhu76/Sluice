@@ -1,0 +1,18 @@
+# read-eintr-4k syscalls/op diagnostic — 2026-10-27T04:16:48+08:00 — host E5, taskset cpu2
+# NOT preregistered in plan §6; added because the CellResult schema requires syscalls/op. Count diagnostic only, never a wall source (§6 rule 3).
+# CAVEAT (fundamental): ptrace stops lengthen every syscall by ~100us while SIGALRM fires every 3us (and coalesces when pending), so signal delivery points move OUT of the pread window — the EINTR-retry rate observed under strace is a DISTORTED LOWER BOUND, not the uninstrumented rate.
+# method: taskset -c 2 strace -c -e trace=pread64 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 <1|0> 1 /tmp/sluice600/data64m.bin seq 0 eintr — run A reps=1, run B reps=0; A-B isolates the timed window (reps=0 under eintr still runs the read verify pass: excluded arms note at ladder.cpp; for these arms verify runs and its ops are in run A too).
+# === arm a1 ===
+# run A (reps=1):
+strace: Process 59928 detached
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000006           3         2           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000006           3         2           total
+# --- TERMINATED WITHOUT MEASUREMENT — reason: strace×itimer non-viability ---
+# The a1 run-A strace invocation made no material progress for >15 minutes (ptrace stop sequences interact with the 3us ITIMER_REAL signal stream; every stop admits another SIGALRM delivery). Task stopped by the measurement agent; no strace counts were consumed.
+# syscalls/op for this cell is reported as NOT_MEASURED_WITH_REASON. What is known without distortion:
+#   structural: a1/a2 issue exactly 1 + r preads per op, r = EINTR interruptions of that op (retry only without a completed count); baseline r=0 => exactly 1.0000 preads/op (proven in read-eof-mix-4k and the closed cells)
+#   r itself is non-stationary by construction (§2/§4.4) and no undistorted unprivileged counter exists; ptrace would only give a distorted lower bound
+#   a0 context derivation from its archived checksum: 17825792 = 4096*4352 exactly => r=0 interruptions in that invocation (sink arithmetic: e = (4096*T - sink) * inv(4097) mod 2^64 = 0)

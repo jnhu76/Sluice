@@ -1,0 +1,91 @@
+# p3-m4-size-sweep-4k-tmpfs PMU — 2026-10-28T02:18:27+08:00
+=== p3-m4-size-sweep-4k-tmpfs arm=a1 pmu run=1 2026-10-28T02:18:27+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=1016.552 user_ns_per_op=1106.445 sys_ns_per_op=1105.469 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,435,953      instructions:u                                                        
+        10,456,508      cycles:u                                                              
+
+       0.006050936 seconds time elapsed
+
+       0.003028000 seconds user
+       0.003025000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-tmpfs arm=a1 pmu run=2 2026-10-28T02:18:27+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=996.107 user_ns_per_op=2194.336 sys_ns_per_op=0.000 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,434,651      instructions:u                                                        
+        10,452,444      cycles:u                                                              
+
+       0.006032215 seconds time elapsed
+
+       0.005866000 seconds user
+       0.000162000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-tmpfs arm=a1 pmu run=3 2026-10-28T02:18:27+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=992.988 user_ns_per_op=1042.480 sys_ns_per_op=1144.043 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,435,784      instructions:u                                                        
+        10,436,594      cycles:u                                                              
+
+       0.005999683 seconds time elapsed
+
+       0.003515000 seconds user
+       0.002498000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-tmpfs arm=a2 pmu run=1 2026-10-28T02:18:27+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=989.279 user_ns_per_op=1726.562 sys_ns_per_op=478.027 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,480,754      instructions:u                                                        
+        10,436,418      cycles:u                                                              
+
+       0.006058224 seconds time elapsed
+
+       0.005039000 seconds user
+       0.001007000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-tmpfs arm=a2 pmu run=2 2026-10-28T02:18:27+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=997.171 user_ns_per_op=2217.285 sys_ns_per_op=0.000 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,479,801      instructions:u                                                        
+        10,457,389      cycles:u                                                              
+
+       0.006065193 seconds time elapsed
+
+       0.004701000 seconds user
+       0.001361000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-tmpfs arm=a2 pmu run=3 2026-10-28T02:18:27+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=992.863 user_ns_per_op=2198.242 sys_ns_per_op=0.000 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,479,775      instructions:u                                                        
+        10,458,519      cycles:u                                                              
+
+       0.006021488 seconds time elapsed
+
+       0.004658000 seconds user
+       0.001363000 seconds sys
+
+
+PERF_EXIT=0

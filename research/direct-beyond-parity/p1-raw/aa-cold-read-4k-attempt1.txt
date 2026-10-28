@@ -1,0 +1,41 @@
+# cell aa-cold-read-4k (plan P1_MEASUREMENT_PLAN.md §4.5, cold A/A noise) — 2026-10-27T05:38:39+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: run_cold a1 a1 4096 16384 /var/tmp/sluice600-p1/cold64m.bin  (16 A/A pairs; nominal order alternates per pair; both arms a1)
+# per invocation: sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches' then taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+# sudo credential supplied via stdin at a sudo -S -v prime in the driving shell; drops ran on the cached timestamp; credential not recorded in any file
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a; fixture sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (64 MiB, btrfs /var/tmp)
+# concurrency sampled every 0.5s throughout → aa-cold-read-4k-window.log (sampler pre-validated in aa-read-4k unit)
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=14467.622 user_ns_per_op=1302.795 sys_ns_per_op=807.892 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=14062.136 user_ns_per_op=1189.514 sys_ns_per_op=986.420 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9580.659 user_ns_per_op=1188.293 sys_ns_per_op=857.788 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=10931.567 user_ns_per_op=1465.118 sys_ns_per_op=734.314 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9421.300 user_ns_per_op=1307.739 sys_ns_per_op=711.792 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12422.486 user_ns_per_op=1177.765 sys_ns_per_op=865.997 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9624.984 user_ns_per_op=1280.396 sys_ns_per_op=800.507 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12831.212 user_ns_per_op=1140.533 sys_ns_per_op=899.475 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9691.701 user_ns_per_op=1359.314 sys_ns_per_op=702.332 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12594.037 user_ns_per_op=953.552 sys_ns_per_op=1048.584 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12760.946 user_ns_per_op=1341.278 sys_ns_per_op=663.483 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=15586.604 user_ns_per_op=1393.799 sys_ns_per_op=769.226 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9951.563 user_ns_per_op=1387.573 sys_ns_per_op=688.934 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12891.100 user_ns_per_op=1365.997 sys_ns_per_op=697.998 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12235.600 user_ns_per_op=1363.617 sys_ns_per_op=729.614 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9895.908 user_ns_per_op=1499.420 sys_ns_per_op=527.924 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=13035.607 user_ns_per_op=1189.301 sys_ns_per_op=886.536 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=14748.663 user_ns_per_op=1313.049 sys_ns_per_op=792.969 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12048.713 user_ns_per_op=1424.957 sys_ns_per_op=652.496 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9896.003 user_ns_per_op=1411.591 sys_ns_per_op=671.356 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=11696.410 user_ns_per_op=1327.026 sys_ns_per_op=758.362 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=13579.814 user_ns_per_op=1276.215 sys_ns_per_op=804.596 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=11238.164 user_ns_per_op=1365.540 sys_ns_per_op=668.365 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=11181.587 user_ns_per_op=1510.345 sys_ns_per_op=558.472 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=11816.350 user_ns_per_op=1673.004 sys_ns_per_op=438.171 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12706.034 user_ns_per_op=1280.792 sys_ns_per_op=803.986 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=12184.413 user_ns_per_op=1246.429 sys_ns_per_op=826.080 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=11274.894 user_ns_per_op=1176.453 sys_ns_per_op=878.296 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=14626.688 user_ns_per_op=1195.190 sys_ns_per_op=906.830 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9863.975 user_ns_per_op=1244.934 sys_ns_per_op=808.685 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=14145.827 user_ns_per_op=1229.736 sys_ns_per_op=873.932 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=13026.373 user_ns_per_op=1225.922 sys_ns_per_op=866.577 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+# INVALID AS NOISE FLOOR — contaminated: sampler (aa-cold-read-4k-window.log) captured 13 foreign samples
+# 05:38:48–05:38:58+ of write-track sibling invocations (w1x/wx on write-write-composition-4k.bin, cpu2)
+# overlapping this series; distribution bimodal (low ~9.4–10.0k, high 10.9–15.6k ns/op). Full cell rerun once.

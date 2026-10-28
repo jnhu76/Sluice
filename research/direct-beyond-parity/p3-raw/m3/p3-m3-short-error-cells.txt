@@ -1,0 +1,16 @@
+# p3-m3-short-error-cells — 2026-10-28T02:11:26+08:00 — descriptive (plan §4.4): source-EOF short transfer; src=2MiB fixture, chunk=64KiB, ops=40 → requests 2.5MiB > 2MiB source → final chunk short
+# cmd per arm: taskset -c 2 ./ladder <arm> 65536 40 1 1 /tmp/sluice600/p3-m3-src2m.bin dst=/tmp/sluice600/copy-p3-m3-short.bin
+=== arm=cp1 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=40 ns_per_op=19849.425 user_ns_per_op=0.000 sys_ns_per_op=20219.512 checksum=2162688 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=117964 src_hash=0x854b91b602bbc983 dst_size=2097152
+exit=0
+=== arm=cp1s ===
+arm=CP1S_sluice_read_write_loop size=65536 ops=40 ns_per_op=17135.350 user_ns_per_op=0.000 sys_ns_per_op=17463.415 checksum=2162688 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=117964 src_hash=0x854b91b602bbc983 dst_size=2097152
+exit=0
+=== arm=cp2 ===
+arm=CP2_copy_file_range size=65536 ops=40 ns_per_op=17759.650 user_ns_per_op=0.000 sys_ns_per_op=18024.390 checksum=2162688 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+exit=0
+=== arm=cp3 ===
+arm=CP3_sendfile size=65536 ops=40 ns_per_op=16181.450 user_ns_per_op=0.000 sys_ns_per_op=16731.707 checksum=2162688 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+exit=0
+# all four arms must publish exactly min(ops*chunk, src)=2097152 bytes, content_ok=1 (loop-and-advance handles the short final chunk; confirmed bytes only)
+# NOT_RUN_WITH_REASON (error injection, plan §4.2 disclosure 3 ENOSPC/EFBIG class): no size-capped destination filesystem is constructible within this session's granted privileges (loop-mount/quota require mount rights outside the perf/PMU/strace+drop sudo scope; plan §1.5). EXDEV/EINVAL/EBADF classes are pinned in support-matrix.txt (cross_fs EXDEV=18, o_append EBADF=9/EINVAL=22, overlap EINVAL=22).

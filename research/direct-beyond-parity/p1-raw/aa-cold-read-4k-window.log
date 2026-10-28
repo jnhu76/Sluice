@@ -1,0 +1,60 @@
+05:38:34.265052482 | 
+05:38:34.839977624 | 
+05:38:35.409998425 | 
+05:38:35.978810056 | 
+05:38:36.551496869 | 
+05:38:37.123817526 | 
+05:38:37.693897673 | 
+05:38:38.266218346 | 
+05:38:38.838338641 | 
+05:38:39.410674898 | 
+05:38:39.996007790 | 
+05:38:40.959087452 | 66323 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:41.632290291 | 
+05:38:42.347696374 | 
+05:38:43.107599771 | 
+05:38:43.786952070 | 
+05:38:44.422149280 | 
+05:38:45.320997946 | 66409 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:46.021940321 | 66431 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:46.769726347 | 66446 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:47.740028080 | 66460 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66466 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:48.374336803 | 66466 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66475 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:49.118682847 | 66487 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66489 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:49.828373881 | 66502 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66503 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:50.488982513 | 66517 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66518 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:51.205265974 | 66531 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66533 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:51.936850541 | 66545 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66547 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:52.662045494 | 66559 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66562 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:53.361410864 | 66562 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66573 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:54.071280641 | 66583 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66587 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:54.795109623 | 66602 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66603 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:55.462261026 | 66616 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:56.138895811 | 66630 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66632 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:56.816136482 | 66644 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66647 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:38:57.486315954 | 66647 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66659 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:58.174968342 | 66669 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66673 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:58.877253494 | 66687 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66688 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:38:59.685777138 | 66701 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder wx 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66702 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:39:00.376085095 | 66715 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+66716 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+05:39:01.030966072 | 66729 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin
+66731 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1x 4096 1024 1024 5 /tmp/sluice600/write-write-composition-4k.bin
+05:39:01.668400930 | 66743 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin

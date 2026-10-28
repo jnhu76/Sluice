@@ -1,0 +1,45 @@
+# p5-ab-negwrite-1b (negative control) — 2026-10-28T11:34:02Z host E5 kernel 7.2.11-200.fc44.x86_64
+# binary: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab sha256 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+# Amendment-1 scratch: /tmp/sluice600/p5-p5-ab-negwrite-1b.bin (mkfixture; deleted after)
+# cmd: paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab w1 w2 1 4096 4096 5 16 /tmp/sluice600/p5-p5-ab-negwrite-1b.bin
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=585.056 user_ns_per_op=211.955 sys_ns_per_op=374.837 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=586.832 user_ns_per_op=334.839 sys_ns_per_op=253.866 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=585.230 user_ns_per_op=374.512 sys_ns_per_op=212.240 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=581.541 user_ns_per_op=291.463 sys_ns_per_op=291.829 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=585.276 user_ns_per_op=374.634 sys_ns_per_op=212.484 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=588.169 user_ns_per_op=152.954 sys_ns_per_op=436.808 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=585.598 user_ns_per_op=275.553 sys_ns_per_op=315.715 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=586.129 user_ns_per_op=288.615 sys_ns_per_op=329.508 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=590.392 user_ns_per_op=236.043 sys_ns_per_op=357.544 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=581.911 user_ns_per_op=190.918 sys_ns_per_op=393.433 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=587.537 user_ns_per_op=355.998 sys_ns_per_op=233.398 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=584.040 user_ns_per_op=294.230 sys_ns_per_op=294.637 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=585.781 user_ns_per_op=252.848 sys_ns_per_op=334.432 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=589.818 user_ns_per_op=295.492 sys_ns_per_op=295.898 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=583.290 user_ns_per_op=272.380 sys_ns_per_op=312.581 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=584.764 user_ns_per_op=273.112 sys_ns_per_op=313.354 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=582.677 user_ns_per_op=251.546 sys_ns_per_op=333.211 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=583.182 user_ns_per_op=191.366 sys_ns_per_op=394.124 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=587.420 user_ns_per_op=396.362 sys_ns_per_op=192.952 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=584.514 user_ns_per_op=292.887 sys_ns_per_op=293.254 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=586.815 user_ns_per_op=334.717 sys_ns_per_op=253.743 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=584.528 user_ns_per_op=292.887 sys_ns_per_op=293.254 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=587.613 user_ns_per_op=375.814 sys_ns_per_op=213.949 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=582.213 user_ns_per_op=413.737 sys_ns_per_op=170.247 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=585.836 user_ns_per_op=316.406 sys_ns_per_op=275.838 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=583.662 user_ns_per_op=150.675 sys_ns_per_op=434.611 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=584.696 user_ns_per_op=354.736 sys_ns_per_op=232.096 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=580.958 user_ns_per_op=352.498 sys_ns_per_op=230.306 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=586.067 user_ns_per_op=192.546 sys_ns_per_op=395.345 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=588.297 user_ns_per_op=234.294 sys_ns_per_op=355.632 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W2_sluice_write_at size=1 ops=4096 ns_per_op=582.169 user_ns_per_op=353.475 sys_ns_per_op=230.713 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=584.296 user_ns_per_op=292.887 sys_ns_per_op=292.969 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+## analysis:
+pairs=16
+W1_native_write_at: mean=584.772ns sd=2.288 median=584.910
+W2_sluice_write_at: mean=585.622ns sd=2.404 median=585.414
+delta(W1_native_write_at-W2_sluice_write_at): median=-2.003ns mean=-0.850ns sd=3.538 pos=6/16
+paired t=-0.96 (df=15)
+CI95_mean=[-2.735,+1.035]
+AB_subgroup_median=-1.140 BA_subgroup_median=-3.202
+raw_deltas=-1.776,-3.689,-2.893,0.531,8.481,-3.497,-4.037,1.474,-0.505,-2.906,2.287,-5.400,2.174,-3.738,-2.230,2.127

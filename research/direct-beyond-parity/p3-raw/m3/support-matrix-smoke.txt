@@ -1,0 +1,54 @@
+kernel=7.2.11-200.fc44.x86_64
+fs=a op=cfr mode=explicit range=in_range ret=4096 errno=0 match=1
+fs=a op=cfr in_off_arg_pos=5120
+fs=a op=cfr out_off_arg_pos=5120
+fs=a op=cfr mode=null range=in_range ret=4096 errno=0 match=1
+fs=a op=cfr in_after_pos=5120
+fs=a op=cfr out_after_pos=5120
+fs=a op=cfr mode=explicit range=past_eof ret=0 errno=0 match=0
+fs=a op=cfr in_off_arg_unadvanced_pos=8192
+fs=a op=cfr past_eof_offsets_unchanged=1
+fs=a op=sendfile mode=explicit_in range=in_range ret=4096 errno=0 match=1
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=5120
+fs=a op=sendfile mode=explicit_in range=past_eof ret=0 errno=0 match=0
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=1024
+fs=a op=cfr mode=explicit range=o_append ret=-1 errno=9 match=0
+fs=a op=sendfile mode=explicit_in range=o_append ret=-1 errno=22 match=0
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=1024
+fs=a op=cfr mode=explicit range=overlap ret=-1 errno=22
+fs=a op=cfr mode=explicit range=adjacent ret=4096 errno=0
+fs=a op=cfr mode=explicit range=cross_fs ret=-1 errno=18 match=0
+fs=a op=sendfile mode=explicit_in range=cross_fs ret=4096 errno=0 match=1
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=5120
+GATE fs=a cfr_samefs_explicit_in_range=1 sendfile_samefs_in_range=1
+fs=b op=cfr mode=explicit range=in_range ret=4096 errno=0 match=1
+fs=b op=cfr in_off_arg_pos=5120
+fs=b op=cfr out_off_arg_pos=5120
+fs=b op=cfr mode=null range=in_range ret=4096 errno=0 match=1
+fs=b op=cfr in_after_pos=5120
+fs=b op=cfr out_after_pos=5120
+fs=b op=cfr mode=explicit range=past_eof ret=0 errno=0 match=0
+fs=b op=cfr in_off_arg_unadvanced_pos=8192
+fs=b op=cfr past_eof_offsets_unchanged=1
+fs=b op=sendfile mode=explicit_in range=in_range ret=4096 errno=0 match=1
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=5120
+fs=b op=sendfile mode=explicit_in range=past_eof ret=0 errno=0 match=0
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=1024
+fs=b op=cfr mode=explicit range=o_append ret=-1 errno=9 match=0
+fs=b op=sendfile mode=explicit_in range=o_append ret=-1 errno=22 match=0
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=1024
+fs=b op=cfr mode=explicit range=overlap ret=-1 errno=22
+fs=b op=cfr mode=explicit range=adjacent ret=4096 errno=0
+fs=b op=cfr mode=explicit range=cross_fs ret=-1 errno=18 match=0
+fs=b op=sendfile mode=explicit_in range=cross_fs ret=4096 errno=0 match=1
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=5120
+GATE fs=b cfr_samefs_explicit_in_range=1 sendfile_samefs_in_range=1
+SUPPORT_GATE_PASS

@@ -1,0 +1,8 @@
+# P5 identity record — 2026-10-28T11:13:34Z host E5 kernel 7.2.11-200.fc44.x86_64
+kit source commit (all four binaries): 2364be4acf1790baa030afe1730d00ca9222f280 (P4 Amendment 1 common-kit-source clause)
+B1  worktree /home/jnhu/Source/Sluice-600-wt HEAD 77e5399a45998dea396699fa2e063c94a665945a  archive d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0  ladder   8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8
+A=P2C1 worktree /home/jnhu/Source/Sluice-direct-read-compose-prevalidated-steps HEAD deaf03014173e13633a43f4db405c9a9e9860f23 archive 07d0680307c71cc412dfd021fd47c3098de57b580283df189f66dcdc2052049e  ladder-c1 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+B=P2C2 worktree /home/jnhu/Source/Sluice-direct-write-compose-exit-staging HEAD 476bd9ce9780594163350228e066a86b554c157d archive 672510281abadba1cbda0a0e89f15e1dbb2c69f5a15bceb306b70196b420a807  ladder-c2 8bb6473b0f2455c2b092d94cc55ccaec20fe72ff40103bd9fb5c9151c7740065
+A+B stacked worktree /home/jnhu/Source/Sluice-direct-compose-stack-readpreval-writeexit HEAD 4ab6ef170ff939001cc1459445b77c21df9e7d86 archive 07d0680307c71cc412dfd021fd47c3098de57b580283df189f66dcdc2052049e ladder-ab 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+NOTE: stacked archive is byte-identical to P2C1's archive (merge resolution R1 took P2C1's src/blocking_file.cpp wholesale); ladder-ab is byte-identical to ladder-c1 (same kit source 2364be4a).
+warm fixture /tmp/sluice600/data64m.bin sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (regenerated this session after reboot)

@@ -1,0 +1,18 @@
+# P5 A+B one-off kill probe: write-side impossible-count guard (R4)
+# tree: 08df2b2a24bf220de08fc136de7aa0e8c0002c37  branch: direct-compose-stack-readpreval-writeexit
+# source: tests/direct_composition_fault_test.cpp with the write killer registered first (bodies byte-identical)
+# flags match the xmake release target: -O3 -DNDEBUG -fvisibility=hidden -std=c++20
+# BASE:   g++ ... -DSLUICE_FILE_INTERNAL_TESTING
+# MUTANT: BASE + -DSLICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT
+
+== BASE build ==
+build ok
+== BASE run ==
+exit=1
+== MUTANT build ==
+build ok
+== MUTANT run ==
+composition read_exact_at/write_all_at: 16 scenarios compared, 5 not drivable, 0 divergences
+composition read_exact/write_all: 11 scenarios compared, 10 not drivable (verdicts needing a caller-supplied offset), 0 divergences
+all 15 direct composition fault-injection tests passed
+exit=0

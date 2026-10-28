@@ -1,0 +1,44 @@
+# cell: write-sweep-0b (P1 plan §4.2 write track, tmpfs warm, size=0)
+# date: 2026-10-27T02:44:55+08:00  host: E5 (Xeon E5-2666 v3, Fedora 44, kernel 7.2.11-200.fc44.x86_64)
+# ladder sha256: 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a
+# paired command: taskset(pinned by paired.sh): /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 w2 0 4096 4096 5 16 /tmp/sluice600/write64m.bin
+# context-arm command: taskset -c 2 $LADDER w0 0 4096 4096 5 $WRITE_FIX
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.829 user_ns_per_op=1.628 sys_ns_per_op=3.255 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=3.011 sys_ns_per_op=3.011 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=3.011 sys_ns_per_op=3.011 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.746 user_ns_per_op=4.761 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.588 user_ns_per_op=0.000 sys_ns_per_op=4.150 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=6.673 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=5.019 user_ns_per_op=7.202 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.829 user_ns_per_op=2.238 sys_ns_per_op=2.238 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.587 user_ns_per_op=0.000 sys_ns_per_op=4.964 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.588 user_ns_per_op=6.551 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=3.092 sys_ns_per_op=3.052 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.588 user_ns_per_op=2.075 sys_ns_per_op=2.075 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.590 user_ns_per_op=0.000 sys_ns_per_op=4.069 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.593 user_ns_per_op=6.795 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=5.021 user_ns_per_op=3.296 sys_ns_per_op=3.296 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.831 user_ns_per_op=4.557 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.590 user_ns_per_op=2.604 sys_ns_per_op=2.604 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.588 user_ns_per_op=3.337 sys_ns_per_op=3.337 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.867 user_ns_per_op=3.825 sys_ns_per_op=3.825 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.589 user_ns_per_op=0.000 sys_ns_per_op=4.150 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.587 user_ns_per_op=0.000 sys_ns_per_op=4.150 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=5.019 user_ns_per_op=0.000 sys_ns_per_op=6.714 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=7.284 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.587 user_ns_per_op=2.035 sys_ns_per_op=2.116 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.588 user_ns_per_op=2.035 sys_ns_per_op=2.035 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.588 user_ns_per_op=2.970 sys_ns_per_op=3.052 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.588 user_ns_per_op=3.092 sys_ns_per_op=3.052 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.588 user_ns_per_op=2.035 sys_ns_per_op=2.075 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.586 user_ns_per_op=0.000 sys_ns_per_op=4.150 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=6.063 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W2_sluice_write_at size=0 ops=4096 ns_per_op=4.589 user_ns_per_op=0.000 sys_ns_per_op=6.104 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W1_native_write_at size=0 ops=4096 ns_per_op=2.587 user_ns_per_op=0.000 sys_ns_per_op=4.069 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+arm=W0_raw_pwrite size=0 ops=4096 ns_per_op=466.422 user_ns_per_op=315.755 sys_ns_per_op=161.702 checksum=0 content_hash=0x0000000000000000 content_ok=-2
+# analysis: python3 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/analyze_pairs.py W1_native_write_at W2_sluice_write_at < p1-raw/write-sweep-0b.txt (analyzer matches full arm names the ladder prints)
+pairs=16
+W1_native_write_at: mean=2.643ns sd=0.101 median=2.588
+W2_sluice_write_at: mean=4.687ns sd=0.179 median=4.589
+delta(W1_native_write_at-W2_sluice_write_at): median=-2.002ns mean=-2.044ns sd=0.161 rel=-42.702% pos=0/16
+paired t=-50.87 (df=15)

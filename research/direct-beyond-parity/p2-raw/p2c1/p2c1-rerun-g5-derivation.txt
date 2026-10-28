@@ -1,0 +1,64 @@
+# P2C1 G5 re-derivation from the REVISE condition-1 serial re-run — 2026-10-28T00:17+08:00 host E5
+# Authority: P2_CANDIDATE_P2C1.md §9 condition 1 + §8; P2_EXPERIMENT_PLAN.md §2.4 (serial exclusivity,
+# A/A first, MDE dual-report), §3.2 negative-control rule, §3.5 G5 rule; P1_MEASUREMENT_PLAN.md §5.5
+# (EXCESS / PARITY_REACHED definitions), §9 (per-run gates), §11.10 (A/A noise rerun discipline).
+# Session: quiescent host (load 0.03/0.06/0.08 at open; pre-cell load recorded per cell in each file;
+# p2c1-rerun-quiesce.txt), all cells strictly serial, taskset -c 2 via paired.sh, arms/commands
+# byte-match the original p2-raw/p2c1 cell records, Amendment-1 scratch discipline vacuous (read cells
+# only; read fixture pinned-sha verified at open and close). Raw: *-rerun*.txt in this directory;
+# prior records untouched.
+
+## Session noise floors (A/A first, per §2.4 addition 2)
+
+- p2c1-aa-read-4k-base-rerun (B1 binary): attempt1 sd_AA=12.871 > 10 ns #600 band → voided; §11.10
+  one-quiesce rerun (45 s, load 0.00) accepted as attempt2: sd_AA = 10.807 ns, still marginally >10 ns
+  → persistent session noise DISCLOSED (same caliber as the original session's accepted 14.602 and P1's
+  10.39; never absorbed by more reps). MDE'(base) = 2.131·sd_AA/√16 = 5.758 ns.
+- p2c1-aa-read-4k-cand-rerun (candidate binary): sd_AA = 7.028 ns (within band, accepted first
+  attempt). MDE'(cand) = 3.744 ns. Note: this A/A cell shows a within-pair position effect (median
+  −4.178, mean-CI [−9.038,−1.550] excludes 0; AB/BA medians symmetric −4.233/−4.178) — the second
+  invocation of each pair runs ~4–5 ns faster; the ABBA alternation cancels exactly this class in the
+  A/B cells below (their ABmed/BAmed are reported per cell). Disclosed, not a gate input.
+
+## G5 cells (candidate binary — the gate cells)
+
+| cell (raw file) | N1 median | delta(A1−A2) median | mean | sd | 95% CI (mean) | pos |
+|---|---|---|---|---|---|---|
+| p2c1-negread-4k-rerun | 707.980 | +1.259 | −0.070 | 13.395 | [−7.206, +7.066] INCL 0 | 9/16 |
+| p2c1-negread-1b-rerun | 553.395 | −0.263 | −1.578 | 7.886 | [−5.779, +2.623] INCL 0 | 7/16 |
+
+Rule application (MDE = 5.535 pinned; threshold = max(MDE, 1%·N1 median)):
+
+- negread-4k: threshold max(5.535, 7.080) = 7.080. CI includes 0 → EXCESS requires CI exclusion
+  (P1 §5.5) → not EXCESS. |median| 1.259 < 7.080 → **PARITY**.
+- negread-1b: threshold max(5.535, 5.534) = 5.535. CI includes 0 → not EXCESS. |median| 0.263 < 5.535
+  → **PARITY**.
+- MDE′ dual-report (§2.4 addition 1): no verdict flips under MDE'(cand)=3.744 or MDE'(base)=5.758 —
+  both cells have CIs including 0, so no floor can make them EXCESS; PARITY magnitudes also hold.
+
+**G5 re-derivation: both p2c1-negread-* cells PARITY, no cell EXCESS → G5 = PARITY (PASS) under the
+preregistered rule.** Contrast with the original session's §8: negread-4k was then median −9.685 with
+CI [−14.424, −1.250] excluding 0 (formally EXCESS); the quiescent serial re-run does not reproduce
+that CI exclusion — consistent with the original record's "probable false positive" attribution.
+
+## B1-side same-unit controls (attribution, not gate cells)
+
+| cell (raw file) | N1 median | delta(A1−A2) median | mean | sd | 95% CI (mean) | classification |
+|---|---|---|---|---|---|---|
+| p2c1-negread-4k-b1side-rerun | 711.452 | −7.565 | −7.287 | 14.141 | [−14.820, +0.247] INCL 0 | between-band: not EXCESS (CI incl 0) but |median| ≥ 7.115 — disclosed |
+| p2c1-negread-1b-b1side-rerun | 552.611 | −1.502 | −0.297 | 8.296 | [−4.717, +4.123] INCL 0 | PARITY (sub-MDE) |
+
+Adjudication reading (B1-side control vs the original session): the a1/a2 4 KiB paired difference on
+this host keeps its EXCESS-direction sign on the B1 binary (original b1side −10.538 CI-excluding;
+re-run −7.565 CI-including) while the candidate-binary cell this session sits at +1.259 — i.e. the
++9…+10 ns band of the original session was a host/session-state artifact in the a1↔a2 comparison, not
+a candidate regression (candidate read_at is machine-identical to B1, P2_CANDIDATE_P2C1.md §2.2 [RUN]).
+The band attenuates below the CI threshold on the re-run session; the residual same-direction median
+on the B1 side remains disclosed. This adjudication is attribution evidence recorded with the cells;
+G5 itself is decided on the candidate-binary cells above.
+
+## Integrity gates (p2c1-rerun-integrity-close.txt)
+
+fixture sha pinned-MATCH at close; ladder/ladder-c1 identities match the recorded sha256s; no
+VERIFY_FAIL in any cell; 7/7 cell files exit=0; checksum equality 32/32 in every accepted cell
+(25165824 @ 4 KiB, 24576 @ 1 B); 16 ABBA pairs (32 arm lines) per cell — ≥16 satisfied.

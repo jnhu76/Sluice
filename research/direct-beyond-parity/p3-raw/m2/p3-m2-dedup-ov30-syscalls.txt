@@ -1,0 +1,84 @@
+=== p3-m2-dedup-ov30 arm=rpl0 run=1 A(reps=1) 2026-10-28T02:04:24+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=101929.209 user_ns_per_op=41511.068 sys_ns_per_op=29629.883 checksum=33554432 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.027411           1     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.027411           1     24578           total
+=== p3-m2-dedup-ov30 arm=rpl0 run=1 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=61628.418 sys_ns_per_op=29062.988 checksum=0 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011330           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011330           0     16386           total
+=== p3-m2-dedup-ov30 arm=rpl0 run=2 A(reps=1) 2026-10-28T02:04:25+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=104846.199 user_ns_per_op=43918.945 sys_ns_per_op=27708.984 checksum=33554432 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.026868           1     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.026868           1     24578           total
+=== p3-m2-dedup-ov30 arm=rpl0 run=2 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=54635.254 sys_ns_per_op=35479.492 checksum=0 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013625           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013625           0     16386           total
+=== p3-m2-dedup-ov30 arm=rpl0 run=3 A(reps=1) 2026-10-28T02:04:26+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=102926.095 user_ns_per_op=41710.612 sys_ns_per_op=30751.302 checksum=33554432 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.028915           1     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.028915           1     24578           total
+=== p3-m2-dedup-ov30 arm=rpl0 run=3 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=62187.988 sys_ns_per_op=28161.621 checksum=0 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010874           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010874           0     16386           total
+=== p3-m2-dedup-ov30 arm=rpld run=1 A(reps=1) 2026-10-28T02:04:27+08:00 ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=54123.104 user_ns_per_op=40493.164 sys_ns_per_op=21451.172 checksum=22023451 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=3 issued_per_group=21507 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.017674           1     16384           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.017674           1     16384           total
+=== p3-m2-dedup-ov30 arm=rpld run=1 B(reps=0) ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=64443.359 sys_ns_per_op=18044.434 checksum=0 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005849           0     12289           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005849           0     12289           total
+=== p3-m2-dedup-ov30 arm=rpld run=2 A(reps=1) 2026-10-28T02:04:27+08:00 ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=53496.736 user_ns_per_op=38794.922 sys_ns_per_op=22831.706 checksum=22023451 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=3 issued_per_group=21507 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.018007           1     16384           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.018007           1     16384           total
+=== p3-m2-dedup-ov30 arm=rpld run=2 B(reps=0) ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=62976.074 sys_ns_per_op=20967.773 checksum=0 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007039           0     12289           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007039           0     12289           total
+=== p3-m2-dedup-ov30 arm=rpld run=3 A(reps=1) 2026-10-28T02:04:28+08:00 ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=53118.771 user_ns_per_op=40738.281 sys_ns_per_op=21431.966 checksum=22023451 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=3 issued_per_group=21507 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015517           0     16384           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015517           0     16384           total
+=== p3-m2-dedup-ov30 arm=rpld run=3 B(reps=0) ===
+arm=RPLD_union_dedup size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=62247.070 sys_ns_per_op=21266.113 checksum=0 content_hash=0xeb2790c3349c78b9 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0x791ce099c10536ad ref_digest=0xeb2790c3349c78b9 outcome_digest=0xeb2790c3349c78b9 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.006983           0     12289           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.006983           0     12289           total

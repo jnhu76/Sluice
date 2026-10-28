@@ -1,0 +1,165 @@
+# P1 cell meta-file-info — syscall-count record (strace -c; counts only, never wall).
+# date=2026-10-27T04:07:07+08:00 host=E5; net per-op = (count@ops=16384 - count@ops=1)/16383.
+# perf raw_syscalls tracepoint not available unprivileged at perf_event_paranoid=1 (tested during meta-open-close unit this session).
+# cmd: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0fi 0 1 0 1 /tmp/sluice600/data64m.bin
+arm=M0_raw_fstat size=0 ops=1 ns_per_op=14792.000 user_ns_per_op=14000.000 sys_ns_per_op=0.000 checksum=150866835076815 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 73.33    0.000011          11         1           write
+ 26.67    0.000004           0         6           close
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         8           fstat
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000015           0        68         1 total
+strace_exit_m0fi_1=0
+# cmd: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0fi 0 16384 0 1 /tmp/sluice600/data64m.bin
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=25352.399 user_ns_per_op=478.333 sys_ns_per_op=3967.468 checksum=2471802225898536960 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.16    0.030121           1     16391           fstat
+  0.34    0.000103           5        19           mmap
+  0.11    0.000033           5         6           mprotect
+  0.10    0.000031           4         7           openat
+  0.05    0.000014           2         6           close
+  0.05    0.000014           3         4           brk
+  0.04    0.000012          12         1           munmap
+  0.04    0.000011           2         4           read
+  0.04    0.000011          11         1           write
+  0.02    0.000006           3         2           pread64
+  0.01    0.000004           2         2           getrusage
+  0.01    0.000003           3         1           set_tid_address
+  0.01    0.000002           2         1           arch_prctl
+  0.01    0.000002           2         1           futex
+  0.01    0.000002           2         1           set_robust_list
+  0.01    0.000002           2         1           prlimit64
+  0.01    0.000002           2         1           getrandom
+  0.01    0.000002           2         1           rseq
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030375           1     16452         1 total
+strace_exit_m0fi_16384=0
+# cmd: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1fi 0 1 0 1 /tmp/sluice600/data64m.bin
+arm=M1_native_file_info size=0 ops=1 ns_per_op=25921.000 user_ns_per_op=15000.000 sys_ns_per_op=0.000 checksum=150866835076815 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         8           fstat
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0        68         1 total
+strace_exit_m1fi_1=0
+# cmd: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1fi 0 16384 0 1 /tmp/sluice600/data64m.bin
+arm=M1_native_file_info size=0 ops=16384 ns_per_op=24892.136 user_ns_per_op=677.673 sys_ns_per_op=3635.010 checksum=2471802225898536960 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.26    0.027389           1     16391           fstat
+  0.22    0.000060           3        19           mmap
+  0.10    0.000028           4         6           mprotect
+  0.07    0.000018           2         7           openat
+  0.06    0.000017          17         1           munmap
+  0.06    0.000017           4         4           brk
+  0.06    0.000017           8         2           getrusage
+  0.05    0.000015          15         1           write
+  0.04    0.000010           1         6           close
+  0.02    0.000005           2         2           pread64
+  0.01    0.000003           0         4           read
+  0.01    0.000003           3         1           futex
+  0.01    0.000003           3         1           getrandom
+  0.01    0.000002           2         1           arch_prctl
+  0.01    0.000002           2         1           set_tid_address
+  0.01    0.000002           2         1           set_robust_list
+  0.01    0.000002           2         1           rseq
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.027594           1     16452         1 total
+strace_exit_m1fi_16384=0
+# cmd: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 1 0 1 /tmp/sluice600/data64m.bin
+arm=M2_sluice_file_info size=0 ops=1 ns_per_op=13567.000 user_ns_per_op=12000.000 sys_ns_per_op=0.000 checksum=150866835076815 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         8           fstat
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0        68         1 total
+strace_exit_m2fi_1=0
+# cmd: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 0 1 /tmp/sluice600/data64m.bin
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=24654.831 user_ns_per_op=554.138 sys_ns_per_op=3740.540 checksum=2471802225898536960 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 98.99    0.028038           1     16391           fstat
+  0.32    0.000090           4        19           mmap
+  0.24    0.000069          11         6           mprotect
+  0.12    0.000034           4         7           openat
+  0.06    0.000018          18         1           write
+  0.06    0.000016          16         1           munmap
+  0.06    0.000016           4         4           brk
+  0.03    0.000009           1         6           close
+  0.02    0.000006           3         2           pread64
+  0.02    0.000005           2         2           getrusage
+  0.01    0.000004           1         4           read
+  0.01    0.000003           3         1           futex
+  0.01    0.000003           3         1           set_tid_address
+  0.01    0.000003           3         1           prlimit64
+  0.01    0.000003           3         1           getrandom
+  0.01    0.000002           2         1           arch_prctl
+  0.01    0.000002           2         1           set_robust_list
+  0.01    0.000002           2         1           rseq
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.028323           1     16452         1 total
+strace_exit_m2fi_16384=0

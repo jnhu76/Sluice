@@ -1,0 +1,37 @@
+# P2C1 REVISE condition-1 serial re-run — host quiescence record — 2026-10-28T00:01:32+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# purpose: P2_CANDIDATE_P2C1.md §9 REVISE condition 1 (G5 negative-control re-run under P2_EXPERIMENT_PLAN.md §2.4 serial exclusivity)
+$ uptime
+ 00:01:32 up 1 day, 25 min,  1 user,  load average: 0.03, 0.06, 0.08
+$ cat /proc/loadavg
+0.03 0.06 0.08 1/1106 123013
+$ nproc; scaling_governor(s)
+20
+performance
+$ perf_event_paranoid
+1
+$ ps -eo pid,ppid,stat,pcpu,pmem,etimes,comm --sort=-pcpu | head -21 (background process survey)
+    PID    PPID STAT %CPU %MEM ELAPSED COMMAND
+ 123007    2726 Ss   33.3  0.0       0 zsh
+   2726    2348 Ssl   3.1  1.0   87867 zcode-cli
+   2348    2304 Sl    0.8  0.3   87873 node
+   1918    1747 Ssl   0.1  0.3   87889 kwin_wayland
+   2096    1747 Ssl   0.1  0.3   87887 plasma-login-gr
+    812       1 Ss    0.0  0.0   87898 systemd-oomd
+  61927   61923 S     0.0  0.0   66914 sshd-session
+ 122591       2 I     0.0  0.0     581 kworker/u80:10-btrfs-endio-write
+   1179       1 Ssl   0.0  0.0   87895 containerd
+   1675    1663 Sl    0.0  0.1   87890 verge-mihomo
+ 122593       2 I     0.0  0.0     581 kworker/u80:12-btrfs-endio-write
+ 122589       2 I     0.0  0.0     581 kworker/u80:8-events_unbound
+   2097    1747 Ssl   0.0  2.4   87887 plasma-login-wa
+   1664       1 Ssl   0.0  0.1   87890 dockerd
+ 122148       2 I     0.0  0.0    1222 kworker/u80:4-btrfs-endio
+    546       2 S     0.0  0.0   87905 btrfs-transaction
+    871       2 S     0.0  0.0   87897 irq/45-iwlwifi:default_queue
+ 122595       2 I     0.0  0.0     581 kworker/u80:14-btrfs-endio
+     16       2 I     0.0  0.0   87907 rcu_preempt
+    954       1 Ssl   0.0  0.0   87897 NetworkManager
+$ concurrent measurement/build processes (paired|ladder|xmake|perf|strace|cc1|g++)
+none
+$ taskset cpu2 availability (isolcpus check)
+BOOT_IMAGE=(hd0,gpt2)/vmlinuz-7.2.11-200.fc44.x86_64 root=UUID=ba12dc94-3473-4e15-b343-421f980add96 ro rootflags=subvol=root rhgb quiet

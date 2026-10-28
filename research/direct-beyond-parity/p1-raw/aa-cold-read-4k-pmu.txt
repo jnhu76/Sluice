@@ -1,0 +1,86 @@
+# PMU + syscall diagnostic for cell aa-cold-read-4k (both arms identical: a1) — 2026-10-27T05:41:56+08:00 host E5
+# wall statistics live in aa-cold-read-4k.txt only (plan §6.3); per run drop_caches first
+# per run: drop, then taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 <cold64m.bin>  (3 reps)
+#          drop, then sudo taskset -c 2 perf stat -e raw_syscalls:sys_enter <same invocation>  (3 reps)
+# caveat: whole-process counters (incl. read-verify pass = another 16384 preads + startup) — deltas are the signal; A/A arms identical
+== rep1 a1 instructions:u,cycles:u ==
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9622.045 user_ns_per_op=1266.846 sys_ns_per_op=792.664 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin':
+
+       542,958,234      instructions:u                                                        
+       114,182,281      cycles:u                                                              
+
+       0.212015311 seconds time elapsed
+
+       0.041512000 seconds user
+       0.028520000 seconds sys
+
+
+== rep1 a1 raw_syscalls:sys_enter (sudo) ==
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9600.815 user_ns_per_op=1327.148 sys_ns_per_op=801.819 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin':
+
+            32,836      raw_syscalls:sys_enter                                                
+
+       0.211945265 seconds time elapsed
+
+       0.043755000 seconds user
+       0.028315000 seconds sys
+
+
+== rep2 a1 instructions:u,cycles:u ==
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9483.775 user_ns_per_op=1300.293 sys_ns_per_op=767.761 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin':
+
+       542,958,200      instructions:u                                                        
+       114,994,751      cycles:u                                                              
+
+       0.209720364 seconds time elapsed
+
+       0.043635000 seconds user
+       0.026972000 seconds sys
+
+
+== rep2 a1 raw_syscalls:sys_enter (sudo) ==
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9508.939 user_ns_per_op=1479.462 sys_ns_per_op=671.722 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin':
+
+            32,836      raw_syscalls:sys_enter                                                
+
+       0.212035365 seconds time elapsed
+
+       0.049436000 seconds user
+       0.023633000 seconds sys
+
+
+== rep3 a1 instructions:u,cycles:u ==
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9443.697 user_ns_per_op=1271.606 sys_ns_per_op=767.578 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin':
+
+       542,958,154      instructions:u                                                        
+       114,775,792      cycles:u                                                              
+
+       0.208151096 seconds time elapsed
+
+       0.041943000 seconds user
+       0.027742000 seconds sys
+
+
+== rep3 a1 raw_syscalls:sys_enter (sudo) ==
+arm=A1_native_read_at size=4096 ops=16384 ns_per_op=9555.974 user_ns_per_op=1676.331 sys_ns_per_op=633.087 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 16384 0 1 /var/tmp/sluice600-p1/cold64m.bin':
+
+            32,836      raw_syscalls:sys_enter                                                
+
+       0.218616379 seconds time elapsed
+
+       0.056461000 seconds user
+       0.022135000 seconds sys
+
+

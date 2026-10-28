@@ -1,0 +1,17 @@
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+2026-10-28T11:29:07+08:00
+Running /home/jnhu/Source/dududu/build/cmake-parquet/experiments/parquet/parquet_bench
+Run on (20 X 3500 MHz CPU s)
+CPU Caches:
+  L1 Data 32 KiB (x10)
+  L1 Instruction 32 KiB (x10)
+  L2 Unified 256 KiB (x10)
+  L3 Unified 25600 KiB (x1)
+Load Average: 0.36, 0.17, 0.10
+***WARNING*** CPU scaling is enabled, the benchmark real time measurements may be noisy and will incur extra overhead.
+***WARNING*** ASLR is enabled, the results may have unreproducible noise in them.
+-------------------------------------------------------------------------------
+Benchmark                     Time             CPU   Iterations UserCounters...
+-------------------------------------------------------------------------------
+Replay/native/medium  235268305 ns    234311024 ns            3 replay_bytes=181.996M replay_requests=57
+Replay/sluice/medium  233111052 ns    232504176 ns            3 replay_bytes=181.996M replay_requests=57

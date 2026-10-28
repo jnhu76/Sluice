@@ -1,0 +1,32 @@
+# write-reject-closed-4k syscalls/op diagnostic — 2026-10-27T04:12:41+08:00 — host E5, taskset cpu2
+# NOT preregistered in plan §6; added because the CellResult schema requires syscalls/op. Count diagnostic only, never a wall source (§6 rule 3).
+# method: taskset -c 2 strace -c -e trace=pwrite64 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 <1|0> 1 /tmp/sluice600/write64m.bin seq 0 closed — run A reps=1, run B reps=0; A-B isolates the timed 4096-op window (closed state runs no prime pass and no readback).
+# === arm w1 ===
+# run A (reps=1):
+arm=W1_native_write_at size=4096 ops=4096 ns_per_op=3.227 user_ns_per_op=0.000 sys_ns_per_op=5.615 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+# exit=0
+# run B (reps=0):
+arm=W1_native_write_at size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=inf sys_ns_per_op=inf checksum=0 content_hash=0x0000000000000000 content_ok=-1
+# exit=0
+# === arm w2 ===
+# run A (reps=1):
+arm=W2_sluice_write_at size=4096 ops=4096 ns_per_op=4.682 user_ns_per_op=3.174 sys_ns_per_op=3.174 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+# exit=0
+# run B (reps=0):
+arm=W2_sluice_write_at size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=inf sys_ns_per_op=inf checksum=0 content_hash=0x0000000000000000 content_ok=-1
+# exit=0
+# === arm w0 ===
+# run A (reps=1):
+arm=W0_raw_pwrite size=4096 ops=4096 ns_per_op=12666.757 user_ns_per_op=766.357 sys_ns_per_op=2806.152 checksum=18446744073709547520 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004977           1      4096      4096 pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004977           1      4096      4096 total
+# exit=0
+# run B (reps=0):
+arm=W0_raw_pwrite size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=inf sys_ns_per_op=-nan checksum=0 content_hash=0x0000000000000000 content_ok=-1
+# exit=0
+# --- syscalls/op summary (timed window = runA - runB) ---
+# w1: 0 pwrite64 in either run → 0.0000/op | w2: 0 → 0.0000/op (pure userspace invalid_state rejection; ld.so startup uses pread64, not pwrite64)
+# w0: 4096-0=4096 pwrite64 → 1.0000/op, 4096/4096 returned EBADF (kernel floor)

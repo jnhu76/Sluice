@@ -1,0 +1,45 @@
+# pq-strategy-gather-native — 2026-10-28T12:16:38+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# process-level ABBA: pair p even invokes A then B, odd B then A; one process per sample; taskset -c 2; cwd /home/jnhu/Source/dududu
+# A = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='ReplayGather/native/medium' reps=1
+# B = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='Replay/native/medium' reps=1
+ReplayGather/native/medium 450426256
+Replay/native/medium 236632423
+Replay/native/medium 234174197
+ReplayGather/native/medium 450580407
+ReplayGather/native/medium 450476492
+Replay/native/medium 236479678
+Replay/native/medium 234152314
+ReplayGather/native/medium 450795068
+ReplayGather/native/medium 450086960
+Replay/native/medium 235363306
+Replay/native/medium 234195287
+ReplayGather/native/medium 450783288
+ReplayGather/native/medium 450667749
+Replay/native/medium 234951768
+Replay/native/medium 234136226
+ReplayGather/native/medium 451266501
+ReplayGather/native/medium 451005516
+Replay/native/medium 235952747
+Replay/native/medium 234680182
+ReplayGather/native/medium 451083412
+ReplayGather/native/medium 450809623
+Replay/native/medium 234754760
+Replay/native/medium 234307042
+ReplayGather/native/medium 452463238
+ReplayGather/native/medium 451266689
+Replay/native/medium 237275264
+Replay/native/medium 234323672
+ReplayGather/native/medium 451684276
+ReplayGather/native/medium 450712263
+Replay/native/medium 235951980
+Replay/native/medium 234328022
+ReplayGather/native/medium 451176350
+# order-aware analysis (statistic A - B in ms):
+pairs=16
+A: mean=450.955256ms sd=0.559096 median=450.802346
+B: mean=235.103679ms sd=1.037728 median=234.717471
+delta(A-B): median=+216.229046ms mean=+215.851576ms sd=1.323953 pos=16/16
+paired t=+652.14 (df=15)
+CI95_mean=[+215.146240,+216.556912]
+AB_subgroup_median=+214.741968 BA_subgroup_median=+216.745541
+raw_deltas_ms=213.793833,216.406210,213.996814,216.642754,214.723654,216.588001,215.715981,217.130275,215.052769,216.403230,216.054863,218.156196,213.991425,217.360604,214.760283,216.848328
