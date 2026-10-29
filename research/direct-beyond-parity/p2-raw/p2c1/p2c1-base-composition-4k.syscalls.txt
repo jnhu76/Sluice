@@ -1,0 +1,330 @@
+# strace syscall-parity diagnostic (P2 §3.4/§4.4; P1 meta-cell convention: strace -c whole-trace, net per-op = (count@ops=4096 - count@ops=1)/4095; counts only, never wall)
+# date=2026-10-27T22:03:24+08:00 host=E5; note: first attempt with '-e trace=pread,pread64,…' failed on this host (strace: invalid system call 'pread') — whole-trace -c avoids the bad alias; both attempts recorded, first attempt void
+# read arms: taskset -c 2 strace -c /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 {4096,1} 0 1 /tmp/sluice600/data64m.bin
+== arm a1x ops=4096 ==
+arm=A1x_native_read_exact_at size=4096 ops=4096 ns_per_op=13204.199 user_ns_per_op=1122.070 sys_ns_per_op=3908.203 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 96.62    0.014017           1      8194           pread64
+  1.17    0.000170         170         1           execve
+  0.84    0.000122           6        19           mmap
+  0.40    0.000058           8         7           openat
+  0.25    0.000036           6         6           mprotect
+  0.12    0.000018           2         7           fstat
+  0.10    0.000015          15         1           munmap
+  0.09    0.000013           2         6           close
+  0.08    0.000012          12         1           write
+  0.08    0.000011           2         4           read
+  0.08    0.000011           3         3           brk
+  0.03    0.000005           2         2           getrusage
+  0.03    0.000004           4         1         1 access
+  0.03    0.000004           4         1           arch_prctl
+  0.02    0.000003           3         1           futex
+  0.02    0.000003           3         1           getrandom
+  0.01    0.000002           2         1           set_tid_address
+  0.01    0.000002           2         1           prlimit64
+  0.01    0.000001           1         1           set_robust_list
+  0.01    0.000001           1         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.014508           1      8259         1 total
+== arm a1x ops=1 ==
+arm=A1x_native_read_exact_at size=4096 ops=1 ns_per_op=16764.000 user_ns_per_op=11000.000 sys_ns_per_op=0.000 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         4           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0        69         1 total
+== arm ax ops=4096 ==
+arm=AX_sluice_read_exact_at size=4096 ops=4096 ns_per_op=12567.175 user_ns_per_op=1766.968 sys_ns_per_op=3147.583 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.81    0.010788           1      8194           pread64
+  0.10    0.000011          11         1           write
+  0.04    0.000004           0         6           close
+  0.04    0.000004           0         7           fstat
+  0.01    0.000001           0         2           getrusage
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010808           1      8259         1 total
+== arm ax ops=1 ==
+arm=AX_sluice_read_exact_at size=4096 ops=1 ns_per_op=16552.000 user_ns_per_op=5500.000 sys_ns_per_op=5500.000 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 42.14    0.000067           3        19           mmap
+ 16.98    0.000027           4         6           mprotect
+  6.92    0.000011           1         7           openat
+  5.03    0.000008           8         1           munmap
+  4.40    0.000007           1         4           read
+  4.40    0.000007           1         4           pread64
+  3.77    0.000006           1         6           close
+  3.77    0.000006           0         7           fstat
+  3.14    0.000005           1         3           brk
+  2.52    0.000004           4         1           write
+  1.26    0.000002           1         2           getrusage
+  1.26    0.000002           2         1           set_tid_address
+  1.26    0.000002           2         1           rseq
+  0.63    0.000001           1         1           arch_prctl
+  0.63    0.000001           1         1           futex
+  0.63    0.000001           1         1           set_robust_list
+  0.63    0.000001           1         1           prlimit64
+  0.63    0.000001           1         1           getrandom
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000159           2        69         1 total
+== arm a1c ops=4096 ==
+arm=A1c_native_read_exact size=4096 ops=4096 ns_per_op=12496.896 user_ns_per_op=1674.683 sys_ns_per_op=3307.861 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 98.29    0.011273           1      8196           read
+  0.77    0.000088           4        19           mmap
+  0.24    0.000027           4         6           mprotect
+  0.21    0.000024           3         7           openat
+  0.10    0.000012           2         6           close
+  0.08    0.000009           1         7           fstat
+  0.07    0.000008           8         1           write
+  0.06    0.000007           7         1           munmap
+  0.03    0.000004           2         2           pread64
+  0.03    0.000003           1         3           brk
+  0.03    0.000003           1         2           getrusage
+  0.02    0.000002           2         1           arch_prctl
+  0.02    0.000002           2         1           set_robust_list
+  0.02    0.000002           2         1           rseq
+  0.01    0.000001           1         1           lseek
+  0.01    0.000001           1         1           futex
+  0.01    0.000001           1         1           set_tid_address
+  0.01    0.000001           1         1           prlimit64
+  0.01    0.000001           1         1           getrandom
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011469           1      8260         1 total
+== arm a1c ops=1 ==
+arm=A1c_native_read_exact size=4096 ops=1 ns_per_op=14575.000 user_ns_per_op=6500.000 sys_ns_per_op=6000.000 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 42.55    0.000080           4        19           mmap
+ 14.89    0.000028           4         6           mprotect
+ 12.77    0.000024           3         7           openat
+  4.79    0.000009           1         6           read
+  4.79    0.000009           1         7           fstat
+  4.26    0.000008           1         6           close
+  3.72    0.000007           7         1           munmap
+  2.13    0.000004           4         1           write
+  2.13    0.000004           2         2           pread64
+  1.60    0.000003           1         3           brk
+  1.06    0.000002           1         2           getrusage
+  1.06    0.000002           2         1           arch_prctl
+  1.06    0.000002           2         1           set_robust_list
+  0.53    0.000001           1         1           lseek
+  0.53    0.000001           1         1           futex
+  0.53    0.000001           1         1           set_tid_address
+  0.53    0.000001           1         1           prlimit64
+  0.53    0.000001           1         1           getrandom
+  0.53    0.000001           1         1           rseq
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000188           2        70         1 total
+== arm ac ops=4096 ==
+arm=AC_sluice_read_exact size=4096 ops=4096 ns_per_op=12641.525 user_ns_per_op=1416.504 sys_ns_per_op=3511.597 checksum=16777216 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 98.18    0.011953           1      8196           read
+  0.98    0.000119           6        19           mmap
+  0.25    0.000031           4         7           openat
+  0.21    0.000026           4         6           mprotect
+  0.08    0.000010           1         6           close
+  0.07    0.000009           1         7           fstat
+  0.07    0.000008           8         1           munmap
+  0.03    0.000004           2         2           pread64
+  0.02    0.000003           1         3           brk
+  0.02    0.000002           2         1           lseek
+  0.02    0.000002           2         1           arch_prctl
+  0.02    0.000002           2         1           set_robust_list
+  0.01    0.000001           0         2           getrusage
+  0.01    0.000001           1         1           futex
+  0.01    0.000001           1         1           set_tid_address
+  0.01    0.000001           1         1           prlimit64
+  0.01    0.000001           1         1           getrandom
+  0.01    0.000001           1         1           rseq
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012175           1      8260         1 total
+== arm ac ops=1 ==
+arm=AC_sluice_read_exact size=4096 ops=1 ns_per_op=14858.000 user_ns_per_op=6500.000 sys_ns_per_op=6000.000 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 49.14    0.000114           6        19           mmap
+ 12.50    0.000029           4         6           mprotect
+  9.91    0.000023           3         7           openat
+  5.60    0.000013           2         6           read
+  4.74    0.000011           1         7           fstat
+  3.88    0.000009           1         6           close
+  3.45    0.000008           8         1           munmap
+  3.02    0.000007           7         1           write
+  1.72    0.000004           2         2           pread64
+  1.29    0.000003           1         3           brk
+  0.86    0.000002           2         1           arch_prctl
+  0.86    0.000002           2         1           set_robust_list
+  0.43    0.000001           1         1           lseek
+  0.43    0.000001           0         2           getrusage
+  0.43    0.000001           1         1           futex
+  0.43    0.000001           1         1           set_tid_address
+  0.43    0.000001           1         1           prlimit64
+  0.43    0.000001           1         1           getrandom
+  0.43    0.000001           1         1           rseq
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000232           3        70         1 total
+
+# net per-op summary (count@4096 - count@1)/4095, by syscall:
+# a1x: raw@4096={'pread64': 8194, 'read': 4, 'lseek': 0} raw@1={'pread64': 4, 'read': 4, 'lseek': 0} net/op={'pread64': 2.0, 'read': 0.0, 'lseek': 0.0}
+# ax: raw@4096={'pread64': 8194, 'read': 4, 'lseek': 0} raw@1={'pread64': 4, 'read': 4, 'lseek': 0} net/op={'pread64': 2.0, 'read': 0.0, 'lseek': 0.0}
+# a1c: raw@4096={'pread64': 2, 'read': 8196, 'lseek': 1} raw@1={'pread64': 2, 'read': 6, 'lseek': 1} net/op={'pread64': 0.0, 'read': 2.0, 'lseek': 0.0}
+# ac: raw@4096={'pread64': 2, 'read': 8196, 'lseek': 1} raw@1={'pread64': 2, 'read': 6, 'lseek': 1} net/op={'pread64': 0.0, 'read': 2.0, 'lseek': 0.0}
+== tail-pattern strace (p2c1-base-eofmix-4k arms; preregistered expectation 1.3333 pread64/op: 2 calls per 3-op rotation) ==
+== arm a1x tail ops=4096 ==
+arm=A1x_native_read_exact_at size=4096 ops=4096 ns_per_op=16832.103 user_ns_per_op=908.691 sys_ns_per_op=4451.904 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015400           1     10924           pread64
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015400           1     10989         1 total
+== arm a1x tail ops=1 ==
+arm=A1x_native_read_exact_at size=4096 ops=1 ns_per_op=17921.000 user_ns_per_op=0.000 sys_ns_per_op=13000.000 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 29.79    0.000028          28         1           munmap
+ 19.15    0.000018           2         7           fstat
+ 14.89    0.000014          14         1           write
+ 10.64    0.000010           1         7           openat
+  7.45    0.000007           2         3           brk
+  6.38    0.000006           1         4           pread64
+  6.38    0.000006           3         2           getrusage
+  3.19    0.000003           3         1           futex
+  2.13    0.000002           0         6           close
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000094           1        69         1 total
+== arm ax tail ops=4096 ==
+arm=AX_sluice_read_exact_at size=4096 ops=4096 ns_per_op=16157.711 user_ns_per_op=496.094 sys_ns_per_op=4839.966 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 98.70    0.016434           1     10924           pread64
+  0.45    0.000075           3        19           mmap
+  0.22    0.000037           6         6           mprotect
+  0.19    0.000032           4         7           openat
+  0.10    0.000016          16         1           write
+  0.09    0.000015          15         1           munmap
+  0.04    0.000007           1         6           close
+  0.04    0.000007           1         7           fstat
+  0.04    0.000006           2         3           brk
+  0.02    0.000004           2         2           getrusage
+  0.02    0.000003           0         4           read
+  0.02    0.000003           3         1           prlimit64
+  0.01    0.000002           2         1           arch_prctl
+  0.01    0.000002           2         1           futex
+  0.01    0.000002           2         1           set_tid_address
+  0.01    0.000002           2         1           getrandom
+  0.01    0.000002           2         1           rseq
+  0.01    0.000001           1         1           set_robust_list
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.016650           1     10989         1 total
+== arm ax tail ops=1 ==
+arm=AX_sluice_read_exact_at size=4096 ops=1 ns_per_op=17699.000 user_ns_per_op=0.000 sys_ns_per_op=12000.000 checksum=4096 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 26.32    0.000045           2        19           mmap
+ 22.81    0.000039           6         6           mprotect
+ 11.11    0.000019           6         3           brk
+  8.77    0.000015          15         1           munmap
+  6.43    0.000011           1         7           openat
+  5.26    0.000009           9         1           write
+  3.51    0.000006           1         4           pread64
+  2.92    0.000005           0         6           close
+  2.92    0.000005           0         7           fstat
+  2.34    0.000004           2         2           getrusage
+  1.75    0.000003           3         1           getrandom
+  1.17    0.000002           2         1           futex
+  1.17    0.000002           2         1           set_robust_list
+  1.17    0.000002           2         1           prlimit64
+  1.17    0.000002           2         1           rseq
+  0.58    0.000001           1         1           arch_prctl
+  0.58    0.000001           1         1           set_tid_address
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000171           2        69         1 total
+# tail net/op (count@4096 - count@1)/4095:
+# a1x tail: pread64 net/op=2.6667 (raw 10924/4)
+# ax tail: pread64 net/op=2.6667 (raw 10924/4)
+# caliber note: 2.6667 net/op here counts timed+verify (2 windows x 4 preads per 3-op rotation = 8/3); the preregistered 1.3333/op (P2 plan §3.2) is the timed-window count (4/3) — identical information, both arms equal at either caliber. seq cells: 2.000 timed+verify = 2x 1.000 timed.

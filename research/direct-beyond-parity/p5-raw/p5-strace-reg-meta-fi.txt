@@ -1,0 +1,157 @@
+# p5-strace-reg-meta-fi (strace -c integral counts, 3 repeats/arm; never a wall source) — 2026-10-28T13:20:07Z host E5 kernel 7.2.11-200.fc44.x86_64
+--- ladder.m2fi rep1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11416.181 user_ns_per_op=361.837 sys_ns_per_op=3285.034 checksum=14830813499712995328 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.85    0.145474           1     98311           fstat
+  0.07    0.000106           5        19           mmap
+  0.02    0.000026           4         6           mprotect
+  0.02    0.000023           3         7           openat
+  0.01    0.000015          15         1           write
+  0.01    0.000012           2         6           close
+  0.01    0.000009           2         4           read
+  0.01    0.000008           8         1           munmap
+  0.01    0.000008           2         4           brk
+  0.00    0.000003           1         2           pread64
+  0.00    0.000003           1         2           getrusage
+  0.00    0.000002           2         1           arch_prctl
+  0.00    0.000002           2         1           set_robust_list
+  0.00    0.000001           1         1           futex
+  0.00    0.000001           1         1           set_tid_address
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000001           1         1           getrandom
+  0.00    0.000001           1         1           rseq
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.145696           1     98372         1 total
+--- ladder.m2fi rep2
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11402.757 user_ns_per_op=395.070 sys_ns_per_op=3270.986 checksum=14830813499712995328 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.95    0.144722           1     98311           fstat
+  0.01    0.000020          20         1           write
+  0.01    0.000016          16         1           munmap
+  0.01    0.000013           3         4           brk
+  0.01    0.000011           1         7           openat
+  0.00    0.000004           2         2           getrusage
+  0.00    0.000003           0         6           close
+  0.00    0.000003           3         1           prlimit64
+  0.00    0.000003           3         1           getrandom
+  0.00    0.000002           2         1           futex
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.144797           1     98372         1 total
+--- ladder.m2fi rep3
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11356.299 user_ns_per_op=446.971 sys_ns_per_op=3208.415 checksum=14830813499712995328 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.95    0.141985           1     98311           fstat
+  0.02    0.000027          27         1           munmap
+  0.01    0.000014           3         4           brk
+  0.01    0.000010           1         7           openat
+  0.01    0.000009           9         1           write
+  0.00    0.000005           2         2           getrusage
+  0.00    0.000003           0         6           close
+  0.00    0.000002           2         1           futex
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.142055           1     98372         1 total
+--- ladder-ab.m2fi rep1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11770.899 user_ns_per_op=467.621 sys_ns_per_op=3350.362 checksum=14830813499712995328 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.98    0.148928           1     98311           fstat
+  0.01    0.000016          16         1           write
+  0.00    0.000005           1         4           brk
+  0.00    0.000003           0         6           close
+  0.00    0.000002           1         2           getrusage
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.148954           1     98372         1 total
+--- ladder-ab.m2fi rep2
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11465.646 user_ns_per_op=450.399 sys_ns_per_op=3234.670 checksum=14830813499712995328 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.82    0.144193           1     98311           fstat
+  0.10    0.000139           7        19           mmap
+  0.02    0.000029           4         7           openat
+  0.02    0.000027           4         6           mprotect
+  0.01    0.000014           2         6           close
+  0.01    0.000011           2         4           brk
+  0.01    0.000010           2         4           read
+  0.01    0.000009           9         1           write
+  0.00    0.000007           7         1           munmap
+  0.00    0.000004           2         2           pread64
+  0.00    0.000003           1         2           getrusage
+  0.00    0.000002           2         1           arch_prctl
+  0.00    0.000002           2         1           set_robust_list
+  0.00    0.000002           2         1           rseq
+  0.00    0.000001           1         1           futex
+  0.00    0.000001           1         1           set_tid_address
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000001           1         1           getrandom
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.144456           1     98372         1 total
+--- ladder-ab.m2fi rep3
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11466.945 user_ns_per_op=309.672 sys_ns_per_op=3376.444 checksum=14830813499712995328 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.98    0.151303           1     98311           fstat
+  0.01    0.000017          17         1           write
+  0.00    0.000005           1         4           brk
+  0.00    0.000003           0         6           close
+  0.00    0.000002           1         2           getrusage
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0        19           mmap
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         1           munmap
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.151330           1     98372         1 total

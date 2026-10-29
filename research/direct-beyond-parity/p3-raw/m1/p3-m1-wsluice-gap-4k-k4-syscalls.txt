@@ -1,0 +1,109 @@
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=1 A(reps=1) 2026-10-28T01:52:35+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=49141.791 user_ns_per_op=1037.109 sys_ns_per_op=14405.273 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=1 B(reps=0) ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=2 A(reps=1) 2026-10-28T01:52:36+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=48441.174 user_ns_per_op=2046.875 sys_ns_per_op=13185.547 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=2 B(reps=0) ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=inf sys_ns_per_op=-nan checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=3 A(reps=1) 2026-10-28T01:52:38+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=49418.631 user_ns_per_op=3056.641 sys_ns_per_op=12637.695 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=3 B(reps=0) ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=1 A(reps=1) 2026-10-28T01:52:42+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=44336.652 user_ns_per_op=916.016 sys_ns_per_op=14478.516 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=1 B(reps=0) ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=2 A(reps=1) 2026-10-28T01:52:44+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=46147.680 user_ns_per_op=1882.812 sys_ns_per_op=13276.367 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=2 B(reps=0) ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=3 A(reps=1) 2026-10-28T01:52:46+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=46763.415 user_ns_per_op=3274.414 sys_ns_per_op=11927.734 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=3 B(reps=0) ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+# REDO 2026-10-28T01:54:36+08:00: earlier run had 2>&1 >> misorder losing strace/perf stderr; rerun with correct redirection; same shapes
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=1 A(reps=1) 2026-10-28T01:54:36+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=49396.336 user_ns_per_op=2799.805 sys_ns_per_op=13130.859 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040671           1     20480           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040671           1     20480           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=1 B(reps=0) ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.033594           2     16384           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.033594           2     16384           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=2 A(reps=1) 2026-10-28T01:54:39+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=47379.108 user_ns_per_op=2567.383 sys_ns_per_op=12903.320 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.038823           1     20480           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.038823           1     20480           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=2 B(reps=0) ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=inf sys_ns_per_op=-nan checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.034822           2     16384           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.034822           2     16384           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=3 A(reps=1) 2026-10-28T01:54:41+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=47062.850 user_ns_per_op=993.164 sys_ns_per_op=14607.422 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040783           1     20480           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040783           1     20480           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 run=3 B(reps=0) ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.029902           1     16384           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.029902           1     16384           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=1 A(reps=1) 2026-10-28T01:54:44+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=46951.360 user_ns_per_op=925.781 sys_ns_per_op=14486.328 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040516           1     20480           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.040516           1     20480           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=1 B(reps=0) ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030974           1     16384           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030974           1     16384           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=2 A(reps=1) 2026-10-28T01:54:46+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=48127.478 user_ns_per_op=1167.969 sys_ns_per_op=14366.211 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.038980           1     20480           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.038980           1     20480           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=2 B(reps=0) ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=inf sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.033934           2     16384           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.033934           2     16384           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=3 A(reps=1) 2026-10-28T01:54:49+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=46462.472 user_ns_per_op=3096.680 sys_ns_per_op=12303.711 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.037520           1     20480           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.037520           1     20480           total
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs run=3 B(reps=0) ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=inf sys_ns_per_op=inf checksum=0 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.031485           1     16384           pwrite64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.031485           1     16384           total

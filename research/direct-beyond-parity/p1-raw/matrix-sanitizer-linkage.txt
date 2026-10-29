@@ -1,0 +1,30 @@
+# Sanitizer/liburing linkage re-verification — 2026-10-27T09:50:31+08:00 — P1 synthesis pass
+# re-runs the check asserted by cell matrix-correctness-4cfg (originally executed during the campaign but not archived then)
+# command: for each mode dir, readelf -d on every executable, tabulate DT_NEEDED entries matching libasan/libubsan/liburing
+# build tree: /home/jnhu/Source/Sluice-direct-cost-ladder/build/linux/x86_64/{release,debug,asan,asanubsan} (leftover from the campaign-boundary matrix loop at kit HEAD e096b4a1)
+mode=release executables=62 linking_libasan=0 linking_libubsan=0 linking_liburing=0
+mode=debug executables=62 linking_libasan=0 linking_libubsan=0 linking_liburing=0
+mode=asan executables=62 linking_libasan=60 linking_libubsan=0 linking_liburing=0
+mode=asanubsan executables=62 linking_libasan=60 linking_libubsan=60 linking_liburing=0
+# sample DT_NEEDED lines:
+ 0x0000000000000001 (NEEDED)             Shared library: [libasan.so.8]
+ 0x0000000000000001 (NEEDED)             Shared library: [libtail_pread_shim.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libasan.so.8]
+ 0x0000000000000001 (NEEDED)             Shared library: [libtail_pread_shim.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libubsan.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libtail_pread_shim.so]
+ 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+# clarification: the 62 files per mode include 2 static archives (libsluice_core.a, libsluice_async.a) caught by the glob;
+# they are not executables — every one of the 60 actual executables links the expected runtime (asan: 60/60 libasan.so.8; asanubsan: 60/60 libasan.so.8+libubsan.so.1).
+# verified by: for b in build/linux/x86_64/asan/*; readelf -d "$b" | grep -q libasan || echo $b  -> only the two .a members printed.

@@ -1,0 +1,5 @@
+# ac3 composition-gap btrfs cp1s vs cp1
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=15191.872 user_ns_per_op=579.656 sys_ns_per_op=15895.549 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=15527.166 user_ns_per_op=584.733 sys_ns_per_op=16118.118 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=15197.241 user_ns_per_op=804.569 sys_ns_per_op=15827.021 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=15286.613 user_ns_per_op=994.338 sys_ns_per_op=15614.994 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864

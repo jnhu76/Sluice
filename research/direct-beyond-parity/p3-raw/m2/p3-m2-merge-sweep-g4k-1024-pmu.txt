@@ -1,0 +1,90 @@
+=== p3-m2-merge-sweep-g4k-1024 arm=rpl0 pmu run=1 2026-10-28T02:03:58+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=9963.220 user_ns_per_op=40128.255 sys_ns_per_op=6462.240 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=0 dedup=0':
+
+     1,182,342,384      instructions:u                                                        
+       410,935,610      cycles:u                                                              
+
+       0.146310242 seconds time elapsed
+
+       0.125257000 seconds user
+       0.019889000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-merge-sweep-g4k-1024 arm=rpl0 pmu run=2 2026-10-28T02:03:59+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=9936.548 user_ns_per_op=40359.049 sys_ns_per_op=6128.906 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=0 dedup=0':
+
+     1,182,342,344      instructions:u                                                        
+       411,443,014      cycles:u                                                              
+
+       0.146243073 seconds time elapsed
+
+       0.126262000 seconds user
+       0.018862000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-merge-sweep-g4k-1024 arm=rpl0 pmu run=3 2026-10-28T02:04:00+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=9803.749 user_ns_per_op=39036.133 sys_ns_per_op=7524.740 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+
+ Performance counter stats for './ladder rpl0 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=0 dedup=0':
+
+     1,182,342,373      instructions:u                                                        
+       411,040,584      cycles:u                                                              
+
+       0.146158099 seconds time elapsed
+
+       0.121667000 seconds user
+       0.023416000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-merge-sweep-g4k-1024 arm=rplt pmu run=1 2026-10-28T02:04:01+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=9966.588 user_ns_per_op=40844.076 sys_ns_per_op=5561.523 checksum=34009224 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=1024 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=7 issued_per_group=33212 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=1024 dedup=0':
+
+     1,190,446,114      instructions:u                                                        
+       417,564,323      cycles:u                                                              
+
+       0.145128384 seconds time elapsed
+
+       0.126735000 seconds user
+       0.018037000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-merge-sweep-g4k-1024 arm=rplt pmu run=2 2026-10-28T02:04:02+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=9939.789 user_ns_per_op=41651.693 sys_ns_per_op=4580.078 checksum=34009224 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=1024 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=7 issued_per_group=33212 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=1024 dedup=0':
+
+     1,190,446,024      instructions:u                                                        
+       415,936,467      cycles:u                                                              
+
+       0.144451433 seconds time elapsed
+
+       0.129112000 seconds user
+       0.015003000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m2-merge-sweep-g4k-1024 arm=rplt pmu run=3 2026-10-28T02:04:03+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=9787.357 user_ns_per_op=41633.138 sys_ns_per_op=4557.292 checksum=34009224 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=1024 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=7 issued_per_group=33212 requested_per_group=32768
+
+ Performance counter stats for './ladder rplt 4096 1024 0 1 /tmp/sluice600/data64m.bin trace=g4k merge=1024 dedup=0':
+
+     1,190,446,072      instructions:u                                                        
+       417,452,071      cycles:u                                                              
+
+       0.144453197 seconds time elapsed
+
+       0.129149000 seconds user
+       0.014994000 seconds sys
+
+
+PERF_EXIT=0

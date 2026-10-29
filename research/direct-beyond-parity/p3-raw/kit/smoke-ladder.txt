@@ -1,0 +1,402 @@
+=== P3 kit smoke gate 2026-10-27T17:45:08Z ===
+kit=/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder
+kernel=7.2.11-200.fc44.x86_64
+log=/home/jnhu/Source/Sluice/research/direct-beyond-parity/p3-raw/kit/smoke-ladder.txt
+ok: fstype /tmp = tmpfs
+ok: fstype /var/tmp = btrfs
+--- build ---
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+5a53a9ad1ea00a9a26dee98543ef473ca15dcdfda86c2aa647b59cca4ec05507  ./ladder
+0f8a97f6947e7a5de88e864e2a23e2c6b526fdd73320c8a92160142479d30501  ./m3-support
+build ok
+--- arm inventory (36 arms) ---
+a0    A0_raw_pread                    read           bare syscall floor (N0)
+a1    A1_native_read_at               read           hand-matched native (N1)
+a2    A2_sluice_read_at               read           B1 library
+a3    A3_nosyscall_stub               read           no-kernel diagnostic stub
+a1x   A1x_native_read_exact_at        read           native composition
+ax    AX_sluice_read_exact_at         read           B1 composition
+a1c   A1c_native_read_exact           read           native shared-cursor composition
+ac    AC_sluice_read_exact            read           B1 shared-cursor composition
+w0    W0_raw_pwrite                   write          bare syscall floor (N0)
+w1    W1_native_write_at              write          hand-matched native (N1)
+w2    W2_sluice_write_at              write          B1 library
+w1x   W1x_native_write_all_at         write          native composition
+wx    WX_sluice_write_all_at          write          B1 composition
+w1c   W1c_native_write_all            write          native shared-cursor composition
+wc    WC_sluice_write_all             write          B1 shared-cursor composition
+m0oc  M0_raw_open_close               open+close     bare syscall floor (N0)
+m0fi  M0_raw_fstat                    file_info      bare syscall floor (N0)
+m1oc  M1_native_open_close            open+close     hand-matched native (N1)
+m1fi  M1_native_file_info             file_info      hand-matched native (N1)
+m1sz  M1_native_size                  size           hand-matched native (N1)
+m2oc  M2_sluice_open_close            open+close     B1 library
+m2fi  M2_sluice_file_info             file_info      B1 library
+m2sz  M2_sluice_size                  size           B1 library
+av0   AV0_kpread_group                vectored read  k separate ::pread (P3 M1)
+av1   AV1_preadv_group                vectored read  one ::preadv (P3 M1)
+avs   AVS_sluice_kread_at_group       vectored read  k Sluice read_at (P3 M1)
+wv0   WV0_kpwrite_group               vectored write k separate ::pwrite (P3 M1)
+wv1   WV1_pwritev_group               vectored write one ::pwritev (P3 M1)
+wvs   WVS_sluice_kwrite_at_group      vectored write k Sluice write_at (P3 M1)
+rpl0  RPL0_unmerged_replay            planner        per-request pread (P3 M2)
+rplt  RPLT_sweep_merge                planner        sort+sweep merge, merge=<T> (P3 M2)
+rpld  RPLD_union_dedup                planner        union dedup (P3 M2)
+cp1   CP1_pread_pwrite_loop           copy           native user-space loop (P3 M3)
+cp1s  CP1S_sluice_read_write_loop     copy           Sluice read_at+write_at loop (P3 M3)
+cp2   CP2_copy_file_range             copy           copy_file_range, explicit offsets (P3 M3)
+cp3   CP3_sendfile                    copy           sendfile, explicit in-offset (P3 M3)
+wrote 4194304 bytes
+wrote 1048576 bytes
+wrote 2097152 bytes
+wrote 1048576 bytes
+wrote 2097152 bytes
+--- read family equality group (a3 excluded) ---
+arm=A0_raw_pread size=4096 ops=64 ns_per_op=797.750 user_ns_per_op=1642.857 sys_ns_per_op=0.000 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+group read-existing reference arm=a0
+arm=A1_native_read_at size=4096 ops=64 ns_per_op=755.125 user_ns_per_op=1616.071 sys_ns_per_op=0.000 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-existing arm=a1 checksum = 655360
+ok: group read-existing arm=a1 content_hash = 0x0000000000000000
+ok: group read-existing arm=a1 fill_len_hash = 
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=743.500 user_ns_per_op=1464.286 sys_ns_per_op=0.000 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-existing arm=a2 checksum = 655360
+ok: group read-existing arm=a2 content_hash = 0x0000000000000000
+ok: group read-existing arm=a2 fill_len_hash = 
+arm=A1x_native_read_exact_at size=4096 ops=64 ns_per_op=735.703 user_ns_per_op=1535.714 sys_ns_per_op=0.000 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-existing arm=a1x checksum = 655360
+ok: group read-existing arm=a1x content_hash = 0x0000000000000000
+ok: group read-existing arm=a1x fill_len_hash = 
+arm=AX_sluice_read_exact_at size=4096 ops=64 ns_per_op=751.547 user_ns_per_op=1558.036 sys_ns_per_op=0.000 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-existing arm=ax checksum = 655360
+ok: group read-existing arm=ax content_hash = 0x0000000000000000
+ok: group read-existing arm=ax fill_len_hash = 
+arm=A1c_native_read_exact size=4096 ops=64 ns_per_op=750.797 user_ns_per_op=1459.821 sys_ns_per_op=0.000 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-existing arm=a1c checksum = 655360
+ok: group read-existing arm=a1c content_hash = 0x0000000000000000
+ok: group read-existing arm=a1c fill_len_hash = 
+arm=AC_sluice_read_exact size=4096 ops=64 ns_per_op=761.500 user_ns_per_op=0.000 sys_ns_per_op=1468.750 checksum=655360 content_hash=0x0000000000000000 content_ok=-1
+ok: group read-existing arm=ac checksum = 655360
+ok: group read-existing arm=ac content_hash = 0x0000000000000000
+ok: group read-existing arm=ac fill_len_hash = 
+--- write family equality group ---
+wrote 1048576 bytes
+arm=W0_raw_pwrite size=4096 ops=32 ns_per_op=761.188 user_ns_per_op=825.000 sys_ns_per_op=0.000 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+group write-existing reference arm=w0
+ok: group write-existing reference content_ok = 1
+arm=W1_native_write_at size=4096 ops=32 ns_per_op=756.438 user_ns_per_op=0.000 sys_ns_per_op=1037.500 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+ok: group write-existing arm=w1 checksum = 327680
+ok: group write-existing arm=w1 content_hash = 0x6320b3b98860d183
+ok: group write-existing arm=w1 content_ok = 1
+arm=W2_sluice_write_at size=4096 ops=32 ns_per_op=789.906 user_ns_per_op=437.500 sys_ns_per_op=425.000 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+ok: group write-existing arm=w2 checksum = 327680
+ok: group write-existing arm=w2 content_hash = 0x6320b3b98860d183
+ok: group write-existing arm=w2 content_ok = 1
+arm=W1x_native_write_all_at size=4096 ops=32 ns_per_op=818.875 user_ns_per_op=0.000 sys_ns_per_op=1150.000 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+ok: group write-existing arm=w1x checksum = 327680
+ok: group write-existing arm=w1x content_hash = 0x6320b3b98860d183
+ok: group write-existing arm=w1x content_ok = 1
+arm=WX_sluice_write_all_at size=4096 ops=32 ns_per_op=826.750 user_ns_per_op=0.000 sys_ns_per_op=1075.000 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+ok: group write-existing arm=wx checksum = 327680
+ok: group write-existing arm=wx content_hash = 0x6320b3b98860d183
+ok: group write-existing arm=wx content_ok = 1
+arm=W1c_native_write_all size=4096 ops=32 ns_per_op=828.438 user_ns_per_op=0.000 sys_ns_per_op=912.500 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+ok: group write-existing arm=w1c checksum = 327680
+ok: group write-existing arm=w1c content_hash = 0x6320b3b98860d183
+ok: group write-existing arm=w1c content_ok = 1
+arm=WC_sluice_write_all size=4096 ops=32 ns_per_op=770.000 user_ns_per_op=0.000 sys_ns_per_op=862.500 checksum=327680 content_hash=0x6320b3b98860d183 content_ok=1
+ok: group write-existing arm=wc checksum = 327680
+ok: group write-existing arm=wc content_hash = 0x6320b3b98860d183
+ok: group write-existing arm=wc content_ok = 1
+--- metadata arms run clean ---
+arm=M0_raw_open_close size=4096 ops=8 ns_per_op=1571.250 user_ns_per_op=2083.333 sys_ns_per_op=0.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+arm=M0_raw_fstat size=4096 ops=8 ns_per_op=524.750 user_ns_per_op=1083.333 sys_ns_per_op=0.000 checksum=113150275047708 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=4096 ops=8 ns_per_op=1594.000 user_ns_per_op=2083.333 sys_ns_per_op=0.000 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=4096 ops=8 ns_per_op=525.625 user_ns_per_op=0.000 sys_ns_per_op=833.333 checksum=113150275047708 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=4096 ops=8 ns_per_op=522.375 user_ns_per_op=0.000 sys_ns_per_op=916.667 checksum=50331648 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=4096 ops=8 ns_per_op=1610.625 user_ns_per_op=0.000 sys_ns_per_op=2083.333 checksum=12 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=4096 ops=8 ns_per_op=565.125 user_ns_per_op=416.667 sys_ns_per_op=500.000 checksum=113150275047708 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=4096 ops=8 ns_per_op=561.250 user_ns_per_op=416.667 sys_ns_per_op=416.667 checksum=50331648 content_hash=0x0000000000000000 content_ok=-1
+--- M1 read group {av0,av1,avs}: k=2/4/8 seq, k=4 rand, k=4 tail (EOF oracle), 64K k=4 ---
+arm=AV0_kpread_group size=4096 ops=64 ns_per_op=2394.781 user_ns_per_op=2000.000 sys_ns_per_op=3754.464 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=4 issued_per_group=4096
+group m1-read-k4 reference arm=av0
+ok: group m1-read-k4 reference content_ok = 1
+arm=AV1_preadv_group size=4096 ops=64 ns_per_op=705.469 user_ns_per_op=4107.143 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=1 issued_per_group=4096
+ok: group m1-read-k4 arm=av1 checksum = 655360
+ok: group m1-read-k4 arm=av1 content_hash = 0x519a9a04bd59f683
+ok: group m1-read-k4 arm=av1 fill_len_hash = 0xfcef937c08a02383
+ok: group m1-read-k4 arm=av1 content_ok = 1
+arm=AVS_sluice_kread_at_group size=4096 ops=64 ns_per_op=2203.031 user_ns_per_op=5549.107 sys_ns_per_op=58.036 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=4 issued_per_group=4096
+ok: group m1-read-k4 arm=avs checksum = 655360
+ok: group m1-read-k4 arm=avs content_hash = 0x519a9a04bd59f683
+ok: group m1-read-k4 arm=avs fill_len_hash = 0xfcef937c08a02383
+ok: group m1-read-k4 arm=avs content_ok = 1
+arm=AV0_kpread_group size=4096 ops=64 ns_per_op=1160.531 user_ns_per_op=4491.071 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=2 fill_len_hash=0xe956b0e493a67383 syscalls_per_group=2 issued_per_group=4096
+group m1-read-k2 reference arm=av0
+ok: group m1-read-k2 reference content_ok = 1
+arm=AV1_preadv_group size=4096 ops=64 ns_per_op=670.391 user_ns_per_op=4071.429 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=2 fill_len_hash=0xe956b0e493a67383 syscalls_per_group=1 issued_per_group=4096
+ok: group m1-read-k2 arm=av1 checksum = 655360
+ok: group m1-read-k2 arm=av1 content_hash = 0x519a9a04bd59f683
+ok: group m1-read-k2 arm=av1 fill_len_hash = 0xe956b0e493a67383
+ok: group m1-read-k2 arm=av1 content_ok = 1
+arm=AVS_sluice_kread_at_group size=4096 ops=64 ns_per_op=1174.516 user_ns_per_op=4549.107 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=2 fill_len_hash=0xe956b0e493a67383 syscalls_per_group=2 issued_per_group=4096
+ok: group m1-read-k2 arm=avs checksum = 655360
+ok: group m1-read-k2 arm=avs content_hash = 0x519a9a04bd59f683
+ok: group m1-read-k2 arm=avs fill_len_hash = 0xe956b0e493a67383
+ok: group m1-read-k2 arm=avs content_ok = 1
+arm=AV0_kpread_group size=4096 ops=64 ns_per_op=4291.688 user_ns_per_op=7906.250 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=8 fill_len_hash=0x1cbce850aba88383 syscalls_per_group=8 issued_per_group=4096
+group m1-read-k8 reference arm=av0
+ok: group m1-read-k8 reference content_ok = 1
+arm=AV1_preadv_group size=4096 ops=64 ns_per_op=755.391 user_ns_per_op=4191.964 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=8 fill_len_hash=0x1cbce850aba88383 syscalls_per_group=1 issued_per_group=4096
+ok: group m1-read-k8 arm=av1 checksum = 655360
+ok: group m1-read-k8 arm=av1 content_hash = 0x519a9a04bd59f683
+ok: group m1-read-k8 arm=av1 fill_len_hash = 0x1cbce850aba88383
+ok: group m1-read-k8 arm=av1 content_ok = 1
+arm=AVS_sluice_kread_at_group size=4096 ops=64 ns_per_op=4287.875 user_ns_per_op=8120.536 sys_ns_per_op=0.000 checksum=655360 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=8 fill_len_hash=0x1cbce850aba88383 syscalls_per_group=8 issued_per_group=4096
+ok: group m1-read-k8 arm=avs checksum = 655360
+ok: group m1-read-k8 arm=avs content_hash = 0x519a9a04bd59f683
+ok: group m1-read-k8 arm=avs fill_len_hash = 0x1cbce850aba88383
+ok: group m1-read-k8 arm=avs content_ok = 1
+arm=AV0_kpread_group size=4096 ops=64 ns_per_op=2609.297 user_ns_per_op=5808.036 sys_ns_per_op=0.000 checksum=655360 content_hash=0x44877c70dfb376af content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=4 issued_per_group=4096
+group m1-read-rand reference arm=av0
+ok: group m1-read-rand reference content_ok = 1
+arm=AV1_preadv_group size=4096 ops=64 ns_per_op=712.672 user_ns_per_op=4084.821 sys_ns_per_op=0.000 checksum=655360 content_hash=0x44877c70dfb376af content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=1 issued_per_group=4096
+ok: group m1-read-rand arm=av1 checksum = 655360
+ok: group m1-read-rand arm=av1 content_hash = 0x44877c70dfb376af
+ok: group m1-read-rand arm=av1 fill_len_hash = 0xfcef937c08a02383
+ok: group m1-read-rand arm=av1 content_ok = 1
+arm=AVS_sluice_kread_at_group size=4096 ops=64 ns_per_op=2250.219 user_ns_per_op=5709.821 sys_ns_per_op=227.679 checksum=655360 content_hash=0x44877c70dfb376af content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=4 issued_per_group=4096
+ok: group m1-read-rand arm=avs checksum = 655360
+ok: group m1-read-rand arm=avs content_hash = 0x44877c70dfb376af
+ok: group m1-read-rand arm=avs fill_len_hash = 0xfcef937c08a02383
+ok: group m1-read-rand arm=avs content_ok = 1
+arm=AV0_kpread_group size=4096 ops=9 ns_per_op=2004.222 user_ns_per_op=0.000 sys_ns_per_op=5777.778 checksum=55296 content_hash=0x623333eb807e844a content_ok=1 iovcnt=4 fill_len_hash=0xefff5e10d3542283 syscalls_per_group=4 issued_per_group=4096
+group m1-read-eof-tail reference arm=av0
+ok: group m1-read-eof-tail reference content_ok = 1
+arm=AV1_preadv_group size=4096 ops=9 ns_per_op=613.444 user_ns_per_op=0.000 sys_ns_per_op=3555.556 checksum=55296 content_hash=0x623333eb807e844a content_ok=1 iovcnt=4 fill_len_hash=0xefff5e10d3542283 syscalls_per_group=1 issued_per_group=4096
+ok: group m1-read-eof-tail arm=av1 checksum = 55296
+ok: group m1-read-eof-tail arm=av1 content_hash = 0x623333eb807e844a
+ok: group m1-read-eof-tail arm=av1 fill_len_hash = 0xefff5e10d3542283
+ok: group m1-read-eof-tail arm=av1 content_ok = 1
+arm=AVS_sluice_kread_at_group size=4096 ops=9 ns_per_op=1992.000 user_ns_per_op=0.000 sys_ns_per_op=5083.333 checksum=55296 content_hash=0x623333eb807e844a content_ok=1 iovcnt=4 fill_len_hash=0xefff5e10d3542283 syscalls_per_group=4 issued_per_group=4096
+ok: group m1-read-eof-tail arm=avs checksum = 55296
+ok: group m1-read-eof-tail arm=avs content_hash = 0x623333eb807e844a
+ok: group m1-read-eof-tail arm=avs fill_len_hash = 0xefff5e10d3542283
+ok: group m1-read-eof-tail arm=avs content_ok = 1
+arm=AV0_kpread_group size=65536 ops=16 ns_per_op=6474.188 user_ns_per_op=38875.000 sys_ns_per_op=14890.625 checksum=3145728 content_hash=0x0fa02bddc8ace683 content_ok=1 iovcnt=4 fill_len_hash=0x7d2bf5afe29f1b83 syscalls_per_group=4 issued_per_group=65536
+group m1-read-64k-k4 reference arm=av0
+ok: group m1-read-64k-k4 reference content_ok = 1
+arm=AV1_preadv_group size=65536 ops=16 ns_per_op=5485.812 user_ns_per_op=47343.750 sys_ns_per_op=4156.250 checksum=3145728 content_hash=0x0fa02bddc8ace683 content_ok=1 iovcnt=4 fill_len_hash=0x7d2bf5afe29f1b83 syscalls_per_group=1 issued_per_group=65536
+ok: group m1-read-64k-k4 arm=av1 checksum = 3145728
+ok: group m1-read-64k-k4 arm=av1 content_hash = 0x0fa02bddc8ace683
+ok: group m1-read-64k-k4 arm=av1 fill_len_hash = 0x7d2bf5afe29f1b83
+ok: group m1-read-64k-k4 arm=av1 content_ok = 1
+arm=AVS_sluice_kread_at_group size=65536 ops=16 ns_per_op=6823.000 user_ns_per_op=43937.500 sys_ns_per_op=9156.250 checksum=3145728 content_hash=0x0fa02bddc8ace683 content_ok=1 iovcnt=4 fill_len_hash=0x7d2bf5afe29f1b83 syscalls_per_group=4 issued_per_group=65536
+ok: group m1-read-64k-k4 arm=avs checksum = 3145728
+ok: group m1-read-64k-k4 arm=avs content_hash = 0x0fa02bddc8ace683
+ok: group m1-read-64k-k4 arm=avs fill_len_hash = 0x7d2bf5afe29f1b83
+ok: group m1-read-64k-k4 arm=avs content_ok = 1
+--- M1 write group {wv0,wv1,wvs} (per-cell scratches) ---
+wrote 1048576 bytes
+arm=WV0_kpwrite_group size=4096 ops=64 ns_per_op=2481.531 user_ns_per_op=0.000 sys_ns_per_op=2743.750 checksum=655360 content_hash=0x6320b3b98860d183 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+ok: m1-write reference content_ok = 1
+wrote 1048576 bytes
+arm=WV1_pwritev_group size=4096 ops=64 ns_per_op=860.875 user_ns_per_op=0.000 sys_ns_per_op=900.000 checksum=655360 content_hash=0x6320b3b98860d183 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+ok: m1-write arm=wv1 checksum = 655360
+ok: m1-write arm=wv1 content_hash = 0x6320b3b98860d183
+wrote 1048576 bytes
+arm=WVS_sluice_kwrite_at_group size=4096 ops=64 ns_per_op=2780.594 user_ns_per_op=0.000 sys_ns_per_op=2906.250 checksum=655360 content_hash=0x6320b3b98860d183 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+ok: m1-write arm=wvs checksum = 655360
+ok: m1-write arm=wvs content_hash = 0x6320b3b98860d183
+--- M1 syscall counter sanity (k=4: av0=4 av1=1) ---
+arm=AV0_kpread_group size=4096 ops=32 ns_per_op=2288.844 user_ns_per_op=7337.500 sys_ns_per_op=0.000 checksum=196608 content_hash=0x97b8128b34f34683 content_ok=1 iovcnt=4 fill_len_hash=0x384ddff9119e9383 syscalls_per_group=4 issued_per_group=4096
+arm=AV1_preadv_group size=4096 ops=32 ns_per_op=734.906 user_ns_per_op=5612.500 sys_ns_per_op=0.000 checksum=196608 content_hash=0x97b8128b34f34683 content_ok=1 iovcnt=4 fill_len_hash=0x384ddff9119e9383 syscalls_per_group=1 issued_per_group=4096
+ok: m1 av0 syscalls_per_group = 4
+ok: m1 av1 syscalls_per_group = 1
+--- M2 g4k: rpl0 vs rplt T sweep {0,512,1k,2k,4k,8k,16k} vs rpld ---
+arm=RPL0_unmerged_replay size=4096 ops=64 ns_per_op=7372.953 user_ns_per_op=32767.361 sys_ns_per_op=1347.222 checksum=5242880 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+ok: m2 g4k rpl0 content_ok = 1
+ok: m2 g4k rpl0 syscalls_per_group = 8
+ok: m2 g4k rpl0 issued_per_group = 32768
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=6745.016 user_ns_per_op=27888.889 sys_ns_per_op=5909.722 checksum=5242880 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+ok: m2 g4k rplt merge=0 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=0 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=0 outcome_digest = 0x833be9a54ea3d951
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=7033.453 user_ns_per_op=30197.917 sys_ns_per_op=3489.583 checksum=5255848 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=512 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=7 issued_per_group=32840 requested_per_group=32768
+ok: m2 g4k rplt merge=512 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=512 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=512 outcome_digest = 0x833be9a54ea3d951
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=6727.812 user_ns_per_op=23086.806 sys_ns_per_op=10343.750 checksum=5312444 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=1024 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=7 issued_per_group=33227 requested_per_group=32768
+ok: m2 g4k rplt merge=1024 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=1024 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=1024 outcome_digest = 0x833be9a54ea3d951
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=6225.672 user_ns_per_op=31048.611 sys_ns_per_op=2239.583 checksum=5509277 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=2048 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=6 issued_per_group=34413 requested_per_group=32768
+ok: m2 g4k rplt merge=2048 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=2048 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=2048 outcome_digest = 0x833be9a54ea3d951
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=6375.062 user_ns_per_op=26239.583 sys_ns_per_op=6715.278 checksum=6495758 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=4096 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=4 issued_per_group=40572 requested_per_group=32768
+ok: m2 g4k rplt merge=4096 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=4096 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=4096 outcome_digest = 0x833be9a54ea3d951
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=6508.391 user_ns_per_op=30996.528 sys_ns_per_op=2486.111 checksum=9899736 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=8192 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=1 issued_per_group=61978 requested_per_group=32768
+ok: m2 g4k rplt merge=8192 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=8192 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=8192 outcome_digest = 0x833be9a54ea3d951
+arm=RPLT_sweep_merge size=4096 ops=64 ns_per_op=5923.516 user_ns_per_op=30774.306 sys_ns_per_op=2378.472 checksum=9899736 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=1 issued_per_group=61978 requested_per_group=32768
+ok: m2 g4k rplt merge=16384 req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rplt merge=16384 ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rplt merge=16384 outcome_digest = 0x833be9a54ea3d951
+arm=RPLD_union_dedup size=4096 ops=64 ns_per_op=6727.031 user_ns_per_op=30357.639 sys_ns_per_op=3409.722 checksum=5242880 content_hash=0x833be9a54ea3d951 content_ok=1 trace=g4k merge=0 dedup=1 req_digest=0x4a6717aa27df416a ref_digest=0x833be9a54ea3d951 outcome_digest=0x833be9a54ea3d951 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+ok: m2 g4k rpld req_digest = 0x4a6717aa27df416a
+ok: m2 g4k rpld ref_digest = 0x833be9a54ea3d951
+ok: m2 g4k rpld outcome_digest = 0x833be9a54ea3d951
+--- M2 ov30: rpl0 vs rpld vs rplt(0); dedup must cut issued bytes ---
+arm=RPL0_unmerged_replay size=4096 ops=64 ns_per_op=6189.391 user_ns_per_op=31440.972 sys_ns_per_op=2538.194 checksum=5242880 content_hash=0xf5c1907f4bf053d8 content_ok=1 trace=ov30 merge=0 dedup=0 req_digest=0xb96f80d53621ab6f ref_digest=0xf5c1907f4bf053d8 outcome_digest=0xf5c1907f4bf053d8 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+arm=RPLD_union_dedup size=4096 ops=64 ns_per_op=4346.734 user_ns_per_op=24597.222 sys_ns_per_op=7277.778 checksum=3457049 content_hash=0xf5c1907f4bf053d8 content_ok=1 trace=ov30 merge=0 dedup=1 req_digest=0xb96f80d53621ab6f ref_digest=0xf5c1907f4bf053d8 outcome_digest=0xf5c1907f4bf053d8 syscalls_per_group=4 issued_per_group=21599 requested_per_group=32768
+ok: m2 ov30 rpld req_digest = 0xb96f80d53621ab6f
+ok: m2 ov30 rpld ref_digest = 0xf5c1907f4bf053d8
+ok: m2 ov30 rpld outcome_digest = 0xf5c1907f4bf053d8
+ok: m2 ov30 dedup issued 21599 < 32768
+--- M2 eofmix: rpl0 vs rplt(4k) vs rplt(0) per-request oracle ---
+arm=RPL0_unmerged_replay size=4096 ops=16 ns_per_op=4533.250 user_ns_per_op=23987.500 sys_ns_per_op=0.000 checksum=688128 content_hash=0x49bb063dd72a7483 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x4ec530b8dcdc6b83 ref_digest=0x49bb063dd72a7483 outcome_digest=0x49bb063dd72a7483 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+arm=RPLT_sweep_merge size=4096 ops=16 ns_per_op=1128.062 user_ns_per_op=22037.500 sys_ns_per_op=0.000 checksum=393216 content_hash=0x49bb063dd72a7483 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x4ec530b8dcdc6b83 ref_digest=0x49bb063dd72a7483 outcome_digest=0x49bb063dd72a7483 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+ok: m2 eofmix rplt merge=4096 req_digest = 0x4ec530b8dcdc6b83
+ok: m2 eofmix rplt merge=4096 ref_digest = 0x49bb063dd72a7483
+ok: m2 eofmix rplt merge=4096 outcome_digest = 0x49bb063dd72a7483
+arm=RPLT_sweep_merge size=4096 ops=16 ns_per_op=1163.125 user_ns_per_op=21000.000 sys_ns_per_op=0.000 checksum=393216 content_hash=0x49bb063dd72a7483 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x4ec530b8dcdc6b83 ref_digest=0x49bb063dd72a7483 outcome_digest=0x49bb063dd72a7483 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+ok: m2 eofmix rplt merge=0 req_digest = 0x4ec530b8dcdc6b83
+ok: m2 eofmix rplt merge=0 ref_digest = 0x49bb063dd72a7483
+ok: m2 eofmix rplt merge=0 outcome_digest = 0x49bb063dd72a7483
+--- M3 functional support matrix (tmpfs + btrfs, cross-fs) ---
+kernel=7.2.11-200.fc44.x86_64
+fs=a op=cfr mode=explicit range=in_range ret=4096 errno=0 match=1
+fs=a op=cfr in_off_arg_pos=5120
+fs=a op=cfr out_off_arg_pos=5120
+fs=a op=cfr mode=null range=in_range ret=4096 errno=0 match=1
+fs=a op=cfr in_after_pos=5120
+fs=a op=cfr out_after_pos=5120
+fs=a op=cfr mode=explicit range=past_eof ret=0 errno=0 match=0
+fs=a op=cfr in_off_arg_unadvanced_pos=8192
+fs=a op=cfr past_eof_offsets_unchanged=1
+fs=a op=sendfile mode=explicit_in range=in_range ret=4096 errno=0 match=1
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=5120
+fs=a op=sendfile mode=explicit_in range=past_eof ret=0 errno=0 match=0
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=1024
+fs=a op=cfr mode=explicit range=o_append ret=-1 errno=9 match=0
+fs=a op=sendfile mode=explicit_in range=o_append ret=-1 errno=22 match=0
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=1024
+fs=a op=cfr mode=explicit range=overlap ret=-1 errno=22
+fs=a op=cfr mode=explicit range=adjacent ret=4096 errno=0
+fs=a op=cfr mode=explicit range=cross_fs ret=-1 errno=18 match=0
+fs=a op=sendfile mode=explicit_in range=cross_fs ret=4096 errno=0 match=1
+fs=a op=sendfile in_fd_after_pos=0
+fs=a op=sendfile out_fd_after_pos=5120
+GATE fs=a cfr_samefs_explicit_in_range=1 sendfile_samefs_in_range=1
+fs=b op=cfr mode=explicit range=in_range ret=4096 errno=0 match=1
+fs=b op=cfr in_off_arg_pos=5120
+fs=b op=cfr out_off_arg_pos=5120
+fs=b op=cfr mode=null range=in_range ret=4096 errno=0 match=1
+fs=b op=cfr in_after_pos=5120
+fs=b op=cfr out_after_pos=5120
+fs=b op=cfr mode=explicit range=past_eof ret=0 errno=0 match=0
+fs=b op=cfr in_off_arg_unadvanced_pos=8192
+fs=b op=cfr past_eof_offsets_unchanged=1
+fs=b op=sendfile mode=explicit_in range=in_range ret=4096 errno=0 match=1
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=5120
+fs=b op=sendfile mode=explicit_in range=past_eof ret=0 errno=0 match=0
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=1024
+fs=b op=cfr mode=explicit range=o_append ret=-1 errno=9 match=0
+fs=b op=sendfile mode=explicit_in range=o_append ret=-1 errno=22 match=0
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=1024
+fs=b op=cfr mode=explicit range=overlap ret=-1 errno=22
+fs=b op=cfr mode=explicit range=adjacent ret=4096 errno=0
+fs=b op=cfr mode=explicit range=cross_fs ret=-1 errno=18 match=0
+fs=b op=sendfile mode=explicit_in range=cross_fs ret=4096 errno=0 match=1
+fs=b op=sendfile in_fd_after_pos=0
+fs=b op=sendfile out_fd_after_pos=5120
+GATE fs=b cfr_samefs_explicit_in_range=1 sendfile_samefs_in_range=1
+SUPPORT_GATE_PASS
+ok: m3-support gates passed on both filesystems
+--- M3 copy group {cp1,cp1s,cp2,cp3} + source, tmpfs and btrfs ---
+arm=CP1_pread_pwrite_loop size=65536 ops=32 ns_per_op=11511.969 user_ns_per_op=0.000 sys_ns_per_op=19652.778 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1 content_ok = 1
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1 dst==src = 0x854b91b602bbc983
+arm=CP1S_sluice_read_write_loop size=65536 ops=32 ns_per_op=11030.969 user_ns_per_op=0.000 sys_ns_per_op=17555.556 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s content_ok = 1
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s dst==src = 0x854b91b602bbc983
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s content_hash = 0x854b91b602bbc983
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s checksum = 4718592
+arm=CP2_copy_file_range size=65536 ops=32 ns_per_op=9622.906 user_ns_per_op=0.000 sys_ns_per_op=16861.111 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 content_ok = 1
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 dst==src = 0x854b91b602bbc983
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 content_hash = 0x854b91b602bbc983
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 checksum = 4718592
+arm=CP3_sendfile size=65536 ops=32 ns_per_op=10887.375 user_ns_per_op=0.000 sys_ns_per_op=17333.333 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 content_ok = 1
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 dst==src = 0x854b91b602bbc983
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 content_hash = 0x854b91b602bbc983
+ok: m3 copy /tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 checksum = 4718592
+arm=CP1_pread_pwrite_loop size=65536 ops=32 ns_per_op=10207.281 user_ns_per_op=0.000 sys_ns_per_op=15236.111 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1 content_ok = 1
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1 dst==src = 0x854b91b602bbc983
+arm=CP1S_sluice_read_write_loop size=65536 ops=32 ns_per_op=10122.781 user_ns_per_op=0.000 sys_ns_per_op=13527.778 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s content_ok = 1
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s dst==src = 0x854b91b602bbc983
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s content_hash = 0x854b91b602bbc983
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp1s checksum = 4718592
+arm=CP2_copy_file_range size=65536 ops=32 ns_per_op=5867.719 user_ns_per_op=5236.111 sys_ns_per_op=5194.444 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 content_ok = 1
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 dst==src = 0x854b91b602bbc983
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 content_hash = 0x854b91b602bbc983
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp2 checksum = 4718592
+arm=CP3_sendfile size=65536 ops=32 ns_per_op=11436.688 user_ns_per_op=1166.667 sys_ns_per_op=12166.667 checksum=4718592 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 content_ok = 1
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 dst==src = 0x854b91b602bbc983
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 content_hash = 0x854b91b602bbc983
+ok: m3 copy /var/tmp/sluice600-p3-smoke/copysrc2m.bin arm=cp3 checksum = 4718592
+arm=CP1_pread_pwrite_loop size=65536 ops=32 ns_per_op=24362.781 user_ns_per_op=0.000 sys_ns_per_op=26125.000 checksum=2621440 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0x854b91b602bbc983 dst_size=2097152
+arm=CP2_copy_file_range size=65536 ops=32 ns_per_op=20668.156 user_ns_per_op=19850.000 sys_ns_per_op=1575.000 checksum=2621440 content_hash=0x854b91b602bbc983 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0x854b91b602bbc983 dst_size=2097152
+ok: m3 cp1 syscalls_per_chunk = 2
+ok: m3 cp2 syscalls_per_chunk = 1
+--- M4 size sweep {512b,4k,64k,1m} tmpfs: a1 vs a2 checksum equality ---
+arm=A1_native_read_at size=512 ops=64 ns_per_op=552.531 user_ns_per_op=0.000 sys_ns_per_op=725.000 checksum=49152 content_hash=0x0000000000000000 content_ok=-1
+group m4-size-512 reference arm=a1
+arm=A2_sluice_read_at size=512 ops=64 ns_per_op=541.891 user_ns_per_op=0.000 sys_ns_per_op=706.250 checksum=49152 content_hash=0x0000000000000000 content_ok=-1
+ok: group m4-size-512 arm=a2 checksum = 49152
+arm=A1_native_read_at size=4096 ops=64 ns_per_op=864.797 user_ns_per_op=1825.000 sys_ns_per_op=0.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+group m4-size-4096 reference arm=a1
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=726.625 user_ns_per_op=1843.750 sys_ns_per_op=0.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+ok: group m4-size-4096 arm=a2 checksum = 393216
+arm=A1_native_read_at size=65536 ops=64 ns_per_op=8045.297 user_ns_per_op=18706.250 sys_ns_per_op=4600.000 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+group m4-size-65536 reference arm=a1
+arm=A2_sluice_read_at size=65536 ops=64 ns_per_op=5600.391 user_ns_per_op=21568.750 sys_ns_per_op=0.000 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+ok: group m4-size-65536 arm=a2 checksum = 6291456
+arm=A1_native_read_at size=1048576 ops=64 ns_per_op=105223.969 user_ns_per_op=19060.000 sys_ns_per_op=111560.000 checksum=100663296 content_hash=0x0000000000000000 content_ok=-1
+group m4-size-1048576 reference arm=a1
+arm=A2_sluice_read_at size=1048576 ops=64 ns_per_op=104425.125 user_ns_per_op=30760.000 sys_ns_per_op=99350.000 checksum=100663296 content_hash=0x0000000000000000 content_ok=-1
+ok: group m4-size-1048576 arm=a2 checksum = 100663296
+arm=A1_native_read_at size=4096 ops=64 ns_per_op=829.969 user_ns_per_op=2037.500 sys_ns_per_op=0.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+group m4-size-4k-btrfs reference arm=a1
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=704.141 user_ns_per_op=1956.250 sys_ns_per_op=0.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+ok: group m4-size-4k-btrfs arm=a2 checksum = 393216
+--- M4 working-set axis (ops >= file_blocks, warmup >= file_blocks) ---
+arm=A1_native_read_at size=4096 ops=256 ns_per_op=754.785 user_ns_per_op=1118.490 sys_ns_per_op=617.188 checksum=2097152 content_hash=0x0000000000000000 content_ok=-1
+group m4-ws-1m reference arm=a1
+arm=A2_sluice_read_at size=4096 ops=256 ns_per_op=849.406 user_ns_per_op=1391.927 sys_ns_per_op=302.083 checksum=2097152 content_hash=0x0000000000000000 content_ok=-1
+ok: group m4-ws-1m arm=a2 checksum = 2097152
+--- M4 syscall shape (a1: 1 pread/op) ---
+arm=A1_native_read_at size=4096 ops=32 ns_per_op=969.125 user_ns_per_op=2125.000 sys_ns_per_op=0.000 checksum=196608 content_hash=0x0000000000000000 content_ok=-1
+ok: m4 a1 pread shape (checksum=(warmup+ops*reps)*size) = 196608
+--- state spot checks (exit 0 expected) ---
+arm=A2_sluice_read_at size=4096 ops=64 ns_per_op=2066.859 user_ns_per_op=5087.500 sys_ns_per_op=0.000 checksum=393216 content_hash=0x0000000000000000 content_ok=-1
+arm=AV1_preadv_group size=4096 ops=64 ns_per_op=1916.156 user_ns_per_op=8487.500 sys_ns_per_op=5162.500 checksum=393216 content_hash=0x519a9a04bd59f683 content_ok=1 iovcnt=4 fill_len_hash=0xfcef937c08a02383 syscalls_per_group=1 issued_per_group=4096
+arm=AV0_kpread_group size=4096 ops=8 ns_per_op=1560.750 user_ns_per_op=1333.333 sys_ns_per_op=0.000 checksum=18446744073709551552 content_hash=0x0000000000000000 content_ok=-1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+arm=RPL0_unmerged_replay size=4096 ops=8 ns_per_op=3101.000 user_ns_per_op=1750.000 sys_ns_per_op=0.000 checksum=18446744073709551488 content_hash=0x0000000000000000 content_ok=-1 trace=g4k merge=0 dedup=0 req_digest=0xcb421beaaad7be01 ref_digest=0x0000000000000000 outcome_digest=0x0000000000000000 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+arm=W2_sluice_write_at size=4096 ops=16 ns_per_op=11.688 user_ns_per_op=0.000 sys_ns_per_op=250.000 checksum=36864 content_hash=0x0000000000000000 content_ok=-1
+=== summary: 188 checks, 0 failures ===
+SMOKE_PASS

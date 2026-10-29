@@ -1,0 +1,5 @@
+# ac3 composition-gap tmpfs cp1s (Sluice read_at+write_at) vs cp1, 64KiB x1024, pairs2
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=18838.771 user_ns_per_op=385.982 sys_ns_per_op=20822.725 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=17536.549 user_ns_per_op=1139.008 sys_ns_per_op=18446.505 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=17700.082 user_ns_per_op=760.445 sys_ns_per_op=18725.498 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1S_sluice_read_write_loop size=65536 ops=1024 ns_per_op=17855.385 user_ns_per_op=981.648 sys_ns_per_op=18856.501 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864

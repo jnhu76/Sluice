@@ -1,0 +1,91 @@
+# p3-m4-size-sweep-4k-btrfs PMU — 2026-10-28T02:18:28+08:00
+=== p3-m4-size-sweep-4k-btrfs arm=a1 pmu run=1 2026-10-28T02:18:28+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=975.444 user_ns_per_op=954.102 sys_ns_per_op=1227.539 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /var/tmp/sluice600-p3/data64m.bin seq 0 normal':
+
+        36,435,656      instructions:u                                                        
+        10,555,338      cycles:u                                                              
+
+       0.006028545 seconds time elapsed
+
+       0.002006000 seconds user
+       0.004017000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-btrfs arm=a1 pmu run=2 2026-10-28T02:18:28+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=925.011 user_ns_per_op=1414.551 sys_ns_per_op=737.305 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /var/tmp/sluice600-p3/data64m.bin seq 0 normal':
+
+        36,435,675      instructions:u                                                        
+        10,491,929      cycles:u                                                              
+
+       0.005941578 seconds time elapsed
+
+       0.002974000 seconds user
+       0.002972000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-btrfs arm=a1 pmu run=3 2026-10-28T02:18:28+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=990.559 user_ns_per_op=955.566 sys_ns_per_op=1208.496 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /var/tmp/sluice600-p3/data64m.bin seq 0 normal':
+
+        36,435,654      instructions:u                                                        
+        10,520,535      cycles:u                                                              
+
+       0.006102774 seconds time elapsed
+
+       0.002009000 seconds user
+       0.004016000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-btrfs arm=a2 pmu run=1 2026-10-28T02:18:28+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=923.982 user_ns_per_op=1570.312 sys_ns_per_op=558.594 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /var/tmp/sluice600-p3/data64m.bin seq 0 normal':
+
+        36,480,796      instructions:u                                                        
+        10,506,389      cycles:u                                                              
+
+       0.005895268 seconds time elapsed
+
+       0.004726000 seconds user
+       0.001174000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-btrfs arm=a2 pmu run=2 2026-10-28T02:18:28+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=964.619 user_ns_per_op=2155.762 sys_ns_per_op=0.000 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /var/tmp/sluice600-p3/data64m.bin seq 0 normal':
+
+        36,479,822      instructions:u                                                        
+        10,508,261      cycles:u                                                              
+
+       0.006032262 seconds time elapsed
+
+       0.005982000 seconds user
+       0.000000000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m4-size-sweep-4k-btrfs arm=a2 pmu run=3 2026-10-28T02:18:28+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=930.864 user_ns_per_op=1684.570 sys_ns_per_op=467.773 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /var/tmp/sluice600-p3/data64m.bin seq 0 normal':
+
+        36,480,757      instructions:u                                                        
+        10,458,071      cycles:u                                                              
+
+       0.005973973 seconds time elapsed
+
+       0.004978000 seconds user
+       0.000991000 seconds sys
+
+
+PERF_EXIT=0

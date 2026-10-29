@@ -1,0 +1,1217 @@
+# P4 W01 physical-work sweep (strace -c integral counts, 3 repeats each) — 2026-10-28T11:53:43+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# caliber: whole-process integral counts; cross-binary/arm deltas cancel shared harness constants; never a wall source
+===== cell w01-hf-1b (size=1 ops=4096 warmup=4096 reps=5)
+--- hf-1b.a2.c1 rep1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=12169.470 user_ns_per_op=322.301 sys_ns_per_op=3541.120 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.59    0.046245           1     28674           pread64
+  0.04    0.000018           2         7           openat
+  0.02    0.000008           1         7           fstat
+  0.02    0.000007           1         6           close
+100.00    0.046436           1     28739         1 total
+--- hf-1b.a2.c1 rep2
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11716.966 user_ns_per_op=410.017 sys_ns_per_op=3252.162 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.74    0.042784           1     28674           pread64
+  0.01    0.000004           0         6           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.042895           1     28739         1 total
+--- hf-1b.a2.c1 rep3
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11657.937 user_ns_per_op=318.917 sys_ns_per_op=3262.033 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.79    0.042530           1     28674           pread64
+  0.02    0.000010           1         7           openat
+  0.01    0.000004           0         7           fstat
+  0.00    0.000002           0         6           close
+100.00    0.042620           1     28739         1 total
+--- hf-1b.a2.b1 rep1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=12413.993 user_ns_per_op=360.805 sys_ns_per_op=3427.979 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.97    0.044990           1     28674           pread64
+  0.01    0.000003           0         6           close
+  0.01    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.045003           1     28739         1 total
+--- hf-1b.a2.b1 rep2
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11657.356 user_ns_per_op=462.716 sys_ns_per_op=3132.917 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 98.93    0.040773           1     28674           pread64
+  0.09    0.000039           5         7           openat
+  0.04    0.000015           2         7           fstat
+  0.03    0.000011           1         6           close
+100.00    0.041214           1     28739         1 total
+--- hf-1b.a2.b1 rep3
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11881.887 user_ns_per_op=351.283 sys_ns_per_op=3244.943 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.98    0.042255           1     28674           pread64
+  0.00    0.000002           0         6           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.042265           1     28739         1 total
+--- hf-1b.a0.b1 rep1
+arm=A0_raw_pread size=1 ops=4096 ns_per_op=11871.599 user_ns_per_op=358.852 sys_ns_per_op=3219.378 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 98.97    0.042351           1     28674           pread64
+  0.10    0.000043           6         7           openat
+  0.04    0.000017           2         7           fstat
+  0.03    0.000012           2         6           close
+100.00    0.042793           1     28739         1 total
+--- hf-1b.a0.b1 rep2
+arm=A0_raw_pread size=1 ops=4096 ns_per_op=11810.429 user_ns_per_op=386.719 sys_ns_per_op=3244.524 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.44    0.042570           1     28674           pread64
+  0.07    0.000028           4         7           openat
+  0.03    0.000012           2         6           close
+  0.03    0.000012           1         7           fstat
+100.00    0.042811           1     28739         1 total
+--- hf-1b.a0.b1 rep3
+arm=A0_raw_pread size=1 ops=4096 ns_per_op=11640.246 user_ns_per_op=177.839 sys_ns_per_op=3406.390 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.98    0.044759           1     28674           pread64
+  0.01    0.000003           0         6           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.044770           1     28739         1 total
+--- hf-1b.a1.b1 rep1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=12078.411 user_ns_per_op=343.366 sys_ns_per_op=3392.683 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.59    0.044823           1     28674           pread64
+  0.04    0.000017           2         7           openat
+  0.02    0.000009           1         7           fstat
+  0.02    0.000008           1         6           close
+100.00    0.045006           1     28739         1 total
+--- hf-1b.a1.b1 rep2
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=11767.840 user_ns_per_op=288.086 sys_ns_per_op=3326.521 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.97    0.043576           1     28674           pread64
+  0.01    0.000003           0         6           close
+  0.01    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.043589           1     28739         1 total
+--- hf-1b.a1.b1 rep3
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=11861.148 user_ns_per_op=337.542 sys_ns_per_op=3312.326 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 98.97    0.043519           1     28674           pread64
+  0.09    0.000039           5         7           openat
+  0.04    0.000017           2         7           fstat
+  0.03    0.000014           2         6           close
+100.00    0.043971           1     28739         1 total
+===== cell w01-hf-4k (size=4096 ops=1024 warmup=1024 reps=5)
+--- hf-4k.a2.c1 rep1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12576.190 user_ns_per_op=483.817 sys_ns_per_op=3810.407 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.92    0.012336           1      7170           pread64
+  0.02    0.000002           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.012346           1      7235         1 total
+--- hf-4k.a2.c1 rep2
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12524.700 user_ns_per_op=1148.158 sys_ns_per_op=3105.329 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.40    0.010186           1      7170           pread64
+  0.10    0.000010           1         7           openat
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         6           close
+100.00    0.010248           1      7235         1 total
+--- hf-4k.a2.c1 rep3
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12333.494 user_ns_per_op=553.990 sys_ns_per_op=3583.984 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 95.14    0.011528           1      7170           pread64
+  0.46    0.000056           8         7           openat
+  0.23    0.000028           4         7           fstat
+  0.11    0.000013           2         6           close
+100.00    0.012117           1      7235         1 total
+--- hf-4k.a2.b1 rep1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12426.530 user_ns_per_op=728.655 sys_ns_per_op=3436.105 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.91    0.011372           1      7170           pread64
+  0.03    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.011382           1      7235         1 total
+--- hf-4k.a2.b1 rep2
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12395.423 user_ns_per_op=938.058 sys_ns_per_op=3257.533 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+100.00    0.011099           1      7170           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.011099           1      7235         1 total
+--- hf-4k.a2.b1 rep3
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12637.993 user_ns_per_op=390.904 sys_ns_per_op=3864.816 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.05    0.012567           1      7170           pread64
+  0.23    0.000029           4         7           openat
+  0.12    0.000015           2         7           fstat
+  0.09    0.000012           2         6           close
+100.00    0.012817           1      7235         1 total
+--- hf-4k.a0.b1 rep1
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=12378.986 user_ns_per_op=119.838 sys_ns_per_op=4108.259 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.90    0.013488           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.013501           1      7235         1 total
+--- hf-4k.a0.b1 rep2
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=12354.980 user_ns_per_op=511.021 sys_ns_per_op=3617.327 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.65    0.011661           1      7170           pread64
+  0.09    0.000011           1         7           openat
+  0.06    0.000007           1         6           close
+  0.05    0.000006           0         7           fstat
+100.00    0.011820           1      7235         1 total
+--- hf-4k.a0.b1 rep3
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=12385.013 user_ns_per_op=96.680 sys_ns_per_op=4028.181 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.68    0.013261           1      7170           pread64
+  0.08    0.000010           1         7           openat
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         6           close
+100.00    0.013303           1      7235         1 total
+--- hf-4k.a1.b1 rep1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12638.531 user_ns_per_op=870.396 sys_ns_per_op=3408.064 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.39    0.011090           1      7170           pread64
+  0.21    0.000024           3         7           openat
+  0.09    0.000010           1         6           close
+  0.06    0.000007           1         7           fstat
+100.00    0.011271           1      7235         1 total
+--- hf-4k.a1.b1 rep2
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12663.168 user_ns_per_op=1159.598 sys_ns_per_op=3011.998 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.18    0.010264           1      7170           pread64
+  0.10    0.000010           1         7           openat
+  0.05    0.000005           0         7           fstat
+  0.03    0.000003           0         6           close
+100.00    0.010349           1      7235         1 total
+--- hf-4k.a1.b1 rep3
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12485.782 user_ns_per_op=715.123 sys_ns_per_op=3445.033 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 97.86    0.011242           1      7170           pread64
+  0.32    0.000037           5         7           openat
+  0.12    0.000014           2         7           fstat
+  0.11    0.000013           2         6           close
+100.00    0.011488           1      7235         1 total
+===== cell w01-seq-1m (size=1048576 ops=256 warmup=128 reps=5)
+--- seq-1m.a2.c1 rep1
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=150702.727 user_ns_per_op=19491.168 sys_ns_per_op=145927.989 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.89    0.202828         137      1474           pread64
+  0.01    0.000025           3         7           openat
+  0.00    0.000010           1         7           fstat
+  0.00    0.000009           1         6           close
+100.00    0.203047         131      1541         1 total
+--- seq-1m.a2.c1 rep2
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=152999.934 user_ns_per_op=21018.342 sys_ns_per_op=145334.239 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.93    0.203262         137      1474           pread64
+  0.01    0.000013           1         7           openat
+  0.00    0.000004           0         6           close
+  0.00    0.000003           0         7           fstat
+100.00    0.203395         131      1541         1 total
+--- seq-1m.a2.c1 rep3
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=152996.723 user_ns_per_op=22563.859 sys_ns_per_op=143249.321 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.95    0.201862         136      1474           pread64
+  0.00    0.000006           1         6           close
+  0.00    0.000004           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.201964         131      1541         1 total
+--- seq-1m.a2.b1 rep1
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=153011.621 user_ns_per_op=23018.342 sys_ns_per_op=143898.777 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.82    0.201689         136      1474           pread64
+  0.02    0.000042           6         7           openat
+  0.01    0.000017           2         7           fstat
+  0.01    0.000013           2         6           close
+100.00    0.202044         131      1541         1 total
+--- seq-1m.a2.b1 rep2
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=151600.773 user_ns_per_op=20985.054 sys_ns_per_op=143155.571 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.95    0.200918         136      1474           pread64
+  0.00    0.000006           0         7           openat
+  0.00    0.000002           0         6           close
+  0.00    0.000001           0         7           fstat
+100.00    0.201020         130      1541         1 total
+--- seq-1m.a2.b1 rep3
+arm=A2_sluice_read_at size=1048576 ops=256 ns_per_op=155091.516 user_ns_per_op=26228.261 sys_ns_per_op=143617.527 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.96    0.204231         138      1474           pread64
+  0.00    0.000003           0         6           close
+  0.00    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.204312         132      1541         1 total
+--- seq-1m.a0.b1 rep1
+arm=A0_raw_pread size=1048576 ops=256 ns_per_op=155959.434 user_ns_per_op=22858.016 sys_ns_per_op=149514.946 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.95    0.210600         142      1474           pread64
+  0.00    0.000005           0         7           openat
+  0.00    0.000002           0         6           close
+  0.00    0.000001           0         7           fstat
+100.00    0.210711         136      1541         1 total
+--- seq-1m.a0.b1 rep2
+arm=A0_raw_pread size=1048576 ops=256 ns_per_op=150565.484 user_ns_per_op=22801.630 sys_ns_per_op=140107.337 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.92    0.197564         134      1474           pread64
+  0.01    0.000020           2         7           openat
+  0.00    0.000005           0         7           fstat
+  0.00    0.000004           0         6           close
+100.00    0.197717         128      1541         1 total
+--- seq-1m.a0.b1 rep3
+arm=A0_raw_pread size=1048576 ops=256 ns_per_op=150353.480 user_ns_per_op=21756.114 sys_ns_per_op=141771.739 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.73    0.197990         134      1474           pread64
+  0.03    0.000051           7         7           openat
+  0.01    0.000014           2         7           fstat
+  0.01    0.000010           1         6           close
+100.00    0.198520         128      1541         1 total
+--- seq-1m.a1.b1 rep1
+arm=A1_native_read_at size=1048576 ops=256 ns_per_op=150362.496 user_ns_per_op=20257.473 sys_ns_per_op=142389.946 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.78    0.198916         134      1474           pread64
+  0.02    0.000041           5         7           openat
+  0.01    0.000014           2         7           fstat
+  0.01    0.000011           1         6           close
+100.00    0.199347         129      1541         1 total
+--- seq-1m.a1.b1 rep2
+arm=A1_native_read_at size=1048576 ops=256 ns_per_op=150642.281 user_ns_per_op=22038.723 sys_ns_per_op=141899.457 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.92    0.199431         135      1474           pread64
+  0.01    0.000012           1         7           openat
+  0.00    0.000006           0         7           fstat
+  0.00    0.000004           0         6           close
+100.00    0.199595         129      1541         1 total
+--- seq-1m.a1.b1 rep3
+arm=A1_native_read_at size=1048576 ops=256 ns_per_op=150278.238 user_ns_per_op=19576.766 sys_ns_per_op=142307.745 checksum=1476395008 content_hash=0x0000000000000000 content_ok=-1
+ 99.82    0.198393         134      1474           pread64
+  0.02    0.000032           4         7           openat
+  0.01    0.000015           2         7           fstat
+  0.01    0.000013           2         6           close
+100.00    0.198752         128      1541         1 total
+===== cell w01-rand-4k (rand 42)
+--- rand-4k.a2.c1 rep1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12455.149 user_ns_per_op=353.516 sys_ns_per_op=3861.328 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.70    0.012794           1      7170           pread64
+  0.09    0.000012           1         7           openat
+  0.04    0.000005           0         7           fstat
+  0.02    0.000003           0         6           close
+100.00    0.012832           1      7235         1 total
+--- rand-4k.a2.c1 rep2
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12471.443 user_ns_per_op=828.962 sys_ns_per_op=3400.809 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.01    0.011111           1      7170           pread64
+  0.19    0.000022           3         7           openat
+  0.11    0.000012           2         6           close
+  0.11    0.000012           1         7           fstat
+100.00    0.011337           1      7235         1 total
+--- rand-4k.a2.c1 rep3
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12359.579 user_ns_per_op=736.468 sys_ns_per_op=3426.339 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.92    0.011192           1      7170           pread64
+  0.02    0.000002           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.011201           1      7235         1 total
+--- rand-4k.a2.b1 rep1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12434.160 user_ns_per_op=489.258 sys_ns_per_op=3699.777 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.74    0.012189           1      7170           pread64
+  0.23    0.000029           4         7           openat
+  0.11    0.000014           2         6           close
+  0.10    0.000013           1         7           fstat
+100.00    0.012600           1      7235         1 total
+--- rand-4k.a2.b1 rep2
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12562.387 user_ns_per_op=1047.433 sys_ns_per_op=3216.657 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+100.00    0.010792           1      7170           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.010792           1      7235         1 total
+--- rand-4k.a2.b1 rep3
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12408.589 user_ns_per_op=1448.103 sys_ns_per_op=2726.004 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 95.26    0.008980           1      7170           pread64
+  0.52    0.000049           7         7           openat
+  0.18    0.000017           2         7           fstat
+  0.12    0.000011           1         6           close
+100.00    0.009427           1      7235         1 total
+--- rand-4k.a0.b1 rep1
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=12397.904 user_ns_per_op=444.336 sys_ns_per_op=3714.704 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.91    0.012394           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.012405           1      7235         1 total
+--- rand-4k.a0.b1 rep2
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=12397.050 user_ns_per_op=622.628 sys_ns_per_op=3503.348 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.36    0.011666           1      7170           pread64
+  0.19    0.000023           3         7           openat
+  0.09    0.000011           1         6           close
+  0.09    0.000011           1         7           fstat
+100.00    0.011861           1      7235         1 total
+--- rand-4k.a0.b1 rep3
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=12422.203 user_ns_per_op=651.786 sys_ns_per_op=3547.573 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 97.97    0.011831           1      7170           pread64
+  0.22    0.000026           3         7           openat
+  0.12    0.000014           2         7           fstat
+  0.10    0.000012           2         6           close
+100.00    0.012076           1      7235         1 total
+--- rand-4k.a1.b1 rep1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12419.180 user_ns_per_op=745.954 sys_ns_per_op=3412.946 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.31    0.011487           1      7170           pread64
+  0.34    0.000040           5         7           openat
+  0.13    0.000015           2         7           fstat
+  0.11    0.000013           2         6           close
+100.00    0.011927           1      7235         1 total
+--- rand-4k.a1.b1 rep2
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12389.098 user_ns_per_op=60.826 sys_ns_per_op=4110.212 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.90    0.013375           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.013388           1      7235         1 total
+--- rand-4k.a1.b1 rep3
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12438.583 user_ns_per_op=874.023 sys_ns_per_op=3351.981 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.54    0.011579           1      7170           pread64
+  0.10    0.000012           1         7           openat
+  0.03    0.000003           0         7           fstat
+  0.00    0.000000           0         6           close
+100.00    0.011632           1      7235         1 total
+===== cell w01-comp-read-4k
+--- comp-read.a1x.b1 rep1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=12600.122 user_ns_per_op=470.285 sys_ns_per_op=3844.308 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.90    0.012648           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.012661           1      7235         1 total
+--- comp-read.a1x.b1 rep2
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=13906.306 user_ns_per_op=758.371 sys_ns_per_op=4058.733 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.06    0.013638           1      7170           pread64
+  0.09    0.000012           1         7           openat
+  0.04    0.000005           0         6           close
+  0.02    0.000003           0         7           fstat
+100.00    0.013768           1      7235         1 total
+--- comp-read.a1x.b1 rep3
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=12974.633 user_ns_per_op=1345.424 sys_ns_per_op=3119.559 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.01    0.010764           1      7170           pread64
+  0.11    0.000012           1         7           openat
+  0.03    0.000003           0         7           fstat
+  0.02    0.000002           0         6           close
+100.00    0.010872           1      7235         1 total
+--- comp-read.ax.b1 rep1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12392.551 user_ns_per_op=750.698 sys_ns_per_op=3393.415 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+100.00    0.011216           1      7170           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.011216           1      7235         1 total
+--- comp-read.ax.b1 rep2
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12559.600 user_ns_per_op=40.737 sys_ns_per_op=4191.267 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.91    0.013420           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.01    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.013432           1      7235         1 total
+--- comp-read.ax.b1 rep3
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12666.192 user_ns_per_op=522.042 sys_ns_per_op=3710.658 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.17    0.012140           1      7170           pread64
+  0.20    0.000025           3         7           openat
+  0.10    0.000012           1         7           fstat
+  0.09    0.000011           1         6           close
+100.00    0.012366           1      7235         1 total
+--- comp-read.a1x.c1 rep1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=12466.798 user_ns_per_op=507.952 sys_ns_per_op=3678.432 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.91    0.012077           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.012088           1      7235         1 total
+--- comp-read.a1x.c1 rep2
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=12315.438 user_ns_per_op=1042.550 sys_ns_per_op=3071.150 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 97.48    0.010271           1      7170           pread64
+  0.25    0.000026           3         7           openat
+  0.12    0.000013           1         7           fstat
+  0.10    0.000011           1         6           close
+100.00    0.010536           1      7235         1 total
+--- comp-read.a1x.c1 rep3
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=12375.821 user_ns_per_op=812.081 sys_ns_per_op=3354.213 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.23    0.010911           1      7170           pread64
+  0.35    0.000040           5         7           openat
+  0.11    0.000013           1         7           fstat
+  0.09    0.000010           1         6           close
+100.00    0.011339           1      7235         1 total
+--- comp-read.ax.c1 rep1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12550.774 user_ns_per_op=960.379 sys_ns_per_op=3310.547 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 97.82    0.011082           1      7170           pread64
+  0.35    0.000040           5         7           openat
+  0.18    0.000020           3         6           close
+  0.10    0.000011           1         7           fstat
+100.00    0.011329           1      7235         1 total
+--- comp-read.ax.c1 rep2
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12490.808 user_ns_per_op=637.277 sys_ns_per_op=3553.571 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.74    0.011666           1      7170           pread64
+  0.09    0.000011           1         7           openat
+  0.05    0.000006           0         7           fstat
+  0.04    0.000005           0         6           close
+100.00    0.011815           1      7235         1 total
+--- comp-read.ax.c1 rep3
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=12389.131 user_ns_per_op=538.225 sys_ns_per_op=3641.741 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.00    0.011847           1      7170           pread64
+  0.23    0.000028           4         7           openat
+  0.20    0.000024           4         6           close
+  0.10    0.000012           1         7           fstat
+100.00    0.012089           1      7235         1 total
+===== cell w01-comp-eofmix-4k (tail)
+--- eofmix.a1x.b1 rep1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=16454.662 user_ns_per_op=788.086 sys_ns_per_op=4448.382 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 96.98    0.014441           1      9557           pread64
+  0.27    0.000040           5         7           openat
+  0.09    0.000013           1         7           fstat
+  0.07    0.000010           1         6           close
+100.00    0.014890           1      9622         1 total
+--- eofmix.a1x.b1 rep2
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=16280.927 user_ns_per_op=955.218 sys_ns_per_op=4055.664 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 98.41    0.013024           1      9557           pread64
+  0.16    0.000021           3         7           openat
+  0.08    0.000011           1         6           close
+  0.08    0.000010           1         7           fstat
+100.00    0.013234           1      9622         1 total
+--- eofmix.a1x.b1 rep3
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=16126.333 user_ns_per_op=592.076 sys_ns_per_op=4378.627 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 99.91    0.013923           1      9557           pread64
+  0.03    0.000004           0         6           close
+  0.02    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.013936           1      9622         1 total
+--- eofmix.ax.b1 rep1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=16115.632 user_ns_per_op=807.338 sys_ns_per_op=4221.959 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 99.13    0.013506           1      9557           pread64
+  0.03    0.000004           0         6           close
+  0.03    0.000004           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.013624           1      9622         1 total
+--- eofmix.ax.b1 rep2
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=16113.130 user_ns_per_op=569.057 sys_ns_per_op=4477.400 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 97.14    0.014241           1      9557           pread64
+  0.27    0.000039           5         7           openat
+  0.10    0.000014           2         7           fstat
+  0.07    0.000010           1         6           close
+100.00    0.014661           1      9622         1 total
+--- eofmix.ax.b1 rep3
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=16680.612 user_ns_per_op=1018.834 sys_ns_per_op=4243.722 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 98.75    0.013701           1      9557           pread64
+  0.13    0.000018           2         7           openat
+  0.06    0.000009           1         6           close
+  0.06    0.000008           1         7           fstat
+100.00    0.013875           1      9622         1 total
+--- eofmix.a1x.c1 rep1
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=16251.236 user_ns_per_op=796.317 sys_ns_per_op=4200.474 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 97.99    0.013504           1      9557           pread64
+  0.28    0.000039           5         7           openat
+  0.10    0.000014           2         7           fstat
+  0.09    0.000012           2         6           close
+100.00    0.013781           1      9622         1 total
+--- eofmix.a1x.c1 rep2
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=16232.735 user_ns_per_op=246.931 sys_ns_per_op=4773.717 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 99.93    0.015415           1      9557           pread64
+  0.01    0.000002           0         6           close
+  0.01    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.015426           1      9622         1 total
+--- eofmix.a1x.c1 rep3
+arm=A1x_native_read_exact_at size=4096 ops=1024 ns_per_op=16349.228 user_ns_per_op=892.857 sys_ns_per_op=4220.843 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 96.91    0.013568           1      9557           pread64
+  0.26    0.000037           5         7           openat
+  0.11    0.000016           2         7           fstat
+  0.09    0.000013           2         6           close
+100.00    0.014001           1      9622         1 total
+--- eofmix.ax.c1 rep1
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=17282.605 user_ns_per_op=337.193 sys_ns_per_op=5077.148 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 99.93    0.016375           1      9557           pread64
+  0.02    0.000003           0         6           close
+  0.01    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.016386           1      9622         1 total
+--- eofmix.ax.c1 rep2
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=16487.059 user_ns_per_op=938.198 sys_ns_per_op=4220.982 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 96.80    0.013623           1      9557           pread64
+  0.36    0.000051           7         7           openat
+  0.11    0.000015           2         7           fstat
+  0.09    0.000012           2         6           close
+100.00    0.014073           1      9622         1 total
+--- eofmix.ax.c1 rep3
+arm=AX_sluice_read_exact_at size=4096 ops=1024 ns_per_op=16457.259 user_ns_per_op=1332.589 sys_ns_per_op=3808.175 checksum=12595200 content_hash=0x0000000000000000 content_ok=-1
+ 99.90    0.012185           1      9557           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.012197           1      9622         1 total
+===== cell w01-comp-cursor-4k
+--- cursor.a1c.b1 rep1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12486.169 user_ns_per_op=163.783 sys_ns_per_op=4159.598 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.31    0.000044           6         7           openat
+  0.13    0.000018           2         7           fstat
+  0.13    0.000018           9         2           pread64
+  0.09    0.000013           2         6           close
+  0.08    0.000011           1         6           lseek
+100.00    0.014038           1      7241         1 total
+--- cursor.a1c.b1 rep2
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12332.045 user_ns_per_op=496.652 sys_ns_per_op=3614.118 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.30    0.000036           5         7           openat
+  0.13    0.000016           2         7           fstat
+  0.10    0.000012           2         6           close
+  0.07    0.000009           1         6           lseek
+  0.03    0.000004           2         2           pread64
+100.00    0.012087           1      7241         1 total
+--- cursor.a1c.b1 rep3
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12420.700 user_ns_per_op=79.660 sys_ns_per_op=4123.605 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.11    0.000015           7         2           pread64
+  0.08    0.000011           1         7           openat
+  0.07    0.000010           1         6           lseek
+  0.04    0.000005           0         6           close
+  0.04    0.000005           0         7           fstat
+100.00    0.013485           1      7241         1 total
+--- cursor.ac.b1 rep1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12590.287 user_ns_per_op=984.375 sys_ns_per_op=3272.042 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.09    0.000010           1         7           openat
+  0.08    0.000009           1         6           lseek
+  0.04    0.000004           0         7           fstat
+  0.02    0.000002           0         6           close
+  0.00    0.000000           0         2           pread64
+100.00    0.010635           1      7241         1 total
+--- cursor.ac.b1 rep2
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12602.044 user_ns_per_op=1020.787 sys_ns_per_op=3176.060 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.19    0.000020           2         7           openat
+  0.08    0.000009           1         6           lseek
+  0.05    0.000005           0         6           close
+  0.05    0.000005           0         7           fstat
+  0.05    0.000005           2         2           pread64
+100.00    0.010768           1      7241         1 total
+--- cursor.ac.b1 rep3
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12379.417 user_ns_per_op=237.723 sys_ns_per_op=3890.904 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.07    0.000009           1         6           lseek
+  0.02    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.012508           1      7241         1 total
+--- cursor.a1c.c1 rep1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12472.036 user_ns_per_op=695.452 sys_ns_per_op=3438.477 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.25    0.000029           4         7           openat
+  0.12    0.000014           2         7           fstat
+  0.10    0.000011           1         6           lseek
+  0.09    0.000010           1         6           close
+  0.03    0.000004           2         2           pread64
+100.00    0.011525           1      7241         1 total
+--- cursor.a1c.c1 rep2
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12582.415 user_ns_per_op=690.430 sys_ns_per_op=3528.460 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.27    0.000033           4         7           openat
+  0.12    0.000014           2         7           fstat
+  0.11    0.000013           2         6           close
+  0.08    0.000010           1         6           lseek
+  0.03    0.000004           2         2           pread64
+100.00    0.012083           1      7241         1 total
+--- cursor.a1c.c1 rep3
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12474.387 user_ns_per_op=1192.662 sys_ns_per_op=3003.488 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.10    0.000010           1         7           openat
+  0.08    0.000008           1         6           lseek
+  0.05    0.000005           0         6           close
+  0.05    0.000005           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.010147           1      7241         1 total
+--- cursor.ac.c1 rep1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12457.985 user_ns_per_op=520.368 sys_ns_per_op=3656.110 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.23    0.000028           4         7           openat
+  0.09    0.000011           1         6           close
+  0.09    0.000011           1         7           fstat
+  0.08    0.000010           1         6           lseek
+  0.02    0.000003           1         2           pread64
+100.00    0.012374           1      7241         1 total
+--- cursor.ac.c1 rep2
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12559.198 user_ns_per_op=299.665 sys_ns_per_op=3882.394 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.08    0.000010           1         6           lseek
+  0.02    0.000003           0         6           close
+  0.02    0.000003           0         7           fstat
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.012657           1      7241         1 total
+--- cursor.ac.c1 rep3
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12599.831 user_ns_per_op=92.076 sys_ns_per_op=4136.858 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+  0.07    0.000009           1         6           lseek
+  0.02    0.000003           0         6           close
+  0.02    0.000003           0         7           fstat
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.013513           1      7241         1 total
+===== cell w01-meta-oc (size=0 ops=2048 warmup=512 reps=5)
+--- meta-oc.m2oc.c1 rep1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=25285.542 user_ns_per_op=424.014 sys_ns_per_op=8050.781 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 59.80    0.027365           2     10759           openat
+ 39.33    0.017999           1     10758           close
+  0.03    0.000015           2         7           fstat
+  0.01    0.000004           2         2           pread64
+100.00    0.045760           2     21571         1 total
+--- meta-oc.m2oc.c1 rep2
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=25542.522 user_ns_per_op=593.285 sys_ns_per_op=7982.329 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 59.72    0.026980           2     10759           openat
+ 39.39    0.017797           1     10758           close
+  0.03    0.000013           1         7           fstat
+  0.01    0.000004           2         2           pread64
+100.00    0.045176           2     21571         1 total
+--- meta-oc.m2oc.c1 rep3
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=26546.198 user_ns_per_op=825.428 sys_ns_per_op=8177.176 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 59.88    0.027895           2     10759           openat
+ 39.27    0.018292           1     10758           close
+  0.03    0.000016           2         7           fstat
+  0.01    0.000004           2         2           pread64
+100.00    0.046585           2     21571         1 total
+--- meta-oc.m2oc.b1 rep1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=26077.954 user_ns_per_op=916.481 sys_ns_per_op=7851.004 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.30    0.026590           2     10759           openat
+ 39.67    0.017494           1     10758           close
+  0.01    0.000003           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.044095           2     21571         1 total
+--- meta-oc.m2oc.b1 rep2
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=25236.284 user_ns_per_op=1148.531 sys_ns_per_op=7350.725 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.46    0.024916           2     10759           openat
+ 39.52    0.016287           1     10758           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.041212           1     21571         1 total
+--- meta-oc.m2oc.b1 rep3
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=25463.376 user_ns_per_op=1003.534 sys_ns_per_op=7588.077 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.76    0.026026           2     10759           openat
+ 39.22    0.016800           1     10758           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.042834           1     21571         1 total
+--- meta-oc.m0oc.b1 rep1
+arm=M0_raw_open_close size=0 ops=2048 ns_per_op=25601.348 user_ns_per_op=697.359 sys_ns_per_op=7650.391 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 59.63    0.025849           2     10759           openat
+ 39.46    0.017107           1     10758           close
+  0.04    0.000017           2         7           fstat
+  0.01    0.000004           2         2           pread64
+100.00    0.043352           2     21571         1 total
+--- meta-oc.m0oc.b1 rep2
+arm=M0_raw_open_close size=0 ops=2048 ns_per_op=25540.013 user_ns_per_op=938.430 sys_ns_per_op=7543.434 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 59.94    0.025448           2     10759           openat
+ 40.04    0.017000           1     10758           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.042457           1     21571         1 total
+--- meta-oc.m0oc.b1 rep3
+arm=M0_raw_open_close size=0 ops=2048 ns_per_op=25252.282 user_ns_per_op=645.089 sys_ns_per_op=7888.300 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.74    0.027154           2     10759           openat
+ 39.13    0.017494           1     10758           close
+  0.01    0.000005           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.044703           2     21571         1 total
+--- meta-oc.m1oc.b1 rep1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=25553.878 user_ns_per_op=1112.165 sys_ns_per_op=7456.194 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.58    0.025960           2     10759           openat
+ 38.48    0.016490           1     10758           close
+  0.04    0.000016           2         7           fstat
+  0.01    0.000004           2         2           pread64
+100.00    0.042854           1     21571         1 total
+--- meta-oc.m1oc.b1 rep2
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=25023.979 user_ns_per_op=927.734 sys_ns_per_op=7444.103 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.47    0.025528           2     10759           openat
+ 39.19    0.016543           1     10758           close
+  0.01    0.000006           0         7           fstat
+  0.01    0.000004           2         2           pread64
+100.00    0.042216           1     21571         1 total
+--- meta-oc.m1oc.b1 rep3
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=25608.869 user_ns_per_op=762.742 sys_ns_per_op=8067.522 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ 60.60    0.027626           2     10759           openat
+ 39.37    0.017949           1     10758           close
+  0.01    0.000005           0         7           fstat
+  0.00    0.000000           0         2           pread64
+100.00    0.045590           2     21571         1 total
+===== cell w01-meta-fi (size=0 ops=16384 warmup=2048 reps=5)
+--- meta-fi.m2fi.c1 rep1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11898.810 user_ns_per_op=400.176 sys_ns_per_op=3240.151 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.65    0.123397           1     83975           fstat
+  0.03    0.000039           5         7           openat
+  0.01    0.000010           1         6           close
+  0.00    0.000004           2         2           pread64
+100.00    0.123828           1     84036         1 total
+--- meta-fi.m2fi.c1 rep2
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11829.345 user_ns_per_op=407.655 sys_ns_per_op=3219.727 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.92    0.123321           1     83975           fstat
+  0.01    0.000011           1         7           openat
+  0.00    0.000004           0         6           close
+  0.00    0.000000           0         2           pread64
+100.00    0.123414           1     84036         1 total
+--- meta-fi.m2fi.c1 rep3
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11839.788 user_ns_per_op=423.233 sys_ns_per_op=3182.986 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.99    0.121956           1     83975           fstat
+  0.00    0.000003           0         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.121972           1     84036         1 total
+--- meta-fi.m2fi.b1 rep1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11902.627 user_ns_per_op=474.812 sys_ns_per_op=3175.936 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.99    0.121618           1     83975           fstat
+  0.00    0.000003           0         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.121634           1     84036         1 total
+--- meta-fi.m2fi.b1 rep2
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11855.125 user_ns_per_op=450.040 sys_ns_per_op=3144.412 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.99    0.120206           1     83975           fstat
+  0.00    0.000003           0         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.120221           1     84036         1 total
+--- meta-fi.m2fi.b1 rep3
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=11818.270 user_ns_per_op=556.938 sys_ns_per_op=3043.266 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.99    0.116394           1     83975           fstat
+  0.00    0.000004           0         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.116411           1     84036         1 total
+--- meta-fi.m0fi.b1 rep1
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=11284.914 user_ns_per_op=360.792 sys_ns_per_op=3218.417 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.90    0.123389           1     83975           fstat
+  0.00    0.000006           1         6           close
+  0.00    0.000006           0         7           openat
+  0.00    0.000003           1         2           pread64
+100.00    0.123515           1     84036         1 total
+--- meta-fi.m0fi.b1 rep2
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=11125.309 user_ns_per_op=318.574 sys_ns_per_op=3174.912 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+100.00    0.121713           1     83975           fstat
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.121713           1     84036         1 total
+--- meta-fi.m0fi.b1 rep3
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=11300.384 user_ns_per_op=302.996 sys_ns_per_op=3275.391 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.83    0.126346           1     83975           fstat
+  0.02    0.000023           3         7           openat
+  0.01    0.000014           2         6           close
+  0.00    0.000004           2         2           pread64
+100.00    0.126566           1     84036         1 total
+--- meta-fi.m1fi.b1 rep1
+arm=M1_native_file_info size=0 ops=16384 ns_per_op=11341.576 user_ns_per_op=439.608 sys_ns_per_op=3173.661 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.65    0.121058           1     83975           fstat
+  0.03    0.000039           5         7           openat
+  0.01    0.000014           2         6           close
+  0.00    0.000004           2         2           pread64
+100.00    0.121484           1     84036         1 total
+--- meta-fi.m1fi.b1 rep2
+arm=M1_native_file_info size=0 ops=16384 ns_per_op=11183.139 user_ns_per_op=345.977 sys_ns_per_op=3147.640 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.81    0.120074           1     83975           fstat
+  0.02    0.000023           3         7           openat
+  0.01    0.000011           1         6           close
+  0.00    0.000004           2         2           pread64
+100.00    0.120301           1     84036         1 total
+--- meta-fi.m1fi.b1 rep3
+arm=M1_native_file_info size=0 ops=16384 ns_per_op=11924.052 user_ns_per_op=348.538 sys_ns_per_op=3312.679 checksum=12667986366865715200 content_hash=0x0000000000000000 content_ok=-1
+ 99.98    0.126955           1     83975           fstat
+  0.01    0.000016           2         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.126986           1     84036         1 total
+===== cell w01-neg-1b / w01-neg-4k (public-op negative controls @ C1)
+--- neg-1b.a1.c1 rep1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=11685.342 user_ns_per_op=395.612 sys_ns_per_op=3214.809 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.97    0.042424           1     28674           pread64
+  0.01    0.000003           0         6           close
+  0.01    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.042436           1     28739         1 total
+--- neg-1b.a1.c1 rep2
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=12042.771 user_ns_per_op=228.237 sys_ns_per_op=3471.122 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.97    0.045668           1     28674           pread64
+  0.01    0.000004           0         6           close
+  0.01    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.045682           1     28739         1 total
+--- neg-1b.a1.c1 rep3
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=11772.899 user_ns_per_op=329.415 sys_ns_per_op=3278.006 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.74    0.042986           1     28674           pread64
+  0.03    0.000013           1         7           openat
+  0.01    0.000006           0         7           fstat
+  0.01    0.000003           0         6           close
+100.00    0.043096           1     28739         1 total
+--- neg-1b.a2.c1 rep1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11834.801 user_ns_per_op=270.159 sys_ns_per_op=3364.153 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.42    0.044239           1     28674           pread64
+  0.08    0.000035           5         7           openat
+  0.03    0.000015           2         6           close
+  0.03    0.000015           2         7           fstat
+100.00    0.044495           1     28739         1 total
+--- neg-1b.a2.c1 rep2
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11764.157 user_ns_per_op=297.259 sys_ns_per_op=3321.394 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.98    0.043254           1     28674           pread64
+  0.00    0.000002           0         6           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.043264           1     28739         1 total
+--- neg-1b.a2.c1 rep3
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=11831.052 user_ns_per_op=374.686 sys_ns_per_op=3236.189 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+ 99.97    0.041977           1     28674           pread64
+  0.01    0.000003           0         6           close
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.041988           1     28739         1 total
+--- neg-4k.a1.c1 rep1
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12535.310 user_ns_per_op=1073.800 sys_ns_per_op=3101.702 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 95.81    0.010390           1      7170           pread64
+  0.35    0.000038           5         7           openat
+  0.11    0.000012           1         7           fstat
+  0.09    0.000010           1         6           close
+100.00    0.010844           1      7235         1 total
+--- neg-4k.a1.c1 rep2
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12500.934 user_ns_per_op=560.547 sys_ns_per_op=3600.028 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.89    0.011529           1      7170           pread64
+  0.03    0.000003           0         6           close
+  0.03    0.000003           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.011542           1      7235         1 total
+--- neg-4k.a1.c1 rep3
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12367.589 user_ns_per_op=73.940 sys_ns_per_op=4020.508 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.30    0.012970           1      7170           pread64
+  0.08    0.000010           1         7           openat
+  0.04    0.000005           0         7           fstat
+  0.02    0.000003           0         6           close
+100.00    0.013061           1      7235         1 total
+--- neg-4k.a2.c1 rep1
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12651.199 user_ns_per_op=343.331 sys_ns_per_op=3873.884 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.91    0.012652           1      7170           pread64
+  0.02    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.012663           1      7235         1 total
+--- neg-4k.a2.c1 rep2
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12359.401 user_ns_per_op=599.330 sys_ns_per_op=3527.483 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.98    0.011655           1      7170           pread64
+  0.27    0.000033           4         7           openat
+  0.14    0.000017           2         7           fstat
+  0.10    0.000012           2         6           close
+100.00    0.012018           1      7235         1 total
+--- neg-4k.a2.c1 rep3
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=12357.383 user_ns_per_op=696.708 sys_ns_per_op=3466.797 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.81    0.011200           1      7170           pread64
+  0.29    0.000034           4         7           openat
+  0.10    0.000011           1         7           fstat
+  0.09    0.000010           1         6           close
+100.00    0.011569           1      7235         1 total
+===== cell w01-write-4k (scratch /tmp/sluice600/write-strace-w.bin, Amendment-1 style)
+--- write-4k.w2.c2 rep1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12286.466 user_ns_per_op=462.240 sys_ns_per_op=3558.594 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 94.30    0.045283           2     22528           pwrite64
+  5.06    0.002429          36        66           pread64
+  0.05    0.000026           3         7           openat
+  0.02    0.000011           1         7           fstat
+  0.02    0.000010           1         6           close
+100.00    0.048022           2     22661         1 total
+--- write-4k.w2.c2 rep2
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12185.828 user_ns_per_op=393.717 sys_ns_per_op=3572.103 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 98.33    0.043672           1     22528           pwrite64
+  1.62    0.000718          10        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.044412           1     22661         1 total
+--- write-4k.w2.c2 rep3
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12243.742 user_ns_per_op=419.759 sys_ns_per_op=3600.098 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 97.05    0.043774           1     22528           pwrite64
+  2.61    0.001178          17        66           pread64
+  0.02    0.000011           1         7           openat
+  0.01    0.000005           0         6           close
+  0.01    0.000005           0         7           fstat
+100.00    0.045103           1     22661         1 total
+--- write-4k.w2.b1 rep1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12102.842 user_ns_per_op=330.241 sys_ns_per_op=3582.031 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 91.65    0.045031           1     22528           pwrite64
+  7.31    0.003594          54        66           pread64
+  0.08    0.000041           5         7           openat
+  0.03    0.000013           1         7           fstat
+  0.02    0.000009           1         6           close
+100.00    0.049134           2     22661         1 total
+--- write-4k.w2.b1 rep2
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=11947.443 user_ns_per_op=15.951 sys_ns_per_op=3968.262 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 99.07    0.045186           2     22528           pwrite64
+  0.68    0.000311           4        66           pread64
+  0.03    0.000013           1         7           openat
+  0.00    0.000002           0         7           fstat
+  0.00    0.000000           0         6           close
+100.00    0.045609           2     22661         1 total
+--- write-4k.w2.b1 rep3
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=11987.020 user_ns_per_op=957.520 sys_ns_per_op=2923.340 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 93.44    0.040227           1     22528           pwrite64
+  6.49    0.002793          42        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.043053           1     22661         1 total
+--- write-4k.w0.b1 rep1
+arm=W0_raw_pwrite size=4096 ops=1024 ns_per_op=12106.399 user_ns_per_op=536.296 sys_ns_per_op=3481.934 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 96.65    0.044134           1     22528           pwrite64
+  2.92    0.001334          20        66           pread64
+  0.02    0.000008           1         7           fstat
+  0.02    0.000007           1         6           close
+  0.00    0.000000           0         7           openat
+100.00    0.045665           2     22661         1 total
+--- write-4k.w0.b1 rep2
+arm=W0_raw_pwrite size=4096 ops=1024 ns_per_op=12107.025 user_ns_per_op=308.757 sys_ns_per_op=3597.493 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 98.36    0.045451           2     22528           pwrite64
+  1.34    0.000621           9        66           pread64
+  0.01    0.000004           0         6           close
+  0.01    0.000004           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.046207           2     22661         1 total
+--- write-4k.w0.b1 rep3
+arm=W0_raw_pwrite size=4096 ops=1024 ns_per_op=11989.896 user_ns_per_op=421.549 sys_ns_per_op=3496.908 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 92.30    0.044378           1     22528           pwrite64
+  7.43    0.003570          54        66           pread64
+  0.01    0.000006           1         6           close
+  0.01    0.000003           0         7           openat
+  0.00    0.000001           0         7           fstat
+100.00    0.048079           2     22661         1 total
+===== cell w01-wcomp-4k
+--- wcomp.w1x.b1 rep1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=12216.908 user_ns_per_op=497.559 sys_ns_per_op=3528.971 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 92.81    0.044024           1     22528           pwrite64
+  6.97    0.003306          50        66           pread64
+  0.01    0.000006           0         7           openat
+  0.00    0.000002           0         6           close
+  0.00    0.000001           0         7           fstat
+100.00    0.047433           2     22661         1 total
+--- wcomp.w1x.b1 rep2
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=12228.046 user_ns_per_op=555.501 sys_ns_per_op=3570.475 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 99.67    0.043223           1     22528           pwrite64
+  0.26    0.000111           1        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.043365           1     22661         1 total
+--- wcomp.w1x.b1 rep3
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=12232.666 user_ns_per_op=311.686 sys_ns_per_op=3731.283 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 93.42    0.044241           1     22528           pwrite64
+  6.50    0.003076          46        66           pread64
+  0.00    0.000001           0         6           close
+  0.00    0.000001           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.047357           2     22661         1 total
+--- wcomp.wx.b1 rep1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12530.175 user_ns_per_op=201.823 sys_ns_per_op=3957.194 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 92.59    0.045345           2     22528           pwrite64
+  6.45    0.003160          47        66           pread64
+  0.09    0.000044           6         7           openat
+  0.05    0.000024           3         7           fstat
+  0.02    0.000010           1         6           close
+100.00    0.048973           2     22661         1 total
+--- wcomp.wx.b1 rep2
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12249.881 user_ns_per_op=249.512 sys_ns_per_op=3908.366 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 96.88    0.043603           1     22528           pwrite64
+  3.08    0.001386          21        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.045008           1     22661         1 total
+--- wcomp.wx.b1 rep3
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12289.467 user_ns_per_op=324.056 sys_ns_per_op=3779.785 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 92.00    0.045994           2     22528           pwrite64
+  7.95    0.003976          60        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.049991           2     22661         1 total
+--- wcomp.w1x.c2 rep1
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=12444.716 user_ns_per_op=262.207 sys_ns_per_op=3826.660 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 99.10    0.044838           1     22528           pwrite64
+  0.30    0.000136           2        66           pread64
+  0.08    0.000036           5         7           openat
+  0.02    0.000010           1         7           fstat
+  0.02    0.000009           1         6           close
+100.00    0.045245           1     22661         1 total
+--- wcomp.w1x.c2 rep2
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=11846.279 user_ns_per_op=485.189 sys_ns_per_op=3447.266 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 91.98    0.043889           1     22528           pwrite64
+  6.94    0.003312          50        66           pread64
+  0.08    0.000040           5         7           openat
+  0.04    0.000017           2         7           fstat
+  0.03    0.000015           2         6           close
+100.00    0.047718           2     22661         1 total
+--- wcomp.w1x.c2 rep3
+arm=W1x_native_write_all_at size=4096 ops=1024 ns_per_op=12115.446 user_ns_per_op=487.793 sys_ns_per_op=3517.904 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 91.93    0.043210           1     22528           pwrite64
+  7.11    0.003343          50        66           pread64
+  0.09    0.000040           5         7           openat
+  0.03    0.000014           2         7           fstat
+  0.02    0.000009           1         6           close
+100.00    0.047003           2     22661         1 total
+--- wcomp.wx.c2 rep1
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12182.309 user_ns_per_op=646.810 sys_ns_per_op=3313.314 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 92.04    0.042299           1     22528           pwrite64
+  7.89    0.003627          54        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.045956           2     22661         1 total
+--- wcomp.wx.c2 rep2
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12185.021 user_ns_per_op=619.141 sys_ns_per_op=3365.072 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 98.19    0.041508           1     22528           pwrite64
+  0.70    0.000297           4        66           pread64
+  0.10    0.000041           5         7           openat
+  0.03    0.000013           1         7           fstat
+  0.02    0.000010           1         6           close
+100.00    0.042275           1     22661         1 total
+--- wcomp.wx.c2 rep3
+arm=WX_sluice_write_all_at size=4096 ops=1024 ns_per_op=12181.645 user_ns_per_op=732.259 sys_ns_per_op=3274.902 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 93.27    0.044371           1     22528           pwrite64
+  6.48    0.003085          46        66           pread64
+  0.03    0.000012           1         7           openat
+  0.01    0.000004           0         6           close
+  0.01    0.000003           0         7           fstat
+100.00    0.047575           2     22661         1 total
+===== cell w01-negw-4k (@ C2)
+--- negw-4k.w1.c2 rep1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=12243.398 user_ns_per_op=3.581 sys_ns_per_op=4017.578 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 92.98    0.043283           1     22528           pwrite64
+  6.76    0.003146          47        66           pread64
+  0.01    0.000006           0         7           openat
+  0.00    0.000001           0         6           close
+  0.00    0.000001           0         7           fstat
+100.00    0.046552           2     22661         1 total
+--- negw-4k.w1.c2 rep2
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=12095.385 user_ns_per_op=248.535 sys_ns_per_op=3712.402 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 95.87    0.041609           1     22528           pwrite64
+  4.06    0.001760          26        66           pread64
+  0.00    0.000001           0         6           close
+  0.00    0.000001           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.043401           1     22661         1 total
+--- negw-4k.w1.c2 rep3
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=12130.668 user_ns_per_op=352.865 sys_ns_per_op=3636.393 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 95.11    0.042407           1     22528           pwrite64
+  4.34    0.001936          29        66           pread64
+  0.05    0.000023           3         7           openat
+  0.02    0.000008           1         6           close
+  0.02    0.000008           1         7           fstat
+100.00    0.044585           1     22661         1 total
+--- negw-4k.w2.c2 rep1
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12104.907 user_ns_per_op=689.941 sys_ns_per_op=3255.697 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 97.84    0.044830           1     22528           pwrite64
+  2.11    0.000968          14        66           pread64
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         7           openat
+100.00    0.045821           2     22661         1 total
+--- negw-4k.w2.c2 rep2
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12141.552 user_ns_per_op=347.493 sys_ns_per_op=3589.030 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 93.33    0.041207           1     22528           pwrite64
+  5.56    0.002456          37        66           pread64
+  0.07    0.000033           4         7           openat
+  0.02    0.000010           1         7           fstat
+  0.02    0.000009           1         6           close
+100.00    0.044152           1     22661         1 total
+--- negw-4k.w2.c2 rep3
+arm=W2_sluice_write_at size=4096 ops=1024 ns_per_op=12181.260 user_ns_per_op=809.733 sys_ns_per_op=3176.921 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+ 95.33    0.042160           1     22528           pwrite64
+  3.36    0.001488          22        66           pread64
+  0.09    0.000041           5         7           openat
+  0.04    0.000018           2         7           fstat
+  0.03    0.000014           2         6           close
+100.00    0.044227           1     22661         1 total
+===== CORRECTED cursor section 2026-10-28T11:56:22+08:00: full strace -c tables (earlier display filter dropped the 'read' row; raw counts unaffected elsewhere)
+--- cursor.a1c.b1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1c rep1
+--- cursor.a1c.b1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1c rep2
+--- cursor.a1c.b1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1c rep3
+--- cursor.ac.b1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder ac rep1
+--- cursor.ac.b1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder ac rep2
+--- cursor.ac.b1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder ac rep3
+--- cursor.a1c.c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1c rep1
+--- cursor.a1c.c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1c rep2
+--- cursor.a1c.c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1c rep3
+--- cursor.ac.c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 ac rep1
+--- cursor.ac.c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 ac rep2
+--- cursor.ac.c1 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 ac rep3
+===== CORRECTED-2 cursor section 2026-10-28T11:57:19+08:00: full tables (zsh word-split defect voided CORRECTED-1)
+--- cursor.a1c.b1 rep1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12708.857 user_ns_per_op=510.463 sys_ns_per_op=4102.958 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 97.59    0.013731           1      7172           read
+  0.37    0.000052           7         7           openat
+  0.15    0.000021           3         7           fstat
+  0.11    0.000016           2         6           close
+  0.08    0.000011           1         6           lseek
+  0.04    0.000005           5         1           write
+  0.03    0.000004           2         2           pread64
+100.00    0.014070           1      7241         1 total
+--- cursor.a1c.b1 rep2
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12572.983 user_ns_per_op=637.416 sys_ns_per_op=3508.092 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.84    0.011224           1      7172           read
+  0.06    0.000007           1         6           lseek
+  0.04    0.000004           4         1           write
+  0.03    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.011242           1      7241         1 total
+--- cursor.a1c.b1 rep3
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12756.569 user_ns_per_op=1065.011 sys_ns_per_op=3259.068 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.11    0.010655           1      7172           read
+  0.11    0.000012           1         7           openat
+  0.09    0.000010           1         6           lseek
+  0.06    0.000006           0         7           fstat
+  0.05    0.000005           5         1           write
+  0.03    0.000003           0         6           close
+  0.00    0.000000           0         2           pread64
+100.00    0.010751           1      7241         1 total
+--- cursor.ac.b1 rep1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12591.031 user_ns_per_op=118.304 sys_ns_per_op=4105.887 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.46    0.013218           1      7172           read
+  0.12    0.000016           8         2           pread64
+  0.12    0.000016           2         7           openat
+  0.08    0.000011           1         7           fstat
+  0.07    0.000010           1         6           close
+  0.07    0.000010           1         6           lseek
+  0.04    0.000005           5         1           write
+100.00    0.013425           1      7241         1 total
+--- cursor.ac.b1 rep2
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12407.869 user_ns_per_op=650.670 sys_ns_per_op=3519.392 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.80    0.011642           1      7172           read
+  0.08    0.000009           1         6           lseek
+  0.04    0.000005           5         1           write
+  0.03    0.000004           0         7           fstat
+  0.03    0.000003           0         6           close
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.011665           1      7241         1 total
+--- cursor.ac.b1 rep3
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12430.480 user_ns_per_op=604.911 sys_ns_per_op=3620.954 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.84    0.011874           1      7172           read
+  0.06    0.000007           1         6           lseek
+  0.04    0.000005           5         1           write
+  0.03    0.000003           0         6           close
+  0.02    0.000002           0         7           fstat
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.011893           1      7241         1 total
+--- cursor.a1c.c1 rep1
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12865.575 user_ns_per_op=843.192 sys_ns_per_op=3330.636 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.11    0.011060           1      7172           read
+  0.20    0.000023           3         7           openat
+  0.07    0.000008           1         6           close
+  0.07    0.000008           1         7           fstat
+  0.07    0.000008           1         6           lseek
+  0.04    0.000004           2         2           pread64
+  0.00    0.000000           0         1           write
+100.00    0.011273           1      7241         1 total
+--- cursor.a1c.c1 rep2
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12434.249 user_ns_per_op=425.642 sys_ns_per_op=3721.261 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.78    0.011929           1      7172           read
+  0.28    0.000035           5         7           openat
+  0.13    0.000016           2         7           fstat
+  0.11    0.000013           2         6           close
+  0.06    0.000008           1         6           lseek
+  0.04    0.000005           5         1           write
+  0.03    0.000004           2         2           pread64
+100.00    0.012326           1      7241         1 total
+--- cursor.a1c.c1 rep3
+arm=A1c_native_read_exact size=4096 ops=1024 ns_per_op=12426.363 user_ns_per_op=1105.748 sys_ns_per_op=2978.376 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 96.04    0.010005           1      7172           read
+  0.35    0.000036           5         7           openat
+  0.13    0.000014           2         7           fstat
+  0.12    0.000012           2         6           close
+  0.07    0.000007           1         6           lseek
+  0.04    0.000004           2         2           pread64
+  0.03    0.000003           3         1           write
+100.00    0.010418           1      7241         1 total
+--- cursor.ac.c1 rep1
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12454.450 user_ns_per_op=650.809 sys_ns_per_op=3577.706 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 99.81    0.011850           1      7172           read
+  0.08    0.000010           1         6           lseek
+  0.04    0.000005           5         1           write
+  0.03    0.000003           0         6           close
+  0.03    0.000003           0         7           fstat
+  0.00    0.000000           0         2           pread64
+  0.00    0.000000           0         7           openat
+100.00    0.011873           1      7241         1 total
+--- cursor.ac.c1 rep2
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12427.287 user_ns_per_op=495.954 sys_ns_per_op=3652.065 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.47    0.011923           1      7172           read
+  0.19    0.000023           3         7           openat
+  0.08    0.000010           1         7           fstat
+  0.08    0.000010           1         6           lseek
+  0.07    0.000009           1         6           close
+  0.03    0.000004           4         1           write
+  0.02    0.000003           1         2           pread64
+100.00    0.012108           1      7241         1 total
+--- cursor.ac.c1 rep3
+arm=AC_sluice_read_exact size=4096 ops=1024 ns_per_op=12357.079 user_ns_per_op=636.161 sys_ns_per_op=3482.840 checksum=25165824 content_hash=0x0000000000000000 content_ok=-1
+ 98.04    0.011272           1      7172           read
+  0.14    0.000016           2         7           openat
+  0.08    0.000009           1         6           lseek
+  0.06    0.000007           1         6           close
+  0.05    0.000006           0         7           fstat
+  0.04    0.000005           2         2           pread64
+  0.03    0.000004           4         1           write
+100.00    0.011497           1      7241         1 total

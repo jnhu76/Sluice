@@ -1,0 +1,43 @@
+# count corroboration — 2026-10-28T02:18:28+08:00
+=== run=1 A(reps=1) ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=13221.604 user_ns_per_op=1615.234 sys_ns_per_op=3900.879 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003375           1      2050           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003375           1      2050           total
+=== run=1 B(reps=0) ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=2198.242 sys_ns_per_op=4516.602 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001445           1      1026           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001445           1      1026           total
+=== run=2 A(reps=1) ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12946.537 user_ns_per_op=316.895 sys_ns_per_op=4938.477 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003815           1      2050           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003815           1      2050           total
+=== run=2 B(reps=0) ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=1955.078 sys_ns_per_op=4645.508 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001419           1      1026           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001419           1      1026           total
+=== run=3 A(reps=1) ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=12954.783 user_ns_per_op=1277.344 sys_ns_per_op=4080.078 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002943           1      2050           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.002943           1      2050           total
+=== run=3 B(reps=0) ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=2980.469 sys_ns_per_op=3640.625 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001149           1      1026           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.001149           1      1026           total

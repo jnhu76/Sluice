@@ -1,0 +1,453 @@
+# P4 parquet physical-work + PMU + rusage diagnostics — 2026-10-28T12:21:41+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# caliber: whole-process counts/PMU/rusage (startup sha256 included, disclosed); deltas cancel shared harness
+===== replay-native-b1 — strace -c x3
+--- replay-native-b1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/native/medium  237942552 ns    236494108 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.24    0.060202         261       230           pread64
+  1.39    0.000877           0      2823           read
+  1.24    0.000781         390         2           munmap
+  1.00    0.000634           7        81           mmap
+  0.38    0.000239           4        49         2 openat
+  0.11    0.000067           2        30           fstat
+  0.10    0.000066           1        47           close
+  0.03    0.000016           2         7           brk
+  0.00    0.000000           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.063212          18      3378         4 total
+--- replay-native-b1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/native/medium  236279338 ns    234882479 ns            3 replay_bytes=181.996M replay_requests=57
+ 98.13    0.062382         271       230           pread64
+  1.68    0.001067           0      2823           read
+  0.04    0.000023           0        49         2 openat
+  0.03    0.000017           8         2           munmap
+  0.02    0.000015           0        68           write
+  0.02    0.000013           1         7           brk
+  0.02    0.000010           0        81           mmap
+  0.01    0.000009           0        30           fstat
+  0.00    0.000003           0        47           close
+  0.00    0.000000           0         2           lseek
+100.00    0.063570          18      3378         4 total
+--- replay-native-b1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/native/medium  236009529 ns    234662864 ns            3 replay_bytes=181.996M replay_requests=57
+ 96.44    0.057317         249       230           pread64
+  2.13    0.001263           0      2823           read
+  0.45    0.000267           3        81           mmap
+  0.31    0.000187           3        49         2 openat
+  0.29    0.000170           2        68           write
+  0.11    0.000068           1        47           close
+  0.06    0.000033           1        30           fstat
+  0.02    0.000009           1         7           brk
+  0.01    0.000004           2         2           lseek
+  0.00    0.000000           0         2           munmap
+100.00    0.059431          17      3378         4 total
+===== replay-native-b1 — perf stat instructions:u,cycles:u
+    15,946,048,776      instructions:u                                                        
+     6,033,629,514      cycles:u                                                              
+===== replay-native-b1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 1.74
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30544
+	User time (seconds): 1.74
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30504
+	User time (seconds): 1.74
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30496
+===== replay-sluice-b1 — strace -c x3
+--- replay-sluice-b1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  238469855 ns    237031173 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.53    0.059149         257       230           pread64
+  1.59    0.000986         492         2           munmap
+  1.39    0.000859           0      2823           read
+  0.57    0.000351           4        81           mmap
+  0.38    0.000233           4        49         2 openat
+  0.28    0.000174           2        68           write
+  0.13    0.000078           1        47           close
+  0.06    0.000037           1        34           fstat
+  0.01    0.000004           2         2           lseek
+  0.00    0.000000           0         7           brk
+100.00    0.061919          18      3382         4 total
+--- replay-sluice-b1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  243723103 ns    242144344 ns            3 replay_bytes=181.996M replay_requests=57
+ 96.15    0.064757         281       230           pread64
+  1.43    0.000961           0      2823           read
+  1.43    0.000961         480         2           munmap
+  0.63    0.000424           5        81           mmap
+  0.16    0.000108           2        49         2 openat
+  0.06    0.000042           1        34           fstat
+  0.06    0.000040           0        47           close
+  0.01    0.000006           0        68           write
+  0.00    0.000001           0         7           brk
+  0.00    0.000000           0         2           lseek
+100.00    0.067347          19      3382         4 total
+--- replay-sluice-b1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  236300691 ns    234923206 ns            3 replay_bytes=181.996M replay_requests=57
+ 96.21    0.058864         255       230           pread64
+  1.58    0.000966         483         2           munmap
+  1.28    0.000783           0      2823           read
+  0.50    0.000305           3        81           mmap
+  0.16    0.000098           2        49         2 openat
+  0.05    0.000031           0        47           close
+  0.05    0.000031           0        34           fstat
+  0.01    0.000005           0         7           brk
+  0.00    0.000000           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.061181          18      3382         4 total
+===== replay-sluice-b1 — perf stat instructions:u,cycles:u
+    15,946,058,413      instructions:u                                                        
+     6,028,950,721      cycles:u                                                              
+===== replay-sluice-b1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 1.74
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30556
+	User time (seconds): 1.76
+	System time (seconds): 0.12
+	Maximum resident set size (kbytes): 30392
+	User time (seconds): 1.76
+	System time (seconds): 0.10
+	Maximum resident set size (kbytes): 30556
+===== replay-sluice-p2c1 — strace -c x3
+--- replay-sluice-p2c1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  236563109 ns    235182050 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.86    0.058575         254       230           pread64
+  1.37    0.000838           0      2823           read
+  1.31    0.000802         401         2           munmap
+  0.54    0.000330           4        81           mmap
+  0.27    0.000165           2        68           write
+  0.24    0.000145           2        49         2 openat
+  0.10    0.000061           1        47           close
+  0.06    0.000038           1        34           fstat
+  0.01    0.000007           1         7           brk
+  0.01    0.000004           2         2           lseek
+100.00    0.061107          18      3382         4 total
+--- replay-sluice-p2c1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  238746936 ns    237251306 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.66    0.055856         242       230           pread64
+  1.47    0.000856           0      2823           read
+  1.37    0.000800         400         2           munmap
+  0.77    0.000452           5        81           mmap
+  0.22    0.000130           2        49         2 openat
+  0.20    0.000117           1        68           write
+  0.09    0.000051           1        34           fstat
+  0.07    0.000040           0        47           close
+  0.02    0.000012           1         7           brk
+  0.00    0.000000           0         2           lseek
+100.00    0.058389          17      3382         4 total
+--- replay-sluice-p2c1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  236332184 ns    234926693 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.38    0.057808         251       230           pread64
+  1.94    0.001173           0      2823           read
+  1.35    0.000820         410         2           munmap
+  0.67    0.000405           5        81           mmap
+  0.22    0.000136           2        49         2 openat
+  0.07    0.000043           1        34           fstat
+  0.07    0.000040           0        47           close
+  0.02    0.000011           1         7           brk
+  0.00    0.000000           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.060611          17      3382         4 total
+===== replay-sluice-p2c1 — perf stat instructions:u,cycles:u
+    15,946,058,276      instructions:u                                                        
+     6,033,003,109      cycles:u                                                              
+===== replay-sluice-p2c1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 1.74
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30508
+	User time (seconds): 1.75
+	System time (seconds): 0.10
+	Maximum resident set size (kbytes): 30476
+	User time (seconds): 1.74
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30436
+===== replay-sluice-p2c2 — strace -c x3
+--- replay-sluice-p2c2 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  237139381 ns    235743540 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.95    0.059920         260       230           pread64
+  1.36    0.000851         425         2           munmap
+  1.00    0.000622           0      2823           read
+  0.83    0.000518           6        81           mmap
+  0.28    0.000173           3        49         2 openat
+  0.10    0.000062           1        47           close
+  0.10    0.000061           1        34           fstat
+  0.02    0.000014           2         7           brk
+  0.01    0.000007           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.062450          18      3382         4 total
+--- replay-sluice-p2c2 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  236685781 ns    235304576 ns            3 replay_bytes=181.996M replay_requests=57
+ 95.21    0.056622         246       230           pread64
+  1.44    0.000859           0      2823           read
+  1.43    0.000851         425         2           munmap
+  0.79    0.000470           5        81           mmap
+  0.50    0.000300           6        49         2 openat
+  0.23    0.000138           2        68           write
+  0.16    0.000096           2        47           close
+  0.10    0.000061           1        34           fstat
+  0.03    0.000015           2         7           brk
+  0.01    0.000004           2         2           lseek
+100.00    0.059469          17      3382         4 total
+--- replay-sluice-p2c2 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+Replay/sluice/medium  238830082 ns    237405955 ns            3 replay_bytes=181.996M replay_requests=57
+ 96.37    0.058053         252       230           pread64
+  1.42    0.000856         428         2           munmap
+  1.33    0.000800           0      2823           read
+  0.51    0.000309           3        81           mmap
+  0.16    0.000099           2        49         2 openat
+  0.06    0.000039           0        47           close
+  0.06    0.000039           1        34           fstat
+  0.01    0.000009           1         7           brk
+  0.00    0.000000           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.060237          17      3382         4 total
+===== replay-sluice-p2c2 — perf stat instructions:u,cycles:u
+    15,946,058,552      instructions:u                                                        
+     6,035,419,385      cycles:u                                                              
+===== replay-sluice-p2c2 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 1.73
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30436
+	User time (seconds): 1.73
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30520
+	User time (seconds): 1.73
+	System time (seconds): 0.11
+	Maximum resident set size (kbytes): 30484
+===== gather-native-b1 — strace -c x3
+--- gather-native-b1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ReplayGather/native/medium  449965361 ns    448827076 ns            2 strategy_bytes_issued=181.996M strategy_requests=57 strategy_staging_bytes=0 strategy_staging_copies=0 strategy_syscalls=2
+ 54.92    0.080070       26690         3           preadv
+ 19.94    0.029073         244       119           pread64
+ 17.25    0.025151         483        52           munmap
+  7.05    0.010275         177        58           brk
+  0.45    0.000663           0      2823           read
+  0.11    0.000166           2        68           write
+  0.09    0.000124           0       131           mmap
+  0.07    0.000098           1        50         2 openat
+  0.02    0.000027           0        48           close
+  0.00    0.000006           0        26           fstat
+  0.00    0.000004           2         2           lseek
+100.00    0.145785          42      3419         4 total
+--- gather-native-b1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ReplayGather/native/medium  450315395 ns    449165685 ns            2 strategy_bytes_issued=181.996M strategy_requests=57 strategy_staging_bytes=0 strategy_staging_copies=0 strategy_syscalls=2
+ 54.39    0.079658       26552         3           preadv
+ 20.22    0.029609         248       119           pread64
+ 17.31    0.025356         487        52           munmap
+  6.85    0.010040         173        58           brk
+  0.45    0.000655           0      2823           read
+  0.42    0.000611           4       131           mmap
+  0.11    0.000158           3        50         2 openat
+  0.05    0.000079           1        68           write
+  0.03    0.000048           1        48           close
+  0.03    0.000043           1        26           fstat
+  0.00    0.000000           0         2           lseek
+100.00    0.146464          42      3419         4 total
+--- gather-native-b1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ReplayGather/native/medium  452145551 ns    450949322 ns            2 strategy_bytes_issued=181.996M strategy_requests=57 strategy_staging_bytes=0 strategy_staging_copies=0 strategy_syscalls=2
+ 54.24    0.080261       26753         3           preadv
+ 20.75    0.030698         257       119           pread64
+ 17.22    0.025484         490        52           munmap
+  6.73    0.009954         171        58           brk
+  0.60    0.000886           0      2823           read
+  0.13    0.000194           3        50         2 openat
+  0.13    0.000190           1       131           mmap
+  0.11    0.000157           2        68           write
+  0.05    0.000067           1        48           close
+  0.01    0.000013           0        26           fstat
+  0.00    0.000003           1         2           lseek
+100.00    0.147973          43      3419         4 total
+===== gather-native-b1 — perf stat instructions:u,cycles:u
+    20,891,533,824      instructions:u                                                        
+     9,350,441,984      cycles:u                                                              
+===== gather-native-b1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 2.73
+	System time (seconds): 0.39
+	Maximum resident set size (kbytes): 384324
+	User time (seconds): 2.71
+	System time (seconds): 0.40
+	Maximum resident set size (kbytes): 384344
+	User time (seconds): 2.71
+	System time (seconds): 0.39
+	Maximum resident set size (kbytes): 384368
+===== gather-sluice-b1 — strace -c x3
+--- gather-sluice-b1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ReplayGather/sluice/medium  493368891 ns    491941177 ns            2 strategy_bytes_issued=181.996M strategy_requests=57 strategy_staging_bytes=181.996M strategy_staging_copies=57 strategy_syscalls=2
+ 74.81    0.118759         973       122           pread64
+ 15.86    0.025179         484        52           munmap
+  8.05    0.012784         180        71           brk
+  0.74    0.001174           0      2823           read
+  0.30    0.000472           3       131           mmap
+  0.10    0.000152           3        50         2 openat
+  0.06    0.000090           1        68           write
+  0.03    0.000040           0        48           close
+  0.02    0.000033           1        26           fstat
+  0.00    0.000000           0         2           lseek
+100.00    0.158739          46      3432         4 total
+--- gather-sluice-b1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ReplayGather/sluice/medium  499263419 ns    497555181 ns            2 strategy_bytes_issued=181.996M strategy_requests=57 strategy_staging_bytes=181.996M strategy_staging_copies=57 strategy_syscalls=2
+ 74.78    0.121809         998       122           pread64
+ 16.06    0.026153         502        52           munmap
+  7.71    0.012563         176        71           brk
+  0.78    0.001266           0      2823           read
+  0.31    0.000505           3       131           mmap
+  0.11    0.000179           3        50         2 openat
+  0.10    0.000167           2        68           write
+  0.04    0.000060           1        48           close
+  0.03    0.000041           1        26           fstat
+  0.00    0.000003           1         2           lseek
+100.00    0.162881          47      3432         4 total
+--- gather-sluice-b1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+ReplayGather/sluice/medium  493825381 ns    492401438 ns            2 strategy_bytes_issued=181.996M strategy_requests=57 strategy_staging_bytes=181.996M strategy_staging_copies=57 strategy_syscalls=2
+ 75.29    0.120875         990       122           pread64
+ 15.23    0.024448         470        52           munmap
+  8.52    0.013676         192        71           brk
+  0.55    0.000883           0      2823           read
+  0.27    0.000439           3       131           mmap
+  0.06    0.000101           2        50         2 openat
+  0.02    0.000026           1        26           fstat
+  0.02    0.000025           0        48           close
+  0.00    0.000006           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.160539          46      3432         4 total
+===== gather-sluice-b1 — perf stat instructions:u,cycles:u
+    20,947,682,546      instructions:u                                                        
+     9,636,260,269      cycles:u                                                              
+===== gather-sluice-b1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 2.82
+	System time (seconds): 0.44
+	Maximum resident set size (kbytes): 404396
+	User time (seconds): 2.78
+	System time (seconds): 0.44
+	Maximum resident set size (kbytes): 404652
+	User time (seconds): 2.76
+	System time (seconds): 0.46
+	Maximum resident set size (kbytes): 404492
+===== t3-p0-b1 — strace -c x3
+--- t3-p0-b1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+T3_fullscan/p0_arrow/medium  341021285 ns    338550544 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.183799 read_errors=0 read_ms=327.3 requested_bytes=0 returned_bytes=0 rows=1.2M
+ 60.82    0.083544         482       173           pread64
+ 32.93    0.045238        1966        23           munmap
+  4.84    0.006644         166        40           brk
+  0.76    0.001041           0      2835           read
+  0.40    0.000544           5       102           mmap
+  0.14    0.000193           3        50         2 openat
+  0.04    0.000049           1        48           close
+  0.03    0.000048           1        32           fstat
+  0.00    0.000002           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    0.137356          40      3414         4 total
+--- t3-p0-b1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+T3_fullscan/p0_arrow/medium  346136287 ns    343650556 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.184632 read_errors=0 read_ms=331.733 requested_bytes=0 returned_bytes=0 rows=1.2M
+ 56.34    0.081506         471       173           pread64
+ 36.63    0.052994        2304        23           munmap
+  5.78    0.008365         209        40           brk
+  0.63    0.000907           0      2835           read
+  0.23    0.000336           3       102           mmap
+  0.15    0.000211           4        50         2 openat
+  0.11    0.000156           2        68           write
+  0.06    0.000085           1        48           close
+  0.03    0.000046           1        32           fstat
+  0.00    0.000003           1         2           lseek
+100.00    0.144676          42      3414         4 total
+--- t3-p0-b1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+T3_fullscan/p0_arrow/medium  341931592 ns    339427622 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.183768 read_errors=0 read_ms=328.615 requested_bytes=0 returned_bytes=0 rows=1.2M
+ 59.68    0.081844         473       173           pread64
+ 33.63    0.046118        2005        23           munmap
+  4.94    0.006780         169        40           brk
+  0.88    0.001208           0      2835           read
+  0.43    0.000584           5       102           mmap
+  0.16    0.000216           4        50         2 openat
+  0.12    0.000169           2        68           write
+  0.04    0.000061           1        32           fstat
+  0.04    0.000059           1        48           close
+  0.00    0.000003           1         2           lseek
+100.00    0.137146          40      3414         4 total
+===== t3-p0-b1 — perf stat instructions:u,cycles:u
+    13,788,887,794      instructions:u                                                        
+     4,820,319,862      cycles:u                                                              
+===== t3-p0-b1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 1.43
+	System time (seconds): 0.51
+	Maximum resident set size (kbytes): 401220
+	User time (seconds): 1.42
+	System time (seconds): 0.53
+	Maximum resident set size (kbytes): 401192
+	User time (seconds): 1.41
+	System time (seconds): 0.53
+	Maximum resident set size (kbytes): 401260
+===== t3-p0-prebuf-b1 — strace -c x3
+--- t3-p0-prebuf-b1 strace rep1
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+T3_fullscan_prebuf/p0_arrow/medium  363844387 ns    297425106 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.190544 read_errors=0 read_ms=331.861 requested_bytes=0 returned_bytes=0 rows=1.2M
+ 22.74    0.195669        6747        29           pread64
+  7.43    0.063959        1827        35           munmap
+  0.36    0.003089         128        24           brk
+  0.14    0.001237           0      2835           read
+  0.08    0.000649           5       110           mmap
+  0.03    0.000246           4        50         2 openat
+  0.02    0.000196           2        68           write
+  0.01    0.000086           2        32           fstat
+  0.01    0.000067           1        48           close
+  0.00    0.000004           2         2           lseek
+100.00    0.860631         245      3500        17 total
+--- t3-p0-prebuf-b1 strace rep2
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+T3_fullscan_prebuf/p0_arrow/medium  361727836 ns    303384132 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.188614 read_errors=0 read_ms=330.25 requested_bytes=0 returned_bytes=0 rows=1.2M
+ 13.79    0.179476        6188        29           pread64
+  4.44    0.057738        1749        33           munmap
+  0.24    0.003071         118        26           brk
+  0.11    0.001407           0      2835           read
+  0.02    0.000319           2       110           mmap
+  0.01    0.000172           2        68           write
+  0.01    0.000071           1        50         2 openat
+  0.00    0.000027           0        32           fstat
+  0.00    0.000018           0        48           close
+  0.00    0.000000           0         2           lseek
+100.00    1.301619         368      3530         4 total
+--- t3-p0-prebuf-b1 strace rep3
+# dataset medium path=build/parquet-data/medium-none.parquet sha256=6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6
+T3_fullscan_prebuf/p0_arrow/medium  360589491 ns    302666174 ns            2 cells=8.4M columns_read=7 io_calls=0 open_meta_ms=0.187767 read_errors=0 read_ms=328.757 requested_bytes=0 returned_bytes=0 rows=1.2M
+ 13.68    0.179898        6203        29           pread64
+  4.42    0.058105        1760        33           munmap
+  0.23    0.003007         111        27           brk
+  0.09    0.001216           0      2835           read
+  0.04    0.000560           5       110           mmap
+  0.01    0.000161           3        50         2 openat
+  0.00    0.000047           0        48           close
+  0.00    0.000047           1        32           fstat
+  0.00    0.000015           0        68           write
+  0.00    0.000000           0         2           lseek
+100.00    1.314878         372      3530         6 total
+===== t3-p0-prebuf-b1 — perf stat instructions:u,cycles:u
+    13,789,476,090      instructions:u                                                        
+     4,904,608,989      cycles:u                                                              
+===== t3-p0-prebuf-b1 — /usr/bin/time -v x3 (ruser/rsys whole-process caliber)
+	User time (seconds): 1.49
+	System time (seconds): 0.61
+	Maximum resident set size (kbytes): 544560
+	User time (seconds): 1.39
+	System time (seconds): 0.65
+	Maximum resident set size (kbytes): 544580
+	User time (seconds): 1.42
+	System time (seconds): 0.62
+	Maximum resident set size (kbytes): 552628

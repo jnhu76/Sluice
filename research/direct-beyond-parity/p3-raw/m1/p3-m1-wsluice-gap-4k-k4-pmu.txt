@@ -1,0 +1,109 @@
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 pmu run=1 2026-10-28T01:52:40+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2841.186 user_ns_per_op=947.266 sys_ns_per_op=1901.367 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 pmu run=2 2026-10-28T01:52:41+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2846.249 user_ns_per_op=1923.828 sys_ns_per_op=925.781 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 pmu run=3 2026-10-28T01:52:41+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2855.551 user_ns_per_op=1938.477 sys_ns_per_op=917.969 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs pmu run=1 2026-10-28T01:52:47+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=2856.470 user_ns_per_op=0.000 sys_ns_per_op=2862.305 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs pmu run=2 2026-10-28T01:52:48+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=2854.474 user_ns_per_op=935.547 sys_ns_per_op=1923.828 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs pmu run=3 2026-10-28T01:52:49+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=2857.368 user_ns_per_op=947.266 sys_ns_per_op=1918.945 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+# REDO 2026-10-28T01:54:36+08:00
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 pmu run=1 2026-10-28T01:54:38+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2908.364 user_ns_per_op=0.000 sys_ns_per_op=2911.133 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wv0 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wsluice-gap-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,700,063      instructions:u                                                        
+     2,257,841,989      cycles:u                                                              
+
+       0.680873596 seconds time elapsed
+
+       0.650873000 seconds user
+       0.027904000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 pmu run=2 2026-10-28T01:54:40+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2900.863 user_ns_per_op=0.000 sys_ns_per_op=2909.180 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wv0 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wsluice-gap-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,700,024      instructions:u                                                        
+     2,257,890,568      cycles:u                                                              
+
+       0.680873943 seconds time elapsed
+
+       0.646932000 seconds user
+       0.031890000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wv0 pmu run=3 2026-10-28T01:54:43+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2901.580 user_ns_per_op=2905.273 sys_ns_per_op=0.000 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wv0 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wsluice-gap-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,699,997      instructions:u                                                        
+     2,257,867,744      cycles:u                                                              
+
+       0.680442449 seconds time elapsed
+
+       0.660447000 seconds user
+       0.017952000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs pmu run=1 2026-10-28T01:54:45+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=2903.758 user_ns_per_op=958.008 sys_ns_per_op=1948.242 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wvs 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wsluice-gap-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,856,837      instructions:u                                                        
+     2,258,069,932      cycles:u                                                              
+
+       0.680862277 seconds time elapsed
+
+       0.658840000 seconds user
+       0.019960000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs pmu run=2 2026-10-28T01:54:48+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=2918.618 user_ns_per_op=970.703 sys_ns_per_op=1952.148 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wvs 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wsluice-gap-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,856,798      instructions:u                                                        
+     2,258,571,852      cycles:u                                                              
+
+       0.681152042 seconds time elapsed
+
+       0.656123000 seconds user
+       0.022929000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wsluice-gap-4k-k4 arm=wvs pmu run=3 2026-10-28T01:54:51+08:00 ===
+arm=WVS_sluice_kwrite_at_group size=4096 ops=1024 ns_per_op=2906.206 user_ns_per_op=958.984 sys_ns_per_op=1951.172 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wvs 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wsluice-gap-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,856,815      instructions:u                                                        
+     2,262,914,518      cycles:u                                                              
+
+       0.685042760 seconds time elapsed
+
+       0.660957000 seconds user
+       0.021925000 seconds sys
+
+
+PERF_EXIT=0

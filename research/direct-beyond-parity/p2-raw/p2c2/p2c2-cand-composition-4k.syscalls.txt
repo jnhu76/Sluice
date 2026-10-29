@@ -1,0 +1,222 @@
+# strace syscall parity, candidate binary ladder-c2 (P1 convention) — 2026-10-27T22:45:18+08:00; per-run scratch
+== c2 arm w1x ops=4096 ==
+arm=W1x_native_write_all_at size=4096 ops=4096 ns_per_op=12380.992 user_ns_per_op=549.805 sys_ns_per_op=3583.984 checksum=16777216 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 93.50    0.039634           1     20480           pwrite64
+  6.33    0.002682          40        66           pread64
+  0.04    0.000019           0        20           mmap
+  0.04    0.000015           7         2           munmap
+  0.03    0.000011           1         7           openat
+  0.02    0.000009           3         3           brk
+  0.01    0.000006           1         6           mprotect
+  0.01    0.000004           2         2           getrusage
+  0.01    0.000003           3         1           futex
+  0.00    0.000002           0         7           fstat
+  0.00    0.000002           2         1           prlimit64
+  0.00    0.000002           2         1           getrandom
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.042389           2     20613         1 total
+== c2 arm w1x ops=1 ==
+arm=W1x_native_write_all_at size=4096 ops=1 ns_per_op=13946.000 user_ns_per_op=0.000 sys_ns_per_op=23000.000 checksum=4096 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 99.10    0.034941           2     16385           pwrite64
+  0.48    0.000171           2        66           pread64
+  0.20    0.000071           3        20           mmap
+  0.11    0.000038           6         6           mprotect
+  0.02    0.000008           4         2           munmap
+  0.02    0.000007           1         7           openat
+  0.01    0.000005           2         2           getrusage
+  0.01    0.000004           1         3           brk
+  0.01    0.000002           0         6           close
+  0.01    0.000002           0         7           fstat
+  0.01    0.000002           2         1           arch_prctl
+  0.01    0.000002           2         1           set_tid_address
+  0.01    0.000002           2         1           getrandom
+  0.01    0.000002           2         1           rseq
+  0.00    0.000001           1         1           futex
+  0.00    0.000001           1         1           set_robust_list
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.035260           2     16518         1 total
+== c2 arm wx ops=4096 ==
+arm=WX_sluice_write_all_at size=4096 ops=4096 ns_per_op=11897.195 user_ns_per_op=488.037 sys_ns_per_op=3604.736 checksum=16777216 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 94.68    0.041986           2     20480           pwrite64
+  5.19    0.002301          34        66           pread64
+  0.05    0.000023           1        20           mmap
+  0.03    0.000013          13         1           write
+  0.03    0.000012           6         2           munmap
+  0.01    0.000004           2         2           getrusage
+  0.01    0.000003           0         6           close
+  0.01    0.000003           0         7           fstat
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.044345           2     20613         1 total
+== c2 arm wx ops=1 ==
+arm=WX_sluice_write_all_at size=4096 ops=1 ns_per_op=14681.000 user_ns_per_op=0.000 sys_ns_per_op=21000.000 checksum=4096 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 89.78    0.032535           1     16385           pwrite64
+ 10.14    0.003673          55        66           pread64
+  0.04    0.000014           0        20           mmap
+  0.03    0.000011           5         2           munmap
+  0.01    0.000004           2         2           getrusage
+  0.00    0.000001           1         1           write
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.036238           2     16518         1 total
+== c2 arm w1c ops=4096 ==
+arm=W1c_native_write_all size=4096 ops=4096 ns_per_op=12588.120 user_ns_per_op=379.883 sys_ns_per_op=3819.336 checksum=16777216 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 76.35    0.032758           1     16384           pwrite64
+ 19.15    0.008218           2      4097           write
+  4.28    0.001836          27        66           pread64
+  0.07    0.000029           4         6           mprotect
+  0.06    0.000025           1        20           mmap
+  0.02    0.000009           4         2           munmap
+  0.02    0.000007           1         7           openat
+  0.01    0.000005           2         2           getrusage
+  0.01    0.000003           0         6           close
+  0.01    0.000003           1         3           brk
+  0.01    0.000003           3         1           arch_prctl
+  0.00    0.000002           0         7           fstat
+  0.00    0.000002           2         1           set_tid_address
+  0.00    0.000002           2         1           set_robust_list
+  0.00    0.000002           2         1           rseq
+  0.00    0.000001           1         1           futex
+  0.00    0.000001           1         1           prlimit64
+  0.00    0.000001           1         1           getrandom
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.042907           2     20613         1 total
+== c2 arm w1c ops=1 ==
+arm=W1c_native_write_all size=4096 ops=1 ns_per_op=15829.000 user_ns_per_op=0.000 sys_ns_per_op=21000.000 checksum=4096 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 94.63    0.033252           2     16384           pwrite64
+  5.23    0.001838          27        66           pread64
+  0.08    0.000029           1        20           mmap
+  0.03    0.000010           5         2           munmap
+  0.01    0.000005           2         2           write
+  0.01    0.000004           2         2           getrusage
+  0.00    0.000001           0         7           fstat
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.035139           2     16518         1 total
+== c2 arm wc ops=4096 ==
+arm=WC_sluice_write_all size=4096 ops=4096 ns_per_op=12479.398 user_ns_per_op=518.555 sys_ns_per_op=3703.857 checksum=16777216 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 77.39    0.030670           1     16384           pwrite64
+ 19.98    0.007920           1      4097           write
+  2.54    0.001005          15        66           pread64
+  0.06    0.000024           1        20           mmap
+  0.03    0.000011           5         2           munmap
+  0.01    0.000002           1         2           getrusage
+  0.00    0.000001           0         6           close
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.039633           1     20613         1 total
+== c2 arm wc ops=1 ==
+arm=WC_sluice_write_all size=4096 ops=1 ns_per_op=16109.000 user_ns_per_op=0.000 sys_ns_per_op=22000.000 checksum=4096 content_hash=0xa2a7b385a4908383 content_ok=1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+ 94.64    0.032638           1     16384           pwrite64
+  5.27    0.001817          27        66           pread64
+  0.07    0.000023           1        20           mmap
+  0.01    0.000005           2         2           getrusage
+  0.01    0.000003           1         2           write
+  0.00    0.000000           0         4           read
+  0.00    0.000000           0         6           close
+  0.00    0.000000           0         7           fstat
+  0.00    0.000000           0         6           mprotect
+  0.00    0.000000           0         2           munmap
+  0.00    0.000000           0         3           brk
+  0.00    0.000000           0         1         1 access
+  0.00    0.000000           0         1           execve
+  0.00    0.000000           0         1           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           set_tid_address
+  0.00    0.000000           0         7           openat
+  0.00    0.000000           0         1           set_robust_list
+  0.00    0.000000           0         1           prlimit64
+  0.00    0.000000           0         1           getrandom
+  0.00    0.000000           0         1           rseq
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.034486           2     16518         1 total
+# net/op summary (count@4096 - count@1)/4095:
+# w1x: net/op={'pwrite64': 1.0, 'write': 0.0, 'lseek': 0.0}
+# wx: net/op={'pwrite64': 1.0, 'write': 0.0, 'lseek': 0.0}
+# w1c: net/op={'pwrite64': 0.0, 'write': 1.0, 'lseek': 0.0}
+# wc: net/op={'pwrite64': 0.0, 'write': 1.0, 'lseek': 0.0}

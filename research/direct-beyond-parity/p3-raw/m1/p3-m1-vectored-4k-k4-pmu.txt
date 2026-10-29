@@ -1,0 +1,90 @@
+=== p3-m1-vectored-4k-k4 arm=av0 pmu run=1 2026-10-28T01:52:13+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=2726.041 user_ns_per_op=7079.590 sys_ns_per_op=963.379 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder av0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,606,788      instructions:u                                                        
+        41,430,730      cycles:u                                                              
+
+       0.018062716 seconds time elapsed
+
+       0.016032000 seconds user
+       0.001991000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-vectored-4k-k4 arm=av0 pmu run=2 2026-10-28T01:52:13+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=2613.778 user_ns_per_op=6407.227 sys_ns_per_op=1511.230 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder av0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,606,960      instructions:u                                                        
+        41,649,560      cycles:u                                                              
+
+       0.017831963 seconds time elapsed
+
+       0.014662000 seconds user
+       0.003123000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-vectored-4k-k4 arm=av0 pmu run=3 2026-10-28T01:52:13+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=2716.635 user_ns_per_op=6857.422 sys_ns_per_op=1156.738 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder av0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,606,997      instructions:u                                                        
+        41,395,815      cycles:u                                                              
+
+       0.017974653 seconds time elapsed
+
+       0.014166000 seconds user
+       0.003769000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-vectored-4k-k4 arm=av1 pmu run=1 2026-10-28T01:52:13+08:00 ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=1092.614 user_ns_per_op=5531.250 sys_ns_per_op=1134.766 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=1 issued_per_group=4096
+
+ Performance counter stats for './ladder av1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,253,640      instructions:u                                                        
+        40,887,417      cycles:u                                                              
+
+       0.015220407 seconds time elapsed
+
+       0.012007000 seconds user
+       0.003180000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-vectored-4k-k4 arm=av1 pmu run=2 2026-10-28T01:52:13+08:00 ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=1084.312 user_ns_per_op=6032.715 sys_ns_per_op=513.672 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=1 issued_per_group=4096
+
+ Performance counter stats for './ladder av1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,253,617      instructions:u                                                        
+        40,791,381      cycles:u                                                              
+
+       0.014961624 seconds time elapsed
+
+       0.013729000 seconds user
+       0.001206000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-vectored-4k-k4 arm=av1 pmu run=3 2026-10-28T01:52:13+08:00 ===
+arm=AV1_preadv_group size=4096 ops=1024 ns_per_op=1113.294 user_ns_per_op=5875.488 sys_ns_per_op=784.668 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=1 issued_per_group=4096
+
+ Performance counter stats for './ladder av1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,253,663      instructions:u                                                        
+        41,269,931      cycles:u                                                              
+
+       0.015236885 seconds time elapsed
+
+       0.012167000 seconds user
+       0.003033000 seconds sys
+
+
+PERF_EXIT=0

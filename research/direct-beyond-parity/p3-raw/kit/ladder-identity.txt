@@ -1,0 +1,24 @@
+# P3 kit identity — recorded before the first timed cell (plan §1.6)
+date: 2026-10-28
+branch: direct-cost-ladder (local only, never pushed)
+kit_head: 4455d98d9823ec138c904be4c63a1d5a84903e97
+commits (P3 extension, oldest first):
+  43c01587 research(direct): add file-transfer functional-support matrix probe
+  99690467 research(direct): add vectored I/O probe arms
+  ea2d10b4 research(direct): add request range planner probe arms
+  7e08f5cf research(direct): add file-to-file kernel transfer probe arms
+  6a28dd13 research(direct): pin M4 fixture and size-axis parameter shapes
+  4455d98d research(direct): add P3 kit smoke gate
+linked library (unchanged, read-only frozen B1 archive):
+  path: /home/jnhu/Source/Sluice-600-wt/build/linux/x86_64/release/libsluice_core.a
+  sha256: d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0
+sources:
+  ladder.cpp sha256 fa26ac36084f140b3e7f7d0441c308d97415a7d0eb8a7b489d08aae7345cc139
+  m3-support.cpp sha256 1cc03bd392470193d75ff5ff3acef6e99459f017bd578c04d3178e93e480741a
+binaries (built by build.sh at kit_head, gcc 16.2.1, -std=c++20 -O3 -DNDEBUG):
+  ladder sha256 5a53a9ad1ea00a9a26dee98543ef473ca15dcdfda86c2aa647b59cca4ec05507
+  m3-support sha256 0f8a97f6947e7a5de88e864e2a23e2c6b526fdd73320c8a92160142479d30501
+  mkfixture sha256 bde3c72404682ac33d510b36a0b166433700d02260253b8ccd0eb9e404913ace (unchanged #600 snapshot copy)
+smoke gate: p3-scripts/p3-smoke.sh → SMOKE_PASS, 188 checks, 0 failures
+  raw: research/direct-beyond-parity/p3-raw/kit/smoke-ladder.txt
+  support matrix raw: research/direct-beyond-parity/p3-raw/m3/support-matrix-smoke.txt

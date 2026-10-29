@@ -1,0 +1,5 @@
+# cell p2c1-aa-read-4k-base (P2 plan §2.4.2/§3.4, read-track fresh-session A/A noise baseline; B1-linked kit binary) — 2026-10-27T21:52:44+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 a1 4096 1024 1024 5 16 /tmp/sluice600/data64m.bin  (16 A/A pairs, warm tmpfs; paired.sh pins taskset -c 2)
+# ladder sha256 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8; READ_FIX sha256 fc37759c398eba83a7b71f528c95fded2573b70f58e7d1d9ce25f5f7d6816dc0
+VERIFY_FAIL arm=A1_native_read_at
+# attempt1 VOID per incident (see kit/smoke-ladder.txt INCIDENT note): read fixture had been overwritten by the smoke bridge section; fixture restored to pinned sha before the rerun.

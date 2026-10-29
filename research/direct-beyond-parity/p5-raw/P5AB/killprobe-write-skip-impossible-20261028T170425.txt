@@ -1,0 +1,20 @@
+# P5 A+B one-off kill probe: write-side impossible-count guard (R4)
+# tree: 08df2b2a24bf220de08fc136de7aa0e8c0002c37  branch: direct-compose-stack-readpreval-writeexit
+# source: tests/direct_composition_fault_test.cpp with the write killer registered first (byte-identical bodies)
+# BASE:   g++ -std=c++20 -I include -I src -DSLICE_FILE_INTERNAL_TESTING
+# MUTANT: BASE + -DSLICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT
+
+== BASE build ==
+writefirst.cpp:6:10: fatal error: semantic_oracle_harness.hpp: No such file or directory
+    6 | #include "semantic_oracle_harness.hpp"
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+== BASE run ==
+exit=127
+== MUTANT build ==
+writefirst.cpp:6:10: fatal error: semantic_oracle_harness.hpp: No such file or directory
+    6 | #include "semantic_oracle_harness.hpp"
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+compilation terminated.
+== MUTANT run ==
+exit=127

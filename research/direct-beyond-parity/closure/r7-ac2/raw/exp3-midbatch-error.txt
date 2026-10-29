@@ -1,0 +1,13 @@
+== policy continue (every member settles) ==
+m0 valid            -> count=100 errno=0(Success)
+m1 admission        -> invalid_argument (no syscall; admission_reject(UINT64_MAX,8)=1)
+m2 PROT_NONE dst    -> count=-1 errno=14(Bad address)
+m3 valid after err  -> count=100 errno=0(Success)
+== policy abort (stop at first member error) ==
+m3 NOT_ATTEMPTED    -> outcome value ABSENT from candidate result shape
+   {count, EOF, admission rejection, OS error, certainty} cannot express it
+== merged-form whole-call error (directory fd) ==
+merged pread(dir)   -> count=-1 errno=21(Is a directory): every member of the failed
+                       extent gets this same error under the intersect rule
+member-shaped pread(dir) at m0's offset -> count=-1 errno=21(Is a directory) (matches)
+EXP3_GATE=PASS (continue_ok=1 rejected=1; expect EFAULT=14, EISDIR=21)

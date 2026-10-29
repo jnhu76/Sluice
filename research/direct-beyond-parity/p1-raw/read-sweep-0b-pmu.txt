@@ -1,0 +1,179 @@
+# P1 cell read-sweep-0b PMU + syscall diagnostics (plan §6.2 caliber; NEVER the wall source) — split from read-sweep-0b.txt 2026-10-27T02:45:51+08:00
+# PMU diagnostic (plan §6.2; NOT wall source) — taskset -c 2 perf stat -e instructions:u,cycles:u ladder <arm> 0 4096 0 1 $READ_FIX — produced 2026-10-27T02:44:40+08:00
+--- perf arm=a0 ---
+arm=A0_raw_pread size=0 ops=4096 ns_per_op=528.170 user_ns_per_op=494.507 sys_ns_per_op=26.367 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a0 0 4096 0 1 /tmp/sluice600/data64m.bin':
+
+         3,234,273      instructions:u                                                        
+         3,667,157      cycles:u                                                              
+
+       0.006270194 seconds time elapsed
+
+       0.004176000 seconds user
+       0.002080000 seconds sys
+
+
+PERF_EXIT_a0=0
+--- perf arm=a1 ---
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=3.200 user_ns_per_op=0.000 sys_ns_per_op=4.150 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 0 4096 0 1 /tmp/sluice600/data64m.bin':
+
+         2,960,368      instructions:u                                                        
+         2,076,643      cycles:u                                                              
+
+       0.001598968 seconds time elapsed
+
+       0.000000000 seconds user
+       0.001623000 seconds sys
+
+
+PERF_EXIT_a1=0
+--- perf arm=a2 ---
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=5.123 user_ns_per_op=5.859 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a2 0 4096 0 1 /tmp/sluice600/data64m.bin':
+
+         3,100,452      instructions:u                                                        
+         2,028,797      cycles:u                                                              
+
+       0.001579239 seconds time elapsed
+
+       0.001604000 seconds user
+       0.000000000 seconds sys
+
+
+PERF_EXIT_a2=0
+--- perf arm=a3 ---
+arm=A3_nosyscall_stub size=0 ops=4096 ns_per_op=3.196 user_ns_per_op=4.028 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a3 0 4096 0 1 /tmp/sluice600/data64m.bin':
+
+         2,944,861      instructions:u                                                        
+         1,924,202      cycles:u                                                              
+
+       0.001536614 seconds time elapsed
+
+       0.001561000 seconds user
+       0.000000000 seconds sys
+
+
+PERF_EXIT_a3=0
+# syscall-count diagnostic (strace, separate from wall runs; not preregistered in plan, added for the ask) — produced 2026-10-27T02:45:01+08:00
+--- strace arm=a0 ---
+arm=A0_raw_pread size=0 ops=4096 ns_per_op=13664.321 user_ns_per_op=625.610 sys_ns_per_op=3927.734 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ------------------
+ 97.42    0.014997           1      8196           pread64
+  1.14    0.000176          88         2           execve
+  0.32    0.000049           1        27           mmap
+  0.29    0.000044          44         1           sched_setaffinity
+  0.16    0.000024           2         9           mprotect
+  0.12    0.000019           1        10           openat
+  0.10    0.000015           7         2           munmap
+  0.09    0.000014           1         9           close
+  0.06    0.000010           1        10           fstat
+  0.06    0.000010           1         6           brk
+  0.04    0.000006           6         1           write
+  0.03    0.000004           2         2         2 access
+  0.03    0.000004           2         2           getrusage
+  0.03    0.000004           4         1           sched_getaffinity
+  0.02    0.000003           1         2           arch_prctl
+  0.02    0.000003           1         2           set_tid_address
+  0.02    0.000003           1         2           set_robust_list
+  0.02    0.000003           1         2           getrandom
+  0.02    0.000003           1         2           rseq
+  0.01    0.000002           1         2           prlimit64
+  0.01    0.000001           0         5           read
+  0.00    0.000000           0         1           futex
+------ ----------- ----------- --------- --------- ------------------
+100.00    0.015394           1      8296         2 total
+STRACE_EXIT_a0=0
+--- strace arm=a1 ---
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=3.125 user_ns_per_op=0.000 sys_ns_per_op=4.517 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ------------------
+ 33.82    0.000070           2        27           mmap
+ 18.84    0.000039           4         9           mprotect
+ 11.59    0.000024           2        10           openat
+  7.73    0.000016           8         2           munmap
+  3.86    0.000008           0         9           close
+  3.86    0.000008           0        10           fstat
+  3.86    0.000008           1         6           brk
+  2.42    0.000005           1         5           read
+  2.42    0.000005           1         4           pread64
+  2.42    0.000005           2         2           getrusage
+  1.45    0.000003           3         1           write
+  1.45    0.000003           3         1           futex
+  1.45    0.000003           1         2           prlimit64
+  0.97    0.000002           1         2           arch_prctl
+  0.97    0.000002           1         2           set_tid_address
+  0.97    0.000002           1         2           set_robust_list
+  0.97    0.000002           1         2           getrandom
+  0.97    0.000002           1         2           rseq
+  0.00    0.000000           0         2         2 access
+  0.00    0.000000           0         2           execve
+  0.00    0.000000           0         1           sched_setaffinity
+  0.00    0.000000           0         1           sched_getaffinity
+------ ----------- ----------- --------- --------- ------------------
+100.00    0.000207           1       104         2 total
+STRACE_EXIT_a1=0
+--- strace arm=a2 ---
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=5.100 user_ns_per_op=3.052 sys_ns_per_op=3.052 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ------------------
+ 46.49    0.000126           4        27           mmap
+ 15.13    0.000041           4         9           mprotect
+  9.23    0.000025           2        10           openat
+  6.27    0.000017           8         2           munmap
+  4.43    0.000012           1        10           fstat
+  4.06    0.000011           1         9           close
+  3.32    0.000009           1         5           read
+  1.85    0.000005           0         6           brk
+  1.85    0.000005           1         4           pread64
+  1.11    0.000003           3         1           write
+  1.11    0.000003           1         2           prlimit64
+  1.11    0.000003           1         2           getrandom
+  0.74    0.000002           1         2           getrusage
+  0.74    0.000002           1         2           arch_prctl
+  0.74    0.000002           1         2           set_tid_address
+  0.74    0.000002           1         2           set_robust_list
+  0.74    0.000002           1         2           rseq
+  0.37    0.000001           1         1           futex
+  0.00    0.000000           0         2         2 access
+  0.00    0.000000           0         2           execve
+  0.00    0.000000           0         1           sched_setaffinity
+  0.00    0.000000           0         1           sched_getaffinity
+------ ----------- ----------- --------- --------- ------------------
+100.00    0.000271           2       104         2 total
+STRACE_EXIT_a2=0
+--- strace arm=a3 ---
+arm=A3_nosyscall_stub size=0 ops=4096 ns_per_op=2.924 user_ns_per_op=4.150 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ------------------
+  0.00    0.000000           0         5           read
+  0.00    0.000000           0         1           write
+  0.00    0.000000           0         9           close
+  0.00    0.000000           0        10           fstat
+  0.00    0.000000           0        27           mmap
+  0.00    0.000000           0         9           mprotect
+  0.00    0.000000           0         2           munmap
+  0.00    0.000000           0         6           brk
+  0.00    0.000000           0         4           pread64
+  0.00    0.000000           0         2         2 access
+  0.00    0.000000           0         2           execve
+  0.00    0.000000           0         2           getrusage
+  0.00    0.000000           0         2           arch_prctl
+  0.00    0.000000           0         1           futex
+  0.00    0.000000           0         1           sched_setaffinity
+  0.00    0.000000           0         1           sched_getaffinity
+  0.00    0.000000           0         2           set_tid_address
+  0.00    0.000000           0        10           openat
+  0.00    0.000000           0         2           set_robust_list
+  0.00    0.000000           0         2           prlimit64
+  0.00    0.000000           0         2           getrandom
+  0.00    0.000000           0         2           rseq
+------ ----------- ----------- --------- --------- ------------------
+100.00    0.000000           0       104         2 total
+STRACE_EXIT_a3=0

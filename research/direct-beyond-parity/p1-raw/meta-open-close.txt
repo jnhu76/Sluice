@@ -1,0 +1,43 @@
+# P1 cell meta-open-close (plan §4.3, metadata track): pairing M1_native_open_close (m1oc) vs M2_sluice_open_close (m2oc); op = one open+close pair; context floor M0_raw_open_close (m0oc)
+# date=2026-10-27T02:44:42+08:00 host=E5 kernel=7.2.11-200.fc44.x86_64
+# ladder sha256=0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a fixture sha256=bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (both verified this session)
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1oc m2oc 0 2048 512 5 16 /tmp/sluice600/data64m.bin
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1755.420 user_ns_per_op=667.597 sys_ns_per_op=1140.160 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+# amendment (recording structure, not measurement): PMU and syscall-count sections were captured into this file
+# during the session and split out to meta-open-close.pmu.txt / meta-open-close.syscalls.txt afterwards, because
+# their child arm= lines made `analyze_pairs.py < cell file` see 18 pairs (18≠16). No sample was altered or
+# dropped; the paired series and context arm above are byte-identical to what was captured.
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1683.408 user_ns_per_op=733.073 sys_ns_per_op=950.149 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1581.949 user_ns_per_op=376.953 sys_ns_per_op=1261.161 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1610.180 user_ns_per_op=748.605 sys_ns_per_op=928.757 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1586.049 user_ns_per_op=201.544 sys_ns_per_op=1498.977 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1583.839 user_ns_per_op=676.246 sys_ns_per_op=1018.694 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1590.409 user_ns_per_op=558.780 sys_ns_per_op=1069.289 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1562.393 user_ns_per_op=1051.990 sys_ns_per_op=581.473 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1558.155 user_ns_per_op=926.618 sys_ns_per_op=684.710 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1602.945 user_ns_per_op=471.912 sys_ns_per_op=1173.270 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1593.008 user_ns_per_op=656.994 sys_ns_per_op=979.632 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1617.382 user_ns_per_op=814.639 sys_ns_per_op=848.121 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1593.667 user_ns_per_op=562.500 sys_ns_per_op=1075.149 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1621.755 user_ns_per_op=468.192 sys_ns_per_op=1191.127 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1604.908 user_ns_per_op=919.922 sys_ns_per_op=736.049 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1638.532 user_ns_per_op=911.737 sys_ns_per_op=770.275 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1593.500 user_ns_per_op=655.785 sys_ns_per_op=968.192 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1692.613 user_ns_per_op=739.676 sys_ns_per_op=1010.417 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1633.261 user_ns_per_op=461.310 sys_ns_per_op=1180.804 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1599.263 user_ns_per_op=662.667 sys_ns_per_op=987.444 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1597.448 user_ns_per_op=646.205 sys_ns_per_op=1006.510 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1655.698 user_ns_per_op=366.722 sys_ns_per_op=1313.616 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1640.974 user_ns_per_op=1116.722 sys_ns_per_op=569.754 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1616.555 user_ns_per_op=451.172 sys_ns_per_op=1209.263 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1587.757 user_ns_per_op=519.159 sys_ns_per_op=1136.440 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1586.312 user_ns_per_op=523.717 sys_ns_per_op=1145.182 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1577.882 user_ns_per_op=553.013 sys_ns_per_op=1087.612 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1596.273 user_ns_per_op=788.318 sys_ns_per_op=834.914 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1648.887 user_ns_per_op=752.325 sys_ns_per_op=932.850 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1598.662 user_ns_per_op=547.712 sys_ns_per_op=1087.612 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1635.951 user_ns_per_op=591.518 sys_ns_per_op=1065.848 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1586.015 user_ns_per_op=617.281 sys_ns_per_op=1047.526 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+# context arm (unpaired floor, plan §4.3 + §4.1 shape): taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0oc 0 2048 512 5 /tmp/sluice600/data64m.bin
+arm=M0_raw_open_close size=0 ops=2048 ns_per_op=1674.044 user_ns_per_op=448.382 sys_ns_per_op=1272.693 checksum=10752 content_hash=0x0000000000000000 content_ok=-1
+ctx_exit=0

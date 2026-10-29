@@ -1,0 +1,84 @@
+kernel=7.2.11-200.fc44.x86_64
+fs=a dir=/tmp/sluice600-ac3
+cell=prec_src_closed_dst_valid ret=-1 errno=9(Bad file descriptor)
+cell=prec_src_valid_dst_closed ret=-1 errno=9(Bad file descriptor)
+cell=prec_src_closed_and_src_neg_off ret=-1 errno=9(Bad file descriptor)
+cell=prec_src_neg_off ret=-1 errno=75(Value too large for defined data type)
+cell=prec_dst_neg_off ret=-1 errno=75(Value too large for defined data type)
+cell=prec_dst_rdonly ret=-1 errno=9(Bad file descriptor)
+cell=prec_dst_rdonly_and_src_neg_off ret=-1 errno=9(Bad file descriptor)
+cell=prec_both_closed ret=-1 errno=9(Bad file descriptor)
+cell=prec_off_len_overflow ret=0 errno=0(ok)
+cell=prec_dst_wronly ret=4096 errno=0(ok)
+cell=eof_exact_full ret=4096 errno=0(ok)
+cell=eof_partial_short ret=2048 errno=0(ok) short_by=2048 src_off_after=8192
+cell=eof_partial_short content_match=1
+cell=eof_at_boundary_zero ret=0 errno=0(ok)
+cell=eof_beyond_zero ret=0 errno=0(ok)
+cell=eof_last_byte_full ret=1 errno=0(ok)
+cell=eof_loop_total ret=0 errno=0(ok) total=8192 chunks=3 src_size=8192
+cell=dest_rdonly_first_attempt ret=-1 errno=9(Bad file descriptor)
+cell=dest_rdonly dst_size_after=0
+cell=type_dst_devnull ret=-1 errno=22(Invalid argument)
+cell=type_src_devzero ret=-1 errno=22(Invalid argument)
+cell=type_src_pipe ret=-1 errno=22(Invalid argument)
+cell=type_dst_pipe ret=-1 errno=22(Invalid argument)
+cell=type_dst_dirfd ret=-1 errno=21(Is a directory)
+cell=type_src_dirfd ret=-1 errno=21(Is a directory)
+cell=oappend_dst_cfr ret=-1 errno=9(Bad file descriptor)
+cell=oappend_dst_sendfile ret=-1 errno=22(Invalid argument)
+cell=oappend_dst dst_size_after=0
+cell=same_exact_overlap ret=-1 errno=22(Invalid argument)
+cell=same_partial_overlap ret=-1 errno=22(Invalid argument)
+cell=same_adjacent ret=4096 errno=0(ok)
+cell=same_adjacent content_match=1
+cell=same_gap ret=4096 errno=0(ok)
+cell=same_gap content_match=1
+cell=same_self_extend ret=4096 errno=0(ok) dst_off_after=16384
+cell=cursors_explicit_untouched ret=4096 errno=0(ok) src_pos_before=777 dst_pos_before=888 src_pos_after=777 dst_pos_after=888 off_arg_after=(5120,5120)
+cell=cursors_null_offset_consumed ret=4096 errno=0(ok) src_pos_after=4873 dst_pos_after=4984
+fs=b dir=/var/tmp/sluice600-ac3
+cell=prec_src_closed_dst_valid ret=-1 errno=9(Bad file descriptor)
+cell=prec_src_valid_dst_closed ret=-1 errno=9(Bad file descriptor)
+cell=prec_src_closed_and_src_neg_off ret=-1 errno=9(Bad file descriptor)
+cell=prec_src_neg_off ret=-1 errno=75(Value too large for defined data type)
+cell=prec_dst_neg_off ret=-1 errno=75(Value too large for defined data type)
+cell=prec_dst_rdonly ret=-1 errno=9(Bad file descriptor)
+cell=prec_dst_rdonly_and_src_neg_off ret=-1 errno=9(Bad file descriptor)
+cell=prec_both_closed ret=-1 errno=9(Bad file descriptor)
+cell=prec_off_len_overflow ret=0 errno=0(ok)
+cell=prec_dst_wronly ret=4096 errno=0(ok)
+cell=eof_exact_full ret=4096 errno=0(ok)
+cell=eof_partial_short ret=2048 errno=0(ok) short_by=2048 src_off_after=8192
+cell=eof_partial_short content_match=1
+cell=eof_at_boundary_zero ret=0 errno=0(ok)
+cell=eof_beyond_zero ret=0 errno=0(ok)
+cell=eof_last_byte_full ret=1 errno=0(ok)
+cell=eof_loop_total ret=0 errno=0(ok) total=8192 chunks=3 src_size=8192
+cell=dest_rdonly_first_attempt ret=-1 errno=9(Bad file descriptor)
+cell=dest_rdonly dst_size_after=0
+cell=type_dst_devnull ret=-1 errno=22(Invalid argument)
+cell=type_src_devzero ret=-1 errno=22(Invalid argument)
+cell=type_src_pipe ret=-1 errno=22(Invalid argument)
+cell=type_dst_pipe ret=-1 errno=22(Invalid argument)
+cell=type_dst_dirfd ret=-1 errno=21(Is a directory)
+cell=type_src_dirfd ret=-1 errno=21(Is a directory)
+cell=oappend_dst_cfr ret=-1 errno=9(Bad file descriptor)
+cell=oappend_dst_sendfile ret=-1 errno=22(Invalid argument)
+cell=oappend_dst dst_size_after=0
+cell=same_exact_overlap ret=-1 errno=22(Invalid argument)
+cell=same_partial_overlap ret=-1 errno=22(Invalid argument)
+cell=same_adjacent ret=4096 errno=0(ok)
+cell=same_adjacent content_match=1
+cell=same_gap ret=4096 errno=0(ok)
+cell=same_gap content_match=1
+cell=same_self_extend ret=4096 errno=0(ok) dst_off_after=16384
+cell=cursors_explicit_untouched ret=4096 errno=0(ok) src_pos_before=777 dst_pos_before=888 src_pos_after=777 dst_pos_after=888 off_arg_after=(5120,5120)
+cell=cursors_null_offset_consumed ret=4096 errno=0(ok) src_pos_after=4873 dst_pos_after=4984
+cell=crossfs_cfr_a_to_b ret=-1 errno=18(Invalid cross-device link)
+cell=crossfs_cfr_a_to_b dst_size_after=0
+cell=crossfs_explicit_fallback ret=0 errno=0(ok) fallback=explicit_caller_loop copied=7168 match=1
+cell=crossfs_cfr_b_to_a ret=-1 errno=18(Invalid cross-device link)
+cell=crossfs_cfr_b_to_a dst_size_after=0
+cell=crossfs_explicit_fallback ret=0 errno=0(ok) fallback=explicit_caller_loop copied=7168 match=1
+cell=crossfs_sendfile_a_to_b ret=4096 errno=0(ok)

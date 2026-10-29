@@ -1,0 +1,8 @@
+# PMU diagnostic section — perf stat -e instructions:u,cycles:u — SEPARATE caliber, never differenced as wall (P1 §6 separation rule)
+# timed-section ops per invocation = (1 warmup + 5 reps + 1 verify) x 1024 = 7168 read_exact_at ops
+round1 ladder-base ax instructions=37708783 cycles=12042093 instr_per_7168_ops=5260.712 cyc_per_7168_ops=1679.979
+round1 ladder-cand ax instructions=37486532 cycles=11723765 instr_per_7168_ops=5229.706 cyc_per_7168_ops=1635.570
+round2 ladder-base ax instructions=37708776 cycles=11904485 instr_per_7168_ops=5260.711 cyc_per_7168_ops=1660.782
+round2 ladder-cand ax instructions=37486332 cycles=11573550 instr_per_7168_ops=5229.678 cyc_per_7168_ops=1614.614
+round3 ladder-base ax instructions=37708779 cycles=11834048 instr_per_7168_ops=5260.711 cyc_per_7168_ops=1650.955
+round3 ladder-cand ax instructions=37486520 cycles=11692261 instr_per_7168_ops=5229.704 cyc_per_7168_ops=1631.175

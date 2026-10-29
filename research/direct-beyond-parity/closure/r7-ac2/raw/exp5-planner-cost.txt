@@ -1,0 +1,7 @@
+k=8    merge-plan planner-only:    212.5 ns/op-group (26.6 ns/request), components~8 sink=160000
+k=8    dedup-plan  planner-only:    197.1 ns/op-group (24.6 ns/request), components~8 sink=160000
+k=64   merge-plan planner-only:   2560.2 ns/op-group (40.0 ns/request), components~63 sink=1260000
+k=64   dedup-plan  planner-only:   2528.7 ns/op-group (39.5 ns/request), components~64 sink=1280000
+k=512  merge-plan planner-only:  39020.4 ns/op-group (76.2 ns/request), components~510 sink=10200000
+k=512  dedup-plan  planner-only:  37786.0 ns/op-group (73.8 ns/request), components~510 sink=10200000
+NON_CLAIM characterization; per-run variance expected; see r7-ac2.md for the claim-bearing [RUN] figures.

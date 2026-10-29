@@ -1,0 +1,84 @@
+=== p3-m1-sluice-gap-4k-k4 arm=av0 run=1 A(reps=1) 2026-10-28T01:52:17+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=49199.637 user_ns_per_op=5587.402 sys_ns_per_op=14839.355 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010853           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010853           1      8194           total
+=== p3-m1-sluice-gap-4k-k4 arm=av0 run=1 B(reps=0) ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=13492.188 sys_ns_per_op=13458.008 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003770           0      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003770           0      4098           total
+=== p3-m1-sluice-gap-4k-k4 arm=av0 run=2 A(reps=1) 2026-10-28T01:52:17+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=49113.099 user_ns_per_op=7446.777 sys_ns_per_op=13083.008 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009959           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009959           1      8194           total
+=== p3-m1-sluice-gap-4k-k4 arm=av0 run=2 B(reps=0) ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=14214.844 sys_ns_per_op=12386.719 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003445           0      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003445           0      4098           total
+=== p3-m1-sluice-gap-4k-k4 arm=av0 run=3 A(reps=1) 2026-10-28T01:52:18+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=50214.190 user_ns_per_op=6599.609 sys_ns_per_op=14219.238 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011027           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011027           1      8194           total
+=== p3-m1-sluice-gap-4k-k4 arm=av0 run=3 B(reps=0) ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=9511.719 sys_ns_per_op=16659.180 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004608           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004608           1      4098           total
+=== p3-m1-sluice-gap-4k-k4 arm=avs run=1 A(reps=1) 2026-10-28T01:52:18+08:00 ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=49705.938 user_ns_per_op=6365.723 sys_ns_per_op=14057.617 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010842           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010842           1      8194           total
+=== p3-m1-sluice-gap-4k-k4 arm=avs run=1 B(reps=0) ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=12602.539 sys_ns_per_op=13540.039 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003749           0      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003749           0      4098           total
+=== p3-m1-sluice-gap-4k-k4 arm=avs run=2 A(reps=1) 2026-10-28T01:52:18+08:00 ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=48612.901 user_ns_per_op=6516.602 sys_ns_per_op=13717.773 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010345           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010345           1      8194           total
+=== p3-m1-sluice-gap-4k-k4 arm=avs run=2 B(reps=0) ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=14745.117 sys_ns_per_op=12069.336 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003476           0      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003476           0      4098           total
+=== p3-m1-sluice-gap-4k-k4 arm=avs run=3 A(reps=1) 2026-10-28T01:52:18+08:00 ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=48749.023 user_ns_per_op=8398.926 sys_ns_per_op=12263.672 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009174           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009174           1      8194           total
+=== p3-m1-sluice-gap-4k-k4 arm=avs run=3 B(reps=0) ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=9556.641 sys_ns_per_op=16650.391 checksum=0 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=0 issued_per_group=0
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004540           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004540           1      4098           total

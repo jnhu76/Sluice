@@ -1,0 +1,22 @@
+# P4 parquet correctness admission (ctest -L parquet per arm build; R1 protocol hard gate) — 2026-10-28T12:04:32+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+== arm b1: ctest --output-on-failure -L parquet
+100% tests passed, 0 tests failed out of 3
+
+Label Time Summary:
+parquet    =   0.91 sec*proc (3 tests)
+
+Total Test time (real) =   0.92 sec
+== arm p2c1: ctest --output-on-failure -L parquet
+100% tests passed, 0 tests failed out of 3
+
+Label Time Summary:
+parquet    =   0.82 sec*proc (3 tests)
+
+Total Test time (real) =   0.82 sec
+== arm p2c2: ctest --output-on-failure -L parquet
+100% tests passed, 0 tests failed out of 3
+
+Label Time Summary:
+parquet    =   0.86 sec*proc (3 tests)
+
+Total Test time (real) =   0.87 sec

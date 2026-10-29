@@ -1,0 +1,20 @@
+# Cold-cache operational definition validation — 2026-10-27T02:35:16+08:00
+# host E5, kernel 7.2.11-200.fc44.x86_64, fixture /var/tmp/sluice600-p1/cold64m.bin (btrfs /dev/sda3) 64MiB, control /tmp/sluice600/data64m.bin (tmpfs)
+# drop operation (requires operator sudo credential via stdin/prompt; never embedded):
+#   sudo -S -p '' sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+
+== warm btrfs x2 ==
+arm=A0_raw_pread size=4096 ops=16384 ns_per_op=8497.615 user_ns_per_op=1236.145 sys_ns_per_op=790.009 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+arm=A0_raw_pread size=4096 ops=16384 ns_per_op=925.420 user_ns_per_op=1258.209 sys_ns_per_op=610.474 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+== cold btrfs (immediately after drop) ==
+arm=A0_raw_pread size=4096 ops=16384 ns_per_op=8720.546 user_ns_per_op=1418.091 sys_ns_per_op=633.514 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+== warm again ==
+arm=A0_raw_pread size=4096 ops=16384 ns_per_op=954.377 user_ns_per_op=1140.472 sys_ns_per_op=728.882 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+== tmpfs control before drop ==
+arm=A0_raw_pread size=4096 ops=16384 ns_per_op=1010.792 user_ns_per_op=1402.588 sys_ns_per_op=531.311 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+== tmpfs control after drop (must be unchanged) ==
+arm=A0_raw_pread size=4096 ops=16384 ns_per_op=1010.850 user_ns_per_op=1213.440 sys_ns_per_op=713.531 checksum=67108864 content_hash=0x0000000000000000 content_ok=-1
+
+# verdict: btrfs 4KiB read ns/op warm ~920 -> cold ~8200 (8.9x slower) -> warm again ~930;
+#         tmpfs unchanged (~985) across the same drop. drop_caches is an effective cold
+#         control for page-cache files on btrfs and does NOT cool tmpfs (shmem) pages.

@@ -1,0 +1,86 @@
+# PMU + syscall diagnostic for cell aa-meta-file-info (both arms identical: m2fi) — 2026-10-27T05:37:54+08:00 host E5
+# wall statistics live in aa-meta-file-info.txt only (plan §6.3); warm tmpfs, no drop
+# per run: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin  (3 reps)
+#           sudo taskset -c 2 perf stat -e raw_syscalls:sys_enter <same invocation>  (3 reps)
+# caveat: whole-process counters = warmup 2048 + 5x16384 timed fstat one_ops + startup; per-timed-op figures divide by 16384
+== rep1 m2fi instructions:u,cycles:u ==
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=515.974 user_ns_per_op=297.006 sys_ns_per_op=226.110 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin':
+
+        10,830,475      instructions:u                                                        
+        12,359,548      cycles:u                                                              
+
+       0.045956929 seconds time elapsed
+
+       0.025828000 seconds user
+       0.020047000 seconds sys
+
+
+== rep1 m2fi raw_syscalls:sys_enter (sudo) ==
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=586.332 user_ns_per_op=246.987 sys_ns_per_op=357.041 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin':
+
+            84,036      raw_syscalls:sys_enter                                                
+
+       0.052672873 seconds time elapsed
+
+       0.020806000 seconds user
+       0.031709000 seconds sys
+
+
+== rep2 m2fi instructions:u,cycles:u ==
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=523.779 user_ns_per_op=346.358 sys_ns_per_op=192.216 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin':
+
+        10,830,517      instructions:u                                                        
+        11,700,778      cycles:u                                                              
+
+       0.047106570 seconds time elapsed
+
+       0.030006000 seconds user
+       0.017015000 seconds sys
+
+
+== rep2 m2fi raw_syscalls:sys_enter (sudo) ==
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=578.549 user_ns_per_op=221.739 sys_ns_per_op=360.078 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin':
+
+            84,036      raw_syscalls:sys_enter                                                
+
+       0.050677841 seconds time elapsed
+
+       0.020243000 seconds user
+       0.030344000 seconds sys
+
+
+== rep3 m2fi instructions:u,cycles:u ==
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=525.716 user_ns_per_op=358.244 sys_ns_per_op=179.592 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin':
+
+        10,830,477      instructions:u                                                        
+        11,686,131      cycles:u                                                              
+
+       0.047187987 seconds time elapsed
+
+       0.031006000 seconds user
+       0.015951000 seconds sys
+
+
+== rep3 m2fi raw_syscalls:sys_enter (sudo) ==
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=580.968 user_ns_per_op=278.356 sys_ns_per_op=321.956 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi 0 16384 2048 5 /tmp/sluice600/data64m.bin':
+
+            84,036      raw_syscalls:sys_enter                                                
+
+       0.052267288 seconds time elapsed
+
+       0.025080000 seconds user
+       0.027119000 seconds sys
+
+

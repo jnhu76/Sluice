@@ -1,0 +1,22 @@
+=== seam advance_by_requested (SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED) ===
+  BASE GREEN (direct_composition_fault_test)
+  killed by: short_reads_report_eof_before_full_with_the_prefix
+  RESTORED GREEN (direct_composition_fault_test)
+=== seam advance_by_requested_reads (SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED) ===
+  BASE GREEN (direct_composition_test)
+  killed by: read_exact_reports_eof_before_full_with_the_prefix
+  RESTORED GREEN (direct_composition_test)
+=== seam retry_zero_progress (SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS) ===
+  BASE GREEN (direct_composition_fault_test)
+  killed by: short_reads_report_eof_before_full_with_the_prefix
+  RESTORED GREEN (direct_composition_fault_test)
+=== seam failure_accounted (SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED) ===
+  BASE GREEN (direct_composition_fault_test)
+  killed by: error_after_confirmed_prefix_keeps_the_prefix
+  RESTORED GREEN (direct_composition_fault_test)
+=== seam skip_impossible_count (SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT) ===
+  BASE GREEN (direct_composition_fault_test)
+  killed by: write_all_impossible_count_stops_immediately
+  RESTORED GREEN (direct_composition_fault_test)
+detail rule suite GREEN under mutant define (compose_mut_rules_stay_green_short_io)
+P2C2 mutants: every seam GREEN -> RED(named) -> RESTORED GREEN

@@ -1,0 +1,10 @@
+# P2 kit identity — 2026-10-27T21:52:06+08:00 host E5 (E5, kernel 7.2.11-200.fc44.x86_64, gcc 16.2.1, binutils 2.46.1 (P1 §3 pin; ld --version token misparsed in the generating command, corrected))
+kit commit: 2364be4acf1790baa030afe1730d00ca9222f280 (branch direct-cost-ladder, local-only; parent e096b4a1e3b7fb1cbfedfcd5f10e7e6a88050637)
+B1-linked ladder binary sha256: 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8  (P1 binary was 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a, preserved at /tmp/ladder-p1-b1)
+frozen B1 archive sha256: d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0 (enforced by build.sh)
+N1 mirror source ladder.cpp sha256: 75c19bcc4f2df35e00ac8ea67fb552b007a3eeba62f64d256a4dedf10a61b2fb; paired2.sh sha256: 0f0e03160879c17e1a2f3e1b990267593fb412ca8d301ef2067ab977802fad14
+build command: ./build.sh = CCACHE_DISABLE=1 g++ -std=c++20 -O3 -DNDEBUG -fvisibility=hidden -Wall -Werror -I< frozen wt include > ladder.cpp < frozen archive > -o ladder
+
+# asm bridge disclosure (old kit source vs extended source, same flags, -S):
+# the N1 wrappers inline into one_op; the new switch cases grow one_op's stack frame (addq $248 -> $296 rsp and downstream slot renumbering), so inlined existing-arm instruction streams are NOT byte-identical between the P1 and P2 binaries — source of every pre-existing arm body is unchanged in commit 2364be4a (git diff touches no existing arm), functional checksum/content bridge MATCHes on a1x/ax/w1x/wx (smoke-ladder.txt old-binary bridge section), and both sides of any future cross-binary cell build from THIS kit source so the harness TU is common-mode. Disclosed per P2 plan §2.3/§6.3.
+# smoke gate: p2-raw/kit/smoke-ladder.txt — ALL GATED GROUPS IDENTICAL (read {a0,a1,a2,a1x,ax,a1c,ac} minus a3 at seq x7 sizes, tail, rand; write {w0,w1,w2,w1x,wx,w1c,wc} with content_ok=1 (size 0: -2 skipped, P1 convention); metadata x3; closed userspace extended group; eintr diagnostic groups identical; old-binary functional bridge MATCH x4)

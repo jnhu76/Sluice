@@ -1,0 +1,23 @@
+# P4 parquet run manifest (R1 format; new file only, frozen R1 artifacts untouched) — 2026-10-28T12:21:58+08:00
+DUDUDU_SHA=ed053cbe098605a40fcd6c9686d5361aa4d10b01
+DUDUDU_BRANCH=p4-strategy-arms (local-only research branch cut from r1-parquet-sluice-bench=ed053cbe098605a40fcd6c9686d5361aa4d10b01)
+SLUICE_PROFILE=noliburing (frozen static archives; SDK prefixes staged from P4 plan §4.1)
+SDK_PREFIX_b1=/home/jnhu/Source/dududu/build/sluice-sdk/p4-b1
+LIB_b1 d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0  /home/jnhu/Source/dududu/build/sluice-sdk/p4-b1/lib/libsluice_core.a
+SDK_PREFIX_p2c1=/home/jnhu/Source/dududu/build/sluice-sdk/p4-p2c1
+LIB_p2c1 07d0680307c71cc412dfd021fd47c3098de57b580283df189f66dcdc2052049e  /home/jnhu/Source/dududu/build/sluice-sdk/p4-p2c1/lib/libsluice_core.a
+SDK_PREFIX_p2c2=/home/jnhu/Source/dududu/build/sluice-sdk/p4-p2c2
+LIB_p2c2 672510281abadba1cbda0a0e89f15e1dbb2c69f5a15bceb306b70196b420a807  /home/jnhu/Source/dududu/build/sluice-sdk/p4-p2c2/lib/libsluice_core.a
+KERNEL=7.2.11-200.fc44.x86_64
+DATE_UTC=2026-10-28T04:21:58Z
+COMPILER=16
+ARROW_VERSION=23.0.1
+PARQUET_VERSION=23.0.1
+BINARY_b1 756b835e7665f3e9da999845980e7f6d05c7f0083f4b9c4757b11cff65ed252c  /tmp/p4-parquet/b1/build/parquet_bench
+BINARY_p2c1 2eb83b846a2719ddbfdaffd682b3033ba6cb108628649b9c3ca81f83265228db  /tmp/p4-parquet/p2c1/build/parquet_bench
+BINARY_p2c2 72a19c6ac954af8fe3ea3ce63939376393fc972371661997ac5247cb21a4769a  /tmp/p4-parquet/p2c2/build/parquet_bench
+DATASET 6116e69cf20a89b7ca8a23e4d4dbd7d3759225a68e379d4776b3727bf3c05af6  /home/jnhu/Source/dududu/build/parquet-data/medium-none.parquet 181966794
+TRACE a059e58fbc8771d78b23cd74afc3e1e7d26a09e230165b474dfc5b5cf1b53724  /home/jnhu/Source/dududu/build/parquet-results/trace-medium-t3.jsonl 58
+ORACLE_T3_DATA_SHA=8d2a752c4759bcbc0756aa4542413f7b7e552cbdbc21d46fd78d0729a46e2f0b (identical across b1/p2c1/p2c2 arms)
+CTEST_PARQUET=3/3 passed per arm (parquet-ctest-admission.txt)
+NOTE=frozen R1 receipts under dududu build/parquet-results/ are read-only inputs; P4 wrote no file there

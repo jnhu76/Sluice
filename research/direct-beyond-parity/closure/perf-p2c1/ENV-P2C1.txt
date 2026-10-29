@@ -1,0 +1,25 @@
+=== E5 perf-p2c1 reverify session environment ===
+2026-10-29T09:08:43+08:00
+E5
+7.2.11-200.fc44.x86_64
+--- load ---
+ 09:08:43 up  2:17,  1 user,  load average: 0.23, 0.13, 0.57
+--- measurement process survey (must be 0) ---
+0 matching measurement processes
+--- cpu2 governor/freq ---
+schedutil
+1700000
+--- perf_event_paranoid ---
+2
+--- tmpfs fixture ---
+tmpfs
+bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a  /tmp/sluice600/data64m.bin
+--- binaries ---
+89084b1d1bd953c2da5202fc789034700269271b0c2d29f04c8c4408c66b5c0d  ladder-base
+3af44bf9020284dad412635f9f3912c1f7cf06232128b73517468868513e9840  ladder-cand
+fa26ac36084f140b3e7f7d0441c308d97415a7d0eb8a7b489d08aae7345cc139  ladder.cpp
+--- archives ---
+e65a252fb0040f3e913fd41a31a41f99977c7bf9e7661480f126a3f0d207ebcf  /home/jnhu/Source/Sluice-perf-p2c1-base/build/linux/x86_64/release/libsluice_core.a
+a536bc6ac37c5c680f2cbe5d1714df7e09dbaf1ef1945cb509969f9bf110055f  /home/jnhu/Source/Sluice-perf-p2c1-head/build/linux/x86_64/release/libsluice_core.a
+--- g++ ---
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)

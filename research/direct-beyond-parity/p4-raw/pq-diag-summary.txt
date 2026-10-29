@@ -1,0 +1,32 @@
+gather-native-b1:
+  strace: pread64=119(n=3,eq=True) preadv=3(n=3,eq=True) read=2823(n=3,eq=True) openat=50(n=3,eq=True) close=48(n=3,eq=True) fstat=26(n=3,eq=True) lseek=2(n=3,eq=True) mmap=131(n=3,eq=True) munmap=52(n=3,eq=True)
+  pmu: instructions:u=20891533824 cycles:u=9350441984
+  rusage: user=2.717s sys=0.393s (n=3)
+gather-sluice-b1:
+  strace: pread64=122(n=3,eq=True) read=2823(n=3,eq=True) openat=50(n=3,eq=True) close=48(n=3,eq=True) fstat=26(n=3,eq=True) lseek=2(n=3,eq=True) mmap=131(n=3,eq=True) munmap=52(n=3,eq=True)
+  pmu: instructions:u=20947682546 cycles:u=9636260269
+  rusage: user=2.787s sys=0.447s (n=3)
+replay-native-b1:
+  strace: pread64=230(n=3,eq=True) read=2823(n=3,eq=True) openat=49(n=3,eq=True) close=47(n=3,eq=True) fstat=30(n=3,eq=True) lseek=2(n=3,eq=True) mmap=81(n=3,eq=True) munmap=2(n=3,eq=True)
+  pmu: instructions:u=15946048776 cycles:u=6033629514
+  rusage: user=1.740s sys=0.110s (n=3)
+replay-sluice-b1:
+  strace: pread64=230(n=3,eq=True) read=2823(n=3,eq=True) openat=49(n=3,eq=True) close=47(n=3,eq=True) fstat=34(n=3,eq=True) lseek=2(n=3,eq=True) mmap=81(n=3,eq=True) munmap=2(n=3,eq=True)
+  pmu: instructions:u=15946058413 cycles:u=6028950721
+  rusage: user=1.753s sys=0.110s (n=3)
+replay-sluice-p2c1:
+  strace: pread64=230(n=3,eq=True) read=2823(n=3,eq=True) openat=49(n=3,eq=True) close=47(n=3,eq=True) fstat=34(n=3,eq=True) lseek=2(n=3,eq=True) mmap=81(n=3,eq=True) munmap=2(n=3,eq=True)
+  pmu: instructions:u=15946058276 cycles:u=6033003109
+  rusage: user=1.743s sys=0.107s (n=3)
+replay-sluice-p2c2:
+  strace: pread64=230(n=3,eq=True) read=2823(n=3,eq=True) openat=49(n=3,eq=True) close=47(n=3,eq=True) fstat=34(n=3,eq=True) lseek=2(n=3,eq=True) mmap=81(n=3,eq=True) munmap=2(n=3,eq=True)
+  pmu: instructions:u=15946058552 cycles:u=6035419385
+  rusage: user=1.730s sys=0.110s (n=3)
+t3-p0-b1:
+  strace: pread64=173(n=3,eq=True) read=2835(n=3,eq=True) openat=50(n=3,eq=True) close=48(n=3,eq=True) fstat=32(n=3,eq=True) lseek=2(n=3,eq=True) mmap=102(n=3,eq=True) munmap=23(n=3,eq=True)
+  pmu: instructions:u=13788887794 cycles:u=4820319862
+  rusage: user=1.420s sys=0.523s (n=3)
+t3-p0-prebuf-b1:
+  strace: pread64=29(n=3,eq=True) read=2835(n=3,eq=True) openat=50(n=3,eq=True) close=48(n=3,eq=True) fstat=32(n=3,eq=True) lseek=2(n=3,eq=True) mmap=110(n=3,eq=True) munmap=35(n=3,eq=False)
+  pmu: instructions:u=13789476090 cycles:u=4904608989
+  rusage: user=1.433s sys=0.627s (n=3)

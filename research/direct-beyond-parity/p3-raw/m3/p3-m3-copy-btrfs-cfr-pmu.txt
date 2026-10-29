@@ -1,0 +1,90 @@
+=== p3-m3-copy-btrfs-cfr arm=cp1 pmu run=1 2026-10-28T02:11:50+08:00 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=19202.241 user_ns_per_op=0.000 sys_ns_per_op=19094.727 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp1 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-cfr-diag.bin':
+
+     1,018,776,969      instructions:u                                                        
+       955,219,620      cycles:u                                                              
+
+       0.445136029 seconds time elapsed
+
+       0.268157000 seconds user
+       0.059443000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-cfr arm=cp1 pmu run=2 2026-10-28T02:11:51+08:00 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=19571.855 user_ns_per_op=985.352 sys_ns_per_op=18463.867 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp1 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-cfr-diag.bin':
+
+     1,018,778,111      instructions:u                                                        
+       954,627,629      cycles:u                                                              
+
+       0.444703729 seconds time elapsed
+
+       0.273774000 seconds user
+       0.053151000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-cfr arm=cp1 pmu run=3 2026-10-28T02:11:53+08:00 ===
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=19631.617 user_ns_per_op=875.000 sys_ns_per_op=18607.422 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp1 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-cfr-diag.bin':
+
+     1,018,777,846      instructions:u                                                        
+       954,857,017      cycles:u                                                              
+
+       0.451446187 seconds time elapsed
+
+       0.269910000 seconds user
+       0.057991000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-cfr arm=cp2 pmu run=1 2026-10-28T02:11:54+08:00 ===
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=5677.384 user_ns_per_op=907.227 sys_ns_per_op=4748.047 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp2 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-cfr-diag.bin':
+
+     1,018,710,169      instructions:u                                                        
+       954,729,349      cycles:u                                                              
+
+       0.319211879 seconds time elapsed
+
+       0.274961000 seconds user
+       0.031976000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-cfr arm=cp2 pmu run=2 2026-10-28T02:11:55+08:00 ===
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=5424.800 user_ns_per_op=88.867 sys_ns_per_op=5314.453 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp2 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-cfr-diag.bin':
+
+     1,018,709,972      instructions:u                                                        
+       955,151,554      cycles:u                                                              
+
+       0.319012673 seconds time elapsed
+
+       0.276676000 seconds user
+       0.029946000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-btrfs-cfr arm=cp2 pmu run=3 2026-10-28T02:11:56+08:00 ===
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=5753.450 user_ns_per_op=0.000 sys_ns_per_op=5731.445 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp2 65536 1024 0 1 /var/tmp/sluice600-p3/data64m.bin dst=/var/tmp/sluice600-p3/copy-p3-m3-copy-btrfs-cfr-diag.bin':
+
+     1,018,709,102      instructions:u                                                        
+       954,694,978      cycles:u                                                              
+
+       0.318286205 seconds time elapsed
+
+       0.275919000 seconds user
+       0.029985000 seconds sys
+
+
+PERF_EXIT=0

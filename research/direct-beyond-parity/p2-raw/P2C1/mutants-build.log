@@ -1,0 +1,224 @@
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.6s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m [38;5;5;1mlinking.release blocking_file_mut_advance_by_requested[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.677s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.025s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.19s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.028s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release tests/semantic_short_io_reference_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_short_io_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.173s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.024s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m [38;5;5;1mlinking.release blocking_file_mut_failure_accounted[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.302s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.025s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m [38;5;5;1mlinking.release blocking_file_mut_skip_impossible_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.214s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.023s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m [38;5;5;1mlinking.release blocking_file_mut_step_reports_full_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.193s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.024s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m [38;5;5;1mlinking.release blocking_file_mut_step_skips_eintr_retry[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.207s[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m [38;5;5;1mlinking.release direct_composition_fault_test[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 2.863s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m [38;5;5;1mlinking.release blocking_file_mut_advance_by_requested[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.725s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.596s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.693s[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.release libsluice_core.a[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<semantic_short_io_reference_test>[0m [38;5;5;1mlinking.release semantic_short_io_reference_test[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.425s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release tests/semantic_short_io_reference_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_short_io_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.702s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.031s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m [38;5;5;1mlinking.release blocking_file_mut_failure_accounted[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.206s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.034s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m [38;5;5;1mlinking.release blocking_file_mut_skip_impossible_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.205s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.032s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m [38;5;5;1mlinking.release blocking_file_mut_step_reports_full_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.197s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.023s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m [38;5;5;1mlinking.release blocking_file_mut_step_skips_eintr_retry[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.194s[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<direct_composition_fault_test>[0m [38;5;5;1mlinking.release direct_composition_fault_test[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.747s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m [38;5;5;1mlinking.release blocking_file_mut_advance_by_requested[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.194s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.034s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.2s[0m
+[0m[38;5;2;1m[ 42%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 52%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.release libsluice_core.a[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<semantic_short_io_reference_test>[0m [38;5;5;1mlinking.release semantic_short_io_reference_test[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.184s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release tests/semantic_short_io_reference_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_short_io_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.169s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.033s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m [38;5;5;1mlinking.release blocking_file_mut_failure_accounted[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.204s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.033s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m [38;5;5;1mlinking.release blocking_file_mut_skip_impossible_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.199s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.033s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m [38;5;5;1mlinking.release blocking_file_mut_step_reports_full_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.202s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.024s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m [38;5;5;1mlinking.release blocking_file_mut_step_skips_eintr_retry[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.191s[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 1.288s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m [38;5;5;1mlinking.release blocking_file_mut_advance_by_requested[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.668s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.031s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.192s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.029s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release tests/semantic_short_io_reference_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_short_io_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.178s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.032s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m [38;5;5;1mlinking.release blocking_file_mut_failure_accounted[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.199s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.034s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m [38;5;5;1mlinking.release blocking_file_mut_skip_impossible_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.197s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.022s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m [38;5;5;1mlinking.release blocking_file_mut_step_reports_full_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.193s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.023s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m [38;5;5;1mlinking.release blocking_file_mut_step_skips_eintr_retry[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.2s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.605s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_advance_by_requested>[0m [38;5;5;1mlinking.release blocking_file_mut_advance_by_requested[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.673s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.032s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.194s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.029s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release tests/semantic_short_io_reference_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_short_io_retry_zero_progress>[0m [38;5;5;1mlinking.release blocking_file_mut_short_io_retry_zero_progress[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.172s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.023s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_failure_accounted>[0m [38;5;5;1mlinking.release blocking_file_mut_failure_accounted[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.191s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.022s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_skip_impossible_count>[0m [38;5;5;1mlinking.release blocking_file_mut_skip_impossible_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.201s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.036s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_reports_full_count>[0m [38;5;5;1mlinking.release blocking_file_mut_step_reports_full_count[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.196s[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.022s[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release tests/direct_composition_fault_test.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 15%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 63%]:[0m [38;5;5;1m<blocking_file_mut_step_skips_eintr_retry>[0m [38;5;5;1mlinking.release blocking_file_mut_step_skips_eintr_retry[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.194s[0m

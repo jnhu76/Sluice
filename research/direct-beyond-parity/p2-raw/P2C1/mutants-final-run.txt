@@ -1,0 +1,8 @@
+SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED via blocking_file_mut_advance_by_requested: GREEN -> RED(FAIL: short_reads_report_eof_before_full_with_the_prefix) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS via blocking_file_mut_retry_zero_progress: GREEN -> RED(FAIL: short_reads_report_eof_before_full_with_the_prefix) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS via blocking_file_mut_short_io_retry_zero_progress: GREEN -> RED(FAIL: read_exact_accumulates_a_short_prefix_then_reports_eof) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED via blocking_file_mut_failure_accounted: GREEN -> RED(FAIL: error_after_confirmed_prefix_keeps_the_prefix) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT via blocking_file_mut_skip_impossible_count: GREEN -> RED(FAIL: impossible_count_stops_immediately) -> RESTORED GREEN
+SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT via blocking_file_mut_step_reports_full_count: GREEN -> RED(FAIL: short_reads_report_eof_before_full_with_the_prefix) -> RESTORED GREEN
+SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY via blocking_file_mut_step_skips_eintr_retry: GREEN -> RED(FAIL: primitive_retries_eintr_without_a_completed_count) -> RESTORED GREEN
+mutants: all seams killed by named assertions

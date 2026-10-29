@@ -1,0 +1,37 @@
+# cell aa-meta-file-info (plan P1_MEASUREMENT_PLAN.md §4.6, metadata-track A/A noise baseline) — 2026-10-27T05:36:20+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2fi m2fi 0 16384 2048 5 16 /tmp/sluice600/data64m.bin  (16 A/A pairs, warm tmpfs, no drop; paired.sh pins taskset -c 2, nominal order alternates per pair)
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a; READ_FIX sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+# opportunistic window: fired after 8 consecutive 1s probes clear; concurrency sampled every 0.2s → aa-meta-file-info-window.log (sampler pipeline pre-validated in aa-read-4k unit)
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=516.305 user_ns_per_op=313.000 sys_ns_per_op=227.253 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=547.192 user_ns_per_op=393.519 sys_ns_per_op=155.440 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=545.395 user_ns_per_op=416.587 sys_ns_per_op=131.812 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=544.151 user_ns_per_op=331.221 sys_ns_per_op=214.582 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=516.499 user_ns_per_op=323.623 sys_ns_per_op=201.815 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=517.790 user_ns_per_op=190.585 sys_ns_per_op=344.548 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=525.191 user_ns_per_op=321.063 sys_ns_per_op=214.772 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=546.022 user_ns_per_op=276.808 sys_ns_per_op=273.259 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=539.276 user_ns_per_op=320.491 sys_ns_per_op=225.645 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=516.451 user_ns_per_op=343.833 sys_ns_per_op=188.655 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=518.076 user_ns_per_op=302.175 sys_ns_per_op=232.243 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=515.053 user_ns_per_op=298.745 sys_ns_per_op=224.800 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=520.778 user_ns_per_op=284.525 sys_ns_per_op=249.476 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=545.671 user_ns_per_op=298.149 sys_ns_per_op=250.298 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=544.367 user_ns_per_op=343.845 sys_ns_per_op=202.148 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=544.345 user_ns_per_op=335.735 sys_ns_per_op=218.583 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=516.936 user_ns_per_op=320.777 sys_ns_per_op=215.094 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=512.948 user_ns_per_op=297.089 sys_ns_per_op=225.896 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=522.012 user_ns_per_op=252.156 sys_ns_per_op=287.633 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=543.918 user_ns_per_op=309.320 sys_ns_per_op=238.031 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=542.402 user_ns_per_op=292.635 sys_ns_per_op=255.943 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=518.287 user_ns_per_op=301.008 sys_ns_per_op=228.790 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=516.662 user_ns_per_op=347.108 sys_ns_per_op=182.653 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=518.108 user_ns_per_op=259.956 sys_ns_per_op=271.615 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=548.104 user_ns_per_op=264.363 sys_ns_per_op=287.848 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=545.280 user_ns_per_op=310.130 sys_ns_per_op=238.353 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=513.596 user_ns_per_op=309.320 sys_ns_per_op=224.824 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=516.915 user_ns_per_op=288.241 sys_ns_per_op=237.686 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=517.719 user_ns_per_op=348.276 sys_ns_per_op=190.894 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=513.911 user_ns_per_op=313.286 sys_ns_per_op=215.272 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=542.178 user_ns_per_op=290.885 sys_ns_per_op=254.776 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=16384 ns_per_op=548.105 user_ns_per_op=312.702 sys_ns_per_op=240.925 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+# §11.10: attempt1 sd_AA=15.365 ns > 10 ns #600 band → cell rerun once after quiescing; canonical record in aa-meta-file-info.txt (window verified clean: aa-meta-file-info-window.log)

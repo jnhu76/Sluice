@@ -1,0 +1,82 @@
+# read-eof-mix-4k PMU caliber — 2026-10-27T04:04:13+08:00 — host E5, taskset cpu2, perf_event_paranoid=1 (unprivileged user-space counters)
+# command per arm (§6.2 shape with the cell pattern appended): taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0 1 /tmp/sluice600/data64m.bin tail
+# denominator ops=4096 (timed ops); whole-process caveat per §6.2: read arms also run an in-process verify pass of 4096 ops (ladder.cpp run_arm), so absolute instr/op are approximate; cross-arm deltas are the signal.
+# PMU runs never feed wall statistics (§6 rule 3); ladder stdout lines below are from instrumented runs.
+# === arm a1 ===
+arm=A1_native_read_at size=4096 ops=4096 ns_per_op=576.675 user_ns_per_op=862.549 sys_ns_per_op=238.892 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 4096 4096 0 1 /tmp/sluice600/data64m.bin tail':
+
+        70,650,147      instructions:u                                                        
+        17,474,353      cycles:u                                                              
+
+       0.011533968 seconds time elapsed
+
+       0.008359000 seconds user
+       0.003144000 seconds sys
+
+
+# exit=0
+# === arm a2 ===
+arm=A2_sluice_read_at size=4096 ops=4096 ns_per_op=588.039 user_ns_per_op=844.238 sys_ns_per_op=262.695 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a2 4096 4096 0 1 /tmp/sluice600/data64m.bin tail':
+
+        70,805,757      instructions:u                                                        
+        16,803,947      cycles:u                                                              
+
+       0.011020998 seconds time elapsed
+
+       0.008590000 seconds user
+       0.002416000 seconds sys
+
+
+# exit=0
+# === arm a1x ===
+arm=A1x_native_read_exact_at size=4096 ops=4096 ns_per_op=748.346 user_ns_per_op=843.872 sys_ns_per_op=426.392 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1x 4096 4096 0 1 /tmp/sluice600/data64m.bin tail':
+
+        71,016,085      instructions:u                                                        
+        16,709,398      cycles:u                                                              
+
+       0.012068154 seconds time elapsed
+
+       0.007007000 seconds user
+       0.005011000 seconds sys
+
+
+# exit=0
+# === arm ax ===
+arm=AX_sluice_read_exact_at size=4096 ops=4096 ns_per_op=753.299 user_ns_per_op=1107.178 sys_ns_per_op=128.174 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder ax 4096 4096 0 1 /tmp/sluice600/data64m.bin tail':
+
+        71,521,541      instructions:u                                                        
+        16,953,779      cycles:u                                                              
+
+       0.011755385 seconds time elapsed
+
+       0.010698000 seconds user
+       0.001066000 seconds sys
+
+
+# exit=0
+# === arm a0 ===
+arm=A0_raw_pread size=4096 ops=4096 ns_per_op=574.879 user_ns_per_op=588.257 sys_ns_per_op=475.342 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a0 4096 4096 0 1 /tmp/sluice600/data64m.bin tail':
+
+        70,428,948      instructions:u                                                        
+        16,206,396      cycles:u                                                              
+
+       0.010337574 seconds time elapsed
+
+       0.005632000 seconds user
+       0.004681000 seconds sys
+
+
+# exit=0
+# --- per-op summary (denominator = 4096 timed ops; whole-process counters, §6.2 caveat applies) ---
+# a1: instr/op=17248.6 cyc/op=4266.2 | a2: instr/op=17286.6 cyc/op=4102.5 | a1x: instr/op=17337.9 cyc/op=4079.4 | ax: instr/op=17461.3 cyc/op=4139.1 | a0: instr/op=17194.6 cyc/op=3956.6
+# instruction delta (B1-N1) per timed op: a2-a1=+38.0 ; ax-a1x=+123.4

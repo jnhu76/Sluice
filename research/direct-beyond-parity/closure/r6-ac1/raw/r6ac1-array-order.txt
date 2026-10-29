@@ -1,0 +1,16 @@
+obs read_ret=12288
+obs read_errno=0
+obs buf0_pattern_ok=1
+obs buf1_pattern_ok=1
+obs buf2_pattern_ok=1
+obs wrapper_read_ret=12288
+obs wrapper_errno=0
+obs wrapper_buf0_ok=1
+obs wrapper_buf2_ok=1
+obs write_ret=6144
+obs write_errno=0
+obs write_size_after=7168
+obs verify_pread_ret=6144
+obs write_contiguous_in_order=1
+obs wrapper_write_ret=6144
+CELL array-order END

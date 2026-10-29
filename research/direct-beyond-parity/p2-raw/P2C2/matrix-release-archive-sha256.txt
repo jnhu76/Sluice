@@ -1,0 +1,1 @@
+672510281abadba1cbda0a0e89f15e1dbb2c69f5a15bceb306b70196b420a807  build/linux/x86_64/release/libsluice_core.a

@@ -1,0 +1,25 @@
+# P1 ladder identity — recorded 2026-10-27T02:37:16+08:00 on E5
+branch: direct-cost-ladder
+HEAD: e096b4a1e3b7fb1cbfedfcd5f10e7e6a88050637
+base: 77e5399a45998dea396699fa2e063c94a665945a (B1 = PR #602 head, frozen in /home/jnhu/Source/Sluice-600-wt)
+commit subject: research(direct): committed cost ladder for write and metadata paths
+
+# frozen archive verification command:
+sha256sum /home/jnhu/Source/Sluice-600-wt/build/linux/x86_64/release/libsluice_core.a
+d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0  /home/jnhu/Source/Sluice-600-wt/build/linux/x86_64/release/libsluice_core.a
+
+# frozen worktree HEAD (must stay 77e5399a):
+77e5399a45998dea396699fa2e063c94a665945a
+
+# build (build.sh) — fresh rebuild for the record:
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a  ./ladder
+
+# committed source hashes:
+f43db18cc42ec93e404e6a2d578264299e278a56c15ea3f3ffd27857b53f6005  -
+100644 blob 8ff3ae00d755e864ee267f87473747c6990eeb74	research/direct-cost-ladder/README.md
+100755 blob fe86abc28b7eaa29be97170fc06e9cbc3a0ffe6a	research/direct-cost-ladder/analyze_pairs.py
+100755 blob 58db3d6556a3e9fa5e27299beb6f8b94a89044e9	research/direct-cost-ladder/build.sh
+100644 blob 9c84369f5859cee41d715c2b23a44c12684f9747	research/direct-cost-ladder/ladder.cpp
+100644 blob ae72ef504bbb01659c27c5696baeaf4a96eac03e	research/direct-cost-ladder/mkfixture.cpp
+100755 blob 857dc49cb969ea3f78bc4055585bed63df816488	research/direct-cost-ladder/paired.sh

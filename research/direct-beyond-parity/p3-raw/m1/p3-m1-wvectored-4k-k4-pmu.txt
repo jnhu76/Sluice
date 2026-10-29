@@ -1,0 +1,109 @@
+=== p3-m1-wvectored-4k-k4 arm=wv0 pmu run=1 2026-10-28T01:52:25+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2889.030 user_ns_per_op=965.820 sys_ns_per_op=1933.594 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv0 pmu run=2 2026-10-28T01:52:26+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2888.754 user_ns_per_op=2893.555 sys_ns_per_op=0.000 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv0 pmu run=3 2026-10-28T01:52:26+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2894.765 user_ns_per_op=964.844 sys_ns_per_op=1930.664 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv1 pmu run=1 2026-10-28T01:52:32+08:00 ===
+arm=WV1_pwritev_group size=4096 ops=1024 ns_per_op=1148.518 user_ns_per_op=1037.109 sys_ns_per_op=122.070 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv1 pmu run=2 2026-10-28T01:52:33+08:00 ===
+arm=WV1_pwritev_group size=4096 ops=1024 ns_per_op=1153.215 user_ns_per_op=48.828 sys_ns_per_op=1111.328 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv1 pmu run=3 2026-10-28T01:52:34+08:00 ===
+arm=WV1_pwritev_group size=4096 ops=1024 ns_per_op=1151.056 user_ns_per_op=1035.156 sys_ns_per_op=124.023 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+PERF_EXIT=0
+# REDO 2026-10-28T01:54:21+08:00
+=== p3-m1-wvectored-4k-k4 arm=wv0 pmu run=1 2026-10-28T01:54:23+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2882.731 user_ns_per_op=1931.641 sys_ns_per_op=958.984 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wv0 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wvectored-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,701,065      instructions:u                                                        
+     2,258,329,167      cycles:u                                                              
+
+       0.681854730 seconds time elapsed
+
+       0.657814000 seconds user
+       0.021928000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv0 pmu run=2 2026-10-28T01:54:25+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2886.722 user_ns_per_op=969.727 sys_ns_per_op=1919.922 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wv0 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wvectored-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,701,135      instructions:u                                                        
+     2,257,813,988      cycles:u                                                              
+
+       0.681324387 seconds time elapsed
+
+       0.655353000 seconds user
+       0.023920000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv0 pmu run=3 2026-10-28T01:54:28+08:00 ===
+arm=WV0_kpwrite_group size=4096 ops=1024 ns_per_op=2886.742 user_ns_per_op=1953.125 sys_ns_per_op=941.406 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder wv0 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wvectored-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,700,969      instructions:u                                                        
+     2,258,430,792      cycles:u                                                              
+
+       0.681500585 seconds time elapsed
+
+       0.658520000 seconds user
+       0.020877000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv1 pmu run=1 2026-10-28T01:54:30+08:00 ===
+arm=WV1_pwritev_group size=4096 ops=1024 ns_per_op=1203.451 user_ns_per_op=671.875 sys_ns_per_op=537.109 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+
+ Performance counter stats for './ladder wv1 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wvectored-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,488,725      instructions:u                                                        
+     2,257,785,916      cycles:u                                                              
+
+       0.679387689 seconds time elapsed
+
+       0.655426000 seconds user
+       0.021924000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv1 pmu run=2 2026-10-28T01:54:33+08:00 ===
+arm=WV1_pwritev_group size=4096 ops=1024 ns_per_op=1203.696 user_ns_per_op=1125.000 sys_ns_per_op=85.938 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+
+ Performance counter stats for './ladder wv1 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wvectored-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,488,523      instructions:u                                                        
+     2,257,744,057      cycles:u                                                              
+
+       0.679074063 seconds time elapsed
+
+       0.657011000 seconds user
+       0.019955000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-wvectored-4k-k4 arm=wv1 pmu run=3 2026-10-28T01:54:35+08:00 ===
+arm=WV1_pwritev_group size=4096 ops=1024 ns_per_op=1203.244 user_ns_per_op=128.906 sys_ns_per_op=1084.961 checksum=4194304 content_hash=0xa2a7b385a4908383 content_ok=1 iovcnt=4 fill_len_hash=0x0000000000000000 syscalls_per_group=1 issued_per_group=4096
+
+ Performance counter stats for './ladder wv1 4096 1024 0 1 /tmp/sluice600/write-p3-m1-wvectored-4k-k4-diag2.bin seq 0 normal iovcnt=4':
+
+     1,077,488,861      instructions:u                                                        
+     2,257,373,153      cycles:u                                                              
+
+       0.678477906 seconds time elapsed
+
+       0.653604000 seconds user
+       0.022920000 seconds sys
+
+
+PERF_EXIT=0

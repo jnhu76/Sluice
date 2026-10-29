@@ -1,0 +1,10 @@
+# coarse syscall-count corroboration, tmpfs, 64KiB x1024, strace -c -f (caliber per P3 plan section 6)
+== cp1
+ 53.67    0.023069          22      1025           pwrite64
+ 46.03    0.019785          17      1155           pread64
+100.00    0.042980          19      2254         1 total
+== cp2
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=42885.856 user_ns_per_op=1994.146 sys_ns_per_op=31356.098 checksum=67174400 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xac16c39f5752c383 dst_size=67108864
+ 73.72    0.029927          29      1025           copy_file_range
+ 13.62    0.005528          42       130           pread64
+100.00    0.040597          33      1229         1 total

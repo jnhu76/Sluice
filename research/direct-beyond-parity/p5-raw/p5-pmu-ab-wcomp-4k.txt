@@ -1,0 +1,77 @@
+# p5-pmu-ab-wcomp-4k (PMU diagnostic; never a wall source) — 2026-10-28T11:58:36Z host E5 kernel 7.2.11-200.fc44.x86_64
+# per arm x3: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab <arm> 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin (P1 §6.2/P2C2 §2.4 command shape)
+# binary: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab sha256 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+== arm w1x ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab w1x 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin':
+
+     1,144,975,670      instructions:u                                                        
+     2,259,210,438      cycles:u                                                              
+
+       0.687560276 seconds time elapsed
+
+       0.654236000 seconds user
+       0.031877000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab w1x 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin':
+
+     1,144,975,587      instructions:u                                                        
+     2,258,887,330      cycles:u                                                              
+
+       0.683978657 seconds time elapsed
+
+       0.655646000 seconds user
+       0.026872000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab w1x 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin':
+
+     1,144,975,451      instructions:u                                                        
+     2,258,954,020      cycles:u                                                              
+
+       0.683428829 seconds time elapsed
+
+       0.653072000 seconds user
+       0.028933000 seconds sys
+
+
+== arm wx ==
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab wx 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin':
+
+     1,145,156,077      instructions:u                                                        
+     2,258,677,003      cycles:u                                                              
+
+       0.681462070 seconds time elapsed
+
+       0.658132000 seconds user
+       0.021907000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab wx 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin':
+
+     1,145,156,049      instructions:u                                                        
+     2,258,691,257      cycles:u                                                              
+
+       0.681930705 seconds time elapsed
+
+       0.652621000 seconds user
+       0.027894000 seconds sys
+
+
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-ab wx 4096 4096 0 1 /tmp/sluice600/p5-p5-pmu-ab-wcomp-4k.bin':
+
+     1,145,155,981      instructions:u                                                        
+     2,258,601,238      cycles:u                                                              
+
+       0.683392920 seconds time elapsed
+
+       0.656062000 seconds user
+       0.025887000 seconds sys
+
+

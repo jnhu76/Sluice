@@ -1,0 +1,13 @@
+# cell: write-sweep-1b (P1 plan §4.2 write track, tmpfs warm, size=1)
+# date: 2026-10-27T04:04:50+08:00  host: E5 (Xeon E5-2666 v3, Fedora 44, kernel 7.2.11-200.fc44.x86_64)
+# ladder sha256: 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a
+# paired command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 w2 1 4096 4096 5 16 /tmp/sluice600/write64m.bin
+# context-arm command: taskset -c 2 $LADDER w0 1 4096 4096 5 $WRITE_FIX
+arm=W0_raw_pwrite size=1 ops=4096 ns_per_op=587.387 user_ns_per_op=308.350 sys_ns_per_op=307.170 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+w0_wall=43.00 s
+arm=W1_native_write_at size=1 ops=4096 ns_per_op=586.239 user_ns_per_op=365.601 sys_ns_per_op=243.896 checksum=24576 content_hash=0xdc0b0234a39d0383 content_ok=1
+VERIFY_FAIL arm=W2_sluice_write_at content
+# ARCHIVED attempt 1 of write-sweep-1b — INVALID per plan §5.9 (one failing invocation invalidates the cell series)
+# root cause: concurrent size=4096 write unit shared $WRITE_FIX=/tmp/sluice600/write64m.bin during pair-0 W2 prime->readback window
+# evidence: post-failure scratch scan found 55343696 nonzero bytes starting 0x1001 matching (j*1103515245>>13)&0xff at phase offset%4096 (4-KiB-block buf pattern); bytes 0..0xFFF re-zeroed by this cell's own block=1 timed writes
+# series state at abort: w0 context OK, pair0 W1 OK, pair0 W2 VERIFY_FAIL content -> paired.sh aborted (set -e)

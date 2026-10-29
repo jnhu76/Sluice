@@ -1,0 +1,45 @@
+# pq-strategy-gather-sluice — 2026-10-28T12:18:09+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# process-level ABBA: pair p even invokes A then B, odd B then A; one process per sample; taskset -c 2; cwd /home/jnhu/Source/dududu
+# A = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='ReplayGather/sluice/medium' reps=1
+# B = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='ReplayGather/native/medium' reps=1
+ReplayGather/sluice/medium 491179932
+ReplayGather/native/medium 451581948
+ReplayGather/native/medium 451194043
+ReplayGather/sluice/medium 491014301
+ReplayGather/sluice/medium 495158365
+ReplayGather/native/medium 451679226
+ReplayGather/native/medium 456493771
+ReplayGather/sluice/medium 491395736
+ReplayGather/sluice/medium 491389157
+ReplayGather/native/medium 451457762
+ReplayGather/native/medium 451872370
+ReplayGather/sluice/medium 491149270
+ReplayGather/sluice/medium 491627376
+ReplayGather/native/medium 451194201
+ReplayGather/native/medium 450555402
+ReplayGather/sluice/medium 492693504
+ReplayGather/sluice/medium 491181498
+ReplayGather/native/medium 451838847
+ReplayGather/native/medium 454096023
+ReplayGather/sluice/medium 491258048
+ReplayGather/sluice/medium 492298214
+ReplayGather/native/medium 450982707
+ReplayGather/native/medium 450519127
+ReplayGather/sluice/medium 491239641
+ReplayGather/sluice/medium 490722378
+ReplayGather/native/medium 451324809
+ReplayGather/native/medium 449997174
+ReplayGather/sluice/medium 491266549
+ReplayGather/sluice/medium 491683127
+ReplayGather/native/medium 451427366
+ReplayGather/native/medium 451032682
+ReplayGather/sluice/medium 491466504
+# order-aware analysis (statistic A - B in ms):
+pairs=16
+A: mean=491.670225ms sd=1.045752 median=491.327853
+B: mean=451.702966ms sd=1.552074 median=451.376088
+delta(A-B): median=+40.093578ms mean=+39.967259ms sd=1.941161 pos=16/16
+paired t=+82.36 (df=15)
+CI95_mean=[+38.933105,+41.001413]
+AB_subgroup_median=+40.093578 BA_subgroup_median=+40.127040
+raw_deltas_ms=39.597984,39.820258,43.479139,34.901965,39.931395,39.276900,40.433175,42.138102,39.342651,37.162025,41.315507,40.720514,39.397569,41.269375,40.255761,40.433822

@@ -1,0 +1,48 @@
+# P1 cell read-sweep-0b — 2026-10-27T02:43:57+08:00 on E5 (E5, kernel 7.2.11-200.fc44.x86_64)
+# pairing command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 a2 0 4096 4096 5 16 /tmp/sluice600/data64m.bin
+# context arms (unpaired, per plan 4.1): for arm in a0 a3; do taskset -c 2 ladder $arm 0 4096 4096 5 $READ_FIX; done
+# fixture sha256: bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+# ladder sha256: 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.820 user_ns_per_op=3.278 sys_ns_per_op=3.313 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.598 user_ns_per_op=3.174 sys_ns_per_op=6.278 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.780 user_ns_per_op=9.521 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.670 user_ns_per_op=3.244 sys_ns_per_op=3.244 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.626 user_ns_per_op=0.000 sys_ns_per_op=6.522 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.115 user_ns_per_op=9.766 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.680 user_ns_per_op=4.534 sys_ns_per_op=4.499 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.619 user_ns_per_op=6.487 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.681 user_ns_per_op=3.174 sys_ns_per_op=3.209 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.967 user_ns_per_op=9.801 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.163 user_ns_per_op=9.975 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.765 user_ns_per_op=3.209 sys_ns_per_op=3.209 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.671 user_ns_per_op=3.209 sys_ns_per_op=3.209 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.115 user_ns_per_op=9.835 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.227 user_ns_per_op=5.022 sys_ns_per_op=4.987 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.837 user_ns_per_op=3.278 sys_ns_per_op=3.313 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.368 user_ns_per_op=6.104 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.762 user_ns_per_op=4.778 sys_ns_per_op=4.743 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.735 user_ns_per_op=9.487 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.640 user_ns_per_op=3.139 sys_ns_per_op=3.139 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.693 user_ns_per_op=0.000 sys_ns_per_op=6.313 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=5.020 user_ns_per_op=6.417 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=5.019 user_ns_per_op=6.906 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=3.143 user_ns_per_op=4.604 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=2.873 user_ns_per_op=0.000 sys_ns_per_op=4.185 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.238 user_ns_per_op=10.010 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=7.789 user_ns_per_op=9.940 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.867 user_ns_per_op=3.313 sys_ns_per_op=3.348 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=4.962 user_ns_per_op=3.418 sys_ns_per_op=3.453 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.609 user_ns_per_op=10.533 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=0 ops=4096 ns_per_op=8.590 user_ns_per_op=5.232 sys_ns_per_op=5.266 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=0 ops=4096 ns_per_op=5.196 user_ns_per_op=7.289 sys_ns_per_op=0.000 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+# context arms (unpaired) — produced 2026-10-27T02:44:18+08:00
+arm=A0_raw_pread size=0 ops=4096 ns_per_op=543.161 user_ns_per_op=350.063 sys_ns_per_op=208.705 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+CTX_EXIT_a0=0
+arm=A3_nosyscall_stub size=0 ops=4096 ns_per_op=3.140 user_ns_per_op=0.000 sys_ns_per_op=4.604 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+CTX_EXIT_a3=0
+# analysis pairs=16
+# analysis A1_native_read_at: mean=4.527ns sd=0.621 median=4.676
+# analysis A2_sluice_read_at: mean=7.650ns sd=1.070 median=7.878
+# analysis delta(A1_native_read_at-A2_sluice_read_at): median=-3.338ns mean=-3.123ns sd=1.013 rel=-43.631% pos=0/16
+# analysis paired t=-12.33 (df=15)
+# analysis 95% CI (§5.4): mean -3.123 ± 2.131*1.013/4 = [-3.663, -2.584] ns (A2-A1: [2.584, 3.663]); AB median -3.419 vs BA -3.103; deltas(A1-A2)=[-2.778,-3.110,-3.489,-3.061,-3.286,-3.398,-3.444,-3.390,-3.394,-3.095,-0.327,-1.876,-5.365,-2.922,-3.647,-3.394]

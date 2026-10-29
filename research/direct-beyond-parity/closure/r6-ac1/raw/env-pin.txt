@@ -1,0 +1,22 @@
+# R6/AC-1 env pin (E5 host, probe session 2026-10-28T23:54:26Z)
+
+## Host
+Linux E5 7.2.11-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 15 15:58:58 UTC 2026 x86_64 GNU/Linux
+
+ldd (GNU libc) 2.43
+getconf IOV_MAX = 1024
+
+## Probe identity
+- source: probes/r6ac1_probe.c sha256 9e364ff767cc716bba4d31d19d189d7f128eae1edabbab630660c9ec26cf56a9
+- binary: cc -O2 -Wall -Wextra -D_FILE_OFFSET_BITS=64 -o r6ac1_probe r6ac1_probe.c -lpthread
+- binary sha256: ccb0334ce262241c4df0764823f869f6ef1e4df5b13fcb04a1288ab94a662a94 (reproduced bit-identical from source on this host)
+
+## Load at session start
+ 07:54:26 up  1:02,  1 user,  load average: 0.64, 2.64, 2.05
+
+## Scratch filesystems
+tmpfs tmpfs rw,nosuid,nodev,seclabel,nr_inodes=1048576,inode64,usrquota
+btrfs /dev/sda3[/root] rw,relatime,seclabel,compress=zstd:1,ssd,discard=async,space_cache=v2,subvolid=256,subvol=/root
+
+## Base
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57

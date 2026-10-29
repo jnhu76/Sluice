@@ -1,0 +1,50 @@
+# P1 cell meta-open-close — PMU diagnostic record (plan §6.2/§6.3: separate PMU section; never the wall source).
+# Split out of meta-open-close.txt after capture so the plain analyzer command in plan §10 stays re-runnable
+# (child arm= lines below are instrumented-run output — excluded from all wall statistics per §5.7).
+# date=2026-10-27 host=E5
+# PMU diagnostic runs (plan §6.2; never wall source), ops=2048 warmup=0 reps=1:
+# cmd: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0oc 0 2048 0 1 /tmp/sluice600/data64m.bin
+arm=M0_raw_open_close size=0 ops=2048 ns_per_op=1780.632 user_ns_per_op=1257.812 sys_ns_per_op=514.648 checksum=2048 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0oc 0 2048 0 1 /tmp/sluice600/data64m.bin':
+
+         2,927,973      instructions:u                                                        
+         3,174,114      cycles:u                                                              
+
+       0.005436912 seconds time elapsed
+
+       0.004365000 seconds user
+       0.001090000 seconds sys
+
+
+pmu_exit_m0oc=0
+# cmd: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1oc 0 2048 0 1 /tmp/sluice600/data64m.bin
+arm=M1_native_open_close size=0 ops=2048 ns_per_op=1692.125 user_ns_per_op=130.371 sys_ns_per_op=1556.641 checksum=2048 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1oc 0 2048 0 1 /tmp/sluice600/data64m.bin':
+
+         3,020,294      instructions:u                                                        
+         2,449,053      cycles:u                                                              
+
+       0.005022863 seconds time elapsed
+
+       0.001004000 seconds user
+       0.004019000 seconds sys
+
+
+pmu_exit_m1oc=0
+# cmd: taskset -c 2 perf stat -e instructions:u,cycles:u /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2oc 0 2048 0 1 /tmp/sluice600/data64m.bin
+arm=M2_sluice_open_close size=0 ops=2048 ns_per_op=1743.044 user_ns_per_op=748.047 sys_ns_per_op=988.281 checksum=2048 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for '/home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m2oc 0 2048 0 1 /tmp/sluice600/data64m.bin':
+
+         3,171,931      instructions:u                                                        
+         2,781,693      cycles:u                                                              
+
+       0.005216036 seconds time elapsed
+
+       0.003128000 seconds user
+       0.002094000 seconds sys
+
+
+pmu_exit_m2oc=0

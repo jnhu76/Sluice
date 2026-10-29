@@ -1,0 +1,45 @@
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 pmu run=1 2026-10-28T02:11:44+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=29449.128 user_ns_per_op=0.000 sys_ns_per_op=29330.078 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp3 65536 1024 0 1 /tmp/sluice600/data64m.bin dst=/tmp/sluice600/copy-p3-m3-copy-tmpfs-sendfile-diag.bin':
+
+     1,018,677,586      instructions:u                                                        
+       954,798,664      cycles:u                                                              
+
+       0.330054652 seconds time elapsed
+
+       0.273409000 seconds user
+       0.055805000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 pmu run=2 2026-10-28T02:11:45+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=29040.590 user_ns_per_op=3.906 sys_ns_per_op=28895.508 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp3 65536 1024 0 1 /tmp/sluice600/data64m.bin dst=/tmp/sluice600/copy-p3-m3-copy-tmpfs-sendfile-diag.bin':
+
+     1,018,677,545      instructions:u                                                        
+       954,249,585      cycles:u                                                              
+
+       0.329716395 seconds time elapsed
+
+       0.273928000 seconds user
+       0.054875000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m3-copy-tmpfs-sendfile arm=cp3 pmu run=3 2026-10-28T02:11:46+08:00 ===
+arm=CP3_sendfile size=65536 ops=1024 ns_per_op=29674.651 user_ns_per_op=0.000 sys_ns_per_op=29544.922 checksum=67108864 content_hash=0xa49ad4325775c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xa49ad4325775c383 dst_size=67108864
+
+ Performance counter stats for './ladder cp3 65536 1024 0 1 /tmp/sluice600/data64m.bin dst=/tmp/sluice600/copy-p3-m3-copy-tmpfs-sendfile-diag.bin':
+
+     1,018,677,597      instructions:u                                                        
+       954,969,198      cycles:u                                                              
+
+       0.332454601 seconds time elapsed
+
+       0.277000000 seconds user
+       0.053750000 seconds sys
+
+
+PERF_EXIT=0

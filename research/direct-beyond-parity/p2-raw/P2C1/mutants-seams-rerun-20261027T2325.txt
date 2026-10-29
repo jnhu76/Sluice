@@ -1,0 +1,24 @@
+# P2C1 seams-tree mutation-kill gate — writer re-run (closes the pre-mechanism archival gap found in report review)
+# date 2026-10-27T23:25+08:00 host E5 (kernel 7.2.11-200.fc44.x86_64)
+# tree: d79244b08c733f6d3dfa472b826517fa8708d0dd (seams-only commit; parent 77e5399a)
+# method: git archive d79244b0 | tar -x -C /tmp/p2writer-rerun/seams-wt (scratch export; no worktree touched, frozen worktrees untouched)
+# gate script: research/direct-beyond-parity/p2-scripts/P2C1-mutants.sh from branch head deaf0301,
+#   byte-identical except WT= and RAW= redirected to /tmp scratch (verified: diff of both files excluding those two lines is empty)
+# run: bash /tmp/p2writer-rerun/P2C1-mutants-seams-rerun.sh -> EXIT=0
+SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED via blocking_file_mut_advance_by_requested: GREEN -> RED(FAIL: short_reads_report_eof_before_full_with_the_prefix) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS via blocking_file_mut_retry_zero_progress: GREEN -> RED(FAIL: short_reads_report_eof_before_full_with_the_prefix) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS via blocking_file_mut_short_io_retry_zero_progress: GREEN -> RED(FAIL: read_exact_accumulates_a_short_prefix_then_reports_eof) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED via blocking_file_mut_failure_accounted: GREEN -> RED(FAIL: error_after_confirmed_prefix_keeps_the_prefix) -> RESTORED GREEN
+SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT via blocking_file_mut_skip_impossible_count: GREEN -> RED(FAIL: impossible_count_stops_immediately) -> RESTORED GREEN
+SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT via blocking_file_mut_step_reports_full_count: GREEN -> RED(FAIL: short_reads_report_eof_before_full_with_the_prefix) -> RESTORED GREEN
+SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY via blocking_file_mut_step_skips_eintr_retry: GREEN -> RED(FAIL: primitive_retries_eintr_without_a_completed_count) -> RESTORED GREEN
+mutants: all seams killed by named assertions
+# per-target RED stderr (exact named-assertion lines, exit code 1 each):
+#   blocking_file_mut_advance_by_requested.err        -> FAIL: short_reads_report_eof_before_full_with_the_prefix
+#   blocking_file_mut_retry_zero_progress.err          -> FAIL: short_reads_report_eof_before_full_with_the_prefix
+#   blocking_file_mut_short_io_retry_zero_progress.err -> FAIL: read_exact_accumulates_a_short_prefix_then_reports_eof
+#   blocking_file_mut_failure_accounted.err            -> FAIL: error_after_confirmed_prefix_keeps_the_prefix
+#   blocking_file_mut_skip_impossible_count.err        -> FAIL: impossible_count_stops_immediately
+#   blocking_file_mut_step_reports_full_count.err      -> FAIL: short_reads_report_eof_before_full_with_the_prefix
+#   blocking_file_mut_step_skips_eintr_retry.err       -> FAIL: primitive_retries_eintr_without_a_completed_count
+# base-binary stderr files empty (GREEN); config/build logs at /tmp/p2writer-rerun/raw/

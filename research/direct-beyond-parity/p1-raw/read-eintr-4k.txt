@@ -1,0 +1,53 @@
+# read-eintr-4k — P1 cell raw series (§4.4 diagnostic: EINTR retry under 3us SIGALRM itimer without SA_RESTART; NON-STATIONARY by construction — medians/ranges only, no CI claims per §5.8) — 2026-10-27T04:16:02+08:00 — host E5 (cpu2 pin, perf_event_paranoid=1)
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a (verified pre-run); read fixture /tmp/sluice600/data64m.bin sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (verified pre-run)
+# series command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a1 a2 4096 2048 256 2 16 /tmp/sluice600/data64m.bin seq 0 eintr
+# context arm command (cell parameters mirrored, single unpaired invocation): taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder a0 4096 2048 256 2 /tmp/sluice600/data64m.bin seq 0 eintr
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3379.199 user_ns_per_op=1998.438 sys_ns_per_op=1632.969 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3982.806 user_ns_per_op=1541.719 sys_ns_per_op=1975.625 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3659.045 user_ns_per_op=1541.094 sys_ns_per_op=2056.875 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3188.966 user_ns_per_op=2309.844 sys_ns_per_op=988.281 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3824.635 user_ns_per_op=1477.187 sys_ns_per_op=1869.219 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3966.490 user_ns_per_op=2842.500 sys_ns_per_op=672.344 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3402.519 user_ns_per_op=2713.125 sys_ns_per_op=715.938 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3837.780 user_ns_per_op=2349.375 sys_ns_per_op=967.656 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3822.994 user_ns_per_op=1302.344 sys_ns_per_op=2015.625 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3439.572 user_ns_per_op=1559.375 sys_ns_per_op=1892.812 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3147.711 user_ns_per_op=1187.812 sys_ns_per_op=2308.594 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3374.886 user_ns_per_op=1499.531 sys_ns_per_op=1829.375 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=4143.999 user_ns_per_op=2829.219 sys_ns_per_op=604.531 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3435.024 user_ns_per_op=1950.781 sys_ns_per_op=1557.188 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3459.875 user_ns_per_op=1736.875 sys_ns_per_op=1724.531 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3250.417 user_ns_per_op=1810.469 sys_ns_per_op=1503.125 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3275.601 user_ns_per_op=1828.125 sys_ns_per_op=1499.062 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3292.872 user_ns_per_op=947.969 sys_ns_per_op=2410.781 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3389.438 user_ns_per_op=2578.594 sys_ns_per_op=989.844 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3488.953 user_ns_per_op=2006.719 sys_ns_per_op=1399.375 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3073.450 user_ns_per_op=1642.812 sys_ns_per_op=1796.562 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3506.909 user_ns_per_op=2142.500 sys_ns_per_op=1548.281 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3552.143 user_ns_per_op=2648.281 sys_ns_per_op=985.781 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3377.881 user_ns_per_op=2531.406 sys_ns_per_op=1030.781 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3432.036 user_ns_per_op=1762.500 sys_ns_per_op=1570.312 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3885.029 user_ns_per_op=1495.781 sys_ns_per_op=2030.469 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=2878.462 user_ns_per_op=2414.844 sys_ns_per_op=1088.750 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3297.131 user_ns_per_op=1085.938 sys_ns_per_op=2217.344 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3420.211 user_ns_per_op=2075.312 sys_ns_per_op=1309.844 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3361.602 user_ns_per_op=1540.938 sys_ns_per_op=1936.094 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=4096 ops=2048 ns_per_op=3458.630 user_ns_per_op=2610.781 sys_ns_per_op=899.062 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=4096 ops=2048 ns_per_op=3090.583 user_ns_per_op=1335.938 sys_ns_per_op=2153.750 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+# series (a1 a2, eintr) exit=0
+arm=A0_raw_pread size=4096 ops=2048 ns_per_op=3347.031 user_ns_per_op=680.469 sys_ns_per_op=1073.125 checksum=17825792 content_hash=0x0000000000000000 content_ok=-1
+# context a0 (eintr) exit=0
+# --- analysis (§5.8 diagnostic caliber: NON-STATIONARY itimer state; medians/ranges only; analyzer t line recorded for reproducibility, NO CI/sign claim) ---
+# analyze_pairs.py A1_native_read_at A2_sluice_read_at:
+pairs=16
+A1_native_read_at: mean=3454.920ns sd=301.375 median=3378.540
+A2_sluice_read_at: mean=3488.633ns sd=286.397 median=3449.101
+delta(A1_native_read_at-A2_sluice_read_at): median=-79.563ns mean=-33.713ns sd=388.988 rel=-2.281% pos=7/16
+paired t=-0.35 (df=15)
+# --- descriptive summary (§5.8: NON-STATIONARY itimer state; medians/ranges only, no CI/sign claims) ---
+# A1 wall median=3378.540 range=[3073.450,4143.999] | user median=1819.297 range=[1085.938,2829.219] | sys median=1536.718 range=[604.531,2217.344]
+# A2 wall median=3449.101 range=[2878.462,3982.806] | user median=1843.828 range=[947.969,2842.500] | sys median=1640.860 range=[672.344,2410.781]
+# A0 context single invocation: wall=3347.031 user=680.469 sys=1073.125 ; checksum=17825792=4096*4352 => ZERO EINTR-interrupted preads in that invocation (derived exactly; documents the non-stationarity)
+# paired delta A1-A2 (descriptive only): median=-79.563 range=[-603.607,+708.975] n=16 — spread ~1.3us, no claim made (§5.8)
+# reference: warm uninstrumented 4k seq reads are ~540 ns/op (read-eof-mix-4k era) — the itimer costs ~2800 ns/op wall at 3us period, dominated by signal delivery, not the retry path
+# a1/a2 checksum uniform: 17825792 over 16+16 lines (= 4352 ops x 4096: every read eventually completed full after retries); a0 documents separately, no equality claim (§5.9/§4.4)

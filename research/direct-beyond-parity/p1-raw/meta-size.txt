@@ -1,0 +1,40 @@
+# P1 cell meta-size (plan §4.3, metadata track): pairing M1_native_size (m1sz) vs M2_sluice_size (m2sz); op = one size; context floor M0_raw_fstat (m0fi, §4.3 shared floor — no m0sz arm exists, size delegates to file_info)
+# date=2026-10-27T04:08:26+08:00 host=E5 kernel=7.2.11-200.fc44.x86_64
+# ladder sha256=0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a (verified this session) fixture sha256=bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (verified this session)
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1sz m2sz 0 16384 2048 5 16 /tmp/sluice600/data64m.bin
+# PMU and syscall-count calibers are captured in meta-size.pmu.txt / meta-size.syscalls.txt (§5.7/§6.3 separation), keeping this file analyzer-clean per §10
+arm=M1_native_size size=0 ops=16384 ns_per_op=986.126 user_ns_per_op=303.878 sys_ns_per_op=482.803 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=921.303 user_ns_per_op=332.841 sys_ns_per_op=319.110 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=563.549 user_ns_per_op=345.989 sys_ns_per_op=219.453 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=546.580 user_ns_per_op=334.830 sys_ns_per_op=226.479 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=517.643 user_ns_per_op=272.413 sys_ns_per_op=272.116 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=509.672 user_ns_per_op=293.338 sys_ns_per_op=234.530 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=508.032 user_ns_per_op=347.192 sys_ns_per_op=179.830 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=518.100 user_ns_per_op=326.803 sys_ns_per_op=210.533 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=554.768 user_ns_per_op=300.341 sys_ns_per_op=264.196 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=509.786 user_ns_per_op=284.096 sys_ns_per_op=247.892 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=510.208 user_ns_per_op=348.073 sys_ns_per_op=179.938 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=526.825 user_ns_per_op=242.759 sys_ns_per_op=299.769 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=517.336 user_ns_per_op=310.547 sys_ns_per_op=229.337 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=509.961 user_ns_per_op=322.790 sys_ns_per_op=205.400 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=523.115 user_ns_per_op=309.951 sys_ns_per_op=228.623 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=507.719 user_ns_per_op=335.449 sys_ns_per_op=191.752 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=521.825 user_ns_per_op=274.569 sys_ns_per_op=260.599 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=509.074 user_ns_per_op=319.372 sys_ns_per_op=202.125 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=510.716 user_ns_per_op=312.607 sys_ns_per_op=207.365 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=515.231 user_ns_per_op=302.020 sys_ns_per_op=229.838 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=538.763 user_ns_per_op=301.591 sys_ns_per_op=239.127 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=506.948 user_ns_per_op=345.501 sys_ns_per_op=179.390 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=522.278 user_ns_per_op=238.341 sys_ns_per_op=300.305 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=526.800 user_ns_per_op=330.900 sys_ns_per_op=200.958 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=513.769 user_ns_per_op=387.981 sys_ns_per_op=144.079 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=511.648 user_ns_per_op=287.955 sys_ns_per_op=237.614 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=509.266 user_ns_per_op=329.530 sys_ns_per_op=188.631 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=512.617 user_ns_per_op=251.917 sys_ns_per_op=275.629 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=514.183 user_ns_per_op=235.185 sys_ns_per_op=293.707 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=508.339 user_ns_per_op=307.808 sys_ns_per_op=213.260 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_size size=0 ops=16384 ns_per_op=540.264 user_ns_per_op=346.346 sys_ns_per_op=202.899 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_size size=0 ops=16384 ns_per_op=516.267 user_ns_per_op=293.088 sys_ns_per_op=235.435 checksum=5634997092352 content_hash=0x0000000000000000 content_ok=-1
+# context arm (unpaired shared floor, plan §4.3: m0fi shared with meta-file-info): taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0fi 0 16384 2048 5 /tmp/sluice600/data64m.bin
+arm=M0_raw_fstat size=0 ops=16384 ns_per_op=529.063 user_ns_per_op=358.565 sys_ns_per_op=179.509 checksum=12667986407730001920 content_hash=0x0000000000000000 content_ok=-1
+ctx_exit=0

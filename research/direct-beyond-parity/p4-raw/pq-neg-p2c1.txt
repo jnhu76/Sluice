@@ -1,0 +1,45 @@
+# pq-neg-p2c1 — 2026-10-28T12:14:24+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# process-level ABBA: pair p even invokes A then B, odd B then A; one process per sample; taskset -c 2; cwd /home/jnhu/Source/dududu
+# A = /tmp/p4-parquet/p2c1/build/parquet_bench --benchmark_filter='Replay/sluice/medium' reps=1
+# B = /tmp/p4-parquet/b1/build/parquet_bench --benchmark_filter='Replay/sluice/medium' reps=1
+Replay/sluice/medium 235145413
+Replay/sluice/medium 234983308
+Replay/sluice/medium 234602986
+Replay/sluice/medium 235505736
+Replay/sluice/medium 235477272
+Replay/sluice/medium 235088153
+Replay/sluice/medium 234602189
+Replay/sluice/medium 236564773
+Replay/sluice/medium 234892829
+Replay/sluice/medium 235997535
+Replay/sluice/medium 234933694
+Replay/sluice/medium 235365496
+Replay/sluice/medium 235345634
+Replay/sluice/medium 235249675
+Replay/sluice/medium 235060359
+Replay/sluice/medium 236888764
+Replay/sluice/medium 235051088
+Replay/sluice/medium 235655156
+Replay/sluice/medium 235355143
+Replay/sluice/medium 234847473
+Replay/sluice/medium 235522454
+Replay/sluice/medium 235542691
+Replay/sluice/medium 235101964
+Replay/sluice/medium 234772779
+Replay/sluice/medium 234953036
+Replay/sluice/medium 235171810
+Replay/sluice/medium 234965095
+Replay/sluice/medium 234836214
+Replay/sluice/medium 235835597
+Replay/sluice/medium 235517663
+Replay/sluice/medium 234473961
+Replay/sluice/medium 234599952
+# order-aware analysis (statistic A - B in ms):
+pairs=16
+A: mean=235.350282ms sd=0.635598 median=235.245523
+B: mean=235.143836ms sd=0.407762 median=235.095058
+delta(A-B): median=+0.110975ms mean=+0.206446ms sd=0.809708 pos=9/16
+paired t=+1.02 (df=15)
+CI95_mean=[-0.224926,+0.637817]
+AB_subgroup_median=+0.037861 BA_subgroup_median=+0.278897
+raw_deltas_ms=0.162105,0.902750,0.389119,1.962584,-1.104706,0.431802,0.095959,1.828405,-0.604068,-0.507670,-0.020237,-0.329185,-0.218774,-0.128881,0.317934,0.125991

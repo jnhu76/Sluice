@@ -1,0 +1,19 @@
+# NOT_RUN attempt evidence: EOPNOTSUPP / ENOSPC / EROFS injection paths on E5 (uid 1000)
+kernel=7.2.11-200.fc44.x86_64 selinux=Enforcing
+writable_fs_for_uid1000: tmpfs(/tmp /dev/shm), btrfs(/ /home /var/tmp, compress=zstd:1)
+attempt eopnotsupp: vfat(/boot/efi) write access:
+touch: cannot touch '/boot/efi/ac3-probe': Permission denied
+rc=1
+attempt eopnotsupp: ext4(/boot) write access:
+touch: cannot touch '/boot/ac3-probe': Permission denied
+rc=1
+attempt enospc: unprivileged size-capped tmpfs mount inside userns:
+mount: /tmp/ac3-ns-mnt: permission denied.
+       dmesg(1) may have more information after failed mount system call.
+rc=32
+attempt enospc: libfuse3 for userspace fault-injection fs:
+Package fuse3 was not found in the pkg-config search path.
+Perhaps you should add the directory containing `fuse3.pc'
+to the PKG_CONFIG_PATH environment variable
+Package 'fuse3' not found
+attempt erofs: no read-only filesystem with write access for uid1000 exists on host (mount -o remount,ro requires CAP_SYS_ADMIN)

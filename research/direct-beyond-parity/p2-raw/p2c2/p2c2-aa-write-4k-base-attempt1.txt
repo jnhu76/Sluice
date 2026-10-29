@@ -1,0 +1,41 @@
+# cell p2c2-aa-write-4k-base (P2 plan §2.4.2/§4.4, write-track fresh-session A/A noise; B1-linked kit binary) — 2026-10-27T21:55:49+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 w1 4096 1024 1024 5 16 /tmp/sluice600/p2-p2c2-aa-write-4k-base.bin  (16 A/A pairs, warm tmpfs; Amendment 1 / P2 §2.4.5 per-cell scratch, mkfixture immediately before, deleted after)
+# ladder sha256 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8; scratch /tmp/sluice600/p2-p2c2-aa-write-4k-base.bin (per-cell, 67108864 B)
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=799.849 user_ns_per_op=664.876 sys_ns_per_op=200.358 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.354 user_ns_per_op=326.660 sys_ns_per_op=489.258 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=768.216 user_ns_per_op=177.083 sys_ns_per_op=668.294 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=767.282 user_ns_per_op=496.257 sys_ns_per_op=331.543 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.059 user_ns_per_op=333.659 sys_ns_per_op=504.232 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=766.278 user_ns_per_op=169.434 sys_ns_per_op=671.712 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=763.991 user_ns_per_op=486.328 sys_ns_per_op=343.913 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=759.747 user_ns_per_op=504.883 sys_ns_per_op=320.801 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=756.863 user_ns_per_op=335.124 sys_ns_per_op=513.021 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=781.504 user_ns_per_op=337.240 sys_ns_per_op=517.904 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.707 user_ns_per_op=328.776 sys_ns_per_op=492.676 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=762.453 user_ns_per_op=78.125 sys_ns_per_op=743.001 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=781.147 user_ns_per_op=168.294 sys_ns_per_op=669.759 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=757.566 user_ns_per_op=492.513 sys_ns_per_op=329.915 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=765.578 user_ns_per_op=326.009 sys_ns_per_op=497.070 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.874 user_ns_per_op=493.978 sys_ns_per_op=331.380 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=767.484 user_ns_per_op=165.853 sys_ns_per_op=656.901 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=797.772 user_ns_per_op=346.354 sys_ns_per_op=518.229 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=766.275 user_ns_per_op=182.780 sys_ns_per_op=669.271 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=783.869 user_ns_per_op=170.898 sys_ns_per_op=681.803 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=762.167 user_ns_per_op=288.411 sys_ns_per_op=528.646 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=765.186 user_ns_per_op=164.225 sys_ns_per_op=665.690 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=766.379 user_ns_per_op=483.398 sys_ns_per_op=331.543 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=762.716 user_ns_per_op=171.875 sys_ns_per_op=646.484 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=774.312 user_ns_per_op=332.031 sys_ns_per_op=507.650 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=759.342 user_ns_per_op=0.000 sys_ns_per_op=815.430 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=761.651 user_ns_per_op=332.194 sys_ns_per_op=498.372 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=762.226 user_ns_per_op=326.172 sys_ns_per_op=495.768 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=760.667 user_ns_per_op=0.000 sys_ns_per_op=817.871 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=763.109 user_ns_per_op=326.660 sys_ns_per_op=492.513 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=780.961 user_ns_per_op=340.658 sys_ns_per_op=517.253 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+arm=W1_native_write_at size=4096 ops=1024 ns_per_op=788.755 user_ns_per_op=175.781 sys_ns_per_op=686.361 checksum=25165824 content_hash=0xa2a7b385a4908383 content_ok=1
+pairs=16
+W1_native_write_at: mean=768.519ns sd=10.915 median=765.927
+W1_native_write_at: mean=768.690ns sd=12.199 median=762.913
+delta(W1_native_write_at-W1_native_write_at): median=-1.161ns mean=-0.170ns sd=17.021 rel=-0.151% pos=7/16
+paired t=-0.04 (df=15)
+# §11.10 NOTE: attempt1 valid, sd_AA=17.021 ns (>10 ns #600 band; P1 accepted write sd was 29.461); rerun once after quiescing per rule.

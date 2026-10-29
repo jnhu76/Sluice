@@ -1,0 +1,10 @@
+obs overflow_negative_ret=-1
+obs overflow_negative_errno=14
+obs ssize_max_single_ret=4096
+obs ssize_max_single_errno=0
+obs above_cap_ret=2147479552
+obs above_cap_errno=0
+obs above_cap_requested=2147483648
+obs k1024_1mib_sum_1gib_ret=8192
+obs k1024_1mib_sum_1gib_errno=0
+CELL sum-overflow END

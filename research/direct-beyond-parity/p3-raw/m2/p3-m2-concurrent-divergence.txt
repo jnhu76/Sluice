@@ -1,0 +1,11 @@
+# REDO 2026-10-28T02:03:33+08:00: first construction mutated offset 33554432 which the ops=256 g4k trace never touches (outcome_digest unchanged); mutation moved to offset 1048576 inside the touched span. Both constructions archived here.
+# --- replay 1: rpl0 (unmerged) on pristine scratch ---
+arm=RPL0_unmerged_replay size=4096 ops=256 ns_per_op=10584.660 user_ns_per_op=37618.490 sys_ns_per_op=9449.219 checksum=8388608 content_hash=0x2fb7a4313639dbac content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x115f0d654b0dc0b1 ref_digest=0x2fb7a4313639dbac outcome_digest=0x2fb7a4313639dbac syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+exit=0
+writer: mutated 4096 bytes at [1048576, 1052672)  (XOR 0xFF)
+# --- replay 2: rplt merge=4096 (merged) on mutated scratch ---
+arm=RPLT_sweep_merge size=4096 ops=256 ns_per_op=7624.906 user_ns_per_op=43604.167 sys_ns_per_op=2261.719 checksum=10309444 content_hash=0x5b6e899ab1284813 content_ok=1 trace=g4k merge=4096 dedup=0 req_digest=0x115f0d654b0dc0b1 ref_digest=0x5b6e899ab1284813 outcome_digest=0x5b6e899ab1284813 syscalls_per_group=4 issued_per_group=40271 requested_per_group=32768
+exit=0
+# --- replay 3: rpl0 (unmerged) on mutated scratch (consistency control) ---
+arm=RPL0_unmerged_replay size=4096 ops=256 ns_per_op=7533.406 user_ns_per_op=42046.875 sys_ns_per_op=3958.333 checksum=8388608 content_hash=0x5b6e899ab1284813 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x115f0d654b0dc0b1 ref_digest=0x5b6e899ab1284813 outcome_digest=0x5b6e899ab1284813 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+exit=0

@@ -1,0 +1,226 @@
+=== p3-m1-sluice-gap-4k-k4 arm=av0 pmu run=1 2026-10-28T01:52:18+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=2712.259 user_ns_per_op=7252.441 sys_ns_per_op=991.699 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder av0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,606,827      instructions:u                                                        
+        41,499,258      cycles:u                                                              
+
+       0.018482102 seconds time elapsed
+
+       0.016383000 seconds user
+       0.002049000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-sluice-gap-4k-k4 arm=av0 pmu run=2 2026-10-28T01:52:18+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=2726.701 user_ns_per_op=7136.719 sys_ns_per_op=1228.027 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder av0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,606,948      instructions:u                                                        
+        41,655,260      cycles:u                                                              
+
+       0.019248133 seconds time elapsed
+
+       0.014744000 seconds user
+       0.003937000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-sluice-gap-4k-k4 arm=av0 pmu run=3 2026-10-28T01:52:18+08:00 ===
+arm=AV0_kpread_group size=4096 ops=1024 ns_per_op=2721.476 user_ns_per_op=6442.383 sys_ns_per_op=1814.453 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder av0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,607,006      instructions:u                                                        
+        41,546,264      cycles:u                                                              
+
+       0.018489738 seconds time elapsed
+
+       0.013309000 seconds user
+       0.005124000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-sluice-gap-4k-k4 arm=avs pmu run=1 2026-10-28T01:52:18+08:00 ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=2580.774 user_ns_per_op=6344.238 sys_ns_per_op=1517.578 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder avs 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,876,374      instructions:u                                                        
+        41,540,628      cycles:u                                                              
+
+       0.017787868 seconds time elapsed
+
+       0.014588000 seconds user
+       0.003135000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-sluice-gap-4k-k4 arm=avs pmu run=2 2026-10-28T01:52:18+08:00 ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=2765.321 user_ns_per_op=6648.438 sys_ns_per_op=1458.496 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder avs 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,876,388      instructions:u                                                        
+        41,513,416      cycles:u                                                              
+
+       0.018170489 seconds time elapsed
+
+       0.015120000 seconds user
+       0.003013000 seconds sys
+
+
+PERF_EXIT=0
+=== p3-m1-sluice-gap-4k-k4 arm=avs pmu run=3 2026-10-28T01:52:19+08:00 ===
+arm=AVS_sluice_kread_at_group size=4096 ops=1024 ns_per_op=2723.528 user_ns_per_op=7429.687 sys_ns_per_op=808.105 checksum=4194304 content_hash=0xd5e13fde91da8f83 content_ok=1 iovcnt=4 fill_len_hash=0x95c09fd0a3cf0383 syscalls_per_group=4 issued_per_group=4096
+
+ Performance counter stats for './ladder avs 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal iovcnt=4':
+
+       150,876,184      instructions:u                                                        
+        41,506,701      cycles:u                                                              
+
+       0.018460080 seconds time elapsed
+
+       0.015216000 seconds user
+       0.003196000 seconds sys
+
+
+PERF_EXIT=0
+# auxiliary attribution diag 2026-10-28T01:55:54+08:00: a0/a1/a2 at same shape (4096 1024 0 1) to decompose av0(N0) vs avs(B1) instruction delta
+=== aux-a0 pmu run=1 2026-10-28T01:55:54+08:00 ===
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=1056.593 user_ns_per_op=996.094 sys_ns_per_op=1101.562 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,382,545      instructions:u                                                        
+        10,477,797      cycles:u                                                              
+
+       0.005798078 seconds time elapsed
+
+       0.003468000 seconds user
+       0.002320000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a0 pmu run=2 2026-10-28T01:55:54+08:00 ===
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=1005.681 user_ns_per_op=1620.605 sys_ns_per_op=574.219 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,382,525      instructions:u                                                        
+        10,478,723      cycles:u                                                              
+
+       0.006039617 seconds time elapsed
+
+       0.004698000 seconds user
+       0.001333000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a0 pmu run=3 2026-10-28T01:55:54+08:00 ===
+arm=A0_raw_pread size=4096 ops=1024 ns_per_op=1002.383 user_ns_per_op=1561.035 sys_ns_per_op=614.746 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a0 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,382,525      instructions:u                                                        
+        10,435,753      cycles:u                                                              
+
+       0.005995349 seconds time elapsed
+
+       0.003994000 seconds user
+       0.001998000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a1 pmu run=1 2026-10-28T01:55:54+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=998.252 user_ns_per_op=948.242 sys_ns_per_op=1229.980 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,435,660      instructions:u                                                        
+        10,428,271      cycles:u                                                              
+
+       0.005994797 seconds time elapsed
+
+       0.001994000 seconds user
+       0.003983000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a1 pmu run=2 2026-10-28T01:55:54+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=1006.364 user_ns_per_op=1566.406 sys_ns_per_op=616.211 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,435,743      instructions:u                                                        
+        10,435,211      cycles:u                                                              
+
+       0.005986000 seconds time elapsed
+
+       0.003989000 seconds user
+       0.001992000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a1 pmu run=3 2026-10-28T01:55:54+08:00 ===
+arm=A1_native_read_at size=4096 ops=1024 ns_per_op=1005.422 user_ns_per_op=2034.180 sys_ns_per_op=137.695 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a1 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,435,802      instructions:u                                                        
+        10,459,647      cycles:u                                                              
+
+       0.005992095 seconds time elapsed
+
+       0.004986000 seconds user
+       0.000998000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a2 pmu run=1 2026-10-28T01:55:54+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=999.565 user_ns_per_op=1638.184 sys_ns_per_op=545.898 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,480,801      instructions:u                                                        
+        10,441,560      cycles:u                                                              
+
+       0.006007553 seconds time elapsed
+
+       0.003445000 seconds user
+       0.002584000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a2 pmu run=2 2026-10-28T01:55:54+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=1006.577 user_ns_per_op=1427.246 sys_ns_per_op=758.789 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,480,869      instructions:u                                                        
+        10,466,210      cycles:u                                                              
+
+       0.006012362 seconds time elapsed
+
+       0.003001000 seconds user
+       0.003003000 seconds sys
+
+
+PERF_EXIT=0
+=== aux-a2 pmu run=3 2026-10-28T01:55:54+08:00 ===
+arm=A2_sluice_read_at size=4096 ops=1024 ns_per_op=1007.960 user_ns_per_op=1052.734 sys_ns_per_op=1147.461 checksum=4194304 content_hash=0x0000000000000000 content_ok=-1
+
+ Performance counter stats for './ladder a2 4096 1024 0 1 /tmp/sluice600/data64m.bin seq 0 normal':
+
+        36,481,064      instructions:u                                                        
+        10,451,417      cycles:u                                                              
+
+       0.006061153 seconds time elapsed
+
+       0.003531000 seconds user
+       0.002526000 seconds sys
+
+
+PERF_EXIT=0

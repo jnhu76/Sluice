@@ -1,0 +1,18 @@
+# P3 execution session environment pin + silence check — 2026-10-28T01:49:05+08:00 — host E5 (jnhu@E5)
+kernel=7.2.11-200.fc44.x86_64
+governor_cpu2=performance
+perf_event_paranoid=1
+strace=strace -- version 7.2
+gcc=gcc (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+numa_nodes=NUMA node(s):                            1
+fstype_tmp=tmpfs fstype_var_tmp=
+uptime=' 01:49:05 up 1 day,  2:12,  1 user,  load average: 0.09, 0.15, 0.12'
+concurrent_measure_procs=3
+ladder_sha256=5a53a9ad1ea00a9a26dee98543ef473ca15dcdfda86c2aa647b59cca4ec05507
+m3support_sha256=0f8a97f6947e7a5de88e864e2a23e2c6b526fdd73320c8a92160142479d30501
+kit_head=4455d98d9823ec138c904be4c63a1d5a84903e97
+kit_dirty_files=5
+read_fix=/tmp/sluice600/data64m.bin sha256=bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a size=67108864
+fstype_var_tmp_resolved=btrfs source=/dev/sda3[/root]
+fstype_tmp_resolved=tmpfs
+measure_proc_check: 1 matching measurement processes (expect 0)

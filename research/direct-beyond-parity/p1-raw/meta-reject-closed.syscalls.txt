@@ -1,0 +1,58 @@
+# meta-reject-closed syscalls/op diagnostic — 2026-10-27T04:14:32+08:00 — host E5, taskset cpu2
+# NOT preregistered in plan §6; added because the CellResult schema requires syscalls/op. Count diagnostic only, never a wall source (§6 rule 3).
+# method: taskset -c 2 strace -c -e trace=fstat /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 0 4096 0 <1|0> 1 /tmp/sluice600/data64m.bin seq 0 closed — run A reps=1, run B reps=0; A-B isolates the timed 4096-op window. Startup fstat (ladder.cpp main, line 787) and any loader fstat appear in both runs and cancel.
+# === arm m1fi ===
+# run A (reps=1):
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.510 user_ns_per_op=7.324 sys_ns_per_op=0.000 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         7           fstat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0         7           total
+# exit=0
+# run B (reps=0):
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=inf sys_ns_per_op=-nan checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         7           fstat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0         7           total
+# exit=0
+# === arm m2fi ===
+# run A (reps=1):
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=4.933 user_ns_per_op=7.080 sys_ns_per_op=0.000 checksum=6291456 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+  0.00    0.000000           0         7           fstat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000000           0         7           total
+# exit=0
+# run B (reps=0):
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000002           0         7           fstat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000002           0         7           total
+# exit=0
+# === arm m0fi ===
+# run A (reps=1):
+arm=M0_raw_fstat size=0 ops=4096 ns_per_op=12637.579 user_ns_per_op=312.988 sys_ns_per_op=3282.227 checksum=7376896 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005893           1      4103      4096 fstat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005893           1      4103      4096 total
+# exit=0
+# run B (reps=0):
+arm=M0_raw_fstat size=0 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=-nan sys_ns_per_op=inf checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000016           2         7           fstat
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.000016           2         7           total
+# exit=0
+# --- syscalls/op summary (timed window = runA - runB) ---
+# m1fi: 7-7=0 fstat → 0.0000/op | m2fi: 7-7=0 → 0.0000/op (the 7 fstats in both runs are startup — ladder main fstat + loader — and cancel)
+# m0fi: 4103-7=4096 fstat → 1.0000/op, 4096/4096 returned EBADF (kernel floor)
+# NOTE (disclosed): the m0fi run-B (reps=0) baseline prints degenerate ns_per_op=2.4e26 / user=-nan / sys=inf and checksum=0 — expected division by total_ops=0 under my reps=0 diagnostic shape (cell itself runs reps=3); only its syscall count (7) is consumed. Run-B ladder stdout lines are diagnostic-baseline artifacts, never wall statistics.

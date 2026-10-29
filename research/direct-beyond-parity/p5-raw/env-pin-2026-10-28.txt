@@ -1,0 +1,19 @@
+# P5 env pin — 2026-10-28T10:56:45Z host E5 kernel 7.2.11-200.fc44.x86_64
+governor: schedutil
+perf_event_paranoid: 2
+loadavg: 0.01 0.43 0.79 2/860 20416
+matching measurement processes (ladder/paired/xmake builds):
+  none
+fixtures:
+-rw-r--r--. 1 jnhu jnhu 67108864 Oct 27 02:27 /var/tmp/sluice600-p1/cold64m.bin
+-rw-r--r--. 1 jnhu jnhu 67108864 Oct 27 04:13 /var/tmp/sluice600-p1/coldwrite64m.bin
+fstype /tmp: tmpfs; /var/tmp: btrfs
+# P5 session close — 2026-10-28T13:21:33Z
+warm fixture sha: bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (pinned bc020fd1…b2993a)
+cold fixture sha: bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+ladder: 8945036746d03389e6f44df7a6b26ae5599f2f1bddda8825da28ebd11dc010e8
+ladder-c1: 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+ladder-c2: 8bb6473b0f2455c2b092d94cc55ccaec20fe72ff40103bd9fb5c9151c7740065
+ladder-ab: 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381
+loadavg: 0.42 1.15 1.40 2/853 29055
+scratch leftovers: 0

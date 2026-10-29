@@ -1,0 +1,84 @@
+=== p3-m2-merge-sweep-g4k-16384 arm=rpl0 run=1 A(reps=1) 2026-10-28T02:04:19+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=103364.715 user_ns_per_op=40557.617 sys_ns_per_op=31121.419 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030268           1     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030268           1     24578           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rpl0 run=1 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=56730.957 sys_ns_per_op=34045.410 checksum=0 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013620           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013620           0     16386           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rpl0 run=2 A(reps=1) 2026-10-28T02:04:20+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=103372.722 user_ns_per_op=44125.977 sys_ns_per_op=27273.112 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.026549           1     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.026549           1     24578           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rpl0 run=2 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=61778.320 sys_ns_per_op=28999.512 checksum=0 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011405           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011405           0     16386           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rpl0 run=3 A(reps=1) 2026-10-28T02:04:21+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=102204.549 user_ns_per_op=40786.458 sys_ns_per_op=31323.242 checksum=33554432 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030277           1     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.030277           1     24578           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rpl0 run=3 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=58873.047 sys_ns_per_op=33151.855 checksum=0 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=0 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013358           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013358           0     16386           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rplt run=1 A(reps=1) 2026-10-28T02:04:22+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=25734.805 user_ns_per_op=37272.461 sys_ns_per_op=22123.047 checksum=63074902 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=1 issued_per_group=61596 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.019711           1     10242           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.019711           1     10242           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rplt run=1 B(reps=0) ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=63352.539 sys_ns_per_op=17634.277 checksum=0 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.006201           0      9218           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.006201           0      9218           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rplt run=2 A(reps=1) 2026-10-28T02:04:22+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=25371.130 user_ns_per_op=44666.341 sys_ns_per_op=14789.714 checksum=63074902 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=1 issued_per_group=61596 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.014135           1     10242           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.014135           1     10242           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rplt run=2 B(reps=0) ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=58640.137 sys_ns_per_op=22997.559 checksum=0 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.008198           0      9218           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.008198           0      9218           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rplt run=3 A(reps=1) 2026-10-28T02:04:23+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=24932.711 user_ns_per_op=42868.490 sys_ns_per_op=16190.755 checksum=63074902 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=1 issued_per_group=61596 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013245           1     10242           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.013245           1     10242           total
+=== p3-m2-merge-sweep-g4k-16384 arm=rplt run=3 B(reps=0) ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=58735.352 sys_ns_per_op=22569.824 checksum=0 content_hash=0x4c4b12b04b181313 content_ok=1 trace=g4k merge=16384 dedup=0 req_digest=0x721f35c2d480f218 ref_digest=0x4c4b12b04b181313 outcome_digest=0x4c4b12b04b181313 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007843           0      9218           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007843           0      9218           total

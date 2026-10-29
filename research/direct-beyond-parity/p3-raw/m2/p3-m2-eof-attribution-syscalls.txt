@@ -1,0 +1,84 @@
+=== p3-m2-eof-attribution arm=rpl0 run=1 A(reps=1) 2026-10-28T02:04:29+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=95337.155 user_ns_per_op=30955.404 sys_ns_per_op=29193.034 checksum=14680064 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.023602           0     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.023602           0     24578           total
+=== p3-m2-eof-attribution arm=rpl0 run=1 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=50026.855 sys_ns_per_op=26581.543 checksum=0 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010378           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010378           0     16386           total
+=== p3-m2-eof-attribution arm=rpl0 run=2 A(reps=1) 2026-10-28T02:04:30+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=98206.359 user_ns_per_op=31467.122 sys_ns_per_op=28599.284 checksum=14680064 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.023925           0     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.023925           0     24578           total
+=== p3-m2-eof-attribution arm=rpl0 run=2 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=50803.223 sys_ns_per_op=24944.824 checksum=0 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009347           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.009347           0     16386           total
+=== p3-m2-eof-attribution arm=rpl0 run=3 A(reps=1) 2026-10-28T02:04:31+08:00 ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=97832.473 user_ns_per_op=34285.482 sys_ns_per_op=26443.359 checksum=14680064 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=8 issued_per_group=32768 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.022681           0     24578           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.022681           0     24578           total
+=== p3-m2-eof-attribution arm=rpl0 run=3 B(reps=0) ===
+arm=RPL0_unmerged_replay size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=48382.324 sys_ns_per_op=27609.375 checksum=0 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=0 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010699           0     16386           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010699           0     16386           total
+=== p3-m2-eof-attribution arm=rplt run=1 A(reps=1) 2026-10-28T02:04:31+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=13708.602 user_ns_per_op=27948.242 sys_ns_per_op=16053.711 checksum=8388608 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007852           0     10242           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007852           0     10242           total
+=== p3-m2-eof-attribution arm=rplt run=1 B(reps=0) ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=50130.859 sys_ns_per_op=13351.562 checksum=0 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003557           0      9218           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003557           0      9218           total
+=== p3-m2-eof-attribution arm=rplt run=2 A(reps=1) 2026-10-28T02:04:32+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=13871.128 user_ns_per_op=37224.609 sys_ns_per_op=6611.328 checksum=8388608 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003835           0     10242           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003835           0     10242           total
+=== p3-m2-eof-attribution arm=rplt run=2 B(reps=0) ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=49268.555 sys_ns_per_op=14631.348 checksum=0 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003829           0      9218           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.003829           0      9218           total
+=== p3-m2-eof-attribution arm=rplt run=3 A(reps=1) 2026-10-28T02:04:33+08:00 ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=14035.196 user_ns_per_op=31876.628 sys_ns_per_op=12140.625 checksum=8388608 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=1 issued_per_group=18432 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005905           0     10242           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005905           0     10242           total
+=== p3-m2-eof-attribution arm=rplt run=3 B(reps=0) ===
+arm=RPLT_sweep_merge size=4096 ops=1024 ns_per_op=976562500000000019418578944.000 user_ns_per_op=47610.840 sys_ns_per_op=15535.156 checksum=0 content_hash=0xfdabdbe0b4f94383 content_ok=1 trace=eofmix merge=4096 dedup=0 req_digest=0x442c0b4b6287a383 ref_digest=0xfdabdbe0b4f94383 outcome_digest=0xfdabdbe0b4f94383 syscalls_per_group=0 issued_per_group=0 requested_per_group=32768
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004138           0      9218           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004138           0      9218           total

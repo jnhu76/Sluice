@@ -1,0 +1,52 @@
+# meta-reject-closed — P1 cell raw series (§4.4 diagnostic: closed-state file_info rejection; medians/ranges only, no CI claims per §5.8) — 2026-10-27T04:13:52+08:00 — host E5 (cpu2 pin, perf_event_paranoid=1)
+# ladder sha256 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a (verified pre-run); read fixture /tmp/sluice600/data64m.bin sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a (verified pre-run)
+# series command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m1fi m2fi 0 4096 1024 3 16 /tmp/sluice600/data64m.bin seq 0 closed
+# context arm command (cell parameters mirrored, single unpaired invocation): taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder m0fi 0 4096 1024 3 /tmp/sluice600/data64m.bin seq 0 closed
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.782 user_ns_per_op=5.033 sys_ns_per_op=2.554 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.336 user_ns_per_op=3.080 sys_ns_per_op=3.080 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.173 user_ns_per_op=3.080 sys_ns_per_op=3.155 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.963 user_ns_per_op=3.380 sys_ns_per_op=3.380 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.782 user_ns_per_op=0.000 sys_ns_per_op=6.611 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.335 user_ns_per_op=0.000 sys_ns_per_op=6.385 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.173 user_ns_per_op=6.235 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.462 user_ns_per_op=4.282 sys_ns_per_op=4.282 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.961 user_ns_per_op=7.061 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.336 user_ns_per_op=0.000 sys_ns_per_op=7.136 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.174 user_ns_per_op=3.080 sys_ns_per_op=3.080 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.961 user_ns_per_op=6.836 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.962 user_ns_per_op=0.000 sys_ns_per_op=6.986 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.172 user_ns_per_op=6.235 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=4.878 user_ns_per_op=0.000 sys_ns_per_op=6.836 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.449 user_ns_per_op=0.000 sys_ns_per_op=6.611 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.960 user_ns_per_op=3.456 sys_ns_per_op=3.380 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.174 user_ns_per_op=6.085 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.172 user_ns_per_op=6.010 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.961 user_ns_per_op=7.812 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.961 user_ns_per_op=3.380 sys_ns_per_op=3.531 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=4.876 user_ns_per_op=2.930 sys_ns_per_op=2.930 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.335 user_ns_per_op=8.338 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.963 user_ns_per_op=6.836 sys_ns_per_op=0.000 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.452 user_ns_per_op=3.230 sys_ns_per_op=3.230 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=4.885 user_ns_per_op=0.000 sys_ns_per_op=7.888 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=5.173 user_ns_per_op=0.000 sys_ns_per_op=6.986 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.462 user_ns_per_op=0.000 sys_ns_per_op=8.188 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.962 user_ns_per_op=3.380 sys_ns_per_op=3.456 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=4.876 user_ns_per_op=2.855 sys_ns_per_op=2.855 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M2_sluice_file_info size=0 ops=4096 ns_per_op=4.878 user_ns_per_op=2.930 sys_ns_per_op=2.930 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+arm=M1_native_file_info size=0 ops=4096 ns_per_op=5.451 user_ns_per_op=3.681 sys_ns_per_op=3.681 checksum=20447232 content_hash=0x0000000000000000 content_ok=-1
+# series (m1fi m2fi, closed) exit=0
+arm=M0_raw_fstat size=0 ops=4096 ns_per_op=478.884 user_ns_per_op=289.739 sys_ns_per_op=144.081 checksum=23974912 content_hash=0x0000000000000000 content_ok=-1
+# context m0fi (closed) exit=0
+# --- analysis (§5.8 diagnostic caliber: medians/ranges only; analyzer t line recorded for reproducibility, NO CI/sign claim) ---
+# analyze_pairs.py M1_native_file_info M2_sluice_file_info:
+pairs=16
+M1_native_file_info: mean=5.781ns sd=0.234 median=5.960
+M2_sluice_file_info: mean=5.122ns sd=0.182 median=5.173
+delta(M1_native_file_info-M2_sluice_file_info): median=+0.627ns mean=+0.659ns sd=0.236 rel=+12.232% pos=16/16
+paired t=+11.16 (df=15)
+# --- descriptive summary (§5.8: medians/ranges only, no CI/sign claims) ---
+# M1fi wall median=5.960 range=[5.449,5.963] | user median=3.418 range=[0.000,7.812] | sys median=3.418 range=[0.000,8.188]
+# M2fi wall median=5.173 range=[4.876,5.336] | user median=3.005 range=[0.000,8.338] | sys median=3.005 range=[0.000,7.888]
+# M0fi context single invocation: wall=478.884 user=289.739 sys=144.081 ; checksum=23974912 = 13312 × 1801 (error_sink_value(from_errno(EBADF)) per op, os_errno=9)
+# paired delta M1fi-M2fi (descriptive): median=+0.627 range=[+0.289,+1.086] n=16 — the Sluice file_info closed-rejection is ~0.6 ns/op FASTER than the native mirror here
+# userspace group checksum uniform: 20447232 over 16+16 m1fi/m2fi lines; m0fi documents the kernel floor separately (§5.9)

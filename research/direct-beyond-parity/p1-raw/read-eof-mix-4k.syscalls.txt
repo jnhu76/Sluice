@@ -1,0 +1,91 @@
+# read-eof-mix-4k syscalls/op diagnostic — 2026-10-27T04:04:38+08:00 — host E5, taskset cpu2
+# NOT preregistered in P1_MEASUREMENT_PLAN.md §6 (plan pins only instructions:u/cycles:u); added because the CellResult schema requires syscalls/op. Count diagnostic only — never a wall/throughput source (§6 rule 3).
+# method: taskset -c 2 strace -c -e trace=pread64 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder <arm> 4096 4096 0|1 1 /tmp/sluice600/data64m.bin tail — run A reps=1 (timed 4096 ops + in-process verify pass 4096 ops), run B reps=0 (verify pass only); A-B isolates the timed window; per-op = (A-B)/4096. Exact counts, ptrace does not change syscall counts.
+# === arm a1 ===
+# run A (reps=1):
+arm=A1_native_read_at size=4096 ops=4096 ns_per_op=13321.851 user_ns_per_op=1217.773 sys_ns_per_op=3136.597 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010942           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.010942           1      8194           total
+# exit=0
+# run B (reps=0, verify pass only):
+arm=A1_native_read_at size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=1389.160 sys_ns_per_op=3401.611 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005058           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.005058           1      4098           total
+# exit=0
+# === arm a2 ===
+# run A (reps=1):
+arm=A2_sluice_read_at size=4096 ops=4096 ns_per_op=12780.146 user_ns_per_op=921.631 sys_ns_per_op=3332.275 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011331           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.011331           1      8194           total
+# exit=0
+# run B (reps=0, verify pass only):
+arm=A2_sluice_read_at size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=2106.689 sys_ns_per_op=2770.264 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004149           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.004149           1      4098           total
+# exit=0
+# === arm a1x ===
+# run A (reps=1):
+arm=A1x_native_read_exact_at size=4096 ops=4096 ns_per_op=17105.903 user_ns_per_op=936.646 sys_ns_per_op=4619.629 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015886           1     10924           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.015886           1     10924           total
+# exit=0
+# run B (reps=0, verify pass only):
+arm=A1x_native_read_exact_at size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=1490.967 sys_ns_per_op=4526.367 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007052           1      5463           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.007052           1      5463           total
+# exit=0
+# === arm ax ===
+# run A (reps=1):
+arm=AX_sluice_read_exact_at size=4096 ops=4096 ns_per_op=17125.234 user_ns_per_op=1495.117 sys_ns_per_op=4057.861 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.014256           1     10924           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.014256           1     10924           total
+# exit=0
+# run B (reps=0, verify pass only):
+arm=AX_sluice_read_exact_at size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=617.920 sys_ns_per_op=5535.400 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.008626           1      5463           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.008626           1      5463           total
+# exit=0
+# === arm a0 ===
+# run A (reps=1):
+arm=A0_raw_pread size=4096 ops=4096 ns_per_op=13535.553 user_ns_per_op=713.501 sys_ns_per_op=3768.799 checksum=8390656 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012829           1      8194           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.012829           1      8194           total
+# exit=0
+# run B (reps=0, verify pass only):
+arm=A0_raw_pread size=4096 ops=4096 ns_per_op=244140625000000004854644736.000 user_ns_per_op=627.441 sys_ns_per_op=4362.793 checksum=0 content_hash=0x0000000000000000 content_ok=-1
+% time     seconds  usecs/call     calls    errors syscall
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.006567           1      4098           pread64
+------ ----------- ----------- --------- --------- ----------------
+100.00    0.006567           1      4098           total
+# exit=0
+# --- syscalls/op summary (timed window = runA-reps1 minus runB-reps0) ---
+# a1: 4096/4096=1.0000 | a2: 4096/4096=1.0000 | a0: 4096/4096=1.0000 | a1x: 5461/4096=1.3333 | ax: 5461/4096=1.3333 (pread64)
+# identical counts across N1/B1 tiers; 5461 = 1366*1 + 1365*2 + 1365*1 over the 4096-op tail rotation (full/partial/at-EOF), matching build_offsets ladder.cpp

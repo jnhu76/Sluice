@@ -1,0 +1,8 @@
+# P2C2 dormant-seam BASE bit-identity — writer re-verification (report-review follow-up), 2026-10-27T23:25+08:00 host E5
+# tree: b6dacc897... (seams commit, full sha b6dacc89 on branch direct-write-compose-exit-staging; parent 77e5399a)
+# method: git archive b6dacc89 | tar -x -C /tmp/p2writer-rerun/p2c2-seams-wt (scratch export; no worktree touched)
+# cmd: cd /tmp/p2writer-rerun/p2c2-seams-wt && xmake f -c -m release --liburing=n -y && xmake -y   (exit 0)
+# sha256 build/linux/x86_64/release/libsluice_core.a:
+d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0
+# == frozen B1 archive sha256 (P2_EXPERIMENT_PLAN.md "Baseline identity") -> the dormant seam defines
+# leave the delivered release archive bit-identical to B1. Independent confirmation of the [RUN-IMPL] claim.

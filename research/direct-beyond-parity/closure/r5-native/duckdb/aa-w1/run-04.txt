@@ -1,0 +1,6 @@
+name	run	timing
+benchmark/tpch/parquet/parquet_projection_direct.benchmark	1	0.019799
+benchmark/tpch/parquet/parquet_projection_direct.benchmark	2	0.020020
+benchmark/tpch/parquet/parquet_projection_direct.benchmark	3	0.019272
+benchmark/tpch/parquet/parquet_projection_direct.benchmark	4	0.017833
+benchmark/tpch/parquet/parquet_projection_direct.benchmark	5	0.019818

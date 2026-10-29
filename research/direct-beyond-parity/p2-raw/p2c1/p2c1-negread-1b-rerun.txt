@@ -1,0 +1,58 @@
+# cell p2c1-negread-1b-rerun (P2 plan §3.4 negative control REVISE cond-1 rerun: 1 B read_at a1 vs a2 @ candidate binary; arms/command byte-match p2-raw/p2c1/p2c1-negread-1b.txt) — 2026-10-28T00:12:57+08:00 host E5 kernel 7.2.11-200.fc44.x86_64
+# cmd: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder-c1 a1 a2 1 4096 4096 5 16 /tmp/sluice600/data64m.bin
+# binary sha256 8305d22ca4ff74db0017a24fd7867b85f4a48ec767fbfc5d49563402ce870381; READ_FIX sha256 bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a
+# pre-cell load: 0.07 0.07 0.06 1/1265 123752
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=555.052 user_ns_per_op=247.489 sys_ns_per_op=316.964 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=548.000 user_ns_per_op=277.274 sys_ns_per_op=276.576 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=562.992 user_ns_per_op=289.830 sys_ns_per_op=278.739 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=536.764 user_ns_per_op=274.519 sys_ns_per_op=275.216 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=550.037 user_ns_per_op=313.442 sys_ns_per_op=245.292 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=544.024 user_ns_per_op=313.058 sys_ns_per_op=245.536 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=554.686 user_ns_per_op=245.884 sys_ns_per_op=314.767 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=556.802 user_ns_per_op=245.431 sys_ns_per_op=313.337 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=555.670 user_ns_per_op=397.531 sys_ns_per_op=168.318 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=555.839 user_ns_per_op=348.737 sys_ns_per_op=210.624 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=558.868 user_ns_per_op=167.097 sys_ns_per_op=399.833 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=552.159 user_ns_per_op=240.513 sys_ns_per_op=321.324 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=559.169 user_ns_per_op=291.888 sys_ns_per_op=272.845 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=555.226 user_ns_per_op=218.750 sys_ns_per_op=348.528 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=552.951 user_ns_per_op=381.138 sys_ns_per_op=184.710 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=557.556 user_ns_per_op=310.407 sys_ns_per_op=253.313 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=547.797 user_ns_per_op=307.966 sys_ns_per_op=248.919 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=556.472 user_ns_per_op=212.891 sys_ns_per_op=351.214 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=555.092 user_ns_per_op=348.354 sys_ns_per_op=211.461 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=551.727 user_ns_per_op=349.470 sys_ns_per_op=211.147 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=547.969 user_ns_per_op=289.028 sys_ns_per_op=266.462 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=547.298 user_ns_per_op=377.093 sys_ns_per_op=179.653 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=558.026 user_ns_per_op=291.085 sys_ns_per_op=269.252 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=553.454 user_ns_per_op=289.655 sys_ns_per_op=267.264 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=556.295 user_ns_per_op=206.822 sys_ns_per_op=357.143 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=557.074 user_ns_per_op=241.525 sys_ns_per_op=320.592 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=542.777 user_ns_per_op=212.158 sys_ns_per_op=348.982 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=544.660 user_ns_per_op=419.399 sys_ns_per_op=135.882 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=559.992 user_ns_per_op=282.017 sys_ns_per_op=281.494 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=560.348 user_ns_per_op=386.370 sys_ns_per_op=178.432 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A2_sluice_read_at size=1 ops=4096 ns_per_op=554.014 user_ns_per_op=274.972 sys_ns_per_op=286.203 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+arm=A1_native_read_at size=1 ops=4096 ns_per_op=553.337 user_ns_per_op=325.265 sys_ns_per_op=232.945 checksum=24576 content_hash=0x0000000000000000 content_ok=-1
+# post-cell load: 0.14 0.08 0.07 1/1265 123787
+# paired.sh exit=0 (nonzero => a ladder invocation failed its VERIFY gate; cell void)
+# --- analysis tail (rerun session): delta = A1_native_read_at - A2_sluice_read_at; EXCESS(A2 slower) = -delta ---
+# pairs=16 median=-0.263 mean=-1.578 sd=7.886 CI(mean)=[-5.779,+2.623] (INCL 0) ABmed=+0.251 BAmed=-2.021 N1median=553.395 pos=7/16
+# rule (P1 §5.5 / P2 §3.2): EXCESS iff CI excludes 0 AND |median| >= max(MDE, 1%*N1med) = max(5.535, 5.534) = 5.535; PARITY iff |median| < 5.535
+# verdict: median -0.263, CI includes 0 -> PARITY (G5 PASS cell)
+# delta[0]=+7.052
+# delta[1]=-26.228
+# delta[2]=+6.013
+# delta[3]=+2.116
+# delta[4]=-0.169
+# delta[5]=-6.709
+# delta[6]=+3.943
+# delta[7]=+4.605
+# delta[8]=-8.675
+# delta[9]=-3.365
+# delta[10]=+0.671
+# delta[11]=-4.572
+# delta[12]=-0.779
+# delta[13]=+1.883
+# delta[14]=-0.356
+# delta[15]=-0.677

@@ -1,0 +1,11 @@
+# P1 cell write-random-4k (write track, locality; tmpfs warm scratch) — 2026-10-27T04:07:04+08:00 on E5 (E5, kernel 7.2.11-200.fc44.x86_64)
+# pairing command: /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/paired.sh /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w1 w2 4096 1024 1024 5 16 /tmp/sluice600/write64m.bin rand 42
+# context arm (unpaired, per plan 4.2; same pattern+seed as cell): taskset -c 2 /home/jnhu/Source/Sluice-direct-cost-ladder/research/direct-cost-ladder/ladder w0 4096 1024 1024 5 /tmp/sluice600/write64m.bin rand 42
+# scratch sha256 before (scratch is rewritten by the untimed prime pass each run; not identity-pinned by plan 3): 3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351
+# ladder sha256: 0685c31f7585e437910ed671a7025a172de4303e756d5b6e31b2480e1c45812a
+# context arms (unpaired) — produced 2026-10-27T04:07:05+08:00
+# Attempt 1 (2026-10-27T04:07:04+08:00) failed: first w1 invocation and the w0 context run both aborted with
+# 'VERIFY_FAIL arm=... content' (whole-file readback mismatch); paired.sh set -e stopped the series at pair 0.
+# Cause diagnosis: concurrent sibling write cell sharing the same scratch (no ladder process held the file when
+# checked afterwards; smoke had passed write x rand content gates; scratch sha changed 3b6a07d0.. -> 9a7062db..).
+# Per plan 5.9 the whole series is invalid; cell rerun follows in write-random-4k.txt (single retry).
