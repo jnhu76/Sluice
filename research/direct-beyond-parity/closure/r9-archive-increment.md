@@ -97,8 +97,10 @@ EOF
   research branches intentionally overlap on that subtree. `DUCKDB_FIO_R0_PREREG.md`
   is additionally carried by dududu PR https://github.com/jnhu76/dududu/pull/7
   per the R5 lane's recorded intent.
-- Increment commit SHA: recorded in the follow-up commit on this branch (a
-  record cannot contain its own commit SHA).
+- Increment commit: `165af28382ef8ede3c1a01f441bc13f3eb1e326c` (pushed to
+  origin 2026-10-29; remote head re-verified via `git ls-remote`); recorded in
+  this follow-up commit because a record cannot contain its own commit SHA.
+  PR #610 head moves `c2a57a77` → this increment; PR stays OPEN.
 
 ## 6. Boundary compliance
 
