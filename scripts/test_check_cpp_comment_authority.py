@@ -162,6 +162,20 @@ class RepoScanTests(unittest.TestCase):
             self.assertEqual([p.name for p in files], ["a.cpp"])
             self.assertEqual(checker.scan_path(files[0]), [])
 
+    def test_archived_research_evidence_is_out_of_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "src.c").write_text("// SEM-01 marker\n")
+            campaign = Path(tmp) / "research" / "campaign" / "closure"
+            campaign.mkdir(parents=True)
+            (campaign / "probe.c").write_text("// SEM-03 step 3 mirrors\n")
+            bench = Path(tmp) / "bench" / "research" / "e1"
+            bench.mkdir(parents=True)
+            (bench / "exp.cpp").write_text("// removed in Phase B\n")
+            files = list(checker.cpp_files(tmp))
+            self.assertEqual([p.name for p in files], ["src.c"])
+            self.assertEqual([f[1] for f in checker.scan_path(files[0])],
+                             ["requirement-id"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
