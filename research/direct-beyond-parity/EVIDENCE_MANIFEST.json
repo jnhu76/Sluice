@@ -2443,7 +2443,7 @@
  },
  {
   "path": "research/direct-beyond-parity/closure/r9-archive-increment.md",
-  "sha256": "87ebfe8ce25b54c9bde11507b66f84c359e8e2b70cad48613918bb234d303153",
+  "sha256": "b592b072dc5dabdce2b1abb3a080246ebdcc9dd6fd04ef93f9301486a92453fe",
   "source_sha": "bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57",
   "host": "E5",
   "arm": "closure",
