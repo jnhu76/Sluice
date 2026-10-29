@@ -1,0 +1,25 @@
+campaign=tp-stats
+reps=15
+stats=1
+date=2026-10-24T17:23:27+08:00
+kernel=7.2.11-200.fc44.x86_64
+compiler=g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+governor=schedutil
+perf_paranoid=1
+loadavg_start=1.74 1.56 2.87
+arm=base worktree=/tmp/sluice-575/base
+arm=base bench_w02_sha256=7ea9df984f15991db0da9d321ad1fe0289c9cf662bc421fb4c62f68034558b12
+arm=base bench_w03_sha256=052befc2b56109d7908e5109c97af6981617d0f62afd3867df5584f9269f16e0
+arm=base bench_w01_sha256=f578f0476ed585c4f2bc92243b608620a6c628b153f8133538d83fce49b1740a
+arm=base lib_async_sha256=f1419abe0c594bd513d10dc35495a43f59082571542780897219b75180cd3c7a
+arm=tp-oponly worktree=/tmp/sluice-575/tp-oponly
+arm=tp-oponly bench_w02_sha256=06309d6543ed5f81ce6d4070f66726730ac0bfff0d2bef45903101a642a5b6e4
+arm=tp-oponly bench_w03_sha256=21bdc4cfae1e619b094f30f61d06f099b6c8286e2b3f70ac24010b344eb1f618
+arm=tp-oponly bench_w01_sha256=f578f0476ed585c4f2bc92243b608620a6c628b153f8133538d83fce49b1740a
+arm=tp-oponly lib_async_sha256=fbcc885d3936c5c70f2d264b381660d44c38db62460fb1e09d02a3b88c10a10f
+arm=tp-full worktree=/tmp/sluice-575/tp-full
+arm=tp-full bench_w02_sha256=f1b5826be1cfb48c2ae88a8441ffb79bcfb100ef6c2a235ccb29efba24cf7882
+arm=tp-full bench_w03_sha256=97cf664be5c46c5d1fed676f96c592f43ef4bd2c36a0e15730cbef487e1793ed
+arm=tp-full bench_w01_sha256=f578f0476ed585c4f2bc92243b608620a6c628b153f8133538d83fce49b1740a
+arm=tp-full lib_async_sha256=dc726b5427affd51d4ee3256afd7e44f098cbd7a8142ebdff8c33abf2d09a8ca

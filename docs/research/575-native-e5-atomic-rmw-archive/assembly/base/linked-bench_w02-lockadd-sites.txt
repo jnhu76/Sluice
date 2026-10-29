@@ -1,0 +1,97 @@
+  41c3f4:	mov    %r13b,0x40(%rsp)
+  41c3f9:	movb   $0x1,0x80(%rsp)
+  41c401:	movaps %xmm0,0x90(%rsp)
+  41c409:	call   41be40 <io_uring_peek_batch_cqe@plt+0x1b510>
+  41c40e:	movzbl 0x80(%rsp),%eax
+  41c416:	mov    %al,0xf(%rsp)
+  41c41a:	lock addq $0x1,0x190(%r15)
+  41c423:	mov    %rbx,%rdi
+  41c426:	call   400770 <pthread_mutex_lock@plt>
+  41c42b:	test   %eax,%eax
+  41c42d:	jne    401d02 <io_uring_peek_batch_cqe@plt+0x13d2>
+  41c433:	subq   $0x1,0x168(%r15)
+  41c43b:	mov    %rbx,%rdi
+--
+  424d4a:	jne    424d70 <io_uring_peek_batch_cqe@plt+0x24440>
+  424d4c:	cmp    %r9,0x10(%rax)
+  424d50:	jne    424d70 <io_uring_peek_batch_cqe@plt+0x24440>
+  424d52:	cmpb   $0x1,0x18(%rax)
+  424d56:	jne    424d70 <io_uring_peek_batch_cqe@plt+0x24440>
+  424d58:	movb   $0x2,0x18(%rax)
+  424d5c:	lock addq $0x1,0x130(%rdi)
+  424d65:	ret
+  424d66:	cs nopw 0x0(%rax,%rax,1)
+  424d70:	sub    $0x8,%rsp
+  424d74:	mov    $0x72,%edx
+  424d79:	mov    $0x1,%esi
+  424d7e:	mov    0x1257b(%rip),%rcx        # 437300 <stderr@GLIBC_2.2.5>
+--
+  425c5a:	jne    425c60 <io_uring_peek_batch_cqe@plt+0x25330>
+  425c5c:	xor    %eax,%eax
+  425c5e:	ret
+  425c5f:	nop
+  425c60:	sub    $0x18,%rsp
+  425c64:	mov    %rdi,%rcx
+  425c67:	lock addq $0x1,0x120(%rdi)
+  425c70:	mov    0xc8(%rdi),%rdi
+  425c77:	mov    %rcx,0x8(%rsp)
+  425c7c:	call   400650 <io_uring_submit@plt>
+  425c81:	mov    0x8(%rsp),%rdi
+  425c86:	mov    $0x1,%edx
+  425c8b:	mov    %eax,%esi
+--
+  425e3b:	add    0x70(%rbx),%rax
+  425e3f:	mov    %rsi,0x20(%rdx)
+  425e43:	mov    %rsi,(%rax)
+  425e46:	mov    %rbp,0x8(%rax)
+  425e4a:	mov    %r12,0x10(%rax)
+  425e4e:	movl   $0x1000000,0x18(%rax)
+  425e55:	lock addq $0x1,0x128(%rbx)
+  425e5e:	mov    0xc8(%rbx),%rax
+  425e65:	mov    0xd0(%rbx),%rcx
+  425e6c:	mov    0x44(%rax),%edi
+  425e6f:	mov    0x38(%rcx),%r9
+  425e73:	mov    0x28(%rcx),%r11
+  425e77:	sub    $0x1,%edi
+--
+  4261b8:	mov    0xd0(%rbx),%rcx
+  4261bf:	test   %rcx,%rcx
+  4261c2:	je     42621e <io_uring_peek_batch_cqe@plt+0x258ee>
+  4261c4:	cmpq   $0x0,0x20(%rcx)
+  4261c9:	je     42620b <io_uring_peek_batch_cqe@plt+0x258db>
+  4261cb:	mov    %r8b,0x8(%rsp)
+  4261d0:	lock addq $0x1,0x120(%rbx)
+  4261d9:	mov    0xc8(%rbx),%rdi
+  4261e0:	call   400650 <io_uring_submit@plt>
+  4261e5:	mov    $0x1,%edx
+  4261ea:	mov    %rbx,%rdi
+  4261ed:	mov    %eax,%esi
+  4261ef:	call   425a40 <io_uring_peek_batch_cqe@plt+0x25110>
+--
+  4265db:	je     426654 <io_uring_peek_batch_cqe@plt+0x25d24>
+  4265dd:	cmpq   $0x0,0x20(%rax)
+  4265e2:	je     426641 <io_uring_peek_batch_cqe@plt+0x25d11>
+  4265e4:	mov    %r10,0x18(%rsp)
+  4265e9:	mov    %r8,0x10(%rsp)
+  4265ee:	mov    %r11,0x8(%rsp)
+  4265f3:	lock addq $0x1,0x120(%r9)
+  4265fc:	mov    0xc8(%r9),%rdi
+  426603:	mov    %r9,(%rsp)
+  426607:	call   400650 <io_uring_submit@plt>
+  42660c:	mov    (%rsp),%rdi
+  426610:	mov    $0x1,%edx
+  426615:	mov    %eax,%esi
+--
+  426bd4:	nopl   0x0(%rax)
+  426bd8:	mov    0xd0(%rbx),%rax
+  426bdf:	test   %rax,%rax
+  426be2:	je     426c1c <io_uring_peek_batch_cqe@plt+0x262ec>
+  426be4:	cmpq   $0x0,0x20(%rax)
+  426be9:	je     426c1c <io_uring_peek_batch_cqe@plt+0x262ec>
+  426beb:	lock addq $0x1,0x120(%rbx)
+  426bf4:	mov    0xc8(%rbx),%rdi
+  426bfb:	call   400650 <io_uring_submit@plt>
+  426c00:	mov    $0x1,%edx
+  426c05:	mov    %rbx,%rdi
+  426c08:	mov    %eax,%esi
+  426c0a:	call   425a40 <io_uring_peek_batch_cqe@plt+0x25110>

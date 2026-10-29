@@ -1,0 +1,56 @@
+;; Function sluice::async::UringAsyncBackend::submit_transport_locked (_ZN6sluice5async17UringAsyncBackend23submit_transport_lockedEv, funcdef_no=7142, decl_uid=168203, cgraph_uid=4156, symbol_order=4155)
+
+Removing basic block 7
+Removing basic block 8
+Removing basic block 9
+int sluice::async::UringAsyncBackend::submit_transport_locked (struct UringAsyncBackend * const this)
+{
+  int rc;
+  int _1;
+  struct TransportLedger * _5;
+  bool _6;
+  long unsigned int _8;
+  __int_type * _10;
+  struct UringRingState * _11;
+  struct io_uring * _12;
+
+  <bb 2> [local count: 1073741824]:
+  _6 = MEM[(const struct _Optional_base *)this_3(D) + 220B]._M_payload.D.163984._M_engaged;
+  if (_6 != 0)
+    goto <bb 7>; [34.00%]
+  else
+    goto <bb 3>; [66.00%]
+
+  <bb 7> [local count: 790007470]:
+  goto <bb 6>; [100.00%]
+
+  <bb 3> [local count: 708669600]:
+  _5 = MEM[(struct TransportLedger * const &)this_3(D) + 208];
+  if (_5 == 0B)
+    goto <bb 7>; [18.09%]
+  else
+    goto <bb 4>; [81.91%]
+
+  <bb 4> [local count: 580471269]:
+  _8 = MEM[(const struct TransportLedger *)_5].size_;
+  if (_8 == 0)
+    goto <bb 7>; [51.12%]
+  else
+    goto <bb 5>; [48.88%]
+
+  <bb 5> [local count: 283734355]:
+  _10 = &MEM[(struct __atomic_base *)this_3(D) + 288B]._M_i;
+  __atomic_fetch_add_8 (_10, 1, 0);
+  _11 = MEM[(struct UringRingState * const &)this_3(D) + 200];
+  _12 = &_11->ring;
+  rc_13 = io_uring_submit (_12);
+  sluice::async::UringAsyncBackend::account_transport_result_locked (this_3(D), rc_13, 1);
+
+  <bb 6> [local count: 1073741824]:
+  # _1 = PHI <0(7), rc_13(5)>
+  return _1;
+
+}
+
+
+

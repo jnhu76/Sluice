@@ -1,0 +1,14 @@
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..c60b77b4 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -219,7 +219,8 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
+     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+ 
+-    submit_flushes_.fetch_add(1, std::memory_order_relaxed);
++    submit_flushes_.store(submit_flushes_.load(std::memory_order_relaxed) + 1,
++                           std::memory_order_relaxed);
+     int rc = 0;
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+     if (ring_state_->test_hooks.submit != nullptr) {
