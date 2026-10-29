@@ -265,12 +265,8 @@ Result<CompositionOutcome> complete_outcome(std::size_t confirmed_bytes) noexcep
 
 Result<CompositionOutcome> primitive_error_outcome(std::size_t confirmed_bytes,
                                                    IoError error) noexcept {
-    CompositionOutcome outcome;
-    outcome.confirmed_bytes = confirmed_bytes;
-    outcome.end = CompositionEnd::primitive_error;
-    outcome.remaining = failure_publish_certainty();
-    outcome.error = error;
-    return outcome;
+    return CompositionOutcome{confirmed_bytes, CompositionEnd::primitive_error,
+                              failure_publish_certainty(), error};
 }
 
 // The composition entry admitted the whole request before compose() runs, so
