@@ -1,0 +1,53 @@
+# receipt r2-03: object uniqueness + per-file blob comparison recheck (branch-sluice-r0-e5-verdict)
+# NOTE: branch introduced 11 files via 6 commits (vs pre-merge main b94041d9); all re-checked here,
+#       not only the 2 receipt docs named by the original audit.
+$ git -C /tmp/dududu-audit rev-list --objects origin/sluice-r0-e5-verdict --not origin/main
+objects-lines=0
+$ git -C /tmp/dududu-audit diff --name-status origin/main origin/sluice-r0-e5-verdict  (full tree diff, expect empty)
+diff-exit=0
+$ git -C /tmp/dududu-audit rev-parse origin/main^{tree} origin/sluice-r0-e5-verdict^{tree}
+731e518af903fe49beb798d80d269eeaceb53794
+731e518af903fe49beb798d80d269eeaceb53794
+$ files introduced by branch: 
+A	benchmarks/duckdb-r0/README.md
+A	benchmarks/duckdb-r0/async-host-probe/README.md
+A	benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp
+A	benchmarks/duckdb-r0/oracle.sql
+A	benchmarks/duckdb-r0/results/lane-record.md
+A	benchmarks/duckdb-r0/results/prep-record.md
+A	benchmarks/fio-r0/README.md
+A	benchmarks/fio-r0/r0-randrw-4k.fio
+A	benchmarks/fio-r0/r0-read-4k.fio
+A	benchmarks/fio-r0/r0-seqread-1m.fio
+A	docs/DUCKDB_FIO_R0_PREREG.md
+$ per-file blob comparison (branch vs origin/main), all 11 files:
+docs/DUCKDB_FIO_R0_PREREG.md IDENTICAL branch=2d625d61542bd6e0002b6b674a9b0d149d51817e main=2d625d61542bd6e0002b6b674a9b0d149d51817e
+benchmarks/duckdb-r0/results/lane-record.md IDENTICAL branch=34c177584421585a13047a9db9859fb7702b1394 main=34c177584421585a13047a9db9859fb7702b1394
+benchmarks/duckdb-r0/README.md IDENTICAL branch=d5a6299566644deef80c608bbfbbcc82084a3e6f main=d5a6299566644deef80c608bbfbbcc82084a3e6f
+benchmarks/duckdb-r0/async-host-probe/README.md IDENTICAL branch=5d5b8520380d402b3c2c236f00dd6dc6bdda18e6 main=5d5b8520380d402b3c2c236f00dd6dc6bdda18e6
+benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp IDENTICAL branch=a6cdfc0f979e03fa2ae813f20ca4e2e72d9a3b84 main=a6cdfc0f979e03fa2ae813f20ca4e2e72d9a3b84
+benchmarks/duckdb-r0/oracle.sql IDENTICAL branch=34a8a95398a58ecf028b28989882a22d7fa49423 main=34a8a95398a58ecf028b28989882a22d7fa49423
+benchmarks/duckdb-r0/results/prep-record.md IDENTICAL branch=19ffa28cde9cb53ec719ba28247318c9cd2e185c main=19ffa28cde9cb53ec719ba28247318c9cd2e185c
+benchmarks/fio-r0/README.md IDENTICAL branch=4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a main=4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a
+benchmarks/fio-r0/r0-randrw-4k.fio IDENTICAL branch=3d1ca048973e1e62f1d3c7f0c84ace01f09ae172 main=3d1ca048973e1e62f1d3c7f0c84ace01f09ae172
+benchmarks/fio-r0/r0-read-4k.fio IDENTICAL branch=4a3f2c07c586089c1f5b0424ae90a78ab0083707 main=4a3f2c07c586089c1f5b0424ae90a78ab0083707
+benchmarks/fio-r0/r0-seqread-1m.fio IDENTICAL branch=8e1526b9008015074f6c7d99d5946a3da5673815 main=8e1526b9008015074f6c7d99d5946a3da5673815
+$ sha256 of both copies of the 2 receipt docs:
+-- docs/DUCKDB_FIO_R0_PREREG.md branch:
+b617adf4a17fb01c547ddec9321d502c8d32281a9f7faad9dd2398b1bcdf839d  -
+-- docs/DUCKDB_FIO_R0_PREREG.md main:
+b617adf4a17fb01c547ddec9321d502c8d32281a9f7faad9dd2398b1bcdf839d  -
+-- benchmarks/duckdb-r0/results/lane-record.md branch:
+74500d79a1115cc5a1d9b062c41ba4a5b5899aff2901e83aaf707b5bd2b58596  -
+-- benchmarks/duckdb-r0/results/lane-record.md main:
+74500d79a1115cc5a1d9b062c41ba4a5b5899aff2901e83aaf707b5bd2b58596  -
+$ sluice #610 archived variant (different host copy, expected difference):
+sluice-archive lines=295 ; dududu-main lines=301
+$ raw run outputs archive location (not in dududu git by design, rule 6):
+00-environment.md
+01-fio-dataset.md
+02-duckdb-oracle-aa.md
+03-duckdb-io-exposure.md
+04-analysis.md
+duckdb
+fio

@@ -1,0 +1,17 @@
+# 01 head resolution + PR association + remote presence (2026-10-29T15:29:28Z)
+$ git -C /home/hoo/Projects/Sluice rev-parse origin/research/575-native-e5-atomic-rmw
+e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+
+$ git ls-remote origin refs/heads/research/575-native-e5-atomic-rmw
+e9baafb9d117cbaf387dde9f4433ebbacb4a73b3	refs/heads/research/575-native-e5-atomic-rmw
+exit=0
+
+$ git ls-remote origin "refs/pull/584/head"
+e9baafb9d117cbaf387dde9f4433ebbacb4a73b3	refs/pull/584/head
+exit=0
+
+$ git -C /home/hoo/Projects/Sluice for-each-ref --format="%(refname) %(objectname)" | grep e9baafb9
+refs/remotes/origin/research/575-native-e5-atomic-rmw e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+
+# PR list (ask-provided) match by headRef+headSha:
+# headRef "research/575-native-e5-atomic-rmw" -> PR #584 state=CLOSED title="research(575): native E5 atomic RMW elimination evidence — NO_CHANGE_JUSTIFIED" headSha=e9baafb9d117cbaf387dde9f4433ebbacb4a73b3 (matches resolved HEAD bit-for-bit)

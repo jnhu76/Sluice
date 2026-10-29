@@ -1,0 +1,38 @@
+=== re-validation 2026-10-29T16:02:08Z ===
+$ git ls-remote origin refs/heads/r5-async-host-probe refs/heads/main
+12a8712eb5ff5f48e570b49b1e01ad5821837dca	refs/heads/main
+4eafbc06d6a2e476055fe45fc75656e7e28a2183	refs/heads/r5-async-host-probe
+exit=0
+$ git -C /tmp/dududu-audit fetch origin --prune
+fetch exit=0
+$ git rev-parse origin/r5-async-host-probe origin/main
+4eafbc06d6a2e476055fe45fc75656e7e28a2183
+12a8712eb5ff5f48e570b49b1e01ad5821837dca
+$ git rev-list --count origin/main..origin/r5-async-host-probe
+0
+$ git merge-base origin/main origin/r5-async-host-probe
+4eafbc06d6a2e476055fe45fc75656e7e28a2183
+$ git merge-base --is-ancestor origin/r5-async-host-probe origin/main; echo $?
+is-ancestor(main) exit=0
+$ git merge-base --is-ancestor origin/r5-async-host-probe origin/r1-request-geometry; echo $?
+is-ancestor(r1) exit=0
+$ git merge-base --is-ancestor origin/r5-async-host-probe origin/sluice-r0-e5-verdict; echo $?
+is-ancestor(e5verdict) exit=0
+$ git branch -a --contains 4eafbc06d6a2e476055fe45fc75656e7e28a2183
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+  remotes/origin/r1-request-geometry
+  remotes/origin/r5-async-host-probe
+  remotes/origin/sluice-r0-e5-verdict
+$ git cat-file -t 4eafbc06d6a2e476055fe45fc75656e7e28a2183
+commit
+$ git log --oneline -6 origin/r5-async-host-probe
+4eafbc0 bench(duckdb): probe async host protocol boundary
+cc053cf bench(duckdb): record dataset and oracle prep receipts
+732a8fb bench(duckdb): pin the sql oracle and io exposure protocol
+bbce768 bench(fio): freeze e5 native storage baseline job set
+b94041d Merge pull request #3 from jnhu76/r1-parquet-sluice-bench
+b07307e docs(bench): refresh r1 receipts on the benchmark server
+$ git rev-parse origin/r5-async-host-probe~4
+b94041d918672d113ea0ca667ba8ccdabf329c80

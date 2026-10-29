@@ -1,0 +1,67 @@
+# receipt: blob reachability — per-file comparison of branch diff files vs origin/master
+# Method: a blob is UNIQUE_TO_BRANCH iff it does not appear in git rev-list --objects origin/master.
+
+$ git rev-list --objects origin/research/product-integration-records ^origin/master | wc -l
+43
+# (2 commits + 7 trees + 34 distinct blobs; 38 file paths because 5 machid paths share blobs with siblings)
+
+$ machid/ ls-tree at branch tip (shows blob dedup):
+100644 blob ad30699aadfe99d6f48b836ab9222b63c532f85b	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-file_info.txt
+100644 blob 3c24136f11ea634294b869ebc53d708d7de73833	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read.txt
+100644 blob 680607bf66d3aa011c0d68c0929324b275203233	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read_at.txt
+100644 blob 8925f6254e51ea01f8c39c6cee39160086bf88d1	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read_exact.txt
+100644 blob c41476dc702a93ec37b7e3c7589ae96d0a8d34b6	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read_exact_at.txt
+100644 blob bfd98bf3daeba09d121603a80b23863edf98b767	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-write_all.txt
+100644 blob b39e1231e43150ed3d8cebbc02099810b467e859	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-write_all_at.txt
+100644 blob 680607bf66d3aa011c0d68c0929324b275203233	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-write_at.txt
+100644 blob ad30699aadfe99d6f48b836ab9222b63c532f85b	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-file_info.txt
+100644 blob 3c24136f11ea634294b869ebc53d708d7de73833	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read.txt
+100644 blob 680607bf66d3aa011c0d68c0929324b275203233	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read_at.txt
+100644 blob ddf53de2dbfd7c5828565201a2b8219c14555c1f	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read_exact.txt
+100644 blob 007e5352d6e309d924fbe9220022c1c671030cee	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read_exact_at.txt
+100644 blob 9b43981be324a0b21f9575938f4094a22b03907d	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-write_all.txt
+100644 blob d247c7d9b804073f8a3433a27151483d1128ddc9	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-write_all_at.txt
+100644 blob 680607bf66d3aa011c0d68c0929324b275203233	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-write_at.txt
+
+$ per-file status (UNIQUE_TO_BRANCH = blob unreachable from origin/master at any path):
+## blobs of these files that ARE also reachable from origin/master (expect none):
+NONE
+
+UNIQUE_TO_BRANCH	INTEGRATION_LOG.md
+UNIQUE_TO_BRANCH	INTEGRATION_PLAN.md
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ENV-P2C1-FINALHEAD.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/PREREGISTERED_PLAN.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/SUMMARY.md
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-a2.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-ac.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-ax-seq.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-ax-tail.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-w2.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-wc.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/aa-wx.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-comp-read-4k.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-cursor-4k.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-eofmix-4k.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-neg-read-at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-neg-write-at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-write-all-at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/ab-write-all.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/build-both.sh
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-file_info.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read_exact.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-read_exact_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-write_all.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-write_all_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/base-write_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-file_info.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read_exact.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-read_exact_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-write_all.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-write_all_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/machid/head-write_at.txt
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/run_aa.sh
+UNIQUE_TO_BRANCH	research/direct-beyond-parity/closure/perf-p2c1-finalhead/run_ab.sh

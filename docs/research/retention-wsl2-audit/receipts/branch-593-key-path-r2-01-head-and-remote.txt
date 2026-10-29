@@ -1,0 +1,11 @@
+# receipt r2-01: HEAD resolution (after fetch origin --prune, exit 0, no ref changes)
+2026-10-29T23:27:54+08:00
+$ git -C /home/hoo/Projects/Sluice rev-parse --verify origin/research/593-key-path
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+$ git rev-parse --verify origin/sluice/research/593-key-path
+fatal: Needed a single revision
+$ git ls-remote origin research/593-key-path
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136	refs/heads/research/593-key-path
+$ git ls-remote origin refs/pull/594/head refs/pull/594/merge
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136	refs/pull/594/head
+acdd225834a1de5e5708e311c4da5d2bceb8930c	refs/pull/594/merge

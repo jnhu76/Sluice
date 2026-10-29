@@ -1,0 +1,67 @@
+# 04 master coverage of the two shared-path files + product-side changes (2026-10-29T15:31:01Z)
+
+$ git log --oneline --follow origin/master -- tests/uring_flush_count_oracle_test.cpp
+1df8b4b8 test(uring): pin positive io_uring transport flush accounting (#585)
+
+$ git show --stat --format="%H %s" 1df8b4b8 -- tests/uring_flush_count_oracle_test.cpp
+1df8b4b82f9078dab824a4559684c40503d3e2cd test(uring): pin positive io_uring transport flush accounting (#585)
+
+ tests/uring_flush_count_oracle_test.cpp | 190 ++++++++++++++++++++++++++++++++
+ 1 file changed, 190 insertions(+)
+
+# blob-to-blob diff branch test (28e77926) vs master #585 test (990cb80c)
+$ git diff --stat 28e77926 990cb80c
+ ...42cd9fac1300 => 990cb80c010c3bdbba12e9679e0c602db24f0b6a | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+$ git diff 28e77926 990cb80c (full, 13 changed lines — comment-only)
+diff --git a/28e779264310c145116c8a3988ca42cd9fac1300 b/990cb80c010c3bdbba12e9679e0c602db24f0b6a
+index 28e77926..990cb80c 100644
+--- a/28e779264310c145116c8a3988ca42cd9fac1300
++++ b/990cb80c010c3bdbba12e9679e0c602db24f0b6a
+@@ -1,10 +1,11 @@
+ // #575 research oracle: the internal submit-flush counter must count real
+-// transport flush attempts. The existing suite only asserts its zero value
+-// (no-flush paths); this test pins the positive semantics — every accepted
+-// non-zero-length data submission produces exactly one transport flush
+-// attempt, monotonicity holds across submissions, and zero-length requests
+-// never flush — so a mutant that suppresses the increment after a real
+-// submission is killed by a counter assertion, not by an unrelated failure.
++// transport submit attempts. The existing suite only asserts its zero value
++// (no-flush paths); in a deterministic fake-submit fixture (fresh backend,
++// non-full ring, no cancels) this test pins the positive semantics — an
++// accepted data submission produces exactly one transport flush attempt,
++// sequential submissions are monotonic, and zero-length requests never
++// flush — so a mutant that suppresses the increment after a real submission
++// is killed by a counter assertion, not by an unrelated failure.
+ 
+ #include <sluice/async/async_io_context.hpp>
+ #include <sluice/async/detail/test_access.hpp>
+
+$ git grep -n "uring_flush_count_oracle" origin/master -- xmake/tests.lua
+origin/master:xmake/tests.lua:578:    uring_progress_target("uring_flush_count_oracle_test",
+origin/master:xmake/tests.lua:579:                              R .. "tests/uring_flush_count_oracle_test.cpp")
+
+# branch change to xmake/tests.lua vs merge-base (2 added lines):
+$ git diff 3df10dc4 origin/research/575-native-e5-atomic-rmw -- xmake/tests.lua
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index b588810f..70327072 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -529,6 +529,8 @@ if has_config("liburing") then
+                               R .. "tests/uring_owed_counter_parity_test.cpp")
+     uring_progress_target("uring_pending_control_parity_test",
+                               R .. "tests/uring_pending_control_parity_test.cpp")
++    uring_progress_target("uring_flush_count_oracle_test",
++                              R .. "tests/uring_flush_count_oracle_test.cpp")
+ 
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of
+
+# branch README claim about #585 productization:
+$ git show origin/research/575-native-e5-atomic-rmw:docs/research/mw-hw-575-native-e5/README.md | grep -A4 "Productized at closeout"
+   the research-time records. **Productized at closeout:** the oracle was
+   extracted to master as a test-only PR — #585, squash-merged as
+   `1df8b4b82f9078dab824a4559684c40503d3e2cd` (based on the v0.0.3 master
+   `3df10dc4`, same as this campaign's baseline; the merged file is this
+   branch's oracle with the leading comment scoped to the deterministic

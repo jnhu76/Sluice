@@ -1,0 +1,16 @@
+$ git rev-parse 999b5305ae7d413a2a71acde926f8c6cfef6876a^  (parent of branch tip)
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+
+$ git merge-base --is-ancestor 999b5305^ origin/master; echo "parent-in-master exit=$?"
+parent-in-master exit=0 (0 = parent reachable from master)
+
+$ git fetch origin refs/pull/611/head  (FETCH_HEAD test, no ref modified)
+From github.com:jnhu76/Sluice
+ * branch              refs/pull/611/head -> FETCH_HEAD
+fetch exit=0
+$ git rev-parse FETCH_HEAD
+999b5305ae7d413a2a71acde926f8c6cfef6876a
+
+$ git cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a && git log --format="%H %P" -1 999b5305
+commit
+999b5305ae7d413a2a71acde926f8c6cfef6876a bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57

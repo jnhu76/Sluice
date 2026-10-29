@@ -1,0 +1,41 @@
+# receipt: merge SHAs / git state — captured 2026-10-29T22:37:49+08:00
+$ git rev-parse origin/master
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+
+$ git rev-parse HEAD
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+
+$ git log --merges --oneline -40 (top 5; no #60x merges present)
+3df10dc4 Merge pull request #583 from jnhu76/release/v0.0.3
+5a75e303 Merge pull request #573 from jnhu76/perf/dp3a-reserve-reinit
+4221c7e3 Merge pull request #572 from jnhu76/perf/dp1-publication-payload
+ad24dc45 Merge pull request #571 from jnhu76/perf/bench-w03-stop-race-stats-wiring
+be28f275 Merge pull request #569 from jnhu76/perf/e1-pending-control-zero-scan
+
+$ git log --all --grep='#602'
+commit 43cb8029ca60b572c91a9aa9dccb17d4300e2f88
+Author: jm.hu <5766215+jnhu76@users.noreply.github.com>
+Date:   Thu Oct 29 14:08:36 2026 +0800
+
+    perf(direct): dispatch admission verdicts without Precheck materialization (#600 C1) (#602)
+    
+    * perf(direct): dispatch admission verdicts without Precheck materialization (#600 C1)
+    
+
+$ git log --all --grep='#612'
+commit 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+Author: jm.hu <5766215+jnhu76@users.noreply.github.com>
+Date:   Thu Oct 29 19:41:19 2026 +0800
+
+    perf(direct): P2C1 read compositions run prevalidated register-resident steps (#608) (#612)
+    
+    * test(direct): land composition mutation seams with named killers
+    
+
+$ parents (squash check)
+43cb8029ca60b572c91a9aa9dccb17d4300e2f88 parents:ac995641e7394bfd82f7edb1caafca6ebea21c13
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b parents:4b962abbd26156bb15c4378b90811e9889795c03
+
+$ ancestry vs origin/master
+43cb8029 IS ancestor of origin/master
+84e1b7d5 IS ancestor of origin/master

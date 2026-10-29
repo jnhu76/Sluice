@@ -1,0 +1,34 @@
+# unique-evidence coverage: are the branch files covered by dududu main / sluice #610 archive?
+# dududu main coverage: blob-identical for both files (see 04) -> dududu main IS the preserved copy.
+
+# cmd: git -C /home/hoo/Projects/Sluice ls-tree -r --name-only master | grep -i "lane-record\|duckdb-r0\|r0-verdict"
+research/direct-beyond-parity/closure/r5-r0-verdict.md
+
+# cmd: blob compare dududu branch prereg vs sluice #610 closure prereg
+dududu branch blob:    2d625d61542bd6e0002b6b674a9b0d149d51817e
+sluice #610 copy blob: 6fe1a84692b398ead4f45f31c60e4ae1b4591fc0
+-> different blobs: sluice archive holds the sluice-tree variant; dududu main holds the dududu variant (fuller, references lane-record.md).
+
+# cmd: git -C /home/hoo/Projects/Sluice grep -n DUCKDB_FIO_R0_PREREG master -- research/direct-beyond-parity/EVIDENCE_MANIFEST.json
+master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json:212:  "path": "research/direct-beyond-parity/closure/DUCKDB_FIO_R0_PREREG.md",
+
+# cmd: lane-record presence in sluice manifest:
+(no output above = lane-record.md not archived in sluice; it lives only in dududu, where main holds it identically)
+
+# cmd: diff sluice copy vs dududu copy (first hunks):
+16,17c16,23
+< Companion records: `r5-prep.md` (protocol freeze), `r5-native/` (serial-lane
+< raw evidence), `r5-async-host.md` (§8.4 async admission). Labeling: `[RUN]` =
+---
+> Companion records (Sluice research tree,
+> `research/direct-beyond-parity/closure/`): `r5-prep.md` (protocol freeze),
+> `r5-native/` (serial-lane raw evidence — kept out of dududu git per rule 6),
+> `r5-async-host.md` (§8.4 async admission). In-repo counterparts:
+> `benchmarks/fio-r0/` (frozen fio protocol), `benchmarks/duckdb-r0/`
+> (oracle, protocol, prep receipts, async-host probe),
+> `benchmarks/duckdb-r0/results/lane-record.md` (measurement-lane completion
+> receipts). Labeling: `[RUN]` =
+# line counts:
+  301 /tmp/r0e5-prereg-dududu.md
+  295 /tmp/r0e5-prereg-sluice.md
+  596 total

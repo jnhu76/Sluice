@@ -1,0 +1,29 @@
+# dududu r5-async-host-probe — 活跃依赖 / worktree / 工作树（receipt 04）
+
+$ git -C /tmp/dududu-audit grep -rn "r5-async-host-probe" origin/main   # 全树 grep 分支名（脚本/CI/文档）
+origin/main:benchmarks/duckdb-r0/async-host-probe/README.md:40:- dududu: branch `r5-async-host-probe` (based on `sluice-r0-closure`).
+origin/main:benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp:405:	probe.path = "/tmp/sluice-r5-async-host-probe.bin";
+origin/main:docs/DUCKDB_FIO_R0_PREREG.md:225:- Non-invasive probe [RUN], dududu branch `r5-async-host-probe` @ `4eafbc0`
+origin/main:docs/DUCKDB_FIO_R0_PREREG.md:300:| Async host admission + probe | `r5-async-host.md`, dududu branch `r5-async-host-probe` (`benchmarks/duckdb-r0/async-host-probe/`) |
+
+$ git -C /tmp/dududu-audit ls-tree -r --name-only origin/main .github/
+.github/workflows/repo-policy.yml
+
+$ git -C /tmp/dududu-audit worktree list
+/tmp/dududu-audit 12a8712 [main]
+
+$ git -C /tmp/dududu-audit branch --list
+* main
+
+$ git -C /tmp/dududu-audit status --porcelain   # 空 → 克隆工作树干净
+(end)
+
+$ ls /home/hoo/Projects/ ; ls -d /tmp/*dududu* 2>/dev/null   # 其他 dududu 检出扫描
+Sluice
+blog
+comment-bench
+hashjoin-lab
+language-os
+markit
+markit-workload.zip
+/tmp/dududu-audit

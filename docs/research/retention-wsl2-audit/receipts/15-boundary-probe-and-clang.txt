@@ -1,0 +1,30 @@
+# receipts/15-boundary-probe.txt
+date: 2026-10-29T23:12:42+08:00
+probe: /tmp/sluice-val-p2c1/p2c1_boundary_probe.cpp (seam build, g++ -O2)
+cmd: g++ -O2 -std=c++20 -Wall -Werror -Iinclude -Isrc -DSLUICE_FILE_INTERNAL_TESTING -o p2c1_boundary_probe p2c1_boundary_probe.cpp src/blocking_file.cpp src/file_resource.cpp && ./p2c1_boundary_probe
+
+PASS big_offset_executes_eofs
+PASS top_edge_admitted_kernel_einval_surfaces_primitive_error
+PASS range_past_off_t_max_rejected
+PASS offset_beyond_off_t_max_rejected
+PASS length_past_ssize_max_rejected
+     raw-close surface: has_value=1 end=3 code=backend_error os_errno=9
+PASS raw_closed_fd_surfaces_backend_error_ebadf
+     seam last offset=9223372036854775803 count=5
+PASS seam_full_off_t_offset_and_advance
+all P2C1 boundary probe checks passed
+exit=0
+
+# clang 21.1.8 + ASan/UBSan probe rerun:
+     seam last offset=9223372036854775803 count=5
+PASS seam_full_off_t_offset_and_advance
+all P2C1 boundary probe checks passed
+
+# receipts/16-clang-suites.txt
+cmd: clang++ -O2 -std=c++20 -Wall -Iinclude -Isrc -DSLUICE_FILE_INTERNAL_TESTING -o fault_clang tests/direct_composition_fault_test.cpp src/blocking_file.cpp src/file_resource.cpp
+composition read_exact/write_all: 11 scenarios compared, 10 not drivable (verdicts needing a caller-supplied offset), 0 divergences
+all 15 direct composition fault-injection tests passed
+fault_clang exit=0
+cmd: clang++ -O2 -std=c++20 -Wall -Iinclude -o shortio_clang tests/semantic_short_io_reference_test.cpp src/blocking_file.cpp src/file_resource.cpp
+all 9 short-I/O reference tests passed (8 primitive cases)
+shortio_clang exit=0

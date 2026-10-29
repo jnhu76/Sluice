@@ -1,0 +1,25 @@
+# receipt r2-05: active dependency — refs in master tree, CI, successor docs
+2026-10-29T23:38:45+08:00
+
+$ git grep -n "593-key-path" origin/master
+origin/master:research/direct-beyond-parity/closure/E5_CLOSURE_SNAPSHOT.md:150:- `research/593-key-path` @ 2714aa65 = [origin/research/593-key-path] (worktree)
+origin/master:research/direct-beyond-parity/closure/E5_CLOSURE_SNAPSHOT.md:167:| `/home/jnhu/sluice-593-research/worktrees/pr` | 2714aa65 | research/593-key-path | clean (0) |
+
+$ git grep -ln "key-path" origin/master -- "*.md"
+origin/master:research/direct-beyond-parity/closure/E5_CLOSURE_SNAPSHOT.md
+
+$ git grep -ln "ELISION_CANDIDATE_FOUND\|ELISION_PERF_SUPPORTED\|key-path-593" origin/master
+origin/master:research/600-direct-excess-cost/PHASE_I_COST_ATTRIBUTION.md
+
+$ git grep -n "593\|research/" origin/master -- .github/workflows/ci.yml .github/workflows/open-code-review.yml
+(no output above = no CI references)
+
+$ git show origin/master:research/600-direct-excess-cost/PHASE_I_COST_ATTRIBUTION.md | sed -n "39,45p"  # verdict vocabulary reuse, not content integration
+## Verdict
+
+**ELISION_CANDIDATE_FOUND**
+
+- C1 (D1-class, single mechanism): validation-path restructure of the four data ops
+  (`read_at`, `write_at`, `read`, `write`) — verdict dispatch replaces the Precheck
+  struct materialization; offset/size cast fusion removes the duplicate bound test
+END-OF-RECEIPT

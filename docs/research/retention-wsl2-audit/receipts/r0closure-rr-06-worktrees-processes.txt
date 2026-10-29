@@ -1,0 +1,44 @@
+## r0closure-rr-06 worktrees & processes (re-review, 2026-10-30T00:08:15+08:00)
+
+### dududu clone worktrees
+$ git -C /tmp/dududu-audit worktree list --porcelain
+worktree /tmp/dududu-audit
+HEAD 12a8712eb5ff5f48e570b49b1e01ad5821837dca
+branch refs/heads/main
+
+exit=0
+
+### Sluice main repo worktrees (branch lines only, full list captured)
+$ git -C /home/hoo/Projects/Sluice worktree list --porcelain | grep -E '^(worktree|branch) '
+worktree /home/hoo/Projects/Sluice
+branch refs/heads/master
+worktree /tmp/sluice-perf-base
+worktree /tmp/sluice-perf-master
+worktree /tmp/sluice-val-asan
+worktree /tmp/sluice-val-asan-ubsan
+worktree /tmp/sluice-val-c1-mutation
+worktree /tmp/sluice-val-c1-plat
+worktree /tmp/sluice-val-debug
+worktree /tmp/sluice-val-k594-retention
+worktree /tmp/sluice-val-liburing
+worktree /tmp/sluice-val-p2c1
+worktree /tmp/sluice-val-p2c1-mutation-a
+worktree /tmp/sluice-val-p2c1-mutation-b
+worktree /tmp/sluice-val-r6ac1-reverify
+worktree /tmp/sluice-val-release
+worktree /tmp/sluice-val-sdk
+worktree /tmp/sluice-val-ubsan
+exit=0
+
+### any worktree anywhere checking out sluice-r0-closure? (expected: no)
+$ for w in $(git -C /home/hoo/Projects/Sluice worktree list --porcelain | grep '^worktree ' | cut -d' ' -f2-); do git -C "$w" branch --show-current; done | sort | uniq -c
+      1 master
+
+### processes referencing the branch name (expected: none)
+$ ps aux | grep 'sluice-r0-closure' | grep -v grep
+exit=1 (1 = no process)
+
+### local branches in dududu clone (expected: no local sluice-r0-closure)
+$ git -C /tmp/dududu-audit branch -vv
+* main 12a8712 [origin/main] Merge pull request #7 from jnhu76/sluice-r0-e5-verdict
+exit=0

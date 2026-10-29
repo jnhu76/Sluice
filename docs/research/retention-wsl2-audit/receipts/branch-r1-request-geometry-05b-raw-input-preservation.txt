@@ -1,0 +1,35 @@
+# branch r1-request-geometry (dududu) — raw-input preservation + Sluice-master coverage (supplement to 05)
+# date: 2026-10-29T23:21:29+08:00
+
+## A. Raw R0 io-trace inputs referenced by results/trace-index.md exist locally and are tracked on Sluice master
+$ sha256sum /home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-{warm,cold,1col-price,1col-discount,kstack}.txt
+067918177e207a2b668e643a57f451a772b5c62ac3774e28d10261345e7ab5cf  /home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-warm.txt
+740db46c1c525dae5d2534cc6c4fd8fb8bebbdb4cc6e3f712844fa5a4715f5e0  /home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-cold.txt
+a1c926244de88e7213cf7c3bade9af75b02d365e35b03ef4f1fc0d97bd6b5906  /home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-1col-price.txt
+b4a263e165fd8b4811d5610af62294a7496a6ab495fd1d3a6ffb0dad5d6779f7  /home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-1col-discount.txt
+96453f0ba2c5a207bd9988365a960e0758f063da48cfb781b1ccb62770b35c0c  /home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-kstack.txt
+
+trace-index.md recorded hashes: warm 06791817…, cold 740db46c…, 1col-price a1c92624…, 1col-discount b4a263e1…, kstack 96453f0b… — ALL MATCH
+
+$ git -C /home/hoo/Projects/Sluice ls-files --error-unmatch research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-warm.txt
+research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-warm.txt
+
+$ git -C /home/hoo/Projects/Sluice ls-tree master -- research/direct-beyond-parity/closure/r5-native/duckdb/ (io-trace blobs)
+100644 blob 58e92e81dd3150e733f0dc68b65f653d2e2bade7	research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-1col-discount.txt
+100644 blob 05c2245510eb38cb9813cdca8d5e558b9bbf350b	research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-1col-price.txt
+100644 blob 87b3f0b63d4f8b7ef329576747e63c0a8f12a7d8	research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-cold.txt
+100644 blob 4a3845b1f733d5146628a22b2176bc02e050d3be	research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-count.txt
+100644 blob c31174046424fc4e6b6d0dacedaaf8c52b992fef	research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-kstack.txt
+100644 blob 372abd92a653d363472a4d95bbc67a327d913722	research/direct-beyond-parity/closure/r5-native/duckdb/io-trace-warm.txt
+
+$ git -C /home/hoo/Projects/Sluice status --porcelain -- research/direct-beyond-parity/closure/r5-native/duckdb/
+(empty = worktree identical to index/HEAD; tracked content is what was hashed)
+
+## B. Study findings NOT archived on Sluice master
+$ git -C /home/hoo/Projects/Sluice grep -l "NO_MATERIAL_OPPORTUNITY" master --
+(none)
+$ git -C /home/hoo/Projects/Sluice grep -il "request geometry|request-geometry" master --
+(none)
+
+## C. /home/jnhu (path recorded in trace-index.md as analysis host) does not exist here
+ls: cannot access '/home/jnhu': No such file or directory

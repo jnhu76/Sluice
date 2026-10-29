@@ -1,0 +1,1517 @@
+
+build/.objs/sluice_core/linux/x86_64/release/src/blocking_file.cpp.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE>:
+       0:	endbr64
+       4:	mov    %rdi,%r9
+       7:	mov    (%rsi),%edi
+       9:	mov    %rsi,%r10
+       c:	test   %edi,%edi
+       e:	js     160 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x160>
+      14:	cmpb   $0x1,0x4(%rsi)
+      18:	je     140 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x140>
+      1e:	test   %r8,%r8
+      21:	je     128 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x128>
+      27:	movabs $0x7fffffffffffffff,%rax
+      31:	mov    %rdx,%r11
+      34:	lea    -0x1(%r8),%rdx
+      38:	sub    %r11,%rax
+      3b:	cmp    %rdx,%rax
+      3e:	jb     140 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x140>
+      44:	mov    %r8,%rax
+      47:	or     %r11,%rax
+      4a:	js     140 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x140>
+      50:	mov    %rcx,%rsi
+      53:	test   %rcx,%rcx
+      56:	je     170 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x170>
+      5c:	sub    $0x38,%rsp
+      60:	mov    %r11,%rcx
+      63:	mov    %r8,%rdx
+      66:	mov    %r9,0x8(%rsp)
+      6b:	mov    %r10,0x28(%rsp)
+      70:	mov    %r11,0x20(%rsp)
+      75:	mov    %r8,0x18(%rsp)
+      7a:	mov    %rsi,0x10(%rsp)
+      7f:	call   84 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x84>
+      84:	mov    0x8(%rsp),%r9
+      89:	test   %rax,%rax
+      8c:	jns    190 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x190>
+      92:	call   97 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x97>
+      97:	mov    0x8(%rsp),%r9
+      9c:	mov    0x10(%rsp),%rsi
+      a1:	mov    (%rax),%eax
+      a3:	mov    0x18(%rsp),%r8
+      a8:	mov    0x20(%rsp),%r11
+      ad:	mov    0x28(%rsp),%r10
+      b2:	cmp    $0x4,%eax
+      b5:	je     1b8 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1b8>
+      bb:	mov    $0x7,%edx
+      c0:	test   %eax,%eax
+      c2:	je     114 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x114>
+      c4:	cmp    $0xd,%eax
+      c7:	je     1c0 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1c0>
+      cd:	cmp    $0x1,%eax
+      d0:	je     1cc <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1cc>
+      d6:	cmp    $0x2,%eax
+      d9:	je     1a8 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1a8>
+      df:	cmp    $0x14,%eax
+      e2:	je     1d8 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1d8>
+      e8:	cmp    $0x1c,%eax
+      eb:	je     1e4 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1e4>
+      f1:	cmp    $0x7a,%eax
+      f4:	je     1f0 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1f0>
+      fa:	cmp    $0xb,%eax
+      fd:	jne    114 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x114>
+      ff:	lea    0x0(%rip),%rdx        # 106 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x106>
+     106:	cs nopw 0x0(%rax,%rax,1)
+     110:	movzbl 0x4(%rdx),%edx
+     114:	mov    %dl,0x8(%r9)
+     118:	mov    %eax,0xc(%r9)
+     11c:	movb   $0x0,0x10(%r9)
+     121:	jmp    1a0 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1a0>
+     123:	nopl   0x0(%rax,%rax,1)
+     128:	movq   $0x0,(%r9)
+     12f:	mov    %r9,%rax
+     132:	movl   $0x0,0xc(%r9)
+     13a:	movb   $0x1,0x10(%r9)
+     13f:	ret
+     140:	mov    $0x8,%eax
+     145:	mov    %al,0x8(%r9)
+     149:	mov    %r9,%rax
+     14c:	movl   $0x0,0xc(%r9)
+     154:	movb   $0x0,0x10(%r9)
+     159:	ret
+     15a:	nopw   0x0(%rax,%rax,1)
+     160:	mov    $0x6,%eax
+     165:	jmp    145 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x145>
+     167:	nopw   0x0(%rax,%rax,1)
+     170:	movb   $0x8,0x8(%r9)
+     175:	mov    %r9,%rax
+     178:	movl   $0x0,0xc(%r9)
+     180:	movb   $0x0,0x10(%r9)
+     185:	ret
+     186:	cs nopw 0x0(%rax,%rax,1)
+     190:	mov    %rax,(%r9)
+     193:	movl   $0x0,0xc(%r9)
+     19b:	movb   $0x1,0x10(%r9)
+     1a0:	mov    %r9,%rax
+     1a3:	add    $0x38,%rsp
+     1a7:	ret
+     1a8:	lea    0x0(%rip),%rdx        # 1af <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1af>
+     1af:	jmp    110 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x110>
+     1b4:	nopl   0x0(%rax)
+     1b8:	mov    (%r10),%edi
+     1bb:	jmp    60 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x60>
+     1c0:	lea    0x0(%rip),%rdx        # 1c7 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1c7>
+     1c7:	jmp    110 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x110>
+     1cc:	lea    0x0(%rip),%rdx        # 1d3 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1d3>
+     1d3:	jmp    110 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x110>
+     1d8:	lea    0x0(%rip),%rdx        # 1df <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1df>
+     1df:	jmp    110 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x110>
+     1e4:	lea    0x0(%rip),%rdx        # 1eb <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1eb>
+     1eb:	jmp    110 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x110>
+     1f0:	lea    0x0(%rip),%rdx        # 1f7 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1f7>
+     1f7:	jmp    110 <_ZN6sluice8blocking7read_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x110>
+     1fc:	nopl   0x0(%rax)
+
+0000000000000200 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE>:
+     200:	endbr64
+     204:	mov    %rdi,%r9
+     207:	mov    (%rsi),%edi
+     209:	mov    %rsi,%r10
+     20c:	test   %edi,%edi
+     20e:	js     360 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x160>
+     214:	cmpb   $0x0,0x4(%rsi)
+     218:	je     340 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x140>
+     21e:	test   %r8,%r8
+     221:	je     328 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x128>
+     227:	movabs $0x7fffffffffffffff,%rax
+     231:	mov    %rdx,%r11
+     234:	lea    -0x1(%r8),%rdx
+     238:	sub    %r11,%rax
+     23b:	cmp    %rdx,%rax
+     23e:	jb     340 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x140>
+     244:	mov    %r8,%rax
+     247:	or     %r11,%rax
+     24a:	js     340 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x140>
+     250:	mov    %rcx,%rsi
+     253:	test   %rcx,%rcx
+     256:	je     370 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x170>
+     25c:	sub    $0x38,%rsp
+     260:	mov    %r11,%rcx
+     263:	mov    %r8,%rdx
+     266:	mov    %r9,0x8(%rsp)
+     26b:	mov    %r10,0x28(%rsp)
+     270:	mov    %r11,0x20(%rsp)
+     275:	mov    %r8,0x18(%rsp)
+     27a:	mov    %rsi,0x10(%rsp)
+     27f:	call   284 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x84>
+     284:	mov    0x8(%rsp),%r9
+     289:	test   %rax,%rax
+     28c:	jns    390 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x190>
+     292:	call   297 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x97>
+     297:	mov    0x8(%rsp),%r9
+     29c:	mov    0x10(%rsp),%rsi
+     2a1:	mov    (%rax),%eax
+     2a3:	mov    0x18(%rsp),%r8
+     2a8:	mov    0x20(%rsp),%r11
+     2ad:	mov    0x28(%rsp),%r10
+     2b2:	cmp    $0x4,%eax
+     2b5:	je     3b8 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1b8>
+     2bb:	mov    $0x7,%edx
+     2c0:	test   %eax,%eax
+     2c2:	je     314 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x114>
+     2c4:	cmp    $0xd,%eax
+     2c7:	je     3c0 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c0>
+     2cd:	cmp    $0x1,%eax
+     2d0:	je     3cc <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1cc>
+     2d6:	cmp    $0x2,%eax
+     2d9:	je     3a8 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1a8>
+     2df:	cmp    $0x14,%eax
+     2e2:	je     3d8 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1d8>
+     2e8:	cmp    $0x1c,%eax
+     2eb:	je     3e4 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1e4>
+     2f1:	cmp    $0x7a,%eax
+     2f4:	je     3f0 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1f0>
+     2fa:	cmp    $0xb,%eax
+     2fd:	jne    314 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x114>
+     2ff:	lea    0x0(%rip),%rdx        # 306 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x106>
+     306:	cs nopw 0x0(%rax,%rax,1)
+     310:	movzbl 0x4(%rdx),%edx
+     314:	mov    %dl,0x8(%r9)
+     318:	mov    %eax,0xc(%r9)
+     31c:	movb   $0x0,0x10(%r9)
+     321:	jmp    3a0 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1a0>
+     323:	nopl   0x0(%rax,%rax,1)
+     328:	movq   $0x0,(%r9)
+     32f:	mov    %r9,%rax
+     332:	movl   $0x0,0xc(%r9)
+     33a:	movb   $0x1,0x10(%r9)
+     33f:	ret
+     340:	mov    $0x8,%eax
+     345:	mov    %al,0x8(%r9)
+     349:	mov    %r9,%rax
+     34c:	movl   $0x0,0xc(%r9)
+     354:	movb   $0x0,0x10(%r9)
+     359:	ret
+     35a:	nopw   0x0(%rax,%rax,1)
+     360:	mov    $0x6,%eax
+     365:	jmp    345 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x145>
+     367:	nopw   0x0(%rax,%rax,1)
+     370:	movb   $0x8,0x8(%r9)
+     375:	mov    %r9,%rax
+     378:	movl   $0x0,0xc(%r9)
+     380:	movb   $0x0,0x10(%r9)
+     385:	ret
+     386:	cs nopw 0x0(%rax,%rax,1)
+     390:	mov    %rax,(%r9)
+     393:	movl   $0x0,0xc(%r9)
+     39b:	movb   $0x1,0x10(%r9)
+     3a0:	mov    %r9,%rax
+     3a3:	add    $0x38,%rsp
+     3a7:	ret
+     3a8:	lea    0x0(%rip),%rdx        # 3af <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1af>
+     3af:	jmp    310 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     3b4:	nopl   0x0(%rax)
+     3b8:	mov    (%r10),%edi
+     3bb:	jmp    260 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x60>
+     3c0:	lea    0x0(%rip),%rdx        # 3c7 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c7>
+     3c7:	jmp    310 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     3cc:	lea    0x0(%rip),%rdx        # 3d3 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1d3>
+     3d3:	jmp    310 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     3d8:	lea    0x0(%rip),%rdx        # 3df <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1df>
+     3df:	jmp    310 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     3e4:	lea    0x0(%rip),%rdx        # 3eb <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1eb>
+     3eb:	jmp    310 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     3f0:	lea    0x0(%rip),%rdx        # 3f7 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1f7>
+     3f7:	jmp    310 <_ZN6sluice8blocking8write_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     3fc:	nopl   0x0(%rax)
+
+0000000000000400 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE>:
+     400:	endbr64
+     404:	mov    %rdi,%r8
+     407:	mov    (%rsi),%edi
+     409:	mov    %rsi,%r9
+     40c:	test   %edi,%edi
+     40e:	js     510 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>
+     414:	cmpb   $0x1,0x4(%rsi)
+     418:	je     550 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x150>
+     41e:	test   %rcx,%rcx
+     421:	je     4f8 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xf8>
+     427:	jle    550 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x150>
+     42d:	mov    %rdx,%rsi
+     430:	test   %rdx,%rdx
+     433:	je     530 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x130>
+     439:	sub    $0x28,%rsp
+     43d:	mov    %rcx,%rdx
+     440:	mov    %r8,(%rsp)
+     444:	mov    %r9,0x18(%rsp)
+     449:	mov    %rcx,0x10(%rsp)
+     44e:	mov    %rsi,0x8(%rsp)
+     453:	call   458 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x58>
+     458:	mov    (%rsp),%r8
+     45c:	test   %rax,%rax
+     45f:	jns    560 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x160>
+     465:	call   46a <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x6a>
+     46a:	mov    (%rsp),%r8
+     46e:	mov    0x8(%rsp),%rsi
+     473:	mov    (%rax),%eax
+     475:	mov    0x10(%rsp),%rcx
+     47a:	mov    0x18(%rsp),%r9
+     47f:	cmp    $0x4,%eax
+     482:	je     588 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x188>
+     488:	mov    $0x7,%edx
+     48d:	test   %eax,%eax
+     48f:	je     4e4 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe4>
+     491:	cmp    $0xd,%eax
+     494:	je     590 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x190>
+     49a:	cmp    $0x1,%eax
+     49d:	je     59c <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x19c>
+     4a3:	cmp    $0x2,%eax
+     4a6:	je     578 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x178>
+     4ac:	cmp    $0x14,%eax
+     4af:	je     5a8 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1a8>
+     4b5:	cmp    $0x1c,%eax
+     4b8:	je     5b4 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1b4>
+     4be:	cmp    $0x7a,%eax
+     4c1:	je     5c0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1c0>
+     4c7:	cmp    $0xb,%eax
+     4ca:	jne    4e4 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe4>
+     4cc:	lea    0x0(%rip),%rdx        # 4d3 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xd3>
+     4d3:	xchg   %ax,%ax
+     4d5:	data16 cs nopw 0x0(%rax,%rax,1)
+     4e0:	movzbl 0x4(%rdx),%edx
+     4e4:	mov    %dl,0x8(%r8)
+     4e8:	mov    %eax,0xc(%r8)
+     4ec:	movb   $0x0,0x10(%r8)
+     4f1:	jmp    570 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x170>
+     4f3:	nopl   0x0(%rax,%rax,1)
+     4f8:	movq   $0x0,(%r8)
+     4ff:	mov    %r8,%rax
+     502:	movl   $0x0,0xc(%r8)
+     50a:	movb   $0x1,0x10(%r8)
+     50f:	ret
+     510:	mov    $0x6,%eax
+     515:	mov    %al,0x8(%r8)
+     519:	mov    %r8,%rax
+     51c:	movl   $0x0,0xc(%r8)
+     524:	movb   $0x0,0x10(%r8)
+     529:	ret
+     52a:	nopw   0x0(%rax,%rax,1)
+     530:	movb   $0x8,0x8(%r8)
+     535:	mov    %r8,%rax
+     538:	movl   $0x0,0xc(%r8)
+     540:	movb   $0x0,0x10(%r8)
+     545:	ret
+     546:	cs nopw 0x0(%rax,%rax,1)
+     550:	mov    $0x8,%eax
+     555:	jmp    515 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x115>
+     557:	nopw   0x0(%rax,%rax,1)
+     560:	mov    %rax,(%r8)
+     563:	movl   $0x0,0xc(%r8)
+     56b:	movb   $0x1,0x10(%r8)
+     570:	mov    %r8,%rax
+     573:	add    $0x28,%rsp
+     577:	ret
+     578:	lea    0x0(%rip),%rdx        # 57f <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x17f>
+     57f:	jmp    4e0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe0>
+     584:	nopl   0x0(%rax)
+     588:	mov    (%r9),%edi
+     58b:	jmp    43d <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x3d>
+     590:	lea    0x0(%rip),%rdx        # 597 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x197>
+     597:	jmp    4e0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe0>
+     59c:	lea    0x0(%rip),%rdx        # 5a3 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1a3>
+     5a3:	jmp    4e0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe0>
+     5a8:	lea    0x0(%rip),%rdx        # 5af <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1af>
+     5af:	jmp    4e0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe0>
+     5b4:	lea    0x0(%rip),%rdx        # 5bb <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1bb>
+     5bb:	jmp    4e0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe0>
+     5c0:	lea    0x0(%rip),%rdx        # 5c7 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1c7>
+     5c7:	jmp    4e0 <_ZN6sluice8blocking4readERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xe0>
+     5cc:	nopl   0x0(%rax)
+
+00000000000005d0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE>:
+     5d0:	endbr64
+     5d4:	mov    %rdi,%r8
+     5d7:	mov    (%rsi),%edi
+     5d9:	mov    %rsi,%r9
+     5dc:	test   %edi,%edi
+     5de:	js     700 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x130>
+     5e4:	cmpb   $0x0,0x4(%rsi)
+     5e8:	je     6e0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     5ee:	test   %rcx,%rcx
+     5f1:	je     6c8 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xf8>
+     5f7:	jle    6e0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x110>
+     5fd:	mov    %rdx,%rsi
+     600:	test   %rdx,%rdx
+     603:	je     710 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x140>
+     609:	sub    $0x28,%rsp
+     60d:	mov    %rcx,%rdx
+     610:	mov    %r8,(%rsp)
+     614:	mov    %r9,0x18(%rsp)
+     619:	mov    %rcx,0x10(%rsp)
+     61e:	mov    %rsi,0x8(%rsp)
+     623:	call   628 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x58>
+     628:	mov    (%rsp),%r8
+     62c:	test   %rax,%rax
+     62f:	jns    730 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x160>
+     635:	call   63a <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x6a>
+     63a:	mov    (%rsp),%r8
+     63e:	mov    0x8(%rsp),%rsi
+     643:	mov    (%rax),%eax
+     645:	mov    0x10(%rsp),%rcx
+     64a:	mov    0x18(%rsp),%r9
+     64f:	cmp    $0x4,%eax
+     652:	je     758 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x188>
+     658:	mov    $0x7,%edx
+     65d:	test   %eax,%eax
+     65f:	je     6b4 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe4>
+     661:	cmp    $0xd,%eax
+     664:	je     760 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x190>
+     66a:	cmp    $0x1,%eax
+     66d:	je     76c <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x19c>
+     673:	cmp    $0x2,%eax
+     676:	je     748 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x178>
+     67c:	cmp    $0x14,%eax
+     67f:	je     778 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1a8>
+     685:	cmp    $0x1c,%eax
+     688:	je     784 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1b4>
+     68e:	cmp    $0x7a,%eax
+     691:	je     790 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1c0>
+     697:	cmp    $0xb,%eax
+     69a:	jne    6b4 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe4>
+     69c:	lea    0x0(%rip),%rdx        # 6a3 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xd3>
+     6a3:	xchg   %ax,%ax
+     6a5:	data16 cs nopw 0x0(%rax,%rax,1)
+     6b0:	movzbl 0x4(%rdx),%edx
+     6b4:	mov    %dl,0x8(%r8)
+     6b8:	mov    %eax,0xc(%r8)
+     6bc:	movb   $0x0,0x10(%r8)
+     6c1:	jmp    740 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x170>
+     6c3:	nopl   0x0(%rax,%rax,1)
+     6c8:	movq   $0x0,(%r8)
+     6cf:	mov    %r8,%rax
+     6d2:	movl   $0x0,0xc(%r8)
+     6da:	movb   $0x1,0x10(%r8)
+     6df:	ret
+     6e0:	mov    $0x8,%eax
+     6e5:	mov    %al,0x8(%r8)
+     6e9:	mov    %r8,%rax
+     6ec:	movl   $0x0,0xc(%r8)
+     6f4:	movb   $0x0,0x10(%r8)
+     6f9:	ret
+     6fa:	nopw   0x0(%rax,%rax,1)
+     700:	mov    $0x6,%eax
+     705:	jmp    6e5 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x115>
+     707:	nopw   0x0(%rax,%rax,1)
+     710:	movb   $0x8,0x8(%r8)
+     715:	mov    %r8,%rax
+     718:	movl   $0x0,0xc(%r8)
+     720:	movb   $0x0,0x10(%r8)
+     725:	ret
+     726:	cs nopw 0x0(%rax,%rax,1)
+     730:	mov    %rax,(%r8)
+     733:	movl   $0x0,0xc(%r8)
+     73b:	movb   $0x1,0x10(%r8)
+     740:	mov    %r8,%rax
+     743:	add    $0x28,%rsp
+     747:	ret
+     748:	lea    0x0(%rip),%rdx        # 74f <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x17f>
+     74f:	jmp    6b0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe0>
+     754:	nopl   0x0(%rax)
+     758:	mov    (%r9),%edi
+     75b:	jmp    60d <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x3d>
+     760:	lea    0x0(%rip),%rdx        # 767 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x197>
+     767:	jmp    6b0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe0>
+     76c:	lea    0x0(%rip),%rdx        # 773 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1a3>
+     773:	jmp    6b0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe0>
+     778:	lea    0x0(%rip),%rdx        # 77f <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1af>
+     77f:	jmp    6b0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe0>
+     784:	lea    0x0(%rip),%rdx        # 78b <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1bb>
+     78b:	jmp    6b0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe0>
+     790:	lea    0x0(%rip),%rdx        # 797 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1c7>
+     797:	jmp    6b0 <_ZN6sluice8blocking5writeERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0xe0>
+     79c:	nopl   0x0(%rax)
+
+00000000000007a0 <_ZN6sluice8blocking9sync_dataERKNS_4FileE>:
+     7a0:	endbr64
+     7a4:	push   %rbx
+     7a5:	mov    %rdi,%rbx
+     7a8:	sub    $0x30,%rsp
+     7ac:	mov    (%rdi),%edi
+     7ae:	test   %edi,%edi
+     7b0:	js     830 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x90>
+     7b2:	call   7b7 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x17>
+     7b7:	test   %eax,%eax
+     7b9:	jns    858 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xb8>
+     7bf:	call   7c4 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x24>
+     7c4:	mov    (%rax),%eax
+     7c6:	cmp    $0x4,%eax
+     7c9:	je     870 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xd0>
+     7cf:	mov    $0x7,%edx
+     7d4:	test   %eax,%eax
+     7d6:	je     817 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x77>
+     7d8:	cmp    $0xd,%eax
+     7db:	je     877 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xd7>
+     7e1:	cmp    $0x1,%eax
+     7e4:	je     886 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe6>
+     7ea:	cmp    $0x2,%eax
+     7ed:	je     88f <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xef>
+     7f3:	cmp    $0x14,%eax
+     7f6:	je     898 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xf8>
+     7fc:	cmp    $0x1c,%eax
+     7ff:	je     8a1 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x101>
+     805:	cmp    $0x7a,%eax
+     808:	je     8aa <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x10a>
+     80e:	cmp    $0xb,%eax
+     811:	je     8b3 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x113>
+     817:	mov    %dl,0x24(%rsp)
+     81b:	mov    %eax,0x28(%rsp)
+     81f:	movb   $0x0,0x2c(%rsp)
+     824:	jmp    842 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xa2>
+     826:	cs nopw 0x0(%rax,%rax,1)
+     830:	movb   $0x6,0x24(%rsp)
+     835:	movl   $0x0,0x28(%rsp)
+     83d:	movb   $0x0,0x2c(%rsp)
+     842:	mov    0x2c(%rsp),%ecx
+     846:	mov    0x24(%rsp),%rax
+     84b:	add    $0x30,%rsp
+     84f:	pop    %rbx
+     850:	mov    %rcx,%rdx
+     853:	ret
+     854:	nopl   0x0(%rax)
+     858:	movq   $0x0,0x24(%rsp)
+     861:	movl   $0x1,0x2c(%rsp)
+     869:	jmp    842 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xa2>
+     86b:	nopl   0x0(%rax,%rax,1)
+     870:	mov    (%rbx),%edi
+     872:	jmp    7b2 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x12>
+     877:	lea    0x0(%rip),%rdx        # 87e <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xde>
+     87e:	xchg   %ax,%ax
+     880:	movzbl 0x4(%rdx),%edx
+     884:	jmp    817 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x77>
+     886:	lea    0x0(%rip),%rdx        # 88d <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xed>
+     88d:	jmp    880 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe0>
+     88f:	lea    0x0(%rip),%rdx        # 896 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xf6>
+     896:	jmp    880 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe0>
+     898:	lea    0x0(%rip),%rdx        # 89f <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xff>
+     89f:	jmp    880 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe0>
+     8a1:	lea    0x0(%rip),%rdx        # 8a8 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x108>
+     8a8:	jmp    880 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe0>
+     8aa:	lea    0x0(%rip),%rdx        # 8b1 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x111>
+     8b1:	jmp    880 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe0>
+     8b3:	lea    0x0(%rip),%rdx        # 8ba <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0x11a>
+     8ba:	jmp    880 <_ZN6sluice8blocking9sync_dataERKNS_4FileE+0xe0>
+     8bc:	nopl   0x0(%rax)
+
+00000000000008c0 <_ZN6sluice8blocking9file_infoERKNS_4FileE>:
+     8c0:	endbr64
+     8c4:	push   %r12
+     8c6:	push   %rbp
+     8c7:	push   %rbx
+     8c8:	mov    %rdi,%rbx
+     8cb:	sub    $0xd0,%rsp
+     8d2:	mov    (%rsi),%edx
+     8d4:	mov    %fs:0x28,%rax
+     8dd:	mov    %rax,0xc8(%rsp)
+     8e5:	xor    %eax,%eax
+     8e7:	test   %edx,%edx
+     8e9:	js     980 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0xc0>
+     8ef:	lea    0x30(%rsp),%rbp
+     8f4:	mov    $0x12,%ecx
+     8f9:	mov    %rsi,%r12
+     8fc:	mov    %rbp,%rdi
+     8ff:	rep stos %rax,(%rdi)
+     902:	mov    %rbp,%rsi
+     905:	mov    %edx,%edi
+     907:	call   90c <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x4c>
+     90c:	test   %eax,%eax
+     90e:	jns    9b8 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0xf8>
+     914:	call   919 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x59>
+     919:	mov    (%rax),%eax
+     91b:	cmp    $0x4,%eax
+     91e:	je     a28 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x168>
+     924:	mov    $0x7,%edx
+     929:	test   %eax,%eax
+     92b:	je     96c <_ZN6sluice8blocking9file_infoERKNS_4FileE+0xac>
+     92d:	cmp    $0xd,%eax
+     930:	je     a31 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x171>
+     936:	cmp    $0x1,%eax
+     939:	je     a49 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x189>
+     93f:	cmp    $0x2,%eax
+     942:	je     a52 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x192>
+     948:	cmp    $0x14,%eax
+     94b:	je     a5b <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x19b>
+     951:	cmp    $0x1c,%eax
+     954:	je     a64 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1a4>
+     95a:	cmp    $0x7a,%eax
+     95d:	je     a6d <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1ad>
+     963:	cmp    $0xb,%eax
+     966:	je     a76 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1b6>
+     96c:	mov    %dl,0x28(%rbx)
+     96f:	mov    %eax,0x2c(%rbx)
+     972:	movb   $0x0,0x30(%rbx)
+     976:	jmp    98f <_ZN6sluice8blocking9file_infoERKNS_4FileE+0xcf>
+     978:	nopl   0x0(%rax,%rax,1)
+     980:	movb   $0x6,0x28(%rdi)
+     984:	movl   $0x0,0x2c(%rdi)
+     98b:	movb   $0x0,0x30(%rdi)
+     98f:	mov    0xc8(%rsp),%rax
+     997:	sub    %fs:0x28,%rax
+     9a0:	jne    a7f <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1bf>
+     9a6:	add    $0xd0,%rsp
+     9ad:	mov    %rbx,%rax
+     9b0:	pop    %rbx
+     9b1:	pop    %rbp
+     9b2:	pop    %r12
+     9b4:	ret
+     9b5:	nopl   (%rax)
+     9b8:	mov    0x48(%rsp),%eax
+     9bc:	pxor   %xmm0,%xmm0
+     9c0:	movb   $0x1,0x30(%rbx)
+     9c4:	movaps %xmm0,(%rsp)
+     9c8:	movq   0x60(%rsp),%xmm0
+     9ce:	movhps 0x30(%rsp),%xmm0
+     9d3:	and    $0xf000,%eax
+     9d8:	movups %xmm0,0x8(%rsp)
+     9dd:	cmp    $0x8000,%eax
+     9e2:	mov    0x38(%rsp),%rax
+     9e7:	movq   $0x0,0x20(%rsp)
+     9f0:	setne  (%rsp)
+     9f4:	movdqa (%rsp),%xmm0
+     9f9:	mov    %rax,0x18(%rsp)
+     9fe:	movb   $0x1,0x20(%rsp)
+     a03:	mov    0x20(%rsp),%rax
+     a08:	movups %xmm0,(%rbx)
+     a0b:	movdqa 0x10(%rsp),%xmm0
+     a11:	mov    %rax,0x20(%rbx)
+     a15:	movl   $0x0,0x2c(%rbx)
+     a1c:	movups %xmm0,0x10(%rbx)
+     a20:	jmp    98f <_ZN6sluice8blocking9file_infoERKNS_4FileE+0xcf>
+     a25:	nopl   (%rax)
+     a28:	mov    (%r12),%edx
+     a2c:	jmp    902 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x42>
+     a31:	lea    0x0(%rip),%rdx        # a38 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x178>
+     a38:	nopl   0x0(%rax,%rax,1)
+     a40:	movzbl 0x4(%rdx),%edx
+     a44:	jmp    96c <_ZN6sluice8blocking9file_infoERKNS_4FileE+0xac>
+     a49:	lea    0x0(%rip),%rdx        # a50 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x190>
+     a50:	jmp    a40 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x180>
+     a52:	lea    0x0(%rip),%rdx        # a59 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x199>
+     a59:	jmp    a40 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x180>
+     a5b:	lea    0x0(%rip),%rdx        # a62 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1a2>
+     a62:	jmp    a40 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x180>
+     a64:	lea    0x0(%rip),%rdx        # a6b <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1ab>
+     a6b:	jmp    a40 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x180>
+     a6d:	lea    0x0(%rip),%rdx        # a74 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1b4>
+     a74:	jmp    a40 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x180>
+     a76:	lea    0x0(%rip),%rdx        # a7d <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1bd>
+     a7d:	jmp    a40 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x180>
+     a7f:	call   a84 <_ZN6sluice8blocking9file_infoERKNS_4FileE+0x1c4>
+     a84:	nop
+     a85:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000000a90 <_ZN6sluice8blocking4sizeERKNS_4FileE>:
+     a90:	endbr64
+     a94:	push   %r12
+     a96:	push   %rbp
+     a97:	push   %rbx
+     a98:	mov    %rdi,%rbx
+     a9b:	sub    $0xa0,%rsp
+     aa2:	mov    (%rsi),%edx
+     aa4:	mov    %fs:0x28,%rax
+     aad:	mov    %rax,0x98(%rsp)
+     ab5:	xor    %eax,%eax
+     ab7:	test   %edx,%edx
+     ab9:	js     b78 <_ZN6sluice8blocking4sizeERKNS_4FileE+0xe8>
+     abf:	mov    $0x12,%ecx
+     ac4:	mov    %rsp,%rdi
+     ac7:	mov    %rsi,%r12
+     aca:	mov    %rsp,%rbp
+     acd:	rep stos %rax,(%rdi)
+     ad0:	mov    %rbp,%rsi
+     ad3:	mov    %edx,%edi
+     ad5:	call   ada <_ZN6sluice8blocking4sizeERKNS_4FileE+0x4a>
+     ada:	test   %eax,%eax
+     adc:	jns    b40 <_ZN6sluice8blocking4sizeERKNS_4FileE+0xb0>
+     ade:	call   ae3 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x53>
+     ae3:	mov    (%rax),%eax
+     ae5:	cmp    $0x4,%eax
+     ae8:	je     b90 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x100>
+     aee:	mov    $0x7,%edx
+     af3:	test   %eax,%eax
+     af5:	je     b32 <_ZN6sluice8blocking4sizeERKNS_4FileE+0xa2>
+     af7:	cmp    $0xd,%eax
+     afa:	je     ba6 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x116>
+     b00:	cmp    $0x1,%eax
+     b03:	je     baf <_ZN6sluice8blocking4sizeERKNS_4FileE+0x11f>
+     b09:	cmp    $0x2,%eax
+     b0c:	je     bb8 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x128>
+     b12:	cmp    $0x14,%eax
+     b15:	je     bc1 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x131>
+     b1b:	cmp    $0x1c,%eax
+     b1e:	je     bca <_ZN6sluice8blocking4sizeERKNS_4FileE+0x13a>
+     b24:	cmp    $0x7a,%eax
+     b27:	je     bd3 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x143>
+     b2d:	cmp    $0xb,%eax
+     b30:	je     b99 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x109>
+     b32:	mov    %dl,0x8(%rbx)
+     b35:	mov    %eax,0xc(%rbx)
+     b38:	movb   $0x0,0x10(%rbx)
+     b3c:	jmp    b53 <_ZN6sluice8blocking4sizeERKNS_4FileE+0xc3>
+     b3e:	xchg   %ax,%ax
+     b40:	mov    0x30(%rsp),%rax
+     b45:	movl   $0x0,0xc(%rbx)
+     b4c:	movb   $0x1,0x10(%rbx)
+     b50:	mov    %rax,(%rbx)
+     b53:	mov    0x98(%rsp),%rax
+     b5b:	sub    %fs:0x28,%rax
+     b64:	jne    bdc <_ZN6sluice8blocking4sizeERKNS_4FileE+0x14c>
+     b66:	add    $0xa0,%rsp
+     b6d:	mov    %rbx,%rax
+     b70:	pop    %rbx
+     b71:	pop    %rbp
+     b72:	pop    %r12
+     b74:	ret
+     b75:	nopl   (%rax)
+     b78:	xor    %eax,%eax
+     b7a:	mov    $0x6,%edx
+     b7f:	movb   $0x0,0x10(%rbx)
+     b83:	mov    %dl,0x8(%rbx)
+     b86:	mov    %eax,0xc(%rbx)
+     b89:	jmp    b53 <_ZN6sluice8blocking4sizeERKNS_4FileE+0xc3>
+     b8b:	nopl   0x0(%rax,%rax,1)
+     b90:	mov    (%r12),%edx
+     b94:	jmp    ad0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x40>
+     b99:	lea    0x0(%rip),%rdx        # ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     ba0:	movzbl 0x4(%rdx),%edx
+     ba4:	jmp    b32 <_ZN6sluice8blocking4sizeERKNS_4FileE+0xa2>
+     ba6:	lea    0x0(%rip),%rdx        # bad <_ZN6sluice8blocking4sizeERKNS_4FileE+0x11d>
+     bad:	jmp    ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     baf:	lea    0x0(%rip),%rdx        # bb6 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x126>
+     bb6:	jmp    ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     bb8:	lea    0x0(%rip),%rdx        # bbf <_ZN6sluice8blocking4sizeERKNS_4FileE+0x12f>
+     bbf:	jmp    ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     bc1:	lea    0x0(%rip),%rdx        # bc8 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x138>
+     bc8:	jmp    ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     bca:	lea    0x0(%rip),%rdx        # bd1 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x141>
+     bd1:	jmp    ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     bd3:	lea    0x0(%rip),%rdx        # bda <_ZN6sluice8blocking4sizeERKNS_4FileE+0x14a>
+     bda:	jmp    ba0 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x110>
+     bdc:	call   be1 <_ZN6sluice8blocking4sizeERKNS_4FileE+0x151>
+     be1:	nopl   0x0(%rax)
+     be5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000000bf0 <_ZN6sluice8blocking6resizeERKNS_4FileEm>:
+     bf0:	endbr64
+     bf4:	push   %r14
+     bf6:	push   %rbx
+     bf7:	sub    $0x38,%rsp
+     bfb:	mov    (%rdi),%eax
+     bfd:	test   %eax,%eax
+     bff:	js     ce0 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0xf0>
+     c05:	cmpb   $0x0,0x4(%rdi)
+     c09:	je     cc0 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0xd0>
+     c0f:	mov    %rsi,%rbx
+     c12:	mov    %rdi,%r14
+     c15:	test   %rsi,%rsi
+     c18:	js     cc0 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0xd0>
+     c1e:	mov    %rbx,%rsi
+     c21:	mov    %eax,%edi
+     c23:	call   c28 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x38>
+     c28:	test   %eax,%eax
+     c2a:	jns    ca8 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0xb8>
+     c2c:	call   c31 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x41>
+     c31:	mov    (%rax),%eax
+     c33:	cmp    $0x4,%eax
+     c36:	je     cf0 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x100>
+     c3c:	mov    $0x7,%edx
+     c41:	test   %eax,%eax
+     c43:	je     c80 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x90>
+     c45:	cmp    $0xd,%eax
+     c48:	je     d09 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x119>
+     c4e:	cmp    $0x1,%eax
+     c51:	je     d12 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x122>
+     c57:	cmp    $0x2,%eax
+     c5a:	je     d1b <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x12b>
+     c60:	cmp    $0x14,%eax
+     c63:	je     d24 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x134>
+     c69:	cmp    $0x1c,%eax
+     c6c:	je     d2d <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x13d>
+     c72:	cmp    $0x7a,%eax
+     c75:	je     d36 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x146>
+     c7b:	cmp    $0xb,%eax
+     c7e:	je     cf8 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x108>
+     c80:	mov    %dl,0x24(%rsp)
+     c84:	mov    %eax,0x28(%rsp)
+     c88:	movb   $0x0,0x2c(%rsp)
+     c8d:	mov    0x2c(%rsp),%ecx
+     c91:	mov    0x24(%rsp),%rax
+     c96:	add    $0x38,%rsp
+     c9a:	pop    %rbx
+     c9b:	pop    %r14
+     c9d:	mov    %rcx,%rdx
+     ca0:	ret
+     ca1:	nopl   0x0(%rax)
+     ca8:	movq   $0x0,0x24(%rsp)
+     cb1:	movl   $0x1,0x2c(%rsp)
+     cb9:	jmp    c8d <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x9d>
+     cbb:	nopl   0x0(%rax,%rax,1)
+     cc0:	mov    $0x8,%eax
+     cc5:	mov    %al,0x24(%rsp)
+     cc9:	movl   $0x0,0x28(%rsp)
+     cd1:	movb   $0x0,0x2c(%rsp)
+     cd6:	jmp    c8d <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x9d>
+     cd8:	nopl   0x0(%rax,%rax,1)
+     ce0:	mov    $0x6,%eax
+     ce5:	jmp    cc5 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0xd5>
+     ce7:	nopw   0x0(%rax,%rax,1)
+     cf0:	mov    (%r14),%eax
+     cf3:	jmp    c1e <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x2e>
+     cf8:	lea    0x0(%rip),%rdx        # cff <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x10f>
+     cff:	nop
+     d00:	movzbl 0x4(%rdx),%edx
+     d04:	jmp    c80 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x90>
+     d09:	lea    0x0(%rip),%rdx        # d10 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x120>
+     d10:	jmp    d00 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x110>
+     d12:	lea    0x0(%rip),%rdx        # d19 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x129>
+     d19:	jmp    d00 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x110>
+     d1b:	lea    0x0(%rip),%rdx        # d22 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x132>
+     d22:	jmp    d00 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x110>
+     d24:	lea    0x0(%rip),%rdx        # d2b <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x13b>
+     d2b:	jmp    d00 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x110>
+     d2d:	lea    0x0(%rip),%rdx        # d34 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x144>
+     d34:	jmp    d00 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x110>
+     d36:	lea    0x0(%rip),%rdx        # d3d <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x14d>
+     d3d:	jmp    d00 <_ZN6sluice8blocking6resizeERKNS_4FileEm+0x110>
+     d3f:	nop
+
+0000000000000d40 <_ZN6sluice8blocking8sync_allERKNS_4FileE>:
+     d40:	endbr64
+     d44:	push   %rbx
+     d45:	mov    %rdi,%rbx
+     d48:	sub    $0x30,%rsp
+     d4c:	mov    (%rdi),%edi
+     d4e:	test   %edi,%edi
+     d50:	js     dd0 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x90>
+     d52:	call   d57 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x17>
+     d57:	test   %eax,%eax
+     d59:	jns    df8 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xb8>
+     d5f:	call   d64 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x24>
+     d64:	mov    (%rax),%eax
+     d66:	cmp    $0x4,%eax
+     d69:	je     e10 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xd0>
+     d6f:	mov    $0x7,%edx
+     d74:	test   %eax,%eax
+     d76:	je     db7 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x77>
+     d78:	cmp    $0xd,%eax
+     d7b:	je     e17 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xd7>
+     d81:	cmp    $0x1,%eax
+     d84:	je     e26 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe6>
+     d8a:	cmp    $0x2,%eax
+     d8d:	je     e2f <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xef>
+     d93:	cmp    $0x14,%eax
+     d96:	je     e38 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xf8>
+     d9c:	cmp    $0x1c,%eax
+     d9f:	je     e41 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x101>
+     da5:	cmp    $0x7a,%eax
+     da8:	je     e4a <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x10a>
+     dae:	cmp    $0xb,%eax
+     db1:	je     e53 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x113>
+     db7:	mov    %dl,0x24(%rsp)
+     dbb:	mov    %eax,0x28(%rsp)
+     dbf:	movb   $0x0,0x2c(%rsp)
+     dc4:	jmp    de2 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xa2>
+     dc6:	cs nopw 0x0(%rax,%rax,1)
+     dd0:	movb   $0x6,0x24(%rsp)
+     dd5:	movl   $0x0,0x28(%rsp)
+     ddd:	movb   $0x0,0x2c(%rsp)
+     de2:	mov    0x2c(%rsp),%ecx
+     de6:	mov    0x24(%rsp),%rax
+     deb:	add    $0x30,%rsp
+     def:	pop    %rbx
+     df0:	mov    %rcx,%rdx
+     df3:	ret
+     df4:	nopl   0x0(%rax)
+     df8:	movq   $0x0,0x24(%rsp)
+     e01:	movl   $0x1,0x2c(%rsp)
+     e09:	jmp    de2 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xa2>
+     e0b:	nopl   0x0(%rax,%rax,1)
+     e10:	mov    (%rbx),%edi
+     e12:	jmp    d52 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x12>
+     e17:	lea    0x0(%rip),%rdx        # e1e <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xde>
+     e1e:	xchg   %ax,%ax
+     e20:	movzbl 0x4(%rdx),%edx
+     e24:	jmp    db7 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x77>
+     e26:	lea    0x0(%rip),%rdx        # e2d <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xed>
+     e2d:	jmp    e20 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe0>
+     e2f:	lea    0x0(%rip),%rdx        # e36 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xf6>
+     e36:	jmp    e20 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe0>
+     e38:	lea    0x0(%rip),%rdx        # e3f <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xff>
+     e3f:	jmp    e20 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe0>
+     e41:	lea    0x0(%rip),%rdx        # e48 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x108>
+     e48:	jmp    e20 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe0>
+     e4a:	lea    0x0(%rip),%rdx        # e51 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x111>
+     e51:	jmp    e20 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe0>
+     e53:	lea    0x0(%rip),%rdx        # e5a <_ZN6sluice8blocking8sync_allERKNS_4FileE+0x11a>
+     e5a:	jmp    e20 <_ZN6sluice8blocking8sync_allERKNS_4FileE+0xe0>
+     e5c:	nopl   0x0(%rax)
+
+0000000000000e60 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE>:
+     e60:	endbr64
+     e64:	push   %r15
+     e66:	push   %r14
+     e68:	push   %r13
+     e6a:	mov    %rsi,%r13
+     e6d:	push   %r12
+     e6f:	push   %rbp
+     e70:	push   %rbx
+     e71:	mov    %rdi,%rbx
+     e74:	sub    $0x48,%rsp
+     e78:	mov    (%rsi),%edi
+     e7a:	mov    %rdx,0x10(%rsp)
+     e7f:	mov    %rcx,0x18(%rsp)
+     e84:	test   %edi,%edi
+     e86:	js     1040 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1e0>
+     e8c:	cmpb   $0x1,0x4(%rsi)
+     e90:	je     fe0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x180>
+     e96:	mov    %r8,%rbp
+     e99:	test   %r8,%r8
+     e9c:	je     fb0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x150>
+     ea2:	movabs $0x7fffffffffffffff,%rax
+     eac:	mov    %rdx,%rsi
+     eaf:	lea    -0x1(%r8),%rdx
+     eb3:	sub    %rsi,%rax
+     eb6:	cmp    %rdx,%rax
+     eb9:	jb     fe0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x180>
+     ebf:	or     %r8,%rsi
+     ec2:	js     fe0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x180>
+     ec8:	xor    %r14d,%r14d
+     ecb:	test   %rcx,%rcx
+     ece:	je     1050 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1f0>
+     ed4:	nop
+     ed5:	data16 cs nopw 0x0(%rax,%rax,1)
+     ee0:	mov    0x18(%rsp),%rax
+     ee5:	mov    %rbp,%r12
+     ee8:	sub    %r14,%r12
+     eeb:	lea    (%rax,%r14,1),%r15
+     eef:	mov    0x10(%rsp),%rax
+     ef4:	add    %r14,%rax
+     ef7:	mov    %rax,0x8(%rsp)
+     efc:	mov    %rax,%rcx
+     eff:	mov    %r12,%rdx
+     f02:	mov    %r15,%rsi
+     f05:	call   f0a <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0xaa>
+     f0a:	test   %rax,%rax
+     f0d:	jns    ff8 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x198>
+     f13:	call   f18 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0xb8>
+     f18:	mov    (%rax),%eax
+     f1a:	cmp    $0x4,%eax
+     f1d:	je     1028 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x1c8>
+     f23:	mov    $0x7,%edx
+     f28:	test   %eax,%eax
+     f2a:	je     f6f <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x10f>
+     f2c:	cmp    $0xd,%eax
+     f2f:	je     1080 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x220>
+     f35:	cmp    $0x1,%eax
+     f38:	je     1080 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x220>
+     f3e:	cmp    $0x2,%eax
+     f41:	je     1090 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x230>
+     f47:	cmp    $0x14,%eax
+     f4a:	je     1090 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x230>
+     f50:	cmp    $0x1c,%eax
+     f53:	je     10a0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x240>
+     f59:	cmp    $0x7a,%eax
+     f5c:	je     10a0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x240>
+     f62:	cmp    $0xb,%eax
+     f65:	setne  %dl
+     f68:	lea    0x3(,%rdx,4),%edx
+     f6f:	movq   $0x103,0x28(%rsp)
+     f78:	mov    %r14,0x20(%rsp)
+     f7d:	mov    %dl,0x2c(%rsp)
+     f81:	mov    %eax,0x30(%rsp)
+     f85:	movb   $0x1,0x34(%rsp)
+     f8a:	movdqa 0x20(%rsp),%xmm0
+     f90:	movups %xmm0,(%rbx)
+     f93:	mov    0x30(%rsp),%rax
+     f98:	movl   $0x0,0x1c(%rbx)
+     f9f:	mov    %rax,0x10(%rbx)
+     fa3:	movb   $0x1,0x20(%rbx)
+     fa7:	jmp    fca <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x16a>
+     fa9:	nopl   0x0(%rax)
+     fb0:	movq   $0x0,0x10(%rbx)
+     fb8:	pxor   %xmm0,%xmm0
+     fbc:	movl   $0x0,0x1c(%rbx)
+     fc3:	movb   $0x1,0x20(%rbx)
+     fc7:	movups %xmm0,(%rbx)
+     fca:	add    $0x48,%rsp
+     fce:	mov    %rbx,%rax
+     fd1:	pop    %rbx
+     fd2:	pop    %rbp
+     fd3:	pop    %r12
+     fd5:	pop    %r13
+     fd7:	pop    %r14
+     fd9:	pop    %r15
+     fdb:	ret
+     fdc:	nopl   0x0(%rax)
+     fe0:	mov    $0x8,%eax
+     fe5:	mov    %al,0x18(%rbx)
+     fe8:	movl   $0x0,0x1c(%rbx)
+     fef:	movb   $0x0,0x20(%rbx)
+     ff3:	jmp    fca <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x16a>
+     ff5:	nopl   (%rax)
+     ff8:	cmp    %rax,%r12
+     ffb:	jb     10b0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x250>
+    1001:	lea    (%rax,%r14,1),%rdx
+    1005:	cmp    %rdx,%rbp
+    1008:	je     1068 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x208>
+    100a:	test   %rax,%rax
+    100d:	je     10f0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x290>
+    1013:	cmp    %rbp,%rdx
+    1016:	jae    1068 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x208>
+    1018:	mov    0x0(%r13),%edi
+    101c:	mov    %rdx,%r14
+    101f:	jmp    ee0 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x80>
+    1024:	nopl   0x0(%rax)
+    1028:	mov    0x0(%r13),%edi
+    102c:	mov    0x8(%rsp),%rcx
+    1031:	jmp    eff <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x9f>
+    1036:	cs nopw 0x0(%rax,%rax,1)
+    1040:	mov    $0x6,%eax
+    1045:	jmp    fe5 <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x185>
+    1047:	nopw   0x0(%rax,%rax,1)
+    1050:	movb   $0x8,0x18(%rbx)
+    1054:	movl   $0x0,0x1c(%rbx)
+    105b:	movb   $0x0,0x20(%rbx)
+    105f:	jmp    fca <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x16a>
+    1064:	nopl   0x0(%rax)
+    1068:	pxor   %xmm0,%xmm0
+    106c:	mov    %rdx,0x20(%rsp)
+    1071:	movups %xmm0,0x28(%rsp)
+    1076:	jmp    f8a <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x12a>
+    107b:	nopl   0x0(%rax,%rax,1)
+    1080:	mov    $0x5,%edx
+    1085:	jmp    f6f <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x10f>
+    108a:	nopw   0x0(%rax,%rax,1)
+    1090:	mov    $0x9,%edx
+    1095:	jmp    f6f <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x10f>
+    109a:	nopw   0x0(%rax,%rax,1)
+    10a0:	mov    $0x4,%edx
+    10a5:	jmp    f6f <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x10f>
+    10aa:	nopw   0x0(%rax,%rax,1)
+    10b0:	movabs $0x600000103,%rax
+    10ba:	mov    %r14,0x20(%rsp)
+    10bf:	mov    %rax,0x28(%rsp)
+    10c4:	movdqa 0x20(%rsp),%xmm0
+    10ca:	movabs $0x100000000,%rax
+    10d4:	mov    %rax,0x10(%rbx)
+    10d8:	movl   $0x0,0x1c(%rbx)
+    10df:	movb   $0x1,0x20(%rbx)
+    10e3:	movups %xmm0,(%rbx)
+    10e6:	jmp    fca <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x16a>
+    10eb:	nopl   0x0(%rax,%rax,1)
+    10f0:	movq   $0x0,0x29(%rsp)
+    10f9:	mov    %r14,0x20(%rsp)
+    10fe:	movb   $0x1,0x28(%rsp)
+    1103:	movdqa 0x20(%rsp),%xmm0
+    1109:	movq   $0x0,0x10(%rbx)
+    1111:	movl   $0x0,0x1c(%rbx)
+    1118:	movb   $0x1,0x20(%rbx)
+    111c:	movups %xmm0,(%rbx)
+    111f:	jmp    fca <_ZN6sluice8blocking13read_exact_atERKNS_4FileEmSt4spanISt4byteLm18446744073709551615EE+0x16a>
+    1124:	nop
+    1125:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000001130 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE>:
+    1130:	endbr64
+    1134:	push   %r15
+    1136:	push   %r14
+    1138:	push   %r13
+    113a:	mov    %rdi,%r13
+    113d:	push   %r12
+    113f:	push   %rbp
+    1140:	push   %rbx
+    1141:	sub    $0x48,%rsp
+    1145:	mov    (%rsi),%edi
+    1147:	mov    %rcx,0x8(%rsp)
+    114c:	test   %edi,%edi
+    114e:	js     1360 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x230>
+    1154:	mov    %rdx,%r14
+    1157:	movzbl 0x4(%rsi),%edx
+    115b:	mov    %rsi,%rbp
+    115e:	test   %dl,%dl
+    1160:	je     1340 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x210>
+    1166:	test   %r8,%r8
+    1169:	je     1280 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x150>
+    116f:	movabs $0x7fffffffffffffff,%rcx
+    1179:	lea    -0x1(%r8),%rax
+    117d:	sub    %r14,%rcx
+    1180:	cmp    %rax,%rcx
+    1183:	jb     1340 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x210>
+    1189:	mov    %r8,%rax
+    118c:	or     %r14,%rax
+    118f:	js     1340 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x210>
+    1195:	xor    %ebx,%ebx
+    1197:	cmpq   $0x0,0x8(%rsp)
+    119d:	je     1370 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x240>
+    11a3:	xchg   %ax,%ax
+    11a5:	data16 cs nopw 0x0(%rax,%rax,1)
+    11b0:	mov    %r8,%r15
+    11b3:	lea    (%r14,%rbx,1),%r12
+    11b7:	sub    %rbx,%r15
+    11ba:	mov    %r15,%rax
+    11bd:	or     %r12,%rax
+    11c0:	js     1338 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x208>
+    11c6:	test   %dl,%dl
+    11c8:	je     1338 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x208>
+    11ce:	movabs $0x7fffffffffffffff,%rdx
+    11d8:	lea    -0x1(%r15),%rax
+    11dc:	sub    %r12,%rdx
+    11df:	cmp    %rax,%rdx
+    11e2:	jb     1338 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x208>
+    11e8:	mov    0x8(%rsp),%rax
+    11ed:	add    %rbx,%rax
+    11f0:	mov    %rax,0x18(%rsp)
+    11f5:	mov    %rax,%rsi
+    11f8:	mov    %r15,%rdx
+    11fb:	mov    %r12,%rcx
+    11fe:	mov    %r8,0x10(%rsp)
+    1203:	call   1208 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0xd8>
+    1208:	mov    0x10(%rsp),%r8
+    120d:	test   %rax,%rax
+    1210:	mov    %rax,%rdx
+    1213:	jns    12b0 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x180>
+    1219:	call   121e <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0xee>
+    121e:	mov    0x10(%rsp),%r8
+    1223:	mov    (%rax),%eax
+    1225:	cmp    $0x4,%eax
+    1228:	je     13a8 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x278>
+    122e:	mov    $0x7,%edx
+    1233:	test   %eax,%eax
+    1235:	je     12f1 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c1>
+    123b:	cmp    $0xd,%eax
+    123e:	je     1438 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x308>
+    1244:	cmp    $0x1,%eax
+    1247:	je     1438 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x308>
+    124d:	cmp    $0x2,%eax
+    1250:	je     1442 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x312>
+    1256:	cmp    $0x14,%eax
+    1259:	je     1442 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x312>
+    125f:	cmp    $0x1c,%eax
+    1262:	je     144c <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x31c>
+    1268:	cmp    $0x7a,%eax
+    126b:	je     144c <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x31c>
+    1271:	cmp    $0xb,%eax
+    1274:	setne  %dl
+    1277:	lea    0x3(,%rdx,4),%edx
+    127e:	jmp    12f1 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c1>
+    1280:	movq   $0x0,0x10(%r13)
+    1288:	pxor   %xmm0,%xmm0
+    128c:	movl   $0x0,0x1c(%r13)
+    1294:	movb   $0x1,0x20(%r13)
+    1299:	movups %xmm0,0x0(%r13)
+    129e:	add    $0x48,%rsp
+    12a2:	mov    %r13,%rax
+    12a5:	pop    %rbx
+    12a6:	pop    %rbp
+    12a7:	pop    %r12
+    12a9:	pop    %r13
+    12ab:	pop    %r14
+    12ad:	pop    %r15
+    12af:	ret
+    12b0:	cmp    %rax,%r15
+    12b3:	jb     13b8 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x288>
+    12b9:	lea    (%rax,%rbx,1),%rax
+    12bd:	cmp    %rax,%r8
+    12c0:	je     1390 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x260>
+    12c6:	test   %rdx,%rdx
+    12c9:	je     1400 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x2d0>
+    12cf:	cmp    %r8,%rax
+    12d2:	jae    1390 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x260>
+    12d8:	mov    0x0(%rbp),%edi
+    12db:	movzbl 0x4(%rbp),%edx
+    12df:	mov    %rax,%rbx
+    12e2:	test   %edi,%edi
+    12e4:	jns    11b0 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x80>
+    12ea:	mov    $0x6,%edx
+    12ef:	xor    %eax,%eax
+    12f1:	movq   $0x103,0x28(%rsp)
+    12fa:	mov    %rbx,0x20(%rsp)
+    12ff:	mov    %dl,0x2c(%rsp)
+    1303:	mov    %eax,0x30(%rsp)
+    1307:	movb   $0x1,0x34(%rsp)
+    130c:	movdqa 0x20(%rsp),%xmm0
+    1312:	movups %xmm0,0x0(%r13)
+    1317:	mov    0x30(%rsp),%rax
+    131c:	movl   $0x0,0x1c(%r13)
+    1324:	mov    %rax,0x10(%r13)
+    1328:	movb   $0x1,0x20(%r13)
+    132d:	jmp    129e <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x16e>
+    1332:	nopw   0x0(%rax,%rax,1)
+    1338:	mov    $0x8,%edx
+    133d:	jmp    12ef <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1bf>
+    133f:	nop
+    1340:	mov    $0x8,%eax
+    1345:	mov    %al,0x18(%r13)
+    1349:	movl   $0x0,0x1c(%r13)
+    1351:	movb   $0x0,0x20(%r13)
+    1356:	jmp    129e <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x16e>
+    135b:	nopl   0x0(%rax,%rax,1)
+    1360:	mov    $0x6,%eax
+    1365:	jmp    1345 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x215>
+    1367:	nopw   0x0(%rax,%rax,1)
+    1370:	movb   $0x8,0x18(%r13)
+    1375:	movl   $0x0,0x1c(%r13)
+    137d:	movb   $0x0,0x20(%r13)
+    1382:	jmp    129e <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x16e>
+    1387:	nopw   0x0(%rax,%rax,1)
+    1390:	pxor   %xmm0,%xmm0
+    1394:	mov    %rax,0x20(%rsp)
+    1399:	movups %xmm0,0x28(%rsp)
+    139e:	jmp    130c <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1dc>
+    13a3:	nopl   0x0(%rax,%rax,1)
+    13a8:	mov    0x0(%rbp),%edi
+    13ab:	mov    0x18(%rsp),%rsi
+    13b0:	jmp    11f8 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0xc8>
+    13b5:	nopl   (%rax)
+    13b8:	movabs $0x600000103,%rax
+    13c2:	mov    %rbx,0x20(%rsp)
+    13c7:	mov    %rax,0x28(%rsp)
+    13cc:	movdqa 0x20(%rsp),%xmm0
+    13d2:	movabs $0x100000000,%rax
+    13dc:	mov    %rax,0x10(%r13)
+    13e0:	movl   $0x0,0x1c(%r13)
+    13e8:	movb   $0x1,0x20(%r13)
+    13ed:	movups %xmm0,0x0(%r13)
+    13f2:	jmp    129e <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x16e>
+    13f7:	nopw   0x0(%rax,%rax,1)
+    1400:	movq   $0x0,0x29(%rsp)
+    1409:	mov    %rbx,0x20(%rsp)
+    140e:	movb   $0x2,0x28(%rsp)
+    1413:	movdqa 0x20(%rsp),%xmm0
+    1419:	movq   $0x0,0x10(%r13)
+    1421:	movl   $0x0,0x1c(%r13)
+    1429:	movb   $0x1,0x20(%r13)
+    142e:	movups %xmm0,0x0(%r13)
+    1433:	jmp    129e <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x16e>
+    1438:	mov    $0x5,%edx
+    143d:	jmp    12f1 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c1>
+    1442:	mov    $0x9,%edx
+    1447:	jmp    12f1 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c1>
+    144c:	mov    $0x4,%edx
+    1451:	jmp    12f1 <_ZN6sluice8blocking12write_all_atERKNS_4FileEmSt4spanIKSt4byteLm18446744073709551615EE+0x1c1>
+    1456:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000001460 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE>:
+    1460:	endbr64
+    1464:	push   %r15
+    1466:	push   %r14
+    1468:	push   %r13
+    146a:	push   %r12
+    146c:	push   %rbp
+    146d:	push   %rbx
+    146e:	mov    %rdi,%rbx
+    1471:	sub    $0x38,%rsp
+    1475:	mov    (%rsi),%edi
+    1477:	mov    %rdx,0x8(%rsp)
+    147c:	test   %edi,%edi
+    147e:	js     15e0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x180>
+    1484:	mov    %rsi,%r14
+    1487:	cmpb   $0x1,0x4(%rsi)
+    148b:	je     1618 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1b8>
+    1491:	mov    %rcx,%r12
+    1494:	test   %rcx,%rcx
+    1497:	je     1580 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x120>
+    149d:	jle    1618 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1b8>
+    14a3:	xor    %ebp,%ebp
+    14a5:	test   %rdx,%rdx
+    14a8:	je     1600 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1a0>
+    14ae:	xchg   %ax,%ax
+    14b0:	mov    0x8(%rsp),%rax
+    14b5:	mov    %r12,%r13
+    14b8:	sub    %rbp,%r13
+    14bb:	lea    (%rax,%rbp,1),%r15
+    14bf:	mov    %r13,%rdx
+    14c2:	mov    %r15,%rsi
+    14c5:	call   14ca <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x6a>
+    14ca:	test   %rax,%rax
+    14cd:	jns    15a0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x140>
+    14d3:	call   14d8 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x78>
+    14d8:	mov    (%rax),%eax
+    14da:	cmp    $0x4,%eax
+    14dd:	je     15d0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x170>
+    14e3:	mov    $0x7,%edx
+    14e8:	test   %eax,%eax
+    14ea:	je     152f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xcf>
+    14ec:	cmp    $0xd,%eax
+    14ef:	je     1638 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1d8>
+    14f5:	cmp    $0x1,%eax
+    14f8:	je     1638 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1d8>
+    14fe:	cmp    $0x2,%eax
+    1501:	je     1648 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1e8>
+    1507:	cmp    $0x14,%eax
+    150a:	je     1648 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1e8>
+    1510:	cmp    $0x1c,%eax
+    1513:	je     1658 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1f8>
+    1519:	cmp    $0x7a,%eax
+    151c:	je     1658 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1f8>
+    1522:	cmp    $0xb,%eax
+    1525:	setne  %dl
+    1528:	lea    0x3(,%rdx,4),%edx
+    152f:	movq   $0x103,0x18(%rsp)
+    1538:	mov    %rbp,0x10(%rsp)
+    153d:	mov    %dl,0x1c(%rsp)
+    1541:	mov    %eax,0x20(%rsp)
+    1545:	movb   $0x1,0x24(%rsp)
+    154a:	movdqa 0x10(%rsp),%xmm0
+    1550:	movups %xmm0,(%rbx)
+    1553:	mov    0x20(%rsp),%rax
+    1558:	movl   $0x0,0x1c(%rbx)
+    155f:	mov    %rax,0x10(%rbx)
+    1563:	movb   $0x1,0x20(%rbx)
+    1567:	add    $0x38,%rsp
+    156b:	mov    %rbx,%rax
+    156e:	pop    %rbx
+    156f:	pop    %rbp
+    1570:	pop    %r12
+    1572:	pop    %r13
+    1574:	pop    %r14
+    1576:	pop    %r15
+    1578:	ret
+    1579:	nopl   0x0(%rax)
+    1580:	pxor   %xmm0,%xmm0
+    1584:	movq   $0x0,0x10(%rbx)
+    158c:	movl   $0x0,0x1c(%rbx)
+    1593:	movb   $0x1,0x20(%rbx)
+    1597:	movups %xmm0,(%rbx)
+    159a:	jmp    1567 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x107>
+    159c:	nopl   0x0(%rax)
+    15a0:	cmp    %rax,%r13
+    15a3:	jb     1668 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x208>
+    15a9:	lea    (%rax,%rbp,1),%rdx
+    15ad:	cmp    %rdx,%r12
+    15b0:	je     1620 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1c0>
+    15b2:	test   %rax,%rax
+    15b5:	je     16a8 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x248>
+    15bb:	cmp    %r12,%rdx
+    15be:	jae    1620 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1c0>
+    15c0:	mov    (%r14),%edi
+    15c3:	mov    %rdx,%rbp
+    15c6:	jmp    14b0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x50>
+    15cb:	nopl   0x0(%rax,%rax,1)
+    15d0:	mov    (%r14),%edi
+    15d3:	jmp    14bf <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x5f>
+    15d8:	nopl   0x0(%rax,%rax,1)
+    15e0:	mov    $0x6,%eax
+    15e5:	mov    %al,0x18(%rbx)
+    15e8:	movl   $0x0,0x1c(%rbx)
+    15ef:	movb   $0x0,0x20(%rbx)
+    15f3:	jmp    1567 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x107>
+    15f8:	nopl   0x0(%rax,%rax,1)
+    1600:	movb   $0x8,0x18(%rbx)
+    1604:	movl   $0x0,0x1c(%rbx)
+    160b:	movb   $0x0,0x20(%rbx)
+    160f:	jmp    1567 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x107>
+    1614:	nopl   0x0(%rax)
+    1618:	mov    $0x8,%eax
+    161d:	jmp    15e5 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x185>
+    161f:	nop
+    1620:	pxor   %xmm0,%xmm0
+    1624:	mov    %rdx,0x10(%rsp)
+    1629:	movups %xmm0,0x18(%rsp)
+    162e:	jmp    154a <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xea>
+    1633:	nopl   0x0(%rax,%rax,1)
+    1638:	mov    $0x5,%edx
+    163d:	jmp    152f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xcf>
+    1642:	nopw   0x0(%rax,%rax,1)
+    1648:	mov    $0x9,%edx
+    164d:	jmp    152f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xcf>
+    1652:	nopw   0x0(%rax,%rax,1)
+    1658:	mov    $0x4,%edx
+    165d:	jmp    152f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xcf>
+    1662:	nopw   0x0(%rax,%rax,1)
+    1668:	movabs $0x600000103,%rax
+    1672:	mov    %rbp,0x10(%rsp)
+    1677:	mov    %rax,0x18(%rsp)
+    167c:	movdqa 0x10(%rsp),%xmm0
+    1682:	movabs $0x100000000,%rax
+    168c:	mov    %rax,0x10(%rbx)
+    1690:	movl   $0x0,0x1c(%rbx)
+    1697:	movb   $0x1,0x20(%rbx)
+    169b:	movups %xmm0,(%rbx)
+    169e:	jmp    1567 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x107>
+    16a3:	nopl   0x0(%rax,%rax,1)
+    16a8:	movq   $0x0,0x19(%rsp)
+    16b1:	mov    %rbp,0x10(%rsp)
+    16b6:	movb   $0x1,0x18(%rsp)
+    16bb:	movdqa 0x10(%rsp),%xmm0
+    16c1:	movq   $0x0,0x10(%rbx)
+    16c9:	movl   $0x0,0x1c(%rbx)
+    16d0:	movb   $0x1,0x20(%rbx)
+    16d4:	movups %xmm0,(%rbx)
+    16d7:	jmp    1567 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x107>
+    16dc:	nopl   0x0(%rax)
+
+00000000000016e0 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE>:
+    16e0:	endbr64
+    16e4:	push   %r15
+    16e6:	push   %r14
+    16e8:	push   %r13
+    16ea:	push   %r12
+    16ec:	push   %rbp
+    16ed:	mov    %rdi,%rbp
+    16f0:	push   %rbx
+    16f1:	sub    $0x38,%rsp
+    16f5:	mov    (%rsi),%edi
+    16f7:	test   %edi,%edi
+    16f9:	js     18c0 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1e0>
+    16ff:	mov    %rdx,%r12
+    1702:	movzbl 0x4(%rsi),%edx
+    1706:	mov    %rsi,%rbx
+    1709:	test   %dl,%dl
+    170b:	je     1810 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x130>
+    1711:	test   %rcx,%rcx
+    1714:	je     17e0 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x100>
+    171a:	jle    1810 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x130>
+    1720:	xor    %r13d,%r13d
+    1723:	test   %r12,%r12
+    1726:	je     18d0 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1f0>
+    172c:	nopl   0x0(%rax)
+    1730:	test   %dl,%dl
+    1732:	je     18b0 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1d0>
+    1738:	mov    %rcx,%r14
+    173b:	sub    %r13,%r14
+    173e:	test   %r14,%r14
+    1741:	jle    18b0 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1d0>
+    1747:	lea    (%r12,%r13,1),%r15
+    174b:	mov    %r14,%rdx
+    174e:	mov    %r15,%rsi
+    1751:	mov    %rcx,0x8(%rsp)
+    1756:	call   175b <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x7b>
+    175b:	mov    0x8(%rsp),%rcx
+    1760:	test   %rax,%rax
+    1763:	mov    %rax,%rdx
+    1766:	jns    1828 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x148>
+    176c:	call   1771 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x91>
+    1771:	mov    0x8(%rsp),%rcx
+    1776:	mov    (%rax),%eax
+    1778:	cmp    $0x4,%eax
+    177b:	je     1900 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x220>
+    1781:	mov    $0x7,%edx
+    1786:	test   %eax,%eax
+    1788:	je     1868 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x188>
+    178e:	cmp    $0xd,%eax
+    1791:	je     1985 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x2a5>
+    1797:	cmp    $0x1,%eax
+    179a:	je     1985 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x2a5>
+    17a0:	cmp    $0x2,%eax
+    17a3:	je     198f <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x2af>
+    17a9:	cmp    $0x14,%eax
+    17ac:	je     198f <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x2af>
+    17b2:	cmp    $0x1c,%eax
+    17b5:	je     1999 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x2b9>
+    17bb:	cmp    $0x7a,%eax
+    17be:	je     1999 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x2b9>
+    17c4:	cmp    $0xb,%eax
+    17c7:	setne  %dl
+    17ca:	lea    0x3(,%rdx,4),%edx
+    17d1:	jmp    1868 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x188>
+    17d6:	cs nopw 0x0(%rax,%rax,1)
+    17e0:	movq   $0x0,0x10(%rbp)
+    17e8:	pxor   %xmm0,%xmm0
+    17ec:	movl   $0x0,0x1c(%rbp)
+    17f3:	movb   $0x1,0x20(%rbp)
+    17f7:	movups %xmm0,0x0(%rbp)
+    17fb:	add    $0x38,%rsp
+    17ff:	mov    %rbp,%rax
+    1802:	pop    %rbx
+    1803:	pop    %rbp
+    1804:	pop    %r12
+    1806:	pop    %r13
+    1808:	pop    %r14
+    180a:	pop    %r15
+    180c:	ret
+    180d:	nopl   (%rax)
+    1810:	mov    $0x8,%eax
+    1815:	mov    %al,0x18(%rbp)
+    1818:	movl   $0x0,0x1c(%rbp)
+    181f:	movb   $0x0,0x20(%rbp)
+    1823:	jmp    17fb <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x11b>
+    1825:	nopl   (%rax)
+    1828:	cmp    %rax,%r14
+    182b:	jb     1910 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x230>
+    1831:	lea    (%rax,%r13,1),%rax
+    1835:	cmp    %rax,%rcx
+    1838:	je     18e8 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x208>
+    183e:	test   %rdx,%rdx
+    1841:	je     1950 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x270>
+    1847:	cmp    %rcx,%rax
+    184a:	jae    18e8 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x208>
+    1850:	mov    (%rbx),%edi
+    1852:	movzbl 0x4(%rbx),%edx
+    1856:	mov    %rax,%r13
+    1859:	test   %edi,%edi
+    185b:	jns    1730 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x50>
+    1861:	mov    $0x6,%edx
+    1866:	xor    %eax,%eax
+    1868:	movq   $0x103,0x18(%rsp)
+    1871:	mov    %r13,0x10(%rsp)
+    1876:	mov    %dl,0x1c(%rsp)
+    187a:	mov    %eax,0x20(%rsp)
+    187e:	movb   $0x1,0x24(%rsp)
+    1883:	movdqa 0x10(%rsp),%xmm0
+    1889:	movups %xmm0,0x0(%rbp)
+    188d:	mov    0x20(%rsp),%rax
+    1892:	movl   $0x0,0x1c(%rbp)
+    1899:	mov    %rax,0x10(%rbp)
+    189d:	movb   $0x1,0x20(%rbp)
+    18a1:	jmp    17fb <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x11b>
+    18a6:	cs nopw 0x0(%rax,%rax,1)
+    18b0:	mov    $0x8,%edx
+    18b5:	jmp    1866 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x186>
+    18b7:	nopw   0x0(%rax,%rax,1)
+    18c0:	mov    $0x6,%eax
+    18c5:	jmp    1815 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x135>
+    18ca:	nopw   0x0(%rax,%rax,1)
+    18d0:	movb   $0x8,0x18(%rbp)
+    18d4:	movl   $0x0,0x1c(%rbp)
+    18db:	movb   $0x0,0x20(%rbp)
+    18df:	jmp    17fb <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x11b>
+    18e4:	nopl   0x0(%rax)
+    18e8:	pxor   %xmm0,%xmm0
+    18ec:	mov    %rax,0x10(%rsp)
+    18f1:	movups %xmm0,0x18(%rsp)
+    18f6:	jmp    1883 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x1a3>
+    18f8:	nopl   0x0(%rax,%rax,1)
+    1900:	mov    (%rbx),%edi
+    1902:	jmp    174b <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x6b>
+    1907:	nopw   0x0(%rax,%rax,1)
+    1910:	movabs $0x600000103,%rax
+    191a:	mov    %r13,0x10(%rsp)
+    191f:	mov    %rax,0x18(%rsp)
+    1924:	movdqa 0x10(%rsp),%xmm0
+    192a:	movabs $0x100000000,%rax
+    1934:	mov    %rax,0x10(%rbp)
+    1938:	movl   $0x0,0x1c(%rbp)
+    193f:	movb   $0x1,0x20(%rbp)
+    1943:	movups %xmm0,0x0(%rbp)
+    1947:	jmp    17fb <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x11b>
+    194c:	nopl   0x0(%rax)
+    1950:	movq   $0x0,0x19(%rsp)
+    1959:	mov    %r13,0x10(%rsp)
+    195e:	movb   $0x2,0x18(%rsp)
+    1963:	movdqa 0x10(%rsp),%xmm0
+    1969:	movq   $0x0,0x10(%rbp)
+    1971:	movl   $0x0,0x1c(%rbp)
+    1978:	movb   $0x1,0x20(%rbp)
+    197c:	movups %xmm0,0x0(%rbp)
+    1980:	jmp    17fb <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x11b>
+    1985:	mov    $0x5,%edx
+    198a:	jmp    1868 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x188>
+    198f:	mov    $0x9,%edx
+    1994:	jmp    1868 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x188>
+    1999:	mov    $0x4,%edx
+    199e:	jmp    1868 <_ZN6sluice8blocking9write_allERKNS_4FileESt4spanIKSt4byteLm18446744073709551615EE+0x188>

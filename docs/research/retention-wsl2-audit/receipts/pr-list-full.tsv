@@ -1,0 +1,376 @@
+1	MERGED	sync-runtime	14bf131a0dafb74e240e2c671f6ca7f84c481a9b	master	feat: sync runtime — blocking I/O pool, positional ops, TLA+ proof, benchmarks
+2	MERGED	feat/async-runtime	422036cd53deb1cf8f26b9cae3c2fc524d45fd73	master	docs(async): resolve frontier phase identity collision
+3	MERGED	fix/e7-t2-contract-corrective	1ccbfe0c56e99c3f1445ac775b49de853d34cab1	master	test(async): realign E7-T2 with E8 worker migration contract
+4	MERGED	feat/cpp-static-1-tsa	8fe0738833494815fb9ffa727e27be4fb86ceb78	master	async: CPP-STATIC-1 TSA pilot + statically exposed global lock authority corrective
+5	MERGED	feat/e11-arch-recon	1d4b4c9c615bdc1c7a3a69498c59d13aa66dbc2b	master	feat(async): E11 architecture recon — deadline-aware wait timers
+6	MERGED	e12-async-synchronization-primitives	5b3017893bc657dd5057411f92db6f4689b9d864	master	feat(async): E12-A Event synchronization primitive (CLOSED)
+7	MERGED	e12-b-audit	0592e5cbffbf5ed0b2104c35eb4915e132a4b56c	master	E12-B Semaphore preparation corrective — policy register + corrected permit model + Conclusion A seam proof + safety-only formal gate
+8	MERGED	feat/e12-C-async-mutex	5593b186b54980f1dadeb22df560971ac046aa3a	master	feat(async): add Fiber-aware AsyncMutex with direct FIFO handoff
+9	MERGED	feat/e12-D-condition-formal	85a508dfcb3d538b07eb3a90c37a58df329c1751	master	feat(async): E12-D AsyncCondition -- formal verification, implementation, and test suite
+10	MERGED	e12-e	9c7573b9ddd20718f38594fa046306c0b7de8435	master	docs(async): E12-E Corrective-2 integration architecture
+11	MERGED	async-mutex-nothrow	e79f088fbc0449b7da374f797049885533e610a0	master	docs(async): async mutex nothrow authority and TLC runner
+12	MERGED	e12-e-queue-production-impl	b8269fdc8464b12038b2e8e2e434c98e31de2d6c	master	feat(async): E12-E Queue production implementation (AsyncQueue<T>) — PASS
+13	MERGED	audit/e10-e12-api-semantic-closure	71a4f35cea124f8e48bbab48a61b7dddbdcc7cf9	master	E10-E12 Async/Sync API & Semantic Closure + Corrective-2 (review findings addressed)
+14	MERGED	docs/e12-independent-review-closure	d2811c17222a60384a8b1c002ac2288bcbdbc028	master	docs(async): close E12-B/C/D and authorize E12-G after independent reviews
+15	MERGED	build/xmake-sanitizer-policy-fix	f4b1dfa20381a9f1d8dd9df5671c7b81f2387edf	master	build(async): replace deprecated mode.asan/tsan/ubsan with set_policy
+16	MERGED	feature/E13-preparation	38fa0cd372bfb0232ea62332b2ccd9120326aa0f	master	E13: Select multi-wait preparation design (Event + Timer first scope)
+17	MERGED	feat/e13-select-formal-model-core	845a9bdbeccc57ec193d29e3c25d9be2f4a6b721	master	E13: formal specs, verification tools, and design docs for select-formal-model-core
+18	MERGED	feat/e13-select-formal-model-safety	ce0d66005af61f7e9e93ce7e0f021c18ef14358a	master	formal(e13): layered safety suite — invariants, negative models, non-vacuity, verifier (#18)
+19	MERGED	feat/e13-select-production-preparation	ca07f78b09b41134df62a46be93a5260cf0f32f2	master	E13: Select production preparation — architecture, adapters, locking, test plan (#19)
+20	MERGED	e13-select-p1	bca17db2f80f88fea1024cedf4b45b8a0f462c6b	master	E13 P1-P6: Select types, admission, suspension, and publication
+21	MERGED	fix/e13-select-review-followup	8cfa6dfaf63197311ba74818604ca1f218ceca5e	master	fix(e13): address PR #20 review — drop redundant remove_cvref in select() requires
+22	MERGED	e13-select-p7-registration-rollback	46e98ffc9633d18c63ecf00d2a3c79495eb397d4	master	async(e13): P7 Select registration rollback + destruction closure
+23	MERGED	chore/semantic-test-names	6b343ab37a9c0b3e0d046d324dc4309d1bd2a33b	master	chore: rename tests/identifiers by behavior (drop e<digits>_ prefix)
+24	MERGED	docs/add-agents-md	1f07e2842f2f144c5fc1c025b03d9c5f7c2c1d44	master	docs: add AGENTS.md repository operating contract
+25	MERGED	fix/security-findings	5548a83388f8aa541d9fecc3be2cd2db985269a7	master	fix(security): address security review findings (WAL, I/O validation, io_uring, fiber, hardening)
+26	MERGED	fix/security-findings	47c9643df5b1a8960235c02b6bd5da50167b9c41	master	chore: update .gitignore
+27	MERGED	e12f-async-rwlock	eacd33ae95412a317103e7973d31bb2fcb6e3dc3	master	feat(async): add E12-F AsyncRwLock
+28	MERGED	design/e12-g-terminal-audit	698543d943b33b2091647400cc79ce427432313a	master	docs(async): E12-G cross-primitive terminal-resolution audit
+29	MERGED	impl/e14-threaded-evented-parity	5661f195f87b5c106a9d38cf1ee98465161f7575	master	E14: Threaded/Evented semantic parity production implementation
+30	MERGED	fix/e14-docs-and-script-refs	783fb447460464a63bf1beadb17439ffed1ff66a	master	docs: fix stale script ref, deduplicate closeout, mark preparation archived
+31	MERGED	refactor/split-xmake-lua	9009ef0a7544dc9c0f802328a7df22181adcf135	master	refactor: split xmake.lua into focused sub-files under xmake/
+32	MERGED	fix/e15-runtime-foundation-blockers	a02faaf7b0a436b479c9523ab48eba0579fd07ff	master	fix: E15 runtime foundation corrective — Result/Context/Batch/Group lifecycle and semantics
+33	MERGED	docs/documentation-architecture-refactor	cee0c4907506b5cab16f5c7f7c75c16b37d9cb83	master	docs: reorganize documentation into structured subdirectories
+34	MERGED	docs/documentation-corrective-v2	261793d76a67018fc3f398f454120ad663631bf4	master	docs: documentation corrective v2 — classification, architecture, and truth repair
+35	MERGED	design/e16-application-runtime	94544b19b4b8fb550966f44fe686aed45128c5cf	master	fix(e16): redesign application runtime architecture per independent review
+36	MERGED	test/fuzz-foundation	648ecea5142193cea4bb251f4fc1fd047a743731	master	test: fuzz foundation with deterministic mutation proof (SLUICE-FUZZ-001)
+37	MERGED	chore/rename-domain-identifiers	140b0716fc62850154978b5f5a929026681a1381	master	chore: rename domain identifiers (e+/p+/n+ → descriptive names)
+38	MERGED	fix/copy-fuzz-crash	cd14a585467b22f7017f4d093f08bfbadbdca10b	master	fix: correct copy_all_fault_fuzz oracle guards for two pre-existing false-positive crashes
+39	MERGED	docs/add-sluice-roadmap	88efe1f10df967700a1c970153fe203bb186eb6f	master	docs: add Sluice roadmap
+40	MERGED	docs/runtime-truth-sync-and-acceptance	0a78f8c215de29bd00fc777292d9e579d9c4227b	master	docs: correct E16 Application Runtime status — design only, not implemented
+41	MERGED	fix/group-transactional-evented-admission	0edb80f6013d60a93196a5507a3ef6c4c95d0717	master	fix(group): make evented admission transactionally exception-safe
+42	MERGED	chore/formal-verification-system	db631865998e94e1bd166581fc5718db1d5f689d	master	chore(formal): unify TLA+ models, tooling, and verification gates
+43	MERGED	fix/e12-queue-model-b	727f91bfc2efdbb3bfe5609f6f9491f2927aad4b	master	fix(formal): correct E12 Queue close-model sentinel + add reachability gates
+44	MERGED	feat/e16-application-runtime-lifecycle-model	729d0b58fe7dbb35bfab442cc585d65f8c313879	master	feat(async): implement E16 ApplicationRuntime lifecycle layer
+46	MERGED	fix/e16-post-merge-corrective-1	cfac7edfbbfc9588a1167f889a8d05be4c900de6	master	fix(async): close E16 terminal resource and identity authority gaps
+48	MERGED	diag/issue-47-multi-worker-crash	48505e519744a286051434b54383683f039b5c24	master	fix(async): close multi-worker suspend-before-switch context race
+49	MERGED	feat/m1-sluice-copy-version-a	c620746606ec76314fcb736635b28d974a19a912	master	feat(apps): add sluice-copy and Runtime task Completion wait
+51	MERGED	fix/issue-50-workers-topology-race	81a1134a45ee506cfb2a6f3c5d9994229474a877	master	fix(async): synchronize Scheduler worker topology growth
+53	MERGED	feat/m1-sluice-copy-version-a	0acd0edfd399300ffc380c27fb0b2178de2345f7	master	fix(m1): Completion publication and sluice-copy correctness
+54	MERGED	test/overnight-local-gate	b9a4a871abcb79b409fb745841e6f8ee7014be05	master	fix(overnight): resolve timeout monotonic clock bug, fix self-test assertions, add unit tests
+55	MERGED	fix/hardening-flaky-watchdog-fallthrough	e5a1848ef60343ad844e5926e8b0c4778c3ef426	master	fix(hardening): root-cause + repair two debug-soak flaky failures (T32, wqtopo)
+57	MERGED	feat/hardening-heartbeat	b0f35157c39a35e827e734c859955b1c70b89db4	master	feat(hardening): add heartbeat observability for long-running commands
+58	CLOSED	feat/version-b-contract-tests	fde712ce71e72cbf4072c3863d5e5605cfa137d7	master	test(copy): ScriptedAsyncBackend + Version B pipeline contract tests
+59	MERGED	feat/version-b-pipeline	19657ac36f9d640ad8f290407949e57b04a8da0d	master	feat(copy): bounded reusable-buffer pipeline (Version B)
+60	MERGED	docs/architecture-compliance-gate	bf22c4d62ad7af8412842ff53d87190ab242f38f	master	docs(architecture): audit, compliance gate, and governance framework
+61	MERGED	fix/explicit-io-completion-authority	5f75a5c243c86202dca75299f461f78bf7567e29	master	fix(async): enforce explicit Completion publication authority (P0-03, P1-03)
+62	MERGED	agent/explicit-io-request-contract	88f2d0311eb94b95b591d46530d42de8d336b7d9	master	docs(adr): define unified Explicit I/O Request Contract
+63	MERGED	feat/bounded-request-slot-reference	5c9d47346b501b822310031f1005154eddc3ca46	master	feat(async): add bounded RequestKey / RequestSlot reference lifecycle (Phase B)
+64	MERGED	feat/phase-e-bounded-threadpool-explicit-io	f71f9903711aea2bbc7286fafde50c3558bd87ad	master	feat(async): migrate ThreadPoolBackend to bounded explicit-I/O (Phase E)
+65	MERGED	docs/phase-e-post-merge-ledger-corrective	4d38eb9afd8f94ce49a3a9937d72d5110d9badcb	master	docs(architecture): post-merge Phase E ledger corrective on master head a8178d8
+66	MERGED	test/phase-c-explicit-io-conformance-gate	43b2944957b5d9cecd28153b0a332447ca2284b8	master	fix(async): explicit-I/O backend conformance gate (Phase C1) + issue #67 wait/drain/stats corrective
+69	MERGED	test/phase-c2-capacity-admission-rejection	b193f85b52e990afed1505862ed74bf3b1a22eb0	master	test(async): Phase C2a capacity/admission/rejection/accounting conformance (issue #68)
+70	MERGED	test/phase-c2b-generation-stale-cancel-matrix	667975b1eb5d3178a8ef8d097004c9aba800eb11	master	test(async): Phase C2b generation/stale-key/cancel-winner/identity-reap conformance (Issue #68 rows 3,4a,5-8)
+71	MERGED	test/phase-c2c-borrow-waiter-delivery-lease	2b303899ee6ddae13b27286e873ebe72ada148da	master	test(async): Phase C2c waiter/borrow/delivery-lease conformance (Issue #68 rows 11,12a,13,14a)
+72	MERGED	test/phase-c2d-failure-injection-accepted-terminal	86ed4fd75fad165970266fd96488f8ac79f53d2a	master	test(async): complete C2d deterministic failure-injection gate
+73	MERGED	test/phase-c2e-close-drain-destruction	25893ce3561f59586c7143a4539dd60c7571321a	master	test(async): complete C2e close-drain lifecycle gate
+76	MERGED	docs/phase-d-uring-migration-plan	825c47b28d3680eda887b237f2fc6901ed897787	master	docs(async): Phase D0 Uring migration audit & PR decomposition (plan)
+77	CLOSED	feat/phase-d1-uring-private-ring-requestarena	646dce8305d79a814c1a2ac08870f990e4ce06f9	docs/phase-d-uring-migration-plan	feat(async): D1 — UringAsyncBackend private-ring RequestArena migration
+78	MERGED	feat/phase-d1-uring-private-ring-requestarena	235162f823e016bbd06358acb9ec59faea20340f	master	feat(async): D1 — UringAsyncBackend private-ring RequestArena migration
+79	MERGED	fix/uring-internal-testing-guard	d9b27fc9e3264204dd57bb3431ddd4c36244591e	master	fix(async): unify uring internal test guard
+80	MERGED	test/phase-d2-uring-failure-noalloc	a5406b45698c733101d61d9b17079e49e33f083c	master	test(async): close Uring Phase D2 failure/no-allocation conformance gap
+82	MERGED	chore/add-local-pre-push-gate	d6281d8b20706540f03c16d23cdc38e2e61061e8	master	chore(dev): add deterministic local pre-push gate
+83	MERGED	test/phase-d3-uring-identity-waiter-conformance	91f72245faa5aa844b274c9ac0086c2e3b4cda7c	master	D3: Uring C2b/C2c identity, cancel, borrow and waiter integration evidence
+84	MERGED	feat/phase-d4-uring-wait-close-drain	66b2a98ba6168743e356550de0e27fed386cbf49	master	Phase D4: Uring wait source, close/drain proof, KernelIo gate lift
+87	MERGED	test/include-unistd-async-stats-wait-race	9bfa22707a79277ab637424a6bb3df89c1b9b73a	master	tests: include unistd.h explicitly in async stats wait race test
+88	MERGED	fix/queue-callguard-lifecycle-sync	500b688e3d7c36526ce729cc73fcf72838902793	master	fix(async): resolve Queue lifecycle race and ThreadPool gate flake (#86-A/B)
+91	MERGED	fix/queue-snapshot-lifecycle-gate	8a5ac5cddf2a1c29b794bf155ecd7f9309cdcbb9	master	fix(queue): snapshot lifecycle compliance + const-correct state_mtx_ (#90)
+93	MERGED	fix/threadpool-resume-bidirectional-92	7d2a4b42541f281477b3ee076e43056763b1fbc5	master	fix(threadpool): complete bidirectional pause-gate resume protocol (#92)
+102	MERGED	docs/zig-io-rebaseline-post-phase-d	fea5d26c4878cba801a239780e4d54e68549cd8d	master	docs(architecture): re-baseline Zig std.Io map + reconcile post-Phase-D state + cancel rearm fix (corrective pass)
+104	MERGED	audit/cpp20-legacy-hygiene	e3276065480f6ba4dd7cc9c99af5a257704a82b8	master	chore(cpp): audit C++20 baseline and legacy compatibility debt
+105	MERGED	feat/phase-f1-scheduler-ready-sink	cba1565d82a5c87f101247245bdcf546d43f5f24	master	Phase F1 (issue #98): Scheduler consumes identity-bearing reap via Scheduler-owned ReadySink
+106	MERGED	feat/phase-f-remaining	537e6a0907cb4d29952289b962d1f3654e5a8a5c	master	Phase F (issue #98): F2 BatchResult origin + F3 public RequestHandle + F4 closeout
+107	MERGED	fix/audit-94-101-closeout	e9305ae874ab9723e503e97a8401cdf3af33bdbd	master	Audit #94–#101 final closeout: #99 design decision, #100 formal gap, #101 watchdog model fix
+108	MERGED	feat/phase-g-backend-progress-wake	5bfb2601b29ccd3ad5857702ff47396dd9a64104	master	Phase G: backend-ready progress wake — G1 BLOCKED (park-window invariant violation); forensic instrumentation + regression
+109	MERGED	closeout/phase-g-foundation-freeze	7fcb0b9f415dad94ffd570812e6be22e258dd753	master	Phase G closeout: causal wake proof, real-uring validation, formal reconciliation, foundation freeze
+114	MERGED	post-freeze/r0-r1-structural-hygiene	4c056c694793b6942f3dfbd46857b4acdc465792	master	Post-freeze R0/R1 structural hygiene: scheduler concept-TU split, Zig std.Io alignment, first workload design
+117	MERGED	ci/watchdog-survivor-forensics	cbcce9f45690b642f301454f8c0df2949c86219b	master	ci(watchdog): survivor forensics — process tree, ppid/state/elapsed, self-ancestry guard
+118	MERGED	fix/issue-116-runtime-reentry-liveness	22de0ee94b29395430b772b82a32a7f4e7d29771	master	fix(issue-116): runtime/scheduler lost re-entry liveness — ROOT_CAUSE_PROVEN_AND_FIXED
+119	MERGED	fix/issue-110-test-gate-generation	310e5c56eb0a342cf54a3a4a4bba6dd8258896ad	master	fix(issue-110): generation-scoped dequeue-gate handshake for the scheme-B race loop (test-only; production byte-identical)
+120	MERGED	fix/issue-115-runnable-publication-wake	71f347e03dee0236c70e6a18a9e0f7c81f9a44e7	master	fix(issue-115): spawn/spawn_on publish the Scheduler wake obligation
+121	MERGED	agent/ci-debug-release	e15179c1a1b063c9fb53dfc931c3c515e38a2288	master	ci: simplify Debug gate and add fast Linux Release
+122	MERGED	apps/file-tools-track	259179c38b9417c857dfd1a00874a3ebd76639a7	master	apps: file-tools track — sluice-copy Version C, sluice-hash, sluice-grep, sluice-tail
+124	MERGED	docs/reorientation	180556279d3c4f294a5e2a6c109d188cc5b39f4d	master	docs: documentation & README information-architecture reorientation
+125	MERGED	audit/formal-cpp-tla-realignment	6ed6659ad38fd96929e21297c21f45cea0da62b9	master	formal: C++ ↔ TLA+ audit — RequestArena debt closed, 19/19 suites green, harness hardening
+126	MERGED	perf/performance-attribution	94ab95314d5a3b9894b6b923e201f633d4d13840	master	perf: performance attribution framework + sluice-grep round-1 optimization
+128	MERGED	fix/issue-123-phase-g-closeout-flake	2dd8c03663f7f390c0e70fc77a84542354ece924	master	fix(test): phase_g_closeout parallel-Debug flake — blocking handshakes + case watchdog (#123)
+130	MERGED	test/issue-129-uring-closeout-handshakes	894aae64566c0daf684e386ae86bc29ccca463a0	master	test(phase-g-uring): migrate closeout observations to blocking handshakes + case watchdog (#129)
+145	MERGED	agent/internal-test-control-plane	64655c2d865efe2a892b134157dbd272eaf21ce4	master	refactor(internal-testing): move test control plane out of installed production headers (C4, #135)
+146	MERGED	agent/runtime-await-operation-helpers	dfc4aa040e73941f365029c50c58a19c54042e94	master	feat(async): runtime await-style op helpers + task-result bridge (C7, #135)
+147	MERGED	agent/failure-model-policy	0a803cc4e969356ec9d78c201e89fa85fcb39396	master	docs(policy): failure-response model T1-T7 + changed-lines assert-hygiene gate (#135 C8, #144)
+148	MERGED	agent/failure-model-high-risk-fixes	01328812304ea0686abc73f0436387a9a1bcb6f6	master	fix(failure-model): high-risk assert sites reclassified T5/L9/T3 (#135 Case B)
+149	MERGED	agent/async-lifetime-contract-failfast	4f076985550051e5994cef8372688ea5c08062b1	master	feat(async): primitive destruction fail-fast unified Debug+Release (ADR-async-primitive-lifetime-failfast, #135)
+152	MERGED	agent/issue141-fileop001-nofollow	5a927f48a522beb0a47bc2cec045f385029d4b51	master	fix(sluice-copy): reject final-destination symlink in --no-atomic open (FILEOP-001, #141)
+154	MERGED	fix/issue-142-dir-fsync-eintr	6dc0dd57bc7b2baa7a6f59e18b1ad1aac9065fd7	master	fix(copy): retry directory fsync on EINTR
+155	MERGED	docs/issue-139-request-lifecycle	893fcc8fa519df88935cb98f26ee83a691cf173c	master	docs(async): request lifecycle locality walkthrough (closes #139)
+156	MERGED	fix/issue-143-close-error-reporting	fa7f525e14afb7b29e8e1c9fb9f10aae130dbd0d	master	fix(file): make close(2) failure observable via explicit close() (closes #143)
+157	MERGED	design/issue-137-submission-transaction	bbd4860a4569e20dbedef84d29e1459d30ad0687	master	design(async): centralized submission transaction design for #137 (PROPOSED — implementation still blocked)
+158	MERGED	fix/issue-151-uring-baseline-t5	42479b7337e870b6ea961cb493c9d00fbe5122c1	master	test(phase-g-uring): type the 6 remaining direct ws->snapshot() baselines (T5)
+159	MERGED	refactor/issue-137-submission-transaction-impl	7f74a655b51063b0f53907ca953f170bd0cfbcbb	master	refactor(async): centralize explicit-I/O submission transaction authority
+160	MERGED	fix/issue-137-review-corrections	012a457ab96d010208a31e29dad05e43df82bcee	master	fix(async): #159 review corrections — Stage-0 ring gate, lock docs, commit-error mapping, hook budget
+165	MERGED	chore/github-governance	09afdee334fc31bafa38dae8d81b8c0c9a251567	master	chore(github): standardize issue and PR governance
+166	MERGED	refactor/cpp-agent-skills	9ac5bb290808dc40e34582a0171d44dcb09076cc	master	refactor(skills): make C++ agent guidance procedural and adversarially reviewable
+168	MERGED	audit/162-cpp-tla-formal-closeout	90e644195f1e18a0f92102a3a4bf4055ba504541	master	formal+async: audit #162 — rwlock model repair (MODEL-001/002/003), model-doc verdicts, CPP-001/002 cleanup
+173	MERGED	formal/171a-suspend-switch-steal	d64a5f9b5b151ade0fd60b847df3a6fd3cba92a5	master	formal(e8): model suspend-switch steal exclusion (MODEL-007a)
+175	MERGED	formal/171b-wait-record-registry	ce87005599699700fc298646d931dbda51bb4da4	master	formal(wait-registry): model generation and delivery arbitration (MODEL-007b)
+177	MERGED	formal/171d-spawn-wake-epoch	2e389b96929ffb930be05112a515fae6f7a63a32	master	formal(scheduler): model spawn wake-epoch obligation (MODEL-007d)
+179	MERGED	formal/171e-worker-retire-rescue	70e50cad20a0695e5b052aca057bb04adecffaea	master	formal(scheduler): model worker-retire ticket rescue (MODEL-007e)
+181	MERGED	formal/171c-cancel-token-epoch	659882ae9567d9719ebb583a17d0c52afbe3ea10	master	formal(cancel): model CancelToken epoch isolation (MODEL-007c)
+182	MERGED	formal/169-async-mutex-negative-freshness	d6b15bc837099507cb50cfbca0b6909cc72067ce	master	formal(e12-async-mutex): enforce generated-negative freshness
+183	MERGED	cleanup/170-remove-dead-inbox	228815eeadb92f63f693b00085fb2e859e4603f8	master	cleanup(async): remove inert worker inbox notification surface
+187	MERGED	formal/e8-retire-inbox-vocabulary	00c896cf84f5d8674e9ee4717da314643918562c	master	formal(e8): retire unreachable inbox transport vocabulary
+188	MERGED	docs/formal-debt-register-rebaseline	1efdd3b1611bf3e8ff3b7ab75ecf299edf7c70c5	master	docs(formal): rebaseline formal debt register (issue #186)
+190	MERGED	formal/e9-retire-worker-quiescent	d5dae4cb8adf12ff89261f599fc3ef48294b793d	master	formal(e9): revive as-built worker retirement transition
+193	MERGED	formal/e9-generated-negatives	fe57ab19895e4aea6ac5478550deebe92f13d338	master	formal(e9): generate negative models with freshness gate
+194	MERGED	formal/e9-participant-no-progress-exit	2fe5c924edb2ea91a010af7f1754b0fb1d89d473	master	formal(e9): revive ParticipantNoProgressExit, complete FairRetire (#191)
+195	MERGED	formal/e9-reference-nonvacuity	47b5547ba58c0f740ff6bb73bdd3525942695265	master	formal(e9): repair SplitWait=FALSE reference-config vacuity (#185)
+201	MERGED	docs/v-layer-child-issue-pointers	4684b076f0d769256b836cced4c92edbc1e11050	master	docs(verification): point #163 V-layer roadmap at child issues #196-#200
+202	MERGED	verify/v2-e9-trace-conformance	c504645b2ffd28279b085b4847b1d80a7c85b668	master	verify(async): #196 E9 real-C++ trace conformance pilot
+203	MERGED	verify/v3-completion-weak-memory	4c13c0c6d98ed29aeafe8a28fb3425b83a2ac615	master	verify(async): #197 bounded weak-memory pilot for Completion publication
+204	MERGED	verify/v5-failure-envelope	cbe7b9c287e25d48ac708b7a5a77ceca38684d8f	master	verify(gates): #198 machine-checkable failure-envelope matrix + validator
+205	MERGED	verify/v6-guarantee-cost	2dce9b009b1bb9947a34bc6ea642782c2299cd32	master	perf(verification): #199 measure correctness costs and sustained overload
+206	MERGED	verify/v7-claim-discipline	283aa13ee81a9405796e46a4e488d96511a8ef22	master	verify(docs): #200 enforce bounded verification claims
+207	MERGED	docs/issue-167-surface-separation	8d53cebc772284ba967a07c9b5e61155e5eb6160	master	docs: separate live user/maintainer surfaces and classify architecture evidence (#167)
+208	MERGED	docs/issue-167-step4-source-comments	be46da0371b68a9d386b16fc3412c197e8f4cb0b	master	docs: functionalize source comments and empty header stale registry (#167 Step 4)
+209	MERGED	docs/issue-167-step5-archive-moves	dbfba3733f66b263d0013e4a41147e223c0e99a1	master	docs: archive zero-consumer evidence/history records to docs/history (#167 Step 5)
+211	MERGED	docs/issue-167-step5b-classification	492133754c125eb425e3fb59dec0b0a58eb44a6c	master	docs(#167): Step 5b semantic classification of docs/design/phase-* and docs/investigations (no moves)
+212	MERGED	docs/issue-167-step5c-preflight	1fcd9c98cd67fa089a2ad8784efe7d86e332a085	master	docs(architecture): Step 5c preflight — normalize Blocked ontology to Step 5b pin model (#167)
+213	MERGED	docs/issue-167-step5c-safe-archive	1ff06242612fbddca302a4b17f01fc244ec99d77	master	docs(archive): Step 5c safe archive batch — issue-110, issue-123, phase-b (#167)
+214	MERGED	docs/issue-167-step5d-issue115	dda1cf1043843f48d22650c98df2b1ed0b812e85	master	docs(archive): issue #115 disposition adjudication (superseded) + archive (#167 Step 5d)
+215	MERGED	docs/issue-167-step5e1-issue116	265963b98216d2b1d95deb89c1c6b149fea4b269	master	docs(archive): Step 5e1 — issue-116 investigation to docs/history (#167)
+216	MERGED	docs/issue-167-step5e2-phase-e	2fc67745e7e05c36164671670b1b958cefb69245	master	docs(archive): Step 5e2 — phase-e frozen design to docs/history (#167)
+217	MERGED	docs/issue-167-step5e3-phase-f1	fca28942e2f4a473586125dee53bdb7de55fe988	master	docs(archive): Step 5e3 — phase-f1 design to docs/history (#167)
+218	MERGED	docs/issue-167-step5e4-phase-g	e82dfbc1ba8507db183c49f75fa167aef8f7966d	master	docs(archive): Step 5e4 — phase-g design to docs/history (#167)
+219	MERGED	docs/issue-167-step5f-verification-keep	359b0dabb956021fb60f93998c160b8cc62add36	master	docs(verification): Step 5f — record KEEP for stable evidence identifiers (#167)
+220	MERGED	docs/issue-167-step5g-audit	525fde532fdd887fa81c7df2b3ff5c6c8db5f05c	master	docs(archive): Step 5g — final audit stale-pointer fix (#167)
+222	MERGED	fix/issue-210-e9-t4-failure-surfacing	5325a3ed32ce5eda3d84ed59600c93ab38891f2f	master	test(e9): fail-safe runner cleanup + pin T4 worker roles against the MW-S2 election race (#210)
+224	MERGED	research/issue-221-e1-abstraction-tax-baseline	5a6d108d50e6d98d0252c3b4f7fc862bd3e694b9	master	perf: add E1 explicit-I/O abstraction-tax baseline harness (#221)
+228	MERGED	chore/issue-227-phase0-mechanical-cleanup	a4fb6cdc821a05980ccfd708df37dcc1c35bdad4	master	chore: #227 phase 0 low-risk mechanical cleanup
+230	MERGED	docs/issue-227-readme-release-status	d5c609ed277656ac844d584449c8f11fe9502fcf	master	docs: correct release-status claims for v0.0.1 baseline
+231	MERGED	fix/issue-229-tsan-deadline-test-seam	a146db1730521962dd8c32cc6215e6c0f7425420	master	fix(async-test): synchronize timer state snapshots (#229)
+232	MERGED	docs/changelog-v001	35e123c410c232a5e87db6be4474961ab902bbcd	master	docs: root CHANGELOG.md from v0.0.1 with release-draft automation
+233	MERGED	docs/context-orientation	bf9bb6087ad21bc0c6a7d9c7d331dc95651e007e	master	docs: add root CONTEXT.md orientation map
+235	MERGED	arch/ac-1a-minimal-observability	45269ecc97d9225c4ffbf046af2517147e2006b2	master	arch(observability): add minimal resource observations for AC-1a
+236	MERGED	research/rx1-attribution-falsification	025bbec97ac19680142df7a25e5051b6e5d38633	master	research(rx1): controlled attribution falsification gate
+238	MERGED	refactor/ac2b-ordinary-deadline-authority	a7138ea4ed0831189c2be2639e8a158c965f26b3	master	refactor(async): centralize ordinary deadline registration lifecycle
+240	MERGED	refactor/ac2c-cancellation-authority	148bbfc75fdb623b15d0d1bd594f566380f7ec41	master	refactor(async): centralize narrow wait cancellation authority
+241	MERGED	test/dst-pv1-next-runnable-seam	c52303de27e86d85958392f5275a53a86daf5f3d	master	test(async): add minimal deterministic runnable-choice seam
+242	MERGED	fix/r2-wait-lifecycle-closeout	c462a7ee7a6a34e0f5fcd5db476aef90e4a33030	master	fix(async): close R2 wait lifecycle after queue liveness repair
+243	MERGED	feat/frontend-semantic-reuse	19c1bdeda7b103456630554694eefe9298d4b804	master	FE campaign: prove multi-frontend semantic reuse with one wait core
+244	MERGED	docs/agent-contract-convergence	7bceaa001a5001c6ca6c55d21313c47a2989034c	master	docs: 收敛 Agent 协作契约与实现导航
+245	MERGED	research/se1-hazard-corpus	06137793d40a140ed6dd418ce2845c7113eb2201	master	research(safety): build SE-1 async I/O lifecycle hazard corpus
+246	MERGED	research/se2-hazard-detection-matrix	865b352991b70ca06f2c67f96faeecfd3fdc30e8	master	research(safety): execute SE-2 hazard detection matrix
+247	MERGED	docs/archive-review-reports	337d4041293df9663f415310e3bbdbd31c022583	master	docs(history): archive FE/R2/SE-1/SE-2/THESIS-LEDGER review reports
+248	MERGED	docs/remove-archived-review-reports	06543fea89b0a6407df81ea161a54ccf7e44f88f	master	docs(history): remove review reports from master (restore untracked ruling)
+252	MERGED	research/tax0a-topology-freeze	2b1d0f7e72b2a2cc874f48cc9273cfc5d39a197b	master	research(tax0): freeze TAX-0A topology audit as TAX-0B preregistration (docs-only)
+253	MERGED	research/tax0b-exp0-capacity	4e6bdb603eab458e637355519d479bf055c13c5c	master	research(perf): measure TAX-0 capacity-dependent runtime tax
+254	MERGED	research/tax0-exp-u0-router-causality	3ba1435cf7f2cf2dc24d0e3b9459cedc36f1374b	master	research(perf): attribute Uring capacity tax to router scanning
+256	MERGED	research/tax0-router-fix-shootout	b12b640134303f15cf3d6b73fa8d5162cffd7246	master	research(perf): benchmark Uring router-resolution fix candidates
+257	MERGED	research/tax0-copy-ab1	0df66ad8fcaaae34b1f82536919ab48850caeebf	master	research(tax0): COPY-AB-1 freeze — application-level copy A/B (R0 vs R1)
+260	MERGED	research/tax0-a2-control-plane	f027a2501851d03d6f81c49dc20225d352a478e5	master	research(tax0): control-plane semantic floor + causal tax attribution (TAX-0B/C/D/E)
+261	MERGED	perf/tax0-f01-stats-gate	5204ba16d423bcd45e1f3f268125dd56df580ae2	master	perf(async): gate max-outstanding sampling on stats presence (TAX-0D F01)
+264	MERGED	research/buf-e0-buffer-truth	975e0754b366f2f9aaaf5839718a1f7727cde2b8	master	research(buf-e0): #263 Phase 2 buffer truth — census, preregistered 4-arm lifecycle measurements, alignment isolation, amplifier verdict
+266	MERGED	research/align-e0	78fb7a02bd5ea38bec95bbb3e87c8c8222cbc9f1	master	research(align-e0): #265 Phase 3 alignment threshold × size × depth × direction — preregistration, harness, WSL2-qualified + native sessions, verdict report
+269	MERGED	research/align-e1	24615737c0a78b36bb8aff23a05872ee824dd90b	master	research(align-e1): #268 application-level chunk sweep and regime map
+271	MERGED	research/chunk-e0-h0	35d912e2381b2fafeb9b1f6a2b51e515b4af5a44	master	research(chunk-e0): #270 host-0 chunk-size × depth sweet-spot map
+273	MERGED	research/rbuf-e0	c4cb8bd24ed3158f569d60fb2bef0e28a5a9a21a	master	research(rbuf-e0): registered-buffer steady-state and amortization crossover
+274	MERGED	perf/tax0-router-r1-production	45f568a04956259185015d79fee9f29b94714862	master	perf(async/uring): land selected reverse router scan and measure residual tax
+275	MERGED	fix/sluice-copy-ready-drain-258	8e3989698cb3a14b843d1bfe3ba3773319b3dc67	master	fix(sluice-copy): drain READY completions on error cleanup (#258)
+276	MERGED	fix/uring-equivalence-drain-262	389b0737832669e2b241051b0fa0340c8021e4fa	master	test(async/uring): name the drain-stall teardown abort instead of failing silently (#262 S2)
+278	MERGED	research/re-h0-native-performance-closure	cfdbc1722f6734061b1a7f8912d50a531a4caeef	master	research(perf): RE-H0 semantic-floor residual and native performance envelope
+280	MERGED	research/g1-control-c0-fixed-file	e86898821281f4bcbeeeb82a2e6e4cd290e2aaab	master	research(control): G1-Control C0 fixed-file identity and specialization falsification
+281	MERGED	research/g1-control-copy-x0	e31da9a587925a13cc7a44ac2918c2051efa6e6d	master	research(copy-x0): G1-Control Candidate 2 — Explicit Copy as a Legal Transformation Boundary (STOP, NO C1)
+282	MERGED	research/g1-control-batch-x0	3705c64b1067a53a93e98fda674eac7b4477df68	master	research(batch-x0): BATCH-X0 — explicit Batch control-plane amortization falsification — STOP, NO C1 (research-only)
+284	MERGED	docs/g1-control-research-closure	944e0232d08273f8fa18eae41d7b6cc4454a27db	master	docs(research): close G1-Control strong thesis and freeze Semantic Authority verdict
+285	MERGED	ci/actions-node24-runtime	dedc5665c86f636b92a4b89f0f1bc07e7d9c8eb1	master	ci(workflows): bump actions to Node 24 runtime majors
+287	MERGED	research/semantic-diet-0	6b458ad84ea10bca48f063ee100ac56a5384f661	master	research(semantic-diet): SEMANTIC-DIET-0 — remove speculative CopyStrategy deferred surface
+291	MERGED	docs/s0-docs-ia	70c2cd945084e916d19e953eac7609a92cd7ff62	master	docs: S0-DOCS — documentation IA, AGENTS/CONTEXT slimming, authority cleanup (#290)
+293	MERGED	research/safety-s0b-contract-reality	b457c0f64a62ee586020020eaecaf58341826b6b	master	research(safety): S0B contract ↔ correctness authority ↔ C++ reality freeze (#292)
+295	MERGED	research/safety-s1a-formal-coverage	5348e111a94582b3bc7c2a2af8c6bd1097de6c5d	master	research(safety): S1A C++ ↔ TLA+/GenMC protocol coverage and correspondence
+297	MERGED	research/safety-rf1-e9-startup-refinement	ac4ee3815b42e522d88e46cba3af5606298294cc	master	formal(e9): R-F1 worker startup population refinement (#223)
+300	MERGED	research/ftlr0-scip-pilot	c1695ee95be96dd8e18344e7aee28047976f50dc	master	research(formal): FTLR-0 SCIP pilot — formal impact recovery experiment (#299)
+302	MERGED	safety/fdg0-phase-a-build-truth	95a8f3f238b7bf9bd38f640d480d5fa861bc3aee	master	research(formal): FDG-0 Phase A — Xmake Build Truth (#298)
+303	MERGED	safety/fdg0-phase-b-formal-facets	c290dea6425f8cc13224a9284b4ad9c77dd1a352	master	formal: FDG-0 Phase B — Formal Facets (#298)
+304	MERGED	safety/fdg0-phase-c-historical-gold	e31025bc726ac9a024f144313112c675c359c44d	master	research(formal): FDG-0 Phase C — historical gold corpus, METHOD_RECALL_NOT_EARNED (#298)
+306	MERGED	research/tv1-trace-drift	7b77f0a8e5054cb77a2e4a65c9b9dc2bac78c69e	master	research(formal): TV-1 historical drift sensitivity via semantic trace validation (TRACE_CHANNEL_PARTIAL)
+307	MERGED	docs/trace-correspondence-authority-map	9ad9af4e04e9f97ee8224be9c113c54db4777aa3	master	docs(formal): clarify C++↔TLA+ correspondence and trace-guard authority
+309	MERGED	docs/docs-consistency-phase-a	384c778f99e1a50e9459ba6005f3def17892a5a2	master	DOCS-CONSISTENCY-0 Phase A — docs/authority consistency
+310	MERGED	cleanup/repository-context-purge	0dd7ad0c1a357261c53508238c616a23652b9bf0	master	cleanup: purge legacy repository context
+311	MERGED	docs/architecture-rebuild	87ea3507b57ec385a727081a6eda4127203e5225	master	docs: rebuild architecture.md from current code
+312	MERGED	format/code-blank-lines	a20eb14a306842c6a876a9de304bb4f8165b5a15	master	format: apply clang-format to include/ and src/
+314	MERGED	docs/design-doctrine	c856e51bd7cde220a2142297dabdb7d265ee7b37	master	docs: freeze explicit I/O mission and design doctrine
+315	MERGED	chore/gitignore-serena-xmake	2960f2920759d1a81b0cbeb8fbba1eb76c754080	master	chore: ignore serena artifacts and consolidate xmake gitignore rules
+317	CLOSED	cleanup/async-dead-protocol	eb557a21e0596e8f2da3822962cdc990dedf8246	master	cleanup: remove proven-dead async protocol surface
+318	CLOSED	cleanup/remove-unused-sync-backend	3d7591ac4848b8269e553b2c93b4c464100f03f9	master	cleanup: remove unused synthetic SyncBackend
+319	CLOSED	test/rebuild-async-core-minimum	3e39cae6c3d7e25d78c63d6a1a6b2722a5d1f585	master	test: rebuild minimal async core lifecycle tests
+320	CLOSED	fix/async-contract-consistency	37b91123c95481500672f60247d47b0a9ceb8803	test/rebuild-async-core-minimum	fix: make async cancellation and moved-from contracts explicit
+322	CLOSED	audit/architecture-survival-map	918a773e0b07d406a32df769d5209f9074dbbf01	master	audit: map Sluice capabilities to APIs and execution paths
+323	CLOSED	test/specification-witnesses	a44352ef3b5f34f503b627309ba96306c98e42f9	audit/architecture-survival-map	test: rebuild minimal specification witnesses from current architecture
+324	MERGED	docs/explicit-file-api-adr	03715b08fe79ed8eb886c811c32e74f050640881	master	docs: freeze explicit File API and execution architecture
+326	MERGED	audit/io-architecture-gap-1	c518283ea71039a71dc5dc8d23aef5a8e37b16ed	master	docs(audit): SLUICE-IO-ARCH-GAP-AUDIT-1 — IO architecture-gap audit report
+328	MERGED	ci/open-code-review-mimo	9d8180f20f505de72097a027356ed1ded77293a1	master	ci: add OpenCodeReview with Mimo v2.5
+329	MERGED	ci/ocr-review-drafts	0e0707ae2deb5bf11d52a81629df52677a4af306	master	ci: allow manual OCR review for draft PRs
+331	MERGED	feat/file-resource-read-path	be07443d154a747bcf08d29f126e631714c3556e	master	feat(async): File resource with positional read entry (#330 shape validation)
+332	MERGED	feat/file-positional-write	e61aefd9de2635925bb7f93cc775edb8b6a2f167	master	feat: File positional write through the existing async seam
+333	MERGED	docs/adr-0002-durability-contract	1aaacd44e70bf18851e945d1505ef405073bddcf	master	docs: define canonical file durability semantics
+334	MERGED	cleanup/remove-synthetic-backends	985671621bb33602ee42bd8fe62585740125ca8c	master	refactor: remove synthetic async backends from production surface
+336	MERGED	feat/async-file-sync-data	d28f675ac554c523e0ffe8843326a6cfb524cde1	master	feat: add File SyncData async operation
+337	MERGED	ci/ocr-advisory	9c3415df7db5b1633ec81a7d2d92a412e4434e3f	master	ci: make OpenCodeReview failures non-blocking
+338	MERGED	docs/explicit-file-conformance-roadmap	54f7f5501a0a1d8bd9ba092ddd22dff5e17b6cba	master	docs: add ADR-derived Explicit File conformance roadmap
+349	MERGED	docs/adr-authority-convergence-1	804d47495a28cc0a7b9436529cdca7b85061f4e2	master	docs(adr): converge Explicit File contract authority
+350	MERGED	feat/blocking-file-surface	870d08f2d6c5feecc587c419f40b6c4f58828896	master	feat: add first-class Blocking operations for canonical File
+352	MERGED	refactor/app-file-resource-convergence	2ca290f95ea961f1cb4bbb1f60bbcf36d0b643ec	master	refactor: converge app consumption onto canonical File
+353	MERGED	phase-a/a3-file-state	8a912f1ebbbcce9eb96a6c68ed7be864925d6074	master	[Roadmap A3] Canonical File state: size and resize
+354	CLOSED	phase-a/a4-sequential-file	1e609b7718d49400d7fa16c03663eef41f4051d6	master	[Roadmap A4] Canonical sequential File operations: read and write
+356	MERGED	corrective/file-access-legality-351	e78aacc84f86b27d6b92e5977eda36cb1c3aef85	master	[Authority corrective] Freeze and enforce canonical operation access-legality (read on write_only = invalid_argument)
+357	MERGED	phase-a/a6-explicit-file-ref-final	7bd432084adcaa5b57f51aeb087e9ce4a78ecb7d	master	[Roadmap A6 final] Explicit outstanding operations reference canonical File semantics (access-provenanced NativeFileRef)
+358	MERGED	phase-a/a7-vectored-final	7ac6bd4ee241bab33b78fb9779455f0bb05edbfb	phase-a/a6-explicit-file-ref-final	[Roadmap A7 final] Vectored decision: not carried as canonical Phase A surface (#355 backfilled)
+359	MERGED	corrective/liburing-verification	777449db0e9366a5b70aa3e28cebc5e37cf12f3d	master	[liburing verification] SLUICE_HAS_LIBURING as public usage requirement + real-path smoke on A6 representation
+360	MERGED	phase-a/a4-sequential-file-final	353a83ef9fc09a05653e8fc9e20b9e22b8c5ad98	master	[Roadmap A4] Canonical sequential File operations: read and write
+361	MERGED	phase-a/a5-sync-all-final	3cf6a618beffacecd3b82ecd1d9a415af47346cf	master	[Roadmap A5] Canonical File-facing SyncAll
+362	MERGED	phase-a/a7-vectored-final3	f9b9286945c3b0655356439fde1df1dc88c06599	master	[Roadmap A7 final] Vectored decision: not carried as canonical Phase A surface (#355 backfilled)
+363	MERGED	corrective/common-api-ledger-row	ca3f3e48d0c0ca409d5ffba98d8edcba8689ae52	master	[Docs] Reconcile Common logical API ledger row with landed SyncAll
+364	MERGED	corrective/backend-submit-privacy	dd8b31969e088ae6a42bed711ef6bed2d326e2dc	master	[Authority corrective] Backend submit_* overrides stay private end-to-end
+365	MERGED	corrective/file-access-precedence-witness	61b7e3e5f179c73304d8d7348fba54f14c334ab6	master	[Phase A corrective] Pin §5.5 File admission precedence with executable witnesses
+367	MERGED	docs/a8-snapshot-corrective-366	362ab6f8cc3b243759dd4d5c0c4db0d424dc0a5f	master	docs: reconcile A8 snapshot and README state (#366)
+368	MERGED	audit/legacy-surface-355	f92acf30849da3b94a06c8aaa59c28f206a22408	master	[Architecture audit] Final §14 disposition of retained legacy I/O surfaces (#355)
+369	MERGED	ci/xmake-build-cache	9a2839719063d88b53f6073927aba31073702384	master	ci: add cached Xmake build verification
+371	MERGED	docs/vectored-semantics-370	390f15bd5602e9be01bcf54eecaabcf1d6a20bcc	master	docs: clarify vectored reopen semantics (#370)
+372	MERGED	audit/code-reality-architecture-1	b9290156f20ae17e8ad8143c9f877ff76ff9a1c9	master	[Architecture audit] Code-first reality vs ADR + formal-method triage
+376	MERGED	formal/fcb1-stage-0	bcfb329223c28040cfc6c4a4c1d7b614405b8de7	master	formal(BRAKE-1): Stage 0 — V2.2 base calculus: execution domains and call origin
+377	MERGED	formal/fcb1-stage-1	43787ad74b3d3a799e2d18dee7537e874f279e9b	master	formal(FCB1-V2.2): Stage 1 — Event re-adjudicated on the execution domains
+378	MERGED	formal/fcb1-stage-2	3ce698d4c76ae0f01fd5094b43b294a19ddb567d	master	formal(FCB1-V2.3): Stage 2 — Semaphore core replayed on the split return window
+379	MERGED	formal/fcb1-stage-3	8a3144535ef5b95ba5ead1c348e6f6cc47987270	master	formal(FCB1-V2.3): Stage 3 — AsyncMutex THEOREM B on the V2.3 authority (RE-ADJUDICATED ON POST-#378 V2.3 AUTHORITY)
+380	MERGED	formal/fcb1-stage-4	db2b13fad0f978742a458fd9a5907df106437876	master	formal(FCB1-V2.3): Stage 4 — AsyncCondition; calculus-brake fired, amended, replayed (RE-ADJUDICATED ON POST-#378 V2.3 AUTHORITY)
+381	MERGED	formal/fcb1-stage-5	36598554b1ede60b796150f7548d90142ad5c027	master	formal(FCB-1): Stage 5 — AsyncRwLock core is THEOREM B
+382	MERGED	formal/fcb1-stage-6	5b16e3461954f515c7a7718c531935484cdd09bf	master	formal(FCB1-V2.3): Stage 6 — AsyncQueue semantics re-adjudicated; capability verdict RESEARCH/DEFER
+383	MERGED	formal/fcb1-stage-7	705bf192c61158ddae258dc79ee4867c37f5d47a	master	formal(FCB1-V2.3): Stage 7 — Select semantics re-adjudicated; capability verdict RESEARCH/DEFER
+384	MERGED	formal/fcb1-stage-8	8143e3685cdab5e9fe9d48d749e82add4b986ab3	master	formal(FCB1-V2.3): Stage 8 — Scheduler driver re-adjudicated; capability verdict RESEARCH/DEFER
+385	MERGED	formal/fcb1-verdict	71254ce945fba6bc4ee3838594ada66ee6e54590	master	formal(FCB1-V2.3): FINAL VERDICT — campaign synthesis on the V2.3 authority; three RESEARCH/DEFER boundaries; multi-worker run deferred
+386	MERGED	architecture/fcb1-375-final-disposition	11a31614adf9587e34409147f17149f0c474365b	master	architecture(FCB1): adjudicate async primitive ownership and close #375
+389	MERGED	architecture/explicit-io-v1-final-decision	daad5dd29d48aa9c136e0027047a64ed70fdaed8	master	docs: freeze Sluice v1 architecture and implementation authority
+404	MERGED	docs/v1-r3-architecture-view	8377e5ca7308b0d37fd4e7ca8ba3f3c9bd39c501	master	docs: add expanded v1 architecture ownership view
+405	MERGED	docs/v1-authority-archive-foundation-audit	5345c4cdff05511693ebc89e1bbaae8cbef3bb25	master	docs: archive superseded architecture records and freeze v1 documentation entrypoints
+406	MERGED	feat/v1-a1-shared-file-semantic-oracle	a71f5cd059197a74117cd97b6d26cb72230e742e	master	feat(v1-a1): establish shared File semantic oracle
+407	MERGED	feat/v1-a2-direct-w01-closure	3f8ac065bc52fe7dc4cf11a9868ae164c11dd8f5	master	feat(v1-a2): close direct File and W-01 semantics
+408	MERGED	formal/v1-f0-evidence-map	58c0609f28c4256e50e4f87740424378301ce8f2	master	formal(v1-f0): reset evidence map around v1-r3 protocols
+409	MERGED	chore/v1-comment-hygiene	c115ec02928400f21d1d3b24fe8ded9bb91db4d9	master	docs(governance): restrict C++ comments to local hazards
+411	MERGED	chore/410-comment-residual-cleanup	54107fa28c3648b8e454e77d1cc63b57c6d959f6	master	chore(governance): remove residual non-hazard C++ comments
+412	MERGED	ci/410-comment-authority-guard	e8c2e370f407e2fbb3d03d47ae270f00012773b4	master	ci(governance): add narrow guard against C++ pseudo-authority comments
+416	MERGED	test/415-primitive-short-write-evidence	e9f6435374ba400e1ffb516b4a36fdae49361999	master	test(evidence): pin the primitive short-write boundary at the seam
+418	MERGED	feat/394-b1-1-request-core-substrate	a30523cccedbea85d1826225ffaabf1004c58ba7	master	feat(async): standalone RequestCore protocol substrate (B1-1)
+420	MERGED	docs/419-mechanism-justification-gate	ef52975f9c766e004a125e9435ce34fdf47d62da	master	docs: add mechanism justification gate to agent guide
+421	MERGED	feat/394-b1-a-context-ownership	de1168588356a5b0f5ccac5f6c709764e80f24c1	master	feat(async): context-owned RequestCore and one context identity domain (B1-A)
+422	MERGED	feat/394-b1-b-threadpool-core-cutover	3e78521151263c98e145d8687175907a07292825	master	feat(async): ThreadPool atomic RequestCore authority cutover (B1-B, #394)
+423	MERGED	feat/394-b1-c-uring-core-cutover	2d56fdf1d258322fe0a83bfbb8e5bedc831462e6	master	feat(async): B1-C — io_uring atomic RequestCore authority cutover (#394)
+424	MERGED	chore/agents-testing-discipline	e88c64adf3b48520c42aa9c2d3e97449b8492c07	master	docs: add failure-first testing discipline
+425	MERGED	feat/394-b1-d-evidence-contraction	50b0e089c6d5adf7de08884afd37006c56ecce4a	master	refactor(async): close B1 RequestCore migration authority (#394)
+426	MERGED	feat/395-public-request	b55957f43afb87fd2c59997aca13d80df8a17b34	master	feat(async): add public Request<T> settlement responsibility (#395)
+434	MERGED	feat/396-observer-protocol	95c0717bbd126a0d972f06d3fc281a73e3993bd3	master	feat(async): migrate Observer protocol out of the backend (#396)
+435	MERGED	c1-h-observer-formal-model	cbecd4e868e83c087f94aa70b6328140b3c822f7	master	test(formal): add TLA+ ObserverCore model for the Observer protocol (#433)
+436	MERGED	docs/396-observer-formal-closure	c27675099c01c52577115b7e196f5e17e887ee5f	master	docs(formal): close #396 Observer proof obligation
+437	MERGED	feat/397-c2-a-progress-source-ownership	4e47f9cc2bddce76d72f182a947d1ba632046613	master	feat(async): C2-A move ProgressSource authority to IoContext (#397)
+438	MERGED	feat/397-c2-b-threadpool-no-lost-wake	6041f562f8222faf0bacbe3f2f04d5da11d52c9f	master	feat(async): C2-B close ThreadPool no-lost-wake protocol (#397)
+439	MERGED	feat/397-c2-c-uring-progress-convergence	02115b64ce1097aceb7d2990a498351873a30d4f	master	feat(async): C2-C converge io_uring readiness on ProgressSource (#397)
+440	MERGED	feat/397-c2-d-owner-outcomes-lifetime	941493929b8ac0890e1f301913654012930227d6	master	feat(async): C2-D single progress owner, owner outcomes, sticky control, external-host lifetime (#397)
+442	MERGED	fix/397-c2-abcd-conformance-contraction	1b468fc8bb5da9fa938c6968ffe0a1a763343e4f	master	fix(async): finalize C2 A-D conformance and contract progress mechanisms (#397)
+443	MERGED	formal/397-c2-e-progress-closure	a73ea6835f96e013c57107bb360e0d2c00d01884	master	formal(progress): close C2 ProgressSource proof obligations (#397)
+444	MERGED	fix/397-c2e-close-admission-transition-signal	b3cdc6a2181a56656a85659eafe4287e30261c4b	master	fix(progress): bind the close_admission wake to the admission transition (#397)
+445	CLOSED	docs/sluice-v1-pages	d63c38ac8f881fcdfa8ad161123f5e1cda31fac1	master	docs(pages): publish Sluice v1 interactive architecture walkthrough
+447	MERGED	feat/398-bounded-request-scope	528cb509e794f20e219685da4c810199a167a898	master	feat(async): add bounded RequestScope structured settlement (#398)
+448	MERGED	feat/visual-github-pages	ff6b8058cdc58e0c6dce860bd5197c7dbbbb0083	master	feat(docs): publish interactive Sluice v1 architecture walkthrough
+449	MERGED	feat/399-narrow-stackful-host	4e71bd52df950f6f4298473b769d021cd18639b4	master	D2 (#399): narrow single-owner stackful File-I/O host (StackfulIoHost) + W-04/HOST-03 evidence
+450	MERGED	feat/400-e1-backend-refinement	6ae2e651d09a0b093848bd9d16c14cf74c76e281	master	feat(async): E1 request-path metadata ops, effect currency, cancel refinement (#400)
+453	MERGED	fix/401-e2-shutdown-replacement	2f17d1d577301bd067423fde7c664c84dc60d772	master	E2: shutdown / poison / retained-result replacement (#401, #452)
+455	MERGED	docs/454-f0-role-profile-census	7ed62f2208c19182ffa1c07f3782b079c33bc353	master	docs(f0): Role/Profile Census + Policy + Consumer Migration DAG (#454)
+456	MERGED	feat/402-f1-clean-room-baseline	6404e07b5e07f197224b957c94680bb785b81b75	master	feat(f1): installed clean-room package baseline + requirement-indexed micro-contract oracles (#402)
+457	MERGED	m/m0-census	15cca2f63ef587f0860997c57642661c21d795cd	master	M0/M1: live consumer census & family readiness plan
+464	MERGED	m/m5-final	f13f40db8ff0a1df4ccc40c08522fc819f556f37	master	docs(m): M final integration report (#402)
+465	MERGED	fix/n02-frozen-baseline-provenance	118ff6731cac72094e2fcf3cd8e8f4743d392971	master	fix(f1): pin --check-frozen provenance to the frozen manifest baseline (N-02)
+468	MERGED	m/mr-tier1-exec	7f5b113b923aea8d89aefc9eb9c4098c576a3a99	master	M-R tier-1: retype reachable consumers to the adopted Request face + wire B-02 (#466)
+469	MERGED	m/mr-tier2-isolation-record	a980f9e8eee53a200f8d6385b6de1f2aa3129cdb	master	M-R tier-2: consumer isolation record with owners, exit conditions and COPY-B/TAIL obligations (#467)
+470	MERGED	m/m5-closeout	89d0b087b4b5ee9f723b773769d987fdd55519f8	master	M closeout: seven-family disposition, evidence and honest PHASE_M=NO (#458)
+471	MERGED	m/mr-tier1-residual	dad773c203a762791f5c98e1bb8934707975564a	master	M-R residual tier-1: retype the last two AsyncIoContext consumers + record corrections (#458)
+472	MERGED	m/mr-disposition-overlay	b0b0e391f49384b22df0e6882dd06f472171fa53	master	docs(m): M-R consumer disposition projection + Option A provenance re-anchoring (post-merge review)
+473	MERGED	decision/460-option-b-conditional-adr	78d94227172438534d6530eb9d17ac61fae7e7b3	master	docs(adr): condition ADR-0003 supported status for M-H Option B
+476	MERGED	docs/adr-0003-option-b-adoption	f5380d5e0ee74820897e2f27ba1b1fb93e216d29	master	docs(adr): formally adopt ADR-0003 narrow host design under Option B
+477	MERGED	test/e1-copy-b-contract-oracle	f6651524295d81584146f278e118d5e2ab4853d9	master	test(copy): e1 COPY-B contract oracle recovery (#474)
+478	MERGED	test/e4-tail-lifecycle-oracle	a7c9e30dea5d43e69a1773669f2835610ffe4f5a	master	test(tail): TAIL stop/settlement/teardown contract oracles (e4, #474)
+479	MERGED	docs/e2-app-readme-reality-alignment	901acfca0b48a27e5d7704560e28710aaec2bef9	master	docs(apps): align four app READMEs with live tests and behavior (e2, #474)
+481	MERGED	diag/e1-settlement-fix	e24ee88b80867d987ec486206d6126fb6151875a	master	fix(e1): publish a progress wake when a worker retires an unclaimable dispatch entry (e1, #474)
+484	MERGED	fix/e1-t4b-cancel-wake	646db4181bfa49adde619610da899becc33b3b38	master	fix(e1): signal when cancel_key retires a stale dispatch entry without a cancel win (T-4b, #482)
+485	MERGED	test/e3-shutdown-bounded-readiness	333a3cb36cf40723c7141d5f82c7e48faaf652e1	master	test(shutdown): replace fixed spin budgets with bounded readiness waits (#483)
+486	MERGED	docs/e1-settlement-ledger	6000745e07332b0589f032e7f31af6dff59ee884	master	docs(ledger): record the e1 settlement notification correction (#480, PROG-02)
+487	MERGED	docs/m-remaining-family-closeout	89bf45ca7ffba65916fcf9bd0ae79c493756467d	master	docs(m): Phase M wave-2 closeout — remaining-family dispositions and seven-family gate recompute (#458)
+488	MERGED	docs/v1-r4-negative-admission-m-exit-policy	21b6e86abc0d7bae22980a7fd50530555c25e77d	master	docs(root): v1-r4 minimal-scope exclusions and Phase M/F3 governance alignment
+490	MERGED	docs/489-f-w2-1-dual-profile-refreeze	7f5eed6acab33c2a78390ab7e594b4e3f77f1107	master	docs(f1): versioned dual-profile re-freeze for F-W2-1
+491	MERGED	codex/m-final-adoption	aabca28f9d46d9c552f1d62f45559edb28f4c8e8	master	Phase M final adoption: minimal v1 decisions, consumer closure and Phase F handoff
+492	MERGED	fix/f3-hash-direct-default	20fc313cb0c09f0e27611977dc39fa4d0f710397	master	F3: migrate single-worker HASH to direct File reads
+493	MERGED	fix/f3-grep-direct	0c5a6503041d48aa75062b2fcbd5f6046b524d5f	master	F3: migrate GREP default execution to direct I/O and fix D-H1/D-H2
+494	MERGED	codex/f3-hash-legacy-exit	b3cf09156d13ff36febc6a54951b56991ed70289	master	F3 Step 3: exit HASH legacy runtime compatibility
+495	MERGED	codex/f3-grep-legacy-exit	5b752d202f1c241e6d38808894d2491284534ded	master	F3 Step 3: exit GREP legacy runtime compatibility
+496	MERGED	codex/f3-copy-request-scope	88eeb0a57a09687aedab6b6ba81eed1d5d7af818	master	F3: migrate COPY pipeline to canonical RequestScope
+497	MERGED	codex/f3-tail-owned-driver	c3217fa95cb983ae74e978f75fb011ddaac7fa0b	master	F3: replace TAIL ApplicationRuntime with app-owned driver
+499	MERGED	codex/f3-runtime-retirement-audit	76774f21d6bb9a8a71f5a768667919b121179c81	master	F3: audit postmerge runtime consumers and define physical retirement batch
+500	MERGED	codex/f3-498-remaining-test-prep	49936edabf6b0bbd6955c1e363846c62392bb46d	master	F3: migrate COPY borrow-metric selftests to canonical RequestScope
+501	MERGED	codex/f3-498-canonical-test-migration	d38430cf3ed770e2705c20eefa5c1fcd75bec6d2	master	F3: migrate legacy File test consumers to canonical Request/File
+502	MERGED	codex/f3-498-retire-async-file	a1cc92c9d1da2ff96e6b8e87fbce8b7df11a349d	master	F3: retire legacy completed-return async File wrapper
+503	MERGED	codex/f3-part-c-c1-waiter	0d11cde73484844b0a1c3201b182c1ab910ec37a	master	F3: re-own Scheduler waiter oracles without ApplicationRuntime
+504	MERGED	codex/f3-part-c-c2-facade	4964613aad16aefad1b9f3e70af8215fe5d8bc9a	master	F3: physically retire ApplicationRuntime facade
+507	MERGED	docs/f3-phase-m-handoff-closeout-20261012	41be167196ccb98cbd0b410aa49803e4c65ff1dc	master	docs(roadmap): pin Phase M closeout and F3 scoped retirement handoff
+508	MERGED	codex/f4-506-pool	e642fd7aca270451d5072580eefd693b76ca00ca	master	retire(#506): physically remove BlockingIoPool product
+509	MERGED	codex/f4-505-oracle	2107a4f381f1a0cf936e01fc3ce97ab277d479a1	master	test(#505-A): re-own semantic range oracle on canonical File
+510	MERGED	codex/f4-505-retirement	23c925f9f7c03a2ab36021e370bac249d6ac88c0	master	retire(#505-B): remove legacy File/Reader/Writer native authority
+511	MERGED	codex/f4-w02-borrow-lifetime	e71fcdaa1fdc21b0d2dc4522a5e5e8b7266fd90f	master	test(package): preserve W-02 borrowed buffers through scope cleanup
+512	MERGED	codex/f4-installed-retirement-verifier	30e70cc21f02361e0edaf967d979499ea4e2e257	master	test(f4): verify 17 installed surface retirements and owner risk evidence
+513	MERGED	codex/f3-final-app-host-20261012	350e789810f16078d528e572a0b124e71bd6da97	master	test(apps): verify final app-host scope and reject inert TAIL workers
+514	MERGED	codex/f4-postmerge-b01	7b78ac5e90628d695907715b9c036b20d509619d	master	test(evidence): adopt F4 clean-break postmerge B-01 package cut
+515	MERGED	codex/f3-postmerge-receipt-20261013	2a19df3f29210dc65719cd1fdcab2d6d6ce4afa8	master	docs(evidence): record approved F3 merged-master closeout
+516	MERGED	f2-clean-authority	acbd1a73c34c9cc569172d2794de558cf65aca54	master	F2: contract the Request/Result/Identity authority (clean break)
+517	MERGED	f2-postmerge-receipt-20261013	63178b5727fe2ca4a8fd5a45d39782867cdf5f84	master	docs(evidence): record approved F2 actual-master exit
+518	MERGED	f5-final-package	5ef4f801095584044d61fd1156862becca5d9db7	master	F5: final package & public surface contraction (#402)
+522	MERGED	codex/pre-f6-infra-520-519-521	7077c4d2dcc4257042e232cc522cbe3fe389c52f	master	pre-F6 infra stabilization: same-dir ring-switch safety (#520), Clang mutation-target build (#519), RequestScope TSan seam (#521) + F-10 dependency-identity correction
+529	MERGED	codex/f6-final-closeout-523	845e17f5977f0132761db3b0471a6fd45bdd9764	master	F6 final closeout: evidence adoption, findings disposition and phase closure
+530	MERGED	codex/525-mechanical-cleanup	4d941f15ab03dc1c8e3431f56dc07b58d0104edf	master	chore(headers): inert Scheduler friendship removal + installed-header -Wextra fix; F6-F17 deferred (#525)
+531	MERGED	codex/526-request-error-domain	1a97212a059cb87524d7512f2dffbc31a9b0d0f6	master	test(err): request-path submission-failure and terminal errno re-diff oracle (F6-F10, #526)
+532	MERGED	codex/527-test-oracles	d65696bac414622ac8516719405de42b0c1dc909	master	test(life,thread): File move-borrow oracle and concurrent-submit corner evidence (F6-F13/F6-F14, #527)
+533	MERGED	codex/524-requestcore-convergence	ecdbb8c638eb5f75ce42abbb3e186989f3109765	master	formal(request): remove the retired ReleaseBind flavor and migrate its mutation oracle (#524 / F6-F03)
+534	MERGED	codex/403-g0-performance-baseline	20e0004f0cbbb8c8cd7e7f9def34e547f5e35d1f	master	G0(#403): evidence-only measured baseline, causal attribution and G1 candidate package
+535	CLOSED	codex/403-flamegraph-evidence	079265cc7284aa2c82709e8d4e100ee7f6fa2bf4	master	perf(403): native flame-graph profiling evidence (evidence-only, do not merge)
+536	MERGED	codex/403-g1-native-optimization	9069b4b5f0bbe55013068d1e186668a3f7114a57	master	G1(#403): native Linux optimization — C9-A/C1/C2 with correctness fixes and tests
+542	MERGED	codex/v2-architecture-freeze	a7cd6e4bfdef5d155e54d9c245a198de3f5a9400	master	docs(v2): propose the v2 architecture and contract as a replacement root (PROPOSED)
+543	MERGED	codex/uring-owed-residue-report	4db12a910951aff07bff072d3c49f0d6439eff27	master	fix(async): report uring owed deliveries as immediate pass residue
+544	MERGED	docs/v2-authority-adoption	ba27beee7db9a0e7180bcbc7110d317805f33b6b	master	docs(v2): adopt sole authority and replace v1 conformance ledger
+545	MERGED	pr-b/v2-surface-contraction	65a7632043ba11b38d99dbf934a2e3988331e59c	master	PR B: v2 code & surface contraction (D1/D2/D6) — 25→11 headers, backend seam closed, host removed
+546	MERGED	repo-hygiene	497a8ae4d46dfb985a7745e106007b1c567743db	master	chore(hygiene): repository contraction — semantic names, closed-campaign retirement, verified evidence
+547	MERGED	v2-release-gates-convergence	91f9c24fe4febc54dc274542d264dbd40f10aa50	master	v2 release gates RG1-RG7: LSan fix, identity/exhaustion evidence, PROG-02 oracle+mutant, release matrix, D3 disclosure
+548	MERGED	docs/v2-release-528-closeout	7424fd0ba8bdfe393f448bcaf282490eaa37e82a	master	docs: v2 release documentation convergence (#528 closeout)
+549	MERGED	chore/v2-pre-release-residue-cleanup	2f2cba0c10d4c2dda48af92839f3a4be889f7132	master	chore: v2 pre-release residue and naming cleanup (v0.0.2 prep)
+551	MERGED	release/v0.0.2	8a2f59499c3c7688bbc251a98b87078d1f87238c	master	Release: Sluice v0.0.2 (v2-only source release)
+552	MERGED	fix/550-threadpool-progress-test-synchronization	6313c2ad521b065427bcdf29bfe5a0192dc3e044	master	test(threadpool): establish causal worker-signal witness for three #550 race oracles
+554	MERGED	test/553-m5-deterministic-oracle	e67eb25a3ce367896a22fdf21c126fb3c63a39ae	master	test(threadpool): deterministic M5 signal-before-enqueue oracle (issue #553)
+558	MERGED	docs/llms-txt-v2	40a7d2ecb23e5796d4f91a854f22719495343f73	master	docs: add llms.txt navigation index for coding agents
+560	MERGED	research/m0m1-state-complexity	2e998fba760f553964a318b6f4a79c73f9dbeeae	master	research(m0-m1): minimal-state / STL container & algorithm complexity study
+562	MERGED	research/native-linux-m2	741e7dc2794eb89ae29607b8930d08d83d3f0faa	master	research(perf): validate io_uring mechanisms on native linux
+565	MERGED	perf/uring-owed-count-skip	fe91e7fdc47e22bb8309e6d4c90950565c006239	master	perf(uring): eliminate empty owed-event sweeps with derived count
+566	MERGED	research/mw-hw-1-path-elimination	0294a6b5e6bf61a9fa5a312f66cbb4bdd85ca46b	master	research(mw-hw-1): WSL2 path elimination & kernel boundary audit
+567	MERGED	research/native-linux-e1	d03f0b8b1a57fe7c5006c3c4367e1c6ed998d3f3	master	research(mw-hw-1): E1 native-Linux validation round — evidence archive (CONDITIONAL)
+569	MERGED	perf/e1-pending-control-zero-scan	c8c8eba4a456004b7592ec1397e99d13576095d9	master	perf(uring): eliminate zero-pending control router scans
+570	CLOSED	research/dp0-data-movement-audit	0d84b4775f1daf7bd11038b9b6d0c0d6dec224a7	master	research(DP-0): compiler-first data-movement audit (RESEARCH ONLY — do not merge)
+571	MERGED	perf/bench-w03-stop-race-stats-wiring	389ec94b5f6237e99634bcfe6a7d68c9e9ddae44	master	fix(bench): close W-03 stop race and wire async stats
+572	MERGED	perf/dp1-publication-payload	30d74a1831223b9245dded2af24ec3b869cdb3d3	master	perf(async): eliminate unused publication payload materialization
+573	MERGED	perf/dp3a-reserve-reinit	89dafc750de161c613d5b6b89ef1fbf7ca989cb6	master	perf(request): eliminate redundant reserve-time slot reset
+583	MERGED	release/v0.0.3	88185f5d9db120c93d3bc6f8af3ea2a497adc34f	master	Release v0.0.3: changelog, validation receipt, ledger record
+584	CLOSED	research/575-native-e5-atomic-rmw	e9baafb9d117cbaf387dde9f4433ebbacb4a73b3	master	research(575): native E5 atomic RMW elimination evidence — NO_CHANGE_JUSTIFIED
+585	MERGED	test/575-uring-flush-count-oracle	a691cc290c3ff46d7e1658497585f3bf6db90d6a	master	test(uring): pin positive io_uring transport flush accounting
+588	MERGED	fix/587-tail-child-liveness	d889cc10a53efe1db6f3ff7c184cfde8bd7c2965	master	test(app): fail fast on dead tail child and surface captured diagnostics (#587)
+589	MERGED	docs/xmake-module-layout	298b6ee141039829211c94b6028afc0d61486443	master	docs(build): clarify xmake module layout
+590	MERGED	fix/586-asan-preload-order	c768b72f0648c60c55d46ddddd3df6150edd98ca	master	test(app): load ASan runtime before tail pread shim (#586)
+592	MERGED	research/uring-router-580-wsl	82be0f4855e7ed142dc27805df16949f9185ffe6	master	research(uring): archive #580 evidence — NO_TRIGGER_NO_CHANGE
+594	OPEN	research/593-key-path	2714aa65fe4837d30f5fa3fcdb27db38c23b7136	master	research(593): E5 native key-path discovery & mechanism-elision campaign
+601	MERGED	sluice-600-direct-research	2fcc79646ee42d1699468e0a50c0269f405b92d3	master	research(direct): #600 E5 excess-cost attribution and C1 validation evidence
+602	MERGED	sluice-600-direct-c1	77e5399a45998dea396699fa2e063c94a665945a	master	perf(direct): dispatch admission verdicts without Precheck materialization (#600 C1)
+610	MERGED	research/direct-beyond-parity-evidence	d40a811dae783837c4749718a2a17f895d46d117	master	research(direct-beyond-parity): archive #603 P0-P6 evidence with sha256 manifest
+611	CLOSED	research/r6-ac1-vectored-semantics	999b5305ae7d413a2a71acde926f8c6cfef6876a	master	research(ac1): E5 semantic closure for positional vectored I/O (#605)
+612	MERGED	sluice-608-p2c1-read-compose	e4c9588ae8754ea44cf52194294103a7795aa1a0	master	perf(direct): P2C1 read compositions run prevalidated register-resident steps (#608)
+613	MERGED	ci/comment-guard-research-evidence-scope	1b3e87f02b44e89397f703607bcb7f906ad89fa4	master	ci(guard): keep comment-authority scan off archived research evidence

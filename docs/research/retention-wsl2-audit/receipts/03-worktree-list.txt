@@ -1,0 +1,7 @@
+$ git -C /home/hoo/Projects/Sluice worktree list --porcelain
+worktree /home/hoo/Projects/Sluice
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+branch refs/heads/master
+
+$ git -C /home/hoo/Projects/Sluice status --porcelain
+(empty output — main workspace clean)

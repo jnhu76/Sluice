@@ -1,0 +1,83 @@
+# RESEARCH_594_ARCHIVE_DECISION verification receipts
+# Session date: 2026-10-30. Host: hoo@WSL2. Repo: /home/hoo/Projects/Sluice.
+# All commands read-only (gh API reads, git diff/ls-tree/grep/archive-to-/tmp).
+# Writes this session: RESEARCH_594_ARCHIVE_DECISION.md + this receipts file only.
+
+$ git rev-parse origin/master origin/research/593-key-path
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136          # == PR #594 head
+$ git merge-base origin/master 2714aa65...
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57          # the #592 research-archive commit
+
+$ git diff --name-status origin/master...2714aa65 | sort stats
+56 entries; 56 A; 0 M / 0 D
+  docs/research/key-path-593/  = 15 files
+  bench/research/key-path-593/ = 41 files (README, 25 harness, 15 patches)
+$ git diff --shortstat origin/master...2714aa65
+ 56 files changed, 12245 insertions(+)
+
+$ git ls-tree --name-only origin/master docs/research/ bench/research/ research/
+docs/research/: mw-hw-1 native-linux-m2 state-complexity uring-router-580
+bench/research/: uring-router-580
+research/: 600-direct-excess-cost RESULTS.md direct-beyond-parity
+$ git ls-tree -r --name-only origin/master | grep -cE 'key-path|(^|/)593'
+0
+$ git show origin/master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json | grep -c 'key-path'
+0
+# sha256 intersection: 56 PR file content hashes vs 665 distinct manifest sha256 values
+$ comm -12 pr-sha.txt 610-sha.txt | wc -l
+0
+
+$ gh pr view 594 --repo jnhu76/Sluice --json state,mergeable,mergeStateStatus,headRefOid,title
+OPEN / MERGEABLE / CLEAN / head 2714aa65fe4837d30f5fa3fcdb27db38c23b7136 /
+title "research(593): E5 native key-path discovery & mechanism-elision campaign"
+$ gh pr view 594 --json body -q .body | grep -n 'PRODUCT_CHANGE\|implements\|remain open'
+3:`PRODUCT_CHANGE: NONE`. Base `bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57`.
+9:This implements the #593 K1–K4 campaign on E5 native (Xeon E5-2666 v3, kernel
+97:**This PR must remain open and unmerged.**
+
+$ git show 2714aa65:docs/research/key-path-593/decision.md | sed -n '205p'
+RESEARCH_PR: https://github.com/jnhu76/Sluice/pull/594 (branch research/593-key-path
+at the frozen base; opened and remains OPEN, unmerged per brief §14).
+$ git show 2714aa65:docs/research/key-path-593/correctness-review.md | sed -n '186,190p'
+- **Independence:** no separate independent reviewer signed off as an approver.
+  The independent review that produced the findings in measurement-review.md §10
+  was a *review input* to this revision, not an approval; ...
+
+$ git grep -r -i -l 'key-path\|key_path' 2714aa65 -- xmake xmake.lua .github scripts tests include src apps
+(no hits, exit 1)                                  # harness not wired into build/CI
+$ git grep -cE 'REQUEST_REPLAY|COMPLETION_REPLAY|METHOD_EARNED|PARTIAL_OBSERVATION_ONLY|REPLAY_NOT_ADMITTED|feasibility matrix' 2714aa65 -- docs/research/key-path-593 bench/research/key-path-593
+(no hits, exit 1)                                  # #593 Pilot R0–R4 vocabulary absent
+$ git grep -n 'PocketJS' 2714aa65 -- docs/research/key-path-593 bench/research/key-path-593
+docs/research/key-path-593/README.md:3:Issue: `jnhu76/Sluice#593` (PocketJS-inspired
+execution-path slicing), with                        # single attribution mention
+
+$ git grep -l -F '<term>' 2714aa65 -- docs/research/key-path-593 bench/research/key-path-593 | wc -l
+0.50017 -> 5   0.12577 -> 6   3.098 -> 7   4.79 -> 12
+$ git grep -n 'c750a314' 2714aa65 -- docs/research/key-path-593/evidence-index.md
+evidence-index.md:77:| `brief.md` | `c750a314807934b696d9e109f7545da7f62115c6ff58647dba59b587303bc198` |
+$ git grep -c 'k4_residue_wake_test\|k4_retry_residue_wake_test' 2714aa65 -- bench/research/key-path-593/patches/k4b-final.diff
+14
+$ git ls-tree --name-only origin/master tests/ | grep -i residue
+tests/uring_owed_residue_test.cpp                  # K4-b oracle sources NOT on master
+
+# SHA256SUMS verification (git archive of both PR subtrees to /tmp/sluice-val-594-decision)
+$ cd /tmp/sluice-val-594-decision/bench/research/key-path-593/harness && sha256sum -c SHA256SUMS
+24 OK, 0 non-OK
+$ cd ../patches && sha256sum -c SHA256SUMS
+14 OK, 0 non-OK
+
+$ gh issue view 593 --json state,title,updatedAt
+OPEN / "research(perf/method): PocketJS-inspired execution-path slicing and
+deterministic replay pilot" / updatedAt 2026-10-25T21:05:25Z
+$ gh issue view 595 --json body -q .body | grep -n 'Evidence:\|research/593-key-path\|W0'
+5:> **Parent:** #563 ... **Evidence:** #593 / research PR #594. ...
+11:Research archive: [#594] ... blob links on branch research/593-key-path
+92:**W0 — Freeze and reproduce:** ... **Do not touch or relocate**
+   `/home/jnhu/sluice-593-research/evidence/` ...
+
+# Forensic limitation (NOT RUN, confirmed)
+$ ls /home/jnhu/sluice-593-research
+ls: cannot access '/home/jnhu/sluice-593-research': No such file or directory
+# E5 raw evidence (1.35 GiB / 6,870 files) and brief.md full text NOT verifiable
+# from this host; no manifest generation or preservation verification executed.

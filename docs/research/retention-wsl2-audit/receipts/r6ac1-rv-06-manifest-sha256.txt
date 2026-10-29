@@ -1,0 +1,38 @@
+manifest total entries=818  entries with r6-ac1 path=34  entries mentioning r6-ac1 in any field=34
+branch-introduced (three-dot) files=34
+command per file: git cat-file blob <branch>:<path> | sha256  vs manifest sha256 (manifest read from origin/master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json)
+MATCHED  e578d0a8b562c7b00e7d8f0828c3a0c36a6dd7cadf858afeb743d149f38eb4a7  research/direct-beyond-parity/closure/r6-ac1.md
+MATCHED  a31502531c39a825122b18013e6b37d3c9fb87edd8a902d957431b910d99429b  research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
+MATCHED  746351a804aa58d55a6b678951918c5ffb7ce8f461db9ae9c505fdd3f4f9d925  research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
+MATCHED  4ced1c48cd73edbd9769624448afa3c90690a8d3959386b5a464383beed1b5d5  research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
+MATCHED  814383c3974c33279ddb351d114ea2221eb4a1df9853e074202bc7f72f2b0c1d  research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+MATCHED  b5e1bbd2d72db3fcdb12fd7a368a98d781c4dd735827b95634dedf5eb9832475  research/direct-beyond-parity/closure/r6-ac1/README.md
+MATCHED  0470dc741a0be65ce33f92c718bfd6daebedf1238983ca6951fd9abae187943d  research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
+MATCHED  9e364ff767cc716bba4d31d19d189d7f128eae1edabbab630660c9ec26cf56a9  research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
+MATCHED  dcdad559978fab46908523f9bf7b37c4b674f87f85db52eb5651dcb7cbd58c56  research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
+MATCHED  9283e6a842ac1edd1a314d2710e4bbb0937daca61d413c798055fdbca49cd937  research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
+MATCHED  37d5978c2e956c02faec2e6742ce27d1ae3c994cf9b2b7268022cd17a30f1f54  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
+MATCHED  74691f5db0b2dc3e3763fbd7083bef41173632ef3a6ade85f70dc98b25f7d5b5  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
+MATCHED  8d18602eb2538548f4ebd2bb75ebbfdbc603aaf9ea6f58eab9787310bbacbe7d  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
+MATCHED  fc2160c6f38fab77357d62e3d6b43dae72335151dc5a197a1cda8a0cb37889dc  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+MATCHED  b3fd77e98a56d2852aeeaafe80d95932aad27ff54166bac46936525b2a6eac03  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
+MATCHED  d9dd390a669c602e5a6fa812b3f6f12508687822c77c61c827e16f7743fda4e2  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
+MATCHED  ba521c69367d604efccb249c297135ba4d58637c2d2bc50b084657d07fcdcca4  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
+MATCHED  d04cf4414db3c706d74b39ba4c70661fdc077d586290f47d48d68670af62f6cd  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
+MATCHED  d04cf4414db3c706d74b39ba4c70661fdc077d586290f47d48d68670af62f6cd  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt
+MATCHED  8e8c19b49a663debb7e478e582f7f76c63a25e8d67830bae9ebb54e1dee452ca  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
+MATCHED  8e8c19b49a663debb7e478e582f7f76c63a25e8d67830bae9ebb54e1dee452ca  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt
+MATCHED  084d278dd4d9e04e2cac9e5f3a6419605993fcb6d535c93e2813196c0f61a8aa  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
+MATCHED  084d278dd4d9e04e2cac9e5f3a6419605993fcb6d535c93e2813196c0f61a8aa  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt
+MATCHED  084d278dd4d9e04e2cac9e5f3a6419605993fcb6d535c93e2813196c0f61a8aa  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt
+MATCHED  2db23fb105ddddc20a9799907dc5ca2cba190e614093472b3e037e0d92082138  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
+MATCHED  40dc008783b2824ed997d13981fbb75a870e79ea6888e2501ff80ce7f5b71f0b  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
+MATCHED  40dc008783b2824ed997d13981fbb75a870e79ea6888e2501ff80ce7f5b71f0b  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt
+MATCHED  205cf6b80328b837d379641d12d6b3c8124f228358695676496e185ae4750510  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
+MATCHED  d0313924fe65479d34f3e178a2c6a798bf3fe25e30d54d39e0bfdf0c8f1f1bc1  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
+MATCHED  d0313924fe65479d34f3e178a2c6a798bf3fe25e30d54d39e0bfdf0c8f1f1bc1  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt
+MATCHED  16aa2bafdb87fbfa17518b2bc0831544e719f11375b0194943690198f38433a5  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
+MATCHED  16aa2bafdb87fbfa17518b2bc0831544e719f11375b0194943690198f38433a5  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt
+MATCHED  85ad54fa601ebe4642513b73efaef060343acd49edf65329e32680da70e9ddd8  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
+MATCHED  85ad54fa601ebe4642513b73efaef060343acd49edf65329e32680da70e9ddd8  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt
+SUMMARY: branchfiles=34 matched=34 mismatched=0 notinmanifest=0

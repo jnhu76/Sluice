@@ -1,0 +1,7 @@
+# cmd: git -C /tmp/dududu-audit rev-list --objects origin/sluice-r0-e5-verdict ^main
+(line count below)
+0
+# cmd: git -C /tmp/dududu-audit diff --name-only main...origin/sluice-r0-e5-verdict
+# cmd: git -C /tmp/dududu-audit diff --name-status a57fb09^ cc321a4 (files the branch added)
+A	benchmarks/duckdb-r0/results/lane-record.md
+A	docs/DUCKDB_FIO_R0_PREREG.md

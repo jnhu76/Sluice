@@ -1,0 +1,16 @@
+# 07 worktree and cross-repo dependency
+## $ git worktree list
+/home/hoo/Projects/Sluice      84e1b7d5 [master]
+/tmp/sluice-val-c1-plat        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention 2714aa65 (detached HEAD)
+/tmp/sluice-val-p2c1           84e1b7d5 (detached HEAD)
+## $ git -C /tmp/sluice-val-k594-retention status --porcelain (empty = clean); HEAD:
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+## $ dududu clone state: /tmp/dududu-audit HEAD + remote
+12a8712eb5ff5f48e570b49b1e01ad5821837dca
+origin	https://github.com/jnhu76/dududu.git (fetch)
+origin	https://github.com/jnhu76/dududu.git (push)
+## $ git -C /tmp/dududu-audit grep -rn -i "key-path-593|593-key-path" HEAD (empty = no matches)
+dududu-grep1 exit=1 (1 = no matches)
+## $ git -C /tmp/dududu-audit grep -rn "593|594" HEAD -- benchmarks/duckdb-r0/results/ docs/ (empty = no matches)
+dududu-grep2 exit=1 (1 = no matches)

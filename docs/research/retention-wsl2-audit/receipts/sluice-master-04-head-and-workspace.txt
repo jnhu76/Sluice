@@ -1,0 +1,29 @@
+$ git -C /home/hoo/Projects/Sluice log -1 --format='%H%n%an %ae%n%ad%n%s' origin/master
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+jm.hu 5766215+jnhu76@users.noreply.github.com
+Thu Oct 29 19:41:19 2026 +0800
+perf(direct): P2C1 read compositions run prevalidated register-resident steps (#608) (#612)
+
+$ git -C /home/hoo/Projects/Sluice symbolic-ref refs/remotes/origin/HEAD
+refs/remotes/origin/master
+
+$ git -C /home/hoo/Projects/Sluice status --porcelain
+?? docs/research/retention-wsl2-audit/
+
+$ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice      84e1b7d5 [master]
+/tmp/sluice-val-c1-plat        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention 2714aa65 (detached HEAD)
+/tmp/sluice-val-p2c1           84e1b7d5 (detached HEAD)
+
+$ git -C /home/hoo/Projects/Sluice ls-tree --name-only origin/master docs/research/
+docs/research/mw-hw-1
+docs/research/native-linux-m2
+docs/research/state-complexity
+docs/research/uring-router-580
+
+$ git -C /home/hoo/Projects/Sluice for-each-ref --format='%(refname) %(objectname:short) %(subject)' refs/tags
+refs/tags/pre-rewrite-2026-09-07 152b0ab4 Sluice snapshot before repository reset and clean-room reconstruction
+refs/tags/v0.0.1 1e38505c Sluice v0.0.1
+refs/tags/v0.0.2 5581fbdf Sluice v0.0.2
+refs/tags/v0.0.3 3ddf9765 Sluice v0.0.3

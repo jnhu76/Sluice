@@ -1,0 +1,7 @@
+# receipt r0closure-08: recovery — fetch-by-sha from origin (run 2026-10-29)
+$ git -C /tmp/dududu-audit fetch origin cc053cf9258b98546b16f9d2f08c5559fa73bc77
+From https://github.com/jnhu76/dududu
+ * branch            cc053cf9258b98546b16f9d2f08c5559fa73bc77 -> FETCH_HEAD
+exit=0
+$ git -C /tmp/dududu-audit rev-parse FETCH_HEAD
+cc053cf9258b98546b16f9d2f08c5559fa73bc77

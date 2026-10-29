@@ -1,0 +1,6 @@
+$ git -C /home/hoo/Projects/Sluice symbolic-ref refs/remotes/origin/HEAD
+refs/remotes/origin/master
+
+$ git -C /home/hoo/Projects/Sluice remote -v
+origin	git@github.com:jnhu76/Sluice.git (fetch)
+origin	git@github.com:jnhu76/Sluice.git (push)

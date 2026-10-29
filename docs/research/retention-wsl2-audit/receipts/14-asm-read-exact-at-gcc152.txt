@@ -1,0 +1,72 @@
+# receipts/14-asm-read-exact-at-gcc152.txt
+date: 2026-10-29T23:12:42+08:00
+cmd: g++ -c -m64 -O3 -std=c++20 -DNDEBUG -Iinclude -o bf_prod.asm.o src/blocking_file.cpp && objdump -dC --no-show-raw-insn bf_prod.asm.o
+function sizes (nm -S):
+0000000000001460 000000000000027c T sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)
+0000000000001130 0000000000000326 T sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)
+0000000000000e60 00000000000002c4 T sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)
+00000000000016e0 00000000000002c3 T sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)
+
+read_exact_at composition-loop excerpt (confirmed=%r14; EINTR retry=cmp $0x4; guard=jb unsigned; complete/eof exits):
+     ec8:	xor    %r14d,%r14d
+     ecb:	test   %rcx,%rcx
+     ece:	je     1050 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1f0>
+     ed4:	nop
+     ed5:	data16 cs nopw 0x0(%rax,%rax,1)
+     ee0:	mov    0x18(%rsp),%rax
+     ee5:	mov    %rbp,%r12
+     ee8:	sub    %r14,%r12
+     eeb:	lea    (%rax,%r14,1),%r15
+     eef:	mov    0x10(%rsp),%rax
+     ef4:	add    %r14,%rax
+     ef7:	mov    %rax,0x8(%rsp)
+     efc:	mov    %rax,%rcx
+     eff:	mov    %r12,%rdx
+     f02:	mov    %r15,%rsi
+     f05:	call   f0a <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0xaa>
+     f0a:	test   %rax,%rax
+     f0d:	jns    ff8 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x198>
+     f13:	call   f18 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0xb8>
+     f18:	mov    (%rax),%eax
+     f1a:	cmp    $0x4,%eax
+     f1d:	je     1028 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x1c8>
+     f23:	mov    $0x7,%edx
+     f28:	test   %eax,%eax
+     f2a:	je     f6f <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x10f>
+     f2c:	cmp    $0xd,%eax
+     f2f:	je     1080 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x220>
+     f35:	cmp    $0x1,%eax
+     f38:	je     1080 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x220>
+     f3e:	cmp    $0x2,%eax
+     f41:	je     1090 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x230>
+     fd9:	pop    %r15
+     fdb:	ret
+     fdc:	nopl   0x0(%rax)
+     fe0:	mov    $0x8,%eax
+     fe5:	mov    %al,0x18(%rbx)
+     fe8:	movl   $0x0,0x1c(%rbx)
+     fef:	movb   $0x0,0x20(%rbx)
+     ff3:	jmp    fca <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x16a>
+     ff5:	nopl   (%rax)
+     ff8:	cmp    %rax,%r12
+     ffb:	jb     10b0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x250>
+    1001:	lea    (%rax,%r14,1),%rdx
+    1005:	cmp    %rdx,%rbp
+    1008:	je     1068 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x208>
+    100a:	test   %rax,%rax
+    100d:	je     10f0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x290>
+    1013:	cmp    %rbp,%rdx
+    1016:	jae    1068 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x208>
+    1018:	mov    0x0(%r13),%edi
+    101c:	mov    %rdx,%r14
+    101f:	jmp    ee0 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x80>
+    1024:	nopl   0x0(%rax)
+    1028:	mov    0x0(%r13),%edi
+    102c:	mov    0x8(%rsp),%rcx
+    1031:	jmp    eff <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x9f>
+    1036:	cs nopw 0x0(%rax,%rax,1)
+    1040:	mov    $0x6,%eax
+    1045:	jmp    fe5 <sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)+0x185>
+    1047:	nopw   0x0(%rax,%rax,1)
+    1050:	movb   $0x8,0x18(%rbx)
+    1054:	movl   $0x0,0x1c(%rbx)

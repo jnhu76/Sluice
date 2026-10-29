@@ -1,0 +1,19 @@
+# dududu r5-async-host-probe — HEAD 与远程核对（receipt 01）
+# 本会话 2026-10-29T23:20:30+08:00 于 /tmp/dududu-audit（origin=https://github.com/jnhu76/dududu.git）执行
+
+$ git -C /tmp/dududu-audit fetch origin
+exit=0
+
+$ git -C /tmp/dududu-audit ls-remote origin r5-async-host-probe main
+12a8712eb5ff5f48e570b49b1e01ad5821837dca	refs/heads/main
+4eafbc06d6a2e476055fe45fc75656e7e28a2183	refs/heads/r5-async-host-probe
+
+$ git -C /tmp/dududu-audit rev-parse origin/r5-async-host-probe
+4eafbc06d6a2e476055fe45fc75656e7e28a2183
+
+$ git -C /tmp/dududu-audit rev-parse main origin/main
+12a8712eb5ff5f48e570b49b1e01ad5821837dca
+12a8712eb5ff5f48e570b49b1e01ad5821837dca
+
+$ git -C /tmp/dududu-audit branch --show-current
+main

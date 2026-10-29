@@ -1,0 +1,30 @@
+# receipt: branch head resolution for research/product-integration-records
+# date: 2026-10-29 (audit run)
+
+$ git rev-parse origin/origin/research/product-integration-records   (literal ask command)
+fatal: ambiguous argument 'origin/origin/research/product-integration-records': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+origin/origin/research/product-integration-records
+exit=128
+
+# NOTE: the literal ref does not exist; actual remote-tracking ref:
+$ git rev-parse origin/research/product-integration-records
+4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+
+$ git for-each-ref | grep -i product-integration
+refs/remotes/origin/research/product-integration-records 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+
+$ git branch -a --contains 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+  remotes/origin/research/product-integration-records
+
+$ git tag --contains 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35 (empty means no tags)
+
+$ git log -1 --format="%H%n%an <%ae>%n%ci%n%s" origin/research/product-integration-records
+4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+jnhu <me@hoooo.org>
+2026-10-29 20:44:37 +0800
+research(integration): record archive push SHA in Phase 8 log
+
+$ git for-each-ref --format="%(refname) %(objectname)" | grep -F 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+refs/remotes/origin/research/product-integration-records 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35

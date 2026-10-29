@@ -1,0 +1,23 @@
+## r0closure-rr-04 PR refs & open-PR dependency (re-review, 2026-10-30T00:05:51+08:00)
+
+$ git -C /tmp/dududu-audit ls-remote origin 'refs/pull/*/head'
+59cffffc2221502409d795c0ea8fe63d931939fb	refs/pull/1/head
+c4fe75f4257d0eef58523a3d6e0894f7f429dad6	refs/pull/2/head
+b07307ed545d6cdc815ea41df5f09c30e282a016	refs/pull/3/head
+cc321a4994ee638493fecda0c437481528f5cea9	refs/pull/7/head
+47cd1976701a2c9e73fc31470f45aec236a3e0b2	refs/pull/8/head
+exit=0
+
+### does any pull ref point at tip cc053cf9258b98546b16f9d2f08c5559fa73bc77? (expected: no match)
+$ git -C /tmp/dududu-audit ls-remote origin 'refs/pull/*/head' | grep -c cc053cf9258b98546b16f9d2f08c5559fa73bc77  (0 = none)
+0
+grep-exit=1 (1 = zero matches)
+
+$ gh pr list -R jnhu76/dududu --state all --json number,state,headRefName,headRefOid --limit 50
+[{"headRefName":"r1-request-geometry","headRefOid":"47cd1976701a2c9e73fc31470f45aec236a3e0b2","number":8,"state":"OPEN"},{"headRefName":"sluice-r0-e5-verdict","headRefOid":"cc321a4994ee638493fecda0c437481528f5cea9","number":7,"state":"MERGED"},{"headRefName":"r1-parquet-sluice-bench","headRefOid":"b07307ed545d6cdc815ea41df5f09c30e282a016","number":3,"state":"MERGED"},{"headRefName":"r0-1-repository-policy","headRefOid":"c4fe75f4257d0eef58523a3d6e0894f7f429dad6","number":2,"state":"MERGED"},{"headRefName":"r0-foundation","headRefOid":"59cffffc2221502409d795c0ea8fe63d931939fb","number":1,"state":"MERGED"}]
+exit=0
+
+### OPEN PRs only, with head oids
+$ gh pr list -R jnhu76/dududu --state open --json number,headRefName,headRefOid
+[{"headRefName":"r1-request-geometry","headRefOid":"47cd1976701a2c9e73fc31470f45aec236a3e0b2","number":8}]
+exit=0

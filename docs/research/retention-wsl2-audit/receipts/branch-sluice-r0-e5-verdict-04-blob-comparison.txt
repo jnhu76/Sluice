@@ -1,0 +1,23 @@
+# per-file blob comparison: branch tip (cc321a4) vs dududu main (12a8712)
+file: benchmarks/duckdb-r0/results/lane-record.md
+  branch blob: 34c177584421585a13047a9db9859fb7702b1394
+  main   blob: 34c177584421585a13047a9db9859fb7702b1394
+  IDENTICAL
+file: docs/DUCKDB_FIO_R0_PREREG.md
+  branch blob: 2d625d61542bd6e0002b6b674a9b0d149d51817e
+  main   blob: 2d625d61542bd6e0002b6b674a9b0d149d51817e
+  IDENTICAL
+# content sha256 of the main-resident copies (backup integrity):
+  benchmarks/duckdb-r0/results/lane-record.md : 74500d79a1115cc5a1d9b062c41ba4a5b5899aff2901e83aaf707b5bd2b58596
+  docs/DUCKDB_FIO_R0_PREREG.md : b617adf4a17fb01c547ddec9321d502c8d32281a9f7faad9dd2398b1bcdf839d
+# first lines of each record (characterization):
+-- benchmarks/duckdb-r0/results/lane-record.md
+# DuckDB R0 measurement-lane completion receipts — E5 (2026-10-29)
+
+Completes `prep-record.md`: the serial measurement lane ran after prep; this
+file records what the lane established, at receipt granularity. Raw outputs
+-- docs/DUCKDB_FIO_R0_PREREG.md
+# DUCKDB_FIO_R0_PREREG — #578 R0 verdict and next-owner-gate preregistration
+
+Date: 2026-10-29. Scope: Sluice E5 closure workflow §8.5 (R5, issue
+[Sluice #578](https://github.com/jnhu76/Sluice/issues/578)). Host: E5

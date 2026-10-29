@@ -1,0 +1,14 @@
+# receipt: filesystem — captured 2026-10-29T22:37:18+08:00
+$ df -T /home/hoo/Projects/Sluice
+Filesystem     Type  1K-blocks      Used Available Use% Mounted on
+/dev/sdd       ext4 1055762868 151462876 850596520  16% /
+
+$ df -T /tmp
+Filesystem     Type  1K-blocks  Used Available Use% Mounted on
+tmpfs          tmpfs   8189788 39812   8149976   1% /tmp
+
+$ findmnt -T /home/hoo/Projects/Sluice -no SOURCE,FSTYPE,TARGET
+/dev/sdd ext4 /
+
+$ findmnt -T /tmp -no SOURCE,FSTYPE,TARGET
+tmpfs tmpfs /tmp

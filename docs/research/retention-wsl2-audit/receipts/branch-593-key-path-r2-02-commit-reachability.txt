@@ -1,0 +1,13 @@
+# receipt r2-02: commit reachability
+2026-10-29T23:28:13+08:00
+$ git branch -a --contains 2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+  remotes/origin/research/593-key-path
+$ git rev-list --count origin/master..origin/research/593-key-path
+2
+$ git log --format="%H %ci %s" origin/master..origin/research/593-key-path
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136 2026-10-26 05:08:06 +0800 research(593): anchor final block to PR #594
+7bf55a875896377b6c1250b206b427cac1c11f7e 2026-10-26 05:01:22 +0800 research(key-path): archive #593 E5 critical-path campaign
+$ git merge-base origin/master origin/research/593-key-path | xargs git log -1 --format="%H %ci %s"
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57 2026-10-25 20:55:08 +0800 research(uring): archive #580 evidence — NO_TRIGGER_NO_CHANGE (#592)
+$ git rev-list --count $(git merge-base origin/master origin/research/593-key-path)..origin/master
+5

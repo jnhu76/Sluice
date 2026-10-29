@@ -1,0 +1,22 @@
+# 03 blob reachability (2026-10-29T15:30:14Z)
+$ git rev-list --objects origin/research/575-native-e5-atomic-rmw ^origin/master | wc -l
+196
+
+$ git diff --name-only origin/master...origin/research/575-native-e5-atomic-rmw | wc -l
+116
+
+$ git diff --name-status origin/master...origin/research/575-native-e5-atomic-rmw (summary by status)
+    115 A
+      1 M
+
+# per-file blob comparison branch-tip vs origin/master (SAME/ABSENT/DIFFERENT)
+# method: git rev-parse --verify --quiet "<ref>:<path>" both sides
+DIFFERENT tests/uring_flush_count_oracle_test.cpp branch=28e779264310c145116c8a3988ca42cd9fac1300 master=990cb80c010c3bdbba12e9679e0c602db24f0b6a
+DIFFERENT xmake/tests.lua branch=70327072db016faa7df63d57ebf9856321282f3b master=c55e97be3a44cced8caecc29580a6c26ca9d918e
+SAME=0 ABSENT_ON_MASTER=114 DIFFERENT=2
+
+# full-tree blob overlap: how many branch-unique content blobs exist anywhere in origin/master (rev-list --objects origin/master, all history)
+# branch-unique blobs (with path): 178; also present in origin/master object set:
+70327072db016faa7df63d57ebf9856321282f3b
+741eb64cdbf94c4fe9050df50ce2e60885741598
+# (70327072 = branch version of xmake/tests.lua, exists in master history as ancestor state; 741eb64c = the xmake/ tree object, not file content)

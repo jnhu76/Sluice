@@ -1,0 +1,12 @@
+# WSL2 toolchain identity (audit host)
+
+Linux Hu 6.18.54.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct  6 19:13:07 UTC 2026 x86_64 GNU/Linux
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Ubuntu clang version 21.1.8 (6ubuntu1)
+ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+
+# off_t/ssize_t probe (./typesize, source receipts/typesize.cpp)
+off_t_bits=64 ssize_t_bits=64 size_t_bits=64 long_bits=64
+off_t_max=9223372036854775807 ssize_t_max=9223372036854775807
+off_t_is_long=1 ssize_t_is_long=1
+file_offset_bits_macro=unset

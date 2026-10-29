@@ -1,0 +1,21 @@
+# receipt: liburing — captured 2026-10-29T22:37:49+08:00
+$ pkg-config --modversion liburing
+2.14
+exit=0
+
+$ ls -la /usr/include/liburing.h
+-rw-r--r-- 1 root root 62116 Feb 13  2026 /usr/include/liburing.h
+
+$ ls /usr/lib/x86_64-linux-gnu/liburing*
+/usr/lib/x86_64-linux-gnu/liburing-ffi.a
+/usr/lib/x86_64-linux-gnu/liburing-ffi.so
+/usr/lib/x86_64-linux-gnu/liburing-ffi.so.2
+/usr/lib/x86_64-linux-gnu/liburing-ffi.so.2.14
+/usr/lib/x86_64-linux-gnu/liburing.a
+/usr/lib/x86_64-linux-gnu/liburing.so
+/usr/lib/x86_64-linux-gnu/liburing.so.2
+/usr/lib/x86_64-linux-gnu/liburing.so.2.14
+
+$ dpkg -l | grep -i liburing
+ii  liburing-dev:amd64                   2.14-1                                     amd64        Linux kernel io_uring access library - development files
+ii  liburing2:amd64                      2.14-1                                     amd64        Linux kernel io_uring access library - shared library

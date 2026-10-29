@@ -1,0 +1,26 @@
+# receipt r2-02: commit reachability recheck (branch-sluice-r0-e5-verdict)
+$ git -C /tmp/dududu-audit rev-list --count origin/main..origin/sluice-r0-e5-verdict
+0
+$ git -C /tmp/dududu-audit merge-base origin/main origin/sluice-r0-e5-verdict
+cc321a4994ee638493fecda0c437481528f5cea9
+$ git -C /tmp/dududu-audit merge-base --is-ancestor cc321a4994ee638493fecda0c437481528f5cea9 origin/main; echo exit=$?
+exit=0
+$ git -C /tmp/dududu-audit branch -a --contains cc321a4994ee638493fecda0c437481528f5cea9
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+  remotes/origin/r1-request-geometry
+  remotes/origin/sluice-r0-e5-verdict
+$ git -C /tmp/dududu-audit cat-file -p 12a8712eb5ff5f48e570b49b1e01ad5821837dca | grep -E "^(tree|parent|    Merge)"
+tree 731e518af903fe49beb798d80d269eeaceb53794
+parent b94041d918672d113ea0ca667ba8ccdabf329c80
+parent cc321a4994ee638493fecda0c437481528f5cea9
+$ git -C /tmp/dududu-audit rev-list cc321a4994ee638493fecda0c437481528f5cea9 --not b94041d918672d113ea0ca667ba8ccdabf329c80 --count
+6
+$ git -C /tmp/dududu-audit log --oneline cc321a49 --not b94041d9 (branch-only commits, 6 expected)
+cc321a4 docs(bench): record r0 measurement lane completion receipts
+a57fb09 docs(bench): record e5 r0 verdict and owner-gate prereg
+4eafbc0 bench(duckdb): probe async host protocol boundary
+cc053cf bench(duckdb): record dataset and oracle prep receipts
+732a8fb bench(duckdb): pin the sql oracle and io exposure protocol
+bbce768 bench(fio): freeze e5 native storage baseline job set

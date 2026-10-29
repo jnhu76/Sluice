@@ -1,0 +1,6 @@
+# receipts/18-debug-o0-suites.txt
+date: 2026-10-29T23:13:21+08:00
+config: xmake -y --plat=linux -m debug (GCC 15.2.0 -O0)
+direct_composition_fault_test: all 15 passed
+semantic_short_io_reference_test: all 9 passed
+(run recorded in session log 2026-10-29; binaries under build/linux/x86_64/debug)

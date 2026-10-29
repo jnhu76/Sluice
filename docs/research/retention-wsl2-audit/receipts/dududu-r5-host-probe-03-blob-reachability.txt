@@ -1,0 +1,37 @@
+# dududu r5-async-host-probe — blob reachability 与内容核对（receipt 03）
+
+$ git -C /tmp/dududu-audit rev-list --objects origin/r5-async-host-probe ^main | wc -l
+0
+
+$ git -C /tmp/dududu-audit rev-list --objects origin/r5-async-host-probe ^main | head -20
+
+$ git -C /tmp/dududu-audit diff --name-only main...origin/r5-async-host-probe | wc -l   # 空 diff → 无需逐文件比对
+0
+
+$ git -C /tmp/dududu-audit log --oneline b94041d..4eafbc06d6a2e476055fe45fc75656e7e28a2183   # 分支段提交
+4eafbc0 bench(duckdb): probe async host protocol boundary
+cc053cf bench(duckdb): record dataset and oracle prep receipts
+732a8fb bench(duckdb): pin the sql oracle and io exposure protocol
+bbce768 bench(fio): freeze e5 native storage baseline job set
+
+$ git -C /tmp/dududu-audit diff --name-status b94041d..4eafbc06d6a2e476055fe45fc75656e7e28a2183
+A	benchmarks/duckdb-r0/README.md
+A	benchmarks/duckdb-r0/async-host-probe/README.md
+A	benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp
+A	benchmarks/duckdb-r0/oracle.sql
+A	benchmarks/duckdb-r0/results/prep-record.md
+A	benchmarks/fio-r0/README.md
+A	benchmarks/fio-r0/r0-randrw-4k.fio
+A	benchmarks/fio-r0/r0-read-4k.fio
+A	benchmarks/fio-r0/r0-seqread-1m.fio
+
+$ for f in <分支新增文件>; do git -C /tmp/dududu-audit cat-file -e "origin/main:$f" && echo IN-MAIN || echo MISSING; done
+IN-MAIN benchmarks/duckdb-r0/README.md
+IN-MAIN benchmarks/duckdb-r0/async-host-probe/README.md
+IN-MAIN benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp
+IN-MAIN benchmarks/duckdb-r0/oracle.sql
+IN-MAIN benchmarks/duckdb-r0/results/prep-record.md
+IN-MAIN benchmarks/fio-r0/README.md
+IN-MAIN benchmarks/fio-r0/r0-randrw-4k.fio
+IN-MAIN benchmarks/fio-r0/r0-read-4k.fio
+IN-MAIN benchmarks/fio-r0/r0-seqread-1m.fio

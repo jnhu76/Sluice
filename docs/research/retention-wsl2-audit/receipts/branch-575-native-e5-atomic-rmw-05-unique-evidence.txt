@@ -1,0 +1,63 @@
+# 05 unique evidence — archive coverage check (2026-10-29T15:31:59Z)
+
+$ git ls-tree --name-only origin/master docs/research/
+docs/research/mw-hw-1
+docs/research/native-linux-m2
+docs/research/state-complexity
+docs/research/uring-router-580
+(no mw-hw-575-native-e5 dir on master)
+
+$ git ls-tree origin/master -- docs/research/mw-hw-575-native-e5
+(empty output above — absent on master)
+
+# PR #610 archive location and scope (commit ac995641):
+ac995641e7394bfd82f7edb1caafca6ebea21c13 research(direct-beyond-parity): archive #603 P0-P6 evidence with sha256 manifest (#610)
+
+ .../API_CAPABILITY_CANDIDATES.md                   |   391 +
+ .../direct-beyond-parity/CANDIDATE_GAP_REGISTER.md |   239 +
+... (all changed paths under research/direct-beyond-parity/ and docs/evidence — campaign #603/#600, NOT #575)
+
+# "575" campaign references on origin/master (grep mw-hw-575|#575|575-native):
+origin/master:CHANGELOG.md:108:- The DP-2B data-movement research and the #575–#582 optimization candidates
+origin/master:bench/research/uring-router-580/run_ab.sh:2:# #580 R6 paired A/B runner (WSL2). Disciplines inherited from #575:
+origin/master:docs/research/uring-router-580/environment.md:86:  #575 (methodology: A/A, path-name bias, interval discipline).
+origin/master:docs/research/uring-router-580/wsl-results.md:5:Both hosts ran the same production-shaped A/B protocol (inherited from #575):
+origin/master:tests/uring_flush_count_oracle_test.cpp:1:// #575 research oracle: the internal submit-flush counter must count real
+
+# dududu (/tmp/dududu-audit, origin=https://github.com/jnhu76/dududu.git):
+$ git -C /tmp/dududu-audit grep -n "575" HEAD
+(exit above nonzero / no output — dududu holds no 575 evidence or references)
+$ git -C /tmp/dududu-audit grep -n "575-native-e5-atomic-rmw|mw-hw-575|#584" HEAD
+(no match, exit 1)
+
+# unique evidence inventory on branch docs/research/mw-hw-575-native-e5/ (114 files):
+$ git ls-tree -r --name-only <branch> docs/research/mw-hw-575-native-e5/ | wc -l
+114
+$ ... grouped by first path segment under the dir:
+     14 (top level)
+      6 assembly
+      9 patches
+     81 raw
+      4 scripts
+
+# manifest.json self-inventory (head):
+{
+ "baseline_sha": "3df10dc44d84799cccb18d29f20149d2983137ec",
+ "campaign": "Sluice #575 native E5 atomic RMW elimination research",
+ "execution_host": "E5 (Intel Xeon E5-2666 v3, Fedora 44, GCC 16.2.1)",
+ "files": {
+  "R0-IDENTITY.md": "309dd8ee480c58a76f253fcf17bfe91d261d49b4586cbc09ca7470ae24041c5b",
+  "R1-AUTHORITY-AND-DAG.md": "281aae6f7a87592dabbb86e2d53b881b3715cec567b904f14512f66166093bca",
+  "R2-BASELINE-CODEGEN.md": "a871b60e8806c7fe1a34fcacf847faee3c59bfb8c08d8b8a2d1cefd017028a33",
+
+# VERDICT.md verdict block:
+# VERDICT — Sluice #575 Native E5 Atomic RMW Elimination Research
+
+```
+THREADPOOL_VERDICT = NO_CHANGE_JUSTIFIED
+URING_VERDICT      = NO_CHANGE_JUSTIFIED
+ISSUE_575_VERDICT  = NO_CHANGE_JUSTIFIED
+PRODUCT_CHANGE_AUTHORIZED = NO
+MERGED = NO
+```
+

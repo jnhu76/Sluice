@@ -1,0 +1,104 @@
+Receipts: retention audit (pass 2, independent re-verification) of origin/backup/pr-601-original-head-e4bb8833
+Repo: /home/hoo/Projects/Sluice (remote origin = github jnhu76/Sluice)
+Date: 2026-10-29. All commands non-destructive (rev-parse/ls-remote/grep/show/merge-base); no fetch, push, branch op, or deletion performed. Revises the pass-1 decision (DELETE_CANDIDATE) to KEEP; see report.
+
+== R1 HEAD resolution ==
+$ git -C /home/hoo/Projects/Sluice rev-parse origin/backup/pr-601-original-head-e4bb8833
+e4bb8833699d0ca5dee191883f3fec6d41b221b2   (matches branch-name suffix e4bb8833)
+$ git -C /home/hoo/Projects/Sluice log --oneline -8 origin/backup/pr-601-original-head-e4bb8833
+e4bb8833 research(direct): #600 E5 excess-cost attribution and C1 validation evidence
+ea2fc4fc perf(direct): dispatch admission verdicts without Precheck materialization (#600 C1)
+bdfd0d8d research(uring): archive #580 evidence — NO_TRIGGER_NO_CHANGE (#592)   <- merge-base with master
+
+== R2 remote existence (special check precondition) ==
+$ git -C /home/hoo/Projects/Sluice ls-remote origin | grep -i backup
+e4bb8833699d0ca5dee191883f3fec6d41b221b2	refs/heads/backup/pr-601-original-head-e4bb8833
+70d48f5eb55a664544b5160cd4675d32150bb21e	refs/heads/backup/pr-612-original-head-70d48f5e
+Remote branch name is backup/... (no sluice/ prefix); local tracking ref origin/backup/pr-601-original-head-e4bb8833 = same SHA.
+P0-planned name backup/600-research-pre-split-e4bb8833 does NOT exist on remote (not in listing); the pushed
+backup/pr-601-original-head-e4bb8833 fulfills the P0 Stage-0 role (r2-pr-boundary.md §2 records the actual push).
+
+== R3 commit reachability ==
+$ git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/backup/pr-601-original-head-e4bb8833
+2
+$ git -C /home/hoo/Projects/Sluice branch -a --contains e4bb8833699d0ca5dee191883f3fec6d41b221b2
+  remotes/origin/backup/pr-601-original-head-e4bb8833        <- ONLY ref containing it (local or remote)
+$ git -C /home/hoo/Projects/Sluice branch --contains e4bb8833699d0ca5dee191883f3fec6d41b221b2
+(empty; local branches = master only)  -> the P0 doc's "second, local keep-alive" (local
+sluice-600-direct-research @ e4bb8833) NO LONGER EXISTS.
+$ git -C /home/hoo/Projects/Sluice merge-base origin/master origin/backup/pr-601-original-head-e4bb8833
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+
+== R4 squash topology: commit objects NOT reachable from master or PR refs ==
+$ git -C /home/hoo/Projects/Sluice log --format='%H parents:%P' -1 84a0cc1d
+84a0cc1dd958997c16e84fed233b74600a608964 parents:bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57   (single parent = squash)
+$ git -C /home/hoo/Projects/Sluice log --format='%H parents:%P' -1 43cb8029
+43cb8029ca60b572c91a9aa9dccb17d4300e2f88 parents:ac995641e7394bfd82f7edb1caafca6ebea21c13   (single parent = squash)
+$ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor 84a0cc1d origin/master   -> exit 0
+$ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor 43cb8029 origin/master   -> exit 0
+$ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor e4bb8833 77e5399a  -> NOT ancestor
+$ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor ea2fc4fc 77e5399a  -> NOT ancestor
+$ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor e4bb8833 2714aa65  -> NOT ancestor (OPEN PR #594 head unaffected)
+$ git -C /home/hoo/Projects/Sluice ls-remote origin refs/pull/601/head refs/pull/602/head
+2fcc79646ee42d1699468e0a50c0269f405b92d3	refs/pull/601/head   (rewritten head; != e4bb8833)
+77e5399a45998dea396699fa2e063c94a665945a	refs/pull/602/head
+-> After deleting the backup ref, ea2fc4fc/e4bb8833 are unreachable on the remote: no PR ref and no
+   master ancestry preserves them (P0_BASELINE_AND_OWNERSHIP.md §2.3.1 states refs/pull/601/head will
+   not preserve the old chain after the force push).
+
+== R5 unique objects / per-file blob compare ==
+$ git -C /home/hoo/Projects/Sluice rev-list --objects origin/backup/pr-601-original-head-e4bb8833 ^origin/master
+21 objects = 2 commits + trees + 9 file blobs (same 9 paths as the three-dot diff)
+$ git -C /home/hoo/Projects/Sluice diff --name-only origin/master...origin/backup/pr-601-original-head-e4bb8833
+include/sluice/detail/file_semantics.hpp
+research/600-direct-excess-cost/{DIRECT_COST_DAG,DIRECT_MACHINE_COST_LEDGER,EVIDENCE_INDEX,PHASE3_VALIDATION,PHASE_I_COST_ATTRIBUTION}.md
+src/blocking_file.cpp
+tests/semantic_range_test.cpp
+xmake/tests.lua
+Blob compare branch vs origin/master:
+SAME b9b0b233 DIRECT_COST_DAG.md / SAME 1741c098 DIRECT_MACHINE_COST_LEDGER.md / SAME a5bbf1cf EVIDENCE_INDEX.md
+SAME 89141091 PHASE3_VALIDATION.md / SAME cfad9902 PHASE_I_COST_ATTRIBUTION.md / SAME 0d3eb7e0 semantic_range_test.cpp
+DIFF e39760ae file_semantics.hpp / DIFF 6660a423 blocking_file.cpp / DIFF febe6515 xmake tests.lua  (master tip evolved post-merge)
+C1 code equality vs merged #602:
+  branch ea2fc4fc:$f == 77e5399a(PR602 head):$f for all 4 files (SAME blob each);
+  43cb8029(#602 squash on master):$f == same 4 blobs (e39760ae / 6660a423 / 0d3eb7e0 / febe6515).
+-> All file content merged on master; the only unique data left is the two commit objects themselves.
+
+== R6 documented dependency: CANDIDATE_SHA keep-alive (pivotal finding) ==
+$ git -C /home/hoo/Projects/Sluice grep -n "CANDIDATE_SHA" origin/master -- research/600-direct-excess-cost/
+origin/master:research/600-direct-excess-cost/PHASE3_VALIDATION.md:4:CANDIDATE_SHA: ea2fc4fca1a6 (branch sluice-600-direct-research, ...
+$ git -C /home/hoo/Projects/Sluice grep -n -e "backup/pr-601-original-head" -e "e4bb8833" origin/master
+research/direct-beyond-parity/P0_BASELINE_AND_OWNERSHIP.md:328-331:
+  "git push origin origin/sluice-600-direct-research:refs/heads/backup/600-research-pre-split-e4bb8833 ...
+   This branch is the remote keep-alive for both ea2fc4fc (CANDIDATE_SHA) and e4bb8833; GitHub's
+   refs/pull/601/head will not preserve the old chain after a force push. Keep it long-term — at
+   minimum past the planned WSL2 portability task; recommended permanently."
+P0_BASELINE_AND_OWNERSHIP.md:366 (§2.3.7): "branch cleanup must not delete backup/...-e4bb8833, and local
+  cleanup must not delete the history reachable from local sluice-600-direct-research ... second, local keep-alive."
+P0_BASELINE_AND_OWNERSHIP.md:383 (§2.4.1): "After the shrink, remote reachability of CANDIDATE_SHA
+  ea2fc4fca1a6 depends on a single branch, the backup."
+research/direct-beyond-parity/closure/r2-pr-boundary.md:64-73: actual push command with full SHA +
+  post-push ls-remote/fetch verification; :145 full diff fetchable from the backup branch; §6 (l.167-169)
+  deletion timing left to Owner/R9 closeout, only considered after both merges.
+-> The local keep-alive named in §2.3.7 is gone (R3), so this remote backup branch is the SOLE ref
+   anywhere keeping the CANDIDATE_SHA object resolvable.
+
+== R7 no worktree / no script consumer ==
+$ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice 84e1b7d5 [master]  + 14 detached /tmp/sluice-val-*/perf-* worktrees at other SHAs
+(77e5399a, 2714aa65, 84e1b7d5). None at e4bb8833. Branch not checked out anywhere -> dirty check N/A.
+$ git -C /home/hoo/Projects/Sluice grep -n -e "backup/pr-601-original-head" -e "e4bb8833" origin/master
+Only 6 hits, all prose/recovery instructions inside research/direct-beyond-parity closure docs.
+No .github/CI, xmake, or script consumer found.
+$ grep -rn -e "backup/pr-601-original-head" -e "e4bb8833" --include={lua,yml,yaml,sh,py,cpp,hpp} (working tree, excl. audit dir)
+No hits in code/config files.
+
+== R8 dududu cross-repo check ==
+$ git -C /tmp/dududu-audit log --oneline -1   -> 12a8712 Merge pull request #7 from jnhu76/sluice-r0-e5-verdict (main)
+$ git -C /tmp/dududu-audit grep -n -e "e4bb8833" -e "ea2fc4fc" -e "backup/pr-601" -e "sluice-600-direct-research"
+No matches in the checked-out main tree (scope: clone at main 12a8712; other dududu branches not grepped).
+
+== R9 associated PR (headRef match, ask-supplied list) ==
+No headRef in the supplied list equals backup/pr-601-original-head-e4bb8833 (or the sluice/ prefixed ask label)
+-> "None". Branch name references PR #601 (MERGED; listed headSha 2fcc7964 = refs/pull/601/head, not valid
+locally): this branch is #601's pre-split/pre-rewrite original head (2 commits: #600 C1 product + research).

@@ -1,0 +1,2 @@
+# cmd: git -C /home/hoo/Projects/Sluice ls-tree -r 2714aa65fe4837d30f5fa3fcdb27db38c23b7136 --name-only | grep -E '^(docs/research/key-path-593/|bench/research/key-path-593/)'
+# files of these dirs present in master HEAD: (empty = absent)

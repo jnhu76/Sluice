@@ -1,0 +1,5 @@
+# 06 product untouched proof
+## $ git diff --name-only bdfd0d8d..2714aa65 | grep -v -e "^bench/research/key-path-593/" -e "^docs/research/key-path-593/"
+filtered-diff exit=1 (1 = zero non-research files)
+## $ git grep -n "594\|research/593" origin/master -- .github scripts xmake apps include src tests (empty = no CI/script dependency)
+ci-grep exit=1

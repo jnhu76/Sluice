@@ -1,0 +1,24 @@
+$ git -C /home/hoo/Projects/Sluice branch -a --contains 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+* master
+  remotes/origin/HEAD -> origin/master
+  remotes/origin/master
+
+$ git -C /home/hoo/Projects/Sluice tag --contains 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+(exit 0)
+
+$ git -C /home/hoo/Projects/Sluice tag | wc -l
+4
+
+$ git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/master
+0
+
+$ git -C /home/hoo/Projects/Sluice rev-list --objects origin/master ^origin/master | wc -l
+0
+
+$ git -C /home/hoo/Projects/Sluice diff --name-only origin/master...origin/master | wc -l
+0
+
+$ git -C /home/hoo/Projects/Sluice for-each-ref --format='%(refname) %(objectname)' | grep -F 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+refs/heads/master 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+refs/remotes/origin/HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+refs/remotes/origin/master 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b

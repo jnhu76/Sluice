@@ -1,0 +1,89 @@
+$ gh pr view 611 --json number,state,headRefName,headRefOid,baseRefName,mergedAt,url,title
+{"baseRefName":"master","headRefName":"research/r6-ac1-vectored-semantics","headRefOid":"999b5305ae7d413a2a71acde926f8c6cfef6876a","mergedAt":null,"number":611,"state":"CLOSED","title":"research(ac1): E5 semantic closure for positional vectored I/O (#605)","url":"https://github.com/jnhu76/Sluice/pull/611"}
+
+$ gh pr list --state open --limit 200 --json number,headRefName  (any OPEN PR with this headRef?)
+[{"headRefName":"research/593-key-path","number":594}]
+
+$ git worktree list --porcelain
+worktree /home/hoo/Projects/Sluice
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+branch refs/heads/master
+
+worktree /tmp/sluice-perf-base
+HEAD 77e5399a45998dea396699fa2e063c94a665945a
+detached
+
+worktree /tmp/sluice-perf-master
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-asan
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-asan-ubsan
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-c1-mutation
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-c1-plat
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-debug
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-k594-retention
+HEAD 2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+detached
+
+worktree /tmp/sluice-val-liburing
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-p2c1
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-p2c1-mutation-a
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-p2c1-mutation-b
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-release
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-sdk
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+worktree /tmp/sluice-val-ubsan
+HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+detached
+
+
+$ git for-each-ref refs/heads/ (local branches matching r6-ac1)
+(no local branch matches r6-ac1)
+
+$ git branch -a --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a
+  remotes/origin/research/r6-ac1-vectored-semantics
+
+$ git rev-list --count origin/master..refs/remotes/origin/research/r6-ac1-vectored-semantics
+1
+
+$ git grep -n 'r6-ac1-vectored-semantics' origin/master  (all references on master)
+origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md:96:  `research/r6-ac1-vectored-semantics`, commit `999b5305`, OPEN); the two
+
+$ git grep -n '999b5305' origin/master  (SHA mentions on master)
+origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md:96:  `research/r6-ac1-vectored-semantics`, commit `999b5305`, OPEN); the two
+
+$ git grep -i dududu refs/remotes/origin/research/r6-ac1-vectored-semantics  (dududu coupling inside branch tree)
+(no dududu matches in branch tree)

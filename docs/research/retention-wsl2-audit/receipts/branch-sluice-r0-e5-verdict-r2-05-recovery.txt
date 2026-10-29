@@ -1,0 +1,15 @@
+# receipt r2-05: recovery recheck (branch-sluice-r0-e5-verdict)
+$ git -C /tmp/dududu-audit ls-remote origin refs/heads/sluice-r0-e5-verdict refs/pull/7/head
+cc321a4994ee638493fecda0c437481528f5cea9	refs/heads/sluice-r0-e5-verdict
+cc321a4994ee638493fecda0c437481528f5cea9	refs/pull/7/head
+# layer 1: content in default branch (tip is ancestor of main via true merge 12a8712e)
+$ git -C /tmp/dududu-audit merge-base --is-ancestor cc321a4994ee638493fecda0c437481528f5cea9 origin/main; echo exit=$?
+exit=0
+$ merge commit 12a8712e parents: b94041d9 + cc321a49 (see receipt r2-02); branch tip tree == main tree (see receipt r2-03: 731e518a == 731e518a)
+# layer 2: remote branch ref still holds tip (ls-remote above: refs/heads/sluice-r0-e5-verdict = cc321a4994...)
+# layer 3: merged-PR pull ref (ls-remote above: refs/pull/7/head = cc321a4994...)
+$ recovery command: git fetch origin pull/7/head:refs/heads/sluice-r0-e5-verdict
+$ git -C /tmp/dududu-audit cat-file -t cc321a4994ee638493fecda0c437481528f5cea9
+commit
+$ git -C /tmp/dududu-audit ls-remote --tags origin (expect none)
+tags-exit=0

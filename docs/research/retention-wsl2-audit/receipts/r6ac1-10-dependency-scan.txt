@@ -1,0 +1,72 @@
+$ git grep -n "research/r6-ac1-vectored-semantics" origin/master  (full branch-name references on master)
+origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md:96:  `research/r6-ac1-vectored-semantics`, commit `999b5305`, OPEN); the two
+(exit=0 ; 1 = no references)
+
+$ git grep -n "r6-ac1-vectored-semantics" -- . ":!docs/research/retention-wsl2-audit"  (working tree, excluding this audit dir)
+research/direct-beyond-parity/closure/r9-archive-increment.md:96:  `research/r6-ac1-vectored-semantics`, commit `999b5305`, OPEN); the two
+(exit=0 ; 1 = no references outside audit dir)
+
+$ git grep -in "dududu" origin/research/r6-ac1-vectored-semantics  (dududu coupling check on branch tree)
+(exit=1 ; 1 = no dududu references)
+
+$ git show origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md | head -60
+# R9 Archive Increment — closure/ evidence appended to the research branch
+
+Archive increment executed: 2026-10-29 (E5 host). Executor: E5 closure
+closeout (release lane). This record extends `r1-evidence-archive.md` (which
+documented the 2026-10-28T23:32:28Z freeze, 615 files, branch
+`research/direct-beyond-parity-evidence` commits `292e0734`+`c2a57a77`, PR
+#610) with the closure-phase evidence produced after that freeze by lanes
+R3–R8, the serial perf lane and the two R9 audit lanes.
+
+## 1. Scope and fidelity
+
+- Source: the live untracked evidence tree
+  `/home/jnhu/Source/Sluice/research/direct-beyond-parity/` on master
+  `bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57` (unchanged; re-verified
+  `git ls-remote origin refs/heads/master` before this increment).
+- Content diff against the branch: byte-comparison (`cmp`) of every file
+  present in both trees → **0 changed files**; the increment is purely
+  additive plus the two administration files listed in §4
+  (`EVIDENCE_MANIFEST.json` extension and `WSL2_VALIDATION_HANDOFF.md`
+  rewrite).
+- **201 new text files**, all under `research/direct-beyond-parity/closure/`:
+  lane reports (`r2-pr-boundary.md`, `r3-c1-review.md`, `r4-p2c1.md`,
+  `r5-prep.md`, `r5-native/*`, `r5-async-host.md`, `r5-r0-verdict.md`,
+  `r6-ac1.md` + `r6-ac1/*`, `r7-ac2.md` + `r7-ac2/*`, `r8-ac3.md` +
+  `r8-ac3/*`, `DUCKDB_FIO_R0_PREREG.md`), the serial perf lane
+  (`perf-p2c1/*` raw samples, PMU diagnostics, machine-identity files,
+  hash-pinned runner/analyzer/fixture sources) and the three files this
+  closeout adds (§4). No existing archived file was modified, deleted or
+  re-encoded; git history retains every prior version.
+
+## 2. Binary disposition (3 ELF executables NOT committed)
+
+`closure/perf-p2c1/` contains three ELF binaries that are reproducible build
+products of the committed sources (`ladder.cpp`, `mkfixture.cpp`,
+`build-both.sh`), retained in the live tree and the preserved perf worktrees
+(`Sluice-perf-p2c1-base` @ `77e5399a`, `Sluice-perf-p2c1-head` @ `70d48f5e`)
+for reproduction. Per repository discipline (commit the evidence, not the
+collector) and the R6 probe precedent (source committed, binary pinned by
+hash), they are excluded from the Git archive and pinned here:
+
+| File | sha256 | Built from |
+|---|---|---|
+| `perf-p2c1/ladder-base` | `89084b1d1bd953c2da5202fc789034700269271b0c2d29f04c8c4408c66b5c0d` | `ladder.cpp` @ `4455d98d` kit + `77e5399a` library (see `perf-p2c1/SUMMARY.md` §1) |
+| `perf-p2c1/ladder-cand` | `3af44bf9020284dad412635f9f3912c1f7cf06232128b73517468868513e9840` | `ladder.cpp` @ `4455d98d` kit + `70d48f5e` library |
+| `perf-p2c1/mkfixture` | `bde3c72404682ac33d510b36a0b166433700d02260253b8ccd0eb9e404913ace` | `mkfixture.cpp` (byte-exact #600 snapshot) |
+
+The two ladder hashes match those recorded in `perf-p2c1/SUMMARY.md` §1.
+Everything else in the increment is plain text (no other non-text file exists
+in the diff set).
+
+## 3. Manifest extension
+
+`research/direct-beyond-parity/EVIDENCE_MANIFEST.json` is extended in place
+with one entry per newly archived file (201 new closure files + the 2 review
+transcriptions + this record + the rewritten handoff), using the same field
+rules as R1 §4 (path + sha256, best-effort `source_sha`/`host`/`arm`/
+`toolchain`/`status`/`report_ref`/`reproduction` derived only from each
+file's own header or path, `""` when not derivable; manifest still does not
+index itself). Entries for pre-existing files are untouched **except**
+`direct-beyond-parity/WSL2_VALIDATION_HANDOFF.md`, whose sha256 now reflects

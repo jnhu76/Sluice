@@ -1,0 +1,27 @@
+# cmd: git branch -a --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a
+  remotes/origin/research/r6-ac1-vectored-semantics
+# cmd: git rev-list --count origin/master..origin/research/r6-ac1-vectored-semantics
+1
+# cmd: git merge-base origin/master origin/research/r6-ac1-vectored-semantics
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+# cmd: git merge-base --is-ancestor bdfd0d8d origin/master (exit 0=ancestor)
+ancestor-YES
+# cmd: git rev-list --count bdfd0d8d..origin/master
+5
+# cmd: git worktree list
+/home/hoo/Projects/Sluice       84e1b7d5 [master]
+/tmp/sluice-perf-base           77e5399a (detached HEAD)
+/tmp/sluice-perf-master         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan-ubsan      84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-mutation     84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-plat         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-debug           84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention  2714aa65 (detached HEAD)
+/tmp/sluice-val-liburing        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-a 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-b 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-release         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-sdk             84e1b7d5 (detached HEAD)
+/tmp/sluice-val-ubsan           84e1b7d5 (detached HEAD)

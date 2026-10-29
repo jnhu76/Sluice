@@ -1,0 +1,33 @@
+# receipt r2-04: active dependency recheck (branch-sluice-r0-e5-verdict)
+$ git -C /tmp/dududu-audit grep -n "sluice-r0-e5-verdict" origin/main --
+grep-dududu-exit=1
+$ git -C /home/hoo/Projects/Sluice grep -n "sluice-r0-e5-verdict" master --
+grep-sluice-exit=1
+$ git -C /tmp/dududu-audit worktree list
+/tmp/dududu-audit 12a8712 [main]
+$ find /tmp /home/hoo/Projects -maxdepth 3 -type d -iname "*dududu*"
+/tmp/sluice-val-dududu-recovery-clone
+/tmp/dududu-audit
+$ ps -eo pid,etime,cmd | grep -iE "dududu|r0-e5" | grep -v grep
+ps-exit=1
+$ gh pr view 7 --repo jnhu76/dududu --json number,state,headRefName,headRefOid,baseRefName,mergedAt
+{"baseRefName":"main","headRefName":"sluice-r0-e5-verdict","headRefOid":"cc321a4994ee638493fecda0c437481528f5cea9","mergedAt":"2026-10-29T04:47:38Z","number":7,"state":"MERGED"}
+$ gh pr list --repo jnhu76/dududu --state open --json number,headRefName
+[{"headRefName":"r1-request-geometry","number":8}]
+
+# post-find note: find now also returns /tmp/sluice-val-dududu-recovery-clone (did not exist at
+# original audit time). Read-only inspection 2026-10-30:
+$ git -C /tmp/sluice-val-dududu-recovery-clone status --porcelain=v1 -b
+## main...origin/main
+$ git -C /tmp/sluice-val-dududu-recovery-clone branch -a
+* main
+  remotes/origin/main
+$ git -C /tmp/sluice-val-dududu-recovery-clone log --oneline -1
+12a8712 Merge pull request #7 from jnhu76/sluice-r0-e5-verdict
+$ git -C /tmp/sluice-val-dududu-recovery-clone rev-parse refs/heads/sluice-r0-e5-verdict
+fatal: ambiguous argument 'refs/heads/sluice-r0-e5-verdict': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+refs/heads/sluice-r0-e5-verdict
+# => sibling verification clone, on main (12a8712, clean), holds only main;
+#    does NOT contain the audited branch. Not a dependency on sluice-r0-e5-verdict.

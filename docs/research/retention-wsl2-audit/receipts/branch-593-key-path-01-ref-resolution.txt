@@ -1,0 +1,14 @@
+# 01 ref resolution for research/593-key-path
+## $ git -C /home/hoo/Projects/Sluice rev-parse origin/origin/research/593-key-path
+fatal: ambiguous argument 'origin/origin/research/593-key-path': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+origin/origin/research/593-key-path
+exit=128
+## $ git -C /home/hoo/Projects/Sluice rev-parse refs/remotes/origin/research/593-key-path
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+## $ git -C /home/hoo/Projects/Sluice for-each-ref | grep 593-key-path
+refs/remotes/origin/research/593-key-path 2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+## $ git ls-remote origin refs/heads/research/593-key-path refs/pull/594/head
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136	refs/heads/research/593-key-path
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136	refs/pull/594/head

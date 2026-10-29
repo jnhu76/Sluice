@@ -1,0 +1,12 @@
+# 03 commit reachability
+## $ git branch -a --contains 2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+  remotes/origin/research/593-key-path
+## $ git tag --contains 2714aa65fe4837d30f5fa3fcdb27db38c23b7136 (empty = none)
+## $ git rev-list --count origin/master..refs/remotes/origin/research/593-key-path
+2
+## $ git log --oneline origin/master..refs/remotes/origin/research/593-key-path
+2714aa65 research(593): anchor final block to PR #594
+7bf55a87 research(key-path): archive #593 E5 critical-path campaign
+## $ git merge-base origin/master refs/remotes/origin/research/593-key-path
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+bdfd0d8d research(uring): archive #580 evidence — NO_TRIGGER_NO_CHANGE (#592)

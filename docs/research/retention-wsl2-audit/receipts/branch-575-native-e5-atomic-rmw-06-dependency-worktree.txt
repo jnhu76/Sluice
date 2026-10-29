@@ -1,0 +1,46 @@
+# 06 active dependency + worktree + working tree (2026-10-29T15:32:26Z)
+
+$ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice       84e1b7d5 [master]
+/tmp/sluice-perf-base           77e5399a (detached HEAD)
+/tmp/sluice-perf-master         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan-ubsan      84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-mutation     84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-plat         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-debug           84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention  2714aa65 (detached HEAD)
+/tmp/sluice-val-liburing        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-a 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-b 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-release         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-sdk             84e1b7d5 (detached HEAD)
+/tmp/sluice-val-ubsan           84e1b7d5 (detached HEAD)
+(no worktree has branch research/575-native-e5-atomic-rmw checked out; no local branch exists — only the remote-tracking ref)
+
+$ grep -rn "575-native-e5-atomic-rmw" /home/hoo/Projects/Sluice --exclude-dir=.git -l
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/sluice-master-retention-value.md
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/branch-575-native-e5-atomic-rmw-01-head-and-pr.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/branch-575-native-e5-atomic-rmw-04-master-coverage.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/branch-575-native-e5-atomic-rmw-05-unique-evidence.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/REPOSITORY_REF_SNAPSHOT.md
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/branch-575-native-e5-atomic-rmw-02-commit-reachability.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/branch-575-native-e5-atomic-rmw-03-blob-reachability.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/sluice-master-02-remotes.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/pr-list-full.tsv
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/pr-list-full.json
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/state-freeze-report.md
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/01-remote-refs.txt
+(only hits: docs/research/retention-wsl2-audit/ audit reports themselves — audit documentation, not runtime dependency)
+
+$ git grep -rn "575" origin/master -- .github
+(no match — no CI reference on master)
+
+# OPEN PRs (ask-provided list): headRef match? none. baseRef = research/575-native-e5-atomic-rmw? none.
+# OPEN Sluice PR #594 (headRef research/593-key-path) referencing this branch or its evidence dir:
+$ git grep -n "575-native-e5-atomic-rmw|mw-hw-575" origin/research/593-key-path
+(no match, exit 1 — #594 does not depend on this branch)
+
+$ git branch --list "research/575*" (local branches)
+(empty — no local branch; working-tree dirty check N/A: branch not checked out anywhere)

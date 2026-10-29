@@ -1,0 +1,32 @@
+# receipt r2-04: worktrees & working-tree state
+2026-10-29T23:38:45+08:00
+
+$ git worktree list
+/home/hoo/Projects/Sluice       84e1b7d5 [master]
+/tmp/sluice-perf-base           77e5399a (detached HEAD)
+/tmp/sluice-perf-master         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan-ubsan      84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-mutation     84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-plat         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-debug           84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention  2714aa65 (detached HEAD)
+/tmp/sluice-val-liburing        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-a 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-b 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-release         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-sdk             84e1b7d5 (detached HEAD)
+/tmp/sluice-val-ubsan           84e1b7d5 (detached HEAD)
+
+$ git worktree list | grep "research/593-key-path"  # any worktree ON the branch
+(no output = none locally)
+
+$ git -C /tmp/sluice-val-k594-retention rev-parse HEAD  # detached worktree pinned at branch tip
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+$ git -C /tmp/sluice-val-k594-retention status --porcelain | wc -l
+0
+
+$ ls /home/jnhu/sluice-593-research  # worktree recorded on remote host by closure snapshot
+ls: cannot access '/home/jnhu/sluice-593-research': No such file or directory
+END-OF-RECEIPT

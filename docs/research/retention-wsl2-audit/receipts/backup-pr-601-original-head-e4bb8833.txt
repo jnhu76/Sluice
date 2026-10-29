@@ -1,0 +1,107 @@
+Receipts: retention audit of origin/backup/pr-601-original-head-e4bb8833
+Repo: /home/hoo/Projects/Sluice (remote origin = git@github.com:jnhu76/Sluice.git)
+Date: 2026-10-29. All commands non-destructive; no fetch/push/branch-op performed on the main repo.
+
+== R1 ref resolution (ask's literal form FAILS; resolvable form used) ==
+$ git -C /home/hoo/Projects/Sluice rev-parse origin/origin/backup/pr-601-original-head-e4bb8833
+fatal: ambiguous argument 'origin/origin/backup/pr-601-original-head-e4bb8833': unknown revision or path not in the working tree. (exit=128)
+Note: audit label "sluice/origin/backup/..." = <repo>/<remote>/<branch>; actual branch is backup/pr-601-original-head-e4bb8833 on remote origin.
+$ git -C /home/hoo/Projects/Sluice for-each-ref | grep -Ei 'backup/pr-601|e4bb8833'
+refs/remotes/origin/backup/pr-601-original-head-e4bb8833 e4bb8833699d0ca5dee191883f3fec6d41b221b2
+$ git -C /home/hoo/Projects/Sluice rev-parse origin/backup/pr-601-original-head-e4bb8833^{commit}
+e4bb8833699d0ca5dee191883f3fec6d41b221b2   <-- matches expected HEAD e4bb8833699d0ca5dee191883f3fec6d41b221b2
+$ git -C /home/hoo/Projects/Sluice show -s --format='commit=%H%ncommitter-date=%ci%nsubject=%s' origin/backup/pr-601-original-head-e4bb8833
+commit=e4bb8833699d0ca5dee191883f3fec6d41b221b2
+committer-date=2026-10-27 00:50:07 +0800
+subject=research(direct): #600 E5 excess-cost attribution and C1 validation evidence
+
+== R2 associated PR (headRef match against supplied PR list) ==
+No PR in the supplied list has headRef = backup/pr-601-original-head-e4bb8833 -> "None".
+Name references #601 (MERGED, headRef sluice-600-direct-research, headSha 2fcc79646ee42d1699468e0a50c0269f405b92d3 = refs/pull/601/head, see R8).
+PR 601's listed headSha 2fcc7964... is NOT a valid object in the local repo:
+$ git merge-base --is-ancestor e4bb8833... 2fcc7964...
+fatal: Not a valid commit name 2fcc79646ee42d1699468e0a50c0269f405b92d3 (exit=128)
+
+== R3 commit reachability ==
+$ git -C /home/hoo/Projects/Sluice branch -a --contains e4bb8833699d0ca5dee191883f3fec6d41b221b2
+  remotes/origin/backup/pr-601-original-head-e4bb8833        <-- only this ref
+$ git -C /home/hoo/Projects/Sluice branch -a --contains ea2fc4fca1a65a63ef3664f71dab1014e98c3b25
+  remotes/origin/backup/pr-601-original-head-e4bb8833        <-- only this ref
+$ git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/backup/pr-601-original-head-e4bb8833
+2
+$ git -C /home/hoo/Projects/Sluice merge-base origin/master origin/backup/pr-601-original-head-e4bb8833
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+$ git -C /home/hoo/Projects/Sluice log --format='%H %ci %s' origin/master..origin/backup/pr-601-original-head-e4bb8833
+e4bb8833699d0ca5dee191883f3fec6d41b221b2 2026-10-27 00:50:07 +0800 research(direct): #600 E5 excess-cost attribution and C1 validation evidence
+ea2fc4fca1a65a63ef3664f71dab1014e98c3b25 2026-10-27 00:33:43 +0800 perf(direct): dispatch admission verdicts without Precheck materialization (#600 C1)
+$ git -C /home/hoo/Projects/Sluice rev-list --parents -n 1 ea2fc4fca1a65a63ef3664f71dab1014e98c3b25
+ea2fc4fca1a65a63ef3664f71dab1014e98c3b25 bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57   (parent = old master base)
+Master topology: 84a0cc1d (#601 squash) and 43cb8029 (#602 squash) both ancestors of origin/master (merge-base --is-ancestor exit=0 both); origin/master = 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b.
+
+== R4 blob reachability / per-file content vs origin/master ==
+$ git -C /home/hoo/Projects/Sluice rev-list --objects origin/backup/pr-601-original-head-e4bb8833 ^origin/master | wc -l
+21   (2 commits + trees; unique object paths:)
+include/sluice/detail/file_semantics.hpp, research/600-direct-excess-cost/{DIRECT_COST_DAG.md,
+DIRECT_MACHINE_COST_LEDGER.md, EVIDENCE_INDEX.md, PHASE3_VALIDATION.md, PHASE_I_COST_ATTRIBUTION.md},
+src/blocking_file.cpp, tests/semantic_range_test.cpp, xmake/tests.lua
+$ git -C /home/hoo/Projects/Sluice diff --name-only origin/master...origin/backup/pr-601-original-head-e4bb8833
+(9 files, same list as above)
+Per-file blob compare (branch:file vs origin/master:file):
+SAME b9b0b233  research/600-direct-excess-cost/DIRECT_COST_DAG.md
+SAME 1741c098  research/600-direct-excess-cost/DIRECT_MACHINE_COST_LEDGER.md
+SAME a5bbf1cf  research/600-direct-excess-cost/EVIDENCE_INDEX.md
+SAME 89141091  research/600-direct-excess-cost/PHASE3_VALIDATION.md
+SAME cfad9902  research/600-direct-excess-cost/PHASE_I_COST_ATTRIBUTION.md
+SAME 0d3eb7e0  tests/semantic_range_test.cpp
+DIFF e39760ae vs d0090897  include/sluice/detail/file_semantics.hpp   (master evolved post-merge: #602, #612)
+DIFF 6660a423 vs 8a27525d  src/blocking_file.cpp                       (same)
+DIFF febe6515 vs c55e97be  xmake/tests.lua                             (same)
+C1 code equality at merge point:
+$ git -C /home/hoo/Projects/Sluice diff ea2fc4fca1a65a63ef3664f71dab1014e98c3b25 43cb8029ca60b572c91a9aa9dccb17d4300e2f88 --stat -- include/sluice/detail/file_semantics.hpp src/blocking_file.cpp tests/semantic_range_test.cpp xmake/tests.lua
+(empty output = 4 code files blob-identical between backup C1 commit and master-merged #602)
+84a0cc1d stat: 5 research files, +348 (research evidence only); 43cb8029 stat: docs/roadmap/v2-conformance.md + 4 code/test paths.
+
+== R5 unique evidence / archive coverage ==
+All 5 research docs research/600-direct-excess-cost/*.md: blob-identical on origin/master (R4).
+Backup metadata (full SHA, both commit SHAs, patch-ids 8ed5d3c0/70a0899c, per-file blobs) is recorded
+in master's archived closure evidence research/direct-beyond-parity/closure/r2-pr-boundary.md:56-81
+(landed via #610). That doc line 168 defers deletion of this branch to Owner/R9 closeout
+"after #602 and #601 merge" — both merged (R3).
+Only unique artifacts: the 2 commit objects themselves (pre-split stacked history). Their content is
+fully merged; nothing else references them (R3, R8).
+
+== R6 active dependency ==
+Not an OPEN PR head: supplied list OPEN PRs = #594 (research/593-key-path, Sluice), #8 (dududu); no match.
+$ git -C /home/hoo/Projects/Sluice grep -I -n -e 'backup/pr-601' -e 'pr-601-original-head' origin/master -- .
+6 hits, all prose in research/direct-beyond-parity/closure/r2-pr-boundary.md (lines 64,65,70,73,145,168);
+no script/CI/consumer. Recursive grep of working tree (excluding .git and audit dir): same 6 hits only.
+$ git -C /home/hoo/Projects/Sluice worktree list --porcelain
+/home/hoo/Projects/Sluice (branch refs/heads/master, HEAD 84e1b7d5)
+/tmp/sluice-val-c1-plat (detached, 84e1b7d5)
+/tmp/sluice-val-k594-retention (detached, 2714aa6)
+/tmp/sluice-val-p2c1 (detached, 84e1b7d5)
+-> no worktree checks out backup/pr-601-original-head-e4bb8833; no dirty check needed.
+
+== R7 remote state / recovery ==
+$ git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/backup/pr-601-original-head-e4bb8833 refs/pull/601/head
+e4bb8833699d0ca5dee191883f3fec6d41b221b2	refs/heads/backup/pr-601-original-head-e4bb8833
+2fcc79646ee42d1699468e0a50c0269f405b92d3	refs/pull/601/head
+Remote branch still exists on GitHub at the exact expected SHA; recoverable anytime before deletion via
+git fetch origin backup/pr-601-original-head-e4bb8833.
+Isolated check whether GitHub retains old head via PR ref (fresh repo /tmp/sluice-val-audit-pr601bak,
+fetch --depth=200 origin refs/pull/601/head -> FETCH_HEAD=2fcc7964, 1345 commits of history):
+merge-base --is-ancestor bdfd0d8d FETCH_HEAD -> exit=0 (old base present)
+cat-file -t / merge-base --is-ancestor for e4bb8833 and ea2fc4fc -> "Not a valid commit name" (exit=128)
+=> refs/pull/601/head does NOT retain the pre-rewrite commits. After remote-branch deletion, the two
+commit objects survive only in local clones' odb (until gc); content remains in master (R4).
+
+== R8 evidence doc excerpts ==
+research/direct-beyond-parity/closure/r2-pr-boundary.md (on origin/master via #610):
+  :57-59  push command that created the backup branch from e4bb8833699d0ca5dee191883f3fec6d41b221b2
+  :62-67  ls-remote + fetch verification, same-SHA, blob checks (EVIDENCE_INDEX.md a5bbf1cf...)
+  :69-81  backup content record: commit 1 ea2fc4fc (patch-id 8ed5d3c0...), commit 2 e4bb8833
+          (patch-id 70a0899c...), full diff 9 files +463/-98
+  :141-145  postcondition 3 PASS: original #601 HEAD and full diff accessible via the backup branch
+            (fetch verified at closure time)
+  :150-154  postcondition 4: PHASE3_VALIDATION.md CANDIDATE_SHA ea2fc4fc verified as ancestor of the backup branch
+  :167-169  deletion timing deferred to Owner/R9 closeout, consider only after #602 AND #601 merge

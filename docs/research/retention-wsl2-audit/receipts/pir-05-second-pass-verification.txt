@@ -1,0 +1,118 @@
+# pir-05 — second-pass independent re-verification of branch research/product-integration-records
+
+Re-audit pass, 2026-10-29 ~23:2x +08:00, WSL2 audit host (/home/hoo/Projects/Sluice).
+Every command below was executed in THIS pass; outputs are pasted verbatim (trimmed
+where marked). Conclusion unchanged vs pir-01..pir-04: ARCHIVE_FIRST.
+
+## 1. HEAD resolution
+
+$ git -C /home/hoo/Projects/Sluice rev-parse --verify origin/research/product-integration-records
+4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+
+$ git -C /home/hoo/Projects/Sluice for-each-ref --format='%(refname) %(objectname)' refs/remotes/origin | grep -i product-integration
+refs/remotes/origin/research/product-integration-records 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+
+$ git -C /home/hoo/Projects/Sluice rev-parse "origin/research/product-integration-records:INTEGRATION_LOG.md"
+b5e6f054bbe953d938eebf62aa1899f64c55c7b9
+
+## 2. Commit reachability
+
+$ git -C /home/hoo/Projects/Sluice branch -a --contains 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+  remotes/origin/research/product-integration-records
+
+$ git -C /home/hoo/Projects/Sluice tag --contains 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+(no tags if empty)                          <- empty: no tag contains the SHA
+
+$ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35 origin/master && echo ancestor || echo not-ancestor
+HEAD is NOT ancestor of origin/master
+
+$ git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/research/product-integration-records
+2
+$ git -C /home/hoo/Projects/Sluice rev-list --count origin/research/product-integration-records..origin/master
+1
+$ git -C /home/hoo/Projects/Sluice merge-base origin/master origin/research/product-integration-records
+4b962abbd26156bb15c4378b90811e9889795c03
+$ git -C /home/hoo/Projects/Sluice rev-parse 84e1b7d5^
+4b962abbd26156bb15c4378b90811e9889795c03    <- master tip's parent IS the merge base
+
+Branch log (top):
+4d621d91 research(integration): record archive push SHA in Phase 8 log
+8c3adf6c research(integration): archive E5 product integration records and Phase 3.3 final-head perf receipts
+4b962abb ci(guard): keep comment-authority scan off archived research evidence (#613)   <- merge base
+
+## 3. Blob reachability — 38/38 file blobs NOT in origin/master (any path, any history)
+
+Method: all object SHAs reachable from origin/master collected once:
+$ git -C /home/hoo/Projects/Sluice rev-list --objects origin/master | awk '{print $1}' | sort -u > /tmp/sluice-master-objects.txt
+35416 objects. Then per changed file:
+$ git -C /home/hoo/Projects/Sluice diff --name-only origin/master...origin/research/product-integration-records   # 38 files, +5028 lines, additions only
+$ for f in $(...); do b=$(git rev-parse "origin/research/product-integration-records:$f"); grep -q "^$b$" master-objects && echo IN-MASTER || echo NOT-IN-MASTER; done
+
+Result: 38 x NOT-IN-MASTER, 0 x IN-MASTER. Tip INTEGRATION_LOG.md blob = b5e6f054…,
+parent-commit version = e87db785… — both unique to the branch.
+Unique objects on the branch side (rev-list --objects <branch> ^origin/master):
+2 commits (4d621d91, 8c3adf6c) + 7 trees (incl. research/, closure/, perf-p2c1-finalhead/)
++ 34 blobs. machid/ blob sharing: base-file_info=head-file_info=ad30699a,
+base-read=head-read=3c24136f, base-read_at=head-read_at=base-write_at=head-write_at=
+base-write_at=680607bf.
+
+No src/ include/ apps/ xmake* path appears in the diff -> no unpushed product change.
+
+$ git -C /home/hoo/Projects/Sluice ls-tree -r --name-only origin/master | grep -iE 'INTEGRATION_(LOG|PLAN)'
+(no output, exit 1 — neither file exists anywhere in master tree)
+
+$ git -C /home/hoo/Projects/Sluice ls-tree -r --name-only origin/master | grep finalhead
+docs/evidence/f2-authority-contraction-20261013/w03-root-cause/raw/campaign-finalhead.sh      c8ff9657…
+docs/evidence/f2-authority-contraction-20261013/w03-root-cause/raw/finalhead-campaign/campaign-runs.tgz  20228fa9…
+docs/evidence/f2-authority-contraction-20261013/w03-root-cause/raw/finalhead-campaign/environment.txt    93b2552c…
+docs/evidence/f2-authority-contraction-20261013/w03-root-cause/raw/finalhead-campaign/results.tsv        cea80b30…
+-> different campaign, different paths, different blobs. master's #610 archive
+   research/direct-beyond-parity/closure/ (206 files) contains perf-p2c1/ only,
+   NO perf-p2c1-finalhead/ directory.
+
+## 4. Remote state / recovery
+
+$ git -C /home/hoo/Projects/Sluice ls-remote origin | grep product-integration-records
+4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35	refs/heads/research/product-integration-records
+$ git -C /home/hoo/Projects/Sluice ls-remote origin | grep -c 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+1                                           <- exactly one server-side ref holds the SHA
+
+## 5. Active dependency
+
+$ git -C /home/hoo/Projects/Sluice grep -l "product-integration-records" origin/master --
+(no output, exit 1 — no tracked file on master references the branch name)
+Worktree grep: only docs/research/retention-wsl2-audit/ audit documents mention it;
+no script/CI reference.
+
+$ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice       84e1b7d5 [master]
+/tmp/sluice-perf-base           77e5399a (detached HEAD)   (and 14 more /tmp worktrees,
+all detached at 84e1b7d5 / 77e5399a / 2714aa65)
+-> NO worktree has research/product-integration-records checked out.
+
+$ ps aux | grep -i "product-integration" | grep -v grep
+(no output — no running process)
+
+## 6. Unique-evidence characterization (read from the branch itself)
+
+$ git show origin/research/product-integration-records:research/direct-beyond-parity/closure/perf-p2c1-finalhead/SUMMARY.md | head -40
+"# P2C1 Final-HEAD Performance Regression Check — E5 (perf-p2c1-finalhead)"
+base = master 43cb8029 (C1 merged), candidate = PR #612 re-anchored head 64508282,
+session 2026-10-29 15:18–15:29 on host E5 — this IS the Final-HEAD Performance
+Receipt the special check warns about. Byte-identity chain to R4 documented.
+
+$ git show origin/research/product-integration-records:INTEGRATION_LOG.md | tail -60
+§8.4: branch created from integration worktree, pushed to jnhu76/Sluice, "不建 PR"
+(deliberately no PR); the perf-p2c1-finalhead receipts are "此前未提交" (previously
+uncommitted); a copy was written to /home/jnhu/Source/Sluice/.zcode/workflow-drafts/
+integration-records.md — ON HOST E5, NOT THIS MACHINE:
+$ ls -d /home/jnhu  -> "No such file or directory"
+So from this audit host, the branch (local remote-tracking ref + GitHub ref, same
+SHA) is the only verifiable persistent copy of all 38 files.
+
+## 7. PR association (from the ask's provided PR list)
+
+headRef match for "research/product-integration-records": none of the 10 entries.
+headSha match for 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35: none.
+-> Associated PR: None. OPEN PR heads (#594 research/593-key-path @ 2714aa65,
+   dududu #8 r1-request-geometry @ 47cd1976) do not point at this branch.

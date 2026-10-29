@@ -1,0 +1,11 @@
+# cmd: git log origin/master --diff-filter=A --oneline -- research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+ac995641 research(direct-beyond-parity): archive #603 P0-P6 evidence with sha256 manifest (#610)
+# cmd: manifest sha256 full verify (python, branch bytes vs EVIDENCE_MANIFEST.json)
+manifest r6-ac1 entries: 34
+branch-side verify: 34 matched, 0 mismatched
+# cmd: git show origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md | grep -n -A3 vectored-semantics
+95-  design PR https://github.com/jnhu76/Sluice/pull/611 (branch
+96:  `research/r6-ac1-vectored-semantics`, commit `999b5305`, OPEN); the two
+97-  research branches intentionally overlap on that subtree. `DUCKDB_FIO_R0_PREREG.md`
+98-  is additionally carried by dududu PR https://github.com/jnhu76/dududu/pull/7
+99-  per the R5 lane's recorded intent.

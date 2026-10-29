@@ -1,0 +1,44 @@
+# receipt: SDK headers — captured 2026-10-29T22:37:49+08:00 at commit 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+$ ls -1 /home/hoo/Projects/Sluice/include/
+sluice
+
+$ ls -1 /home/hoo/Projects/Sluice/include/sluice/
+async
+blocking
+detail
+effect.hpp
+error.hpp
+file_resource.hpp
+measurement.hpp
+result.hpp
+
+$ find include -name '*.hpp' | sort
+/home/hoo/Projects/Sluice/include/sluice/async/async_io_context.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/async_backend.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/context_identity.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/fail_fast.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/observer_protocol.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/progress_source.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/ready_sink.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/reference_ready_sink.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/request_core.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/request_key.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/test_access.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/threadpool_backend.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/detail/uring_backend.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/request.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/request_scope.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/threadpool_backend.hpp
+/home/hoo/Projects/Sluice/include/sluice/async/uring_backend.hpp
+/home/hoo/Projects/Sluice/include/sluice/blocking/file.hpp
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp
+/home/hoo/Projects/Sluice/include/sluice/detail/posix_retry.hpp
+/home/hoo/Projects/Sluice/include/sluice/detail/uring_submit.hpp
+/home/hoo/Projects/Sluice/include/sluice/effect.hpp
+/home/hoo/Projects/Sluice/include/sluice/error.hpp
+/home/hoo/Projects/Sluice/include/sluice/file_resource.hpp
+/home/hoo/Projects/Sluice/include/sluice/measurement.hpp
+/home/hoo/Projects/Sluice/include/sluice/result.hpp
+
+top-level entries in include/sluice: 8
+recursive .hpp count: 26
