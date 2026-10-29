@@ -115,9 +115,22 @@
   objdump 计数，.comment 已验证编译器）。**计数不可跨工具链/口径比较；任何
   在 WSL2 上的 C1 性能复核必须重测，不能引用 E5 计数。** 这只影响性能证据，
   不影响语义：全部语义套件在两编译器 + ASan/UBSan 下一致通过。
-- WSL2 GCC 15.2 的 read_at 把 errno→Code 映射内联为跳转表
-  （receipts 13，`movslq (%rcx,%rax,4),%rsi; jmp *%rsi`），E5 账本未描述该
-  形态——进一步印证两宿主机器码不同源。
+- WSL2 GCC 15.2 的 read_at 把 errno→Code 映射内联为逐常量比较/分支链，
+  不是跳转表（2026-10-30 更正：原文误写为跳转表并引用
+  `movslq (%rcx,%rax,4),%rsi; jmp *%rsi`——receipts 13 全文件不存在任何
+  `jmp *` 间接跳转或 `movslq` 表索引，grep 零命中）。真实链条在 read_at 内
+  （receipts/13-c1-blocking-file-gcc152-O3.dis:49-67，地址 b2–fd）：EINTR
+  先行 `cmp $0x4,%eax; je` 回 retry 循环（:49-50，目标 :106-107）；默认码
+  `mov $0x7,%edx`（backend_error）预装（:51）；errno==0 经 `test/je` 直走
+  默认（:52-53）；随后 EACCES=0xd（:54-55）、EPERM=0x1（:56-57）、
+  ENOENT=0x2（:58-59）、ENOTDIR=0x14（:60-61）、ENOSPC=0x1c（:62-63）、
+  EDQUOT=0x7a（:64-65）、EAGAIN=0xb（:66-67）逐个 `cmp/je`，命中分支以
+  `lea 0x0(%rip),%rdx` + `movzbl 0x4(%rdx),%edx`（:68-70）从指令流内嵌
+  字节装入映射码，未命中沿用默认 backend_error（:71 存入结果）。该形态是
+  error.hpp:80-88 对 kNativeErrorMappings 线性 == 扫描展开的直接结果；
+  write_at 同形（13-c1-blocking-file-gcc152-O3.dis:162-183），read_exact_at
+  的同类链见 receipts/14-asm-read-exact-at-gcc152.txt:31-41。E5 账本未
+  描述该形态——两宿主机器码不同源的结论不变。
 - 语义层面未发现任何依赖 E5 代码生成模式的构造：无内联依赖、无优化器提示、
   无 `if constexpr` 分支语义、无内建函数依赖；测试 oracle 的
   `unsigned __int128` 仅测试用且两编译器均支持（x86_64）。
