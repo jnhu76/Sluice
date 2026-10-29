@@ -15,7 +15,6 @@
 namespace {
 
 using sluice::IoError;
-using sluice::detail::checked_posix_offset;
 using sluice::detail::DataOpVerdict;
 using sluice::detail::kMaxNativeOffset;
 using sluice::detail::kMaxNativeTransfer;
@@ -90,16 +89,16 @@ bool size_bound_holds() {
 }
 
 bool checked_offset_reports_invalid_argument() {
-    auto accepted = checked_posix_offset(kMaxNativeOffset);
-    if (!accepted.has_value())
+    const sluice::detail::DataOpRequest request{false,
+                                               sluice::FileAccess::read_only,
+                                               sluice::detail::FileOperation::read,
+                                               kMaxNativeOffset + 1,
+                                               1};
+    const DataOpVerdict verdict = sluice::detail::precheck_data_op(request);
+    if (verdict != DataOpVerdict::reject_range)
         return false;
-    if (accepted.value() != std::numeric_limits<off_t>::max())
-        return false;
-
-    auto rejected = checked_posix_offset(kMaxNativeOffset + 1);
-    if (rejected.has_value())
-        return false;
-    return rejected.error().code == IoError::Code::invalid_argument;
+    const auto rejection = sluice::detail::rejection_of(verdict);
+    return rejection.has_value() && rejection->code == IoError::Code::invalid_argument;
 }
 
 bool native_transfer_limit_is_a_range_rejection() {
