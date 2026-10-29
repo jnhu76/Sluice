@@ -1,8 +1,10 @@
 # Branch Retention Matrix — retention-wsl2-audit
 
 Consolidated per-branch retention matrix for the WSL2 branch-retention audit
-campaign. It merges the per-branch audit entries (17 audit records covering 11
-unique branches across two repositories) into one section per branch.
+campaign. It merges the per-branch audit entries (two or three rounds for
+several branches; each section lists its rounds, conflicts and evidence
+files) into one section per branch — 11 unique branches across two
+repositories.
 
 - Repositories: `jnhu76/Sluice` (`/home/hoo/Projects/Sluice`, default branch
   `master`) and `jnhu76/dududu` (local audit clone `/tmp/dududu-audit`, default
@@ -15,13 +17,21 @@ unique branches across two repositories) into one section per branch.
   research data must land on the default branch before any deletion),
   `DELETE_CANDIDATE` (meets all cleanup conditions; deletion remains an Owner
   decision), `UNKNOWN`.
+- Report attribution: this audit is delivered by PR #614
+  (`AUDIT_DELIVERY_PR = #614`, branch `research/retention-wsl2-audit`); the
+  E5 key-path research campaign it adjudicates is PR #594
+  (`KEY_PATH_RESEARCH_PR = #594`, branch `research/593-key-path`), retained
+  unmerged (`KEY_PATH_ARCHIVE_STATUS = KEEP_UNMERGED`; full verdict
+  `KEEP_RESEARCH_PR_UNMERGED` in RESEARCH_594_ARCHIVE_DECISION.md). The final
+  report block previously collapsed both roles into a single `RESEARCH_PR`
+  field filled with #594's description.
 
 ## Decision summary
 
 | # | Branch | Repo | HEAD | Final decision | Audit rounds | Cleanup-eligible |
 |---|--------|------|------|----------------|--------------|------------------|
 | 1 | `master` | Sluice | `84e1b7d578c2c58a3c46033487d9e1ac7c639b8b` | KEEP | 1 | No (default branch) |
-| 2 | `backup/pr-601-original-head-e4bb8833` | Sluice | `e4bb8833699d0ca5dee191883f3fec6d41b221b2` | KEEP | 2 (conflicting; KEEP stands) | No |
+| 2 | `backup/pr-601-original-head-e4bb8833` | Sluice | `e4bb8833699d0ca5dee191883f3fec6d41b221b2` | KEEP | 3 (conflicting; KEEP stands) | No |
 | 3 | `backup/pr-612-original-head-70d48f5e` | Sluice | `70d48f5eb55a664544b5160cd4675d32150bb21e` | DELETE_CANDIDATE | 3 (early ARCHIVE_FIRST dissent documented) | Yes (Owner-gated) |
 | 4 | `research/575-native-e5-atomic-rmw` | Sluice | `e9baafb9d117cbaf387dde9f4433ebbacb4a73b3` | ARCHIVE_FIRST | 2 (agree) | No |
 | 5 | `research/593-key-path` | Sluice | `2714aa65fe4837d30f5fa3fcdb27db38c23b7136` | KEEP | 2 (agree) | No |
@@ -32,10 +42,31 @@ unique branches across two repositories) into one section per branch.
 | 10 | `sluice-r0-closure` | dududu | `cc053cf9258b98546b16f9d2f08c5559fa73bc77` | DELETE_CANDIDATE | 2 (agree) | Yes |
 | 11 | `sluice-r0-e5-verdict` | dududu | `cc321a4994ee638493fecda0c437481528f5cea9` | DELETE_CANDIDATE | 2 (agree) | Yes |
 
-Tally by audit record (17 records): KEEP 5, ARCHIVE_FIRST 5,
-DELETE_CANDIDATE 7, UNKNOWN 0.
-Tally by unique branch after round resolution (11 branches): KEEP 4,
-ARCHIVE_FIRST 2, DELETE_CANDIDATE 5, UNKNOWN 0.
+Tally (governance matrix — unique branches after round resolution, 11
+branches): KEEP 4, ARCHIVE_FIRST 2, DELETE_CANDIDATE 5, UNKNOWN 0
+(4 + 2 + 5 = 11).
+
+Counting calibers — two separate scopes, not to be mixed:
+
+- Governance matrix (this table): 11 unique branches = 7 Sluice + 4 dududu.
+  It excludes dududu's default branch `main` and this audit's own delivery
+  branch `research/retention-wsl2-audit` (PR #614). A branch with
+  conflicting rounds is counted once under its standing decision.
+- Full remote-ref snapshot (CLOSURE_BASELINE_SNAPSHOT.md §3/§7): a
+  different caliber that counts refs, not decisions — Sluice has 8 named
+  remote branches (the 7 matrix branches + `research/retention-wsl2-audit`)
+  and dududu has 5 (the 4 matrix branches + default `main`), 13 in total.
+  The PR #614 report block's `SLUICE_REMOTE_BRANCH_COUNT = 8` and
+  `DUDUDU_REMOTE_BRANCH_COUNT = 5` report this snapshot caliber, separate
+  from the 11-branch governance tally above.
+- The tally previously printed here ("by audit record, 17 records: KEEP 5,
+  ARCHIVE_FIRST 5, DELETE_CANDIDATE 7") was wrong and is removed: KEEP 5
+  and ARCHIVE_FIRST 5 happen to coincide with the per-round verdict totals,
+  but DELETE_CANDIDATE 7 matches neither the per-round total (13 DELETE
+  rounds: 2 pr-601 + 2 pr-612 + 3 r6-ac1 + 2 r5 + 2 r0-closure +
+  2 r0-e5-verdict) nor the unique-branch count (5), so 17 matched no
+  reproducible total. Per-round verdicts and conflicts remain documented in
+  each section's Audit rounds and Decision fields.
 
 ---
 
