@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <optional>
 #include <span>
+#include <utility>
 
 #ifdef SLUICE_FILE_INTERNAL_TESTING
 #include "file_test_seams.hpp"
@@ -72,6 +73,14 @@ ssize_t native_pwrite(int fd, const void* buf, std::size_t count, off_t offset) 
             scripted(file_testing::NativeCall::pwrite, fd, buf, count, static_cast<long>(offset)));
 #endif
     return ::pwrite(fd, buf, count, offset);
+}
+
+template <class Fn> auto step_retry_on_eintr(Fn&& fn) -> decltype(fn()) {
+#if defined(SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY)
+    return fn();
+#else
+    return detail::retry_on_eintr(std::forward<Fn>(fn));
+#endif
 }
 
 }
@@ -231,55 +240,96 @@ Result<void> sync_all(const File& file) {
 namespace {
 
 using detail::CompositionKind;
-using detail::CompositionState;
 
-constexpr EffectCertainty publish_certainty(detail::EffectCertainty certainty) noexcept {
-    return certainty == detail::EffectCertainty::accounted ? EffectCertainty::accounted
-                                                           : EffectCertainty::unknown;
+constexpr EffectCertainty failure_publish_certainty() noexcept {
+#if defined(SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED)
+    return EffectCertainty::accounted;
+#else
+    return EffectCertainty::unknown;
+#endif
 }
 
-CompositionOutcome direct_outcome(const CompositionState& state) noexcept {
+Result<CompositionOutcome> complete_outcome(std::size_t confirmed_bytes) noexcept {
     CompositionOutcome outcome;
-    outcome.confirmed_bytes = state.confirmed_bytes;
-    outcome.remaining = publish_certainty(detail::composition_effect_certainty(state));
-    switch (state.stop) {
-    case detail::CompositionStop::complete:
-        outcome.end = CompositionEnd::complete;
-        break;
-    case detail::CompositionStop::eof_before_full:
-        outcome.end = CompositionEnd::eof_before_full;
-        break;
-    case detail::CompositionStop::write_no_progress:
-        outcome.end = CompositionEnd::write_no_progress;
-        break;
-    case detail::CompositionStop::primitive_error:
-        outcome.end = CompositionEnd::primitive_error;
-        outcome.error = state.error;
-        break;
-    case detail::CompositionStop::impossible_count:
-        outcome.end = CompositionEnd::primitive_error;
-        outcome.error = IoError{.code = IoError::Code::invalid_state};
-        break;
-    }
+    outcome.confirmed_bytes = confirmed_bytes;
     return outcome;
 }
 
-// `confirmed` never exceeds the validated request, so an advanced offset stays
-// inside the range the precheck accepted and the arithmetic cannot overflow.
+[[maybe_unused]] Result<CompositionOutcome> stalled_outcome(CompositionEnd end,
+                                                            std::size_t confirmed_bytes) noexcept {
+    CompositionOutcome outcome;
+    outcome.confirmed_bytes = confirmed_bytes;
+    outcome.end = end;
+    return outcome;
+}
+
+Result<CompositionOutcome> primitive_error_outcome(std::size_t confirmed_bytes,
+                                                   IoError error) noexcept {
+    return CompositionOutcome{confirmed_bytes, CompositionEnd::primitive_error,
+                              failure_publish_certainty(), error};
+}
+
+// The composition entry admitted the whole request before compose() runs, so
+// the step offsets below stay inside the validated range; the off_t casts
+// cannot lose bits.
+Result<std::size_t> prevalidated_pread_step(const File& file, std::uint64_t offset,
+                                            std::span<std::byte> dst) {
+    ssize_t n = step_retry_on_eintr([&] {
+        return native_pread(file.native_handle(), dst.data(), dst.size(),
+                            static_cast<off_t>(offset));
+    });
+    if (n < 0) {
+        return make_unexpected<std::size_t>(from_errno_value(errno));
+    }
+    return static_cast<std::size_t>(n);
+}
+
+Result<std::size_t> prevalidated_read_step(const File& file, std::span<std::byte> dst) {
+    ssize_t n = step_retry_on_eintr([&] {
+        return native_read(file.native_handle(), dst.data(), dst.size());
+    });
+    if (n < 0) {
+        return make_unexpected<std::size_t>(from_errno_value(errno));
+    }
+    return static_cast<std::size_t>(n);
+}
+
+// `confirmed` never exceeds the validated request, so the arithmetic cannot
+// overflow.
 template <class Primitive>
 Result<CompositionOutcome> compose(CompositionKind kind, std::size_t total,
                                    Primitive&& primitive) {
-    CompositionState state;
-    while (!state.stopped && state.confirmed_bytes < total) {
-        const std::size_t confirmed = state.confirmed_bytes;
-        auto step = primitive(confirmed);
+    std::size_t confirmed_bytes = 0;
+    while (confirmed_bytes < total) {
+        auto step = primitive(confirmed_bytes);
         if (!step.has_value()) {
-            state = detail::compose_error(state, step.error());
-            break;
+            return primitive_error_outcome(confirmed_bytes, step.error());
         }
-        state = detail::compose_progress(kind, total, state, step.value());
+#if defined(SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED) || \
+    defined(SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT)
+        const std::size_t transferred = total - confirmed_bytes;
+#else
+        const std::size_t transferred = step.value();
+#endif
+#if !defined(SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT)
+        if (transferred > total - confirmed_bytes) {
+            return primitive_error_outcome(
+                confirmed_bytes, IoError{.code = IoError::Code::invalid_state});
+        }
+#endif
+        confirmed_bytes += transferred;
+        if (confirmed_bytes == total)
+            break;
+#if !defined(SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS)
+        if (transferred == 0) {
+            return stalled_outcome(kind == CompositionKind::read_exact
+                                       ? CompositionEnd::eof_before_full
+                                       : CompositionEnd::write_no_progress,
+                                   confirmed_bytes);
+        }
+#endif
     }
-    return direct_outcome(state);
+    return complete_outcome(confirmed_bytes);
 }
 
 }
@@ -295,7 +345,7 @@ Result<CompositionOutcome> read_exact_at(const File& file, std::uint64_t offset,
         return make_unexpected<CompositionOutcome>(
             IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::read_exact, dst.size(), [&](std::size_t confirmed) {
-        return read_at(file, offset + confirmed, dst.subspan(confirmed));
+        return prevalidated_pread_step(file, offset + confirmed, dst.subspan(confirmed));
     });
 }
 
@@ -325,7 +375,7 @@ Result<CompositionOutcome> read_exact(const File& file, std::span<std::byte> dst
         return make_unexpected<CompositionOutcome>(
             IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::read_exact, dst.size(),
-                   [&](std::size_t confirmed) { return read(file, dst.subspan(confirmed)); });
+                   [&](std::size_t confirmed) { return prevalidated_read_step(file, dst.subspan(confirmed)); });
 }
 
 Result<CompositionOutcome> write_all(const File& file, std::span<const std::byte> src) {

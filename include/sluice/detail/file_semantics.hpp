@@ -245,6 +245,12 @@ constexpr CompositionState compose_progress(CompositionKind kind, std::size_t re
                                             std::size_t transferred) noexcept {
     if (state.stopped)
         return state;
+#if defined(SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED)
+    transferred = requested_total - state.confirmed_bytes;
+#endif
+#if defined(SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT)
+    state.confirmed_bytes += transferred;
+#else
     const std::size_t remaining = requested_total - state.confirmed_bytes;
     if (transferred > remaining) {
         state.stopped = true;
@@ -252,13 +258,16 @@ constexpr CompositionState compose_progress(CompositionKind kind, std::size_t re
         return state;
     }
     state.confirmed_bytes += transferred;
+#endif
     if (state.confirmed_bytes == requested_total)
         return state;
+#if !defined(SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS)
     if (transferred == 0) {
         state.stopped = true;
         state.stop = kind == CompositionKind::read_exact ? CompositionStop::eof_before_full
                                                         : CompositionStop::write_no_progress;
     }
+#endif
     return state;
 }
 

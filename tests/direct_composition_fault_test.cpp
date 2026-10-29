@@ -362,6 +362,31 @@ bool impossible_count_stops_immediately() {
     return ok;
 }
 
+bool write_all_impossible_count_stops_immediately() {
+    std::string path;
+    std::optional<File> file_holder = opened_with_content("", path, sluice::FileAccess::read_write);
+    if (!file_holder.has_value())
+        return false;
+    File& file = *file_holder;
+    const int fd = file.native_handle();
+    const std::vector<std::byte> src(4, std::byte{0x46});
+
+    bool ok = true;
+    {
+        NativeScript script(kTransferCalls, fd, {{8, 0}, {8, 0}});
+        auto composed = sluice::blocking::write_all_at(file, 0, src);
+        ok = ok && composed.has_value();
+        ok = ok && composed.value().end == CompositionEnd::primitive_error;
+        ok = ok && composed.value().confirmed_bytes == 0;
+        ok = ok && composed.value().remaining == EffectCertainty::unknown;
+        ok = ok && composed.value().error.has_value() &&
+             composed.value().error->code == IoError::Code::invalid_state;
+        ok = ok && script.calls() == 1;
+    }
+    ::unlink(path.c_str());
+    return ok;
+}
+
 bool a_primitive_error_reports_an_unaccounted_remainder_in_both_directions() {
     std::string path;
     std::optional<File> file_holder =
@@ -664,6 +689,8 @@ int main() {
          primitive_write_retries_eintr_then_stops_at_the_first_count},
         {"zero_length_requests_make_no_native_call", zero_length_requests_make_no_native_call},
         {"impossible_count_stops_immediately", impossible_count_stops_immediately},
+        {"write_all_impossible_count_stops_immediately",
+         write_all_impossible_count_stops_immediately},
         {"a_primitive_error_reports_an_unaccounted_remainder_in_both_directions",
          a_primitive_error_reports_an_unaccounted_remainder_in_both_directions},
         {"every_stop_reason_is_pinned_against_the_oracle_error_rule",

@@ -97,6 +97,27 @@ do
     direct_mutant_target("blocking_file_mut_admit_unrepresentable_size",
                          R .. "tests/blocking_file_state_test.cpp",
                          "SLUICE_SEM_MUTANT_ADMIT_UNREPRESENTABLE_SIZE")
+    direct_mutant_target("blocking_file_mut_advance_by_requested",
+                         R .. "tests/direct_composition_fault_test.cpp",
+                         "SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED")
+    direct_mutant_target("blocking_file_mut_retry_zero_progress",
+                         R .. "tests/direct_composition_fault_test.cpp",
+                         "SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS")
+    direct_mutant_target("blocking_file_mut_short_io_retry_zero_progress",
+                         R .. "tests/semantic_short_io_reference_test.cpp",
+                         "SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS")
+    direct_mutant_target("blocking_file_mut_failure_accounted",
+                         R .. "tests/direct_composition_fault_test.cpp",
+                         "SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED")
+    direct_mutant_target("blocking_file_mut_skip_impossible_count",
+                         R .. "tests/direct_composition_fault_test.cpp",
+                         "SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT")
+    direct_mutant_target("blocking_file_mut_step_reports_full_count",
+                         R .. "tests/direct_composition_fault_test.cpp",
+                         "SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT")
+    direct_mutant_target("blocking_file_mut_step_skips_eintr_retry",
+                         R .. "tests/direct_composition_fault_test.cpp",
+                         "SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY")
 end
 
 -- Real io_uring verification: registered only when the liburing build switch
