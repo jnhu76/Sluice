@@ -10,7 +10,10 @@ There are no comment-count thresholds. Adding comments is never flagged by
 itself; only the high-confidence patterns below are.
 
 Scanned extensions: .h .hpp .hh .c .cpp .cc. Excluded paths are build or
-generated outputs only (.git, build, .xmake, .lake, node_modules); no
+generated outputs (.git, build, .xmake, .lake, node_modules) and archived
+research evidence trees (any path component named "research"): their bytes
+are frozen provenance records pinned by evidence manifests, not maintained
+source, so the guard never requires — or licenses — editing them. No
 maintained source directory is excluded.
 """
 
@@ -36,7 +39,7 @@ RULES = [
 COMPILED_RULES = [(name, re.compile(pattern)) for name, pattern in RULES]
 
 CPP_SUFFIXES = {".h", ".hpp", ".hh", ".c", ".cpp", ".cc"}
-EXCLUDED_DIRS = {".git", "build", ".xmake", ".lake", "node_modules"}
+EXCLUDED_DIRS = {".git", "build", ".xmake", ".lake", "node_modules", "research"}
 
 FOOTER = (
     "C++ comments may document local hazards, invariants, or mechanism\n"
