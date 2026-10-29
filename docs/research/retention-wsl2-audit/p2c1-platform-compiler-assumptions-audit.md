@@ -61,6 +61,9 @@ oracle 及 `CompositionOutcome` 字段序对齐；核对 `precheck_data_op`/
   行为差异；File 被 move 走（fd_ 变 -1 后复用编号）同理。建议账本补一句
   fd-reuse 形态，避免读者把"EBADF-class"当成并发 close 的唯一可观察结果。
 - severity 依据：合同外（调用方数据竞争），非数据丢失级缺陷，故 low。
+- 集中披露：本 finding 已汇入 `WSL2_PORTABILITY_REPORT.md` 的
+  「THREAD-01 合同外并发风险披露」节（四点区分：合同内一致 / EBADF 分类
+  差异 / fd 复用错读 / 竞争先于 P2C1、窗口扩大；披露，非修复）。
 
 ### F2（low，已验证，平台事实）： admitted 顶边请求在本机内核返回 EINVAL 而非 EOF
 

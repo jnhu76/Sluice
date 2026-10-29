@@ -97,6 +97,8 @@ blocking_file_sequential / blocking_file_state / semantic_short_io_reference）�
 - **THREAD-01 并发生命周期**：契约 §1003-1022 "File move/close/destruction |
   Caller serialization" → SEM-05 契约外披露的竞争归类（caller data race）正确；
   in-contract 行为（入口 admission 不变、无泄漏、无新增 UB）与披露一致。
+  （本复审 F1 的 fd-reuse 形态已集中披露于 `WSL2_PORTABILITY_REPORT.md`
+  「THREAD-01 合同外并发风险披露」节；披露，非修复。）
 
 ## 2. 矩阵与平台证据复核（读取 receipts，未全部重跑，如实标注）
 

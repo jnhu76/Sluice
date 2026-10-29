@@ -171,7 +171,9 @@
 14. uring 零长请求走内联发布（zero_op），不依赖内核 len==0 特殊语义；
     threadpool 零长为 count=0 的 pread/pwrite，内核直接返回 0。
 15. THREAD-01 要求 File close/destroy 由调用方串行化（explicit-io-contract.md:1003-1023
-    最后一行）；组合中途并发 close 是契约外调用方数据竞争。
+    最后一行）；组合中途并发 close 是契约外调用方数据竞争。该竞争的 fd 复用
+    形态与 P2C1 暴露窗口已集中披露于 `WSL2_PORTABILITY_REPORT.md` 的
+    「THREAD-01 合同外并发风险披露」节（披露，非修复）。
 16. 顶端边界的内核行为：offset+count ≤ off_t::max 的合法 admitted 请求在
     WSL2 kernel 6.18 上仍可能被内核以 EINVAL 拒绝（tmpfs/ext4 均如此）；
     Sluice 如实映射为 primitive_error（os_errno=22 保留、certainty 按错误

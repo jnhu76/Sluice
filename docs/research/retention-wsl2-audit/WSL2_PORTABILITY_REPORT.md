@@ -92,6 +92,8 @@ Low findings across both audits (all `verified`, none contract-internal):
    report success. P2C1 widened the window from per-step to whole-composition;
    the race class is pre-existing and contract-external; recommendation is a
    one-sentence ledger addition.
+   Consolidated disclosure: see the 「THREAD-01 合同外并发风险披露」 section
+   below.
 2. **E5 machine-code evidence is not transferable** — full-function
    instruction counts on WSL2 (GCC 15.2: `read_at`=111, `read_exact_at`=163;
    clang 21.1.8: 102/138) vs the E5 exact-path caliber (≈40) differ by both
@@ -217,7 +219,8 @@ against source; ABI:
   24/24 gates + 16/16 consumer.
 
 Five low findings (F1–F5), all verified; F5 is the C1-report citation
-inaccuracy listed under B1.
+inaccuracy listed under B1. F1's THREAD-01 out-of-contract fd-reuse exposure
+is consolidated in the 「THREAD-01 合同外并发风险披露」 section below.
 
 ### Performance re-review (verdict: CONCERNS)
 
@@ -274,6 +277,55 @@ Independent performance reviewer
 The performance re-reviewer did not adjudicate ABI (correctness reviewer's
 jurisdiction); no ABI claim was made or relied on by the performance report.
 
+## THREAD-01 合同外并发风险披露
+
+本节把三处同源发现（本报告 B1 finding 1、`p2c1-platform-compiler-assumptions-audit.md`
+F1、`correctness-review-20261030.md` F1 的独立确认）集中为一处披露，并做四点
+区分。THREAD-01 根契约行为是 `docs/explicit-io-contract.md` §13 表行
+"File move/close/destruction | Caller serialization | No outstanding borrow of
+the native resource"——File 的 move/close/destroy 与在途操作必须由调用方
+串行化。下述 (b)(c)(d) 的一切形态都以违反该串行化为前提，因此全部属于合同外
+调用方数据竞争，在两棵树中均不是合同内行为。
+
+- **(a) 合同内语义一致。** 调用方遵守 THREAD-01 串行化的所有交错下，P2C1 树
+  （`84e1b7d5`）与 C1 基线（`43cb8029`）语义一致：组合入口 admission 不变，
+  无资源泄漏，无新增 UB；预验证组合的退出 flavor 与短读规则逐字段映射到既有
+  `compose_progress`/`compose_error` oracle（本报告 B1 P2C1 段；B2 矩阵全绿；
+  B4 正确性复审的 THREAD-01 核对行）。
+- **(b) 合同外 EBADF 分类差异。** 在违反 THREAD-01 的组合中途并发 close、且
+  fd 编号未被复用的形态下：C1 基线每步走公共 primitive admission，以
+  `invalid_state` 停止；P2C1 读组合步骤不再逐步重查 closed，`pread`/`read`
+  收到 `EBADF` 并物化为 `primitive_error`/`backend_error`/`os_errno=9`
+  （`receipts/15` raw-close 探针原始输出行 "raw-close surface: has_value=1
+  end=3 code=backend_error os_errno=9"，本轮只读引用、未重跑）。该差异已由
+  `docs/roadmap/v2-conformance.md` SEM-05 行披露（"… EBADF-class
+  backend_error … where the C1 baseline stopped with invalid_state …"）；
+  两树结果均 well-formed、errno 保真。
+- **(c) 合同外并发 close + fd 复用（账本句未点名的更危险形态）。** 若被 close
+  的 fd 编号在组合在途时被第三方 `open()` 重新分配，P2C1 预验证步骤会把
+  `file.native_handle()` 直接传入 syscall：`prevalidated_pread_step`
+  （`src/blocking_file.cpp:275-285`，调用点 `:347-349`）与
+  `prevalidated_read_step`（`:287-294`，调用点 `:377-378`）均无逐步 closed
+  重查，此时步骤将从**被重新分配的 fd——即另一个文件——**读到数据并
+  **静默报成功**（错数据、无错误 surfaced）。对比：写组合仍逐步走公共
+  `write_at`/`write` admission（`:363-364`、`:390-391`）。SEM-05 账本句只点名
+  (b) 的 EBADF 形态；三处同源发现均建议账本补一句点名此 fd-reuse 形态，避免
+  读者把 EBADF 当作组合中途并发 close 的唯一可观察结果。
+- **(d) 竞争先于 P2C1 存在；P2C1 扩大的是暴露窗口。** "组合在途时并发 close"
+  这一竞争类别在 C1 基线即已存在：基线每步 admission 与该步 pread 之间同样有
+  窗口，窗内发生 fd 复用同样导致错读。P2C1 把读组合改为单次入口预验证 +
+  寄存器驻留步骤，将暴露窗口从"每步 admission→pread"扩大为"整组合：入口
+  预验证→每一步 syscall"，即**预验证与 syscall 之间的间隔**变长。P2C1 没有
+  引入新竞争类别、没有新增 UB、没有改变任何合同内行为。
+
+**本节是披露，不是修复。** 本轮（retention-wsl2-audit closeout）不修改 v2
+契约（`docs/explicit-io-contract.md`），不重构 File Lifetime，不改动 `src/`
+产品代码。(b) 与 (c) 两类合同外风险在 C1 基线与 P2C1 两棵树中均保持原状：
+**未被修复、未被缓解、也未被以任何方式消除**，本报告没有任何一处把它们表述
+为已修复。原始测量数值未改动，`receipts/` 证据保持只读原样。若要消除或收窄
+该合同外暴露，需先修订根契约或立项 File Lifetime 语义重构，由后续 slice 按
+正常工程顺序处理，不属于本审计活动的范围。
+
 ## Conclusions
 
 1. **Portability verdict: PASS (correctness), with performance explicitly
@@ -298,7 +350,8 @@ jurisdiction); no ABI claim was made or relied on by the performance report.
 4. **Known behavioral deltas are contract-external and disclosed** (THREAD-01
    race flavor; kernel top-edge EINVAL platform envelope), and one report
    citation inaccuracy (F5) needs an erratum. None affects contract-internal
-   behavior.
+   behavior. The THREAD-01 race flavor is fully scoped — as disclosure, not a
+   fix — in the 「THREAD-01 合同外并发风险披露」 section above.
 
 ## Limitations and not-run items (explicit)
 
