@@ -1,0 +1,14 @@
+obs seed_read_ret=100
+obs preadv_ret=4096
+obs preadv_errno=0
+obs cursor_after_preadv=100
+obs pwritev_ret=2048
+obs pwritev_errno=0
+obs cursor_after_pwritev=100
+obs cursor_through_dup=100
+obs neg_offset_ret=-1
+obs neg_offset_errno=22
+obs int64max_offset_ret=-1
+obs int64max_offset_errno=22
+obs cursor_read_advances_to=100
+CELL cursor END

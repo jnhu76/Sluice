@@ -1,0 +1,7 @@
+CELL env BEGIN
+obs sysconf_SC_IOV_MAX=1024
+obs page_size=4096
+obs ssize_max=9223372036854775807
+obs off_t_bits=64
+obs glibc=2.43
+CELL env END

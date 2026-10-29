@@ -1,0 +1,17 @@
+obs short_ret=6144
+obs short_errno=0
+obs buf0_full_pattern=1
+obs buf1_prefix2048_pattern=1
+obs buf1_trailer_untouched=1
+obs buf2_fully_untouched=1
+obs eof0_ret=0
+obs eof0_errno=0
+obs past_eof_ret=0
+obs past_eof_errno=0
+obs straddle_ret=8
+obs straddle_prefix_ok=1
+obs straddle_trailer_untouched=1
+obs mixed_zero_len_ret=4096
+obs mixed_zero_len_buf1_pattern=1
+obs mixed_zero_len_buf0_untouched=1
+CELL short-read END

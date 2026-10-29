@@ -1,0 +1,6 @@
+obs iterations_requested=5000
+obs preadv_complete_calls=5000
+obs preadv_torn_observations=2
+obs split_complete_calls=5000
+obs split_torn_observations=2
+CELL atomicity END

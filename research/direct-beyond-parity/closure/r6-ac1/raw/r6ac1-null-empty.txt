@@ -1,0 +1,15 @@
+obs read_iovcnt0_null_ret=0
+obs read_iovcnt0_null_errno=0
+obs read_iovcnt0_valid_ret=0
+obs read_iovcnt0_valid_errno=0
+obs read_null_iovcnt1_ret=-1
+obs read_null_iovcnt1_errno=14
+obs read_all_zero_len_ret=0
+obs read_all_zero_len_errno=0
+obs write_iovcnt0_ret=0
+obs write_iovcnt0_errno=0
+obs write_iovcnt0_size_after=0
+obs write_all_zero_len_ret=0
+obs write_all_zero_len_errno=0
+obs write_all_zero_len_size_after=0
+CELL null-empty END

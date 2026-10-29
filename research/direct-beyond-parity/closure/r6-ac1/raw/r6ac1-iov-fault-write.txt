@@ -1,0 +1,9 @@
+obs mid_fault_ret=4096
+obs mid_fault_errno=0
+obs mid_fault_size_after=4096
+obs mid_fault_prefix_pread_ret=4096
+obs mid_fault_prefix_landed=1
+obs single_fault_ret=-1
+obs single_fault_errno=14
+obs single_fault_size_after=0
+CELL iov-fault-write END

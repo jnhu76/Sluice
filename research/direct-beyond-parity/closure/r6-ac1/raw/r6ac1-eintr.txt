@@ -1,0 +1,13 @@
+CELL eintr BEGIN
+obs child_read_ret=-1
+obs child_read_errno=4
+obs child_read_buffer_guard_intact=1
+obs child_write_ret=-1
+obs child_write_errno=4
+obs child_write_size_after=0
+obs child_exit=0
+obs parent_control_read_ret=4096
+obs parent_control_read_errno=0
+obs parent_control_write_ret=2048
+obs parent_control_write_errno=0
+CELL eintr END
