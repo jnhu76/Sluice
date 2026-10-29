@@ -1,0 +1,9 @@
+member                                  ref_cnt  got_cnt   offset  refEOF  gotEOF
+m0 inside                                   100      100        0       0       0 OK
+m1 inside, gap 100 <= T after m0            100      100      200       0       0 OK
+m2 overlaps m1                              100      100      250       0       0 OK
+m3 straddles EOF (prefix 100)               100      100     9900       0       0 OK
+m4 zero-length valid offset (no-op)           0        0     9950       0       0 OK
+m5 wholly past EOF                            0        0    12000       1       1 OK
+components=2 (member preads 5 -> 2; zero-length no-op issues none), requested=600 B, observed(issued-clamp)=450 B
+EXP2_GATE=PASS

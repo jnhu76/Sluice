@@ -1,0 +1,12 @@
+obs mid_fault_ret=4096
+obs mid_fault_errno=0
+obs mid_fault_buf0_full_pattern=1
+obs mid_fault_buf2_as_derived_from_total=1
+obs first_fault_ret=-1
+obs first_fault_errno=14
+obs first_fault_buf1_guard_intact=1
+obs single_fault_ret=-1
+obs single_fault_errno=14
+obs wrapper_mid_fault_ret=4096
+obs wrapper_mid_fault_errno=0
+CELL iov-fault-read END

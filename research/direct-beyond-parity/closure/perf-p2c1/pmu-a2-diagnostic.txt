@@ -1,0 +1,7 @@
+# PMU diagnostic section — a2 (non-composition primitive negative control) — machine identity predicted: identical instr counts
+round1 ladder-base a2 instructions=37263989 cycles=11427374
+round1 ladder-cand a2 instructions=37263839 cycles=11667895
+round2 ladder-base a2 instructions=37263801 cycles=11710790
+round2 ladder-cand a2 instructions=37264091 cycles=11375180
+round3 ladder-base a2 instructions=37263885 cycles=11660746
+round3 ladder-cand a2 instructions=37263824 cycles=11717729

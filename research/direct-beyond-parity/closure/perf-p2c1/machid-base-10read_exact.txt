@@ -1,0 +1,215 @@
+
+base/blocking_file.cpp.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000001730 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE>:
+    1730:	48 81 ec 88 00 00 00 	sub    $0x88,%rsp
+    1737:	48 89 6c 24 60       	mov    %rbp,0x60(%rsp)
+    173c:	48 89 fd             	mov    %rdi,%rbp
+    173f:	8b 3e                	mov    (%rsi),%edi
+    1741:	85 ff                	test   %edi,%edi
+    1743:	0f 88 f7 01 00 00    	js     1940 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x210>
+    1749:	48 89 5c 24 58       	mov    %rbx,0x58(%rsp)
+    174e:	48 89 f3             	mov    %rsi,%rbx
+    1751:	80 7e 04 01          	cmpb   $0x1,0x4(%rsi)
+    1755:	0f 84 ba 01 00 00    	je     1915 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1e5>
+    175b:	48 85 c9             	test   %rcx,%rcx
+    175e:	0f 84 7c 01 00 00    	je     18e0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1b0>
+    1764:	4c 89 6c 24 70       	mov    %r13,0x70(%rsp)
+    1769:	0f 8e a1 01 00 00    	jle    1910 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1e0>
+    176f:	49 89 d5             	mov    %rdx,%r13
+    1772:	48 85 d2             	test   %rdx,%rdx
+    1775:	0f 84 d5 01 00 00    	je     1950 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x220>
+    177b:	4c 89 74 24 78       	mov    %r14,0x78(%rsp)
+    1780:	4c 89 bc 24 80 00 00 	mov    %r15,0x80(%rsp)
+    1787:	00 
+    1788:	4c 89 64 24 68       	mov    %r12,0x68(%rsp)
+    178d:	45 31 e4             	xor    %r12d,%r12d
+    1790:	8b 3b                	mov    (%rbx),%edi
+    1792:	85 ff                	test   %edi,%edi
+    1794:	0f 88 b6 02 00 00    	js     1a50 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x320>
+    179a:	80 7b 04 01          	cmpb   $0x1,0x4(%rbx)
+    179e:	0f 84 9c 02 00 00    	je     1a40 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x310>
+    17a4:	49 89 ce             	mov    %rcx,%r14
+    17a7:	4d 29 e6             	sub    %r12,%r14
+    17aa:	4d 85 f6             	test   %r14,%r14
+    17ad:	0f 8e 8d 02 00 00    	jle    1a40 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x310>
+    17b3:	4f 8d 7c 25 00       	lea    0x0(%r13,%r12,1),%r15
+    17b8:	4c 89 f2             	mov    %r14,%rdx
+    17bb:	4c 89 fe             	mov    %r15,%rsi
+    17be:	48 89 4c 24 08       	mov    %rcx,0x8(%rsp)
+    17c3:	e8 00 00 00 00       	call   17c8 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x98>
+    17c8:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+    17cd:	48 85 c0             	test   %rax,%rax
+    17d0:	0f 89 aa 01 00 00    	jns    1980 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x250>
+    17d6:	e8 00 00 00 00       	call   17db <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0xab>
+    17db:	48 8b 4c 24 08       	mov    0x8(%rsp),%rcx
+    17e0:	8b 00                	mov    (%rax),%eax
+    17e2:	83 f8 04             	cmp    $0x4,%eax
+    17e5:	0f 84 75 02 00 00    	je     1a60 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x330>
+    17eb:	ba 07 00 00 00       	mov    $0x7,%edx
+    17f0:	85 c0                	test   %eax,%eax
+    17f2:	74 4c                	je     1840 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>
+    17f4:	83 f8 0d             	cmp    $0xd,%eax
+    17f7:	0f 84 8e 02 00 00    	je     1a8b <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x35b>
+    17fd:	83 f8 01             	cmp    $0x1,%eax
+    1800:	0f 84 85 02 00 00    	je     1a8b <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x35b>
+    1806:	83 f8 02             	cmp    $0x2,%eax
+    1809:	0f 84 86 02 00 00    	je     1a95 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x365>
+    180f:	83 f8 14             	cmp    $0x14,%eax
+    1812:	0f 84 7d 02 00 00    	je     1a95 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x365>
+    1818:	83 f8 1c             	cmp    $0x1c,%eax
+    181b:	0f 84 7e 02 00 00    	je     1a9f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x36f>
+    1821:	83 f8 7a             	cmp    $0x7a,%eax
+    1824:	0f 84 75 02 00 00    	je     1a9f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x36f>
+    182a:	83 f8 0b             	cmp    $0xb,%eax
+    182d:	0f 95 c2             	setne  %dl
+    1830:	8d 14 95 03 00 00 00 	lea    0x3(,%rdx,4),%edx
+    1837:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    183e:	00 00 
+    1840:	88 54 24 1c          	mov    %dl,0x1c(%rsp)
+    1844:	bf 01 00 00 00       	mov    $0x1,%edi
+    1849:	be 01 00 00 00       	mov    $0x1,%esi
+    184e:	89 44 24 20          	mov    %eax,0x20(%rsp)
+    1852:	48 8b 4c 24 1c       	mov    0x1c(%rsp),%rcx
+    1857:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    185e:	00 00 
+    1860:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1867:	00 00 
+    1869:	48 89 4c 24 3c       	mov    %rcx,0x3c(%rsp)
+    186e:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1873:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+    1878:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    187d:	88 4c 24 38          	mov    %cl,0x38(%rsp)
+    1881:	4c 8b 64 24 68       	mov    0x68(%rsp),%r12
+    1886:	40 88 7c 24 39       	mov    %dil,0x39(%rsp)
+    188b:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1890:	88 54 24 3c          	mov    %dl,0x3c(%rsp)
+    1894:	66 0f 6f 44 24 30    	movdqa 0x30(%rsp),%xmm0
+    189a:	89 44 24 40          	mov    %eax,0x40(%rsp)
+    189e:	4c 8b 74 24 78       	mov    0x78(%rsp),%r14
+    18a3:	40 88 74 24 44       	mov    %sil,0x44(%rsp)
+    18a8:	48 8b 44 24 40       	mov    0x40(%rsp),%rax
+    18ad:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    18b4:	4c 8b bc 24 80 00 00 	mov    0x80(%rsp),%r15
+    18bb:	00 
+    18bc:	48 89 45 10          	mov    %rax,0x10(%rbp)
+    18c0:	48 89 e8             	mov    %rbp,%rax
+    18c3:	c6 45 20 01          	movb   $0x1,0x20(%rbp)
+    18c7:	0f 11 45 00          	movups %xmm0,0x0(%rbp)
+    18cb:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    18d0:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    18d7:	c3                   	ret
+    18d8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
+    18df:	00 
+    18e0:	66 0f ef c0          	pxor   %xmm0,%xmm0
+    18e4:	c6 45 20 01          	movb   $0x1,0x20(%rbp)
+    18e8:	48 89 e8             	mov    %rbp,%rax
+    18eb:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    18f0:	48 c7 45 10 00 00 00 	movq   $0x0,0x10(%rbp)
+    18f7:	00 
+    18f8:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    18ff:	0f 11 45 00          	movups %xmm0,0x0(%rbp)
+    1903:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1908:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    190f:	c3                   	ret
+    1910:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1915:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    191a:	b8 08 00 00 00       	mov    $0x8,%eax
+    191f:	88 45 18             	mov    %al,0x18(%rbp)
+    1922:	48 89 e8             	mov    %rbp,%rax
+    1925:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    192c:	c6 45 20 00          	movb   $0x0,0x20(%rbp)
+    1930:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1935:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    193c:	c3                   	ret
+    193d:	0f 1f 00             	nopl   (%rax)
+    1940:	b8 06 00 00 00       	mov    $0x6,%eax
+    1945:	eb d8                	jmp    191f <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x1ef>
+    1947:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    194e:	00 00 
+    1950:	c6 45 18 08          	movb   $0x8,0x18(%rbp)
+    1954:	48 89 e8             	mov    %rbp,%rax
+    1957:	48 8b 5c 24 58       	mov    0x58(%rsp),%rbx
+    195c:	c7 45 1c 00 00 00 00 	movl   $0x0,0x1c(%rbp)
+    1963:	4c 8b 6c 24 70       	mov    0x70(%rsp),%r13
+    1968:	c6 45 20 00          	movb   $0x0,0x20(%rbp)
+    196c:	48 8b 6c 24 60       	mov    0x60(%rsp),%rbp
+    1971:	48 81 c4 88 00 00 00 	add    $0x88,%rsp
+    1978:	c3                   	ret
+    1979:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
+    1980:	49 39 c6             	cmp    %rax,%r14
+    1983:	0f 82 a7 00 00 00    	jb     1a30 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x300>
+    1989:	49 01 c4             	add    %rax,%r12
+    198c:	4c 39 e1             	cmp    %r12,%rcx
+    198f:	74 3f                	je     19d0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x2a0>
+    1991:	48 85 c0             	test   %rax,%rax
+    1994:	75 3a                	jne    19d0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x2a0>
+    1996:	b8 01 00 00 00       	mov    $0x1,%eax
+    199b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
+    19a0:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    19a7:	00 00 
+    19a9:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    19b0:	00 00 
+    19b2:	3c 04                	cmp    $0x4,%al
+    19b4:	0f 84 b6 00 00 00    	je     1a70 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x340>
+    19ba:	31 ff                	xor    %edi,%edi
+    19bc:	31 f6                	xor    %esi,%esi
+    19be:	31 c0                	xor    %eax,%eax
+    19c0:	31 d2                	xor    %edx,%edx
+    19c2:	b9 01 00 00 00       	mov    $0x1,%ecx
+    19c7:	e9 a7 fe ff ff       	jmp    1873 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x143>
+    19cc:	0f 1f 40 00          	nopl   0x0(%rax)
+    19d0:	31 c0                	xor    %eax,%eax
+    19d2:	4c 89 64 24 30       	mov    %r12,0x30(%rsp)
+    19d7:	66 89 44 24 38       	mov    %ax,0x38(%rsp)
+    19dc:	c6 44 24 3c 07       	movb   $0x7,0x3c(%rsp)
+    19e1:	66 0f 6f 44 24 30    	movdqa 0x30(%rsp),%xmm0
+    19e7:	c7 44 24 40 00 00 00 	movl   $0x0,0x40(%rsp)
+    19ee:	00 
+    19ef:	c7 44 24 20 00 00 00 	movl   $0x0,0x20(%rsp)
+    19f6:	00 
+    19f7:	0f 29 44 24 10       	movaps %xmm0,0x10(%rsp)
+    19fc:	49 39 cc             	cmp    %rcx,%r12
+    19ff:	0f 82 8b fd ff ff    	jb     1790 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x60>
+    1a05:	48 c7 44 24 3a 00 00 	movq   $0x0,0x3a(%rsp)
+    1a0c:	00 00 
+    1a0e:	31 ff                	xor    %edi,%edi
+    1a10:	31 f6                	xor    %esi,%esi
+    1a12:	31 c0                	xor    %eax,%eax
+    1a14:	48 c7 44 24 40 00 00 	movq   $0x0,0x40(%rsp)
+    1a1b:	00 00 
+    1a1d:	31 d2                	xor    %edx,%edx
+    1a1f:	31 c9                	xor    %ecx,%ecx
+    1a21:	e9 4d fe ff ff       	jmp    1873 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x143>
+    1a26:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
+    1a2d:	00 00 00 
+    1a30:	b8 04 00 00 00       	mov    $0x4,%eax
+    1a35:	e9 66 ff ff ff       	jmp    19a0 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x270>
+    1a3a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
+    1a40:	31 c0                	xor    %eax,%eax
+    1a42:	ba 08 00 00 00       	mov    $0x8,%edx
+    1a47:	e9 f4 fd ff ff       	jmp    1840 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>
+    1a4c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1a50:	31 c0                	xor    %eax,%eax
+    1a52:	ba 06 00 00 00       	mov    $0x6,%edx
+    1a57:	e9 e4 fd ff ff       	jmp    1840 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>
+    1a5c:	0f 1f 40 00          	nopl   0x0(%rax)
+    1a60:	8b 3b                	mov    (%rbx),%edi
+    1a62:	e9 51 fd ff ff       	jmp    17b8 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x88>
+    1a67:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
+    1a6e:	00 00 
+    1a70:	bf 01 00 00 00       	mov    $0x1,%edi
+    1a75:	be 01 00 00 00       	mov    $0x1,%esi
+    1a7a:	31 c0                	xor    %eax,%eax
+    1a7c:	ba 06 00 00 00       	mov    $0x6,%edx
+    1a81:	b9 03 00 00 00       	mov    $0x3,%ecx
+    1a86:	e9 e8 fd ff ff       	jmp    1873 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x143>
+    1a8b:	ba 05 00 00 00       	mov    $0x5,%edx
+    1a90:	e9 ab fd ff ff       	jmp    1840 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>
+    1a95:	ba 09 00 00 00       	mov    $0x9,%edx
+    1a9a:	e9 a1 fd ff ff       	jmp    1840 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>
+    1a9f:	ba 04 00 00 00       	mov    $0x4,%edx
+    1aa4:	e9 97 fd ff ff       	jmp    1840 <_ZN6sluice8blocking10read_exactERKNS_4FileESt4spanISt4byteLm18446744073709551615EE+0x110>

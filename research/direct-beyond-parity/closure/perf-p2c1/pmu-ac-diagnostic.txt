@@ -1,0 +1,7 @@
+# PMU diagnostic section — ac (cursor) arm — separate caliber, never wall
+round1 ladder-base ac instructions=37630783 cycles=11759232 instr_per_7168_ops=5249.830 cyc_per_7168_ops=1640.518
+round1 ladder-cand ac instructions=37444205 cycles=11922487 instr_per_7168_ops=5223.801 cyc_per_7168_ops=1663.293
+round2 ladder-base ac instructions=37630796 cycles=11912745 instr_per_7168_ops=5249.832 cyc_per_7168_ops=1661.934
+round2 ladder-cand ac instructions=37444338 cycles=11707626 instr_per_7168_ops=5223.819 cyc_per_7168_ops=1633.318
+round3 ladder-base ac instructions=37630462 cycles=11911917 instr_per_7168_ops=5249.785 cyc_per_7168_ops=1661.819
+round3 ladder-cand ac instructions=37444315 cycles=11948083 instr_per_7168_ops=5223.816 cyc_per_7168_ops=1666.864

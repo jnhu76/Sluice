@@ -1,250 +1,260 @@
 # WSL2 Validation Handoff — Direct Beyond-Parity Product Candidate
 
-- Authority: `MISSION.md` §8.3 (P6.3, MISSION.md:866-890) — frozen material for
-  the **separate, post-mission WSL2 portability workflow**. WSL2 does not
-  participate in performance-admission adjudication for this mission
-  (`MISSION.md` §0, MISSION.md:28-30).
-- Prepared by: P6 closeout session, 2026-10-28. This document is a draft
-  consolidation record; it creates nothing on GitHub and merges nothing.
-- Verification legend: `[RUN-THIS-SESSION]` = command executed by the P6
-  session that wrote this file (commands cited inline); `[TRANSCRIBED]` =
-  transcribed from the frozen mission documents cited inline, not re-executed
-  here.
-- Validation target (per `INTEGRATION_AND_INDEPENDENT_REVIEW.md` §6.1, the
-  preregistered P5 fallback): **A alone = P2C1** (read-composition with
-  prevalidated register-resident steps). The stacked branch and P2C2 are
-  frozen secondary identities, not validation targets (§2 below).
+- Authority: `MISSION.md` §8.3 (P6.3) — frozen material for the **separate,
+  post-mission WSL2 portability workflow**. WSL2 does not participate in
+  performance-admission adjudication (`MISSION.md` §0:28-30).
+- **Supersedes the 2026-10-28 P6-era draft of this file** (which targeted the
+  local-only research candidate `deaf0301`). That draft remains retrievable at
+  branch `research/direct-beyond-parity-evidence` commit `292e0734`. The
+  validation target is now the actual stacked product candidate frozen below;
+  the research candidate's product-relevant content is contained in the
+  product chain (`42f5eef9`+`cc8ad2ab` are cherry-picks of `d79244b0`+`31d18b6a`;
+  the only production delta beyond them is the audited dead-store shrink
+  `b12fb551`).
+- Prepared by: E5 closure closeout (R9/release lane), 2026-10-29. Creates
+  nothing on GitHub beyond this archive commit; merges nothing.
+- **No WSL2 command was run in the producing session.** Every E5 fact below is
+  either re-verified by the closeout session (`[RUN-CLOSEOUT]`) or transcribed
+  from the named closure record with the lane that executed it
+  (`[RUN-R3]`/`[RUN-R4]`/`[RUN-R9]`/`[RUN-PERF]`); `[TRANSCRIBED]` = copied
+  from a cited archived record without re-execution.
 
-## 1. BASE_SHA
+## 0. Frozen candidate identity
 
-Two anchors, both required reading before any WSL2 comparison:
+| Field | Value | Evidence |
+|---|---|---|
+| **Base SHA** | `77e5399a45998dea396699fa2e063c94a665945a` = PR #602 head (C1 product), branch `sluice-600-direct-c1`, remote-verified 2026-10-29 | `[RUN-CLOSEOUT: git ls-remote origin refs/heads/sluice-600-direct-c1]` |
+| **Candidate SHA** | `70d48f5eb55a664544b5160cd4675d32150bb21e` = PR #612 head, branch `sluice-608-p2c1-read-compose` | `[RUN-CLOSEOUT: git ls-remote origin refs/heads/sluice-608-p2c1-read-compose]` |
+| **PR URL** | https://github.com/jnhu76/Sluice/pull/612 (OPEN, not merged, base = `sluice-600-direct-c1`); stacked on https://github.com/jnhu76/Sluice/pull/602 (OPEN, base `master`) | `[RUN-CLOSEOUT: gh pr view 602/612]` |
+| **Stacking** | `git log --oneline 77e5399a..70d48f5e` = exactly 4 commits: `42f5eef9` (test: seams+killers) → `cc8ad2ab` (perf: prevalidated steps) → `b12fb551` (refactor: dead-store shrink) → `70d48f5e` (docs: ledger) | `[RUN-CLOSEOUT]` |
+| B0 (context) | master `bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57` = remote master, unchanged | `[RUN-CLOSEOUT: git ls-remote origin refs/heads/master]` |
 
-| Code | Role | Identity | Notes |
-|---|---|---|---|
-| B0 | master at freeze | `bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57` | `[RUN-THIS-SESSION: git rev-parse master]` → same SHA (2026-10-28). The repository's public trunk; C1 is NOT in master. |
-| B1 | comparison BASE used by every P2/P5 gate | `77e5399a45998dea396699fa2e063c94a665945a` = PR #602 head, branch `sluice-600-direct-c1` | B0 + two commits: `4c3e698d` (C1 product) + `77e5399a` (docs-only ledger). Frozen worktree `/home/jnhu/Source/Sluice-600-wt`; release archive sha256 `d1e351a54ded3dfa1df6b1cd2e47622eefbd5d7027439cb31a314bed3a3007f0` `[TRANSCRIBED: P0_BASELINE_AND_OWNERSHIP.md §1.2-§1.3; p5-raw/identity.txt read this session]`. |
+The candidate is stacked **on B1 (`77e5399a`), not on B0**. A WSL2 diff must
+state its base; if #602/#612 merge before the WSL2 workflow starts, re-anchor
+to the merged trunk and re-derive the delta instead of copying the numbers
+below.
 
-The candidate is stacked **on B1**, not on B0 (`git log master..<candidate>`
-includes `4c3e698d`, `77e5399a` `[RUN-THIS-SESSION]`). A WSL2 run must state
-which base it diffs against; the frozen gates all used B1. If PR #602 merges
-before the WSL2 workflow starts, re-anchor per
-`INTEGRATION_AND_INDEPENDENT_REVIEW.md` §6.2 item 2 before diffing.
+## 1. Code delta (Base → Candidate)
 
-## 2. CANDIDATE_SHA
-
-| Arm | HEAD | Branch | Local-only? | Release archive sha256 |
-|---|---|---|---|---|
-| **A = P2C1 (validation target)** | `deaf03014173e13633a43f4db405c9a9e9860f23` | `direct-read-compose-prevalidated-steps` | yes — `git branch -r --contains deaf0301` → empty `[RUN-THIS-SESSION]` | `07d0680307c71cc412dfd021fd47c3098de57b580283df189f66dcdc2052049e` |
-| B = P2C2 (secondary, frozen) | `476bd9ce9780594163350228e066a86b554c157d` | `direct-write-compose-exit-staging` | yes `[RUN-THIS-SESSION]` | `672510281abadba1cbda0a0e89f15e1dbb2c69f5a15bceb306b70196b420a807` |
-| A+B stacked (secondary, NOT admitted) | `4ab6ef170ff939001cc1459445b77c21df9e7d86` | `direct-compose-stack-readpreval-writeexit` | yes `[RUN-THIS-SESSION]` | byte-identical to A's (`07d06803…2049e`) |
-
-Archive and worktree identities `[TRANSCRIBED: p5-raw/identity.txt, read in
-full this session]`. Stacking verdict: **NOT STACK_ADMITTED** (S1 write-side
-INTERFERENCE_STATIC 39>37; S2 STACK_LOSS ×3; S3 FAIL margin +0.037) — recorded
-integration candidate is **A alone** per the preregistered fallback
-(`INTEGRATION_AND_INDEPENDENT_REVIEW.md` §6.1 `[TRANSCRIBED]`). A's commit
-chain over B1: `d79244b0` (seams + killers) → `31d18b6a` (mechanism) →
-`5180e27a` (gate scripts) → `deaf0301` (ANSI-parse fix)
-(`P2_CANDIDATE_P2C1.md` §1 `[TRANSCRIBED]`).
-
-## 3. ABI / Header differences (A vs B1)
-
-Cumulative `git diff --numstat 77e5399a..deaf0301` `[TRANSCRIBED:
-P2_CANDIDATE_P2C1.md` §1]`: 6 files, +301/−37.
+`git diff --name-status 77e5399a..70d48f5e` `[RUN-CLOSEOUT]`: **5 files, all
+M, +145/−38** — no file added, none deleted.
 
 | File | Δ | Content |
 |---|---|---|
-| `include/sluice/detail/file_semantics.hpp` | +9/−0 | Three dormant `SLUICE_COMPOSE_MUTANT_*` seam guards on `detail::compose_progress`; zero BASE code change on this path |
-| `src/blocking_file.cpp` | +91/−37 | Six compose seam guards; `step_retry_on_eintr`; private `prevalidated_pread_step` / `prevalidated_read_step` (pread/read + EINTR retry + count, entered after one outer admission); per-exit-flavor outcome materializers (complete / stalled / primitive_error) feeding the sret directly; register-resident compose loop. `direct_outcome` and `publish_certainty` deleted (no remaining consumer) |
-| `tests/direct_composition_fault_test.cpp` | +27/−0 | New named killer `write_all_impossible_count_stops_immediately` |
-| `xmake/tests.lua` | +21/−0 | Seven `direct_mutant_target()` entries for the seam set |
-| `research/direct-beyond-parity/p2-scripts/{P2C1-matrix.sh,P2C1-mutants.sh}` | +50/+103 | Gate scripts |
+| `src/blocking_file.cpp` | +124/−38 | `step_retry_on_eintr`; private `prevalidated_pread_step`/`prevalidated_read_step` (pread/read + EINTR retry + count, entered after the single outer admission); three per-exit-flavor outcome materializers (complete/stalled/primitive_error, aggregate-init form after `b12fb551`); register-resident compose loop; `direct_outcome`/`publish_certainty` deleted (no remaining consumer) |
+| `include/sluice/detail/file_semantics.hpp` | +9 | 3 compile-time `SLUICE_COMPOSE_MUTANT_*` seams on the SEM-05 rule table `compose_progress`; detail header is uninstalled (v2-r1 Appendix B SIMPLIFY→internal) |
+| `tests/direct_composition_fault_test.cpp` | +27 | named killer `write_all_impossible_count_stops_immediately` |
+| `xmake/tests.lua` | +21 | 7 `direct_mutant_target()` entries — target-scoped, `set_default(false)`, no `add_tests`; never run by plain `xmake test` |
+| `docs/roadmap/v2-conformance.md` | 1 line | SEM-05 row: live mutation evidence write-back + THREAD-01 out-of-contract disclosure. Contract text untouched. |
 
-**No public-header or ABI change** (`INTEGRATION_AND_INDEPENDENT_REVIEW.md`
-§6.3 `[TRANSCRIBED]`): the four public ops `read_at`/`read`/`write_at`/`write`
-have instruction streams **identical across BASE and candidate** (sha-equal
-object streams; `P2_CANDIDATE_P2C1.md` §2.2), the `Result<size_t>` /
-`Result<CompositionOutcome>` ABI is untouched, W-01/INV-01 direct independence
-is preserved (no new include, context or runtime dependency). Adoption of A is
-an internal implementation change under the existing v2-r1 contract.
+## 2. ABI / Header identity
 
-## 4. Test checklist (what must be green on WSL2)
+- Public header `include/sluice/blocking/file.hpp` blob is **byte-identical
+  across master, Base and Candidate**: blob `e62a33c39425de0fc0eb2ea10d34fa33c3177447`
+  at `bdfd0d8d`, `77e5399a`, `70d48f5e` `[RUN-CLOSEOUT: git ls-tree <sha> --
+  include/sluice/blocking/file.hpp]`. No public declaration changed; `Result`
+  / `CompositionOutcome` layouts untouched.
+- Installed SDK surface unchanged: `scripts/verify_v2_package.py` all gates
+  PASS (24/24) at `70d48f5e` with manifest `VERIFICATION_HEAD=70d48f5e…`,
+  `VERIFICATION_HEAD_DIRTY=False`, HEADERS = exactly the 11 v2-r1 Appendix B
+  contract headers, no `detail/` header installed,
+  `NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED` PASS `[RUN-R9,
+  /home/jnhu/Source/Sluice-r9-audit-p2c1]`.
+- The four public primitives `read_at`/`write_at`/`read`/`write` are
+  instruction-stream identical Base vs Candidate (byte-equal objdump
+  extractions) `[RUN-R4 §7]`; the changed machine surface is exactly the four
+  composition primitives `[RUN-PERF §5, re-verified R9 §12.2 F3/F4]`:
+  `read_exact_at` 240→174, `write_all_at` 240→211, `read_exact` 208→167,
+  `write_all` 208→194 instruction bodies (GCC 16 calibers — re-derive, never
+  copy).
 
-1. **Four-configuration matrix, 58/58 each**: modes `release`, `debug`,
-   `asan`, `asanubsan` (repo-defined in `xmake.lua`), configured
-   `--liburing=n`. Gate script: `research/direct-beyond-parity/p2-scripts/P2C1-matrix.sh`
-   (exit 0 at `deaf0301`); re-executed form at the stacked HEAD:
-   `research/direct-beyond-parity/p5-scripts/p5-combined-matrix.sh` (sha256
-   `3efd53b4…fdce25`, four legs 0 failed, `P5_INTERACTION_OUTCOME.md` §13
-   `[TRANSCRIBED]`).
-2. **Mutation kill gate**: `p2-scripts/P2C1-mutants.sh` (7/7 named-assertion
-   kills, GREEN→RED→RESTORED); `p5-scripts/p5-combined-mutants.sh` (sha256
-   `c805f416…993d8`; 8 seam legs + rules control) `[TRANSCRIBED: P5 §13]`.
-3. **Key oracle suites** (full obligation table in
-   `P0_BASELINE_AND_OWNERSHIP.md` §5.1): `direct_composition_fault_test`
-   (fault-injection; incl. the new write-side impossible-count killer),
-   `file_access_precedence_test` (36), `semantic_validation_precedence_test`
-   (direct 21/21), `semantic_range_test`, `direct_composition_test`,
-   `direct_cursor_position_test`, `blocking_file_{read,write,state,sequential}_test`,
-   `file_open_contract_test`, `file_close_semantics_test`,
-   `semantic_effect_outcome_test`, `direct_w01_consumer_probe` (W-01
-   independence static asserts).
-4. Command-reproducibility caveat carried from P0 (`P0_BASELINE_AND_OWNERSHIP.md`
-   §3.6): the #600-era matrix runs did not pin exact per-mode command lines;
-   the P2/P5 gate scripts above are the pinned form — run the scripts, not
-   reconstructed commands.
+## 3. E5 correctness conclusion (frozen)
 
-## 5. Proven semantic invariants (must survive on WSL2 unchanged)
+All at Base+Candidate stack, host E5 (Fedora 44, kernel
+`7.2.11-200.fc44.x86_64`, GCC 16.2.1, xmake 3.1.2):
 
-Contract anchors are v2-r1 requirement IDs in `docs/explicit-io-contract.md`;
-the oracle table with per-obligation named assertions is
-`P0_BASELINE_AND_OWNERSHIP.md` §5.1 `[TRANSCRIBED]`. Summary of the floor:
+1. Suite matrix at `70d48f5e` `[RUN-R4 §6]`: release/debug/asan/ubsan/asanubsan
+   `--liburing=n` → **58/58 ×5**, plus `release --liburing=y` → **79/79**
+   (io_uring backend suite). Zero failures; UBSan output grep `runtime error`
+   = 0.
+2. P2C1 seven-mutation gate `[RUN-R4 §5]`, re-executed by R9 `[RUN-R9]`:
+   all 7 exit=1 with exactly one named FAIL line each (table §5 below);
+   BASE/RESTORED green; source tree zero-pollution.
+3. C1 admission mutants remain lethal on the stacked tree `[RUN-R9]`
+   (`blocking_file_mut_empty_before_closed` at `70d48f5e` → exit=1,
+   FAIL `sequential_read_on_write_only_file_rejected_upfront`).
+4. Installed-SDK consumer probe 16/16 (closed composition → `invalid_state`
+   incl. closed-before-empty; access-before-empty; past-EOF prefix +
+   `eof_before_full`; zero-length; UINT64_MAX; move/close) `[RUN-R4 §8.2]`.
+5. strace syscall oracle `[RUN-R4 §8.3]`: full `read_exact_at` = 1×`pread64`;
+   31B/23B = 2 syscalls (data step + EOF step, one syscall each); zero-length
+   0 syscalls; closed 0 syscalls; `write_all_at` 1×`pwrite64`. Candidate
+   changes no syscall counts vs the B1 oracle.
+6. Independent correctness review (R9 §12.1): **APPROVE** — admission
+   precedence, range/offset safety, `static_cast<off_t>` domination proof,
+   null-buffer, zero-length, closed/access, EINTR mapping completeness,
+   composition stops, File lifetime, ABI/v2-r1 correspondence all re-verified
+   from source at both heads; every diff hunk read (`closure/r3-c1-review.md`,
+   `closure/r4-p2c1.md`; R9 record:
+   `closure/r9-independent-correctness-review.md`).
+7. CI note: `gh pr checks 612` shows **no GitHub Actions checks** (only
+   CodeRabbit "skipping"); the stacked-base PR #602 has CI 6/6 green at
+   `77e5399a` (run 40363163278) `[RUN-R9]`. E5 correctness evidence for #612
+   is therefore **local-execution-based**; a CI run on the branch is a
+   desirable (not blocking) extra when WSL2 or Owner review starts.
+8. THREAD-01 boundary (disclosed, not a defect): under caller serialization
+   the candidate is behaviorally identical to B1; under a **contract-external**
+   concurrent `close` mid-composition, B1 stops with `invalid_state` at the
+   next step while the candidate continues into `pread` on the exchanged fd
+   (−1) and surfaces a POSIX-defined EBADF-class `backend_error` — no UAF, no
+   allocation, caller-owned lifetime in both trees (`src/file_resource.cpp:103-112`).
+   Disclosed in ledger SEM-05 row + PR #612 body. If adoption proceeds, this
+   lands in the obligation table.
 
-- Closed-file precedence (`invalid_state` before access/range); access-mode
-  legality table; offset/length/overflow never wraps (SEM-03/04).
-- Zero-length = logical no-op skipping offset/range checks, no OS call;
-  null buffer → empty-span no-op (SEM-03 step 3).
-- EINTR retried only without a completed count; never replays confirmed
-  bytes (SEM-05/ERR-01).
-- Partial read/write is success; primitive does not loop; EOF read-0 is
-  success; `read_exact*` keeps the prefix on `eof_before_full` (SEM-05).
-- No-progress stop; confirmed-bytes accounting; effect certainty —
-  uncounted attempts report unknown, never fabricated 0 (ERR-02).
-- Open legality (36 scenarios incl. NUL rejection, close-on-exec, 0644);
-  close consumes ownership on first native attempt incl. EINTR (SEM-02).
-- Shared open-file-description cursor; positional ops never move it (SEM-04/07).
-- Composition stop conditions full/eof/zero-progress/error with the shared
-  rejection precedence (SEM-05/SEM-03).
-- `file_info`/`size` observation-time semantics; resize zero-fill/discard,
-  cursor unmoved; sync coverage of completed writes (SEM-06/07).
-- THREAD-01 caller-serialization boundary; W-01/INV-01 direct independence.
+## 4. E5 performance applicability scope (frozen)
 
-P2C1-specific proofs: §3 of `P2_CANDIDATE_P2C1.md` maps every obligation to
-its oracle; the four public primitives are machine-identical (§2.2); the
-compose loop keeps exactly one admission per call and re-tests nothing per
-step that the outer admission already proved.
+- **Current-head serial-lane re-verify (2026-10-29, `closure/perf-p2c1/`)**
+  `[RUN-PERF]`: ABBA paired A/B on tmpfs 4 KiB, taskset cpu2, budget ≤24
+  pairs/shape, after A/A-first discipline (5 cells ×16 pairs):
+  - comp-read-4k (ax seq, 24/24 pairs): median −11.688 ns/op, CI95
+    [−20.522, +11.188] **crosses 0** (auditor recompute with correct
+    t(0.975,23)=2.069: [−20.060, +10.727] — still crosses 0), |median| <
+    MDE′24 15.39 → **INCONCLUSIVE** under session heavy-tail noise
+    (sd_AA up to 35.6, ±70–100 ns outliers); direction favorable in both
+    16/24-pair views and AB/BA subgroups; PMU −31.0 instr/op independent
+    corroboration (never a wall substitute).
+  - eofmix (ax tail, 16 pairs): median −12.036, CI95 [−26.389, −7.513]
+    excludes 0, ≥ MDE′16 10.40 → **WIN_CONFIRMED**.
+  - cursor (ac seq, 16 pairs): median −20.173, CI95 [−35.197, −10.738]
+    excludes 0, ≥ MDE′16 18.84 → **WIN_CONFIRMED**.
+  - Negative control (non-composed Primitive a2, 16 pairs): PARITY (median
+    −0.024, CI crosses 0; total instructions equal within ±0.0004%;
+    `read_at` disassembly byte-identical) — the win gate holds.
+  - **Overall verdict: INCONCLUSIVE** — the primary claim carrier did not
+    reach statistical confirmation in the authorized budget; no regression
+    anywhere (all medians ≤0, cycles lower on ax/ac, control parity,
+    non-composed primitives machine-identical).
+- **Scope limits** `[RUN-PERF + R9 §12.2 F4]`: the P2C1 performance verdict
+  covers the three read-composition shapes only. Write compositions
+  (`write_all_at`/`write_all`) have changed machine code (§2) but were **not
+  wall-measured** in this session; do not generalize the eofmix/cursor wins to
+  write compositions. Absolute E5 numbers are **not** WSL2 targets; WSL2 does
+  regression-only checks (§7 item 6).
+- Historical frozen claims (P2 wall −16.565 CI [−20.806,−7.270]; P4
+  fresh-scale WIN ×3 at −19.048/−15.907/−15.130; capped "measurable
+  improvement with re-attributed residual") belong to the pre-structure
+  research candidate at `deaf0301`/freeze archives; they are reference, not
+  current-head evidence. Baseline continuity was re-proven mechanically: fresh
+  base build's normalized disassembly multiset is identical to the frozen B1
+  archive's (`blocking_file.cpp.o` multiset sha256 `7dd8faeb…` both sides)
+  `[RUN-PERF §1, re-verified R9 §12.2]`.
 
-**Disclosed boundary to carry (not a defect; adoption-time obligation-table
-entry):** under a contract-external THREAD-01 violation (concurrent `close`
-during an in-flight composition), B1's per-step re-validation would stop with
-`invalid_state` at the next step, while A's prevalidated steps continue into
-`pread` on the closed descriptor and surface a backend/EBADF-class primitive
-error. Out-of-contract either way; recorded by the independent reviewers and
-to be written into the conformance-ledger obligation row at adoption
-(`INTEGRATION_AND_INDEPENDENT_REVIEW.md` §6.2 item 3, `P5_INTERACTION_OUTCOME.md`
-§12.1 `[TRANSCRIBED]`).
+## 5. Mutation Oracle (what must kill on WSL2)
 
-## 6. Mutation Oracle
+Killers are **named suite assertions** (GREEN → RED(named single-line FAIL,
+exit=1) → RESTORED GREEN) — never crash/build-failure/timeout.
 
-- **Seam set (candidate)**: three `SLUICE_COMPOSE_MUTANT_*` guards on
-  `detail::compose_progress` (`include/sluice/detail/file_semantics.hpp`) +
-  six guards in `src/blocking_file.cpp`; the P5 union form drives the 6-define
-  seam set as 8 legs + 1 rules-control leg. Killers must be **named suite
-  assertions** (GREEN→RED(named)→RESTORED GREEN) — never crash, build failure
-  or timeout.
-- **Rules-stay-green control**: the control leg (retargeted to the
-  production-only compose seam at `4ab6ef17`, Amendment 1) must stay GREEN
-  under `FAILURE_ACCOUNTED` while the implementation legs go RED — proving the
-  non-authoritative SEM-05 rule table (`detail::compose_progress`) is an
-  oracle, not a second authority (`P5_INTERACTION_OUTCOME.md` §2/§13
-  `[TRANSCRIBED]`).
-- **BASE-side admission mutants** (carried by B1, keep working): 
-  `SLUICE_SEM_MUTANT_EMPTY_BEFORE_CLOSED`, `SLUICE_SEM_MUTANT_ADMIT_INVALID_RANGE`
-  (in `precheck_data_op`), `SLUICE_SEM_MUTANT_ADMIT_UNREPRESENTABLE_SIZE` (in
-  `precheck_resize`); xmake targets via `direct_mutant_target()`
-  (`P0_BASELINE_AND_OWNERSHIP.md` §5.3 `[TRANSCRIBED]`).
-- Gate scripts + sha256: see §4 item 2.
+C1 admission mutants (carried by Base, keep working):
 
-## 7. Platform assumptions behind the E5 evidence
+| Define (target) | Killer |
+|---|---|
+| `SLUICE_SEM_MUTANT_ADMIT_INVALID_RANGE` | `read_with_illegal_offset_reports_invalid_argument` (`tests/blocking_file_read_test.cpp:122`) |
+| `SLUICE_SEM_MUTANT_EMPTY_BEFORE_CLOSED` | `sequential_read_on_write_only_file_rejected_upfront` (`tests/blocking_file_sequential_test.cpp:392`) |
+| `SLUICE_SEM_MUTANT_ADMIT_UNREPRESENTABLE_SIZE` | `resize_overflow_reports_invalid_argument` (`tests/blocking_file_state_test.cpp:320`) |
 
-- Host: Intel Xeon E5-2666 v3 (10C/20T, L3 25 MiB, single NUMA node), Fedora
-  44, kernel `7.2.11-200.fc44.x86_64`, glibc `2.43-9.fc44`; `/tmp` tmpfs;
-  root fs btrfs+zstd; governor `performance` in P0/P2 sessions, `schedutil`
-  pinned in P5 (`p5-raw/env-pin-2026-10-28.txt`); `perf_event_paranoid` 1
-  (P0) / 2 (P5); measurement cores via `taskset` (cpu2); 16 ABBA pairs per
-  cell; quiescent-host discipline per `P2_CANDIDATE_P2C1.md` §12.1
-  `[TRANSCRIBED: P0 §1.5; P5 header]`.
-- Fixture: 64 MiB warm-tmpfs read fixture, sha256
-  `bc020fd15a622e081793b0fb8ff2383838e27f6d1cb2135f204aad8383b2993a`;
-  deterministically regenerable via
-  `research/direct-beyond-parity/probe-snapshot-600/mkfixture.cpp` (fixed LCG
-  pattern, no seed) `[TRANSCRIBED: P0 §1.4]`.
-- NUMA axis: single-node host — any NUMA statement is `NOT_RUN_WITH_REASON`
-  (`IO_WORK_REDUCTION_LEDGER.md` §13 `[TRANSCRIBED]`).
-- **Absolute E5 numbers are not WSL2 targets** (MISSION §8.3: WSL2 checks
-  correctness, portability, ABI, compiler difference and *independent
-  regression*; it must not confirm or rewrite E5 native performance
-  evidence).
+P2C1 composition mutants (candidate seams):
 
-## 8. Compiler conditions
+| Define | Killer |
+|---|---|
+| `SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED` | `short_reads_report_eof_before_full_with_the_prefix` |
+| `SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS` (fault leg) | `short_reads_report_eof_before_full_with_the_prefix` |
+| `SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS` (rules leg) | `read_exact_accumulates_a_short_prefix_then_reports_eof` |
+| `SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED` | `error_after_confirmed_prefix_keeps_the_prefix` |
+| `SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT` | `impossible_count_stops_immediately` |
+| `SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT` | `short_reads_report_eof_before_full_with_the_prefix` |
+| `SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY` | `primitive_retries_eintr_without_a_completed_count` |
 
-- Frozen E5 toolchain: GCC 16.2.1 20260819 (`gcc-16.2.1-2.fc44`), flags
-  `-m64 -fvisibility=hidden -Wall -Werror -O3 -std=c++20 -DNDEBUG`;
-  binutils ar/ld 2.46.1 with deterministic archives (`ar -D`); ccache wrapper
-  first on PATH — clean rebuilds ran `CCACHE_DISABLE=1`; xmake
-  `v3.1.2+HEAD.5d21e9d` **user-local** (reproducing the build environment
-  means reproducing that xmake at that path, not `dnf install xmake`);
-  relative-`builddir` cwd caveat — always configure from inside the worktree
-  `[TRANSCRIBED: P0 §1.5]`.
-- Clang 22.1.8 present on E5 but **no Clang build was ever frozen** — a
-  WSL2 Clang leg is *new evidence*, not a reproduction. Recommended: primary
-  WSL2 leg on the distro GCC with the same flags; optional secondary Clang
-  leg reported separately.
-- The static instruction bounds (e.g. `read_exact_at` 68≤75 / arc 25≤26,
-  `read_exact` 55≤60 / 21≤21; public-op ±0) are **GCC-16 calibers**
-  (`P2_CANDIDATE_P2C1.md` §2.1/§12.4 `[TRANSCRIBED]`). On another compiler,
-  re-derive bounds from fresh objdump transcripts; never copy the numbers.
+Rules-stay-green control: the SEM-05 rule table (`detail::compose_progress`)
+is a **non-authoritative oracle**; a mutation of the rules table must be killed
+by the fault-leg suite while the implementation stays green — the rule table
+must never become a second authority. Mutant defines are compile-time,
+target-scoped, default-off, and must not leak into the installed SDK
+(verifier negative gate covers this).
 
-## 9. E5 applicability scope (what the candidate is and is not claimed to be)
+## 6. Independent review status
 
-- A's admitted claim, capped at **"measurable improvement with re-attributed
-  residual"** (`P2_CANDIDATE_P2C1.md` §12.4): P2 wall −16.565 ns/op
-  (95% CI [−20.806, −7.270]) on the composition shape vs B1; P4 fresh-scale
-  `WIN_CONFIRMED` ×3 on composition cells only (comp-read-4k −19.048
-  CI[−21.376,−10.723]; eofmix −15.907 CI[−17.130,−9.639]; cursor −15.130
-  CI[−22.305,−4.849]; all ≥ fresh MDE′ 12.414; PHYSICAL_WORK_DELTA = 0;
-  PMU −62/−69/−52 instr/op; negative controls PARITY)
-  (`REAL_WORKLOAD_COMPETITION.md` §1 `[TRANSCRIBED]`).
-- The win does **not** transfer to: public primitive ops, metadata, random
-  offsets, 1 MiB streaming, cold btrfs (7 W01 cells NO_CLAIM); the Parquet
-  real-workload trace (PARITY at workload scale, transfer NO_CLAIM); the tail
-  (P99 `NOT_SUPPORTABLE_WITH_REASON` everywhere). Kit-shape evidence, single
-  E5 host, no cross-host/cross-kernel comparibility claim
-  (`REAL_WORKLOAD_COMPETITION.md` §5.1 `[TRANSCRIBED]`).
-- B (P2C2) has **no wall claim** (instruction caliber only); the stack is
-  not admitted. Neither is a WSL2 validation target.
+| Review | Verdict | Record |
+|---|---|---|
+| C1 product review (R3, §12.1 scope: 10 sections) | APPROVE (C1_PRODUCT_REVIEW) | `closure/r3-c1-review.md` |
+| P2C1 productization (R4) | P2C1_PRODUCT_READY (perf handed to serial lane, NOT_RUN_WITH_REASON) | `closure/r4-p2c1.md` |
+| Independent correctness review (R9 §12.1) | APPROVE — re-ran release suite ×2, all 10 mutants, verifier 24/24; read every diff hunk + full source at both heads | `closure/r9-independent-correctness-review.md` |
+| Independent performance review (R9 §12.2) | APPROVE — all 12 mission checks re-verified from raw samples; 6 non-blocking findings (transcription direction flip F1, analyzer t-table fallback F2, archive-completeness F3, enumeration scope F4, un-archived side numbers F5, A/A asymmetry F6 — none changes a verdict) | `closure/r9-independent-performance-review.md` |
 
-## 10. WSL2 focus items (correctness, portability, ABI, compiler, regression)
+## 7. Platform assumptions to verify on WSL2 (each is an E5 fact, not a portability guarantee)
 
-1. **Matrix + mutation**: run §4 items 1–3 on the WSL2 GCC; all 58/58 legs
-   green; every seam killed by its named assertion; rules-control GREEN.
-2. **ABI check**: link a consumer against the candidate archive; verify
-   `Result<CompositionOutcome>` layout and the four public op symbols are
-   unchanged vs BASE (object/symbol comparison at the WSL2 toolchain; the
-   sha-equal-streams proof is GCC-16-specific and must be re-derived).
-3. **Static gates re-derived, not copied**: objdump the compose loops at the
-   WSL2 compiler; check the *structural* invariants (0 re-tests in step
-   loops; exactly 1 pread/read per step; single-point exit materialization;
-   `movaps` dead-store count 0; back-edge guards present) rather than the
-   numeric bounds.
-4. **Portability surface**: A uses only `pread`/`read` + EINTR retry — no
-   vectored/cfr/io_uring dependency, no kernel-version-sensitive syscall, no
-   alignment assumption. Build both `--liburing=n` and the default config.
-   Fixtures on the WSL2 native filesystem (ext4 in the VM), never `/mnt/*`
-   (9p/DrvFS) for timing cells; tmpfs for warm cells; document cache control.
-5. **THREAD-01 boundary documentation**: confirm the §5 disclosed
-   concurrent-close difference is understood and lands in the obligation
-   table if adoption proceeds.
-6. **Independent regression check (not absolute performance)**: A/A noise
-   floor, then paired ABBA A/B at the W01 composition shapes (comp-read /
-   eofmix / cursor) and the negative-control cells (negread-1b/4k). Adjudicate
-   regressions only; expect different noise bands and first-pair outliers
-   (P5 §11 class); never compare absolute ns against E5.
-7. **Environment pinning**: record an env-pin file (governor, load, matching
-   processes) per session, mirroring `p5-raw/env-pin-2026-10-28.txt`;
-   quiescent serial discipline per `P2_CANDIDATE_P2C1.md` §12.1.
-8. **Known disclosed items to watch, not fix silently**: persistent session
-   A/A noise above the historical 10 ns band (P5 §11); write-track first-pair
-   outlier +140…+204 ns class (P5 §11); eofmix residual direction (+10.228
-   EXCESS at P2, re-adjudicated WIN at P4 fresh scale — direction instability
-   is a recorded property, cap maintained).
+1. **Syscall surface**: candidate steps use only `pread`/`read` (+EINTR retry)
+   and the public `write_at`/`write`; no vectored/cfr/io_uring/alignment
+   dependency. WSL2 kernel must provide `pread64`/`pwrite64` with POSIX
+   semantics incl. EINTR-before-data (verify; the EINTR retry discipline
+   `retry_on_eintr` retries only `result<0 && errno==EINTR`).
+2. **`CompositionOutcome` layout** (24B aggregate: confirmed@0, end@8,
+   remaining@9, optional@12; libstdc++ optional payload-first) is a GCC/libstdc++
+   observation — verify layout independently on the WSL2 toolchain before
+   trusting any E5 dead-store reasoning shape.
+3. **Static instruction bounds and machine-code shapes are GCC-16 calibers** —
+   re-derive from fresh objdump at the WSL2 compiler; check structural
+   invariants (one admission per call; one pread/read per step; single-point
+   exit materialization; no partial dead store), never copied numbers.
+4. **Filesystem identity**: E5 evidence is tmpfs (warm) + btrfs zstd:1; WSL2
+   native fs is ext4 — expect different noise floors and different cold-cache
+   behavior; fixtures must live on the native fs (never `/mnt/*` 9p/DrvFS for
+   timed cells).
+5. **Governor/scheduler**: E5 ran schedutil (P5 onward) with elevated session
+   noise (sd_AA 19.5–35.6); WSL2 has its own scheduling path — establish a
+   fresh A/A noise floor before any paired run.
+6. **liburing**: matrix must pass `--liburing=n`; the `--liburing=y` 79/79 leg
+   is optional on WSL2 (io_uring availability differs) — if run, it is new
+   evidence, not a reproduction.
+7. **xmake user-local install** (v3.1.2+HEAD.5d21e9d at user path) and
+   relative-`builddir` cwd behavior — reproduce the tool, configure from
+   inside the worktree.
+8. **glibc error mapping**: `kNativeErrorMappings` assumes glibc errno values;
+   WSL2 glibc/MSVCRT interplay must not introduce new errno values on the
+   exercised paths.
+
+## 8. WSL2 build & test checklist (ordered)
+
+Work on the frozen identity in §0 (or re-anchored trunk after merges; never
+rewrite SHAs).
+
+1. **Matrix**: configure `xmake f -m <mode> --liburing=n -y && xmake -y &&
+   xmake test` for `release`, `debug`, `asan`, `asanubsan` → **58/58 each, 0
+   failed**; optional `release --liburing=y` → 79/79.
+2. **Mutation gate**: build and run all 10 mutant targets (3 C1 + 7 P2C1) →
+   each exit=1 with exactly the named FAIL line from §5; then confirm
+   `git status --porcelain -- src/ include/ tests/ xmake/ docs/` empty and
+   re-run the release suite → RESTORED 58/58.
+3. **Package verifier**: `python3 scripts/verify_v2_package.py --mode release
+   --manifest-out <tmp>/v2-manifest.json --keep-prefix` → all gates PASS; 11
+   contract headers; no `detail/` header; mutant defines not installed.
+4. **SDK consumer probe**: compile+link a consumer against the installed
+   prefix using only `<sluice/blocking/file.hpp>`; re-check the 16-case
+   behavior set (full round-trip, past-EOF prefix + `eof_before_full`,
+   zero-length, UINT64_MAX → `invalid_argument`, closed → `invalid_state`,
+   access-before-empty, move/close) and `Result<CompositionOutcome>` field
+   accounting (`confirmed`/`remaining`/certainty).
+5. **strace oracle**: full `read_exact_at` = 1 syscall; 31B/23B = 2; zero
+   length = 0; closed = 0 (shape, not timing).
+6. **Independent regression check (never absolute perf)**: A/A noise floor
+   first (≥16 pairs); then paired ABBA at comp-read-4k / eofmix / cursor +
+   negative control a2; adjudicate regressions only; expect different noise
+   bands; never compare ns against E5 values in §4.
+7. **THREAD-01 documentation**: confirm §3 item 8's disclosed boundary is
+   understood and lands in the obligation table if adoption proceeds.
+8. **Environment pinning**: write an env-pin per session (kernel, governor
+   equivalent, load, fs identity, toolchain, xmake path), mirroring
+   `closure/perf-p2c1/ENV-P2C1.txt`; serial quiescent-host discipline.
+
+Boundary: WSL2 must not confirm or rewrite E5 native performance evidence;
+its deliverable is correctness/portability/ABI/compiler/regression evidence on
+the frozen candidate.

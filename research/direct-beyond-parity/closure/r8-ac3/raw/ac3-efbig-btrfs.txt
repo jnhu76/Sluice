@@ -1,0 +1,2 @@
+kernel=7.2.11-200.fc44.x86_64
+cell=efbig_midcopy ret=-1 errno=27(File too large) confirmed_before_fail=4096 attempts=2 dst_size_after=4096 partial_effect=1

@@ -1,0 +1,24 @@
+60695 pread64(3</usr/lib64/libc.so.6>, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
+60695 pread64(3</usr/lib64/libc.so.6>, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
+60695 pread64(3</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\3756\1\0PAR1", 8, 207130005) = 8
+60695 pread64(3</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\2\31\374\0215\0\30\rduckdb_schema\25 \0\25\4%\2\30\nl"..., 79613, 207050392) = 79613
+60700 +++ exited with 0 +++
+60704 +++ exited with 0 +++
+60712 +++ exited with 0 +++
+60696 +++ exited with 0 +++
+60708 +++ exited with 0 +++
+60703 +++ exited with 0 +++
+60707 +++ exited with 0 +++
+60709 +++ exited with 0 +++
+60706 +++ exited with 0 +++
+60701 +++ exited with 0 +++
+60711 +++ exited with 0 +++
+60710 +++ exited with 0 +++
+60713 +++ exited with 0 +++
+60702 +++ exited with 0 +++
+60714 +++ exited with 0 +++
+60705 +++ exited with 0 +++
+60698 +++ exited with 0 +++
+60697 +++ exited with 0 +++
+60699 +++ exited with 0 +++
+60695 +++ exited with 0 +++

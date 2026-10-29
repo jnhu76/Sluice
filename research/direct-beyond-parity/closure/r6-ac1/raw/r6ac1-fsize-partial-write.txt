@@ -1,0 +1,12 @@
+CELL fsize-partial-write BEGIN
+obs partial_ret=100
+obs partial_errno=0
+obs partial_sigxfsz_count=0
+obs partial_size_after=100
+obs partial_prefix100_landed=1
+obs efbig_ret=-1
+obs efbig_errno=27
+obs efbig_sigxfsz_count=1
+obs efbig_size_after=100
+obs child_exit=0
+CELL fsize-partial-write END

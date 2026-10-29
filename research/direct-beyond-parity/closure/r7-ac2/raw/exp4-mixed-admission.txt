@@ -1,0 +1,8 @@
+a zero-len @UINT64_MAX                   OK   -> success 0 (offset skipped)
+b zero-len @valid                        OK   -> success 0
+c len8 @UINT64_MAX                       OK   -> invalid_argument
+d len8 @valid                            OK   -> count 8
+g zero-len nullptr @UINT64_MAX           OK   -> success 0
+e zero-len on CLOSED file                OK   -> invalid_state
+f len8 on CLOSED file                    OK   -> invalid_state
+EXP4_GATE=PASS (failures=0)

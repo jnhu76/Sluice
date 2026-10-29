@@ -1,0 +1,5 @@
+# ac3 comparator tmpfs cp1 vs cp2, shape 64KiB x1024, warmup2 reps5 pairs2 (coarse; NOT the formal serial lane)
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=18541.275 user_ns_per_op=982.038 sys_ns_per_op=20464.467 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=15440.677 user_ns_per_op=773.721 sys_ns_per_op=17012.886 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=15415.527 user_ns_per_op=2.929 sys_ns_per_op=17555.838 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=17558.190 user_ns_per_op=973.253 sys_ns_per_op=18457.829 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864

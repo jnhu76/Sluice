@@ -1,0 +1,5 @@
+obs pipe_preadv_ret=-1
+obs pipe_preadv_errno=29
+obs pipe_pwritev_ret=-1
+obs pipe_pwritev_errno=29
+CELL nonseekable END

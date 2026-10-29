@@ -1,0 +1,31 @@
+# ac3 acceleration attribution: aligned vs misaligned cfr, reflink ceiling (coarse)
+kernel=7.2.11-200.fc44.x86_64
+== btrfs aligned cfr x3
+mode=align off=0 copied=67108864 wall_ms=18.1 ns_per_chunk=17640
+mode=align off=0 copied=67108864 wall_ms=24.3 ns_per_chunk=23770
+mode=align off=0 copied=67108864 wall_ms=17.7 ns_per_chunk=17262
+== btrfs misaligned cfr x3
+short cfr r=65535 errno=0 at 67043328
+short cfr r=65535 errno=0 at 67043328
+short cfr r=65535 errno=0 at 67043328
+== btrfs cp --reflink=always
+reflink_always wall=0.00s
+== btrfs cp --reflink=never (userspace read/write)
+reflink_never wall=0.05s
+== tmpfs aligned cfr x3
+mode=align off=0 copied=67108864 wall_ms=23.8 ns_per_chunk=23247
+mode=align off=0 copied=67108864 wall_ms=23.9 ns_per_chunk=23352
+mode=align off=0 copied=67108864 wall_ms=23.0 ns_per_chunk=22493
+== tmpfs misaligned cfr x3
+short cfr r=65535 errno=0 at 67043328
+short cfr r=65535 errno=0 at 67043328
+short cfr r=65535 errno=0 at 67043328
+# ac3 misaligned cfr rerun (bound fixed: last partial chunk excluded)
+== btrfs misaligned cfr x3
+mode=misalign off=1 copied=67043328 wall_ms=1452.4 ns_per_chunk=1419741
+mode=misalign off=1 copied=67043328 wall_ms=1391.7 ns_per_chunk=1360432
+mode=misalign off=1 copied=67043328 wall_ms=1316.2 ns_per_chunk=1286580
+== tmpfs misaligned cfr x3
+mode=misalign off=1 copied=67043328 wall_ms=18.2 ns_per_chunk=17749
+mode=misalign off=1 copied=67043328 wall_ms=18.4 ns_per_chunk=17951
+mode=misalign off=1 copied=67043328 wall_ms=18.2 ns_per_chunk=17788

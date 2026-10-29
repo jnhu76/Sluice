@@ -1,0 +1,206 @@
+60727 pread64(3</usr/lib64/libc.so.6>, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
+60727 pread64(3</usr/lib64/libc.so.6>, "\6\0\0\0\4\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0@\0\0\0\0\0\0\0"..., 784, 64) = 784
+60727 pread64(3</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\3756\1\0PAR1", 8, 207130005) = 8
+60727 pread64(3</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\2\31\374\0215\0\30\rduckdb_schema\25 \0\25\4%\2\30\nl"..., 79613, 207050392) = 79613
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\324\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 1147324) = 256
+60727 pread64(5</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\224\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 5359418) = 256
+60729 pread64(6</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60740 pread64(7</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60740 <... pread64 resumed>, "\25\0\25\220\200x\25\222\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 13781631) = 256
+60729 <... pread64 resumed>, "\25\0\25\220\200x\25\356\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 9572075) = 256
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60727 pread64(5</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 <... pread64 resumed>, "\25\0\25\220\200x\25\270\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 17991335) = 256
+60740 pread64(7</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60729 pread64(6</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60734 pread64(9</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\312\275M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 22200984) = 256
+60730 pread64(10</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\324\275M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 26413056) = 256
+60731 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\327L \0\1\1\10,*F\1\7\f\0\20O\24\5\10\10"..., 634602, 1147347) = 634602
+60734 pread64(9</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60740 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1`\310~\0\1\1\10\0303,\1\7\f\0\362Ur\5\10\10"..., 634569, 13781654) = 634569
+60730 pread64(10</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\232\17b\0\1\1\10Ja^\1\7\f\0\310Tj\5\10\4"..., 634652, 17991358) = 634652
+60727 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1X-=\0\1\1\10\220\241y\1\7\f\0\6\274C\5\10\10"..., 634634, 5359441) = 634634
+60737 pread64(11</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\374\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 30622475) = 256
+60737 pread64(11</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60733 pread64(12</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60729 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\f6<\0\1\1\10\335oO\1\7\f\0'\362z\5\10\10"..., 634679, 9572098) = 634679
+60733 <... pread64 resumed>, "\25\0\25\220\200x\25\304\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 34831573) = 256
+60730 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\274O\202\0\1\1\10\\\5Y\1\7\f\0\4\345%\5\10\10"..., 634730, 26413079) = 634730
+60733 pread64(12</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60742 pread64(13</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60741 pread64(14</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60734 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\267\355`\0\1\1\10\300\301A\1\7\f\0\27\345\n\5\10\10"..., 634725, 22201007) = 634725
+60742 <... pread64 resumed>, "\25\0\25\220\200x\25\336\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 39043116) = 256
+60741 <... pread64 resumed>, "\25\0\25\220\200x\25\366\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 43250266) = 256
+60741 pread64(14</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60742 pread64(13</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60732 pread64(15</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\250\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 47461691) = 256
+60733 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\27\305$\0\1\1\10&\376 \1\7\f\0z\262%\5\10\10"..., 634594, 34831596) = 634594
+60738 pread64(17</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60737 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\244\317.\0\1\1\10\340\223`\1\7\f\0!&\t\5\10\10"..., 634622, 30622498) = 634622
+60738 <... pread64 resumed>, "\25\0\25\220\200x\25\256\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 55879468) = 256
+60732 pread64(15</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60738 pread64(17</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60744 pread64(18</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\222\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 60089973) = 256
+60736 pread64(16</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60741 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\224i\32\0\1\1\10\216\265\177\1\7\f\0z{\34\5\10\10"..., 634619, 43250289) = 634619
+60736 <... pread64 resumed>, "\25\0\25\220\200x\25\340\271M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 51671545) = 256
+60745 pread64(19</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60744 pread64(18</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60745 <... pread64 resumed>, "\25\0\25\220\200x\25\342\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 64299327) = 256
+60736 pread64(16</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60745 pread64(19</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\302\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 72719228) = 256
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60732 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\10\330\23\0\1\1\10&b#\1\7\f\0\215\200F\5\10\10"..., 634580, 47461714) = 634580
+60738 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\26[C\0\1\1\10\317\35F\1\7\f\0@\17=\5\10\10"..., 634647, 55879491) = 634647
+60746 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1d\3\n\0\1\1\10h74\1\7\f\0\4\302K\5\10\10"..., 634657, 72719251) = 634657
+60742 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1N\261\"\0\1\1\10\336\\v\1\7\f\0\352\364g\5\10\10"..., 634671, 39043139) = 634671
+60728 pread64(20</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60744 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\265\\H\0\1\1\10v\243\7\1\7\f\0L\321]\5\10\10"..., 634505, 60089996) = 634505
+60728 <... pread64 resumed>, "\25\0\25\220\200x\25\250\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 68509877) = 256
+60731 <... pread64 resumed>, "\25\0\25\220\200x\25\312\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 81137701) = 256
+60745 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1t\1F\0\1\1\10H\313%\1\7\f\0\t\357N\5\10\10"..., 634545, 64299350) = 634545
+60743 pread64(21</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\314\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 76929890) = 256
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60728 pread64(20</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60743 pread64(21</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60736 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\270\246\\\0\1\1\10\214\270B\1\7\f\0\211\rL\5\10\10"..., 634480, 51671568) = 634480
+60731 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\223\342W\0\1\1\10`\245\v\1\7\f\0\260u\31\5\10\10"..., 634661, 81137724) = 634661
+60740 pread64(7</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\342\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 93774490) = 256
+60740 pread64(7</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60739 pread64(22</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\246\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 85350329) = 256
+60735 pread64(23</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60740 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\0001F\0\1\1\10\270\364@\1\7\f\0.:*\5\10\10"..., 634545, 93774513) = 634545
+60735 <... pread64 resumed>, "\25\0\25\220\200x\25\242\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 89563921) = 256
+60728 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1$\377 \0\1\1\10\200\3545\1\7\f\0\234I\177\5\10\4"..., 634580, 68509900) = 634580
+60727 pread64(5</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60739 pread64(22</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60730 pread64(10</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60727 <... pread64 resumed>, "\25\0\25\220\200x\25\236\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 102192403) = 256
+60743 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\370|D\0\1\1\10\3701\36\1\7\f\0,br\5\10\10"..., 634662, 76929913) = 634662
+60730 <... pread64 resumed>, "\25\0\25\220\200x\25\256\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 97983397) = 256
+60727 pread64(5</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60730 pread64(10</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60735 pread64(23</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60727 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1D\302=\0\1\1\10\7,\t\1\7\f\0\2503\22\5\10\10"..., 634639, 102192426) = 634639
+60730 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\20\363*\0\1\1\10h\20\3\1\7\f\0\324Xn\5\10\10"..., 634519, 97983420) = 634519
+60739 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\360`*\0\1\1\10n\357\5\1\7\f\0\216Z4\5\10\10"..., 634643, 85350352) = 634643
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60733 pread64(12</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 <... pread64 resumed>, "\25\0\25\220\200x\25\232\300M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 110612288) = 256
+60735 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\360a\203\0\1\1\10\v\221\201\1\7\f\0\2663A\5\10\10"..., 634513, 89563944) = 634513
+60733 <... pread64 resumed>, "\25\0\25\220\200x\25\270\276M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 114823101) = 256
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60733 pread64(12</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\243:J\0\1\1\10t\\e\1\7\f\0<w.\5\10\10"..., 634893, 110612311) = 634893
+60733 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\220\26\21\0\1\1\10\220?\5\1\7\f\0`\234\22\5\10\10"..., 634780, 114823124) = 634780
+60741 pread64(14</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60734 pread64(9</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60741 <... pread64 resumed>, "\25\0\25\220\200x\25\264\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 119031020) = 256
+60734 <... pread64 resumed>, "\25\0\25\220\200x\25\302\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 106402691) = 256
+60741 pread64(14</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60734 pread64(9</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60741 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1.\f\20\0\1\1\10@\5I\1\7\f\0\312\340<\5\10\10"..., 634586, 119031043) = 634586
+60729 pread64(6</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60734 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\264\373\21\0\1\1\0100\342o\1\7\f\0\365th\5\10\10"..., 634657, 106402714) = 634657
+60729 <... pread64 resumed>, "\25\0\25\220\200x\25\252\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 123240752) = 256
+60729 pread64(6</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\252\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 127451643) = 256
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60742 pread64(13</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60740 pread64(7</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60742 <... pread64 resumed>, "\25\0\25\220\200x\25\362\275M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 135870214) = 256
+60729 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1N\213S\0\1\1\10D\31!\1\7\f\0\377f\r\5\10\10"..., 634581, 123240775) = 634581
+60744 pread64(18</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60742 pread64(13</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60740 <... pread64 resumed>, "\25\0\25\220\200x\25\320\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 131660170) = 256
+60738 pread64(17</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60744 <... pread64 resumed>, "\25\0\25\220\200x\25\350\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 144291620) = 256
+60740 pread64(7</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60731 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1H\17}\0\1\1\10\253\241:\1\7\f\0\5c1\5\10\10"..., 634581, 127451666) = 634581
+60738 <... pread64 resumed>, "\25\0\25\220\200x\25\222\271M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 140080251) = 256
+60744 pread64(18</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60742 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\245\257d\0\1\1\10\365l\2\1\7\f\0r7k\5\10\10"..., 634745, 135870237) = 634745
+60738 pread64(17</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60732 pread64(15</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60745 pread64(19</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60732 <... pread64 resumed>, "\25\0\25\220\200x\25\344\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 148503857) = 256
+60745 <... pread64 resumed>, "\25\0\25\220\200x\25\336\300M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 152713101) = 256
+60740 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1(\204\16\0\1\1\10\240\202\17\1\7\f\0v\3\3\5\10\10"..., 634536, 131660193) = 634536
+60732 pread64(15</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60745 pread64(19</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60744 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\324Xg\0\1\1\10P`:\1\7\f\0nrc\5\10\10"..., 634676, 144291643) = 634676
+60737 pread64(11</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60738 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1N\244\36\0\1\1\10\33^,\1\7\f\0N\252)\5\10\10"..., 634441, 140080274) = 634441
+60737 <... pread64 resumed>, "\25\0\25\220\200x\25\220\276M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 156923089) = 256
+60737 pread64(11</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60745 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\304L\23\0\1\1\10\311b\2\1\7\f\0\332\352c\5\10\10"..., 634927, 152713124) = 634927
+60732 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\220\346B\0\1\1\10`\7\32\1\7\f\0\360\315\21\5\10\10"..., 634546, 148503880) = 634546
+60727 pread64(5</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\220\200x\25\342\271M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 165337790) = 256
+60736 pread64(16</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60727 pread64(5</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60737 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\240[-\0\1\1\10 \33C\1\7\f\0\32E\24\t\10\4"..., 634760, 156923112) = 634760
+60736 <... pread64 resumed>, "\25\0\25\220\200x\25\310\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 161130113) = 256
+60730 pread64(10</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60736 pread64(16</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60730 <... pread64 resumed>, "\25\0\25\220\200x\25\302\273M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 169547569) = 256
+60730 pread64(10</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60727 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1*\260\21\0\1\1\10V\313\v\1\7\f\0$\216\\\5\10\10"..., 634481, 165337813) = 634481
+60743 pread64(21</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60743 <... pread64 resumed>, "\25\0\25\220\200x\25\272\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 173757911) = 256
+60736 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1(\262:\0\5\1\49\36\5\7\10\372\332H\5\10\10jH"..., 634660, 161130136) = 634660
+60746 <... pread64 resumed>, "\25\0\25\220\200x\25\252\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 177970568) = 256
+60743 pread64(21</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60746 pread64(8</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60730 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\34\256\7\0\1\1\10Y\301)\1\7\f\0\17\354\214\5\10\10"..., 634593, 169547592) = 634593
+60733 pread64(12</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60743 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\222\221$\0\1\1\10\374\6x\1\7\f\0\373\204F\5\10\10"..., 634653, 173757934) = 634653
+60746 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\220\177;\0\1\1\10\69?\1\7\f\0n\204D\5\10\10"..., 634517, 177970591) = 634517
+60733 <... pread64 resumed>, "\25\0\25\220\200x\25\264\274M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 186390320) = 256
+60728 pread64(20</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60733 pread64(12</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60728 <... pread64 resumed>, "\25\0\25\220\200x\25\240\275M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 182179831) = 256
+60739 pread64(22</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60733 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1B\0\2\0\1\1\10\362 \203\1\7\f\0\\\253\32\5\10\10"..., 634650, 186390343) = 634650
+60739 <... pread64 resumed>, "\25\0\25\220\200x\25\316\272M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 190597919) = 256
+60728 pread64(20</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60739 pread64(22</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60728 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\fy\24\0\1\1\10\224S\f\1\7\f\0R\n\"\5\10\10"..., 634704, 182179854) = 634704
+60739 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\300DF\0\1\1\10\363sg\1\7\f\0\343\366\20\5\10\10"..., 634535, 190597942) = 634535
+60741 pread64(14</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60735 pread64(23</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60741 <... pread64 resumed>, "\25\0\25\220\200x\25\332\271M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 199018220) = 256
+60735 <... pread64 resumed>, "\25\0\25\220\200x\25\376\276M,\25\200\200\17\25\0\25\6\25\6\0\0\210\200<,\4\0\0\0\200"..., 256, 194809050) = 256
+60741 pread64(14</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60735 pread64(23</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60741 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\322\225I\0\1\1\10\200b7\1\7\f\0\nU\233\5\10\10"..., 634477, 199018243) = 634477
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet>, "\25\0\25\200\310d\25\364\366@,\25\376\310\f\25\0\25\6\25\6\0\0\200\2442,\4\0\0\0\376"..., 256, 203050631) = 256
+60731 pread64(4</home/jnhu/Source/dududu/build/duckdb-bench/duckdb_benchmark_data/lineitem.parquet> <unfinished ...>
+60735 <... pread64 resumed>, "\210\200<,\4\0\0\0\200\200\17\1\214\245L\0\1\1\10\362\307\17\1\7\f\0\24\367N\5\10\10"..., 634815, 194809073) = 634815
+60731 <... pread64 resumed>, "\200\2442,\4\0\0\0\376\310\f\1*+\31\0\1\1\10b:>\1\7\f\0\3111\206\5\10\10"..., 531898, 203050654) = 531898
+60732 +++ exited with 0 +++
+60745 +++ exited with 0 +++
+60738 +++ exited with 0 +++
+60736 +++ exited with 0 +++
+60743 +++ exited with 0 +++
+60737 +++ exited with 0 +++
+60746 +++ exited with 0 +++
+60739 +++ exited with 0 +++
+60741 +++ exited with 0 +++
+60733 +++ exited with 0 +++
+60730 +++ exited with 0 +++
+60728 +++ exited with 0 +++
+60735 +++ exited with 0 +++
+60734 +++ exited with 0 +++
+60729 +++ exited with 0 +++
+60742 +++ exited with 0 +++
+60731 +++ exited with 0 +++
+60744 +++ exited with 0 +++
+60740 +++ exited with 0 +++
+60727 +++ exited with 0 +++

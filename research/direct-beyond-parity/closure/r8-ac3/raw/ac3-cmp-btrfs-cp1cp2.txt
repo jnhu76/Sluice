@@ -1,0 +1,5 @@
+# ac3 comparator btrfs cp1 vs cp2, same shape
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=16085.478 user_ns_per_op=1186.841 sys_ns_per_op=16431.082 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=6331.459 user_ns_per_op=40.023 sys_ns_per_op=8346.740 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP2_copy_file_range size=65536 ops=1024 ns_per_op=6198.462 user_ns_per_op=170.636 sys_ns_per_op=8344.201 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=1 issued_per_chunk=65536 src_hash=0xac16c39f5752c383 dst_size=67108864
+arm=CP1_pread_pwrite_loop size=65536 ops=1024 ns_per_op=15757.489 user_ns_per_op=779.774 sys_ns_per_op=16336.783 checksum=335675392 content_hash=0xac16c39f5752c383 content_ok=1 syscalls_per_chunk=2 issued_per_chunk=131072 src_hash=0xac16c39f5752c383 dst_size=67108864
