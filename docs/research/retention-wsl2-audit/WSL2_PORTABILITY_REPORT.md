@@ -187,12 +187,17 @@ number was ever compared against E5.**
   `PARTIALLY_OBSERVABLE_USER_ONLY` (`perf_event_paranoid = 2` blocks
   kernel-inclusive counting); no verdict rests on PMU counts. CPU frequency
   state is unobservable on this guest (no cpufreq sysfs) — recorded UNKNOWN.
-- Verdict recorded by the round: `PORTABILITY_PASS_PERF_DIFFERENT` — WSL2
-  portability gates pass; none of the archived E5 per-cell win verdicts
-  replicated as distinguishable under this host's session noise. The token is
-  defined here (the observations report uses it undefined): *PERF_DIFFERENT =
-  the E5 kit's per-cell win verdicts did not replicate as distinguishable
-  under WSL2 session noise; no E5 wall numbers were compared.*
+- Verdict recorded by the round (baseline attribution corrected 2026-10-30):
+  `C1_WALL_EFFECT_ON_WSL2 = NOT_ISOLATED`, `P2C1_WALL_EFFECT_ON_WSL2 =
+  NOT_DISTINGUISHABLE`, `WSL2_PORTABILITY = PASS` — WSL2 portability gates
+  pass; the A/B isolates only the P2C1 increment (C1 is on both sides); none
+  of the archived E5 per-cell win verdicts replicated as distinguishable
+  under this host's session noise, and no E5 wall numbers were compared.
+  These three lines supersede the earlier token
+  `PORTABILITY_PASS_PERF_DIFFERENT`, which the round had emitted undefined
+  and this report had defined as: *the E5 kit's per-cell win verdicts did not
+  replicate as distinguishable under WSL2 session noise; no E5 wall numbers
+  were compared.*
 
 ### Correctness re-review (verdict: OK, ABI_CONSISTENT)
 
@@ -236,6 +241,13 @@ Independent performance reviewer
   a re-run. Also record that `77e5399a` is NOT an ancestor of `origin/master`
   (merge-base `bdfd0d8d`; reachable only via
   `origin/backup/pr-612-original-head-70d48f5e`).
+  **Resolution (2026-10-30):** the label correction has been applied to
+  `WSL2_PERFORMANCE_OBSERVATIONS.md` (§1 baseline table, §1 production-delta
+  paragraph, §7 interpretation, §11 verdict, §12 attribution boundary):
+  baseline = C1 only, candidate = C1+P2C1, measured increment = P2C1 only,
+  with the three defined verdict lines replacing the old token. No re-run was
+  performed; `receipts/perf-observations.log:4` retains the original session
+  label ("stacked base before #602/#612") as immutable raw evidence.
 - Low: read-arm "parity" needs the "indistinguishable ≠ proven equal"
   qualifier the report applies only to write arms — WSL2 MDE′ is 13 ns
   (eofmix) / 26 ns (cursor), and the archived E5 kit's confirmed wins on the
@@ -244,6 +256,8 @@ Independent performance reviewer
   of E5.
 - Low: the verdict token `PORTABILITY_PASS_PERF_DIFFERENT` is undefined in
   the report (single occurrence, :234); defined in this report above.
+  Resolved by the 2026-10-30 correction: the report now records the three
+  defined verdict lines and the old token no longer occurs in it.
 - Low: the oracle-smoke sentence overstates the receipt (15 smokes: 10 arms
   on the candidate binary, only the 5 read arms on the base binary; no
   standalone base write smoke). Actual base write-arm oracle coverage is
@@ -272,15 +286,15 @@ jurisdiction); no ABI claim was made or relied on by the performance report.
 2. **WSL2 does not re-adjudicate E5 performance.** No E5 wall number was
    compared, no E5 instruction count carries weight here (different compiler,
    different caliber — B1 finding 2), and the round's own verdict
-   (`PORTABILITY_PASS_PERF_DIFFERENT`) only records that the E5 kit's
-   per-cell win verdicts did not replicate as distinguishable under WSL2
-   session noise. Any future WSL2 performance claim about C1 must be a fresh
-   measurement.
-3. **Even the WSL2-local attribution is narrower than labeled.** Per the
-   high-severity re-review finding, the measured A/B isolates the **P2C1
-   increment only**; C1's WSL2 wall-clock effect was never isolated. This is
-   a report-label defect (the experiment pair itself mirrors the archived E5
-   kit's pairing), to be fixed by a label correction, not a re-run.
+   (`P2C1_WALL_EFFECT_ON_WSL2 = NOT_DISTINGUISHABLE`) only records that the
+   E5 kit's per-cell win verdicts did not replicate as distinguishable under
+   WSL2 session noise. Any future WSL2 performance claim about C1 must be a
+   fresh measurement.
+3. **The WSL2-local attribution is P2C1-only.** Per the high-severity
+   re-review finding, the measured A/B isolates the **P2C1 increment only**;
+   C1's WSL2 wall-clock effect was never isolated. The original report-label
+   defect (the experiment pair itself mirrors the archived E5 kit's pairing)
+   was fixed by the 2026-10-30 label correction, not a re-run.
 4. **Known behavioral deltas are contract-external and disclosed** (THREAD-01
    race flavor; kernel top-edge EINVAL platform envelope), and one report
    citation inaccuracy (F5) needs an erratum. None affects contract-internal

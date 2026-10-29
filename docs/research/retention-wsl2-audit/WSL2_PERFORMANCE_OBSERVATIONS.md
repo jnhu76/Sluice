@@ -17,14 +17,20 @@ the receipts log.
 
 | Side | Commit | Worktree | Release archive sha256 |
 | --- | --- | --- | --- |
-| master (candidate) | `84e1b7d578c2c58a3c46033487d9e1ac7c639b8b` (origin/master) | `/tmp/sluice-perf-master` | `d41685d2ab7be2ea6cc1e8e9870537e2b67992f7b7a2396dd15ba2e25570d338` |
-| baseline (stacked base) | `77e5399a45998dea396699fa2e063c94a665945a` (pre-#602/#612) | `/tmp/sluice-perf-base` | `a12d98c1b0f868003230edd6f2b37fad2035a77787400ab6bcbcd88b2e4074d7` |
+| candidate (master, C1+P2C1) | `84e1b7d578c2c58a3c46033487d9e1ac7c639b8b` (origin/master) | `/tmp/sluice-perf-master` | `d41685d2ab7be2ea6cc1e8e9870537e2b67992f7b7a2396dd15ba2e25570d338` |
+| baseline (C1 only) | `77e5399a45998dea396699fa2e063c94a665945a` (PR #602 branch head; contains C1, not P2C1) | `/tmp/sluice-perf-base` | `a12d98c1b0f868003230edd6f2b37fad2035a77787400ab6bcbcd88b2e4074d7` |
 
 The production delta between the two commits is `src/blocking_file.cpp` +
-`include/sluice/detail/file_semantics.hpp` (C1: dispatch admission verdicts
-without Precheck materialization, #602; P2C1: read compositions run
-prevalidated register-resident steps, #612), plus tests, scripts, research and
-docs. Both archives build the same two TUs (`file_resource.cpp.o`,
+`include/sluice/detail/file_semantics.hpp` (P2C1: read compositions run
+prevalidated register-resident steps, #612), plus tests (`xmake/tests.lua`,
+`tests/direct_composition_fault_test.cpp`) and non-production research/docs
+changes. C1 (dispatch admission verdicts without Precheck materialization,
+#602) is present on **both** sides: baseline `77e5399a` is the PR #602 branch
+head (C1 code commit `4c3e698d` + docs commit `77e5399a`), squashed onto
+master as `43cb8029`; the candidate adds only P2C1 on top of that same C1
+content. The measured increment between the two sides is therefore **P2C1
+only**; this A/B does not isolate C1's WSL2 wall-clock effect. Both archives
+build the same two TUs (`file_resource.cpp.o`,
 `blocking_file.cpp.o`); both builds compiled from scratch
 (`xmake f -c -m release --liburing=n -y && xmake build -y`).
 
@@ -129,14 +135,16 @@ Consequence applied below: a CI-excluding cell inside the write family is not
 accepted as a distinguished difference unless it replicates across independent
 same-parameter series.
 
-## 7. A/B results (candidate master vs baseline)
+## 7. A/B results (candidate = C1+P2C1 vs baseline = C1 only)
 
 Per-side medians, per-pair delta medians and CI95 for every series are in the
-receipts log §5–§6. Summary (Δ = ladderA − ladderB, negative favors master):
+receipts log §5–§6. The measured increment is the P2C1 change alone (C1 is
+present on both sides). Summary (Δ = ladderA − ladderB, negative favors the
+candidate):
 
 ### 4 KiB dedicated series (16 ABBA pairs each)
 
-| Op | master median (ns/op) | baseline median (ns/op) | Δ median | CI95 | verdict |
+| Op | candidate (C1+P2C1) median (ns/op) | baseline (C1 only) median (ns/op) | Δ median | CI95 | verdict |
 | --- | --- | --- | --- | --- | --- |
 | read_exact_at (ax seq) | 647.2 | 646.9 | +5.6 | [−19.0, +21.6] | parity |
 | read_exact_at (ax eofmix) | 591.6 | 597.5 | −3.5 | [−20.2, +9.3] | parity |
@@ -153,7 +161,7 @@ All 24 cells (0 B/1 B/64 B/512 B/4 KiB/64 KiB × the four ops) returned CI95
 straddling zero with one flagged cell:
 
 - `write_all` @ 4 KiB sweep run: Δ median −45.3 ns, signs 1/16,
-  CI95 **[−173.1, −12.4]** — superficially favoring master.
+  CI95 **[−173.1, −12.4]** — superficially favoring the candidate.
 - The same preregistered configuration was therefore run twice more
   independently: the dedicated 4 KiB series (Δ median −8.1 ns,
   CI95 [−111.2, +57.0]) and a tie-breaker series (Δ median −8.6 ns,
@@ -225,14 +233,23 @@ schedule exists to cancel.
 
 - Correctness: the kit's content oracle passed on every sample of every
   series on both sides; no correctness regression.
-- Performance: no distinguishable speedup or regression between master
-  (`84e1b7d5`, C1+P2C1) and the stacked base (`77e5399a`) on this WSL2 host
-  across 4 ops × 6 sizes, 16-pair ABBA series, order-aware analysis, with the
-  negative control at parity and the single flagged write cell resolved as
-  noise (§7).
+- Performance: no distinguishable speedup or regression between the candidate
+  (`84e1b7d5`, C1+P2C1) and the baseline (`77e5399a`, C1 only — PR #602
+  branch head) on this WSL2 host across 4 ops × 6 sizes, 16-pair ABBA
+  series, order-aware analysis, with the negative control at parity and the
+  single flagged write cell resolved as noise (§7). The measured increment is
+  the P2C1 (#612) change alone; C1 is present on both sides, so this
+  comparison does not isolate C1's WSL2 wall-clock effect.
 
-verdict = **PORTABILITY_PASS_PERF_DIFFERENT**.
+```
+C1_WALL_EFFECT_ON_WSL2 = NOT_ISOLATED
+P2C1_WALL_EFFECT_ON_WSL2 = NOT_DISTINGUISHABLE
+WSL2_PORTABILITY = PASS
+```
 
+These lines supersede the earlier verdict token
+`PORTABILITY_PASS_PERF_DIFFERENT`, which this report had emitted undefined
+(baseline attribution corrected 2026-10-30; same semantics, now explicit).
 This verdict says nothing about E5-relative standing; per the archived
 discipline, WSL2 wall numbers were never compared against E5 absolute
 numbers, and only instrument/fixture identity was carried across platforms.
@@ -261,6 +278,13 @@ numbers, and only instrument/fixture identity was carried across platforms.
 7. The ladder's read-arm `content_ok=-1` field semantics are instrument
    design (verification via exit code), confirmed against the archived E5
    outputs, not a skipped oracle.
+8. Attribution boundary: baseline `77e5399a` is the PR #602 branch head and
+   already contains C1 (code commit `4c3e698d`, squash-merged to master as
+   `43cb8029`), so the A/B isolates only the P2C1 increment. C1's standalone
+   WSL2 wall-clock effect was never measured here (a pre-C1 baseline such as
+   `43cb8029^` = `ac995641` was not built); `77e5399a` is not an ancestor of
+   `origin/master` (merge-base `bdfd0d8d`) and remains reachable via
+   `refs/pull/602/head` and the backup branch.
 
 ## 13. Evidence pointers
 
