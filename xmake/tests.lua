@@ -1120,6 +1120,26 @@ do
     request_scope_target("request_scope_mut_finish_cancels_cleanup",
                          R .. "tests/request_scope_test.cpp", false,
                          "SLUICE_REQUEST_SCOPE_MUTANT_FINISH_CANCELS_CLEANUP")
+    -- Research ELIDE-010 settlement-pass mutation build. The candidate
+    -- (SLUICE_RESEARCH_ELIDE_010) removes the settlement loop's pre-wait
+    -- poll pass; restoring it must shift the settlement pass identity back
+    -- and be killed by the frozen-identity oracle of the same suite.
+    -- Executed and recorded manually, never run as a regular test.
+    target("request_scope_mut_settle_retains_extra_poll_pass")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core")
+        add_includedirs(R .. "include", R .. "src/async")
+        add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_RESEARCH_ELIDE_010",
+                    "SLUICE_REQUEST_SCOPE_MUTANT_SETTLE_RETAINS_EXTRA_POLL_PASS")
+        add_files(R .. "tests/request_scope_test.cpp",
+                  R .. "src/async/async_io_context.cpp",
+                  R .. "src/async/request_scope.cpp",
+                  R .. "src/async/threadpool_backend.cpp",
+                  R .. "src/async/fail_fast.cpp",
+                  R .. "src/async/detail/context_identity.cpp",
+                  R .. "src/async/detail/request_core.cpp")
 end
 
 -- ThreadPool request-core integration evidence. The deterministic pause gates and fault
