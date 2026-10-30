@@ -1,0 +1,29 @@
+diff --git a/include/sluice/async/detail/threadpool_backend.hpp b/include/sluice/async/detail/threadpool_backend.hpp
+index cab651e8..acffc42c 100644
+--- a/include/sluice/async/detail/threadpool_backend.hpp
++++ b/include/sluice/async/detail/threadpool_backend.hpp
+@@ -236,7 +236,10 @@ class ThreadPoolBackend : public AsyncBackend {
+ 
+     std::vector<std::thread> workers_;
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++
+     std::atomic<std::uint64_t> syscall_count_{0};
++#endif
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+diff --git a/src/async/threadpool_backend.cpp b/src/async/threadpool_backend.cpp
+index 515822ad..43d71925 100644
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -428,7 +428,9 @@ void ThreadPoolBackend::worker_loop() {
+                 sluice::FileInfo metadata;
+                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
++#endif
+                 {
+                     std::lock_guard<std::mutex> wl(work_mtx_);
+                     --active_workers_;

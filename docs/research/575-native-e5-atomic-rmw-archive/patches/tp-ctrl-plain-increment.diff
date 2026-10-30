@@ -1,0 +1,15 @@
+diff --git a/src/async/threadpool_backend.cpp b/src/async/threadpool_backend.cpp
+index 515822ad..55640268 100644
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -428,7 +428,9 @@ void ThreadPoolBackend::worker_loop() {
+                 sluice::FileInfo metadata;
+                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
+ 
+-                syscall_count_.fetch_add(1, std::memory_order_relaxed);
++                syscall_count_.store(
++                    syscall_count_.load(std::memory_order_relaxed) + 1,
++                    std::memory_order_relaxed);
+                 {
+                     std::lock_guard<std::mutex> wl(work_mtx_);
+                     --active_workers_;

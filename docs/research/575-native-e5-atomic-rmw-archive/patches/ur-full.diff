@@ -1,0 +1,29 @@
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..3b484b1b 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -321,7 +321,10 @@ class UringAsyncBackend : public AsyncBackend {
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++
+     std::atomic<std::uint64_t> submit_flushes_{0};
++#endif
+     std::atomic<std::size_t> live_cookies_{0};
+     std::atomic<std::size_t> live_control_sqes_{0};
+ 
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..5fee5e4a 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -219,7 +219,9 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
+     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+     submit_flushes_.fetch_add(1, std::memory_order_relaxed);
++#endif
+     int rc = 0;
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+     if (ring_state_->test_hooks.submit != nullptr) {

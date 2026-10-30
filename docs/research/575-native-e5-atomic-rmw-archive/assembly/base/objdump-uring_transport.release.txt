@@ -1,0 +1,2199 @@
+
+build/.objs/sluice_async/linux/x86_64/release/src/async/uring_transport.cpp.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]>:
+       0:	sub    $0x8,%rsp
+       4:	mov    $0x83,%edx
+       9:	mov    $0x1,%esi
+       e:	mov    0x0(%rip),%rcx        # 15 <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]+0x15>
+      15:	mov    $0x0,%edi
+      1a:	call   1f <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]+0x1f>
+      1f:	mov    0x0(%rip),%rdi        # 26 <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]+0x26>
+      26:	call   2b <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]+0x2b>
+      2b:	call   30 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]>
+
+0000000000000030 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]>:
+      30:	sub    $0x8,%rsp
+      34:	mov    $0x46,%edx
+      39:	mov    $0x1,%esi
+      3e:	mov    0x0(%rip),%rcx        # 45 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]+0x15>
+      45:	mov    $0x0,%edi
+      4a:	call   4f <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]+0x1f>
+      4f:	mov    0x0(%rip),%rdi        # 56 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]+0x26>
+      56:	call   5b <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]+0x2b>
+      5b:	call   60 <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]>
+
+0000000000000060 <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]>:
+      60:	sub    $0x8,%rsp
+      64:	mov    $0x86,%edx
+      69:	mov    $0x1,%esi
+      6e:	mov    0x0(%rip),%rcx        # 75 <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]+0x15>
+      75:	mov    $0x0,%edi
+      7a:	call   7f <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]+0x1f>
+      7f:	mov    0x0(%rip),%rdi        # 86 <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]+0x26>
+      86:	call   8b <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]+0x2b>
+      8b:	call   90 <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]>
+
+0000000000000090 <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]>:
+      90:	sub    $0x8,%rsp
+      94:	mov    $0x70,%edx
+      99:	mov    $0x1,%esi
+      9e:	mov    0x0(%rip),%rcx        # a5 <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]+0x15>
+      a5:	mov    $0x0,%edi
+      aa:	call   af <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]+0x1f>
+      af:	mov    0x0(%rip),%rdi        # b6 <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]+0x26>
+      b6:	call   bb <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]+0x2b>
+      bb:	call   c0 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()>
+
+00000000000000c0 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()>:
+      c0:	sub    $0xc8,%rsp
+      c7:	mov    0x110(%rdi),%rcx
+      ce:	mov    %r13,0xc0(%rsp)
+      d6:	mov    0xdc(%rdi),%r13
+      dd:	mov    0x20(%rcx),%rsi
+      e1:	test   %rsi,%rsi
+      e4:	je     2b1 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x1f1>
+      ea:	mov    %rbp,0xb0(%rsp)
+      f2:	mov    %r12,0xb8(%rsp)
+      fa:	mov    %rbx,0xa8(%rsp)
+     102:	mov    %rdi,%rbx
+     105:	mov    0x18(%rcx),%rax
+     109:	sub    $0x1,%rsi
+     10d:	mov    0x20(%rbx),%rdi
+     111:	mov    %rax,%rdx
+     114:	add    $0x1,%rax
+     118:	shl    $0x4,%rdx
+     11c:	add    (%rcx),%rdx
+     11f:	mov    0x8(%rdx),%rbp
+     123:	mov    (%rdx),%r12d
+     126:	xor    %edx,%edx
+     128:	mov    %rsi,0x20(%rcx)
+     12c:	divq   0x28(%rcx)
+     130:	mov    %rdx,0x18(%rcx)
+     134:	call   139 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x79>
+     139:	mov    %r12d,0x8(%rsp)
+     13e:	sub    $0x20,%rsp
+     142:	mov    0x20(%rbx),%rdi
+     146:	mov    %rax,0x20(%rsp)
+     14b:	mov    %rbp,0x30(%rsp)
+     150:	movdqa 0x20(%rsp),%xmm0
+     156:	mov    %rbp,0x10(%rsp)
+     15b:	movups %xmm0,(%rsp)
+     15f:	call   164 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0xa4>
+     164:	add    $0x20,%rsp
+     168:	test   %al,%al
+     16a:	jne    285 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x1c5>
+     170:	movb   $0x0,0x20(%rsp)
+     175:	mov    %r13,%rax
+     178:	pxor   %xmm1,%xmm1
+     17c:	mov    0x20(%rbx),%rdi
+     180:	sar    $0x20,%rax
+     184:	mov    %r13b,0x38(%rsp)
+     189:	lea    0x40(%rsp),%rsi
+     18e:	sub    $0x20,%rsp
+     192:	movq   $0x0,0x48(%rsp)
+     19b:	movdqa 0x40(%rsp),%xmm0
+     1a1:	movaps %xmm1,0x60(%rsp)
+     1a6:	movq   $0x0,0x50(%rsp)
+     1af:	mov    %eax,0x5c(%rsp)
+     1b3:	movups %xmm0,0x68(%rsp)
+     1b8:	movdqa 0x50(%rsp),%xmm0
+     1be:	movaps %xmm1,0x80(%rsp)
+     1c6:	movaps %xmm1,0x90(%rsp)
+     1ce:	movaps %xmm1,0xa0(%rsp)
+     1d6:	movq   $0x0,0xb0(%rsp)
+     1e2:	movb   $0x1,0x90(%rsp)
+     1ea:	movups %xmm0,0x78(%rsp)
+     1ef:	mov    0x30(%rsp),%rax
+     1f4:	movdqa 0x20(%rsp),%xmm0
+     1fa:	mov    %rax,0x10(%rsp)
+     1ff:	movups %xmm0,(%rsp)
+     203:	call   208 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x148>
+     208:	add    $0x20,%rsp
+     20c:	test   %al,%al
+     20e:	jne    2c1 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x201>
+     214:	sub    $0x20,%rsp
+     218:	mov    0x20(%rbx),%rdi
+     21c:	mov    0x30(%rsp),%rax
+     221:	movdqa 0x20(%rsp),%xmm0
+     227:	mov    %rax,0x10(%rsp)
+     22c:	movups %xmm0,(%rsp)
+     230:	call   235 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x175>
+     235:	add    $0x20,%rsp
+     239:	cmp    $0x1,%al
+     23b:	jne    2c1 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x201>
+     241:	mov    0x118(%rbx),%rcx
+     248:	mov    0x20(%rcx),%rsi
+     24c:	mov    0x28(%rcx),%rdi
+     250:	cmp    %rdi,%rsi
+     253:	jae    2c6 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x206>
+     255:	mov    0x18(%rcx),%rax
+     259:	xor    %edx,%edx
+     25b:	add    %rsi,%rax
+     25e:	add    $0x1,%rsi
+     262:	div    %rdi
+     265:	mov    0x8(%rbx),%rax
+     269:	shl    $0x4,%rdx
+     26d:	add    (%rcx),%rdx
+     270:	mov    %r12d,(%rdx)
+     273:	mov    %rbp,0x8(%rdx)
+     277:	mov    %rsi,0x20(%rcx)
+     27b:	test   %rax,%rax
+     27e:	je     285 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x1c5>
+     280:	addq   $0x1,0x30(%rax)
+     285:	mov    0x110(%rbx),%rcx
+     28c:	mov    0x20(%rcx),%rsi
+     290:	test   %rsi,%rsi
+     293:	jne    105 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x45>
+     299:	mov    0xa8(%rsp),%rbx
+     2a1:	mov    0xb0(%rsp),%rbp
+     2a9:	mov    0xb8(%rsp),%r12
+     2b1:	mov    0xc0(%rsp),%r13
+     2b9:	add    $0xc8,%rsp
+     2c0:	ret
+     2c1:	call   2c6 <sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()+0x206>
+     2c6:	call   30 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]>
+     2cb:	nop
+     2cc:	nopl   0x0(%rax)
+
+00000000000002d0 <sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const>:
+     2d0:	mov    0x110(%rdi),%rax
+     2d7:	cmpq   $0x0,0x20(%rax)
+     2dc:	jne    368 <sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const+0x98>
+     2e2:	mov    0xd0(%rdi),%rax
+     2e9:	test   %rax,%rax
+     2ec:	je     361 <sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const+0x91>
+     2ee:	mov    0x20(%rax),%rdi
+     2f2:	test   %rdi,%rdi
+     2f5:	je     361 <sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const+0x91>
+     2f7:	mov    0x18(%rax),%rcx
+     2fb:	mov    0x28(%rax),%rsi
+     2ff:	mov    (%rax),%r8
+     302:	add    %rcx,%rdi
+     305:	nopl   0x0(%rax)
+     309:	data16 cs nopw 0x0(%rax,%rax,1)
+     314:	data16 cs nopw 0x0(%rax,%rax,1)
+     31f:	data16 cs nopw 0x0(%rax,%rax,1)
+     32a:	data16 cs nopw 0x0(%rax,%rax,1)
+     335:	data16 cs nopw 0x0(%rax,%rax,1)
+     340:	mov    %rcx,%rax
+     343:	xor    %edx,%edx
+     345:	div    %rsi
+     348:	lea    (%rdx,%rdx,2),%rax
+     34c:	shl    $0x4,%rax
+     350:	cmpb   $0x0,0x28(%r8,%rax,1)
+     356:	je     368 <sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const+0x98>
+     358:	add    $0x1,%rcx
+     35c:	cmp    %rdi,%rcx
+     35f:	jne    340 <sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const+0x70>
+     361:	xor    %eax,%eax
+     363:	ret
+     364:	nopl   0x0(%rax)
+     368:	mov    $0x1,%eax
+     36d:	ret
+     36e:	xchg   %ax,%ax
+
+0000000000000370 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)>:
+     370:	mov    0x78(%rdi),%rax
+     374:	mov    %rcx,%r9
+     377:	mov    0x70(%rdi),%rcx
+     37b:	mov    %rdx,%r10
+     37e:	sub    %rcx,%rax
+     381:	mov    %rax,%r8
+     384:	sar    $0x5,%r8
+     388:	je     3f0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x80>
+     38a:	lea    -0x1(%r8),%rdx
+     38e:	add    %rcx,%rax
+     391:	jmp    3ad <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x3d>
+     393:	xchg   %ax,%ax
+     395:	data16 cs nopw 0x0(%rax,%rax,1)
+     3a0:	sub    $0x20,%rax
+     3a4:	test   %rdx,%rdx
+     3a7:	je     3f0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x80>
+     3a9:	sub    $0x1,%rdx
+     3ad:	cmpb   $0x0,-0x5(%rax)
+     3b1:	je     3a0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x30>
+     3b3:	cmp    -0x20(%rax),%rsi
+     3b7:	jne    3a0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x30>
+     3b9:	cmp    %rdx,%r8
+     3bc:	je     3f0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x80>
+     3be:	shl    $0x5,%rdx
+     3c2:	lea    (%rcx,%rdx,1),%rax
+     3c6:	cmp    %r10d,0x8(%rax)
+     3ca:	jne    3f0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x80>
+     3cc:	cmp    %r9,0x10(%rax)
+     3d0:	jne    3f0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x80>
+     3d2:	cmpb   $0x1,0x18(%rax)
+     3d6:	jne    3f0 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x80>
+     3d8:	movb   $0x2,0x18(%rax)
+     3dc:	lock addq $0x1,0x130(%rdi)
+     3e5:	ret
+     3e6:	cs nopw 0x0(%rax,%rax,1)
+     3f0:	sub    $0x8,%rsp
+     3f4:	mov    $0x72,%edx
+     3f9:	mov    $0x1,%esi
+     3fe:	mov    0x0(%rip),%rcx        # 405 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x95>
+     405:	mov    $0x0,%edi
+     40a:	call   40f <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0x9f>
+     40f:	mov    0x0(%rip),%rdi        # 416 <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0xa6>
+     416:	call   41b <sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)+0xab>
+     41b:	call   420 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]>
+
+0000000000000420 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]>:
+     420:	sub    $0x48,%rsp
+     424:	mov    0xc8(%rdi),%rdx
+     42b:	mov    %r12,0x40(%rsp)
+     430:	mov    %rdi,%r12
+     433:	mov    (%rdx),%rcx
+     436:	testb  $0x2,0xc0(%rdx)
+     43d:	mov    0x44(%rdx),%eax
+     440:	mov    (%rcx),%ecx
+     442:	jne    550 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x130>
+     448:	sub    %ecx,%eax
+     44a:	cmp    %eax,0x5c(%rdx)
+     44d:	jb     5bc <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x19c>
+     453:	mov    0xd0(%r12),%rcx
+     45b:	mov    0x20(%rcx),%rsi
+     45f:	cmp    %rax,%rsi
+     462:	jb     586 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x166>
+     468:	mov    %rbp,0x38(%rsp)
+     46d:	mov    %rsi,%rbp
+     470:	sub    %rax,%rbp
+     473:	je     535 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x115>
+     479:	mov    %rbx,0x30(%rsp)
+     47e:	xor    %ebx,%ebx
+     480:	jmp    499 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x79>
+     482:	nopw   0x0(%rax,%rax,1)
+     488:	add    $0x1,%rbx
+     48c:	cmp    %rbx,%rbp
+     48f:	je     530 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x110>
+     495:	mov    0x20(%rcx),%rsi
+     499:	test   %rsi,%rsi
+     49c:	je     55a <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x13a>
+     4a2:	mov    0x18(%rcx),%rax
+     4a6:	lea    (%rax,%rax,2),%rdx
+     4aa:	shl    $0x4,%rdx
+     4ae:	add    (%rcx),%rdx
+     4b1:	movdqu (%rdx),%xmm0
+     4b5:	movq   %xmm0,%rdi
+     4ba:	movaps %xmm0,(%rsp)
+     4be:	movdqu 0x10(%rdx),%xmm0
+     4c3:	movaps %xmm0,0x10(%rsp)
+     4c8:	movdqu 0x20(%rdx),%xmm0
+     4cd:	mov    0x40(%rcx),%rdx
+     4d1:	add    $0x1,%rdx
+     4d5:	movaps %xmm0,0x20(%rsp)
+     4da:	cmp    %rdx,%rdi
+     4dd:	jne    555 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x135>
+     4df:	add    $0x1,%rax
+     4e3:	xor    %edx,%edx
+     4e5:	sub    $0x1,%rsi
+     4e9:	mov    %rdi,0x40(%rcx)
+     4ed:	divq   0x28(%rcx)
+     4f1:	mov    %rsi,0x20(%rcx)
+     4f5:	mov    %rdx,0x18(%rcx)
+     4f9:	cmpb   $0x1,0xc(%rsp)
+     4fe:	jne    488 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x68>
+     500:	mov    0x18(%rsp),%edx
+     504:	mov    0x20(%rsp),%rcx
+     509:	mov    %r12,%rdi
+     50c:	add    $0x1,%rbx
+     510:	mov    0x10(%rsp),%rsi
+     515:	call   51a <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0xfa>
+     51a:	cmp    %rbx,%rbp
+     51d:	je     530 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x110>
+     51f:	mov    0xd0(%r12),%rcx
+     527:	jmp    495 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x75>
+     52c:	nopl   0x0(%rax)
+     530:	mov    0x30(%rsp),%rbx
+     535:	mov    %rbp,%rax
+     538:	mov    0x40(%rsp),%r12
+     53d:	mov    0x38(%rsp),%rbp
+     542:	add    $0x48,%rsp
+     546:	ret
+     547:	nopw   0x0(%rax,%rax,1)
+     550:	jmp    448 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x28>
+     555:	call   90 <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]>
+     55a:	mov    $0x53,%edx
+     55f:	mov    $0x1,%esi
+     564:	mov    $0x0,%edi
+     569:	mov    0x0(%rip),%rcx        # 570 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x150>
+     570:	call   575 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x155>
+     575:	mov    0x0(%rip),%rdi        # 57c <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x15c>
+     57c:	call   581 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x161>
+     581:	call   586 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x166>
+     586:	mov    $0x82,%edx
+     58b:	mov    $0x1,%esi
+     590:	mov    $0x0,%edi
+     595:	mov    0x0(%rip),%rcx        # 59c <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x17c>
+     59c:	mov    %rbx,0x30(%rsp)
+     5a1:	mov    %rbp,0x38(%rsp)
+     5a6:	call   5ab <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x18b>
+     5ab:	mov    0x0(%rip),%rdi        # 5b2 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x192>
+     5b2:	call   5b7 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x197>
+     5b7:	call   5bc <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x19c>
+     5bc:	mov    $0x74,%edx
+     5c1:	mov    $0x1,%esi
+     5c6:	mov    $0x0,%edi
+     5cb:	mov    0x0(%rip),%rcx        # 5d2 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x1b2>
+     5d2:	mov    %rbx,0x30(%rsp)
+     5d7:	mov    %rbp,0x38(%rsp)
+     5dc:	call   5e1 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x1c1>
+     5e1:	mov    0x0(%rip),%rdi        # 5e8 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x1c8>
+     5e8:	call   5ed <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x1cd>
+     5ed:	call   5f2 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]+0x1d2>
+     5f2:	nopl   (%rax)
+     5f5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000000600 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_()>:
+     600:	mov    0xd0(%rdi),%rax
+     607:	test   %rax,%rax
+     60a:	je     613 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_()+0x13>
+     60c:	cmpq   $0x0,0x20(%rax)
+     611:	jne    620 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_()+0x20>
+     613:	xor    %eax,%eax
+     615:	ret
+     616:	cs nopw 0x0(%rax,%rax,1)
+     620:	jmp    420 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]>
+     625:	nop
+     626:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000000630 <sluice::async::UringAsyncBackend::allocate_cookie_()>:
+     630:	mov    0xb8(%rdi),%rax
+     637:	test   %rax,%rax
+     63a:	jle    648 <sluice::async::UringAsyncBackend::allocate_cookie_()+0x18>
+     63c:	lea    0x1(%rax),%rdx
+     640:	mov    %rdx,0xb8(%rdi)
+     647:	ret
+     648:	push   %rax
+     649:	call   0 <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]>
+     64e:	xchg   %ax,%ax
+
+0000000000000650 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const>:
+     650:	mov    %rdi,%rcx
+     653:	mov    %rsi,%rdi
+     656:	mov    %rdx,%rsi
+     659:	mov    0x70(%rcx),%rax
+     65d:	mov    0x78(%rcx),%rcx
+     661:	sub    %rax,%rcx
+     664:	je     6a4 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x54>
+     666:	sar    $0x5,%rcx
+     66a:	add    $0x8,%rax
+     66e:	xor    %edx,%edx
+     670:	mov    %rcx,%r8
+     673:	jmp    68d <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x3d>
+     675:	data16 cs nopw 0x0(%rax,%rax,1)
+     680:	add    $0x1,%rdx
+     684:	add    $0x20,%rax
+     688:	cmp    %rcx,%rdx
+     68b:	jae    6a0 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x50>
+     68d:	cmpb   $0x0,0x13(%rax)
+     691:	je     680 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x30>
+     693:	cmp    %edi,(%rax)
+     695:	jne    680 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x30>
+     697:	cmp    %rsi,0x8(%rax)
+     69b:	jne    680 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x30>
+     69d:	mov    %rdx,%r8
+     6a0:	mov    %r8,%rax
+     6a3:	ret
+     6a4:	xor    %r8d,%r8d
+     6a7:	jmp    6a0 <sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const+0x50>
+     6a9:	nop
+     6aa:	nopw   0x0(%rax,%rax,1)
+
+00000000000006b0 <sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const>:
+     6b0:	mov    0x70(%rdi),%rax
+     6b4:	mov    0x78(%rdi),%rcx
+     6b8:	sub    %rax,%rcx
+     6bb:	mov    %rcx,%rdi
+     6be:	sar    $0x5,%rdi
+     6c2:	je     700 <sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const+0x50>
+     6c4:	lea    -0x1(%rdi),%rdx
+     6c8:	add    %rcx,%rax
+     6cb:	jmp    6ed <sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const+0x3d>
+     6cd:	nopl   0x0(%rax,%rax,1)
+     6d5:	data16 cs nopw 0x0(%rax,%rax,1)
+     6e0:	sub    $0x20,%rax
+     6e4:	test   %rdx,%rdx
+     6e7:	je     700 <sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const+0x50>
+     6e9:	sub    $0x1,%rdx
+     6ed:	cmpb   $0x0,-0x5(%rax)
+     6f1:	je     6e0 <sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const+0x30>
+     6f3:	cmp    %rsi,-0x20(%rax)
+     6f7:	jne    6e0 <sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const+0x30>
+     6f9:	mov    %rdx,%rax
+     6fc:	ret
+     6fd:	nopl   (%rax)
+     700:	mov    %rdi,%rdx
+     703:	mov    %rdx,%rax
+     706:	ret
+     707:	nop
+     708:	nopl   0x0(%rax,%rax,1)
+
+0000000000000710 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)>:
+     710:	sub    $0x38,%rsp
+     714:	mov    0x70(%rdi),%rax
+     718:	mov    0x78(%rdi),%rcx
+     71c:	sub    %rax,%rcx
+     71f:	sar    $0x5,%rcx
+     723:	cmp    %rcx,%rsi
+     726:	jae    8d5 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1c5>
+     72c:	mov    %rsi,%rcx
+     72f:	shl    $0x5,%rcx
+     733:	add    %rcx,%rax
+     736:	cmpb   $0x0,0x1b(%rax)
+     73a:	je     8d5 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1c5>
+     740:	cmpb   $0x0,0x18(%rax)
+     744:	jne    906 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1f6>
+     74a:	mov    %rdi,%rdx
+     74d:	cmpb   $0x0,0x19(%rax)
+     751:	jne    7a0 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x90>
+     753:	mov    0x90(%rdx),%rcx
+     75a:	mov    0x98(%rdx),%r11
+     761:	movq   $0x0,(%rax)
+     768:	movl   $0x0,0x8(%rax)
+     76f:	movq   $0x0,0x10(%rax)
+     777:	movl   $0x0,0x18(%rax)
+     77e:	cmp    %r11,%rcx
+     781:	je     7b0 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0xa0>
+     783:	mov    %esi,(%rcx)
+     785:	add    $0x4,%rcx
+     789:	mov    %rcx,0x90(%rdx)
+     790:	lock subq $0x1,0x128(%rdx)
+     799:	add    $0x38,%rsp
+     79d:	ret
+     79e:	xchg   %ax,%ax
+     7a0:	subq   $0x1,0x68(%rdi)
+     7a5:	jmp    753 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x43>
+     7a7:	nopw   0x0(%rax,%rax,1)
+     7b0:	mov    0x88(%rdx),%r9
+     7b7:	mov    %rcx,%r8
+     7ba:	mov    %rbx,0x30(%rsp)
+     7bf:	movabs $0x1fffffffffffffff,%rax
+     7c9:	sub    %r9,%r8
+     7cc:	mov    %r8,%rdi
+     7cf:	sar    $0x2,%rdi
+     7d3:	cmp    %rax,%rdi
+     7d6:	je     7dc <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0xcc>
+     7dc:	test   %rdi,%rdi
+     7df:	mov    $0x1,%eax
+     7e4:	mov    %rsi,0x28(%rsp)
+     7e9:	cmovne %rdi,%rax
+     7ed:	mov    %rdx,0x20(%rsp)
+     7f2:	mov    %r8,0x18(%rsp)
+     7f7:	add    %rdi,%rax
+     7fa:	mov    %r9,0x10(%rsp)
+     7ff:	movabs $0x1fffffffffffffff,%rdi
+     809:	cmp    %rdi,%rax
+     80c:	mov    %r11,0x8(%rsp)
+     811:	cmova  %rdi,%rax
+     815:	mov    %rcx,(%rsp)
+     819:	lea    0x0(,%rax,4),%rdi
+     821:	lea    0x0(,%rax,4),%rbx
+     829:	call   82e <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x11e>
+     82e:	mov    (%rsp),%rcx
+     832:	mov    0x10(%rsp),%r9
+     837:	mov    0x18(%rsp),%r8
+     83c:	mov    0x28(%rsp),%rsi
+     841:	mov    %rax,%r10
+     844:	cmp    %r9,%rcx
+     847:	mov    0x8(%rsp),%r11
+     84c:	mov    0x20(%rsp),%rdx
+     851:	mov    %esi,(%rax,%r8,1)
+     855:	je     8d0 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1c0>
+     857:	mov    %r9,%rax
+     85a:	mov    %r10,%rdi
+     85d:	nopl   (%rax)
+     860:	mov    (%rax),%r8d
+     863:	add    $0x4,%rax
+     867:	add    $0x4,%rdi
+     86b:	mov    %r8d,-0x4(%rdi)
+     86f:	cmp    %rax,%rcx
+     872:	jne    860 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x150>
+     874:	sub    %r9,%rcx
+     877:	add    %r10,%rcx
+     87a:	add    $0x4,%rcx
+     87e:	test   %r9,%r9
+     881:	je     8ad <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x19d>
+     883:	mov    %r11,%rsi
+     886:	mov    %r9,%rdi
+     889:	mov    %r10,0x10(%rsp)
+     88e:	sub    %r9,%rsi
+     891:	mov    %rdx,0x8(%rsp)
+     896:	mov    %rcx,(%rsp)
+     89a:	call   89f <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x18f>
+     89f:	mov    0x10(%rsp),%r10
+     8a4:	mov    0x8(%rsp),%rdx
+     8a9:	mov    (%rsp),%rcx
+     8ad:	mov    %r10,0x88(%rdx)
+     8b4:	add    %rbx,%r10
+     8b7:	mov    0x30(%rsp),%rbx
+     8bc:	mov    %rcx,0x90(%rdx)
+     8c3:	mov    %r10,0x98(%rdx)
+     8ca:	jmp    790 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x80>
+     8cf:	nop
+     8d0:	mov    %rax,%rcx
+     8d3:	jmp    87a <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x16a>
+     8d5:	mov    $0x52,%edx
+     8da:	mov    $0x1,%esi
+     8df:	mov    $0x0,%edi
+     8e4:	mov    0x0(%rip),%rcx        # 8eb <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1db>
+     8eb:	mov    %rbx,0x30(%rsp)
+     8f0:	call   8f5 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1e5>
+     8f5:	mov    0x0(%rip),%rdi        # 8fc <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1ec>
+     8fc:	call   901 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1f1>
+     901:	call   906 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x1f6>
+     906:	mov    $0x65,%edx
+     90b:	mov    $0x1,%esi
+     910:	mov    $0x0,%edi
+     915:	mov    0x0(%rip),%rcx        # 91c <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x20c>
+     91c:	mov    %rbx,0x30(%rsp)
+     921:	call   926 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x216>
+     926:	mov    0x0(%rip),%rdi        # 92d <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x21d>
+     92d:	call   932 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x222>
+     932:	call   937 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)+0x227>
+     937:	nop
+     938:	nopl   0x0(%rax,%rax,1)
+
+0000000000000940 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)>:
+     940:	cmpb   $0x0,0xe4(%rdi)
+     947:	je     94a <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0xa>
+     949:	ret
+     94a:	sub    $0x158,%rsp
+     951:	mov    %rsi,%rax
+     954:	mov    %r13,0x140(%rsp)
+     95c:	shr    $0x20,%rax
+     960:	mov    %rsi,%r13
+     963:	mov    %r15,0x150(%rsp)
+     96b:	mov    %rdi,%r15
+     96e:	mov    %rbx,0x128(%rsp)
+     976:	mov    %rbp,0x130(%rsp)
+     97e:	mov    %rsi,0xdc(%rdi)
+     985:	movb   $0x1,0xe4(%rdi)
+     98c:	mov    0x20(%rdi),%rdi
+     990:	mov    %eax,0x8(%rsp)
+     994:	call   999 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x59>
+     999:	mov    0x110(%r15),%rcx
+     9a0:	mov    0x20(%rcx),%rsi
+     9a4:	test   %rsi,%rsi
+     9a7:	je     b45 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x205>
+     9ad:	pxor   %xmm4,%xmm4
+     9b1:	movaps %xmm4,0x10(%rsp)
+     9b6:	mov    0x18(%rcx),%rax
+     9ba:	sub    $0x1,%rsi
+     9be:	mov    0x20(%r15),%rdi
+     9c2:	mov    %rax,%rdx
+     9c5:	add    $0x1,%rax
+     9c9:	shl    $0x4,%rdx
+     9cd:	add    (%rcx),%rdx
+     9d0:	mov    0x8(%rdx),%rbx
+     9d4:	mov    (%rdx),%ebp
+     9d6:	xor    %edx,%edx
+     9d8:	mov    %rsi,0x20(%rcx)
+     9dc:	divq   0x28(%rcx)
+     9e0:	mov    %rdx,0x18(%rcx)
+     9e4:	call   9e9 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0xa9>
+     9e9:	movdqa 0x10(%rsp),%xmm2
+     9ef:	mov    %ebp,0x28(%rsp)
+     9f3:	sub    $0x20,%rsp
+     9f7:	mov    %rax,0x40(%rsp)
+     9fc:	mov    0x28(%rsp),%eax
+     a00:	movb   $0x0,0xe0(%rsp)
+     a08:	mov    0x20(%r15),%rdi
+     a0c:	movq   $0x0,0xe8(%rsp)
+     a18:	movdqa 0xe0(%rsp),%xmm0
+     a21:	movaps %xmm2,0x80(%rsp)
+     a29:	movq   $0x0,0xf0(%rsp)
+     a35:	mov    %r13b,0xf8(%rsp)
+     a3d:	mov    %eax,0xfc(%rsp)
+     a44:	movups %xmm0,0x88(%rsp)
+     a4c:	movdqa 0xf0(%rsp),%xmm0
+     a55:	movaps %xmm2,0xa0(%rsp)
+     a5d:	movaps %xmm2,0xb0(%rsp)
+     a65:	mov    %rbx,0x50(%rsp)
+     a6a:	movaps %xmm2,0xc0(%rsp)
+     a72:	movq   $0x0,0xd0(%rsp)
+     a7e:	movb   $0x1,0xb0(%rsp)
+     a86:	movups %xmm0,0x98(%rsp)
+     a8e:	movdqa 0x40(%rsp),%xmm0
+     a94:	lea    0x80(%rsp),%rsi
+     a9c:	mov    %rbx,0x10(%rsp)
+     aa1:	movups %xmm0,(%rsp)
+     aa5:	call   aaa <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x16a>
+     aaa:	add    $0x20,%rsp
+     aae:	test   %al,%al
+     ab0:	jne    ff5 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6b5>
+     ab6:	sub    $0x20,%rsp
+     aba:	mov    0x20(%r15),%rdi
+     abe:	mov    0x50(%rsp),%rax
+     ac3:	movdqa 0x40(%rsp),%xmm0
+     ac9:	mov    %rax,0x10(%rsp)
+     ace:	movups %xmm0,(%rsp)
+     ad2:	call   ad7 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x197>
+     ad7:	add    $0x20,%rsp
+     adb:	cmp    $0x1,%al
+     add:	jne    1031 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6f1>
+     ae3:	mov    0x118(%r15),%rcx
+     aea:	mov    0x20(%rcx),%rsi
+     aee:	mov    0x28(%rcx),%rdi
+     af2:	cmp    %rdi,%rsi
+     af5:	jae    1072 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x732>
+     afb:	mov    0x18(%rcx),%rax
+     aff:	xor    %edx,%edx
+     b01:	add    %rsi,%rax
+     b04:	add    $0x1,%rsi
+     b08:	div    %rdi
+     b0b:	mov    %rdx,%rax
+     b0e:	shl    $0x4,%rax
+     b12:	add    (%rcx),%rax
+     b15:	mov    %ebp,(%rax)
+     b17:	mov    %rbx,0x8(%rax)
+     b1b:	mov    0x8(%r15),%rax
+     b1f:	mov    %rsi,0x20(%rcx)
+     b23:	test   %rax,%rax
+     b26:	je     f5a <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x61a>
+     b2c:	mov    0x110(%r15),%rcx
+     b33:	addq   $0x1,0x30(%rax)
+     b38:	mov    0x20(%rcx),%rsi
+     b3c:	test   %rsi,%rsi
+     b3f:	jne    9b6 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x76>
+     b45:	mov    0xd0(%r15),%rcx
+     b4c:	cmpq   $0x0,0x20(%rcx)
+     b51:	je     c8b <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x34b>
+     b57:	mov    %r12,0x138(%rsp)
+     b5f:	pxor   %xmm3,%xmm3
+     b63:	mov    %r14,0x148(%rsp)
+     b6b:	xor    %r14d,%r14d
+     b6e:	movaps %xmm3,0x10(%rsp)
+     b73:	xchg   %ax,%ax
+     b75:	data16 cs nopw 0x0(%rax,%rax,1)
+     b80:	mov    0x18(%rcx),%rax
+     b84:	xor    %edx,%edx
+     b86:	add    %r14,%rax
+     b89:	divq   0x28(%rcx)
+     b8d:	lea    (%rdx,%rdx,2),%r12
+     b91:	shl    $0x4,%r12
+     b95:	add    (%rcx),%r12
+     b98:	cmpb   $0x0,0x28(%r12)
+     b9e:	jne    1046 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x706>
+     ba4:	mov    0x70(%r15),%rcx
+     ba8:	mov    0x78(%r15),%rax
+     bac:	sub    %rcx,%rax
+     baf:	mov    %rax,%rsi
+     bb2:	sar    $0x5,%rsi
+     bb6:	je     f90 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x650>
+     bbc:	mov    0x10(%r12),%rdx
+     bc1:	lea    -0x1(%rsi),%rbp
+     bc5:	lea    -0x20(%rcx,%rax,1),%rbx
+     bca:	jmp    bf1 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x2b1>
+     bcc:	nopw   0x0(%rax,%rax,1)
+     bd5:	data16 cs nopw 0x0(%rax,%rax,1)
+     be0:	sub    $0x20,%rbx
+     be4:	test   %rbp,%rbp
+     be7:	je     f90 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x650>
+     bed:	sub    $0x1,%rbp
+     bf1:	cmpb   $0x0,0x1b(%rbx)
+     bf5:	je     be0 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x2a0>
+     bf7:	cmp    (%rbx),%rdx
+     bfa:	jne    be0 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x2a0>
+     bfc:	cmp    %rbp,%rsi
+     bff:	je     f90 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x650>
+     c05:	mov    0x18(%r12),%eax
+     c0a:	cmp    %eax,0x8(%rbx)
+     c0d:	jne    f90 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x650>
+     c13:	mov    0x20(%r12),%rax
+     c18:	cmp    %rax,0x10(%rbx)
+     c1c:	jne    f90 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x650>
+     c22:	mov    0x20(%r15),%rdi
+     c26:	call   c2b <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x2eb>
+     c2b:	mov    %rax,0x40(%rsp)
+     c30:	mov    0x8(%rbx),%eax
+     c33:	mov    %eax,0x48(%rsp)
+     c37:	mov    0x10(%rbx),%rax
+     c3b:	mov    %rax,0x50(%rsp)
+     c40:	cmpb   $0x0,0xc(%r12)
+     c46:	jne    d60 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x420>
+     c4c:	cmpb   $0x0,0x1a(%rbx)
+     c50:	je     d90 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x450>
+     c56:	cmpb   $0x0,0x18(%rbx)
+     c5a:	je     d80 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x440>
+     c60:	mov    0xd0(%r15),%rcx
+     c67:	movb   $0x1,0x28(%r12)
+     c6d:	add    $0x1,%r14
+     c71:	cmp    0x20(%rcx),%r14
+     c75:	jb     b80 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x240>
+     c7b:	mov    0x138(%rsp),%r12
+     c83:	mov    0x148(%rsp),%r14
+     c8b:	mov    0x18(%r15),%rbx
+     c8f:	test   %rbx,%rbx
+     c92:	je     f32 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x5f2>
+     c98:	mov    %rbx,%rdi
+     c9b:	call   ca0 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x360>
+     ca0:	test   %eax,%eax
+     ca2:	jne    ca8 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x368>
+     ca8:	mov    0x28(%rbx),%rax
+     cac:	cmp    $0xffffffffffffffff,%rax
+     cb0:	je     f73 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x633>
+     cb6:	add    $0x1,%rax
+     cba:	mov    %rax,0x28(%rbx)
+     cbe:	mov    0x6c(%rbx),%eax
+     cc1:	test   %eax,%eax
+     cc3:	js     d29 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x3e9>
+     cc5:	cmpb   $0x0,0x70(%rbx)
+     cc9:	jne    d29 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x3e9>
+     ccb:	movq   $0x1,0xc0(%rsp)
+     cd7:	call   cdc <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x39c>
+     cdc:	lea    0xc0(%rsp),%rsi
+     ce4:	mov    %rax,%rbp
+     ce7:	movl   $0x0,0x0(%rbp)
+     cee:	mov    0x6c(%rbx),%edi
+     cf1:	mov    $0x8,%edx
+     cf6:	mov    %rsi,0x8(%rsp)
+     cfb:	call   d00 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x3c0>
+     d00:	cmp    $0x8,%rax
+     d04:	je     d25 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x3e5>
+     d06:	mov    0x0(%rbp),%ecx
+     d09:	test   %rax,%rax
+     d0c:	jns    fbc <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x67c>
+     d12:	cmp    $0x4,%ecx
+     d15:	mov    0x8(%rsp),%rsi
+     d1a:	je     ce7 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x3a7>
+     d1c:	cmp    $0xb,%ecx
+     d1f:	jne    fbc <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x67c>
+     d25:	movb   $0x1,0x70(%rbx)
+     d29:	mov    0x130(%rsp),%rbp
+     d31:	mov    0x140(%rsp),%r13
+     d39:	mov    %rbx,%rdi
+     d3c:	mov    0x150(%rsp),%r15
+     d44:	mov    0x128(%rsp),%rbx
+     d4c:	add    $0x158,%rsp
+     d53:	jmp    d58 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x418>
+     d58:	nopl   0x0(%rax,%rax,1)
+     d60:	movzbl 0x18(%rbx),%eax
+     d64:	cmp    $0x2,%al
+     d66:	je     f20 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x5e0>
+     d6c:	test   %al,%al
+     d6e:	jne    ed8 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x598>
+     d74:	cmpb   $0x0,0x1a(%rbx)
+     d78:	je     c60 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x320>
+     d7e:	xchg   %ax,%ax
+     d80:	mov    %rbp,%rsi
+     d83:	mov    %r15,%rdi
+     d86:	call   d8b <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x44b>
+     d8b:	jmp    c60 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x320>
+     d90:	movdqa 0x10(%rsp),%xmm1
+     d96:	mov    0x8(%rsp),%edi
+     d9a:	movb   $0x0,0x60(%rsp)
+     d9f:	lea    0xc0(%rsp),%rsi
+     da7:	movq   $0x0,0x68(%rsp)
+     db0:	sub    $0x20,%rsp
+     db4:	movdqa 0x80(%rsp),%xmm0
+     dbd:	mov    %edi,0x9c(%rsp)
+     dc4:	mov    0x20(%r15),%rdi
+     dc8:	movaps %xmm1,0xe0(%rsp)
+     dd0:	movq   $0x0,0x90(%rsp)
+     ddc:	mov    %r13b,0x98(%rsp)
+     de4:	movups %xmm0,0xe8(%rsp)
+     dec:	movdqa 0x90(%rsp),%xmm0
+     df5:	movaps %xmm1,0x100(%rsp)
+     dfd:	movaps %xmm1,0x110(%rsp)
+     e05:	movaps %xmm1,0x120(%rsp)
+     e0d:	movq   $0x0,0x130(%rsp)
+     e19:	movb   $0x1,0x110(%rsp)
+     e21:	movups %xmm0,0xf8(%rsp)
+     e29:	movdqa 0x60(%rsp),%xmm0
+     e2f:	mov    %rax,0x10(%rsp)
+     e34:	movups %xmm0,(%rsp)
+     e38:	call   e3d <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x4fd>
+     e3d:	add    $0x20,%rsp
+     e41:	test   %al,%al
+     e43:	jne    1087 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x747>
+     e49:	sub    $0x20,%rsp
+     e4d:	mov    0x20(%r15),%rdi
+     e51:	mov    0x70(%rsp),%rax
+     e56:	movdqa 0x60(%rsp),%xmm0
+     e5c:	mov    %rax,0x10(%rsp)
+     e61:	movups %xmm0,(%rsp)
+     e65:	call   e6a <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x52a>
+     e6a:	add    $0x20,%rsp
+     e6e:	cmp    $0x1,%al
+     e70:	jne    1041 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x701>
+     e76:	mov    0x118(%r15),%rcx
+     e7d:	movb   $0x1,0x1a(%rbx)
+     e81:	mov    0x20(%rcx),%rsi
+     e85:	mov    0x28(%rcx),%r10
+     e89:	cmp    %r10,%rsi
+     e8c:	jae    1082 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x742>
+     e92:	mov    0x18(%rcx),%rax
+     e96:	xor    %edx,%edx
+     e98:	mov    0x8(%rbx),%r9d
+     e9c:	mov    0x10(%rbx),%rdi
+     ea0:	add    %rsi,%rax
+     ea3:	add    $0x1,%rsi
+     ea7:	div    %r10
+     eaa:	mov    0x8(%r15),%rax
+     eae:	shl    $0x4,%rdx
+     eb2:	add    (%rcx),%rdx
+     eb5:	mov    %r9d,(%rdx)
+     eb8:	mov    %rdi,0x8(%rdx)
+     ebc:	mov    %rsi,0x20(%rcx)
+     ec0:	test   %rax,%rax
+     ec3:	je     c56 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x316>
+     ec9:	addq   $0x1,0x30(%rax)
+     ece:	jmp    c56 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x316>
+     ed3:	nopl   0x0(%rax,%rax,1)
+     ed8:	sub    $0x20,%rsp
+     edc:	movb   $0x0,0x18(%rbx)
+     ee0:	mov    0x20(%r15),%rdi
+     ee4:	mov    0x70(%rsp),%rax
+     ee9:	movdqa 0x60(%rsp),%xmm0
+     eef:	mov    %rax,0x10(%rsp)
+     ef4:	movups %xmm0,(%rsp)
+     ef8:	call   efd <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x5bd>
+     efd:	add    $0x20,%rsp
+     f01:	test   %al,%al
+     f03:	jne    1041 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x701>
+     f09:	cmpb   $0x0,0x1a(%rbx)
+     f0d:	je     c60 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x320>
+     f13:	jmp    c56 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x316>
+     f18:	nopl   0x0(%rax,%rax,1)
+     f20:	lock subq $0x1,0x130(%r15)
+     f29:	movzbl 0x18(%rbx),%eax
+     f2d:	jmp    d6c <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x42c>
+     f32:	mov    0x128(%rsp),%rbx
+     f3a:	mov    0x130(%rsp),%rbp
+     f42:	mov    0x140(%rsp),%r13
+     f4a:	mov    0x150(%rsp),%r15
+     f52:	add    $0x158,%rsp
+     f59:	ret
+     f5a:	mov    0x110(%r15),%rcx
+     f61:	mov    0x20(%rcx),%rsi
+     f65:	test   %rsi,%rsi
+     f68:	jne    9b6 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x76>
+     f6e:	jmp    b45 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x205>
+     f73:	mov    0x38(%rbx),%rax
+     f77:	cmp    $0xffffffffffffffff,%rax
+     f7b:	je     cbe <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x37e>
+     f81:	add    $0x1,%rax
+     f85:	mov    %rax,0x38(%rbx)
+     f89:	jmp    cbe <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x37e>
+     f8e:	xchg   %ax,%ax
+     f90:	mov    $0x57,%edx
+     f95:	mov    $0x1,%esi
+     f9a:	mov    $0x0,%edi
+     f9f:	mov    0x0(%rip),%rcx        # fa6 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x666>
+     fa6:	call   fab <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x66b>
+     fab:	mov    0x0(%rip),%rdi        # fb2 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x672>
+     fb2:	call   fb7 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x677>
+     fb7:	call   fbc <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x67c>
+     fbc:	mov    0x0(%rip),%rdi        # fc3 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x683>
+     fc3:	mov    $0x0,%edx
+     fc8:	mov    $0x0,%esi
+     fcd:	xor    %eax,%eax
+     fcf:	mov    %r12,0x138(%rsp)
+     fd7:	mov    %r14,0x148(%rsp)
+     fdf:	call   fe4 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6a4>
+     fe4:	mov    0x0(%rip),%rdi        # feb <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6ab>
+     feb:	call   ff0 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6b0>
+     ff0:	call   ff5 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6b5>
+     ff5:	mov    $0x68,%edx
+     ffa:	mov    $0x1,%esi
+     fff:	mov    0x0(%rip),%rcx        # 1006 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6c6>
+    1006:	mov    $0x0,%edi
+    100b:	mov    %r12,0x138(%rsp)
+    1013:	mov    %r14,0x148(%rsp)
+    101b:	call   1020 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6e0>
+    1020:	mov    0x0(%rip),%rdi        # 1027 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6e7>
+    1027:	call   102c <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6ec>
+    102c:	call   1031 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x6f1>
+    1031:	mov    %r12,0x138(%rsp)
+    1039:	mov    %r14,0x148(%rsp)
+    1041:	call   1046 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x706>
+    1046:	mov    $0x5e,%edx
+    104b:	mov    $0x1,%esi
+    1050:	mov    $0x0,%edi
+    1055:	mov    0x0(%rip),%rcx        # 105c <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x71c>
+    105c:	call   1061 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x721>
+    1061:	mov    0x0(%rip),%rdi        # 1068 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x728>
+    1068:	call   106d <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x72d>
+    106d:	call   1072 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x732>
+    1072:	mov    %r12,0x138(%rsp)
+    107a:	mov    %r14,0x148(%rsp)
+    1082:	call   30 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]>
+    1087:	mov    $0x6b,%edx
+    108c:	mov    $0x1,%esi
+    1091:	mov    $0x0,%edi
+    1096:	mov    0x0(%rip),%rcx        # 109d <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x75d>
+    109d:	call   10a2 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x762>
+    10a2:	mov    0x0(%rip),%rdi        # 10a9 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x769>
+    10a9:	call   10ae <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x76e>
+    10ae:	call   10b3 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)+0x773>
+    10b3:	nop
+    10b4:	nop
+    10b5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+00000000000010c0 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)>:
+    10c0:	test   %dl,%dl
+    10c2:	je     1208 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x148>
+    10c8:	sub    $0x48,%rsp
+    10cc:	mov    %r12,0x40(%rsp)
+    10d1:	mov    %rdi,%r12
+    10d4:	test   %esi,%esi
+    10d6:	jle    11b0 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0xf0>
+    10dc:	mov    0xd0(%rdi),%rcx
+    10e3:	mov    %rbp,0x38(%rsp)
+    10e8:	mov    %esi,%ebp
+    10ea:	mov    %rbx,0x30(%rsp)
+    10ef:	mov    0x20(%rcx),%rsi
+    10f3:	cmp    %rbp,%rsi
+    10f6:	jb     128b <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1cb>
+    10fc:	xor    %ebx,%ebx
+    10fe:	jmp    111a <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x5a>
+    1100:	add    $0x1,%rbx
+    1104:	cmp    %rbx,%rbp
+    1107:	je     11f0 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x130>
+    110d:	mov    0x20(%rcx),%rsi
+    1111:	test   %rsi,%rsi
+    1114:	je     125a <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x19a>
+    111a:	mov    0x18(%rcx),%rax
+    111e:	lea    (%rax,%rax,2),%rdx
+    1122:	shl    $0x4,%rdx
+    1126:	add    (%rcx),%rdx
+    1129:	movdqu (%rdx),%xmm0
+    112d:	movq   %xmm0,%rdi
+    1132:	movaps %xmm0,(%rsp)
+    1136:	movdqu 0x10(%rdx),%xmm0
+    113b:	movaps %xmm0,0x10(%rsp)
+    1140:	movdqu 0x20(%rdx),%xmm0
+    1145:	mov    0x40(%rcx),%rdx
+    1149:	add    $0x1,%rdx
+    114d:	movaps %xmm0,0x20(%rsp)
+    1152:	cmp    %rdx,%rdi
+    1155:	jne    1286 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1c6>
+    115b:	add    $0x1,%rax
+    115f:	xor    %edx,%edx
+    1161:	sub    $0x1,%rsi
+    1165:	mov    %rdi,0x40(%rcx)
+    1169:	divq   0x28(%rcx)
+    116d:	mov    %rsi,0x20(%rcx)
+    1171:	mov    %rdx,0x18(%rcx)
+    1175:	cmpb   $0x1,0xc(%rsp)
+    117a:	jne    1100 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x40>
+    117c:	mov    0x18(%rsp),%edx
+    1180:	mov    0x20(%rsp),%rcx
+    1185:	mov    %r12,%rdi
+    1188:	add    $0x1,%rbx
+    118c:	mov    0x10(%rsp),%rsi
+    1191:	call   1196 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0xd6>
+    1196:	cmp    %rbx,%rbp
+    1199:	je     11f0 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x130>
+    119b:	mov    0xd0(%r12),%rcx
+    11a3:	jmp    110d <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x4d>
+    11a8:	nopl   0x0(%rax,%rax,1)
+    11b0:	je     11fa <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x13a>
+    11b2:	lea    0x10(%rsi),%edx
+    11b5:	mov    0xd0(%rdi),%rax
+    11bc:	cmp    $0xc,%edx
+    11bf:	ja     1210 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x150>
+    11c1:	mov    $0x1021,%ecx
+    11c6:	bt     %rdx,%rcx
+    11ca:	jae    1210 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x150>
+    11cc:	test   %rax,%rax
+    11cf:	je     11fa <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x13a>
+    11d1:	cmpq   $0x0,0x20(%rax)
+    11d6:	je     11fa <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x13a>
+    11d8:	mov    0x40(%rsp),%r12
+    11dd:	add    $0x48,%rsp
+    11e1:	jmp    420 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]>
+    11e6:	cs nopw 0x0(%rax,%rax,1)
+    11f0:	mov    0x30(%rsp),%rbx
+    11f5:	mov    0x38(%rsp),%rbp
+    11fa:	mov    0x40(%rsp),%r12
+    11ff:	add    $0x48,%rsp
+    1203:	ret
+    1204:	nopl   0x0(%rax)
+    1208:	ret
+    1209:	nopl   0x0(%rax)
+    1210:	neg    %esi
+    1212:	mov    %rbp,0x38(%rsp)
+    1217:	mov    %esi,%ebp
+    1219:	test   %rax,%rax
+    121c:	je     1225 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x165>
+    121e:	cmpq   $0x0,0x20(%rax)
+    1223:	jne    1250 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x190>
+    1225:	mov    %rbp,%rsi
+    1228:	mov    %r12,%rdi
+    122b:	mov    0x38(%rsp),%rbp
+    1230:	mov    0x40(%rsp),%r12
+    1235:	shl    $0x20,%rsi
+    1239:	add    $0x48,%rsp
+    123d:	or     $0x7,%rsi
+    1241:	jmp    940 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)>
+    1246:	cs nopw 0x0(%rax,%rax,1)
+    1250:	mov    %r12,%rdi
+    1253:	call   420 <sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]>
+    1258:	jmp    1225 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x165>
+    125a:	mov    $0x53,%edx
+    125f:	mov    $0x1,%esi
+    1264:	mov    $0x0,%edi
+    1269:	mov    0x0(%rip),%rcx        # 1270 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1b0>
+    1270:	call   1275 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1b5>
+    1275:	mov    0x0(%rip),%rdi        # 127c <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1bc>
+    127c:	call   1281 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1c1>
+    1281:	call   1286 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1c6>
+    1286:	call   90 <sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]>
+    128b:	mov    $0x74,%edx
+    1290:	mov    $0x1,%esi
+    1295:	mov    $0x0,%edi
+    129a:	mov    0x0(%rip),%rcx        # 12a1 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1e1>
+    12a1:	call   12a6 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1e6>
+    12a6:	mov    0x0(%rip),%rdi        # 12ad <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1ed>
+    12ad:	call   12b2 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1f2>
+    12b2:	call   12b7 <sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)+0x1f7>
+    12b7:	nop
+    12b8:	nopl   0x0(%rax,%rax,1)
+
+00000000000012c0 <sluice::async::UringAsyncBackend::submit_transport_locked()>:
+    12c0:	cmpb   $0x0,0xe4(%rdi)
+    12c7:	jne    12dc <sluice::async::UringAsyncBackend::submit_transport_locked()+0x1c>
+    12c9:	mov    0xd0(%rdi),%rax
+    12d0:	test   %rax,%rax
+    12d3:	je     12dc <sluice::async::UringAsyncBackend::submit_transport_locked()+0x1c>
+    12d5:	cmpq   $0x0,0x20(%rax)
+    12da:	jne    12e0 <sluice::async::UringAsyncBackend::submit_transport_locked()+0x20>
+    12dc:	xor    %eax,%eax
+    12de:	ret
+    12df:	nop
+    12e0:	sub    $0x18,%rsp
+    12e4:	mov    %rdi,%rcx
+    12e7:	lock addq $0x1,0x120(%rdi)
+    12f0:	mov    0xc8(%rdi),%rdi
+    12f7:	mov    %rcx,0x8(%rsp)
+    12fc:	call   1301 <sluice::async::UringAsyncBackend::submit_transport_locked()+0x41>
+    1301:	mov    0x8(%rsp),%rdi
+    1306:	mov    $0x1,%edx
+    130b:	mov    %eax,%esi
+    130d:	mov    %eax,0x4(%rsp)
+    1311:	call   1316 <sluice::async::UringAsyncBackend::submit_transport_locked()+0x56>
+    1316:	mov    0x4(%rsp),%eax
+    131a:	add    $0x18,%rsp
+    131e:	ret
+    131f:	nop
+
+0000000000001320 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)>:
+    1320:	sub    $0x78,%rsp
+    1324:	movzbl 0xe4(%rdi),%r8d
+    132c:	mov    %rbx,0x60(%rsp)
+    1331:	mov    %rdi,%rbx
+    1334:	test   %r8b,%r8b
+    1337:	jne    1460 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x140>
+    133d:	mov    %rbp,0x68(%rsp)
+    1342:	mov    0x90(%rdi),%rax
+    1349:	mov    %r12,0x70(%rsp)
+    134e:	cmp    %rax,0x88(%rdi)
+    1355:	je     18df <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5bf>
+    135b:	mov    0xc8(%rdi),%rax
+    1362:	mov    %rdx,%r12
+    1365:	mov    %rsi,%rbp
+    1368:	pxor   %xmm0,%xmm0
+    136c:	mov    0xc0(%rax),%ecx
+    1372:	mov    (%rax),%rdx
+    1375:	test   $0x2,%cl
+    1378:	jne    1470 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x150>
+    137e:	mov    0x44(%rax),%esi
+    1381:	mov    %esi,%edi
+    1383:	sub    (%rdx),%edi
+    1385:	cmp    0x5c(%rax),%edi
+    1388:	jae    1838 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x518>
+    138e:	mov    0x58(%rax),%edx
+    1391:	shr    $0xa,%ecx
+    1394:	and    %esi,%edx
+    1396:	and    $0x1,%ecx
+    1399:	add    $0x1,%esi
+    139c:	shl    %cl,%edx
+    139e:	mov    %esi,0x44(%rax)
+    13a1:	shl    $0x6,%rdx
+    13a5:	add    0x38(%rax),%rdx
+    13a9:	xor    %eax,%eax
+    13ab:	movb   $0x0,0x1(%rdx)
+    13af:	movq   $0x0,0x28(%rdx)
+    13b7:	mov    %ax,0x2(%rdx)
+    13bb:	movl   $0x0,0x1c(%rdx)
+    13c2:	movups %xmm0,0x30(%rdx)
+    13c6:	mov    0x20(%rbx),%rdi
+    13ca:	mov    %rdx,0x8(%rsp)
+    13cf:	call   13d4 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0xb4>
+    13d4:	mov    %ebp,0x18(%rsp)
+    13d8:	sub    $0x20,%rsp
+    13dc:	mov    0x20(%rbx),%rdi
+    13e0:	mov    %rax,0x30(%rsp)
+    13e5:	mov    %r12,0x40(%rsp)
+    13ea:	movdqa 0x30(%rsp),%xmm1
+    13f0:	mov    %r12,0x10(%rsp)
+    13f5:	movups %xmm1,(%rsp)
+    13f9:	call   13fe <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0xde>
+    13fe:	add    $0x20,%rsp
+    1402:	pxor   %xmm0,%xmm0
+    1406:	mov    0x8(%rsp),%rdx
+    140b:	test   %al,%al
+    140d:	jne    1780 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x460>
+    1413:	mov    0x90(%rbx),%rcx
+    141a:	mov    0xb8(%rbx),%rsi
+    1421:	mov    -0x4(%rcx),%eax
+    1424:	sub    $0x4,%rcx
+    1428:	mov    %rcx,0x90(%rbx)
+    142f:	test   %rsi,%rsi
+    1432:	jle    190b <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5eb>
+    1438:	lea    0x1(%rsi),%rcx
+    143c:	mov    %rcx,0xb8(%rbx)
+    1443:	mov    %ebp,%ecx
+    1445:	lea    (%rcx,%rcx,2),%rcx
+    1449:	shl    $0x4,%rcx
+    144d:	add    0x30(%rbx),%rcx
+    1451:	cmpb   $0x5,(%rcx)
+    1454:	ja     14b7 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x197>
+    1456:	movzbl (%rcx),%edi
+    1459:	jmp    *0x0(,%rdi,8)
+    1460:	xor    %r8d,%r8d
+    1463:	mov    0x60(%rsp),%rbx
+    1468:	add    $0x78,%rsp
+    146c:	mov    %r8d,%eax
+    146f:	ret
+    1470:	mov    (%rdx),%ecx
+    1472:	mov    0x44(%rax),%esi
+    1475:	mov    %esi,%edx
+    1477:	sub    %ecx,%edx
+    1479:	cmp    0x5c(%rax),%edx
+    147c:	jae    1756 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x436>
+    1482:	mov    0xc0(%rax),%ecx
+    1488:	jmp    138e <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x6e>
+    148d:	nopl   (%rax)
+    1490:	mov    0x4(%rcx),%edi
+    1493:	mov    0x28(%rcx),%rcx
+    1497:	movb   $0x15,(%rdx)
+    149a:	movq   $0x0,0x10(%rdx)
+    14a2:	mov    %rcx,0x8(%rdx)
+    14a6:	movabs $0x110000000303,%rcx
+    14b0:	mov    %edi,0x4(%rdx)
+    14b3:	mov    %rcx,0x18(%rdx)
+    14b7:	shl    $0x5,%rax
+    14bb:	add    0x70(%rbx),%rax
+    14bf:	mov    %rsi,0x20(%rdx)
+    14c3:	mov    %rsi,(%rax)
+    14c6:	mov    %rbp,0x8(%rax)
+    14ca:	mov    %r12,0x10(%rax)
+    14ce:	movl   $0x1000000,0x18(%rax)
+    14d5:	lock addq $0x1,0x128(%rbx)
+    14de:	mov    0xc8(%rbx),%rax
+    14e5:	mov    0xd0(%rbx),%rcx
+    14ec:	mov    0x44(%rax),%edi
+    14ef:	mov    0x38(%rcx),%r9
+    14f3:	mov    0x28(%rcx),%r11
+    14f7:	sub    $0x1,%edi
+    14fa:	and    0x58(%rax),%edi
+    14fd:	mov    %edi,%edx
+    14ff:	test   %r9,%r9
+    1502:	je     1510 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x1f0>
+    1504:	mov    0x48(%rcx),%eax
+    1507:	xor    %edx,%edx
+    1509:	add    $0x1,%rax
+    150d:	div    %r11
+    1510:	mov    0x20(%rcx),%r8
+    1514:	mov    %edi,%eax
+    1516:	cmp    %r8,%rax
+    1519:	cmovb  %r8,%rax
+    151d:	cmp    %r11,%rax
+    1520:	jae    18da <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5ba>
+    1526:	mov    0x30(%rcx),%r10
+    152a:	lea    -0x1(%r10),%rax
+    152e:	cmp    $0xfffffffffffffffd,%rax
+    1532:	ja     18da <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5ba>
+    1538:	cmp    %edx,%edi
+    153a:	jne    18da <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5ba>
+    1540:	lea    0x1(%r9),%rax
+    1544:	cmp    %rax,%r10
+    1547:	jne    18da <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5ba>
+    154d:	mov    0x18(%rcx),%rax
+    1551:	xor    %edx,%edx
+    1553:	mov    %r10,0x30(%rsp)
+    1558:	add    $0x2,%r9
+    155c:	mov    %edi,0x38(%rsp)
+    1560:	add    %r8,%rax
+    1563:	movb   $0x0,0x3c(%rsp)
+    1568:	movdqa 0x30(%rsp),%xmm0
+    156e:	add    $0x1,%r8
+    1572:	div    %r11
+    1575:	mov    %r9,0x30(%rcx)
+    1579:	mov    %ebp,0x48(%rsp)
+    157d:	mov    %rsi,0x40(%rsp)
+    1582:	mov    %r12,0x50(%rsp)
+    1587:	movb   $0x0,0x58(%rsp)
+    158c:	lea    (%rdx,%rdx,2),%rax
+    1590:	shl    $0x4,%rax
+    1594:	add    (%rcx),%rax
+    1597:	movups %xmm0,(%rax)
+    159a:	movdqa 0x40(%rsp),%xmm0
+    15a0:	movups %xmm0,0x10(%rax)
+    15a4:	movdqu 0x49(%rsp),%xmm0
+    15aa:	movups %xmm0,0x19(%rax)
+    15ae:	mov    %r10,0x38(%rcx)
+    15b2:	mov    0x110(%rbx),%r10
+    15b9:	mov    %edi,0x48(%rcx)
+    15bc:	mov    0x20(%r10),%r9
+    15c0:	mov    %r8,0x20(%rcx)
+    15c4:	test   %r9,%r9
+    15c7:	je     1698 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x378>
+    15cd:	mov    0x18(%r10),%r11
+    15d1:	mov    0x28(%r10),%rdi
+    15d5:	xor    %ecx,%ecx
+    15d7:	mov    (%r10),%r8
+    15da:	jmp    15e9 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x2c9>
+    15dc:	nopl   0x0(%rax)
+    15e0:	cmp    %rcx,%r9
+    15e3:	je     1698 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x378>
+    15e9:	lea    (%rcx,%r11,1),%rsi
+    15ed:	xor    %edx,%edx
+    15ef:	add    $0x1,%rcx
+    15f3:	mov    %rsi,%rax
+    15f6:	div    %rdi
+    15f9:	shl    $0x4,%rdx
+    15fd:	add    %r8,%rdx
+    1600:	cmp    (%rdx),%ebp
+    1602:	jne    15e0 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x2c0>
+    1604:	cmp    %r12,0x8(%rdx)
+    1608:	jne    15e0 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x2c0>
+    160a:	cmp    %r9,%rcx
+    160d:	jae    166f <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x34f>
+    160f:	lea    -0x1(%r9,%r11,1),%r11
+    1614:	data16 cs nopw 0x0(%rax,%rax,1)
+    161f:	data16 cs nopw 0x0(%rax,%rax,1)
+    162a:	data16 cs nopw 0x0(%rax,%rax,1)
+    1635:	data16 cs nopw 0x0(%rax,%rax,1)
+    1640:	mov    %rsi,%rax
+    1643:	xor    %edx,%edx
+    1645:	add    $0x1,%rsi
+    1649:	div    %rdi
+    164c:	mov    %rsi,%rax
+    164f:	mov    %rdx,%rcx
+    1652:	xor    %edx,%edx
+    1654:	div    %rdi
+    1657:	shl    $0x4,%rcx
+    165b:	shl    $0x4,%rdx
+    165f:	movdqu (%r8,%rdx,1),%xmm0
+    1665:	movups %xmm0,(%r8,%rcx,1)
+    166a:	cmp    %rsi,%r11
+    166d:	jne    1640 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x320>
+    166f:	sub    $0x1,%r9
+    1673:	mov    %r9,0x20(%r10)
+    1677:	mov    $0x1,%r8d
+    167d:	mov    0x68(%rsp),%rbp
+    1682:	mov    0x70(%rsp),%r12
+    1687:	mov    0x60(%rsp),%rbx
+    168c:	mov    %r8d,%eax
+    168f:	add    $0x78,%rsp
+    1693:	ret
+    1694:	nopl   0x0(%rax)
+    1698:	mov    $0x6a,%edx
+    169d:	mov    $0x1,%esi
+    16a2:	mov    $0x0,%edi
+    16a7:	mov    0x0(%rip),%rcx        # 16ae <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x38e>
+    16ae:	call   16b3 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x393>
+    16b3:	mov    0x0(%rip),%rdi        # 16ba <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x39a>
+    16ba:	call   16bf <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x39f>
+    16bf:	call   16c4 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x3a4>
+    16c4:	nopl   0x0(%rax)
+    16c8:	movq   0x20(%rcx),%xmm0
+    16cd:	movq   0x8(%rcx),%xmm1
+    16d2:	mov    0x18(%rcx),%edi
+    16d5:	mov    0x4(%rcx),%ecx
+    16d8:	movb   $0x16,(%rdx)
+    16db:	punpcklqdq %xmm1,%xmm0
+    16df:	mov    %ecx,0x4(%rdx)
+    16e2:	mov    %edi,0x18(%rdx)
+    16e5:	movups %xmm0,0x8(%rdx)
+    16e9:	jmp    14b7 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x197>
+    16ee:	xchg   %ax,%ax
+    16f0:	mov    0x4(%rcx),%ecx
+    16f3:	movb   $0x3,(%rdx)
+    16f6:	movq   $0x0,0x18(%rdx)
+    16fe:	mov    %ecx,0x4(%rdx)
+    1701:	movups %xmm0,0x8(%rdx)
+    1705:	jmp    14b7 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x197>
+    170a:	nopw   0x0(%rax,%rax,1)
+    1710:	mov    0x4(%rcx),%ecx
+    1713:	movb   $0x3,(%rdx)
+    1716:	movups %xmm0,0x8(%rdx)
+    171a:	mov    %ecx,0x4(%rdx)
+    171d:	movabs $0x100000000,%rcx
+    1727:	mov    %rcx,0x18(%rdx)
+    172b:	jmp    14b7 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x197>
+    1730:	movq   0x20(%rcx),%xmm0
+    1735:	movq   0x8(%rcx),%xmm1
+    173a:	mov    0x18(%rcx),%edi
+    173d:	mov    0x4(%rcx),%ecx
+    1740:	movb   $0x17,(%rdx)
+    1743:	punpcklqdq %xmm1,%xmm0
+    1747:	mov    %ecx,0x4(%rdx)
+    174a:	mov    %edi,0x18(%rdx)
+    174d:	movups %xmm0,0x8(%rdx)
+    1751:	jmp    14b7 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x197>
+    1756:	cmpb   $0x0,0xe4(%rdi)
+    175d:	je     18c4 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5a4>
+    1763:	mov    0x68(%rsp),%rbp
+    1768:	mov    0x70(%rsp),%r12
+    176d:	mov    %r8d,%eax
+    1770:	mov    0x60(%rsp),%rbx
+    1775:	add    $0x78,%rsp
+    1779:	ret
+    177a:	nopw   0x0(%rax,%rax,1)
+    1780:	mov    0x110(%rbx),%r10
+    1787:	mov    0xc8(%rbx),%rax
+    178e:	mov    0x20(%r10),%r9
+    1792:	subl   $0x1,0x44(%rax)
+    1796:	test   %r9,%r9
+    1799:	je     1677 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x357>
+    179f:	mov    0x18(%r10),%r11
+    17a3:	mov    0x28(%r10),%rdi
+    17a7:	xor    %ecx,%ecx
+    17a9:	mov    (%r10),%r8
+    17ac:	jmp    17c9 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x4a9>
+    17ae:	nopl   0x0(%rax)
+    17b5:	data16 cs nopw 0x0(%rax,%rax,1)
+    17c0:	cmp    %rcx,%r9
+    17c3:	je     1677 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x357>
+    17c9:	lea    (%r11,%rcx,1),%rsi
+    17cd:	xor    %edx,%edx
+    17cf:	add    $0x1,%rcx
+    17d3:	mov    %rsi,%rax
+    17d6:	div    %rdi
+    17d9:	shl    $0x4,%rdx
+    17dd:	add    %r8,%rdx
+    17e0:	cmp    %ebp,(%rdx)
+    17e2:	jne    17c0 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x4a0>
+    17e4:	cmp    %r12,0x8(%rdx)
+    17e8:	jne    17c0 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x4a0>
+    17ea:	cmp    %r9,%rcx
+    17ed:	jae    166f <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x34f>
+    17f3:	lea    -0x1(%r11,%r9,1),%r11
+    17f8:	nopl   0x0(%rax,%rax,1)
+    1800:	mov    %rsi,%rax
+    1803:	xor    %edx,%edx
+    1805:	add    $0x1,%rsi
+    1809:	div    %rdi
+    180c:	mov    %rsi,%rax
+    180f:	mov    %rdx,%rcx
+    1812:	xor    %edx,%edx
+    1814:	div    %rdi
+    1817:	shl    $0x4,%rcx
+    181b:	shl    $0x4,%rdx
+    181f:	movdqu (%r8,%rdx,1),%xmm0
+    1825:	movups %xmm0,(%r8,%rcx,1)
+    182a:	cmp    %r11,%rsi
+    182d:	jne    1800 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x4e0>
+    182f:	jmp    166f <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x34f>
+    1834:	nopl   0x0(%rax)
+    1838:	mov    0xd0(%rbx),%rcx
+    183f:	test   %rcx,%rcx
+    1842:	je     189e <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x57e>
+    1844:	cmpq   $0x0,0x20(%rcx)
+    1849:	je     188b <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x56b>
+    184b:	mov    %r8b,0x8(%rsp)
+    1850:	lock addq $0x1,0x120(%rbx)
+    1859:	mov    0xc8(%rbx),%rdi
+    1860:	call   1865 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x545>
+    1865:	mov    $0x1,%edx
+    186a:	mov    %rbx,%rdi
+    186d:	mov    %eax,%esi
+    186f:	call   1874 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x554>
+    1874:	cmpb   $0x0,0xe4(%rbx)
+    187b:	movzbl 0x8(%rsp),%r8d
+    1881:	pxor   %xmm0,%xmm0
+    1885:	jne    1763 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x443>
+    188b:	mov    0xc8(%rbx),%rax
+    1892:	mov    (%rax),%rdx
+    1895:	testb  $0x2,0xc0(%rax)
+    189c:	jne    18d6 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5b6>
+    189e:	mov    (%rdx),%ecx
+    18a0:	mov    0x44(%rax),%esi
+    18a3:	mov    %esi,%edx
+    18a5:	sub    %ecx,%edx
+    18a7:	cmp    0x5c(%rax),%edx
+    18aa:	jae    1763 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x443>
+    18b0:	mov    0x58(%rax),%edx
+    18b3:	movzbl 0xc1(%rax),%ecx
+    18ba:	and    %esi,%edx
+    18bc:	shr    $0x2,%cl
+    18bf:	jmp    1396 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x76>
+    18c4:	mov    0xd0(%rdi),%rcx
+    18cb:	test   %rcx,%rcx
+    18ce:	jne    1844 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x524>
+    18d4:	jmp    188b <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x56b>
+    18d6:	mov    (%rdx),%ecx
+    18d8:	jmp    18a0 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x580>
+    18da:	call   60 <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]>
+    18df:	mov    $0x4a,%edx
+    18e4:	mov    $0x1,%esi
+    18e9:	mov    $0x0,%edi
+    18ee:	mov    0x0(%rip),%rcx        # 18f5 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5d5>
+    18f5:	call   18fa <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5da>
+    18fa:	mov    0x0(%rip),%rdi        # 1901 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5e1>
+    1901:	call   1906 <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5e6>
+    1906:	call   190b <sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)+0x5eb>
+    190b:	call   0 <sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]>
+
+0000000000001910 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)>:
+    1910:	mov    %rdi,%r9
+    1913:	cmpb   $0x0,0xe4(%rdi)
+    191a:	jne    1bf8 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2e8>
+    1920:	mov    %rsi,%r8
+    1923:	mov    0x78(%rdi),%rcx
+    1927:	mov    0x70(%rdi),%rsi
+    192b:	sub    %rsi,%rcx
+    192e:	je     1bf8 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2e8>
+    1934:	mov    %rdx,%r10
+    1937:	sar    $0x5,%rcx
+    193b:	lea    0x8(%rsi),%rax
+    193f:	xor    %edx,%edx
+    1941:	jmp    1971 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x61>
+    1943:	nopl   0x0(%rax)
+    194a:	data16 cs nopw 0x0(%rax,%rax,1)
+    1955:	data16 cs nopw 0x0(%rax,%rax,1)
+    1960:	add    $0x1,%rdx
+    1964:	add    $0x20,%rax
+    1968:	cmp    %rcx,%rdx
+    196b:	jae    1bf0 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2e0>
+    1971:	cmpb   $0x0,0x13(%rax)
+    1975:	je     1960 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x50>
+    1977:	cmp    (%rax),%r8d
+    197a:	jne    1960 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x50>
+    197c:	cmp    %r10,0x8(%rax)
+    1980:	jne    1960 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x50>
+    1982:	cmp    %rcx,%rdx
+    1985:	je     1bf8 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2e8>
+    198b:	shl    $0x5,%rdx
+    198f:	lea    (%rsi,%rdx,1),%r11
+    1993:	cmpb   $0x0,0x18(%r11)
+    1998:	jne    1c00 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2f0>
+    199e:	sub    $0x98,%rsp
+    19a5:	mov    %rbx,0x88(%rsp)
+    19ad:	mov    (%r11),%rbx
+    19b0:	test   %rbx,%rbx
+    19b3:	jle    1d21 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x411>
+    19b9:	mov    0xc8(%r9),%rsi
+    19c0:	pxor   %xmm0,%xmm0
+    19c4:	mov    0xc0(%rsi),%ecx
+    19ca:	mov    (%rsi),%rdx
+    19cd:	test   $0x2,%cl
+    19d0:	jne    1c18 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x308>
+    19d6:	mov    0x44(%rsi),%eax
+    19d9:	mov    %eax,%edi
+    19db:	sub    (%rdx),%edi
+    19dd:	cmp    0x5c(%rsi),%edi
+    19e0:	jae    1c51 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x341>
+    19e6:	mov    %r14,0x90(%rsp)
+    19ee:	mov    0x58(%rsi),%edx
+    19f1:	shr    $0xa,%ecx
+    19f4:	and    %eax,%edx
+    19f6:	and    $0x1,%ecx
+    19f9:	add    $0x1,%eax
+    19fc:	shl    %cl,%edx
+    19fe:	mov    %eax,0x44(%rsi)
+    1a01:	xor    %eax,%eax
+    1a03:	shl    $0x6,%rdx
+    1a07:	add    0x38(%rsi),%rdx
+    1a0b:	movb   $0x0,0x1(%rdx)
+    1a0f:	movq   $0x0,0x28(%rdx)
+    1a17:	mov    %ax,0x2(%rdx)
+    1a1b:	movl   $0x0,0x1c(%rdx)
+    1a22:	movups %xmm0,0x30(%rdx)
+    1a26:	mov    0x20(%r9),%rdi
+    1a2a:	mov    %r10,0x28(%rsp)
+    1a2f:	mov    %r8,0x8(%rsp)
+    1a34:	mov    %r9,(%rsp)
+    1a38:	mov    %r11,0x20(%rsp)
+    1a3d:	mov    %rdx,0x18(%rsp)
+    1a42:	call   1a47 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x137>
+    1a47:	mov    0x8(%rsp),%r8
+    1a4c:	mov    (%rsp),%r9
+    1a50:	sub    $0x20,%rsp
+    1a54:	mov    0x48(%rsp),%r10
+    1a59:	mov    %rax,0x50(%rsp)
+    1a5e:	mov    %r8d,0x58(%rsp)
+    1a63:	mov    0x20(%r9),%rdi
+    1a67:	mov    %r8,0x30(%rsp)
+    1a6c:	mov    %r10,0x60(%rsp)
+    1a71:	mov    %r9,0x28(%rsp)
+    1a76:	movdqa 0x50(%rsp),%xmm0
+    1a7c:	mov    %r10,0x10(%rsp)
+    1a81:	mov    %r10,0x20(%rsp)
+    1a86:	movups %xmm0,(%rsp)
+    1a8a:	call   1a8f <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x17f>
+    1a8f:	add    $0x20,%rsp
+    1a93:	mov    (%rsp),%r10
+    1a97:	mov    0x8(%rsp),%r9
+    1a9c:	test   %al,%al
+    1a9e:	mov    0x10(%rsp),%r8
+    1aa3:	mov    0x18(%rsp),%rdx
+    1aa8:	mov    0x20(%rsp),%r11
+    1aad:	je     1d55 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x445>
+    1ab3:	mov    %rbx,%rax
+    1ab6:	movb   $0xe,(%rdx)
+    1ab9:	bts    $0x3f,%rax
+    1abe:	movl   $0xffffffff,0x4(%rdx)
+    1ac5:	movq   $0x0,0x8(%rdx)
+    1acd:	mov    %rbx,0x10(%rdx)
+    1ad1:	movq   $0x0,0x18(%rdx)
+    1ad9:	mov    %rax,0x20(%rdx)
+    1add:	movb   $0x1,0x18(%r11)
+    1ae2:	cmpb   $0x0,0x19(%r11)
+    1ae7:	je     1af3 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x1e3>
+    1ae9:	movb   $0x0,0x19(%r11)
+    1aee:	subq   $0x1,0x68(%r9)
+    1af3:	mov    0xc8(%r9),%rax
+    1afa:	mov    0xd0(%r9),%rcx
+    1b01:	mov    0x44(%rax),%edi
+    1b04:	mov    0x38(%rcx),%r9
+    1b08:	lea    -0x1(%rdi),%esi
+    1b0b:	mov    0x28(%rcx),%rdi
+    1b0f:	and    0x58(%rax),%esi
+    1b12:	mov    %esi,%edx
+    1b14:	mov    %rdi,%r14
+    1b17:	test   %r9,%r9
+    1b1a:	je     1b28 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x218>
+    1b1c:	mov    0x48(%rcx),%eax
+    1b1f:	xor    %edx,%edx
+    1b21:	add    $0x1,%rax
+    1b25:	div    %rdi
+    1b28:	mov    0x20(%rcx),%rdi
+    1b2c:	mov    %esi,%eax
+    1b2e:	cmp    %rdi,%rax
+    1b31:	cmovb  %rdi,%rax
+    1b35:	cmp    %r14,%rax
+    1b38:	jae    1d1c <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x40c>
+    1b3e:	mov    0x30(%rcx),%r11
+    1b42:	lea    -0x1(%r11),%rax
+    1b46:	cmp    $0xfffffffffffffffd,%rax
+    1b4a:	ja     1d1c <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x40c>
+    1b50:	cmp    %edx,%esi
+    1b52:	jne    1d1c <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x40c>
+    1b58:	lea    0x1(%r9),%rax
+    1b5c:	cmp    %rax,%r11
+    1b5f:	jne    1d1c <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x40c>
+    1b65:	lea    0x2(%r9),%rax
+    1b69:	xor    %edx,%edx
+    1b6b:	mov    %r11,0x50(%rsp)
+    1b70:	mov    %rax,0x30(%rcx)
+    1b74:	mov    0x18(%rcx),%rax
+    1b78:	mov    %esi,0x58(%rsp)
+    1b7c:	add    %rdi,%rax
+    1b7f:	movb   $0x1,0x5c(%rsp)
+    1b84:	movdqa 0x50(%rsp),%xmm0
+    1b8a:	div    %r14
+    1b8d:	mov    %r8d,0x68(%rsp)
+    1b92:	mov    0x90(%rsp),%r14
+    1b9a:	mov    %rbx,0x60(%rsp)
+    1b9f:	mov    %r10,0x70(%rsp)
+    1ba4:	movb   $0x0,0x78(%rsp)
+    1ba9:	lea    (%rdx,%rdx,2),%rax
+    1bad:	shl    $0x4,%rax
+    1bb1:	add    (%rcx),%rax
+    1bb4:	movups %xmm0,(%rax)
+    1bb7:	movdqa 0x60(%rsp),%xmm0
+    1bbd:	movups %xmm0,0x10(%rax)
+    1bc1:	movdqu 0x69(%rsp),%xmm0
+    1bc7:	movups %xmm0,0x19(%rax)
+    1bcb:	lea    0x1(%rdi),%rax
+    1bcf:	mov    %r11,0x38(%rcx)
+    1bd3:	mov    %esi,0x48(%rcx)
+    1bd6:	mov    %rax,0x20(%rcx)
+    1bda:	mov    0x88(%rsp),%rbx
+    1be2:	add    $0x98,%rsp
+    1be9:	ret
+    1bea:	nopw   0x0(%rax,%rax,1)
+    1bf0:	ret
+    1bf1:	nopl   0x0(%rax)
+    1bf8:	ret
+    1bf9:	nopl   0x0(%rax)
+    1c00:	cmpb   $0x0,0x19(%r11)
+    1c05:	je     1bf8 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2e8>
+    1c07:	movb   $0x0,0x19(%r11)
+    1c0c:	subq   $0x1,0x68(%r9)
+    1c11:	ret
+    1c12:	nopw   0x0(%rax,%rax,1)
+    1c18:	mov    (%rdx),%ecx
+    1c1a:	mov    0x44(%rsi),%eax
+    1c1d:	mov    %eax,%edx
+    1c1f:	sub    %ecx,%edx
+    1c21:	cmp    0x5c(%rsi),%edx
+    1c24:	jae    1c39 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x329>
+    1c26:	mov    %r14,0x90(%rsp)
+    1c2e:	mov    0xc0(%rsi),%ecx
+    1c34:	jmp    19ee <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0xde>
+    1c39:	cmpb   $0x0,0xe4(%r9)
+    1c41:	jne    1bda <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2ca>
+    1c43:	mov    0xd0(%r9),%rax
+    1c4a:	test   %rax,%rax
+    1c4d:	jne    1c5d <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x34d>
+    1c4f:	jmp    1cc1 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x3b1>
+    1c51:	mov    0xd0(%r9),%rax
+    1c58:	test   %rax,%rax
+    1c5b:	je     1cd4 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x3c4>
+    1c5d:	cmpq   $0x0,0x20(%rax)
+    1c62:	je     1cc1 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x3b1>
+    1c64:	mov    %r10,0x18(%rsp)
+    1c69:	mov    %r8,0x10(%rsp)
+    1c6e:	mov    %r11,0x8(%rsp)
+    1c73:	lock addq $0x1,0x120(%r9)
+    1c7c:	mov    0xc8(%r9),%rdi
+    1c83:	mov    %r9,(%rsp)
+    1c87:	call   1c8c <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x37c>
+    1c8c:	mov    (%rsp),%rdi
+    1c90:	mov    $0x1,%edx
+    1c95:	mov    %eax,%esi
+    1c97:	call   1c9c <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x38c>
+    1c9c:	mov    (%rsp),%r9
+    1ca0:	mov    0x8(%rsp),%r11
+    1ca5:	pxor   %xmm0,%xmm0
+    1ca9:	mov    0x10(%rsp),%r8
+    1cae:	mov    0x18(%rsp),%r10
+    1cb3:	cmpb   $0x0,0xe4(%r9)
+    1cbb:	jne    1bda <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2ca>
+    1cc1:	mov    0xc8(%r9),%rsi
+    1cc8:	mov    (%rsi),%rdx
+    1ccb:	testb  $0x2,0xc0(%rsi)
+    1cd2:	jne    1cfe <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x3ee>
+    1cd4:	mov    (%rdx),%ecx
+    1cd6:	mov    0x44(%rsi),%eax
+    1cd9:	mov    %eax,%edx
+    1cdb:	sub    %ecx,%edx
+    1cdd:	cmp    0x5c(%rsi),%edx
+    1ce0:	jae    1d02 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x3f2>
+    1ce2:	mov    0x58(%rsi),%edx
+    1ce5:	movzbl 0xc1(%rsi),%ecx
+    1cec:	mov    %r14,0x90(%rsp)
+    1cf4:	and    %eax,%edx
+    1cf6:	shr    $0x2,%cl
+    1cf9:	jmp    19f6 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0xe6>
+    1cfe:	mov    (%rdx),%ecx
+    1d00:	jmp    1cd6 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x3c6>
+    1d02:	cmpb   $0x0,0x19(%r11)
+    1d07:	jne    1bda <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2ca>
+    1d0d:	movb   $0x1,0x19(%r11)
+    1d12:	addq   $0x1,0x68(%r9)
+    1d17:	jmp    1bda <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x2ca>
+    1d1c:	call   60 <sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]>
+    1d21:	mov    $0x79,%edx
+    1d26:	mov    $0x1,%esi
+    1d2b:	mov    0x0(%rip),%rcx        # 1d32 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x422>
+    1d32:	mov    $0x0,%edi
+    1d37:	mov    %r14,0x90(%rsp)
+    1d3f:	call   1d44 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x434>
+    1d44:	mov    0x0(%rip),%rdi        # 1d4b <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x43b>
+    1d4b:	call   1d50 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x440>
+    1d50:	call   1d55 <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x445>
+    1d55:	call   1d5a <sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)+0x44a>
+    1d5a:	nopw   0x0(%rax,%rax,1)
+
+0000000000001d60 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)>:
+    1d60:	push   %r13
+    1d62:	push   %r12
+    1d64:	push   %rbp
+    1d65:	mov    %rdi,%rbp
+    1d68:	push   %rbx
+    1d69:	lea    0xe8(%rdi),%rbx
+    1d70:	mov    %rbx,%rdi
+    1d73:	sub    $0x18,%rsp
+    1d77:	call   1d7c <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1c>
+    1d7c:	test   %eax,%eax
+    1d7e:	jne    1d84 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x24>
+    1d84:	mov    0x110(%rbp),%r13
+    1d8b:	mov    0x20(%r13),%r9
+    1d8f:	test   %r9,%r9
+    1d92:	je     1e37 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0xd7>
+    1d98:	mov    0x48(%rsp),%r11d
+    1d9d:	mov    0x50(%rsp),%r12
+    1da2:	xor    %ecx,%ecx
+    1da4:	mov    0x18(%r13),%r10
+    1da8:	mov    0x28(%r13),%rdi
+    1dac:	mov    0x0(%r13),%r8
+    1db0:	jmp    1dc5 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x65>
+    1db2:	nopl   (%rax)
+    1db5:	data16 cs nopw 0x0(%rax,%rax,1)
+    1dc0:	cmp    %rcx,%r9
+    1dc3:	je     1e37 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0xd7>
+    1dc5:	lea    (%rcx,%r10,1),%rsi
+    1dc9:	xor    %edx,%edx
+    1dcb:	add    $0x1,%rcx
+    1dcf:	mov    %rsi,%rax
+    1dd2:	div    %rdi
+    1dd5:	shl    $0x4,%rdx
+    1dd9:	add    %r8,%rdx
+    1ddc:	cmp    (%rdx),%r11d
+    1ddf:	jne    1dc0 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x60>
+    1de1:	cmp    %r12,0x8(%rdx)
+    1de5:	jne    1dc0 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x60>
+    1de7:	cmp    %r9,%rcx
+    1dea:	jae    1e2f <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0xcf>
+    1dec:	lea    -0x1(%r9,%r10,1),%r10
+    1df1:	nopl   0x0(%rax)
+    1df5:	data16 cs nopw 0x0(%rax,%rax,1)
+    1e00:	mov    %rsi,%rax
+    1e03:	xor    %edx,%edx
+    1e05:	add    $0x1,%rsi
+    1e09:	div    %rdi
+    1e0c:	mov    %rsi,%rax
+    1e0f:	mov    %rdx,%rcx
+    1e12:	xor    %edx,%edx
+    1e14:	div    %rdi
+    1e17:	shl    $0x4,%rcx
+    1e1b:	shl    $0x4,%rdx
+    1e1f:	movdqu (%r8,%rdx,1),%xmm0
+    1e25:	movups %xmm0,(%r8,%rcx,1)
+    1e2a:	cmp    %r10,%rsi
+    1e2d:	jne    1e00 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0xa0>
+    1e2f:	sub    $0x1,%r9
+    1e33:	mov    %r9,0x20(%r13)
+    1e37:	sub    $0x20,%rsp
+    1e3b:	mov    0x20(%rbp),%rdi
+    1e3f:	mov    0x70(%rsp),%rax
+    1e44:	movdqu 0x60(%rsp),%xmm0
+    1e4a:	mov    %rax,0x10(%rsp)
+    1e4f:	movups %xmm0,(%rsp)
+    1e53:	call   1e58 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0xf8>
+    1e58:	add    $0x20,%rsp
+    1e5c:	mov    %eax,%r12d
+    1e5f:	test   %al,%al
+    1e61:	je     1e88 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x128>
+    1e63:	cmp    $0x1,%al
+    1e65:	je     1fc1 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x261>
+    1e6b:	mov    %rbx,%rdi
+    1e6e:	call   1e73 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x113>
+    1e73:	add    $0x18,%rsp
+    1e77:	mov    %r12d,%eax
+    1e7a:	pop    %rbx
+    1e7b:	pop    %rbp
+    1e7c:	pop    %r12
+    1e7e:	pop    %r13
+    1e80:	ret
+    1e81:	nopl   0x0(%rax)
+    1e88:	sub    $0x20,%rsp
+    1e8c:	mov    0x20(%rbp),%rdi
+    1e90:	mov    0x70(%rsp),%rax
+    1e95:	movdqu 0x60(%rsp),%xmm0
+    1e9b:	mov    %rax,0x10(%rsp)
+    1ea0:	movups %xmm0,(%rsp)
+    1ea4:	call   1ea9 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x149>
+    1ea9:	add    $0x20,%rsp
+    1ead:	cmp    $0x1,%al
+    1eaf:	jne    20e4 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x384>
+    1eb5:	mov    0x118(%rbp),%r8
+    1ebc:	mov    0x48(%rsp),%esi
+    1ec0:	mov    0x50(%rsp),%rdi
+    1ec5:	mov    0x20(%r8),%rcx
+    1ec9:	mov    0x28(%r8),%r9
+    1ecd:	cmp    %r9,%rcx
+    1ed0:	jae    20e9 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x389>
+    1ed6:	mov    0x18(%r8),%rax
+    1eda:	xor    %edx,%edx
+    1edc:	add    %rcx,%rax
+    1edf:	add    $0x1,%rcx
+    1ee3:	div    %r9
+    1ee6:	shl    $0x4,%rdx
+    1eea:	add    (%r8),%rdx
+    1eed:	mov    %rdi,0x8(%rdx)
+    1ef1:	mov    %rbx,%rdi
+    1ef4:	mov    %rsi,(%rdx)
+    1ef7:	mov    %rcx,0x20(%r8)
+    1efb:	call   1f00 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1a0>
+    1f00:	mov    0x8(%rbp),%rax
+    1f04:	test   %rax,%rax
+    1f07:	je     1f0e <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1ae>
+    1f09:	addq   $0x1,0x28(%rax)
+    1f0e:	mov    0x18(%rbp),%rbx
+    1f12:	test   %rbx,%rbx
+    1f15:	je     1e73 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x113>
+    1f1b:	mov    %rbx,%rdi
+    1f1e:	call   1f23 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1c3>
+    1f23:	test   %eax,%eax
+    1f25:	jne    1f2b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1cb>
+    1f2b:	mov    0x28(%rbx),%rax
+    1f2f:	cmp    $0xffffffffffffffff,%rax
+    1f33:	je     1faa <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x24a>
+    1f35:	add    $0x1,%rax
+    1f39:	mov    %rax,0x28(%rbx)
+    1f3d:	mov    0x6c(%rbx),%edx
+    1f40:	test   %edx,%edx
+    1f42:	js     1e6b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x10b>
+    1f48:	cmpb   $0x0,0x70(%rbx)
+    1f4c:	jne    1e6b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x10b>
+    1f52:	movq   $0x1,0x8(%rsp)
+    1f5b:	lea    0x8(%rsp),%rbp
+    1f60:	call   1f65 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x205>
+    1f65:	mov    %rax,%r13
+    1f68:	movl   $0x0,0x0(%r13)
+    1f70:	mov    0x6c(%rbx),%edi
+    1f73:	mov    $0x8,%edx
+    1f78:	mov    %rbp,%rsi
+    1f7b:	call   1f80 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x220>
+    1f80:	cmp    $0x8,%rax
+    1f84:	je     1fa1 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x241>
+    1f86:	mov    0x0(%r13),%ecx
+    1f8a:	test   %rax,%rax
+    1f8d:	jns    20bb <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x35b>
+    1f93:	cmp    $0x4,%ecx
+    1f96:	je     1f68 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x208>
+    1f98:	cmp    $0xb,%ecx
+    1f9b:	jne    20bb <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x35b>
+    1fa1:	movb   $0x1,0x70(%rbx)
+    1fa5:	jmp    1e6b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x10b>
+    1faa:	mov    0x38(%rbx),%rax
+    1fae:	cmp    $0xffffffffffffffff,%rax
+    1fb2:	je     1f3d <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1dd>
+    1fb4:	add    $0x1,%rax
+    1fb8:	mov    %rax,0x38(%rbx)
+    1fbc:	jmp    1f3d <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x1dd>
+    1fc1:	mov    0x48(%rsp),%eax
+    1fc5:	mov    0x50(%rsp),%rdx
+    1fca:	mov    %rbp,%rdi
+    1fcd:	mov    %eax,%esi
+    1fcf:	call   1fd4 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x274>
+    1fd4:	mov    %rbx,%rdi
+    1fd7:	call   1fdc <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x27c>
+    1fdc:	mov    0x18(%rbp),%rbx
+    1fe0:	test   %rbx,%rbx
+    1fe3:	je     1e73 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x113>
+    1fe9:	mov    %rbx,%rdi
+    1fec:	call   1ff1 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x291>
+    1ff1:	test   %eax,%eax
+    1ff3:	jne    1ff9 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x299>
+    1ff9:	mov    0x28(%rbx),%rax
+    1ffd:	cmp    $0xffffffffffffffff,%rax
+    2001:	je     20a0 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x340>
+    2007:	add    $0x1,%rax
+    200b:	mov    %rax,0x28(%rbx)
+    200f:	mov    0x6c(%rbx),%eax
+    2012:	test   %eax,%eax
+    2014:	js     1e6b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x10b>
+    201a:	cmpb   $0x0,0x70(%rbx)
+    201e:	jne    1e6b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x10b>
+    2024:	movq   $0x1,0x8(%rsp)
+    202d:	lea    0x8(%rsp),%rbp
+    2032:	call   2037 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x2d7>
+    2037:	mov    %rax,%r13
+    203a:	movl   $0x0,0x0(%r13)
+    2042:	mov    0x6c(%rbx),%edi
+    2045:	mov    $0x8,%edx
+    204a:	mov    %rbp,%rsi
+    204d:	call   2052 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x2f2>
+    2052:	cmp    $0x8,%rax
+    2056:	je     1fa1 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x241>
+    205c:	mov    0x0(%r13),%ecx
+    2060:	test   %rax,%rax
+    2063:	jns    2073 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x313>
+    2065:	cmp    $0x4,%ecx
+    2068:	je     203a <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x2da>
+    206a:	cmp    $0xb,%ecx
+    206d:	je     1fa1 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x241>
+    2073:	mov    0x0(%rip),%rdi        # 207a <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x31a>
+    207a:	mov    $0x0,%edx
+    207f:	mov    $0x0,%esi
+    2084:	xor    %eax,%eax
+    2086:	call   208b <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x32b>
+    208b:	mov    0x0(%rip),%rdi        # 2092 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x332>
+    2092:	call   2097 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x337>
+    2097:	call   209c <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x33c>
+    209c:	nopl   0x0(%rax)
+    20a0:	mov    0x38(%rbx),%rax
+    20a4:	cmp    $0xffffffffffffffff,%rax
+    20a8:	je     200f <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x2af>
+    20ae:	add    $0x1,%rax
+    20b2:	mov    %rax,0x38(%rbx)
+    20b6:	jmp    200f <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x2af>
+    20bb:	mov    0x0(%rip),%rdi        # 20c2 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x362>
+    20c2:	mov    $0x0,%edx
+    20c7:	mov    $0x0,%esi
+    20cc:	xor    %eax,%eax
+    20ce:	call   20d3 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x373>
+    20d3:	mov    0x0(%rip),%rdi        # 20da <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x37a>
+    20da:	call   20df <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x37f>
+    20df:	call   20e4 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x384>
+    20e4:	call   20e9 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)+0x389>
+    20e9:	call   30 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]>
+    20ee:	xchg   %ax,%ax
+
+00000000000020f0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)>:
+    20f0:	push   %r13
+    20f2:	mov    %rdx,%r13
+    20f5:	push   %r12
+    20f7:	mov    %rsi,%r12
+    20fa:	push   %rbp
+    20fb:	lea    0xe8(%rdi),%rbp
+    2102:	push   %rbx
+    2103:	mov    %rdi,%rbx
+    2106:	mov    %rbp,%rdi
+    2109:	sub    $0x18,%rsp
+    210d:	call   2112 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x22>
+    2112:	test   %eax,%eax
+    2114:	jne    211a <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x2a>
+    211a:	mov    0x110(%rbx),%rcx
+    2121:	mov    0x20(%rcx),%rsi
+    2125:	mov    0x28(%rcx),%rdi
+    2129:	cmp    %rdi,%rsi
+    212c:	jae    23ec <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x2fc>
+    2132:	mov    0x18(%rcx),%rax
+    2136:	xor    %edx,%edx
+    2138:	add    %rsi,%rax
+    213b:	add    $0x1,%rsi
+    213f:	div    %rdi
+    2142:	shl    $0x4,%rdx
+    2146:	add    (%rcx),%rdx
+    2149:	mov    %r12,(%rdx)
+    214c:	movzbl 0xe4(%rbx),%r12d
+    2154:	mov    %r13,0x8(%rdx)
+    2158:	mov    %rsi,0x20(%rcx)
+    215c:	test   %r12b,%r12b
+    215f:	jne    2350 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x260>
+    2165:	data16 cs nopw 0x0(%rax,%rax,1)
+    2170:	mov    0x18(%rcx),%rax
+    2174:	mov    %rbx,%rdi
+    2177:	shl    $0x4,%rax
+    217b:	add    (%rcx),%rax
+    217e:	mov    (%rax),%esi
+    2180:	mov    0x8(%rax),%rdx
+    2184:	call   2189 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x99>
+    2189:	test   %al,%al
+    218b:	je     219b <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xab>
+    218d:	mov    0x110(%rbx),%rcx
+    2194:	cmpq   $0x0,0x20(%rcx)
+    2199:	jne    2170 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x80>
+    219b:	movzbl 0xe4(%rbx),%r12d
+    21a3:	test   %r12b,%r12b
+    21a6:	je     2258 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x168>
+    21ac:	mov    %rbp,%rdi
+    21af:	call   21b4 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xc4>
+    21b4:	mov    0x18(%rbx),%rbx
+    21b8:	test   %rbx,%rbx
+    21bb:	je     233c <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x24c>
+    21c1:	mov    %rbx,%rdi
+    21c4:	call   21c9 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xd9>
+    21c9:	test   %eax,%eax
+    21cb:	jne    21d1 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xe1>
+    21d1:	mov    0x28(%rbx),%rax
+    21d5:	cmp    $0xffffffffffffffff,%rax
+    21d9:	je     23b0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x2c0>
+    21df:	add    $0x1,%rax
+    21e3:	mov    %rax,0x28(%rbx)
+    21e7:	mov    0x6c(%rbx),%eax
+    21ea:	test   %eax,%eax
+    21ec:	js     2242 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x152>
+    21ee:	cmpb   $0x0,0x70(%rbx)
+    21f2:	jne    2242 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x152>
+    21f4:	movq   $0x1,0x8(%rsp)
+    21fd:	call   2202 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x112>
+    2202:	mov    %rax,%rbp
+    2205:	movl   $0x0,0x0(%rbp)
+    220c:	mov    0x6c(%rbx),%edi
+    220f:	mov    $0x8,%edx
+    2214:	lea    0x8(%rsp),%rsi
+    2219:	call   221e <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x12e>
+    221e:	cmp    $0x8,%rax
+    2222:	je     223e <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x14e>
+    2224:	mov    0x0(%rbp),%ecx
+    2227:	test   %rax,%rax
+    222a:	jns    23f1 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x301>
+    2230:	cmp    $0x4,%ecx
+    2233:	je     2205 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x115>
+    2235:	cmp    $0xb,%ecx
+    2238:	jne    23f1 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x301>
+    223e:	movb   $0x1,0x70(%rbx)
+    2242:	add    $0x18,%rsp
+    2246:	mov    %rbx,%rdi
+    2249:	pop    %rbx
+    224a:	pop    %rbp
+    224b:	pop    %r12
+    224d:	pop    %r13
+    224f:	jmp    2254 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x164>
+    2254:	nopl   0x0(%rax)
+    2258:	mov    0xd0(%rbx),%rax
+    225f:	test   %rax,%rax
+    2262:	je     229c <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1ac>
+    2264:	cmpq   $0x0,0x20(%rax)
+    2269:	je     229c <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1ac>
+    226b:	lock addq $0x1,0x120(%rbx)
+    2274:	mov    0xc8(%rbx),%rdi
+    227b:	call   2280 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x190>
+    2280:	mov    $0x1,%edx
+    2285:	mov    %rbx,%rdi
+    2288:	mov    %eax,%esi
+    228a:	call   228f <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x19f>
+    228f:	cmpb   $0x0,0xe4(%rbx)
+    2296:	jne    21ac <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xbc>
+    229c:	cmpq   $0x0,0x68(%rbx)
+    22a1:	je     2304 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x214>
+    22a3:	mov    0x78(%rbx),%rcx
+    22a7:	mov    0x70(%rbx),%rdx
+    22ab:	xor    %r13d,%r13d
+    22ae:	cmp    %rcx,%rdx
+    22b1:	je     2304 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x214>
+    22b3:	xchg   %ax,%ax
+    22b5:	data16 cs nopw 0x0(%rax,%rax,1)
+    22c0:	mov    %r13,%rax
+    22c3:	shl    $0x5,%rax
+    22c7:	add    %rdx,%rax
+    22ca:	cmpb   $0x0,0x1b(%rax)
+    22ce:	je     22e0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1f0>
+    22d0:	cmpb   $0x0,0x18(%rax)
+    22d4:	jne    22e0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1f0>
+    22d6:	cmpb   $0x0,0x19(%rax)
+    22da:	jne    23d0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x2e0>
+    22e0:	mov    %rcx,%rax
+    22e3:	add    $0x1,%r13
+    22e7:	sub    %rdx,%rax
+    22ea:	sar    $0x5,%rax
+    22ee:	cmp    %rax,%r13
+    22f1:	jb     22c0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1d0>
+    22f3:	movzbl 0xe4(%rbx),%r12d
+    22fb:	test   %r12b,%r12b
+    22fe:	jne    21ac <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xbc>
+    2304:	mov    0x110(%rbx),%rax
+    230b:	cmpq   $0x0,0x20(%rax)
+    2310:	jne    21ac <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xbc>
+    2316:	mov    0xd0(%rbx),%rax
+    231d:	test   %rax,%rax
+    2320:	je     232b <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x23b>
+    2322:	mov    0x20(%rax),%rdi
+    2326:	test   %rdi,%rdi
+    2329:	jne    2370 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x280>
+    232b:	mov    %rbp,%rdi
+    232e:	call   2333 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x243>
+    2333:	test   %r12b,%r12b
+    2336:	jne    21b4 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xc4>
+    233c:	add    $0x18,%rsp
+    2340:	pop    %rbx
+    2341:	pop    %rbp
+    2342:	pop    %r12
+    2344:	pop    %r13
+    2346:	ret
+    2347:	nopw   0x0(%rax,%rax,1)
+    2350:	mov    %rbx,%rdi
+    2353:	call   2358 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x268>
+    2358:	cmpb   $0x0,0xe4(%rbx)
+    235f:	je     2304 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x214>
+    2361:	jmp    21ac <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xbc>
+    2366:	cs nopw 0x0(%rax,%rax,1)
+    2370:	mov    0x18(%rax),%rcx
+    2374:	mov    0x28(%rax),%rsi
+    2378:	mov    (%rax),%r8
+    237b:	add    %rcx,%rdi
+    237e:	xchg   %ax,%ax
+    2380:	mov    %rcx,%rax
+    2383:	xor    %edx,%edx
+    2385:	div    %rsi
+    2388:	lea    (%rdx,%rdx,2),%rax
+    238c:	shl    $0x4,%rax
+    2390:	cmpb   $0x0,0x28(%r8,%rax,1)
+    2396:	je     21ac <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xbc>
+    239c:	add    $0x1,%rcx
+    23a0:	cmp    %rdi,%rcx
+    23a3:	jne    2380 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x290>
+    23a5:	jmp    232b <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x23b>
+    23aa:	nopw   0x0(%rax,%rax,1)
+    23b0:	mov    0x38(%rbx),%rax
+    23b4:	cmp    $0xffffffffffffffff,%rax
+    23b8:	je     21e7 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xf7>
+    23be:	add    $0x1,%rax
+    23c2:	mov    %rax,0x38(%rbx)
+    23c6:	jmp    21e7 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xf7>
+    23cb:	nopl   0x0(%rax,%rax,1)
+    23d0:	mov    0x10(%rax),%rdx
+    23d4:	mov    0x8(%rax),%esi
+    23d7:	mov    %rbx,%rdi
+    23da:	call   23df <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x2ef>
+    23df:	mov    0x70(%rbx),%rdx
+    23e3:	mov    0x78(%rbx),%rcx
+    23e7:	jmp    22e0 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1f0>
+    23ec:	call   30 <sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]>
+    23f1:	mov    0x0(%rip),%rdi        # 23f8 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x308>
+    23f8:	mov    $0x0,%edx
+    23fd:	mov    $0x0,%esi
+    2402:	xor    %eax,%eax
+    2404:	call   2409 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x319>
+    2409:	mov    0x0(%rip),%rdi        # 2410 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x320>
+    2410:	call   2415 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x325>
+    2415:	call   241a <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x32a>
+    241a:	nopw   0x0(%rax,%rax,1)
+
+0000000000002420 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()>:
+    2420:	cmpb   $0x0,0xe4(%rdi)
+    2427:	jne    24c0 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0xa0>
+    242d:	cmpq   $0x0,0x68(%rdi)
+    2432:	je     24c0 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0xa0>
+    2438:	mov    0x78(%rdi),%rsi
+    243c:	mov    0x70(%rdi),%rdx
+    2440:	cmp    %rdx,%rsi
+    2443:	je     24c0 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0xa0>
+    2445:	sub    $0x18,%rsp
+    2449:	xor    %ecx,%ecx
+    244b:	nopl   0x0(%rax,%rax,1)
+    2450:	mov    %rcx,%rax
+    2453:	shl    $0x5,%rax
+    2457:	add    %rdx,%rax
+    245a:	cmpb   $0x0,0x1b(%rax)
+    245e:	je     2470 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0x50>
+    2460:	cmpb   $0x0,0x18(%rax)
+    2464:	jne    2470 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0x50>
+    2466:	cmpb   $0x0,0x19(%rax)
+    246a:	jne    2490 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0x70>
+    246c:	nopl   0x0(%rax)
+    2470:	mov    %rsi,%rax
+    2473:	add    $0x1,%rcx
+    2477:	sub    %rdx,%rax
+    247a:	sar    $0x5,%rax
+    247e:	cmp    %rax,%rcx
+    2481:	jb     2450 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0x30>
+    2483:	add    $0x18,%rsp
+    2487:	ret
+    2488:	nopl   0x0(%rax,%rax,1)
+    2490:	mov    0x8(%rax),%esi
+    2493:	mov    0x10(%rax),%rdx
+    2497:	mov    %rcx,0x8(%rsp)
+    249c:	mov    %rdi,(%rsp)
+    24a0:	call   24a5 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0x85>
+    24a5:	mov    (%rsp),%rdi
+    24a9:	mov    0x8(%rsp),%rcx
+    24ae:	mov    0x70(%rdi),%rdx
+    24b2:	mov    0x78(%rdi),%rsi
+    24b6:	jmp    2470 <sluice::async::UringAsyncBackend::service_pending_controls_locked_()+0x50>
+    24b8:	nopl   0x0(%rax,%rax,1)
+    24c0:	ret
+
+Disassembly of section .text.unlikely:
+
+0000000000000000 <sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long) [clone .cold]>:
+   0:	mov    $0x0,%edi
+   5:	call   a <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError) [clone .cold]>
+
+000000000000000a <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError) [clone .cold]>:
+   a:	mov    %eax,%edi
+   c:	mov    %r12,0x138(%rsp)
+  14:	mov    %r14,0x148(%rsp)
+  1c:	call   21 <sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError) [clone .cold]+0x17>
+  21:	nop
+
+0000000000000022 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]>:
+  22:	mov    %eax,%edi
+  24:	call   29 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]+0x7>
+  29:	mov    %eax,%edi
+  2b:	call   30 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]+0xe>
+  30:	mov    %eax,%edi
+  32:	call   37 <sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]+0x15>
+  37:	nop
+
+0000000000000038 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]>:
+  38:	mov    %eax,%edi
+  3a:	call   3f <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]+0x7>
+  3f:	mov    %eax,%edi
+  41:	call   46 <sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]+0xe>

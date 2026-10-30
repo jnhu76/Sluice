@@ -1,0 +1,3663 @@
+
+build/.objs/sluice_async/linux/x86_64/release/src/async/threadpool_backend.cpp.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <sluice::async::ThreadPoolBackend::poll()>:
+       0:	sub    $0x8,%rsp
+       4:	mov    (%rdi),%rax
+       7:	call   *0x18(%rax)
+       a:	add    $0x8,%rsp
+       e:	ret
+       f:	nop
+
+0000000000000010 <sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()>:
+      10:	sub    $0x8,%rsp
+      14:	mov    $0x71,%edx
+      19:	mov    $0x1,%esi
+      1e:	mov    0x0(%rip),%rcx        # 25 <sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()+0x15>
+      25:	mov    $0x0,%edi
+      2a:	call   2f <sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()+0x1f>
+      2f:	mov    0x0(%rip),%rdi        # 36 <sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()+0x26>
+      36:	call   3b <sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()+0x2b>
+      3b:	call   40 <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()>
+
+0000000000000040 <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()>:
+      40:	movq   $0x0,(%rdi)
+      47:	jmp    4c <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()+0xc>
+      4c:	nopl   0x0(%rax)
+
+0000000000000050 <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()>:
+      50:	sub    $0x18,%rsp
+      54:	movq   $0x0,(%rdi)
+      5b:	mov    %rdi,0x8(%rsp)
+      60:	call   65 <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()+0x15>
+      65:	mov    0x8(%rsp),%rdi
+      6a:	mov    $0x10,%esi
+      6f:	add    $0x18,%rsp
+      73:	jmp    78 <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()+0x28>
+      78:	nopl   0x0(%rax,%rax,1)
+
+0000000000000080 <sluice::async::ThreadPoolBackend::outstanding() const>:
+      80:	mov    0x20(%rdi),%rdi
+      84:	test   %rdi,%rdi
+      87:	je     90 <sluice::async::ThreadPoolBackend::outstanding() const+0x10>
+      89:	jmp    8e <sluice::async::ThreadPoolBackend::outstanding() const+0xe>
+      8e:	xchg   %ax,%ax
+      90:	xor    %eax,%eax
+      92:	ret
+      93:	nop
+      94:	nop
+      95:	data16 cs nopw 0x0(%rax,%rax,1)
+
+00000000000000a0 <sluice::async::ThreadPoolBackend::stop_execution()>:
+      a0:	push   %rbp
+      a1:	lea    0x68(%rdi),%rbp
+      a5:	push   %rbx
+      a6:	mov    %rdi,%rbx
+      a9:	mov    %rbp,%rdi
+      ac:	sub    $0x8,%rsp
+      b0:	call   b5 <sluice::async::ThreadPoolBackend::stop_execution()+0x15>
+      b5:	test   %eax,%eax
+      b7:	jne    bd <sluice::async::ThreadPoolBackend::stop_execution()+0x1d>
+      bd:	movb   $0x1,0x170(%rbx)
+      c4:	mov    %rbp,%rdi
+      c7:	call   cc <sluice::async::ThreadPoolBackend::stop_execution()+0x2c>
+      cc:	add    $0x8,%rsp
+      d0:	lea    0x90(%rbx),%rdi
+      d7:	pop    %rbx
+      d8:	pop    %rbp
+      d9:	jmp    de <sluice::async::ThreadPoolBackend::stop_execution()+0x3e>
+      de:	xchg   %ax,%ax
+
+00000000000000e0 <sluice::async::ThreadPoolBackend::internal_work_retired() const>:
+      e0:	push   %rbp
+      e1:	lea    0x68(%rdi),%rbp
+      e5:	push   %rbx
+      e6:	mov    %rdi,%rbx
+      e9:	mov    %rbp,%rdi
+      ec:	sub    $0x8,%rsp
+      f0:	call   f5 <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x15>
+      f5:	test   %eax,%eax
+      f7:	jne    fd <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x1d>
+      fd:	mov    0x168(%rbx),%rax
+     104:	or     0xe0(%rbx),%rax
+     10b:	or     0x110(%rbx),%rax
+     112:	jne    150 <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x70>
+     114:	mov    0x48(%rbx),%rax
+     118:	mov    0x50(%rbx),%rdx
+     11c:	cmp    %rdx,%rax
+     11f:	jne    149 <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x69>
+     121:	nopl   0x0(%rax)
+     125:	data16 cs nopw 0x0(%rax,%rax,1)
+     130:	mov    $0x1,%ebx
+     135:	jmp    152 <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x72>
+     137:	nopw   0x0(%rax,%rax,1)
+     140:	add    $0x20,%rax
+     144:	cmp    %rax,%rdx
+     147:	je     130 <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x50>
+     149:	cmpb   $0x0,0x1(%rax)
+     14d:	je     140 <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x60>
+     14f:	nop
+     150:	xor    %ebx,%ebx
+     152:	mov    %rbp,%rdi
+     155:	call   15a <sluice::async::ThreadPoolBackend::internal_work_retired() const+0x7a>
+     15a:	add    $0x8,%rsp
+     15e:	mov    %ebx,%eax
+     160:	pop    %rbx
+     161:	pop    %rbp
+     162:	ret
+     163:	nop
+     164:	nop
+     165:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000000170 <sluice::async::ThreadPoolBackend::retire_execution_resources()>:
+     170:	push   %r12
+     172:	mov    %rdi,%r12
+     175:	push   %rbp
+     176:	push   %rbx
+     177:	sub    $0x40,%rsp
+     17b:	mov    0x178(%rdi),%rbx
+     182:	mov    0x180(%rdi),%rbp
+     189:	cmp    %rbx,%rbp
+     18c:	jne    199 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x29>
+     18e:	jmp    1b0 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x40>
+     190:	add    $0x8,%rbx
+     194:	cmp    %rbx,%rbp
+     197:	je     1b0 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x40>
+     199:	cmpq   $0x0,(%rbx)
+     19d:	je     190 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x20>
+     19f:	mov    %rbx,%rdi
+     1a2:	add    $0x8,%rbx
+     1a6:	call   1ab <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x3b>
+     1ab:	cmp    %rbx,%rbp
+     1ae:	jne    199 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x29>
+     1b0:	lea    0x68(%r12),%rdi
+     1b5:	call   1ba <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x4a>
+     1ba:	test   %eax,%eax
+     1bc:	jne    1c2 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x52>
+     1c2:	mov    0x20(%r12),%rsi
+     1c7:	test   %rsi,%rsi
+     1ca:	je     268 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xf8>
+     1d0:	mov    %rsp,%rdi
+     1d3:	call   1d8 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x68>
+     1d8:	mov    0x8(%rsp),%rcx
+     1dd:	movdqu 0x18(%rsp),%xmm0
+     1e3:	movdqu 0x28(%rsp),%xmm1
+     1e9:	mov    0x168(%r12),%rax
+     1f1:	or     0xe0(%r12),%rax
+     1f9:	or     0x110(%r12),%rax
+     201:	jne    22f <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xbf>
+     203:	mov    0x48(%r12),%rax
+     208:	mov    0x50(%r12),%rdx
+     20d:	cmp    %rdx,%rax
+     210:	jne    229 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xb9>
+     212:	jmp    238 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xc8>
+     214:	nop
+     215:	data16 cs nopw 0x0(%rax,%rax,1)
+     220:	add    $0x20,%rax
+     224:	cmp    %rax,%rdx
+     227:	je     238 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xc8>
+     229:	cmpb   $0x0,0x1(%rax)
+     22d:	je     220 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xb0>
+     22f:	call   234 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xc4>
+     234:	nopl   0x0(%rax)
+     238:	por    %xmm1,%xmm0
+     23c:	movdqa %xmm0,%xmm1
+     240:	psrldq $0x8,%xmm1
+     245:	por    %xmm1,%xmm0
+     249:	movq   %xmm0,%rax
+     24e:	or     %rcx,%rax
+     251:	jne    22f <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xbf>
+     253:	add    $0x40,%rsp
+     257:	lea    0x68(%r12),%rdi
+     25c:	pop    %rbx
+     25d:	pop    %rbp
+     25e:	pop    %r12
+     260:	jmp    265 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0xf5>
+     265:	nopl   (%rax)
+     268:	pxor   %xmm0,%xmm0
+     26c:	xor    %ecx,%ecx
+     26e:	movdqa %xmm0,%xmm1
+     272:	jmp    1e9 <sluice::async::ThreadPoolBackend::retire_execution_resources()+0x79>
+     277:	nop
+     278:	nopl   0x0(%rax,%rax,1)
+
+0000000000000280 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()>:
+     280:	push   %rbp
+     281:	lea    0x68(%rdi),%rbp
+     285:	push   %rbx
+     286:	mov    %rdi,%rbx
+     289:	sub    $0x8,%rsp
+     28d:	movq   $0x0,(%rdi)
+     294:	mov    %rbp,%rdi
+     297:	call   29c <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x1c>
+     29c:	test   %eax,%eax
+     29e:	jne    2a4 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x24>
+     2a4:	movb   $0x1,0x170(%rbx)
+     2ab:	mov    %rbp,%rdi
+     2ae:	lea    0x90(%rbx),%rbp
+     2b5:	call   2ba <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x3a>
+     2ba:	mov    %rbp,%rdi
+     2bd:	call   2c2 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x42>
+     2c2:	mov    %rbx,%rdi
+     2c5:	call   2ca <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x4a>
+     2ca:	mov    0x180(%rbx),%rdx
+     2d1:	mov    0x178(%rbx),%rdi
+     2d8:	cmp    %rdi,%rdx
+     2db:	je     2f3 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x73>
+     2dd:	mov    %rdi,%rax
+     2e0:	cmpq   $0x0,(%rax)
+     2e4:	jne    2ea <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x6a>
+     2ea:	add    $0x8,%rax
+     2ee:	cmp    %rax,%rdx
+     2f1:	jne    2e0 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x60>
+     2f3:	test   %rdi,%rdi
+     2f6:	je     307 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x87>
+     2f8:	mov    0x188(%rbx),%rsi
+     2ff:	sub    %rdi,%rsi
+     302:	call   307 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x87>
+     307:	mov    0x150(%rbx),%rdi
+     30e:	test   %rdi,%rdi
+     311:	je     322 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xa2>
+     313:	mov    0x160(%rbx),%rsi
+     31a:	sub    %rdi,%rsi
+     31d:	call   322 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xa2>
+     322:	mov    0x120(%rbx),%rdi
+     329:	test   %rdi,%rdi
+     32c:	je     33d <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xbd>
+     32e:	mov    0x130(%rbx),%rsi
+     335:	sub    %rdi,%rsi
+     338:	call   33d <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xbd>
+     33d:	mov    0xf0(%rbx),%rdi
+     344:	test   %rdi,%rdi
+     347:	je     358 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xd8>
+     349:	mov    0x100(%rbx),%rsi
+     350:	sub    %rdi,%rsi
+     353:	call   358 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xd8>
+     358:	mov    0xc0(%rbx),%rdi
+     35f:	test   %rdi,%rdi
+     362:	je     373 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xf3>
+     364:	mov    0xd0(%rbx),%rsi
+     36b:	sub    %rdi,%rsi
+     36e:	call   373 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xf3>
+     373:	mov    %rbp,%rdi
+     376:	call   37b <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xfb>
+     37b:	mov    0x48(%rbx),%rdi
+     37f:	test   %rdi,%rdi
+     382:	je     390 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x110>
+     384:	mov    0x58(%rbx),%rsi
+     388:	sub    %rdi,%rsi
+     38b:	call   390 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x110>
+     390:	mov    0x30(%rbx),%rdi
+     394:	test   %rdi,%rdi
+     397:	je     3b0 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x130>
+     399:	mov    0x40(%rbx),%rsi
+     39d:	add    $0x8,%rsp
+     3a1:	pop    %rbx
+     3a2:	pop    %rbp
+     3a3:	sub    %rdi,%rsi
+     3a6:	jmp    3ab <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x12b>
+     3ab:	nopl   0x0(%rax,%rax,1)
+     3b0:	add    $0x8,%rsp
+     3b4:	pop    %rbx
+     3b5:	pop    %rbp
+     3b6:	ret
+     3b7:	nop
+     3b8:	nopl   0x0(%rax,%rax,1)
+
+00000000000003c0 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()>:
+     3c0:	sub    $0x18,%rsp
+     3c4:	mov    %rdi,0x8(%rsp)
+     3c9:	call   3ce <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0xe>
+     3ce:	mov    0x8(%rsp),%rdi
+     3d3:	mov    $0x198,%esi
+     3d8:	add    $0x18,%rsp
+     3dc:	jmp    3e1 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend()+0x21>
+     3e1:	nop
+     3e2:	nopl   (%rax)
+     3e5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+00000000000003f0 <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)>:
+     3f0:	mov    %rdi,%rcx
+     3f3:	mov    %rdx,%rdi
+     3f6:	mov    0x28(%rcx),%r8
+     3fa:	mov    0x20(%rcx),%rdx
+     3fe:	cmp    %r8,%rdx
+     401:	jae    42e <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)+0x3e>
+     403:	mov    0x18(%rcx),%rax
+     407:	xor    %r9d,%r9d
+     40a:	add    %rdx,%rax
+     40d:	cmp    %r8,%rax
+     410:	cmovb  %r9,%r8
+     414:	add    $0x1,%rdx
+     418:	sub    %r8,%rax
+     41b:	shl    $0x4,%rax
+     41f:	add    (%rcx),%rax
+     422:	mov    %rsi,(%rax)
+     425:	mov    %rdi,0x8(%rax)
+     429:	mov    %rdx,0x20(%rcx)
+     42d:	ret
+     42e:	push   %rax
+     42f:	mov    $0x69,%edx
+     434:	mov    $0x1,%esi
+     439:	mov    $0x0,%edi
+     43e:	mov    0x0(%rip),%rcx        # 445 <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)+0x55>
+     445:	call   44a <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)+0x5a>
+     44a:	mov    0x0(%rip),%rdi        # 451 <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)+0x61>
+     451:	call   456 <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)+0x66>
+     456:	call   45b <sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)+0x6b>
+     45b:	nop
+     45c:	nopl   0x0(%rax)
+
+0000000000000460 <sluice::async::ThreadPoolBackend::BoundedHandleRing::pop_front(sluice::async::detail::RequestReservation&)>:
+     460:	mov    0x20(%rdi),%rdx
+     464:	xor    %eax,%eax
+     466:	test   %rdx,%rdx
+     469:	je     49f <sluice::async::ThreadPoolBackend::BoundedHandleRing::pop_front(sluice::async::detail::RequestReservation&)+0x3f>
+     46b:	mov    0x18(%rdi),%rax
+     46f:	mov    %rax,%rcx
+     472:	add    $0x1,%rax
+     476:	shl    $0x4,%rcx
+     47a:	add    (%rdi),%rcx
+     47d:	movdqu (%rcx),%xmm0
+     481:	xor    %ecx,%ecx
+     483:	cmp    0x28(%rdi),%rax
+     487:	cmove  %rcx,%rax
+     48b:	sub    $0x1,%rdx
+     48f:	movups %xmm0,(%rsi)
+     492:	mov    %rdx,0x20(%rdi)
+     496:	mov    %rax,0x18(%rdi)
+     49a:	mov    $0x1,%eax
+     49f:	ret
+
+00000000000004a0 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)>:
+     4a0:	mov    0x20(%rdi),%r8
+     4a4:	mov    %rdi,%r11
+     4a7:	test   %r8,%r8
+     4aa:	je     5c8 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x128>
+     4b0:	push   %rbp
+     4b1:	mov    %rsi,%r9
+     4b4:	mov    %rdx,%rbp
+     4b7:	xor    %edx,%edx
+     4b9:	push   %rbx
+     4ba:	mov    0x18(%rdi),%rbx
+     4be:	mov    0x28(%rdi),%rsi
+     4c2:	mov    (%rdi),%rdi
+     4c5:	mov    %rbx,%r10
+     4c8:	mov    %rbx,%rcx
+     4cb:	sub    %rsi,%r10
+     4ce:	jmp    511 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x71>
+     4d0:	nopl   0x0(%rax)
+     4d4:	data16 cs nopw 0x0(%rax,%rax,1)
+     4df:	data16 cs nopw 0x0(%rax,%rax,1)
+     4ea:	data16 cs nopw 0x0(%rax,%rax,1)
+     4f5:	data16 cs nopw 0x0(%rax,%rax,1)
+     500:	add    $0x1,%rdx
+     504:	add    $0x1,%rcx
+     508:	cmp    %rdx,%r8
+     50b:	je     5c0 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x120>
+     511:	cmp    %rsi,%rcx
+     514:	lea    (%r10,%rdx,1),%rax
+     518:	cmovb  %rcx,%rax
+     51c:	shl    $0x4,%rax
+     520:	add    %rdi,%rax
+     523:	cmp    %r9d,(%rax)
+     526:	jne    500 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x60>
+     528:	cmp    %rbp,0x8(%rax)
+     52c:	jne    500 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x60>
+     52e:	lea    0x1(%rdx),%rax
+     532:	cmp    %r8,%rax
+     535:	jae    5d0 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x130>
+     53b:	mov    %rbx,%rax
+     53e:	lea    (%rbx,%rdx,1),%rcx
+     542:	lea    0x1(%rbx,%rdx,1),%r10
+     547:	sub    %rsi,%rax
+     54a:	lea    -0x1(%r8,%rbx,1),%rbx
+     54f:	add    %rdx,%rax
+     552:	jmp    5a6 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x106>
+     554:	data16 cs nopw 0x0(%rax,%rax,1)
+     55f:	data16 cs nopw 0x0(%rax,%rax,1)
+     56a:	data16 cs nopw 0x0(%rax,%rax,1)
+     575:	data16 cs nopw 0x0(%rax,%rax,1)
+     580:	add    $0x1,%rax
+     584:	mov    %rax,%r9
+     587:	shl    $0x4,%r9
+     58b:	shl    $0x4,%rdx
+     58f:	add    $0x1,%rcx
+     593:	add    $0x1,%r10
+     597:	movdqu (%rdi,%r9,1),%xmm0
+     59d:	movups %xmm0,(%rdi,%rdx,1)
+     5a1:	cmp    %rcx,%rbx
+     5a4:	je     5d0 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0x130>
+     5a6:	cmp    %rsi,%rcx
+     5a9:	mov    %rax,%rdx
+     5ac:	cmovb  %rcx,%rdx
+     5b0:	cmp    %rsi,%r10
+     5b3:	jae    580 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0xe0>
+     5b5:	mov    %r10,%r9
+     5b8:	add    $0x1,%rax
+     5bc:	jmp    587 <sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)+0xe7>
+     5be:	xchg   %ax,%ax
+     5c0:	xor    %eax,%eax
+     5c2:	pop    %rbx
+     5c3:	pop    %rbp
+     5c4:	ret
+     5c5:	nopl   (%rax)
+     5c8:	xor    %eax,%eax
+     5ca:	ret
+     5cb:	nopl   0x0(%rax,%rax,1)
+     5d0:	sub    $0x1,%r8
+     5d4:	mov    $0x1,%eax
+     5d9:	pop    %rbx
+     5da:	pop    %rbp
+     5db:	mov    %r8,0x20(%r11)
+     5df:	ret
+
+00000000000005e0 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)>:
+     5e0:	push   %r15
+     5e2:	mov    $0x0,%eax
+     5e7:	push   %r14
+     5e9:	movq   %rax,%xmm0
+     5ee:	mov    %rsi,%rax
+     5f1:	push   %r13
+     5f3:	push   %r12
+     5f5:	push   %rbp
+     5f6:	mov    %rdi,%rbp
+     5f9:	push   %rbx
+     5fa:	sub    $0x38,%rsp
+     5fe:	movups %xmm0,(%rdi)
+     601:	shr    $0x3a,%rax
+     605:	pxor   %xmm0,%xmm0
+     609:	movq   $0x0,0x20(%rdi)
+     611:	mov    %rsi,0x28(%rdi)
+     615:	movups %xmm0,0x10(%rdi)
+     619:	jne    61f <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x3f>
+     61f:	mov    %rsi,%rbx
+     622:	mov    %rdx,%r15
+     625:	test   %rsi,%rsi
+     628:	je     a68 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x488>
+     62e:	mov    %rsi,%r12
+     631:	shl    $0x5,%r12
+     635:	mov    %r12,%rdi
+     638:	call   63d <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x5d>
+     63d:	pxor   %xmm0,%xmm0
+     641:	lea    (%rax,%r12,1),%rdx
+     645:	mov    %rax,0x30(%rbp)
+     649:	mov    %rdx,0x40(%rbp)
+     64d:	nopl   0x0(%rax,%rax,1)
+     655:	data16 cs nopw 0x0(%rax,%rax,1)
+     660:	movups %xmm0,(%rax)
+     663:	add    $0x20,%rax
+     667:	movups %xmm0,-0x10(%rax)
+     66b:	movl   $0xffffffff,-0x1c(%rax)
+     672:	cmp    %rdx,%rax
+     675:	jne    660 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x80>
+     677:	mov    %rax,0x38(%rbp)
+     67b:	pxor   %xmm0,%xmm0
+     67f:	mov    %r12,%rdi
+     682:	movq   $0x0,0x58(%rbp)
+     68a:	movups %xmm0,0x48(%rbp)
+     68e:	call   693 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0xb3>
+     693:	lea    (%rax,%r12,1),%r13
+     697:	mov    %rax,0x48(%rbp)
+     69b:	mov    %r12,%rdx
+     69e:	xor    %esi,%esi
+     6a0:	mov    %r13,0x58(%rbp)
+     6a4:	mov    %rax,%rdi
+     6a7:	call   6ac <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0xcc>
+     6ac:	mov    %r13,0x50(%rbp)
+     6b0:	pxor   %xmm0,%xmm0
+     6b4:	lea    0x90(%rbp),%rax
+     6bb:	movq   $0x0,0x60(%rbp)
+     6c3:	mov    %rax,%rdi
+     6c6:	movq   $0x0,0x68(%rbp)
+     6ce:	movq   $0x0,0x70(%rbp)
+     6d6:	movq   $0x0,0x78(%rbp)
+     6de:	movups %xmm0,0x80(%rbp)
+     6e5:	movaps %xmm0,(%rsp)
+     6e9:	mov    %rax,0x18(%rsp)
+     6ee:	call   6f3 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x113>
+     6f3:	movdqa (%rsp),%xmm0
+     6f8:	movq   $0x0,0xd0(%rbp)
+     703:	movups %xmm0,0xc0(%rbp)
+     70a:	test   %rbx,%rbx
+     70d:	je     713 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x133>
+     713:	mov    %rbx,%r13
+     716:	shl    $0x4,%r13
+     71a:	mov    %r13,%rdi
+     71d:	call   722 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x142>
+     722:	lea    (%rax,%r13,1),%r14
+     726:	mov    %rax,0xc0(%rbp)
+     72d:	mov    %rax,%rdi
+     730:	xor    %esi,%esi
+     732:	mov    %r14,0xd0(%rbp)
+     739:	mov    %r13,%rdx
+     73c:	call   741 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x161>
+     741:	mov    %r14,0xc8(%rbp)
+     748:	pxor   %xmm0,%xmm0
+     74c:	mov    %r13,%rdi
+     74f:	mov    %rbx,0xe8(%rbp)
+     756:	movq   $0x0,0x100(%rbp)
+     761:	movups %xmm0,0xd8(%rbp)
+     768:	movups %xmm0,0xf0(%rbp)
+     76f:	call   774 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x194>
+     774:	lea    (%rax,%r13,1),%r14
+     778:	mov    %rax,0xf0(%rbp)
+     77f:	mov    %rax,%rdi
+     782:	xor    %esi,%esi
+     784:	mov    %r14,0x100(%rbp)
+     78b:	mov    %r13,%rdx
+     78e:	call   793 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x1b3>
+     793:	mov    %r14,0xf8(%rbp)
+     79a:	pxor   %xmm0,%xmm0
+     79e:	mov    %r13,%rdi
+     7a1:	mov    %rbx,0x118(%rbp)
+     7a8:	movq   $0x0,0x130(%rbp)
+     7b3:	movups %xmm0,0x108(%rbp)
+     7ba:	movups %xmm0,0x120(%rbp)
+     7c1:	call   7c6 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x1e6>
+     7c6:	lea    (%rax,%r13,1),%r14
+     7ca:	mov    %rax,0x120(%rbp)
+     7d1:	mov    %rax,%rdi
+     7d4:	xor    %esi,%esi
+     7d6:	mov    %r14,0x130(%rbp)
+     7dd:	mov    %r13,%rdx
+     7e0:	call   7e5 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x205>
+     7e5:	mov    %r14,0x128(%rbp)
+     7ec:	pxor   %xmm0,%xmm0
+     7f0:	mov    %r12,%rdi
+     7f3:	mov    %rbx,0x148(%rbp)
+     7fa:	movq   $0x0,0x160(%rbp)
+     805:	movups %xmm0,0x138(%rbp)
+     80c:	movups %xmm0,0x150(%rbp)
+     813:	call   818 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x238>
+     818:	add    %rax,%r12
+     81b:	mov    %rax,0x150(%rbp)
+     822:	shl    $0x5,%rbx
+     826:	xor    %esi,%esi
+     828:	mov    %r12,0x160(%rbp)
+     82f:	mov    %rbx,%rdx
+     832:	mov    %rax,%rdi
+     835:	call   83a <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x25a>
+     83a:	pxor   %xmm0,%xmm0
+     83e:	movb   $0x0,0x170(%rbp)
+     845:	lea    (%rax,%rbx,1),%rcx
+     849:	movq   $0x0,0x168(%rbp)
+     854:	mov    %rcx,0x158(%rbp)
+     85b:	movq   $0x0,0x188(%rbp)
+     866:	movq   $0x0,0x190(%rbp)
+     871:	movups %xmm0,0x178(%rbp)
+     878:	test   %r15,%r15
+     87b:	je     881 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x2a1>
+     881:	mov    %r15,%rax
+     884:	shr    $0x3c,%rax
+     888:	jne    88e <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x2ae>
+     88e:	lea    0x0(,%r15,8),%r12
+     896:	mov    %r12,%rdi
+     899:	call   89e <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x2be>
+     89e:	mov    %rax,0x178(%rbp)
+     8a5:	mov    %rax,%rbx
+     8a8:	mov    %rax,0x180(%rbp)
+     8af:	lea    (%rax,%r12,1),%rax
+     8b3:	xor    %r12d,%r12d
+     8b6:	mov    %rax,0x188(%rbp)
+     8bd:	jmp    929 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x349>
+     8bf:	nop
+     8c0:	movq   $0x0,(%rbx)
+     8c7:	mov    $0x10,%edi
+     8cc:	call   8d1 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x2f1>
+     8d1:	movq   $0x0,(%rax)
+     8d8:	lea    0x28(%rsp),%rsi
+     8dd:	mov    $0x0,%edx
+     8e2:	mov    %rbx,%rdi
+     8e5:	mov    %rbp,0x8(%rax)
+     8e9:	mov    %rax,0x28(%rsp)
+     8ee:	call   8f3 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x313>
+     8f3:	mov    0x28(%rsp),%rdi
+     8f8:	test   %rdi,%rdi
+     8fb:	je     903 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x323>
+     8fd:	mov    (%rdi),%rax
+     900:	call   *0x8(%rax)
+     903:	mov    0x180(%rbp),%rax
+     90a:	add    $0x1,%r12
+     90e:	lea    0x8(%rax),%rbx
+     912:	mov    %rbx,0x180(%rbp)
+     919:	cmp    %r15,%r12
+     91c:	jae    a55 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x475>
+     922:	mov    0x188(%rbp),%rax
+     929:	cmp    %rax,%rbx
+     92c:	jne    8c0 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x2e0>
+     92e:	mov    0x178(%rbp),%r14
+     935:	mov    %rbx,%rax
+     938:	sub    %r14,%rax
+     93b:	mov    %rax,%rdx
+     93e:	mov    %rax,0x10(%rsp)
+     943:	movabs $0xfffffffffffffff,%rax
+     94d:	sar    $0x3,%rdx
+     951:	cmp    %rax,%rdx
+     954:	je     95a <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x37a>
+     95a:	test   %rdx,%rdx
+     95d:	mov    $0x1,%eax
+     962:	cmovne %rdx,%rax
+     966:	add    %rdx,%rax
+     969:	movabs $0xfffffffffffffff,%rdx
+     973:	cmp    %rdx,%rax
+     976:	cmova  %rdx,%rax
+     97a:	shl    $0x3,%rax
+     97e:	mov    %rax,%rdi
+     981:	mov    %rax,(%rsp)
+     985:	call   98a <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x3aa>
+     98a:	mov    0x10(%rsp),%rcx
+     98f:	mov    $0x10,%edi
+     994:	mov    %rax,%r13
+     997:	add    %rax,%rcx
+     99a:	movq   $0x0,(%rcx)
+     9a1:	mov    %rcx,0x10(%rsp)
+     9a6:	call   9ab <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x3cb>
+     9ab:	mov    %rbp,0x8(%rax)
+     9af:	mov    0x10(%rsp),%rdi
+     9b4:	lea    0x28(%rsp),%rsi
+     9b9:	mov    $0x0,%edx
+     9be:	movq   $0x0,(%rax)
+     9c5:	mov    %rax,0x28(%rsp)
+     9ca:	call   9cf <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x3ef>
+     9cf:	mov    0x28(%rsp),%rdi
+     9d4:	test   %rdi,%rdi
+     9d7:	je     9df <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x3ff>
+     9d9:	mov    (%rdi),%rax
+     9dc:	call   *0x8(%rax)
+     9df:	cmp    %rbx,%r14
+     9e2:	je     a88 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4a8>
+     9e8:	sub    %r14,%rbx
+     9eb:	mov    %r14,%rdx
+     9ee:	mov    %r13,%rax
+     9f1:	add    %r13,%rbx
+     9f4:	nop
+     9f5:	data16 cs nopw 0x0(%rax,%rax,1)
+     a00:	mov    (%rdx),%rcx
+     a03:	add    $0x8,%rax
+     a07:	add    $0x8,%rdx
+     a0b:	mov    %rcx,-0x8(%rax)
+     a0f:	cmp    %rax,%rbx
+     a12:	jne    a00 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x420>
+     a14:	add    $0x8,%rbx
+     a18:	test   %r14,%r14
+     a1b:	je     a2f <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x44f>
+     a1d:	mov    0x188(%rbp),%rsi
+     a24:	mov    %r14,%rdi
+     a27:	sub    %r14,%rsi
+     a2a:	call   a2f <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x44f>
+     a2f:	mov    %r13,0x178(%rbp)
+     a36:	add    $0x1,%r12
+     a3a:	add    (%rsp),%r13
+     a3e:	mov    %rbx,0x180(%rbp)
+     a45:	mov    %r13,0x188(%rbp)
+     a4c:	cmp    %r15,%r12
+     a4f:	jb     922 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x342>
+     a55:	add    $0x38,%rsp
+     a59:	pop    %rbx
+     a5a:	pop    %rbp
+     a5b:	pop    %r12
+     a5d:	pop    %r13
+     a5f:	pop    %r14
+     a61:	pop    %r15
+     a63:	ret
+     a64:	nopl   0x0(%rax)
+     a68:	movq   $0x0,0x58(%rdi)
+     a70:	xor    %r12d,%r12d
+     a73:	xor    %r13d,%r13d
+     a76:	movups %xmm0,0x30(%rdi)
+     a7a:	movups %xmm0,0x40(%rdi)
+     a7e:	jmp    6ac <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0xcc>
+     a83:	nopl   0x0(%rax,%rax,1)
+     a88:	lea    0x8(%r13),%rbx
+     a8c:	jmp    a1d <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x43d>
+     a8e:	mov    %rax,%rbx
+     a91:	jmp    a96 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4b6>
+     a96:	mov    %rax,%rbx
+     a99:	jmp    a9e <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4be>
+     a9e:	mov    %rax,%rbx
+     aa1:	jmp    aa6 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4c6>
+     aa6:	jmp    aab <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4cb>
+     aab:	jmp    ab0 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4d0>
+     ab0:	mov    %rax,%rbx
+     ab3:	jmp    ab8 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4d8>
+     ab8:	mov    %rax,%rbx
+     abb:	jmp    ac0 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4e0>
+     ac0:	mov    %rax,%rbx
+     ac3:	jmp    ac8 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4e8>
+     ac8:	mov    %rax,%rbx
+     acb:	jmp    ad0 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4f0>
+     ad0:	mov    %rax,%rbx
+     ad3:	jmp    ad8 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)+0x4f8>
+     ad8:	nopl   0x0(%rax,%rax,1)
+
+0000000000000ae0 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)>:
+     ae0:	push   %r12
+     ae2:	mov    %rcx,%r12
+     ae5:	push   %rbp
+     ae6:	mov    %rdi,%rbp
+     ae9:	mov    $0x198,%edi
+     aee:	push   %rbx
+     aef:	sub    $0x20,%rsp
+     af3:	mov    %rsi,0x8(%rsp)
+     af8:	mov    %rdx,(%rsp)
+     afc:	call   b01 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x21>
+     b01:	mov    0x8(%rsp),%rsi
+     b06:	mov    (%rsp),%rdx
+     b0a:	mov    %rax,%rdi
+     b0d:	mov    %rax,%rbx
+     b10:	call   b15 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x35>
+     b15:	lea    0x18(%rsp),%rsi
+     b1a:	mov    %r12,%rdx
+     b1d:	mov    %rbp,%rdi
+     b20:	mov    %rbx,0x18(%rsp)
+     b25:	call   b2a <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x4a>
+     b2a:	mov    0x18(%rsp),%rbx
+     b2f:	test   %rbx,%rbx
+     b32:	je     b58 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x78>
+     b34:	mov    (%rbx),%rax
+     b37:	mov    %rbx,%rdi
+     b3a:	mov    0x8(%rax),%rax
+     b3e:	cmp    $0x0,%rax
+     b44:	jne    b68 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x88>
+     b46:	call   b4b <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x6b>
+     b4b:	mov    $0x198,%esi
+     b50:	mov    %rbx,%rdi
+     b53:	call   b58 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x78>
+     b58:	add    $0x20,%rsp
+     b5c:	mov    %rbp,%rax
+     b5f:	pop    %rbx
+     b60:	pop    %rbp
+     b61:	pop    %r12
+     b63:	ret
+     b64:	nopl   0x0(%rax)
+     b68:	call   *%rax
+     b6a:	add    $0x20,%rsp
+     b6e:	mov    %rbp,%rax
+     b71:	pop    %rbx
+     b72:	pop    %rbp
+     b73:	pop    %r12
+     b75:	ret
+     b76:	mov    %rax,%rbp
+     b79:	jmp    b7e <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0x9e>
+     b7e:	mov    %rax,%rbx
+     b81:	jmp    b86 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)+0xa6>
+     b86:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000000b90 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)>:
+     b90:	mov    0x8(%rsp),%eax
+     b94:	test   %eax,%eax
+     b96:	js     c10 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x80>
+     b98:	cmpb   $0x1,0xc(%rsp)
+     b9d:	je     c00 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x70>
+     b9f:	mov    0x18(%rsp),%rax
+     ba4:	test   %rax,%rax
+     ba7:	je     bd4 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x44>
+     ba9:	mov    0x20(%rsp),%rcx
+     bae:	mov    %rcx,%rsi
+     bb1:	or     %rax,%rsi
+     bb4:	js     c00 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x70>
+     bb6:	movabs $0x7fffffffffffffff,%rdx
+     bc0:	sub    $0x1,%rax
+     bc4:	sub    %rcx,%rdx
+     bc7:	cmp    %rax,%rdx
+     bca:	jb     c00 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x70>
+     bcc:	cmpq   $0x0,0x10(%rsp)
+     bd2:	je     c00 <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x70>
+     bd4:	xor    %edx,%edx
+     bd6:	mov    $0x1,%eax
+     bdb:	mov    %al,-0xc(%rsp)
+     bdf:	mov    -0xc(%rsp),%ecx
+     be3:	mov    %dl,-0x14(%rsp)
+     be7:	movl   $0x0,-0x10(%rsp)
+     bef:	mov    %rcx,%rdx
+     bf2:	mov    -0x14(%rsp),%rax
+     bf7:	ret
+     bf8:	nopl   0x0(%rax,%rax,1)
+     c00:	mov    $0x8,%edx
+     c05:	xor    %eax,%eax
+     c07:	jmp    bdb <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x4b>
+     c09:	nopl   0x0(%rax)
+     c10:	mov    $0x6,%edx
+     c15:	xor    %eax,%eax
+     c17:	jmp    bdb <sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)+0x4b>
+     c19:	nop
+     c1a:	nopw   0x0(%rax,%rax,1)
+
+0000000000000c20 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)>:
+     c20:	mov    0x8(%rsp),%eax
+     c24:	test   %eax,%eax
+     c26:	js     c98 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x78>
+     c28:	movzbl 0xc(%rsp),%eax
+     c2d:	mov    $0x8,%edx
+     c32:	test   %al,%al
+     c34:	je     c78 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x58>
+     c36:	mov    0x18(%rsp),%rcx
+     c3b:	test   %rcx,%rcx
+     c3e:	je     ca8 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x88>
+     c40:	mov    0x20(%rsp),%rdi
+     c45:	xor    %eax,%eax
+     c47:	mov    %rdi,%rsi
+     c4a:	or     %rcx,%rsi
+     c4d:	js     c78 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x58>
+     c4f:	movabs $0x7fffffffffffffff,%rsi
+     c59:	sub    $0x1,%rcx
+     c5d:	sub    %rdi,%rsi
+     c60:	cmp    %rcx,%rsi
+     c63:	jb     c78 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x58>
+     c65:	xor    %ecx,%ecx
+     c67:	cmpq   $0x0,0x10(%rsp)
+     c6d:	cmovne %ecx,%edx
+     c70:	mov    $0x1,%ecx
+     c75:	cmovne %ecx,%eax
+     c78:	mov    %al,-0xc(%rsp)
+     c7c:	mov    -0xc(%rsp),%ecx
+     c80:	mov    %dl,-0x14(%rsp)
+     c84:	movl   $0x0,-0x10(%rsp)
+     c8c:	mov    %rcx,%rdx
+     c8f:	mov    -0x14(%rsp),%rax
+     c94:	ret
+     c95:	nopl   (%rax)
+     c98:	mov    $0x6,%edx
+     c9d:	xor    %eax,%eax
+     c9f:	jmp    c78 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x58>
+     ca1:	nopl   0x0(%rax)
+     ca8:	xor    %edx,%edx
+     caa:	mov    $0x1,%eax
+     caf:	jmp    c78 <sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)+0x58>
+     cb1:	nop
+     cb2:	nopl   (%rax)
+     cb5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000000cc0 <sluice::async::ThreadPoolBackend::validate_sync(sluice::async::SyncDataOp)>:
+     cc0:	test   %edi,%edi
+     cc2:	js     cf0 <sluice::async::ThreadPoolBackend::validate_sync(sluice::async::SyncDataOp)+0x30>
+     cc4:	movb   $0x1,-0x18(%rsp)
+     cc9:	mov    -0x18(%rsp),%eax
+     ccd:	movq   $0x0,-0x14(%rsp)
+     cd6:	mov    %eax,-0xc(%rsp)
+     cda:	mov    -0xc(%rsp),%ecx
+     cde:	mov    -0x14(%rsp),%rax
+     ce3:	mov    %rcx,%rdx
+     ce6:	ret
+     ce7:	nopw   0x0(%rax,%rax,1)
+     cf0:	movb   $0x0,-0xc(%rsp)
+     cf5:	mov    -0xc(%rsp),%ecx
+     cf9:	movb   $0x6,-0x14(%rsp)
+     cfe:	movl   $0x0,-0x10(%rsp)
+     d06:	mov    %rcx,%rdx
+     d09:	mov    -0x14(%rsp),%rax
+     d0e:	ret
+     d0f:	nop
+
+0000000000000d10 <sluice::async::ThreadPoolBackend::validate_sync(sluice::async::SyncAllOp)>:
+     d10:	test   %edi,%edi
+     d12:	js     d40 <sluice::async::ThreadPoolBackend::validate_sync(sluice::async::SyncAllOp)+0x30>
+     d14:	movb   $0x1,-0x18(%rsp)
+     d19:	mov    -0x18(%rsp),%eax
+     d1d:	movq   $0x0,-0x14(%rsp)
+     d26:	mov    %eax,-0xc(%rsp)
+     d2a:	mov    -0xc(%rsp),%ecx
+     d2e:	mov    -0x14(%rsp),%rax
+     d33:	mov    %rcx,%rdx
+     d36:	ret
+     d37:	nopw   0x0(%rax,%rax,1)
+     d40:	movb   $0x0,-0xc(%rsp)
+     d45:	mov    -0xc(%rsp),%ecx
+     d49:	movb   $0x6,-0x14(%rsp)
+     d4e:	movl   $0x0,-0x10(%rsp)
+     d56:	mov    %rcx,%rdx
+     d59:	mov    -0x14(%rsp),%rax
+     d5e:	ret
+     d5f:	nop
+
+0000000000000d60 <sluice::async::ThreadPoolBackend::validate_file_info(sluice::async::FileInfoOp)>:
+     d60:	test   %edi,%edi
+     d62:	js     d90 <sluice::async::ThreadPoolBackend::validate_file_info(sluice::async::FileInfoOp)+0x30>
+     d64:	movb   $0x1,-0x18(%rsp)
+     d69:	mov    -0x18(%rsp),%eax
+     d6d:	movq   $0x0,-0x14(%rsp)
+     d76:	mov    %eax,-0xc(%rsp)
+     d7a:	mov    -0xc(%rsp),%ecx
+     d7e:	mov    -0x14(%rsp),%rax
+     d83:	mov    %rcx,%rdx
+     d86:	ret
+     d87:	nopw   0x0(%rax,%rax,1)
+     d90:	movb   $0x0,-0xc(%rsp)
+     d95:	mov    -0xc(%rsp),%ecx
+     d99:	movb   $0x6,-0x14(%rsp)
+     d9e:	movl   $0x0,-0x10(%rsp)
+     da6:	mov    %rcx,%rdx
+     da9:	mov    -0x14(%rsp),%rax
+     dae:	ret
+     daf:	nop
+
+0000000000000db0 <sluice::async::ThreadPoolBackend::validate_size(sluice::async::SizeOp)>:
+     db0:	test   %edi,%edi
+     db2:	js     de0 <sluice::async::ThreadPoolBackend::validate_size(sluice::async::SizeOp)+0x30>
+     db4:	movb   $0x1,-0x18(%rsp)
+     db9:	mov    -0x18(%rsp),%eax
+     dbd:	movq   $0x0,-0x14(%rsp)
+     dc6:	mov    %eax,-0xc(%rsp)
+     dca:	mov    -0xc(%rsp),%ecx
+     dce:	mov    -0x14(%rsp),%rax
+     dd3:	mov    %rcx,%rdx
+     dd6:	ret
+     dd7:	nopw   0x0(%rax,%rax,1)
+     de0:	movb   $0x0,-0xc(%rsp)
+     de5:	mov    -0xc(%rsp),%ecx
+     de9:	movb   $0x6,-0x14(%rsp)
+     dee:	movl   $0x0,-0x10(%rsp)
+     df6:	mov    %rcx,%rdx
+     df9:	mov    -0x14(%rsp),%rax
+     dfe:	ret
+     dff:	nop
+
+0000000000000e00 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)>:
+     e00:	push   %r13
+     e02:	mov    %rdx,%r13
+     e05:	push   %r12
+     e07:	mov    %rsi,%r12
+     e0a:	push   %rbp
+     e0b:	lea    0x68(%rdi),%rbp
+     e0f:	push   %rbx
+     e10:	mov    %rdi,%rbx
+     e13:	mov    %rbp,%rdi
+     e16:	sub    $0x8,%rsp
+     e1a:	call   e1f <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x1f>
+     e1f:	test   %eax,%eax
+     e21:	jne    e27 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x27>
+     e27:	mov    0xe0(%rbx),%rdx
+     e2e:	mov    0xe8(%rbx),%rcx
+     e35:	cmp    %rcx,%rdx
+     e38:	jae    e8b <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x8b>
+     e3a:	mov    0xd8(%rbx),%rax
+     e41:	xor    %esi,%esi
+     e43:	mov    %rbp,%rdi
+     e46:	add    %rdx,%rax
+     e49:	cmp    %rcx,%rax
+     e4c:	cmovb  %rsi,%rcx
+     e50:	add    $0x1,%rdx
+     e54:	sub    %rcx,%rax
+     e57:	shl    $0x4,%rax
+     e5b:	add    0xc0(%rbx),%rax
+     e62:	mov    %r12,(%rax)
+     e65:	mov    %r13,0x8(%rax)
+     e69:	mov    %rdx,0xe0(%rbx)
+     e70:	call   e75 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x75>
+     e75:	add    $0x8,%rsp
+     e79:	lea    0x90(%rbx),%rdi
+     e80:	pop    %rbx
+     e81:	pop    %rbp
+     e82:	pop    %r12
+     e84:	pop    %r13
+     e86:	jmp    e8b <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0x8b>
+     e8b:	mov    $0x69,%edx
+     e90:	mov    $0x1,%esi
+     e95:	mov    $0x0,%edi
+     e9a:	mov    0x0(%rip),%rcx        # ea1 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xa1>
+     ea1:	call   ea6 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xa6>
+     ea6:	mov    0x0(%rip),%rdi        # ead <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xad>
+     ead:	call   eb2 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xb2>
+     eb2:	call   eb7 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)+0xb7>
+     eb7:	nop
+     eb8:	nopl   0x0(%rax,%rax,1)
+
+0000000000000ec0 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)>:
+     ec0:	sub    $0x48,%rsp
+     ec4:	mov    0x60(%rsp),%rax
+     ec9:	mov    %rbx,0x30(%rsp)
+     ece:	mov    %esi,%ebx
+     ed0:	mov    %rbp,0x38(%rsp)
+     ed5:	movdqu 0x50(%rsp),%xmm0
+     edb:	mov    %rdi,%rbp
+     ede:	mov    0x20(%rdi),%rdi
+     ee2:	mov    %rax,0x10(%rsp)
+     ee7:	movups %xmm0,(%rsp)
+     eeb:	call   ef0 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x30>
+     ef0:	add    $0x20,%rsp
+     ef4:	test   %al,%al
+     ef6:	je     105b <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x19b>
+     efc:	sub    $0x20,%rsp
+     f00:	mov    0x20(%rbp),%rdi
+     f04:	xor    %esi,%esi
+     f06:	mov    0x60(%rsp),%rax
+     f0b:	movdqu 0x50(%rsp),%xmm0
+     f11:	mov    %rax,0x10(%rsp)
+     f16:	movups %xmm0,(%rsp)
+     f1a:	call   f1f <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x5f>
+     f1f:	add    $0x20,%rsp
+     f23:	test   %al,%al
+     f25:	jne    105b <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x19b>
+     f2b:	sub    $0x20,%rsp
+     f2f:	mov    0x20(%rbp),%rdi
+     f33:	mov    0x60(%rsp),%rax
+     f38:	movdqu 0x50(%rsp),%xmm0
+     f3e:	mov    %rax,0x10(%rsp)
+     f43:	movups %xmm0,(%rsp)
+     f47:	call   f4c <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x8c>
+     f4c:	add    $0x20,%rsp
+     f50:	test   %al,%al
+     f52:	jne    105b <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x19b>
+     f58:	lea    0x68(%rbp),%rdi
+     f5c:	call   f61 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0xa1>
+     f61:	test   %eax,%eax
+     f63:	jne    f69 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0xa9>
+     f69:	mov    0x40(%rsp),%rdx
+     f6e:	mov    %ebx,%eax
+     f70:	movdqu 0x30(%rsp),%xmm0
+     f76:	lea    0x68(%rbp),%rdi
+     f7a:	shl    $0x5,%rax
+     f7e:	add    0x48(%rbp),%rax
+     f82:	movb   $0x1,0x1(%rax)
+     f86:	mov    %rdx,0x18(%rax)
+     f8a:	movups %xmm0,0x8(%rax)
+     f8e:	call   f93 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0xd3>
+     f93:	mov    0x18(%rbp),%rbx
+     f97:	test   %rbx,%rbx
+     f9a:	je     1030 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x170>
+     fa0:	mov    %rbx,%rdi
+     fa3:	call   fa8 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0xe8>
+     fa8:	test   %eax,%eax
+     faa:	jne    fb0 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0xf0>
+     fb0:	mov    0x28(%rbx),%rax
+     fb4:	cmp    $0xffffffffffffffff,%rax
+     fb8:	je     1040 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x180>
+     fbe:	add    $0x1,%rax
+     fc2:	mov    %rax,0x28(%rbx)
+     fc6:	mov    0x6c(%rbx),%eax
+     fc9:	test   %eax,%eax
+     fcb:	js     1019 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x159>
+     fcd:	cmpb   $0x0,0x70(%rbx)
+     fd1:	jne    1019 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x159>
+     fd3:	movq   $0x1,0x8(%rsp)
+     fdc:	call   fe1 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x121>
+     fe1:	mov    %rax,%rbp
+     fe4:	movl   $0x0,0x0(%rbp)
+     feb:	mov    0x6c(%rbx),%edi
+     fee:	mov    $0x8,%edx
+     ff3:	lea    0x8(%rsp),%rsi
+     ff8:	call   ffd <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x13d>
+     ffd:	cmp    $0x8,%rax
+    1001:	je     1015 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x155>
+    1003:	mov    0x0(%rbp),%ecx
+    1006:	test   %rax,%rax
+    1009:	jns    1065 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1a5>
+    100b:	cmp    $0x4,%ecx
+    100e:	je     fe4 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x124>
+    1010:	cmp    $0xb,%ecx
+    1013:	jne    1065 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1a5>
+    1015:	movb   $0x1,0x70(%rbx)
+    1019:	mov    0x18(%rsp),%rbp
+    101e:	mov    %rbx,%rdi
+    1021:	mov    0x10(%rsp),%rbx
+    1026:	add    $0x28,%rsp
+    102a:	jmp    102f <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x16f>
+    102f:	nop
+    1030:	mov    0x10(%rsp),%rbx
+    1035:	mov    0x18(%rsp),%rbp
+    103a:	add    $0x28,%rsp
+    103e:	ret
+    103f:	nop
+    1040:	mov    0x38(%rbx),%rax
+    1044:	cmp    $0xffffffffffffffff,%rax
+    1048:	je     fc6 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x106>
+    104e:	add    $0x1,%rax
+    1052:	mov    %rax,0x38(%rbx)
+    1056:	jmp    fc6 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x106>
+    105b:	mov    %r12,0x20(%rsp)
+    1060:	call   1065 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1a5>
+    1065:	mov    0x0(%rip),%rdi        # 106c <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1ac>
+    106c:	mov    $0x0,%edx
+    1071:	mov    $0x0,%esi
+    1076:	xor    %eax,%eax
+    1078:	mov    %r12,0x20(%rsp)
+    107d:	call   1082 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1c2>
+    1082:	mov    0x0(%rip),%rdi        # 1089 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1c9>
+    1089:	call   108e <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1ce>
+    108e:	call   1093 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)+0x1d3>
+    1093:	nop
+    1094:	nop
+    1095:	data16 cs nopw 0x0(%rax,%rax,1)
+
+00000000000010a0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)>:
+    10a0:	sub    $0xe8,%rsp
+    10a7:	mov    %r14,0xd8(%rsp)
+    10af:	mov    0xf0(%rsp),%r14d
+    10b7:	mov    %r12,0xc8(%rsp)
+    10bf:	mov    %rdi,%r12
+    10c2:	test   %r14d,%r14d
+    10c5:	js     1200 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x160>
+    10cb:	mov    %rbx,0xb8(%rsp)
+    10d3:	mov    %rbp,0xc0(%rsp)
+    10db:	mov    %r13,0xd0(%rsp)
+    10e3:	mov    %r15,0xe0(%rsp)
+    10eb:	cmpb   $0x1,0xf4(%rsp)
+    10f3:	je     11c0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x120>
+    10f9:	mov    0x100(%rsp),%r15
+    1101:	mov    0xf8(%rsp),%rbp
+    1109:	mov    %rsi,%r13
+    110c:	test   %r15,%r15
+    110f:	je     1210 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x170>
+    1115:	mov    0x108(%rsp),%rbx
+    111d:	mov    %r15,%rax
+    1120:	or     %rbx,%rax
+    1123:	js     11c0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x120>
+    1129:	movabs $0x7fffffffffffffff,%rax
+    1133:	lea    -0x1(%r15),%rdx
+    1137:	sub    %rbx,%rax
+    113a:	cmp    %rdx,%rax
+    113d:	jb     11c0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x120>
+    1143:	test   %rbp,%rbp
+    1146:	je     11c0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x120>
+    1148:	mov    0x20(%rsi),%rsi
+    114c:	lea    0x30(%rsp),%rdi
+    1151:	call   1156 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0xb6>
+    1156:	movzbl 0x30(%rsp),%eax
+    115b:	test   %al,%al
+    115d:	je     13e0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x340>
+    1163:	cmp    $0x1,%al
+    1165:	sete   %al
+    1168:	lea    0x3(%rax,%rax,2),%eax
+    116c:	mov    %al,0x18(%r12)
+    1171:	movb   $0x0,0x20(%r12)
+    1177:	mov    0xb8(%rsp),%rbx
+    117f:	mov    0xc0(%rsp),%rbp
+    1187:	mov    0xd0(%rsp),%r13
+    118f:	movl   $0x0,0x1c(%r12)
+    1198:	mov    0xe0(%rsp),%r15
+    11a0:	mov    %r12,%rax
+    11a3:	mov    0xd8(%rsp),%r14
+    11ab:	mov    0xc8(%rsp),%r12
+    11b3:	add    $0xe8,%rsp
+    11ba:	ret
+    11bb:	nopl   0x0(%rax,%rax,1)
+    11c0:	mov    0xb8(%rsp),%rbx
+    11c8:	mov    0xc0(%rsp),%rbp
+    11d0:	mov    $0x8,%eax
+    11d5:	mov    0xd0(%rsp),%r13
+    11dd:	mov    0xe0(%rsp),%r15
+    11e5:	mov    %al,0x18(%r12)
+    11ea:	movl   $0x0,0x1c(%r12)
+    11f3:	movb   $0x0,0x20(%r12)
+    11f9:	jmp    11a0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x100>
+    11fb:	nopl   0x0(%rax,%rax,1)
+    1200:	mov    $0x6,%eax
+    1205:	jmp    11e5 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x145>
+    1207:	nopw   0x0(%rax,%rax,1)
+    1210:	mov    0x20(%rsi),%rsi
+    1214:	lea    0x30(%rsp),%rdi
+    1219:	call   121e <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x17e>
+    121e:	movzbl 0x30(%rsp),%eax
+    1223:	test   %al,%al
+    1225:	jne    1163 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0xc3>
+    122b:	mov    0x38(%rsp),%eax
+    122f:	xor    %ebx,%ebx
+    1231:	xor    %edx,%edx
+    1233:	test   %r15,%r15
+    1236:	mov    %rax,0x28(%rsp)
+    123b:	mov    0x40(%rsp),%rsi
+    1240:	mov    %rdx,(%rsp)
+    1244:	mov    %rax,%rdx
+    1247:	lea    0x68(%r13),%rdi
+    124b:	sete   0x17(%rsp)
+    1250:	shl    $0x5,%rdx
+    1254:	mov    %rdx,%rax
+    1257:	add    0x30(%r13),%rax
+    125b:	mov    %rsi,0x8(%rsp)
+    1260:	movb   $0x0,(%rax)
+    1263:	mov    %r14d,0x4(%rax)
+    1267:	mov    %rbp,0x8(%rax)
+    126b:	mov    %r15,0x10(%rax)
+    126f:	mov    %rbx,0x18(%rax)
+    1273:	mov    %rdx,0x20(%rsp)
+    1278:	mov    %rdi,0x18(%rsp)
+    127d:	call   1282 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x1e2>
+    1282:	test   %eax,%eax
+    1284:	jne    128a <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x1ea>
+    128a:	mov    0x20(%rsp),%rax
+    128f:	xor    %edx,%edx
+    1291:	add    0x48(%r13),%rax
+    1295:	pxor   %xmm0,%xmm0
+    1299:	mov    %dx,(%rax)
+    129c:	mov    0x18(%rsp),%rdi
+    12a1:	movq   $0x0,0x18(%rax)
+    12a9:	movups %xmm0,0x8(%rax)
+    12ad:	call   12b2 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x212>
+    12b2:	movzbl 0x17(%rsp),%eax
+    12b7:	movb   $0x0,0x70(%rsp)
+    12bc:	lea    0x90(%rsp),%rdi
+    12c4:	mov    %rbx,0x78(%rsp)
+    12c9:	sub    $0x20,%rsp
+    12cd:	mov    0x20(%r13),%rsi
+    12d1:	mov    %r15,0xa0(%rsp)
+    12d9:	mov    %al,0xa8(%rsp)
+    12e0:	mov    %r14d,0x70(%rsp)
+    12e5:	mov    %rbp,0x78(%rsp)
+    12ea:	movdqa 0x70(%rsp),%xmm0
+    12f0:	lea    0x90(%rsp),%r8
+    12f8:	mov    0x58(%rsp),%edx
+    12fc:	mov    0x60(%rsp),%rcx
+    1301:	mov    %r15,0x10(%rsp)
+    1306:	movups %xmm0,(%rsp)
+    130a:	call   130f <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x26f>
+    130f:	add    $0x20,%rsp
+    1313:	cmpb   $0x0,0x90(%rsp)
+    131b:	jne    1400 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x360>
+    1321:	mov    (%rsp),%rcx
+    1325:	mov    0x8(%rsp),%rbx
+    132a:	movabs $0xffffffff00000000,%rdx
+    1334:	mov    %rcx,%rax
+    1337:	mov    %rbx,0x8(%rsp)
+    133c:	and    %rdx,%rax
+    133f:	or     0x28(%rsp),%rax
+    1344:	cmpb   $0x0,0x88(%rsp)
+    134c:	mov    %rax,(%rsp)
+    1350:	mov    (%rsp),%rax
+    1354:	mov    0x8(%rsp),%rdx
+    1359:	mov    %eax,%esi
+    135b:	je     13f0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x350>
+    1361:	sub    $0x20,%rsp
+    1365:	mov    %r13,%rdi
+    1368:	mov    0xc8(%rsp),%rax
+    1370:	movdqu 0xb8(%rsp),%xmm0
+    1379:	mov    %rax,0x10(%rsp)
+    137e:	movups %xmm0,(%rsp)
+    1382:	call   1387 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x2e7>
+    1387:	add    $0x20,%rsp
+    138b:	movdqu 0x98(%rsp),%xmm0
+    1394:	mov    0xa8(%rsp),%rax
+    139c:	movl   $0x0,0x1c(%r12)
+    13a5:	movb   $0x1,0x20(%r12)
+    13ab:	mov    0xb8(%rsp),%rbx
+    13b3:	mov    %rax,0x10(%r12)
+    13b8:	mov    0xc0(%rsp),%rbp
+    13c0:	mov    0xd0(%rsp),%r13
+    13c8:	mov    0xe0(%rsp),%r15
+    13d0:	movups %xmm0,(%r12)
+    13d5:	jmp    11a0 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x100>
+    13da:	nopw   0x0(%rax,%rax,1)
+    13e0:	mov    0x38(%rsp),%eax
+    13e4:	jmp    1231 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x191>
+    13e9:	nopl   0x0(%rax)
+    13f0:	mov    %r13,%rdi
+    13f3:	call   13f8 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x358>
+    13f8:	jmp    138b <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x2eb>
+    13fa:	nopw   0x0(%rax,%rax,1)
+    1400:	mov    0x20(%r13),%rdi
+    1404:	mov    0x38(%rsp),%esi
+    1408:	mov    0x40(%rsp),%rdx
+    140d:	call   1412 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0x372>
+    1412:	movb   $0x6,0x18(%r12)
+    1418:	jmp    1171 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)+0xd1>
+    141d:	nop
+    141e:	xchg   %ax,%ax
+
+0000000000001420 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)>:
+    1420:	sub    $0xe8,%rsp
+    1427:	mov    %r14,0xd8(%rsp)
+    142f:	mov    0xf0(%rsp),%r14d
+    1437:	mov    %r12,0xc8(%rsp)
+    143f:	mov    %rdi,%r12
+    1442:	test   %r14d,%r14d
+    1445:	js     1580 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x160>
+    144b:	mov    %rbx,0xb8(%rsp)
+    1453:	mov    %rbp,0xc0(%rsp)
+    145b:	mov    %r13,0xd0(%rsp)
+    1463:	mov    %r15,0xe0(%rsp)
+    146b:	cmpb   $0x0,0xf4(%rsp)
+    1473:	je     1540 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x120>
+    1479:	mov    0x100(%rsp),%r15
+    1481:	mov    0xf8(%rsp),%rbp
+    1489:	mov    %rsi,%r13
+    148c:	test   %r15,%r15
+    148f:	je     1590 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x170>
+    1495:	mov    0x108(%rsp),%rbx
+    149d:	mov    %r15,%rax
+    14a0:	or     %rbx,%rax
+    14a3:	js     1540 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x120>
+    14a9:	movabs $0x7fffffffffffffff,%rax
+    14b3:	lea    -0x1(%r15),%rdx
+    14b7:	sub    %rbx,%rax
+    14ba:	cmp    %rdx,%rax
+    14bd:	jb     1540 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x120>
+    14c3:	test   %rbp,%rbp
+    14c6:	je     1540 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x120>
+    14c8:	mov    0x20(%rsi),%rsi
+    14cc:	lea    0x30(%rsp),%rdi
+    14d1:	call   14d6 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0xb6>
+    14d6:	movzbl 0x30(%rsp),%eax
+    14db:	test   %al,%al
+    14dd:	je     1760 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x340>
+    14e3:	cmp    $0x1,%al
+    14e5:	sete   %al
+    14e8:	lea    0x3(%rax,%rax,2),%eax
+    14ec:	mov    %al,0x18(%r12)
+    14f1:	movb   $0x0,0x20(%r12)
+    14f7:	mov    0xb8(%rsp),%rbx
+    14ff:	mov    0xc0(%rsp),%rbp
+    1507:	mov    0xd0(%rsp),%r13
+    150f:	movl   $0x0,0x1c(%r12)
+    1518:	mov    0xe0(%rsp),%r15
+    1520:	mov    %r12,%rax
+    1523:	mov    0xd8(%rsp),%r14
+    152b:	mov    0xc8(%rsp),%r12
+    1533:	add    $0xe8,%rsp
+    153a:	ret
+    153b:	nopl   0x0(%rax,%rax,1)
+    1540:	mov    0xb8(%rsp),%rbx
+    1548:	mov    0xc0(%rsp),%rbp
+    1550:	mov    $0x8,%eax
+    1555:	mov    0xd0(%rsp),%r13
+    155d:	mov    0xe0(%rsp),%r15
+    1565:	mov    %al,0x18(%r12)
+    156a:	movl   $0x0,0x1c(%r12)
+    1573:	movb   $0x0,0x20(%r12)
+    1579:	jmp    1520 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x100>
+    157b:	nopl   0x0(%rax,%rax,1)
+    1580:	mov    $0x6,%eax
+    1585:	jmp    1565 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x145>
+    1587:	nopw   0x0(%rax,%rax,1)
+    1590:	mov    0x20(%rsi),%rsi
+    1594:	lea    0x30(%rsp),%rdi
+    1599:	call   159e <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x17e>
+    159e:	movzbl 0x30(%rsp),%eax
+    15a3:	test   %al,%al
+    15a5:	jne    14e3 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0xc3>
+    15ab:	mov    0x38(%rsp),%eax
+    15af:	xor    %ebx,%ebx
+    15b1:	xor    %edx,%edx
+    15b3:	test   %r15,%r15
+    15b6:	mov    %rax,0x28(%rsp)
+    15bb:	mov    0x40(%rsp),%rsi
+    15c0:	mov    %rdx,(%rsp)
+    15c4:	mov    %rax,%rdx
+    15c7:	lea    0x68(%r13),%rdi
+    15cb:	sete   0x17(%rsp)
+    15d0:	shl    $0x5,%rdx
+    15d4:	mov    %rdx,%rax
+    15d7:	add    0x30(%r13),%rax
+    15db:	mov    %rsi,0x8(%rsp)
+    15e0:	movb   $0x1,(%rax)
+    15e3:	mov    %r14d,0x4(%rax)
+    15e7:	mov    %rbp,0x8(%rax)
+    15eb:	mov    %r15,0x10(%rax)
+    15ef:	mov    %rbx,0x18(%rax)
+    15f3:	mov    %rdx,0x20(%rsp)
+    15f8:	mov    %rdi,0x18(%rsp)
+    15fd:	call   1602 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x1e2>
+    1602:	test   %eax,%eax
+    1604:	jne    160a <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x1ea>
+    160a:	mov    0x20(%rsp),%rax
+    160f:	mov    $0x1,%edx
+    1614:	add    0x48(%r13),%rax
+    1618:	pxor   %xmm0,%xmm0
+    161c:	mov    %dx,(%rax)
+    161f:	mov    0x18(%rsp),%rdi
+    1624:	movq   $0x0,0x18(%rax)
+    162c:	movups %xmm0,0x8(%rax)
+    1630:	call   1635 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x215>
+    1635:	movzbl 0x17(%rsp),%eax
+    163a:	movb   $0x1,0x70(%rsp)
+    163f:	lea    0x90(%rsp),%rdi
+    1647:	mov    %rbx,0x78(%rsp)
+    164c:	sub    $0x20,%rsp
+    1650:	mov    0x20(%r13),%rsi
+    1654:	mov    %r15,0xa0(%rsp)
+    165c:	mov    %al,0xa8(%rsp)
+    1663:	mov    %r14d,0x70(%rsp)
+    1668:	mov    %rbp,0x78(%rsp)
+    166d:	movdqa 0x70(%rsp),%xmm0
+    1673:	lea    0x90(%rsp),%r8
+    167b:	mov    0x58(%rsp),%edx
+    167f:	mov    0x60(%rsp),%rcx
+    1684:	mov    %r15,0x10(%rsp)
+    1689:	movups %xmm0,(%rsp)
+    168d:	call   1692 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x272>
+    1692:	add    $0x20,%rsp
+    1696:	cmpb   $0x0,0x90(%rsp)
+    169e:	jne    1780 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x360>
+    16a4:	mov    (%rsp),%rcx
+    16a8:	mov    0x8(%rsp),%rbx
+    16ad:	movabs $0xffffffff00000000,%rdx
+    16b7:	mov    %rcx,%rax
+    16ba:	mov    %rbx,0x8(%rsp)
+    16bf:	and    %rdx,%rax
+    16c2:	or     0x28(%rsp),%rax
+    16c7:	cmpb   $0x0,0x88(%rsp)
+    16cf:	mov    %rax,(%rsp)
+    16d3:	mov    (%rsp),%rax
+    16d7:	mov    0x8(%rsp),%rdx
+    16dc:	mov    %eax,%esi
+    16de:	je     1770 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x350>
+    16e4:	sub    $0x20,%rsp
+    16e8:	mov    %r13,%rdi
+    16eb:	mov    0xc8(%rsp),%rax
+    16f3:	movdqu 0xb8(%rsp),%xmm0
+    16fc:	mov    %rax,0x10(%rsp)
+    1701:	movups %xmm0,(%rsp)
+    1705:	call   170a <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x2ea>
+    170a:	add    $0x20,%rsp
+    170e:	movdqu 0x98(%rsp),%xmm0
+    1717:	mov    0xa8(%rsp),%rax
+    171f:	movl   $0x0,0x1c(%r12)
+    1728:	movb   $0x1,0x20(%r12)
+    172e:	mov    0xb8(%rsp),%rbx
+    1736:	mov    %rax,0x10(%r12)
+    173b:	mov    0xc0(%rsp),%rbp
+    1743:	mov    0xd0(%rsp),%r13
+    174b:	mov    0xe0(%rsp),%r15
+    1753:	movups %xmm0,(%r12)
+    1758:	jmp    1520 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x100>
+    175d:	nopl   (%rax)
+    1760:	mov    0x38(%rsp),%eax
+    1764:	jmp    15b1 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x191>
+    1769:	nopl   0x0(%rax)
+    1770:	mov    %r13,%rdi
+    1773:	call   1778 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x358>
+    1778:	jmp    170e <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x2ee>
+    177a:	nopw   0x0(%rax,%rax,1)
+    1780:	mov    0x20(%r13),%rdi
+    1784:	mov    0x38(%rsp),%esi
+    1788:	mov    0x40(%rsp),%rdx
+    178d:	call   1792 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0x372>
+    1792:	movb   $0x6,0x18(%r12)
+    1798:	jmp    14f1 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)+0xd1>
+    179d:	nop
+    179e:	xchg   %ax,%ax
+
+00000000000017a0 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)>:
+    17a0:	sub    $0xd8,%rsp
+    17a7:	mov    %rbx,0xa8(%rsp)
+    17af:	mov    %rdi,%rbx
+    17b2:	test   %edx,%edx
+    17b4:	js     1820 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x80>
+    17b6:	mov    %rbp,0xb0(%rsp)
+    17be:	mov    %rsi,%rbp
+    17c1:	mov    0x20(%rsi),%rsi
+    17c5:	lea    0x20(%rsp),%rdi
+    17ca:	mov    %r12,0xb8(%rsp)
+    17d2:	mov    %rdx,%r12
+    17d5:	call   17da <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x3a>
+    17da:	movzbl 0x20(%rsp),%eax
+    17df:	test   %al,%al
+    17e1:	je     1838 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x98>
+    17e3:	cmp    $0x1,%al
+    17e5:	movl   $0x0,0x1c(%rbx)
+    17ec:	mov    0xb0(%rsp),%rbp
+    17f4:	sete   %al
+    17f7:	movb   $0x0,0x20(%rbx)
+    17fb:	mov    0xb8(%rsp),%r12
+    1803:	lea    0x3(%rax,%rax,2),%eax
+    1807:	mov    %al,0x18(%rbx)
+    180a:	mov    %rbx,%rax
+    180d:	mov    0xa8(%rsp),%rbx
+    1815:	add    $0xd8,%rsp
+    181c:	ret
+    181d:	nopl   (%rax)
+    1820:	movb   $0x6,0x18(%rdi)
+    1824:	movl   $0x0,0x1c(%rdi)
+    182b:	movb   $0x0,0x20(%rdi)
+    182f:	jmp    180a <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x6a>
+    1831:	nopl   0x0(%rax)
+    1838:	mov    0x30(%rsp),%rdx
+    183d:	pxor   %xmm1,%xmm1
+    1841:	lea    0x68(%rbp),%rdi
+    1845:	mov    %r15,0xd0(%rsp)
+    184d:	mov    %r14,0xc8(%rsp)
+    1855:	mov    %rax,%r14
+    1858:	mov    %rdx,%r15
+    185b:	mov    0x28(%rsp),%edx
+    185f:	mov    %r13,0xc0(%rsp)
+    1867:	mov    %rdi,0x10(%rsp)
+    186c:	mov    0x28(%rsp),%r13d
+    1871:	shl    $0x5,%rdx
+    1875:	movaps %xmm1,(%rsp)
+    1879:	mov    %rdx,%rax
+    187c:	add    0x30(%rbp),%rax
+    1880:	mov    %rdx,0x18(%rsp)
+    1885:	movb   $0x5,(%rax)
+    1888:	mov    %r12d,0x4(%rax)
+    188c:	movq   $0x0,0x8(%rax)
+    1894:	movups %xmm1,0x10(%rax)
+    1898:	call   189d <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0xfd>
+    189d:	test   %eax,%eax
+    189f:	jne    18a5 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x105>
+    18a5:	mov    0x18(%rsp),%rax
+    18aa:	mov    $0x5,%edx
+    18af:	add    0x48(%rbp),%rax
+    18b3:	pxor   %xmm0,%xmm0
+    18b7:	mov    %dx,(%rax)
+    18ba:	mov    0x10(%rsp),%rdi
+    18bf:	movq   $0x0,0x18(%rax)
+    18c7:	movups %xmm0,0x8(%rax)
+    18cb:	call   18d0 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x130>
+    18d0:	movdqa (%rsp),%xmm2
+    18d5:	mov    %r12d,0x40(%rsp)
+    18da:	lea    0x80(%rsp),%rdi
+    18e2:	movq   $0x5,0x60(%rsp)
+    18eb:	sub    $0x20,%rsp
+    18ef:	mov    0x20(%rbp),%rsi
+    18f3:	movups %xmm2,0x88(%rsp)
+    18fb:	movq   $0x0,0x98(%rsp)
+    1907:	movq   $0x0,0x68(%rsp)
+    1910:	movdqa 0x60(%rsp),%xmm0
+    1916:	lea    0x80(%rsp),%r8
+    191e:	movq   $0x0,0x10(%rsp)
+    1927:	mov    0x48(%rsp),%edx
+    192b:	mov    0x50(%rsp),%rcx
+    1930:	movups %xmm0,(%rsp)
+    1934:	call   1939 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x199>
+    1939:	add    $0x20,%rsp
+    193d:	cmpb   $0x0,0x80(%rsp)
+    1945:	jne    1a00 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x260>
+    194b:	movabs $0xffffffff00000000,%rdx
+    1955:	mov    %r14,%rax
+    1958:	and    %rdx,%rax
+    195b:	mov    %r15,%rdx
+    195e:	or     %r13,%rax
+    1961:	mov    %eax,%esi
+    1963:	cmpb   $0x0,0x78(%rsp)
+    1968:	jne    19c8 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x228>
+    196a:	mov    %rbp,%rdi
+    196d:	call   1972 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x1d2>
+    1972:	mov    0x98(%rsp),%rax
+    197a:	movl   $0x0,0x1c(%rbx)
+    1981:	movdqu 0x88(%rsp),%xmm0
+    198a:	movb   $0x1,0x20(%rbx)
+    198e:	mov    %rax,0x10(%rbx)
+    1992:	movups %xmm0,(%rbx)
+    1995:	mov    0xb0(%rsp),%rbp
+    199d:	mov    0xb8(%rsp),%r12
+    19a5:	mov    0xc0(%rsp),%r13
+    19ad:	mov    0xc8(%rsp),%r14
+    19b5:	mov    0xd0(%rsp),%r15
+    19bd:	jmp    180a <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x6a>
+    19c2:	nopw   0x0(%rax,%rax,1)
+    19c8:	sub    $0x20,%rsp
+    19cc:	mov    %rbp,%rdi
+    19cf:	mov    0xb8(%rsp),%rax
+    19d7:	movdqu 0xa8(%rsp),%xmm0
+    19e0:	mov    %rax,0x10(%rsp)
+    19e5:	movups %xmm0,(%rsp)
+    19e9:	call   19ee <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x24e>
+    19ee:	add    $0x20,%rsp
+    19f2:	jmp    1972 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x1d2>
+    19f7:	nopw   0x0(%rax,%rax,1)
+    1a00:	mov    0x20(%rbp),%rdi
+    1a04:	mov    0x28(%rsp),%esi
+    1a08:	mov    0x30(%rsp),%rdx
+    1a0d:	call   1a12 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x272>
+    1a12:	movb   $0x6,0x18(%rbx)
+    1a16:	movl   $0x0,0x1c(%rbx)
+    1a1d:	movb   $0x0,0x20(%rbx)
+    1a21:	jmp    1995 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)+0x1f5>
+    1a26:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000001a30 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)>:
+    1a30:	sub    $0xd8,%rsp
+    1a37:	mov    %rbx,0xa8(%rsp)
+    1a3f:	mov    %rdi,%rbx
+    1a42:	test   %edx,%edx
+    1a44:	js     1ab0 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x80>
+    1a46:	mov    %rbp,0xb0(%rsp)
+    1a4e:	mov    %rsi,%rbp
+    1a51:	mov    0x20(%rsi),%rsi
+    1a55:	lea    0x20(%rsp),%rdi
+    1a5a:	mov    %r12,0xb8(%rsp)
+    1a62:	mov    %rdx,%r12
+    1a65:	call   1a6a <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x3a>
+    1a6a:	movzbl 0x20(%rsp),%eax
+    1a6f:	test   %al,%al
+    1a71:	je     1ac8 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x98>
+    1a73:	cmp    $0x1,%al
+    1a75:	movl   $0x0,0x1c(%rbx)
+    1a7c:	mov    0xb0(%rsp),%rbp
+    1a84:	sete   %al
+    1a87:	movb   $0x0,0x20(%rbx)
+    1a8b:	mov    0xb8(%rsp),%r12
+    1a93:	lea    0x3(%rax,%rax,2),%eax
+    1a97:	mov    %al,0x18(%rbx)
+    1a9a:	mov    %rbx,%rax
+    1a9d:	mov    0xa8(%rsp),%rbx
+    1aa5:	add    $0xd8,%rsp
+    1aac:	ret
+    1aad:	nopl   (%rax)
+    1ab0:	movb   $0x6,0x18(%rdi)
+    1ab4:	movl   $0x0,0x1c(%rdi)
+    1abb:	movb   $0x0,0x20(%rdi)
+    1abf:	jmp    1a9a <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x6a>
+    1ac1:	nopl   0x0(%rax)
+    1ac8:	mov    0x30(%rsp),%rdx
+    1acd:	pxor   %xmm1,%xmm1
+    1ad1:	lea    0x68(%rbp),%rdi
+    1ad5:	mov    %r15,0xd0(%rsp)
+    1add:	mov    %r14,0xc8(%rsp)
+    1ae5:	mov    %rax,%r14
+    1ae8:	mov    %rdx,%r15
+    1aeb:	mov    0x28(%rsp),%edx
+    1aef:	mov    %r13,0xc0(%rsp)
+    1af7:	mov    %rdi,0x10(%rsp)
+    1afc:	mov    0x28(%rsp),%r13d
+    1b01:	shl    $0x5,%rdx
+    1b05:	movaps %xmm1,(%rsp)
+    1b09:	mov    %rdx,%rax
+    1b0c:	add    0x30(%rbp),%rax
+    1b10:	mov    %rdx,0x18(%rsp)
+    1b15:	movb   $0x4,(%rax)
+    1b18:	mov    %r12d,0x4(%rax)
+    1b1c:	movq   $0x0,0x8(%rax)
+    1b24:	movups %xmm1,0x10(%rax)
+    1b28:	call   1b2d <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0xfd>
+    1b2d:	test   %eax,%eax
+    1b2f:	jne    1b35 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x105>
+    1b35:	mov    0x18(%rsp),%rax
+    1b3a:	mov    $0x4,%edx
+    1b3f:	add    0x48(%rbp),%rax
+    1b43:	pxor   %xmm0,%xmm0
+    1b47:	mov    %dx,(%rax)
+    1b4a:	mov    0x10(%rsp),%rdi
+    1b4f:	movq   $0x0,0x18(%rax)
+    1b57:	movups %xmm0,0x8(%rax)
+    1b5b:	call   1b60 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x130>
+    1b60:	movdqa (%rsp),%xmm2
+    1b65:	mov    %r12d,0x40(%rsp)
+    1b6a:	lea    0x80(%rsp),%rdi
+    1b72:	movq   $0x4,0x60(%rsp)
+    1b7b:	sub    $0x20,%rsp
+    1b7f:	mov    0x20(%rbp),%rsi
+    1b83:	movups %xmm2,0x88(%rsp)
+    1b8b:	movq   $0x0,0x98(%rsp)
+    1b97:	movq   $0x0,0x68(%rsp)
+    1ba0:	movdqa 0x60(%rsp),%xmm0
+    1ba6:	lea    0x80(%rsp),%r8
+    1bae:	movq   $0x0,0x10(%rsp)
+    1bb7:	mov    0x48(%rsp),%edx
+    1bbb:	mov    0x50(%rsp),%rcx
+    1bc0:	movups %xmm0,(%rsp)
+    1bc4:	call   1bc9 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x199>
+    1bc9:	add    $0x20,%rsp
+    1bcd:	cmpb   $0x0,0x80(%rsp)
+    1bd5:	jne    1c90 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x260>
+    1bdb:	movabs $0xffffffff00000000,%rdx
+    1be5:	mov    %r14,%rax
+    1be8:	and    %rdx,%rax
+    1beb:	mov    %r15,%rdx
+    1bee:	or     %r13,%rax
+    1bf1:	mov    %eax,%esi
+    1bf3:	cmpb   $0x0,0x78(%rsp)
+    1bf8:	jne    1c58 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x228>
+    1bfa:	mov    %rbp,%rdi
+    1bfd:	call   1c02 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x1d2>
+    1c02:	mov    0x98(%rsp),%rax
+    1c0a:	movl   $0x0,0x1c(%rbx)
+    1c11:	movdqu 0x88(%rsp),%xmm0
+    1c1a:	movb   $0x1,0x20(%rbx)
+    1c1e:	mov    %rax,0x10(%rbx)
+    1c22:	movups %xmm0,(%rbx)
+    1c25:	mov    0xb0(%rsp),%rbp
+    1c2d:	mov    0xb8(%rsp),%r12
+    1c35:	mov    0xc0(%rsp),%r13
+    1c3d:	mov    0xc8(%rsp),%r14
+    1c45:	mov    0xd0(%rsp),%r15
+    1c4d:	jmp    1a9a <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x6a>
+    1c52:	nopw   0x0(%rax,%rax,1)
+    1c58:	sub    $0x20,%rsp
+    1c5c:	mov    %rbp,%rdi
+    1c5f:	mov    0xb8(%rsp),%rax
+    1c67:	movdqu 0xa8(%rsp),%xmm0
+    1c70:	mov    %rax,0x10(%rsp)
+    1c75:	movups %xmm0,(%rsp)
+    1c79:	call   1c7e <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x24e>
+    1c7e:	add    $0x20,%rsp
+    1c82:	jmp    1c02 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x1d2>
+    1c87:	nopw   0x0(%rax,%rax,1)
+    1c90:	mov    0x20(%rbp),%rdi
+    1c94:	mov    0x28(%rsp),%esi
+    1c98:	mov    0x30(%rsp),%rdx
+    1c9d:	call   1ca2 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x272>
+    1ca2:	movb   $0x6,0x18(%rbx)
+    1ca6:	movl   $0x0,0x1c(%rbx)
+    1cad:	movb   $0x0,0x20(%rbx)
+    1cb1:	jmp    1c25 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)+0x1f5>
+    1cb6:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000001cc0 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)>:
+    1cc0:	sub    $0xd8,%rsp
+    1cc7:	mov    %rbx,0xa8(%rsp)
+    1ccf:	mov    %rdi,%rbx
+    1cd2:	test   %edx,%edx
+    1cd4:	js     1d40 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x80>
+    1cd6:	mov    %rbp,0xb0(%rsp)
+    1cde:	mov    %rsi,%rbp
+    1ce1:	mov    0x20(%rsi),%rsi
+    1ce5:	lea    0x20(%rsp),%rdi
+    1cea:	mov    %r12,0xb8(%rsp)
+    1cf2:	mov    %rdx,%r12
+    1cf5:	call   1cfa <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x3a>
+    1cfa:	movzbl 0x20(%rsp),%eax
+    1cff:	test   %al,%al
+    1d01:	je     1d58 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x98>
+    1d03:	cmp    $0x1,%al
+    1d05:	movl   $0x0,0x1c(%rbx)
+    1d0c:	mov    0xb0(%rsp),%rbp
+    1d14:	sete   %al
+    1d17:	movb   $0x0,0x20(%rbx)
+    1d1b:	mov    0xb8(%rsp),%r12
+    1d23:	lea    0x3(%rax,%rax,2),%eax
+    1d27:	mov    %al,0x18(%rbx)
+    1d2a:	mov    %rbx,%rax
+    1d2d:	mov    0xa8(%rsp),%rbx
+    1d35:	add    $0xd8,%rsp
+    1d3c:	ret
+    1d3d:	nopl   (%rax)
+    1d40:	movb   $0x6,0x18(%rdi)
+    1d44:	movl   $0x0,0x1c(%rdi)
+    1d4b:	movb   $0x0,0x20(%rdi)
+    1d4f:	jmp    1d2a <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x6a>
+    1d51:	nopl   0x0(%rax)
+    1d58:	mov    0x30(%rsp),%rdx
+    1d5d:	pxor   %xmm1,%xmm1
+    1d61:	lea    0x68(%rbp),%rdi
+    1d65:	mov    %r15,0xd0(%rsp)
+    1d6d:	mov    %r14,0xc8(%rsp)
+    1d75:	mov    %rax,%r14
+    1d78:	mov    %rdx,%r15
+    1d7b:	mov    0x28(%rsp),%edx
+    1d7f:	mov    %r13,0xc0(%rsp)
+    1d87:	mov    %rdi,0x10(%rsp)
+    1d8c:	mov    0x28(%rsp),%r13d
+    1d91:	shl    $0x5,%rdx
+    1d95:	movaps %xmm1,(%rsp)
+    1d99:	mov    %rdx,%rax
+    1d9c:	add    0x30(%rbp),%rax
+    1da0:	mov    %rdx,0x18(%rsp)
+    1da5:	movb   $0x3,(%rax)
+    1da8:	mov    %r12d,0x4(%rax)
+    1dac:	movq   $0x0,0x8(%rax)
+    1db4:	movups %xmm1,0x10(%rax)
+    1db8:	call   1dbd <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0xfd>
+    1dbd:	test   %eax,%eax
+    1dbf:	jne    1dc5 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x105>
+    1dc5:	mov    0x18(%rsp),%rax
+    1dca:	mov    $0x3,%edx
+    1dcf:	add    0x48(%rbp),%rax
+    1dd3:	pxor   %xmm0,%xmm0
+    1dd7:	mov    %dx,(%rax)
+    1dda:	mov    0x10(%rsp),%rdi
+    1ddf:	movq   $0x0,0x18(%rax)
+    1de7:	movups %xmm0,0x8(%rax)
+    1deb:	call   1df0 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x130>
+    1df0:	movdqa (%rsp),%xmm2
+    1df5:	mov    %r12d,0x40(%rsp)
+    1dfa:	lea    0x80(%rsp),%rdi
+    1e02:	movq   $0x3,0x60(%rsp)
+    1e0b:	sub    $0x20,%rsp
+    1e0f:	mov    0x20(%rbp),%rsi
+    1e13:	movups %xmm2,0x88(%rsp)
+    1e1b:	movq   $0x0,0x98(%rsp)
+    1e27:	movq   $0x0,0x68(%rsp)
+    1e30:	movdqa 0x60(%rsp),%xmm0
+    1e36:	lea    0x80(%rsp),%r8
+    1e3e:	movq   $0x0,0x10(%rsp)
+    1e47:	mov    0x48(%rsp),%edx
+    1e4b:	mov    0x50(%rsp),%rcx
+    1e50:	movups %xmm0,(%rsp)
+    1e54:	call   1e59 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x199>
+    1e59:	add    $0x20,%rsp
+    1e5d:	cmpb   $0x0,0x80(%rsp)
+    1e65:	jne    1f20 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x260>
+    1e6b:	movabs $0xffffffff00000000,%rdx
+    1e75:	mov    %r14,%rax
+    1e78:	and    %rdx,%rax
+    1e7b:	mov    %r15,%rdx
+    1e7e:	or     %r13,%rax
+    1e81:	mov    %eax,%esi
+    1e83:	cmpb   $0x0,0x78(%rsp)
+    1e88:	jne    1ee8 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x228>
+    1e8a:	mov    %rbp,%rdi
+    1e8d:	call   1e92 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x1d2>
+    1e92:	mov    0x98(%rsp),%rax
+    1e9a:	movl   $0x0,0x1c(%rbx)
+    1ea1:	movdqu 0x88(%rsp),%xmm0
+    1eaa:	movb   $0x1,0x20(%rbx)
+    1eae:	mov    %rax,0x10(%rbx)
+    1eb2:	movups %xmm0,(%rbx)
+    1eb5:	mov    0xb0(%rsp),%rbp
+    1ebd:	mov    0xb8(%rsp),%r12
+    1ec5:	mov    0xc0(%rsp),%r13
+    1ecd:	mov    0xc8(%rsp),%r14
+    1ed5:	mov    0xd0(%rsp),%r15
+    1edd:	jmp    1d2a <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x6a>
+    1ee2:	nopw   0x0(%rax,%rax,1)
+    1ee8:	sub    $0x20,%rsp
+    1eec:	mov    %rbp,%rdi
+    1eef:	mov    0xb8(%rsp),%rax
+    1ef7:	movdqu 0xa8(%rsp),%xmm0
+    1f00:	mov    %rax,0x10(%rsp)
+    1f05:	movups %xmm0,(%rsp)
+    1f09:	call   1f0e <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x24e>
+    1f0e:	add    $0x20,%rsp
+    1f12:	jmp    1e92 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x1d2>
+    1f17:	nopw   0x0(%rax,%rax,1)
+    1f20:	mov    0x20(%rbp),%rdi
+    1f24:	mov    0x28(%rsp),%esi
+    1f28:	mov    0x30(%rsp),%rdx
+    1f2d:	call   1f32 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x272>
+    1f32:	movb   $0x6,0x18(%rbx)
+    1f36:	movl   $0x0,0x1c(%rbx)
+    1f3d:	movb   $0x0,0x20(%rbx)
+    1f41:	jmp    1eb5 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)+0x1f5>
+    1f46:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000001f50 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)>:
+    1f50:	sub    $0xd8,%rsp
+    1f57:	mov    %rbx,0xa8(%rsp)
+    1f5f:	mov    %rdi,%rbx
+    1f62:	test   %edx,%edx
+    1f64:	js     1fd0 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x80>
+    1f66:	mov    %rbp,0xb0(%rsp)
+    1f6e:	mov    %rsi,%rbp
+    1f71:	mov    0x20(%rsi),%rsi
+    1f75:	lea    0x20(%rsp),%rdi
+    1f7a:	mov    %r12,0xb8(%rsp)
+    1f82:	mov    %rdx,%r12
+    1f85:	call   1f8a <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x3a>
+    1f8a:	movzbl 0x20(%rsp),%eax
+    1f8f:	test   %al,%al
+    1f91:	je     1fe8 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x98>
+    1f93:	cmp    $0x1,%al
+    1f95:	movl   $0x0,0x1c(%rbx)
+    1f9c:	mov    0xb0(%rsp),%rbp
+    1fa4:	sete   %al
+    1fa7:	movb   $0x0,0x20(%rbx)
+    1fab:	mov    0xb8(%rsp),%r12
+    1fb3:	lea    0x3(%rax,%rax,2),%eax
+    1fb7:	mov    %al,0x18(%rbx)
+    1fba:	mov    %rbx,%rax
+    1fbd:	mov    0xa8(%rsp),%rbx
+    1fc5:	add    $0xd8,%rsp
+    1fcc:	ret
+    1fcd:	nopl   (%rax)
+    1fd0:	movb   $0x6,0x18(%rdi)
+    1fd4:	movl   $0x0,0x1c(%rdi)
+    1fdb:	movb   $0x0,0x20(%rdi)
+    1fdf:	jmp    1fba <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x6a>
+    1fe1:	nopl   0x0(%rax)
+    1fe8:	mov    0x30(%rsp),%rdx
+    1fed:	pxor   %xmm1,%xmm1
+    1ff1:	lea    0x68(%rbp),%rdi
+    1ff5:	mov    %r15,0xd0(%rsp)
+    1ffd:	mov    %r14,0xc8(%rsp)
+    2005:	mov    %rax,%r14
+    2008:	mov    %rdx,%r15
+    200b:	mov    0x28(%rsp),%edx
+    200f:	mov    %r13,0xc0(%rsp)
+    2017:	mov    %rdi,0x10(%rsp)
+    201c:	mov    0x28(%rsp),%r13d
+    2021:	shl    $0x5,%rdx
+    2025:	movaps %xmm1,(%rsp)
+    2029:	mov    %rdx,%rax
+    202c:	add    0x30(%rbp),%rax
+    2030:	mov    %rdx,0x18(%rsp)
+    2035:	movb   $0x2,(%rax)
+    2038:	mov    %r12d,0x4(%rax)
+    203c:	movq   $0x0,0x8(%rax)
+    2044:	movups %xmm1,0x10(%rax)
+    2048:	call   204d <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0xfd>
+    204d:	test   %eax,%eax
+    204f:	jne    2055 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x105>
+    2055:	mov    0x18(%rsp),%rax
+    205a:	mov    $0x2,%edx
+    205f:	add    0x48(%rbp),%rax
+    2063:	pxor   %xmm0,%xmm0
+    2067:	mov    %dx,(%rax)
+    206a:	mov    0x10(%rsp),%rdi
+    206f:	movq   $0x0,0x18(%rax)
+    2077:	movups %xmm0,0x8(%rax)
+    207b:	call   2080 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x130>
+    2080:	movdqa (%rsp),%xmm2
+    2085:	mov    %r12d,0x40(%rsp)
+    208a:	lea    0x80(%rsp),%rdi
+    2092:	movq   $0x2,0x60(%rsp)
+    209b:	sub    $0x20,%rsp
+    209f:	mov    0x20(%rbp),%rsi
+    20a3:	movups %xmm2,0x88(%rsp)
+    20ab:	movq   $0x0,0x98(%rsp)
+    20b7:	movq   $0x0,0x68(%rsp)
+    20c0:	movdqa 0x60(%rsp),%xmm0
+    20c6:	lea    0x80(%rsp),%r8
+    20ce:	movq   $0x0,0x10(%rsp)
+    20d7:	mov    0x48(%rsp),%edx
+    20db:	mov    0x50(%rsp),%rcx
+    20e0:	movups %xmm0,(%rsp)
+    20e4:	call   20e9 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x199>
+    20e9:	add    $0x20,%rsp
+    20ed:	cmpb   $0x0,0x80(%rsp)
+    20f5:	jne    21b0 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x260>
+    20fb:	movabs $0xffffffff00000000,%rdx
+    2105:	mov    %r14,%rax
+    2108:	and    %rdx,%rax
+    210b:	mov    %r15,%rdx
+    210e:	or     %r13,%rax
+    2111:	mov    %eax,%esi
+    2113:	cmpb   $0x0,0x78(%rsp)
+    2118:	jne    2178 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x228>
+    211a:	mov    %rbp,%rdi
+    211d:	call   2122 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x1d2>
+    2122:	mov    0x98(%rsp),%rax
+    212a:	movl   $0x0,0x1c(%rbx)
+    2131:	movdqu 0x88(%rsp),%xmm0
+    213a:	movb   $0x1,0x20(%rbx)
+    213e:	mov    %rax,0x10(%rbx)
+    2142:	movups %xmm0,(%rbx)
+    2145:	mov    0xb0(%rsp),%rbp
+    214d:	mov    0xb8(%rsp),%r12
+    2155:	mov    0xc0(%rsp),%r13
+    215d:	mov    0xc8(%rsp),%r14
+    2165:	mov    0xd0(%rsp),%r15
+    216d:	jmp    1fba <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x6a>
+    2172:	nopw   0x0(%rax,%rax,1)
+    2178:	sub    $0x20,%rsp
+    217c:	mov    %rbp,%rdi
+    217f:	mov    0xb8(%rsp),%rax
+    2187:	movdqu 0xa8(%rsp),%xmm0
+    2190:	mov    %rax,0x10(%rsp)
+    2195:	movups %xmm0,(%rsp)
+    2199:	call   219e <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x24e>
+    219e:	add    $0x20,%rsp
+    21a2:	jmp    2122 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x1d2>
+    21a7:	nopw   0x0(%rax,%rax,1)
+    21b0:	mov    0x20(%rbp),%rdi
+    21b4:	mov    0x28(%rsp),%esi
+    21b8:	mov    0x30(%rsp),%rdx
+    21bd:	call   21c2 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x272>
+    21c2:	movb   $0x6,0x18(%rbx)
+    21c6:	movl   $0x0,0x1c(%rbx)
+    21cd:	movb   $0x0,0x20(%rbx)
+    21d1:	jmp    2145 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)+0x1f5>
+    21d6:	cs nopw 0x0(%rax,%rax,1)
+
+00000000000021e0 <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)>:
+    21e0:	push   %r12
+    21e2:	mov    %rdx,%r12
+    21e5:	push   %rbp
+    21e6:	mov    %rsi,%rbp
+    21e9:	push   %rbx
+    21ea:	mov    %rdi,%rbx
+    21ed:	sub    $0x60,%rsp
+    21f1:	mov    0x20(%rdi),%rdi
+    21f5:	call   21fa <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x1a>
+    21fa:	mov    %r12,0x10(%rsp)
+    21ff:	sub    $0x20,%rsp
+    2203:	xor    %esi,%esi
+    2205:	mov    %rax,0x20(%rsp)
+    220a:	mov    0x20(%rbx),%rdi
+    220e:	mov    %ebp,0x28(%rsp)
+    2212:	movdqa 0x20(%rsp),%xmm0
+    2218:	mov    %r12,0x10(%rsp)
+    221d:	movups %xmm0,(%rsp)
+    2221:	call   2226 <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x46>
+    2226:	add    $0x20,%rsp
+    222a:	test   %al,%al
+    222c:	jne    232f <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x14f>
+    2232:	sub    $0x20,%rsp
+    2236:	mov    %ebp,%ebp
+    2238:	mov    0x20(%rbx),%rdi
+    223c:	mov    0x30(%rsp),%rax
+    2241:	shl    $0x5,%rbp
+    2245:	add    0x48(%rbx),%rbp
+    2249:	movzbl 0x0(%rbp),%ebp
+    224d:	movdqa 0x20(%rsp),%xmm0
+    2253:	mov    %rax,0x10(%rsp)
+    2258:	movups %xmm0,(%rsp)
+    225c:	call   2261 <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x81>
+    2261:	add    $0x20,%rsp
+    2265:	test   %al,%al
+    2267:	jne    232f <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x14f>
+    226d:	movdqa (%rsp),%xmm0
+    2272:	mov    0x10(%rsp),%rax
+    2277:	sub    $0x20,%rsp
+    227b:	mov    0x20(%rbx),%rdi
+    227f:	movaps %xmm0,0x40(%rsp)
+    2284:	mov    %rax,0x50(%rsp)
+    2289:	mov    %rax,0x10(%rsp)
+    228e:	movups %xmm0,(%rsp)
+    2292:	call   2297 <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0xb7>
+    2297:	mov    0x10(%rbx),%rdi
+    229b:	add    $0x20,%rsp
+    229f:	lea    0x60(%rbx),%rax
+    22a3:	mov    0x20(%rsp),%r8
+    22a8:	mov    0x28(%rsp),%r9
+    22ad:	mov    %bpl,0x58(%rsp)
+    22b2:	test   %rdi,%rdi
+    22b5:	cmove  %rax,%rdi
+    22b9:	mov    (%rdi),%rax
+    22bc:	mov    0x10(%rax),%rdx
+    22c0:	mov    0x30(%rsp),%rax
+    22c5:	mov    %rax,0x50(%rsp)
+    22ca:	cmp    $0x0,%rdx
+    22d1:	jne    2300 <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x120>
+    22d3:	sub    $0x20,%rsp
+    22d7:	mov    0x20(%rbx),%rdi
+    22db:	mov    %r8,(%rsp)
+    22df:	mov    %r9,0x8(%rsp)
+    22e4:	mov    %rax,0x10(%rsp)
+    22e9:	call   22ee <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0x10e>
+    22ee:	sub    $0xffffffffffffff80,%rsp
+    22f2:	pop    %rbx
+    22f3:	pop    %rbp
+    22f4:	pop    %r12
+    22f6:	ret
+    22f7:	nopw   0x0(%rax,%rax,1)
+    2300:	sub    $0x20,%rsp
+    2304:	movdqa 0x70(%rsp),%xmm0
+    230a:	mov    %r8,(%rsp)
+    230e:	mov    %r9,0x8(%rsp)
+    2313:	movups %xmm0,0x10(%rsp)
+    2318:	call   *%rdx
+    231a:	add    $0x20,%rsp
+    231e:	mov    0x20(%rsp),%r8
+    2323:	mov    0x28(%rsp),%r9
+    2328:	mov    0x30(%rsp),%rax
+    232d:	jmp    22d3 <sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)+0xf3>
+    232f:	call   10 <sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()>
+    2334:	nop
+    2335:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000002340 <sluice::async::ThreadPoolBackend::poll_progress()>:
+    2340:	sub    $0x88,%rsp
+    2347:	lea    0x68(%rdi),%rax
+    234b:	mov    %rbx,0x58(%rsp)
+    2350:	mov    %rdi,%rbx
+    2353:	mov    %rax,%rdi
+    2356:	mov    %rax,0x8(%rsp)
+    235b:	call   2360 <sluice::async::ThreadPoolBackend::poll_progress()+0x20>
+    2360:	test   %eax,%eax
+    2362:	jne    2368 <sluice::async::ThreadPoolBackend::poll_progress()+0x28>
+    2368:	mov    0x110(%rbx),%rdx
+    236f:	mov    %r12,0x68(%rsp)
+    2374:	mov    %r13,0x70(%rsp)
+    2379:	mov    %r14,0x78(%rsp)
+    237e:	test   %rdx,%rdx
+    2381:	je     2420 <sluice::async::ThreadPoolBackend::poll_progress()+0xe0>
+    2387:	mov    0xf0(%rbx),%r12
+    238e:	mov    0x118(%rbx),%r11
+    2395:	xor    %esi,%esi
+    2397:	mov    0x148(%rbx),%rcx
+    239e:	mov    0x138(%rbx),%r10
+    23a5:	mov    0x120(%rbx),%r9
+    23ac:	mov    0x108(%rbx),%rax
+    23b3:	mov    0x140(%rbx),%r13
+    23ba:	mov    %rax,%rdi
+    23bd:	add    $0x1,%rax
+    23c1:	shl    $0x4,%rdi
+    23c5:	add    %r12,%rdi
+    23c8:	cmp    %rax,%r11
+    23cb:	cmove  %rsi,%rax
+    23cf:	sub    $0x1,%rdx
+    23d3:	mov    (%rdi),%r8d
+    23d6:	mov    0x8(%rdi),%rdi
+    23da:	mov    %rdx,0x110(%rbx)
+    23e1:	mov    %rax,0x108(%rbx)
+    23e8:	cmp    %rcx,%r13
+    23eb:	jae    275f <sluice::async::ThreadPoolBackend::poll_progress()+0x41f>
+    23f1:	lea    0x0(%r13,%r10,1),%rax
+    23f6:	mov    %rsi,%r14
+    23f9:	cmp    %rcx,%rax
+    23fc:	cmovae %rcx,%r14
+    2400:	add    $0x1,%r13
+    2404:	sub    %r14,%rax
+    2407:	shl    $0x4,%rax
+    240b:	mov    %r8d,(%r9,%rax,1)
+    240f:	mov    %rdi,0x8(%r9,%rax,1)
+    2414:	mov    %r13,0x140(%rbx)
+    241b:	test   %rdx,%rdx
+    241e:	jne    23ac <sluice::async::ThreadPoolBackend::poll_progress()+0x6c>
+    2420:	mov    0x28(%rbx),%rdx
+    2424:	mov    %r15,0x80(%rsp)
+    242c:	test   %rdx,%rdx
+    242f:	je     2730 <sluice::async::ThreadPoolBackend::poll_progress()+0x3f0>
+    2435:	mov    0x48(%rbx),%rsi
+    2439:	mov    0x150(%rbx),%rdi
+    2440:	xor    %ecx,%ecx
+    2442:	xor    %r14d,%r14d
+    2445:	xor    %eax,%eax
+    2447:	pxor   %xmm1,%xmm1
+    244b:	nopl   0x0(%rax,%rax,1)
+    2450:	shl    $0x5,%rax
+    2454:	add    %rsi,%rax
+    2457:	cmpb   $0x0,0x1(%rax)
+    245b:	je     2660 <sluice::async::ThreadPoolBackend::poll_progress()+0x320>
+    2461:	mov    0x18(%rax),%rdx
+    2465:	movdqu 0x8(%rax),%xmm0
+    246a:	movb   $0x0,0x1(%rax)
+    246e:	mov    %rdx,0x40(%rsp)
+    2473:	movzbl (%rax),%edx
+    2476:	movaps %xmm0,0x30(%rsp)
+    247b:	mov    %dl,0x48(%rsp)
+    247f:	mov    %r14,%rdx
+    2482:	add    $0x1,%r14
+    2486:	shl    $0x5,%rdx
+    248a:	movups %xmm0,(%rdi,%rdx,1)
+    248e:	movdqu 0x39(%rsp),%xmm0
+    2494:	movups %xmm0,0x9(%rdi,%rdx,1)
+    2499:	movq   $0x0,0x18(%rax)
+    24a1:	movups %xmm1,0x8(%rax)
+    24a5:	mov    0x28(%rbx),%rdx
+    24a9:	lea    0x1(%rcx),%eax
+    24ac:	mov    %rax,%rcx
+    24af:	cmp    %rdx,%rax
+    24b2:	jb     2450 <sluice::async::ThreadPoolBackend::poll_progress()+0x110>
+    24b4:	mov    0x8(%rsp),%rdi
+    24b9:	xor    %r12d,%r12d
+    24bc:	call   24c1 <sluice::async::ThreadPoolBackend::poll_progress()+0x181>
+    24c1:	mov    0x140(%rbx),%r13
+    24c8:	test   %r13,%r13
+    24cb:	je     2528 <sluice::async::ThreadPoolBackend::poll_progress()+0x1e8>
+    24cd:	xor    %r12d,%r12d
+    24d0:	xor    %r15d,%r15d
+    24d3:	mov    0x138(%rbx),%rax
+    24da:	mov    %rbx,%rdi
+    24dd:	mov    %rax,%rdx
+    24e0:	add    $0x1,%rax
+    24e4:	shl    $0x4,%rdx
+    24e8:	add    0x120(%rbx),%rdx
+    24ef:	cmp    0x148(%rbx),%rax
+    24f6:	cmove  %r15,%rax
+    24fa:	sub    $0x1,%r13
+    24fe:	mov    (%rdx),%rsi
+    2501:	mov    0x8(%rdx),%rdx
+    2505:	mov    %r13,0x140(%rbx)
+    250c:	add    $0x1,%r12
+    2510:	mov    %rax,0x138(%rbx)
+    2517:	call   251c <sluice::async::ThreadPoolBackend::poll_progress()+0x1dc>
+    251c:	mov    0x140(%rbx),%r13
+    2523:	test   %r13,%r13
+    2526:	jne    24d3 <sluice::async::ThreadPoolBackend::poll_progress()+0x193>
+    2528:	test   %r14,%r14
+    252b:	je     2752 <sluice::async::ThreadPoolBackend::poll_progress()+0x412>
+    2531:	lea    (%r14,%r12,1),%r13
+    2535:	mov    %rbp,0x60(%rsp)
+    253a:	xor    %r15d,%r15d
+    253d:	lea    0x60(%rbx),%r14
+    2541:	jmp    25a4 <sluice::async::ThreadPoolBackend::poll_progress()+0x264>
+    2543:	nopl   0x0(%rax,%rax,1)
+    2548:	sub    $0x20,%rsp
+    254c:	mov    0x20(%rbx),%rdi
+    2550:	mov    %rdx,0x8(%rsp)
+    2555:	mov    %rcx,0x10(%rsp)
+    255a:	mov    %rax,(%rsp)
+    255e:	call   2563 <sluice::async::ThreadPoolBackend::poll_progress()+0x223>
+    2563:	mov    0x150(%rbx),%rax
+    256a:	mov    0x20(%rbx),%rdi
+    256e:	movdqu (%rax,%r15,1),%xmm0
+    2574:	movups %xmm0,(%rsp)
+    2578:	mov    0x10(%rax,%r15,1),%rax
+    257d:	mov    %rax,0x10(%rsp)
+    2582:	call   2587 <sluice::async::ThreadPoolBackend::poll_progress()+0x247>
+    2587:	add    $0x20,%rsp
+    258b:	test   %al,%al
+    258d:	jne    275a <sluice::async::ThreadPoolBackend::poll_progress()+0x41a>
+    2593:	add    $0x1,%r12
+    2597:	add    $0x20,%r15
+    259b:	cmp    %r13,%r12
+    259e:	je     2678 <sluice::async::ThreadPoolBackend::poll_progress()+0x338>
+    25a4:	mov    0x150(%rbx),%rax
+    25ab:	sub    $0x20,%rsp
+    25af:	mov    0x20(%rbx),%rdi
+    25b3:	add    %r15,%rax
+    25b6:	mov    0x10(%rax),%rdx
+    25ba:	movdqu (%rax),%xmm0
+    25be:	movzbl 0x18(%rax),%ebp
+    25c2:	movaps %xmm0,0x30(%rsp)
+    25c7:	mov    %rdx,0x40(%rsp)
+    25cc:	movups %xmm0,(%rsp)
+    25d0:	mov    0x10(%rax),%rax
+    25d4:	mov    %rax,0x10(%rsp)
+    25d9:	call   25de <sluice::async::ThreadPoolBackend::poll_progress()+0x29e>
+    25de:	mov    0x10(%rbx),%rdi
+    25e2:	add    $0x20,%rsp
+    25e6:	mov    0x18(%rsp),%rdx
+    25eb:	mov    0x20(%rsp),%rcx
+    25f0:	mov    %bpl,0x48(%rsp)
+    25f5:	test   %rdi,%rdi
+    25f8:	mov    %rdx,0x38(%rsp)
+    25fd:	cmove  %r14,%rdi
+    2601:	mov    %rcx,0x40(%rsp)
+    2606:	mov    (%rdi),%rax
+    2609:	mov    0x10(%rax),%rsi
+    260d:	mov    0x10(%rsp),%rax
+    2612:	mov    %rax,0x30(%rsp)
+    2617:	cmp    $0x0,%rsi
+    261e:	je     2548 <sluice::async::ThreadPoolBackend::poll_progress()+0x208>
+    2624:	sub    $0x20,%rsp
+    2628:	movdqa 0x60(%rsp),%xmm0
+    262e:	mov    %rax,(%rsp)
+    2632:	mov    %rdx,0x8(%rsp)
+    2637:	movups %xmm0,0x10(%rsp)
+    263c:	call   *%rsi
+    263e:	add    $0x20,%rsp
+    2642:	mov    0x10(%rsp),%rax
+    2647:	mov    0x18(%rsp),%rdx
+    264c:	mov    0x20(%rsp),%rcx
+    2651:	jmp    2548 <sluice::async::ThreadPoolBackend::poll_progress()+0x208>
+    2656:	cs nopw 0x0(%rax,%rax,1)
+    2660:	lea    0x1(%rcx),%eax
+    2663:	mov    %rax,%rcx
+    2666:	cmp    %rdx,%rax
+    2669:	jb     2450 <sluice::async::ThreadPoolBackend::poll_progress()+0x110>
+    266f:	jmp    24b4 <sluice::async::ThreadPoolBackend::poll_progress()+0x174>
+    2674:	nopl   0x0(%rax)
+    2678:	mov    0x60(%rsp),%rbp
+    267d:	mov    0x8(%rsp),%rdi
+    2682:	call   2687 <sluice::async::ThreadPoolBackend::poll_progress()+0x347>
+    2687:	test   %eax,%eax
+    2689:	jne    268f <sluice::async::ThreadPoolBackend::poll_progress()+0x34f>
+    268f:	cmpq   $0x0,0x110(%rbx)
+    2697:	je     2700 <sluice::async::ThreadPoolBackend::poll_progress()+0x3c0>
+    2699:	mov    $0x1,%r12d
+    269f:	mov    0x8(%rsp),%rdi
+    26a4:	call   26a9 <sluice::async::ThreadPoolBackend::poll_progress()+0x369>
+    26a9:	mov    0x20(%rbx),%rdi
+    26ad:	xor    %ecx,%ecx
+    26af:	test   %rdi,%rdi
+    26b2:	je     26bf <sluice::async::ThreadPoolBackend::poll_progress()+0x37f>
+    26b4:	call   26b9 <sluice::async::ThreadPoolBackend::poll_progress()+0x379>
+    26b9:	test   %rax,%rax
+    26bc:	setne  %cl
+    26bf:	movzbl %r12b,%edx
+    26c3:	mov    %r13,%rax
+    26c6:	mov    0x68(%rsp),%r12
+    26cb:	movabs $0xffffffff0000ffff,%rsi
+    26d5:	mov    %cl,%dh
+    26d7:	mov    0x70(%rsp),%r13
+    26dc:	mov    0x78(%rsp),%r14
+    26e1:	mov    %rdx,%rcx
+    26e4:	mov    0x80(%rsp),%r15
+    26ec:	mov    0x58(%rsp),%rbx
+    26f1:	add    $0x88,%rsp
+    26f8:	and    %rsi,%rcx
+    26fb:	mov    %rcx,%rdx
+    26fe:	ret
+    26ff:	nop
+    2700:	mov    0x48(%rbx),%rax
+    2704:	mov    0x50(%rbx),%rdx
+    2708:	cmp    %rdx,%rax
+    270b:	jne    2719 <sluice::async::ThreadPoolBackend::poll_progress()+0x3d9>
+    270d:	jmp    2728 <sluice::async::ThreadPoolBackend::poll_progress()+0x3e8>
+    270f:	nop
+    2710:	add    $0x20,%rax
+    2714:	cmp    %rax,%rdx
+    2717:	je     2728 <sluice::async::ThreadPoolBackend::poll_progress()+0x3e8>
+    2719:	cmpb   $0x0,0x1(%rax)
+    271d:	je     2710 <sluice::async::ThreadPoolBackend::poll_progress()+0x3d0>
+    271f:	jmp    2699 <sluice::async::ThreadPoolBackend::poll_progress()+0x359>
+    2724:	nopl   0x0(%rax)
+    2728:	xor    %r12d,%r12d
+    272b:	jmp    269f <sluice::async::ThreadPoolBackend::poll_progress()+0x35f>
+    2730:	mov    0x8(%rsp),%rdi
+    2735:	xor    %r14d,%r14d
+    2738:	call   273d <sluice::async::ThreadPoolBackend::poll_progress()+0x3fd>
+    273d:	mov    0x140(%rbx),%r13
+    2744:	test   %r13,%r13
+    2747:	jne    24cd <sluice::async::ThreadPoolBackend::poll_progress()+0x18d>
+    274d:	jmp    267d <sluice::async::ThreadPoolBackend::poll_progress()+0x33d>
+    2752:	mov    %r12,%r13
+    2755:	jmp    267d <sluice::async::ThreadPoolBackend::poll_progress()+0x33d>
+    275a:	call   275f <sluice::async::ThreadPoolBackend::poll_progress()+0x41f>
+    275f:	mov    $0x69,%edx
+    2764:	mov    $0x1,%esi
+    2769:	mov    $0x0,%edi
+    276e:	mov    0x0(%rip),%rcx        # 2775 <sluice::async::ThreadPoolBackend::poll_progress()+0x435>
+    2775:	mov    %rbp,0x60(%rsp)
+    277a:	mov    %r15,0x80(%rsp)
+    2782:	call   2787 <sluice::async::ThreadPoolBackend::poll_progress()+0x447>
+    2787:	mov    0x0(%rip),%rdi        # 278e <sluice::async::ThreadPoolBackend::poll_progress()+0x44e>
+    278e:	call   2793 <sluice::async::ThreadPoolBackend::poll_progress()+0x453>
+    2793:	call   2798 <sluice::async::ThreadPoolBackend::poll_progress()+0x458>
+    2798:	nopl   0x0(%rax,%rax,1)
+
+00000000000027a0 <sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)>:
+    27a0:	push   %rbp
+    27a1:	mov    %esi,%ebp
+    27a3:	push   %rbx
+    27a4:	mov    %rdi,%rbx
+    27a7:	sub    $0x48,%rsp
+    27ab:	mov    0x20(%rdi),%rdi
+    27af:	mov    0x70(%rsp),%rax
+    27b4:	movdqu 0x60(%rsp),%xmm0
+    27ba:	mov    %rax,0x10(%rsp)
+    27bf:	movups %xmm0,(%rsp)
+    27c3:	call   27c8 <sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)+0x28>
+    27c8:	mov    0x10(%rbx),%rdi
+    27cc:	add    $0x20,%rsp
+    27d0:	lea    0x60(%rbx),%rax
+    27d4:	mov    0x50(%rsp),%rdx
+    27d9:	movdqu 0x40(%rsp),%xmm0
+    27df:	mov    %bpl,0x18(%rsp)
+    27e4:	test   %rdi,%rdi
+    27e7:	cmove  %rax,%rdi
+    27eb:	mov    %rdx,0x10(%rsp)
+    27f0:	mov    (%rdi),%rax
+    27f3:	mov    0x10(%rax),%rax
+    27f7:	cmp    $0x0,%rax
+    27fd:	jne    2810 <sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)+0x70>
+    27ff:	mov    0x20(%rbx),%rdi
+    2803:	add    $0x28,%rsp
+    2807:	pop    %rbx
+    2808:	pop    %rbp
+    2809:	jmp    280e <sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)+0x6e>
+    280e:	xchg   %ax,%ax
+    2810:	sub    $0x20,%rsp
+    2814:	movups %xmm0,(%rsp)
+    2818:	movdqa 0x30(%rsp),%xmm0
+    281e:	movups %xmm0,0x10(%rsp)
+    2823:	call   *%rax
+    2825:	add    $0x20,%rsp
+    2829:	mov    0x20(%rbx),%rdi
+    282d:	add    $0x28,%rsp
+    2831:	pop    %rbx
+    2832:	pop    %rbp
+    2833:	jmp    2838 <sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)+0x98>
+    2838:	nopl   0x0(%rax,%rax,1)
+
+0000000000002840 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)>:
+    2840:	sub    $0xb8,%rsp
+    2847:	mov    %rbx,0x98(%rsp)
+    284f:	mov    %rdi,%rbx
+    2852:	mov    %rbp,0xa0(%rsp)
+    285a:	mov    %rsi,%rbp
+    285d:	mov    %r14,0xb0(%rsp)
+    2865:	mov    %rdx,%r14
+    2868:	call   286d <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x2d>
+    286d:	movl   $0x0,(%rax)
+    2873:	cmpb   $0x5,0x0(%rbp)
+    2877:	ja     2ad8 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x298>
+    287d:	mov    %r12,0xa8(%rsp)
+    2885:	mov    %rax,%r12
+    2888:	movzbl 0x0(%rbp),%eax
+    288c:	jmp    *0x0(,%rax,8)
+    2893:	nopl   0x0(%rax,%rax,1)
+    2898:	mov    (%r12),%eax
+    289c:	cmp    $0x4,%eax
+    289f:	jne    2a5f <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x21f>
+    28a5:	data16 cs nopw 0x0(%rax,%rax,1)
+    28b0:	mov    0x4(%rbp),%edi
+    28b3:	call   28b8 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x78>
+    28b8:	test   %eax,%eax
+    28ba:	js     2898 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x58>
+    28bc:	nopl   0x0(%rax)
+    28c0:	movb   $0x1,(%rbx)
+    28c3:	mov    0xa8(%rsp),%r12
+    28cb:	movq   $0x0,0x8(%rbx)
+    28d3:	movb   $0x0,0x10(%rbx)
+    28d7:	movb   $0x0,0x18(%rbx)
+    28db:	movl   $0x0,0x1c(%rbx)
+    28e2:	mov    %rbx,%rax
+    28e5:	mov    0xa0(%rsp),%rbp
+    28ed:	mov    0x98(%rsp),%rbx
+    28f5:	mov    0xb0(%rsp),%r14
+    28fd:	add    $0xb8,%rsp
+    2904:	ret
+    2905:	nopl   (%rax)
+    2908:	mov    (%r12),%eax
+    290c:	cmp    $0x4,%eax
+    290f:	jne    2a5f <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x21f>
+    2915:	data16 cs nopw 0x0(%rax,%rax,1)
+    2920:	mov    0x4(%rbp),%edi
+    2923:	call   2928 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xe8>
+    2928:	test   %eax,%eax
+    292a:	js     2908 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xc8>
+    292c:	jmp    28c0 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x80>
+    292e:	xchg   %ax,%ax
+    2930:	mov    (%r12),%eax
+    2934:	cmp    $0x4,%eax
+    2937:	jne    29a2 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x162>
+    2939:	nopl   0x0(%rax)
+    2940:	mov    0x18(%rbp),%rcx
+    2944:	mov    0x10(%rbp),%rdx
+    2948:	mov    0x8(%rbp),%rsi
+    294c:	mov    0x4(%rbp),%edi
+    294f:	call   2954 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x114>
+    2954:	test   %rax,%rax
+    2957:	js     2930 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xf0>
+    2959:	movb   $0x1,(%rbx)
+    295c:	mov    0xa8(%rsp),%r12
+    2964:	movq   $0x0,0x10(%rbx)
+    296c:	mov    %rax,0x8(%rbx)
+    2970:	movb   $0x0,0x18(%rbx)
+    2974:	movl   $0x0,0x1c(%rbx)
+    297b:	jmp    28e2 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xa2>
+    2980:	mov    0x18(%rbp),%rcx
+    2984:	mov    0x10(%rbp),%rdx
+    2988:	mov    0x8(%rbp),%rsi
+    298c:	mov    0x4(%rbp),%edi
+    298f:	call   2994 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x154>
+    2994:	test   %rax,%rax
+    2997:	jns    2959 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x119>
+    2999:	mov    (%r12),%eax
+    299d:	cmp    $0x4,%eax
+    29a0:	je     2980 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x140>
+    29a2:	test   %eax,%eax
+    29a4:	je     29e5 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x1a5>
+    29a6:	cmp    $0xd,%eax
+    29a9:	je     2b99 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x359>
+    29af:	cmp    $0x1,%eax
+    29b2:	je     2ba0 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x360>
+    29b8:	cmp    $0x2,%eax
+    29bb:	je     2ba7 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x367>
+    29c1:	cmp    $0x14,%eax
+    29c4:	je     2bae <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x36e>
+    29ca:	cmp    $0x1c,%eax
+    29cd:	je     2bb5 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x375>
+    29d3:	cmp    $0x7a,%eax
+    29d6:	je     2bbc <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x37c>
+    29dc:	cmp    $0xb,%eax
+    29df:	je     2b83 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x343>
+    29e5:	mov    $0x7,%edx
+    29ea:	movq   $0x1,0x10(%rbx)
+    29f2:	mov    0xa8(%rsp),%r12
+    29fa:	movb   $0x0,(%rbx)
+    29fd:	movq   $0x0,0x8(%rbx)
+    2a05:	mov    %dl,0x18(%rbx)
+    2a08:	mov    %eax,0x1c(%rbx)
+    2a0b:	jmp    28e2 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xa2>
+    2a10:	pxor   %xmm0,%xmm0
+    2a14:	movaps %xmm0,(%rsp)
+    2a18:	movaps %xmm0,0x10(%rsp)
+    2a1d:	movaps %xmm0,0x20(%rsp)
+    2a22:	movaps %xmm0,0x30(%rsp)
+    2a27:	movaps %xmm0,0x40(%rsp)
+    2a2c:	movaps %xmm0,0x50(%rsp)
+    2a31:	movaps %xmm0,0x60(%rsp)
+    2a36:	movaps %xmm0,0x70(%rsp)
+    2a3b:	movaps %xmm0,0x80(%rsp)
+    2a43:	mov    0x4(%rbp),%edi
+    2a46:	mov    %rsp,%rsi
+    2a49:	call   2a4e <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x20e>
+    2a4e:	test   %eax,%eax
+    2a50:	jns    2b00 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x2c0>
+    2a56:	mov    (%r12),%eax
+    2a5a:	cmp    $0x4,%eax
+    2a5d:	je     2a43 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x203>
+    2a5f:	xor    %edx,%edx
+    2a61:	test   %eax,%eax
+    2a63:	je     2aa4 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x264>
+    2a65:	cmp    $0xd,%eax
+    2a68:	je     2b59 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x319>
+    2a6e:	cmp    $0x1,%eax
+    2a71:	je     2b60 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x320>
+    2a77:	cmp    $0x2,%eax
+    2a7a:	je     2b67 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x327>
+    2a80:	cmp    $0x14,%eax
+    2a83:	je     2b6e <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x32e>
+    2a89:	cmp    $0x1c,%eax
+    2a8c:	je     2b75 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x335>
+    2a92:	cmp    $0x7a,%eax
+    2a95:	je     2b7c <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x33c>
+    2a9b:	cmp    $0xb,%eax
+    2a9e:	je     2b43 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x303>
+    2aa4:	mov    $0x7,%ecx
+    2aa9:	mov    %cl,%dl
+    2aab:	shl    $0x20,%rax
+    2aaf:	movb   $0x0,(%rbx)
+    2ab2:	mov    0xa8(%rsp),%r12
+    2aba:	mov    %edx,%edx
+    2abc:	movq   $0x0,0x10(%rbx)
+    2ac4:	or     %rax,%rdx
+    2ac7:	movq   $0x0,0x8(%rbx)
+    2acf:	mov    %rdx,0x18(%rbx)
+    2ad3:	jmp    28e2 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xa2>
+    2ad8:	movb   $0x0,(%rbx)
+    2adb:	movq   $0x0,0x8(%rbx)
+    2ae3:	movb   $0x0,0x10(%rbx)
+    2ae7:	movb   $0x7,0x18(%rbx)
+    2aeb:	movl   $0x0,0x1c(%rbx)
+    2af2:	jmp    28e2 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0xa2>
+    2af7:	nopw   0x0(%rax,%rax,1)
+    2b00:	test   %r14,%r14
+    2b03:	je     28c0 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x80>
+    2b09:	mov    0x18(%rsp),%eax
+    2b0d:	movdqa (%rsp),%xmm0
+    2b12:	and    $0xf000,%eax
+    2b17:	movups %xmm0,0x10(%r14)
+    2b1c:	cmp    $0x8000,%eax
+    2b21:	mov    0x30(%rsp),%rax
+    2b26:	setne  (%r14)
+    2b2a:	cmpb   $0x0,0x20(%r14)
+    2b2f:	mov    %rax,0x8(%r14)
+    2b33:	jne    28c0 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x80>
+    2b39:	movb   $0x1,0x20(%r14)
+    2b3e:	jmp    28c0 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x80>
+    2b43:	mov    $0x0,%ecx
+    2b48:	nopl   0x0(%rax,%rax,1)
+    2b50:	movzbl 0x4(%rcx),%ecx
+    2b54:	jmp    2aa9 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x269>
+    2b59:	mov    $0x0,%ecx
+    2b5e:	jmp    2b50 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x310>
+    2b60:	mov    $0x0,%ecx
+    2b65:	jmp    2b50 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x310>
+    2b67:	mov    $0x0,%ecx
+    2b6c:	jmp    2b50 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x310>
+    2b6e:	mov    $0x0,%ecx
+    2b73:	jmp    2b50 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x310>
+    2b75:	mov    $0x0,%ecx
+    2b7a:	jmp    2b50 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x310>
+    2b7c:	mov    $0x0,%ecx
+    2b81:	jmp    2b50 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x310>
+    2b83:	mov    $0x0,%edx
+    2b88:	nopl   0x0(%rax,%rax,1)
+    2b90:	movzbl 0x4(%rdx),%edx
+    2b94:	jmp    29ea <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x1aa>
+    2b99:	mov    $0x0,%edx
+    2b9e:	jmp    2b90 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x350>
+    2ba0:	mov    $0x0,%edx
+    2ba5:	jmp    2b90 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x350>
+    2ba7:	mov    $0x0,%edx
+    2bac:	jmp    2b90 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x350>
+    2bae:	mov    $0x0,%edx
+    2bb3:	jmp    2b90 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x350>
+    2bb5:	mov    $0x0,%edx
+    2bba:	jmp    2b90 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x350>
+    2bbc:	mov    $0x0,%edx
+    2bc1:	jmp    2b90 <sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)+0x350>
+    2bc3:	nop
+    2bc4:	nop
+    2bc5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+0000000000002bd0 <sluice::async::ThreadPoolBackend::worker_loop()>:
+    2bd0:	push   %r15
+    2bd2:	mov    %rdi,%r15
+    2bd5:	push   %r14
+    2bd7:	push   %r13
+    2bd9:	push   %r12
+    2bdb:	push   %rbp
+    2bdc:	push   %rbx
+    2bdd:	lea    0x68(%rdi),%rbx
+    2be1:	sub    $0x118,%rsp
+    2be8:	nopl   0x0(%rax,%rax,1)
+    2bf0:	mov    %rbx,%rdi
+    2bf3:	mov    %rbx,0x80(%rsp)
+    2bfb:	movb   $0x0,0x88(%rsp)
+    2c03:	call   2c08 <sluice::async::ThreadPoolBackend::worker_loop()+0x38>
+    2c08:	test   %eax,%eax
+    2c0a:	jne    2c10 <sluice::async::ThreadPoolBackend::worker_loop()+0x40>
+    2c10:	movb   $0x1,0x88(%rsp)
+    2c18:	mov    0xe0(%r15),%rdx
+    2c1f:	cmpb   $0x0,0x170(%r15)
+    2c27:	jne    2c48 <sluice::async::ThreadPoolBackend::worker_loop()+0x78>
+    2c29:	test   %rdx,%rdx
+    2c2c:	jne    2c51 <sluice::async::ThreadPoolBackend::worker_loop()+0x81>
+    2c2e:	lea    0x80(%rsp),%rsi
+    2c36:	lea    0x90(%r15),%rdi
+    2c3d:	call   2c42 <sluice::async::ThreadPoolBackend::worker_loop()+0x72>
+    2c42:	jmp    2c18 <sluice::async::ThreadPoolBackend::worker_loop()+0x48>
+    2c44:	nopl   0x0(%rax)
+    2c48:	test   %rdx,%rdx
+    2c4b:	je     3110 <sluice::async::ThreadPoolBackend::worker_loop()+0x540>
+    2c51:	mov    0xd8(%r15),%rax
+    2c58:	mov    0x20(%r15),%rdi
+    2c5c:	mov    %rax,%rsi
+    2c5f:	add    $0x1,%rax
+    2c63:	shl    $0x4,%rsi
+    2c67:	add    0xc0(%r15),%rsi
+    2c6e:	mov    0x8(%rsi),%rbp
+    2c72:	mov    (%rsi),%r12d
+    2c75:	xor    %esi,%esi
+    2c77:	cmp    0xe8(%r15),%rax
+    2c7e:	cmove  %rsi,%rax
+    2c82:	sub    $0x1,%rdx
+    2c86:	mov    %rdx,0xe0(%r15)
+    2c8d:	mov    %rax,0xd8(%r15)
+    2c94:	call   2c99 <sluice::async::ThreadPoolBackend::worker_loop()+0xc9>
+    2c99:	sub    $0x20,%rsp
+    2c9d:	mov    0x20(%r15),%rdi
+    2ca1:	mov    %r12d,0xd8(%rsp)
+    2ca9:	mov    %rax,0xd0(%rsp)
+    2cb1:	mov    %rbp,0xe0(%rsp)
+    2cb9:	movdqa 0xd0(%rsp),%xmm0
+    2cc2:	mov    %rbp,0x10(%rsp)
+    2cc7:	movups %xmm0,(%rsp)
+    2ccb:	call   2cd0 <sluice::async::ThreadPoolBackend::worker_loop()+0x100>
+    2cd0:	movzbl 0xa8(%rsp),%edx
+    2cd8:	add    $0x20,%rsp
+    2cdc:	test   %al,%al
+    2cde:	je     2d98 <sluice::async::ThreadPoolBackend::worker_loop()+0x1c8>
+    2ce4:	test   %dl,%dl
+    2ce6:	jne    30b0 <sluice::async::ThreadPoolBackend::worker_loop()+0x4e0>
+    2cec:	mov    0x18(%r15),%rbp
+    2cf0:	test   %rbp,%rbp
+    2cf3:	je     2bf0 <sluice::async::ThreadPoolBackend::worker_loop()+0x20>
+    2cf9:	mov    %rbp,%rdi
+    2cfc:	call   2d01 <sluice::async::ThreadPoolBackend::worker_loop()+0x131>
+    2d01:	test   %eax,%eax
+    2d03:	jne    2d09 <sluice::async::ThreadPoolBackend::worker_loop()+0x139>
+    2d09:	mov    0x28(%rbp),%rax
+    2d0d:	cmp    $0xffffffffffffffff,%rax
+    2d11:	je     30d0 <sluice::async::ThreadPoolBackend::worker_loop()+0x500>
+    2d17:	add    $0x1,%rax
+    2d1b:	mov    %rax,0x28(%rbp)
+    2d1f:	mov    0x6c(%rbp),%edx
+    2d22:	test   %edx,%edx
+    2d24:	js     2d85 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b5>
+    2d26:	cmpb   $0x0,0x70(%rbp)
+    2d2a:	jne    2d85 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b5>
+    2d2c:	movq   $0x1,0xb0(%rsp)
+    2d38:	lea    0xb0(%rsp),%r13
+    2d40:	call   2d45 <sluice::async::ThreadPoolBackend::worker_loop()+0x175>
+    2d45:	mov    %rax,%r12
+    2d48:	movl   $0x0,(%r12)
+    2d50:	mov    0x6c(%rbp),%edi
+    2d53:	mov    $0x8,%edx
+    2d58:	mov    %r13,%rsi
+    2d5b:	call   2d60 <sluice::async::ThreadPoolBackend::worker_loop()+0x190>
+    2d60:	cmp    $0x8,%rax
+    2d64:	je     2d81 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b1>
+    2d66:	mov    (%r12),%edx
+    2d6a:	test   %rax,%rax
+    2d6d:	jns    3171 <sluice::async::ThreadPoolBackend::worker_loop()+0x5a1>
+    2d73:	cmp    $0x4,%edx
+    2d76:	je     2d48 <sluice::async::ThreadPoolBackend::worker_loop()+0x178>
+    2d78:	cmp    $0xb,%edx
+    2d7b:	jne    3171 <sluice::async::ThreadPoolBackend::worker_loop()+0x5a1>
+    2d81:	movb   $0x1,0x70(%rbp)
+    2d85:	mov    %rbp,%rdi
+    2d88:	call   2d8d <sluice::async::ThreadPoolBackend::worker_loop()+0x1bd>
+    2d8d:	jmp    2bf0 <sluice::async::ThreadPoolBackend::worker_loop()+0x20>
+    2d92:	nopw   0x0(%rax,%rax,1)
+    2d98:	mov    %r12d,%eax
+    2d9b:	shl    $0x5,%rax
+    2d9f:	add    0x30(%r15),%rax
+    2da3:	movdqu (%rax),%xmm0
+    2da7:	movzbl (%rax),%r13d
+    2dab:	movaps %xmm0,0x40(%rsp)
+    2db0:	movdqu 0x10(%rax),%xmm0
+    2db5:	addq   $0x1,0x168(%r15)
+    2dbd:	movaps %xmm0,0x50(%rsp)
+    2dc2:	test   %dl,%dl
+    2dc4:	jne    3090 <sluice::async::ThreadPoolBackend::worker_loop()+0x4c0>
+    2dca:	pxor   %xmm0,%xmm0
+    2dce:	lea    0x60(%rsp),%rdi
+    2dd3:	lea    0x40(%rsp),%rsi
+    2dd8:	movq   $0x0,0xa0(%rsp)
+    2de4:	lea    0x80(%rsp),%rdx
+    2dec:	movaps %xmm0,0x80(%rsp)
+    2df4:	mov    %r13b,0x40(%rsp)
+    2df9:	movb   $0x1,0x80(%rsp)
+    2e01:	movaps %xmm0,0x90(%rsp)
+    2e09:	call   2e0e <sluice::async::ThreadPoolBackend::worker_loop()+0x23e>
+    2e0e:	movzbl 0x80(%rsp),%eax
+    2e16:	mov    %al,0xf(%rsp)
+    2e1a:	lock addq $0x1,0x190(%r15)
+    2e23:	mov    %rbx,%rdi
+    2e26:	call   2e2b <sluice::async::ThreadPoolBackend::worker_loop()+0x25b>
+    2e2b:	test   %eax,%eax
+    2e2d:	jne    2e33 <sluice::async::ThreadPoolBackend::worker_loop()+0x263>
+    2e33:	subq   $0x1,0x168(%r15)
+    2e3b:	mov    %rbx,%rdi
+    2e3e:	call   2e43 <sluice::async::ThreadPoolBackend::worker_loop()+0x273>
+    2e43:	mov    0x20(%r15),%rdi
+    2e47:	call   2e4c <sluice::async::ThreadPoolBackend::worker_loop()+0x27c>
+    2e4c:	pxor   %xmm0,%xmm0
+    2e50:	mov    %r12d,0x28(%rsp)
+    2e55:	movaps %xmm0,0xb0(%rsp)
+    2e5d:	movaps %xmm0,0xd0(%rsp)
+    2e65:	movaps %xmm0,0xe0(%rsp)
+    2e6d:	movaps %xmm0,0xf0(%rsp)
+    2e75:	movdqa 0x60(%rsp),%xmm0
+    2e7b:	mov    %rax,0x20(%rsp)
+    2e80:	movups %xmm0,0xb8(%rsp)
+    2e88:	movdqa 0x70(%rsp),%xmm0
+    2e8e:	mov    %rbp,0x30(%rsp)
+    2e93:	movq   $0x0,0x100(%rsp)
+    2e9f:	movb   $0x1,0xe0(%rsp)
+    2ea7:	movups %xmm0,0xc8(%rsp)
+    2eaf:	cmpb   $0x0,0x60(%rsp)
+    2eb4:	je     2f06 <sluice::async::ThreadPoolBackend::worker_loop()+0x336>
+    2eb6:	sub    $0x4,%r13d
+    2eba:	cmp    $0x1,%r13b
+    2ebe:	ja     2f06 <sluice::async::ThreadPoolBackend::worker_loop()+0x336>
+    2ec0:	movzbl 0xf(%rsp),%eax
+    2ec5:	movb   $0x1,0xd8(%rsp)
+    2ecd:	mov    %al,0x80(%rsp)
+    2ed4:	mov    0xa0(%rsp),%rax
+    2edc:	movdqa 0x80(%rsp),%xmm0
+    2ee5:	mov    %rax,0x100(%rsp)
+    2eed:	movaps %xmm0,0xe0(%rsp)
+    2ef5:	movdqa 0x90(%rsp),%xmm0
+    2efe:	movaps %xmm0,0xf0(%rsp)
+    2f06:	lea    0xb0(%rsp),%rsi
+    2f0e:	sub    $0x20,%rsp
+    2f12:	mov    0x20(%r15),%rdi
+    2f16:	mov    0x50(%rsp),%rax
+    2f1b:	movdqa 0x40(%rsp),%xmm0
+    2f21:	mov    %rax,0x10(%rsp)
+    2f26:	movups %xmm0,(%rsp)
+    2f2a:	call   2f2f <sluice::async::ThreadPoolBackend::worker_loop()+0x35f>
+    2f2f:	add    $0x20,%rsp
+    2f33:	test   %al,%al
+    2f35:	jne    3140 <sluice::async::ThreadPoolBackend::worker_loop()+0x570>
+    2f3b:	sub    $0x20,%rsp
+    2f3f:	mov    0x20(%r15),%rdi
+    2f43:	mov    0x50(%rsp),%rax
+    2f48:	movdqa 0x40(%rsp),%xmm0
+    2f4e:	mov    %rax,0x10(%rsp)
+    2f53:	movups %xmm0,(%rsp)
+    2f57:	call   2f5c <sluice::async::ThreadPoolBackend::worker_loop()+0x38c>
+    2f5c:	add    $0x20,%rsp
+    2f60:	cmp    $0x1,%al
+    2f62:	jne    3140 <sluice::async::ThreadPoolBackend::worker_loop()+0x570>
+    2f68:	mov    %rbx,%rdi
+    2f6b:	call   2f70 <sluice::async::ThreadPoolBackend::worker_loop()+0x3a0>
+    2f70:	test   %eax,%eax
+    2f72:	jne    2f78 <sluice::async::ThreadPoolBackend::worker_loop()+0x3a8>
+    2f78:	mov    0x110(%r15),%rdx
+    2f7f:	mov    0x118(%r15),%rsi
+    2f86:	cmp    %rsi,%rdx
+    2f89:	jae    3145 <sluice::async::ThreadPoolBackend::worker_loop()+0x575>
+    2f8f:	mov    0x108(%r15),%rax
+    2f96:	xor    %edi,%edi
+    2f98:	add    %rdx,%rax
+    2f9b:	cmp    %rsi,%rax
+    2f9e:	cmovb  %rdi,%rsi
+    2fa2:	add    $0x1,%rdx
+    2fa6:	mov    %rbx,%rdi
+    2fa9:	sub    %rsi,%rax
+    2fac:	shl    $0x4,%rax
+    2fb0:	add    0xf0(%r15),%rax
+    2fb7:	mov    %rbp,0x8(%rax)
+    2fbb:	mov    %r12d,(%rax)
+    2fbe:	mov    %rdx,0x110(%r15)
+    2fc5:	call   2fca <sluice::async::ThreadPoolBackend::worker_loop()+0x3fa>
+    2fca:	mov    0x18(%r15),%rbp
+    2fce:	test   %rbp,%rbp
+    2fd1:	je     2bf0 <sluice::async::ThreadPoolBackend::worker_loop()+0x20>
+    2fd7:	mov    %rbp,%rdi
+    2fda:	call   2fdf <sluice::async::ThreadPoolBackend::worker_loop()+0x40f>
+    2fdf:	test   %eax,%eax
+    2fe1:	jne    2fe7 <sluice::async::ThreadPoolBackend::worker_loop()+0x417>
+    2fe7:	mov    0x28(%rbp),%rax
+    2feb:	cmp    $0xffffffffffffffff,%rax
+    2fef:	je     30f0 <sluice::async::ThreadPoolBackend::worker_loop()+0x520>
+    2ff5:	add    $0x1,%rax
+    2ff9:	mov    %rax,0x28(%rbp)
+    2ffd:	mov    0x6c(%rbp),%eax
+    3000:	test   %eax,%eax
+    3002:	js     2d85 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b5>
+    3008:	cmpb   $0x0,0x70(%rbp)
+    300c:	jne    2d85 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b5>
+    3012:	movq   $0x1,0x18(%rsp)
+    301b:	call   3020 <sluice::async::ThreadPoolBackend::worker_loop()+0x450>
+    3020:	mov    %rax,%r12
+    3023:	movl   $0x0,(%r12)
+    302b:	mov    0x6c(%rbp),%edi
+    302e:	mov    $0x8,%edx
+    3033:	lea    0x18(%rsp),%rsi
+    3038:	call   303d <sluice::async::ThreadPoolBackend::worker_loop()+0x46d>
+    303d:	cmp    $0x8,%rax
+    3041:	je     2d81 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b1>
+    3047:	mov    (%r12),%edx
+    304b:	test   %rax,%rax
+    304e:	jns    305e <sluice::async::ThreadPoolBackend::worker_loop()+0x48e>
+    3050:	cmp    $0x4,%edx
+    3053:	je     3023 <sluice::async::ThreadPoolBackend::worker_loop()+0x453>
+    3055:	cmp    $0xb,%edx
+    3058:	je     2d81 <sluice::async::ThreadPoolBackend::worker_loop()+0x1b1>
+    305e:	mov    0x0(%rip),%rdi        # 3065 <sluice::async::ThreadPoolBackend::worker_loop()+0x495>
+    3065:	mov    %edx,%ecx
+    3067:	mov    $0x0,%esi
+    306c:	xor    %eax,%eax
+    306e:	mov    $0x0,%edx
+    3073:	call   3078 <sluice::async::ThreadPoolBackend::worker_loop()+0x4a8>
+    3078:	mov    0x0(%rip),%rdi        # 307f <sluice::async::ThreadPoolBackend::worker_loop()+0x4af>
+    307f:	call   3084 <sluice::async::ThreadPoolBackend::worker_loop()+0x4b4>
+    3084:	call   3089 <sluice::async::ThreadPoolBackend::worker_loop()+0x4b9>
+    3089:	nopl   0x0(%rax)
+    3090:	mov    0x80(%rsp),%rdi
+    3098:	test   %rdi,%rdi
+    309b:	je     2dca <sluice::async::ThreadPoolBackend::worker_loop()+0x1fa>
+    30a1:	call   30a6 <sluice::async::ThreadPoolBackend::worker_loop()+0x4d6>
+    30a6:	jmp    2dca <sluice::async::ThreadPoolBackend::worker_loop()+0x1fa>
+    30ab:	nopl   0x0(%rax,%rax,1)
+    30b0:	mov    0x80(%rsp),%rdi
+    30b8:	test   %rdi,%rdi
+    30bb:	je     2cec <sluice::async::ThreadPoolBackend::worker_loop()+0x11c>
+    30c1:	call   30c6 <sluice::async::ThreadPoolBackend::worker_loop()+0x4f6>
+    30c6:	jmp    2cec <sluice::async::ThreadPoolBackend::worker_loop()+0x11c>
+    30cb:	nopl   0x0(%rax,%rax,1)
+    30d0:	mov    0x38(%rbp),%rax
+    30d4:	cmp    $0xffffffffffffffff,%rax
+    30d8:	je     2d1f <sluice::async::ThreadPoolBackend::worker_loop()+0x14f>
+    30de:	add    $0x1,%rax
+    30e2:	mov    %rax,0x38(%rbp)
+    30e6:	jmp    2d1f <sluice::async::ThreadPoolBackend::worker_loop()+0x14f>
+    30eb:	nopl   0x0(%rax,%rax,1)
+    30f0:	mov    0x38(%rbp),%rax
+    30f4:	cmp    $0xffffffffffffffff,%rax
+    30f8:	je     2ffd <sluice::async::ThreadPoolBackend::worker_loop()+0x42d>
+    30fe:	add    $0x1,%rax
+    3102:	mov    %rax,0x38(%rbp)
+    3106:	jmp    2ffd <sluice::async::ThreadPoolBackend::worker_loop()+0x42d>
+    310b:	nopl   0x0(%rax,%rax,1)
+    3110:	cmpb   $0x0,0x88(%rsp)
+    3118:	jne    312c <sluice::async::ThreadPoolBackend::worker_loop()+0x55c>
+    311a:	add    $0x118,%rsp
+    3121:	pop    %rbx
+    3122:	pop    %rbp
+    3123:	pop    %r12
+    3125:	pop    %r13
+    3127:	pop    %r14
+    3129:	pop    %r15
+    312b:	ret
+    312c:	mov    0x80(%rsp),%rdi
+    3134:	test   %rdi,%rdi
+    3137:	je     311a <sluice::async::ThreadPoolBackend::worker_loop()+0x54a>
+    3139:	call   313e <sluice::async::ThreadPoolBackend::worker_loop()+0x56e>
+    313e:	jmp    311a <sluice::async::ThreadPoolBackend::worker_loop()+0x54a>
+    3140:	call   3145 <sluice::async::ThreadPoolBackend::worker_loop()+0x575>
+    3145:	mov    $0x69,%edx
+    314a:	mov    $0x1,%esi
+    314f:	mov    $0x0,%edi
+    3154:	mov    0x0(%rip),%rcx        # 315b <sluice::async::ThreadPoolBackend::worker_loop()+0x58b>
+    315b:	call   3160 <sluice::async::ThreadPoolBackend::worker_loop()+0x590>
+    3160:	mov    0x0(%rip),%rdi        # 3167 <sluice::async::ThreadPoolBackend::worker_loop()+0x597>
+    3167:	call   316c <sluice::async::ThreadPoolBackend::worker_loop()+0x59c>
+    316c:	call   3171 <sluice::async::ThreadPoolBackend::worker_loop()+0x5a1>
+    3171:	mov    0x0(%rip),%rdi        # 3178 <sluice::async::ThreadPoolBackend::worker_loop()+0x5a8>
+    3178:	mov    %edx,%ecx
+    317a:	mov    $0x0,%esi
+    317f:	xor    %eax,%eax
+    3181:	mov    $0x0,%edx
+    3186:	call   318b <sluice::async::ThreadPoolBackend::worker_loop()+0x5bb>
+    318b:	mov    0x0(%rip),%rdi        # 3192 <sluice::async::ThreadPoolBackend::worker_loop()+0x5c2>
+    3192:	call   3197 <sluice::async::ThreadPoolBackend::worker_loop()+0x5c7>
+    3197:	call   319c <sluice::async::ThreadPoolBackend::worker_loop()+0x5cc>
+    319c:	mov    %rax,%rbx
+    319f:	jmp    31a4 <sluice::async::ThreadPoolBackend::worker_loop()+0x5d4>
+    31a4:	nop
+    31a5:	data16 cs nopw 0x0(%rax,%rax,1)
+
+00000000000031b0 <std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::_M_run()>:
+    31b0:	mov    0x8(%rdi),%rdi
+    31b4:	jmp    2bd0 <sluice::async::ThreadPoolBackend::worker_loop()>
+    31b9:	nop
+    31ba:	nopw   0x0(%rax,%rax,1)
+
+00000000000031c0 <sluice::async::ThreadPoolBackend::signal_ready_progress()>:
+    31c0:	push   %rbx
+    31c1:	sub    $0x20,%rsp
+    31c5:	mov    0x18(%rdi),%rbx
+    31c9:	test   %rbx,%rbx
+    31cc:	je     3260 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xa0>
+    31d2:	mov    %rbx,%rdi
+    31d5:	call   31da <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x1a>
+    31da:	test   %eax,%eax
+    31dc:	jne    31e2 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x22>
+    31e2:	mov    0x28(%rbx),%rax
+    31e6:	cmp    $0xffffffffffffffff,%rax
+    31ea:	je     3270 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xb0>
+    31f0:	add    $0x1,%rax
+    31f4:	mov    %rax,0x28(%rbx)
+    31f8:	mov    0x6c(%rbx),%eax
+    31fb:	test   %eax,%eax
+    31fd:	js     3253 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x93>
+    31ff:	cmpb   $0x0,0x70(%rbx)
+    3203:	jne    3253 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x93>
+    3205:	movq   $0x1,0x18(%rsp)
+    320e:	call   3213 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x53>
+    3213:	mov    %rax,%rcx
+    3216:	movl   $0x0,(%rcx)
+    321c:	mov    0x6c(%rbx),%edi
+    321f:	mov    $0x8,%edx
+    3224:	lea    0x18(%rsp),%rsi
+    3229:	mov    %rcx,0x8(%rsp)
+    322e:	call   3233 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x73>
+    3233:	cmp    $0x8,%rax
+    3237:	je     324f <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x8f>
+    3239:	mov    0x8(%rsp),%rcx
+    323e:	mov    (%rcx),%edx
+    3240:	test   %rax,%rax
+    3243:	jns    328b <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xcb>
+    3245:	cmp    $0x4,%edx
+    3248:	je     3216 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x56>
+    324a:	cmp    $0xb,%edx
+    324d:	jne    328b <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xcb>
+    324f:	movb   $0x1,0x70(%rbx)
+    3253:	add    $0x20,%rsp
+    3257:	mov    %rbx,%rdi
+    325a:	pop    %rbx
+    325b:	jmp    3260 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xa0>
+    3260:	add    $0x20,%rsp
+    3264:	pop    %rbx
+    3265:	ret
+    3266:	cs nopw 0x0(%rax,%rax,1)
+    3270:	mov    0x38(%rbx),%rax
+    3274:	cmp    $0xffffffffffffffff,%rax
+    3278:	je     31f8 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x38>
+    327e:	add    $0x1,%rax
+    3282:	mov    %rax,0x38(%rbx)
+    3286:	jmp    31f8 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0x38>
+    328b:	mov    0x0(%rip),%rdi        # 3292 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xd2>
+    3292:	mov    %edx,%ecx
+    3294:	mov    $0x0,%esi
+    3299:	xor    %eax,%eax
+    329b:	mov    $0x0,%edx
+    32a0:	call   32a5 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xe5>
+    32a5:	mov    0x0(%rip),%rdi        # 32ac <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xec>
+    32ac:	call   32b1 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xf1>
+    32b1:	call   32b6 <sluice::async::ThreadPoolBackend::signal_ready_progress()+0xf6>
+    32b6:	cs nopw 0x0(%rax,%rax,1)
+
+00000000000032c0 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)>:
+    32c0:	push   %r13
+    32c2:	push   %r12
+    32c4:	push   %rbp
+    32c5:	mov    %rdi,%rbp
+    32c8:	push   %rbx
+    32c9:	lea    0x68(%rdi),%rbx
+    32cd:	mov    %rbx,%rdi
+    32d0:	sub    $0x18,%rsp
+    32d4:	call   32d9 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x19>
+    32d9:	test   %eax,%eax
+    32db:	jne    32e1 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x21>
+    32e1:	mov    0xe0(%rbp),%r8
+    32e8:	mov    0x48(%rsp),%eax
+    32ec:	test   %r8,%r8
+    32ef:	je     3408 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x148>
+    32f5:	mov    0xd8(%rbp),%r11
+    32fc:	mov    0xe8(%rbp),%rsi
+    3303:	mov    %eax,%r10d
+    3306:	xor    %edx,%edx
+    3308:	mov    0x50(%rsp),%r12
+    330d:	mov    0xc0(%rbp),%rdi
+    3314:	mov    %r11,%r9
+    3317:	mov    %r11,%rcx
+    331a:	sub    %rsi,%r9
+    331d:	jmp    3351 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x91>
+    331f:	data16 cs nopw 0x0(%rax,%rax,1)
+    332a:	data16 cs nopw 0x0(%rax,%rax,1)
+    3335:	data16 cs nopw 0x0(%rax,%rax,1)
+    3340:	add    $0x1,%rdx
+    3344:	add    $0x1,%rcx
+    3348:	cmp    %rdx,%r8
+    334b:	je     3408 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x148>
+    3351:	cmp    %rsi,%rcx
+    3354:	lea    (%r9,%rdx,1),%rax
+    3358:	cmovb  %rcx,%rax
+    335c:	shl    $0x4,%rax
+    3360:	add    %rdi,%rax
+    3363:	cmp    (%rax),%r10d
+    3366:	jne    3340 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x80>
+    3368:	cmp    %r12,0x8(%rax)
+    336c:	jne    3340 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x80>
+    336e:	lea    0x1(%rdx),%rax
+    3372:	cmp    %r8,%rax
+    3375:	jae    3680 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x3c0>
+    337b:	mov    %r11,%rax
+    337e:	lea    (%rdx,%r11,1),%rcx
+    3382:	lea    0x1(%rdx,%r11,1),%r10
+    3387:	sub    %rsi,%rax
+    338a:	lea    -0x1(%r8,%r11,1),%r11
+    338f:	add    %rdx,%rax
+    3392:	jmp    33ea <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x12a>
+    3394:	data16 cs nopw 0x0(%rax,%rax,1)
+    339f:	data16 cs nopw 0x0(%rax,%rax,1)
+    33aa:	data16 cs nopw 0x0(%rax,%rax,1)
+    33b5:	data16 cs nopw 0x0(%rax,%rax,1)
+    33c0:	add    $0x1,%rax
+    33c4:	mov    %rax,%r9
+    33c7:	shl    $0x4,%r9
+    33cb:	shl    $0x4,%rdx
+    33cf:	add    $0x1,%rcx
+    33d3:	add    $0x1,%r10
+    33d7:	movdqu (%rdi,%r9,1),%xmm0
+    33dd:	movups %xmm0,(%rdi,%rdx,1)
+    33e1:	cmp    %r11,%rcx
+    33e4:	je     3680 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x3c0>
+    33ea:	cmp    %rsi,%rcx
+    33ed:	mov    %rax,%rdx
+    33f0:	cmovb  %rcx,%rdx
+    33f4:	cmp    %rsi,%r10
+    33f7:	jae    33c0 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x100>
+    33f9:	mov    %r10,%r9
+    33fc:	add    $0x1,%rax
+    3400:	jmp    33c7 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x107>
+    3402:	nopw   0x0(%rax,%rax,1)
+    3408:	xor    %r13d,%r13d
+    340b:	sub    $0x20,%rsp
+    340f:	mov    0x20(%rbp),%rdi
+    3413:	mov    0x70(%rsp),%rax
+    3418:	movdqu 0x60(%rsp),%xmm0
+    341e:	mov    %rax,0x10(%rsp)
+    3423:	movups %xmm0,(%rsp)
+    3427:	call   342c <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x16c>
+    342c:	add    $0x20,%rsp
+    3430:	mov    %eax,%r12d
+    3433:	test   %al,%al
+    3435:	je     3518 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x258>
+    343b:	mov    %rbx,%rdi
+    343e:	cmp    $0x1,%al
+    3440:	je     36a0 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x3e0>
+    3446:	call   344b <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x18b>
+    344b:	test   %r13b,%r13b
+    344e:	je     3648 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x388>
+    3454:	mov    0x18(%rbp),%rbx
+    3458:	test   %rbx,%rbx
+    345b:	je     3648 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x388>
+    3461:	mov    %rbx,%rdi
+    3464:	call   3469 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x1a9>
+    3469:	test   %eax,%eax
+    346b:	jne    3471 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x1b1>
+    3471:	mov    0x28(%rbx),%rax
+    3475:	cmp    $0xffffffffffffffff,%rax
+    3479:	je     36b0 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x3f0>
+    347f:	add    $0x1,%rax
+    3483:	mov    %rax,0x28(%rbx)
+    3487:	mov    0x6c(%rbx),%eax
+    348a:	test   %eax,%eax
+    348c:	js     3640 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x380>
+    3492:	cmpb   $0x0,0x70(%rbx)
+    3496:	jne    3640 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x380>
+    349c:	movq   $0x1,0x8(%rsp)
+    34a5:	lea    0x8(%rsp),%r13
+    34aa:	call   34af <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x1ef>
+    34af:	mov    %rax,%rbp
+    34b2:	movl   $0x0,0x0(%rbp)
+    34b9:	mov    0x6c(%rbx),%edi
+    34bc:	mov    $0x8,%edx
+    34c1:	mov    %r13,%rsi
+    34c4:	call   34c9 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x209>
+    34c9:	cmp    $0x8,%rax
+    34cd:	je     363c <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x37c>
+    34d3:	mov    0x0(%rbp),%ecx
+    34d6:	test   %rax,%rax
+    34d9:	jns    34e9 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x229>
+    34db:	cmp    $0x4,%ecx
+    34de:	je     34b2 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x1f2>
+    34e0:	cmp    $0xb,%ecx
+    34e3:	je     363c <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x37c>
+    34e9:	mov    0x0(%rip),%rdi        # 34f0 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x230>
+    34f0:	mov    $0x0,%edx
+    34f5:	mov    $0x0,%esi
+    34fa:	xor    %eax,%eax
+    34fc:	call   3501 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x241>
+    3501:	mov    0x0(%rip),%rdi        # 3508 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x248>
+    3508:	call   350d <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x24d>
+    350d:	call   3512 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x252>
+    3512:	nopw   0x0(%rax,%rax,1)
+    3518:	sub    $0x20,%rsp
+    351c:	mov    0x20(%rbp),%rdi
+    3520:	mov    0x70(%rsp),%rax
+    3525:	movdqu 0x60(%rsp),%xmm0
+    352b:	mov    %rax,0x10(%rsp)
+    3530:	movups %xmm0,(%rsp)
+    3534:	call   3539 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x279>
+    3539:	add    $0x20,%rsp
+    353d:	cmp    $0x1,%al
+    353f:	jne    3720 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x460>
+    3545:	mov    0x110(%rbp),%rdx
+    354c:	mov    0x118(%rbp),%rcx
+    3553:	mov    0x48(%rsp),%esi
+    3557:	mov    0x50(%rsp),%rdi
+    355c:	cmp    %rcx,%rdx
+    355f:	jae    36f4 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x434>
+    3565:	mov    0x108(%rbp),%rax
+    356c:	xor    %r8d,%r8d
+    356f:	add    %rdx,%rax
+    3572:	cmp    %rcx,%rax
+    3575:	cmovb  %r8,%rcx
+    3579:	add    $0x1,%rdx
+    357d:	sub    %rcx,%rax
+    3580:	shl    $0x4,%rax
+    3584:	add    0xf0(%rbp),%rax
+    358b:	mov    %rdi,0x8(%rax)
+    358f:	mov    %rbx,%rdi
+    3592:	mov    %rsi,(%rax)
+    3595:	mov    %rdx,0x110(%rbp)
+    359c:	call   35a1 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x2e1>
+    35a1:	mov    0x8(%rbp),%rax
+    35a5:	test   %rax,%rax
+    35a8:	je     35af <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x2ef>
+    35aa:	addq   $0x1,0x28(%rax)
+    35af:	mov    0x18(%rbp),%rbx
+    35b3:	test   %rbx,%rbx
+    35b6:	je     3648 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x388>
+    35bc:	mov    %rbx,%rdi
+    35bf:	call   35c4 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x304>
+    35c4:	test   %eax,%eax
+    35c6:	jne    35cc <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x30c>
+    35cc:	mov    0x28(%rbx),%rax
+    35d0:	cmp    $0xffffffffffffffff,%rax
+    35d4:	je     3660 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x3a0>
+    35da:	add    $0x1,%rax
+    35de:	mov    %rax,0x28(%rbx)
+    35e2:	mov    0x6c(%rbx),%edx
+    35e5:	test   %edx,%edx
+    35e7:	js     3640 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x380>
+    35e9:	cmpb   $0x0,0x70(%rbx)
+    35ed:	jne    3640 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x380>
+    35ef:	movq   $0x1,0x8(%rsp)
+    35f8:	lea    0x8(%rsp),%r13
+    35fd:	call   3602 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x342>
+    3602:	mov    %rax,%rbp
+    3605:	movl   $0x0,0x0(%rbp)
+    360c:	mov    0x6c(%rbx),%edi
+    360f:	mov    $0x8,%edx
+    3614:	mov    %r13,%rsi
+    3617:	call   361c <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x35c>
+    361c:	cmp    $0x8,%rax
+    3620:	je     363c <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x37c>
+    3622:	mov    0x0(%rbp),%ecx
+    3625:	test   %rax,%rax
+    3628:	jns    36cb <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x40b>
+    362e:	cmp    $0x4,%ecx
+    3631:	je     3605 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x345>
+    3633:	cmp    $0xb,%ecx
+    3636:	jne    36cb <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x40b>
+    363c:	movb   $0x1,0x70(%rbx)
+    3640:	mov    %rbx,%rdi
+    3643:	call   3648 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x388>
+    3648:	add    $0x18,%rsp
+    364c:	mov    %r12d,%eax
+    364f:	pop    %rbx
+    3650:	pop    %rbp
+    3651:	pop    %r12
+    3653:	pop    %r13
+    3655:	ret
+    3656:	cs nopw 0x0(%rax,%rax,1)
+    3660:	mov    0x38(%rbx),%rax
+    3664:	cmp    $0xffffffffffffffff,%rax
+    3668:	je     35e2 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x322>
+    366e:	add    $0x1,%rax
+    3672:	mov    %rax,0x38(%rbx)
+    3676:	jmp    35e2 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x322>
+    367b:	nopl   0x0(%rax,%rax,1)
+    3680:	sub    $0x1,%r8
+    3684:	mov    $0x1,%r13d
+    368a:	mov    %r8,0xe0(%rbp)
+    3691:	jmp    340b <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x14b>
+    3696:	cs nopw 0x0(%rax,%rax,1)
+    36a0:	call   36a5 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x3e5>
+    36a5:	mov    $0x4,%r12d
+    36ab:	jmp    344b <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x18b>
+    36b0:	mov    0x38(%rbx),%rax
+    36b4:	cmp    $0xffffffffffffffff,%rax
+    36b8:	je     3487 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x1c7>
+    36be:	add    $0x1,%rax
+    36c2:	mov    %rax,0x38(%rbx)
+    36c6:	jmp    3487 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x1c7>
+    36cb:	mov    0x0(%rip),%rdi        # 36d2 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x412>
+    36d2:	mov    $0x0,%edx
+    36d7:	mov    $0x0,%esi
+    36dc:	xor    %eax,%eax
+    36de:	call   36e3 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x423>
+    36e3:	mov    0x0(%rip),%rdi        # 36ea <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x42a>
+    36ea:	call   36ef <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x42f>
+    36ef:	call   36f4 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x434>
+    36f4:	mov    $0x69,%edx
+    36f9:	mov    $0x1,%esi
+    36fe:	mov    $0x0,%edi
+    3703:	mov    0x0(%rip),%rcx        # 370a <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x44a>
+    370a:	call   370f <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x44f>
+    370f:	mov    0x0(%rip),%rdi        # 3716 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x456>
+    3716:	call   371b <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x45b>
+    371b:	call   3720 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x460>
+    3720:	call   3725 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)+0x465>
+    3725:	nop
+    3726:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000003730 <sluice::async::ThreadPoolBackend::cancel_identity(sluice::async::detail::RequestKey)>:
+    3730:	jmp    32c0 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)>
+    3735:	nop
+    3736:	cs nopw 0x0(%rax,%rax,1)
+
+0000000000003740 <sluice::async::ThreadPoolBackend::dispatch_occupancy() const>:
+    3740:	sub    $0x18,%rsp
+    3744:	mov    %rbp,0x10(%rsp)
+    3749:	mov    %rdi,%rbp
+    374c:	add    $0x68,%rdi
+    3750:	call   3755 <sluice::async::ThreadPoolBackend::dispatch_occupancy() const+0x15>
+    3755:	test   %eax,%eax
+    3757:	jne    375d <sluice::async::ThreadPoolBackend::dispatch_occupancy() const+0x1d>
+    375d:	lea    0x68(%rbp),%rdi
+    3761:	mov    0xe0(%rbp),%rbp
+    3768:	call   376d <sluice::async::ThreadPoolBackend::dispatch_occupancy() const+0x2d>
+    376d:	mov    %rbp,%rax
+    3770:	mov    0x10(%rsp),%rbp
+    3775:	add    $0x18,%rsp
+    3779:	ret
+    377a:	nopw   0x0(%rax,%rax,1)
+
+0000000000003780 <sluice::async::ThreadPoolBackend::active_workers() const>:
+    3780:	sub    $0x18,%rsp
+    3784:	mov    %rbp,0x10(%rsp)
+    3789:	mov    %rdi,%rbp
+    378c:	add    $0x68,%rdi
+    3790:	call   3795 <sluice::async::ThreadPoolBackend::active_workers() const+0x15>
+    3795:	test   %eax,%eax
+    3797:	jne    379d <sluice::async::ThreadPoolBackend::active_workers() const+0x1d>
+    379d:	lea    0x68(%rbp),%rdi
+    37a1:	mov    0x168(%rbp),%rbp
+    37a8:	call   37ad <sluice::async::ThreadPoolBackend::active_workers() const+0x2d>
+    37ad:	mov    %rbp,%rax
+    37b0:	mov    0x10(%rsp),%rbp
+    37b5:	add    $0x18,%rsp
+    37b9:	ret
+    37ba:	nopw   0x0(%rax,%rax,1)
+
+00000000000037c0 <sluice::async::ThreadPoolBackend::close_admission()>:
+    37c0:	mov    0x20(%rdi),%rax
+    37c4:	test   %rax,%rax
+    37c7:	je     38b0 <sluice::async::ThreadPoolBackend::close_admission()+0xf0>
+    37cd:	push   %rbx
+    37ce:	mov    %rdi,%rbx
+    37d1:	mov    %rax,%rdi
+    37d4:	sub    $0x20,%rsp
+    37d8:	call   37dd <sluice::async::ThreadPoolBackend::close_admission()+0x1d>
+    37dd:	test   %al,%al
+    37df:	je     38a0 <sluice::async::ThreadPoolBackend::close_admission()+0xe0>
+    37e5:	mov    0x18(%rbx),%rcx
+    37e9:	test   %rcx,%rcx
+    37ec:	je     38a0 <sluice::async::ThreadPoolBackend::close_admission()+0xe0>
+    37f2:	mov    %rcx,%rdi
+    37f5:	mov    %rcx,(%rsp)
+    37f9:	call   37fe <sluice::async::ThreadPoolBackend::close_admission()+0x3e>
+    37fe:	test   %eax,%eax
+    3800:	jne    3806 <sluice::async::ThreadPoolBackend::close_admission()+0x46>
+    3806:	mov    (%rsp),%rcx
+    380a:	mov    0x28(%rcx),%rax
+    380e:	cmp    $0xffffffffffffffff,%rax
+    3812:	je     38b8 <sluice::async::ThreadPoolBackend::close_admission()+0xf8>
+    3818:	add    $0x1,%rax
+    381c:	mov    %rax,0x28(%rcx)
+    3820:	mov    0x6c(%rcx),%eax
+    3823:	test   %eax,%eax
+    3825:	js     388d <sluice::async::ThreadPoolBackend::close_admission()+0xcd>
+    3827:	cmpb   $0x0,0x70(%rcx)
+    382b:	jne    388d <sluice::async::ThreadPoolBackend::close_admission()+0xcd>
+    382d:	mov    %rcx,(%rsp)
+    3831:	movq   $0x1,0x18(%rsp)
+    383a:	call   383f <sluice::async::ThreadPoolBackend::close_admission()+0x7f>
+    383f:	mov    (%rsp),%rcx
+    3843:	mov    %rax,%r8
+    3846:	mov    $0x8,%edx
+    384b:	movl   $0x0,(%r8)
+    3852:	mov    0x6c(%rcx),%edi
+    3855:	lea    0x18(%rsp),%rsi
+    385a:	mov    %rcx,(%rsp)
+    385e:	mov    %r8,0x8(%rsp)
+    3863:	call   3868 <sluice::async::ThreadPoolBackend::close_admission()+0xa8>
+    3868:	mov    (%rsp),%rcx
+    386c:	cmp    $0x8,%rax
+    3870:	je     3889 <sluice::async::ThreadPoolBackend::close_admission()+0xc9>
+    3872:	mov    0x8(%rsp),%r8
+    3877:	mov    (%r8),%edx
+    387a:	test   %rax,%rax
+    387d:	jns    38d3 <sluice::async::ThreadPoolBackend::close_admission()+0x113>
+    387f:	cmp    $0x4,%edx
+    3882:	je     3846 <sluice::async::ThreadPoolBackend::close_admission()+0x86>
+    3884:	cmp    $0xb,%edx
+    3887:	jne    38d3 <sluice::async::ThreadPoolBackend::close_admission()+0x113>
+    3889:	movb   $0x1,0x70(%rcx)
+    388d:	add    $0x20,%rsp
+    3891:	mov    %rcx,%rdi
+    3894:	pop    %rbx
+    3895:	jmp    389a <sluice::async::ThreadPoolBackend::close_admission()+0xda>
+    389a:	nopw   0x0(%rax,%rax,1)
+    38a0:	add    $0x20,%rsp
+    38a4:	pop    %rbx
+    38a5:	ret
+    38a6:	cs nopw 0x0(%rax,%rax,1)
+    38b0:	ret
+    38b1:	nopl   0x0(%rax)
+    38b8:	mov    0x38(%rcx),%rax
+    38bc:	cmp    $0xffffffffffffffff,%rax
+    38c0:	je     3820 <sluice::async::ThreadPoolBackend::close_admission()+0x60>
+    38c6:	add    $0x1,%rax
+    38ca:	mov    %rax,0x38(%rcx)
+    38ce:	jmp    3820 <sluice::async::ThreadPoolBackend::close_admission()+0x60>
+    38d3:	mov    0x0(%rip),%rdi        # 38da <sluice::async::ThreadPoolBackend::close_admission()+0x11a>
+    38da:	mov    %edx,%ecx
+    38dc:	mov    $0x0,%esi
+    38e1:	xor    %eax,%eax
+    38e3:	mov    $0x0,%edx
+    38e8:	call   38ed <sluice::async::ThreadPoolBackend::close_admission()+0x12d>
+    38ed:	mov    0x0(%rip),%rdi        # 38f4 <sluice::async::ThreadPoolBackend::close_admission()+0x134>
+    38f4:	call   38f9 <sluice::async::ThreadPoolBackend::close_admission()+0x139>
+    38f9:	call   38fe <sluice::async::ThreadPoolBackend::close_admission()+0x13e>
+    38fe:	xchg   %ax,%ax
+
+0000000000003900 <sluice::async::ThreadPoolBackend::any_event_owed_locked_() const>:
+    3900:	mov    0x48(%rdi),%rax
+    3904:	mov    0x50(%rdi),%rcx
+    3908:	cmp    %rax,%rcx
+    390b:	jne    3929 <sluice::async::ThreadPoolBackend::any_event_owed_locked_() const+0x29>
+    390d:	jmp    3934 <sluice::async::ThreadPoolBackend::any_event_owed_locked_() const+0x34>
+    390f:	nopw   0x0(%rax,%rax,1)
+    3915:	data16 cs nopw 0x0(%rax,%rax,1)
+    3920:	add    $0x20,%rax
+    3924:	cmp    %rcx,%rax
+    3927:	je     3931 <sluice::async::ThreadPoolBackend::any_event_owed_locked_() const+0x31>
+    3929:	movzbl 0x1(%rax),%edx
+    392d:	test   %dl,%dl
+    392f:	je     3920 <sluice::async::ThreadPoolBackend::any_event_owed_locked_() const+0x20>
+    3931:	mov    %edx,%eax
+    3933:	ret
+    3934:	xor    %edx,%edx
+    3936:	jmp    3931 <sluice::async::ThreadPoolBackend::any_event_owed_locked_() const+0x31>
+
+Disassembly of section .text._ZNSt6thread24_M_thread_deps_never_runEv:
+
+0000000000000000 <std::thread::_M_thread_deps_never_run()>:
+   0:	ret
+
+Disassembly of section .text._ZNK6sluice5async12AsyncBackend27has_immediate_physical_workEv:
+
+0000000000000000 <sluice::async::AsyncBackend::has_immediate_physical_work() const>:
+   0:	xor    %eax,%eax
+   2:	ret
+
+Disassembly of section .text._ZN6sluice5async12AsyncBackend22progress_port_attachedEv:
+
+0000000000000000 <sluice::async::AsyncBackend::progress_port_attached()>:
+   0:	mov    $0x1,%eax
+   5:	ret
+
+Disassembly of section .text._ZN6sluice5async6detail18ReferenceReadySink8on_readyENS1_10ReadyEventE:
+
+0000000000000000 <sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)>:
+   0:	ret
+
+Disassembly of section .text._ZNK6sluice5async17ThreadPoolBackend25signals_physical_progressEv:
+
+0000000000000000 <sluice::async::ThreadPoolBackend::signals_physical_progress() const>:
+   0:	mov    $0x1,%eax
+   5:	ret
+
+Disassembly of section .text._ZNK6sluice5async17ThreadPoolBackend13slot_capacityEv:
+
+0000000000000000 <sluice::async::ThreadPoolBackend::slot_capacity() const>:
+   0:	mov    0x28(%rdi),%rax
+   4:	ret
+
+Disassembly of section .text._ZN6sluice5async6detail18ReferenceReadySinkD2Ev:
+
+0000000000000000 <sluice::async::detail::ReferenceReadySink::~ReferenceReadySink()>:
+   0:	ret
+
+Disassembly of section .text._ZN6sluice5async6detail18ReferenceReadySinkD0Ev:
+
+0000000000000000 <sluice::async::detail::ReferenceReadySink::~ReferenceReadySink()>:
+   0:	mov    $0x8,%esi
+   5:	jmp    a <sluice::async::ThreadPoolBackend::internal_work_retired() const [clone .cold]+0x2>
+
+Disassembly of section .text.unlikely:
+
+0000000000000000 <sluice::async::ThreadPoolBackend::stop_execution() [clone .cold]>:
+   0:	mov    %eax,%edi
+   2:	call   7 <sluice::async::ThreadPoolBackend::stop_execution() [clone .cold]+0x7>
+   7:	nop
+
+0000000000000008 <sluice::async::ThreadPoolBackend::internal_work_retired() const [clone .cold]>:
+   8:	mov    %eax,%edi
+   a:	call   f <sluice::async::ThreadPoolBackend::internal_work_retired() const [clone .cold]+0x7>
+   f:	nop
+
+0000000000000010 <sluice::async::ThreadPoolBackend::retire_execution_resources() [clone .cold]>:
+  10:	mov    %eax,%edi
+  12:	call   17 <sluice::async::ThreadPoolBackend::retire_execution_resources() [clone .cold]+0x7>
+  17:	nop
+
+0000000000000018 <sluice::async::ThreadPoolBackend::~ThreadPoolBackend() [clone .cold]>:
+  18:	call   1d <sluice::async::ThreadPoolBackend::~ThreadPoolBackend() [clone .cold]+0x5>
+  1d:	mov    %eax,%edi
+  1f:	call   24 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]>
+
+0000000000000024 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]>:
+  24:	mov    $0x0,%edi
+  29:	call   2e <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xa>
+  2e:	mov    0x28(%rsp),%rdi
+  33:	test   %rdi,%rdi
+  36:	jne    60 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x3c>
+  38:	mov    (%rsp),%rsi
+  3c:	mov    %r13,%rdi
+  3f:	call   44 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x20>
+  44:	mov    %rbx,%rdi
+  47:	call   4c <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x28>
+  4c:	lea    0x68(%rbp),%rdi
+  50:	call   55 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x31>
+  55:	test   %eax,%eax
+  57:	je     68 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x44>
+  59:	mov    %eax,%edi
+  5b:	call   60 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x3c>
+  60:	mov    (%rdi),%rax
+  63:	call   *0x8(%rax)
+  66:	jmp    38 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x14>
+  68:	movb   $0x1,0x170(%rbp)
+  6f:	lea    0x68(%rbp),%rdi
+  73:	call   78 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x54>
+  78:	mov    0x18(%rsp),%rdi
+  7d:	call   82 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x5e>
+  82:	mov    0x178(%rbp),%rbx
+  89:	mov    0x180(%rbp),%r12
+  90:	cmp    %rbx,%r12
+  93:	je     ac <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x88>
+  95:	cmpq   $0x0,(%rbx)
+  99:	je     a3 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x7f>
+  9b:	mov    %rbx,%rdi
+  9e:	call   a3 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x7f>
+  a3:	add    $0x8,%rbx
+  a7:	cmp    %rbx,%r12
+  aa:	jne    95 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x71>
+  ac:	call   b1 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x8d>
+  b1:	mov    %rax,%rbx
+  b4:	call   b9 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x95>
+  b9:	mov    0x180(%rbp),%rdx
+  c0:	mov    0x178(%rbp),%rdi
+  c7:	cmp    %rdi,%rdx
+  ca:	je     e3 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xbf>
+  cc:	mov    %rdi,%rax
+  cf:	cmpq   $0x0,(%rax)
+  d3:	je     da <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xb6>
+  d5:	call   da <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xb6>
+  da:	add    $0x8,%rax
+  de:	cmp    %rax,%rdx
+  e1:	jne    cf <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xab>
+  e3:	test   %rdi,%rdi
+  e6:	je     f7 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xd3>
+  e8:	mov    0x188(%rbp),%rsi
+  ef:	sub    %rdi,%rsi
+  f2:	call   f7 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xd3>
+  f7:	mov    0x150(%rbp),%rdi
+  fe:	test   %rdi,%rdi
+ 101:	je     112 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xee>
+ 103:	mov    0x160(%rbp),%rsi
+ 10a:	sub    %rdi,%rsi
+ 10d:	call   112 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xee>
+ 112:	mov    0x120(%rbp),%rdi
+ 119:	test   %rdi,%rdi
+ 11c:	je     12d <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x109>
+ 11e:	mov    0x130(%rbp),%rsi
+ 125:	sub    %rdi,%rsi
+ 128:	call   12d <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x109>
+ 12d:	mov    0xf0(%rbp),%rdi
+ 134:	test   %rdi,%rdi
+ 137:	je     148 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x124>
+ 139:	mov    0x100(%rbp),%rsi
+ 140:	sub    %rdi,%rsi
+ 143:	call   148 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x124>
+ 148:	mov    0xc0(%rbp),%rdi
+ 14f:	test   %rdi,%rdi
+ 152:	je     163 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x13f>
+ 154:	mov    0xd0(%rbp),%rsi
+ 15b:	sub    %rdi,%rsi
+ 15e:	call   163 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x13f>
+ 163:	mov    0x18(%rsp),%rdi
+ 168:	call   16d <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x149>
+ 16d:	mov    0x48(%rbp),%rdi
+ 171:	test   %rdi,%rdi
+ 174:	je     182 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x15e>
+ 176:	mov    0x58(%rbp),%rsi
+ 17a:	sub    %rdi,%rsi
+ 17d:	call   182 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x15e>
+ 182:	mov    0x30(%rbp),%rdi
+ 186:	test   %rdi,%rdi
+ 189:	je     197 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x173>
+ 18b:	mov    0x40(%rbp),%rsi
+ 18f:	sub    %rdi,%rsi
+ 192:	call   197 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x173>
+ 197:	mov    %rbx,%rdi
+ 19a:	call   19f <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x17b>
+ 19f:	mov    $0x0,%edi
+ 1a4:	call   1a9 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x185>
+ 1a9:	mov    %rax,%rbx
+ 1ac:	jmp    44 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x20>
+ 1b1:	mov    0x28(%rsp),%rdi
+ 1b6:	test   %rdi,%rdi
+ 1b9:	je     44 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x20>
+ 1bf:	mov    (%rdi),%rax
+ 1c2:	call   *0x8(%rax)
+ 1c5:	jmp    44 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x20>
+ 1ca:	mov    $0x0,%edi
+ 1cf:	call   1d4 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x1b0>
+ 1d4:	mov    0x120(%rbp),%rdi
+ 1db:	jmp    11e <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0xfa>
+ 1e0:	xor    %edx,%edx
+ 1e2:	xor    %ecx,%ecx
+ 1e4:	xor    %esi,%esi
+ 1e6:	xor    %edi,%edi
+ 1e8:	xor    %r8d,%r8d
+ 1eb:	xor    %eax,%eax
+ 1ed:	mov    %rdx,0xe8(%rbp)
+ 1f4:	mov    %rax,0xd0(%rbp)
+ 1fb:	mov    %rdx,0x100(%rbp)
+ 202:	mov    %rcx,0x118(%rbp)
+ 209:	mov    %rcx,0x130(%rbp)
+ 210:	mov    %rsi,0x148(%rbp)
+ 217:	mov    %rsi,0x150(%rbp)
+ 21e:	mov    %r12,0x160(%rbp)
+ 225:	mov    %rdi,0x158(%rbp)
+ 22c:	mov    %rdi,0x168(%rbp)
+ 233:	movb   $0x0,0x170(%rbp)
+ 23a:	mov    %r8,0x188(%rbp)
+ 241:	mov    %r8,0x190(%rbp)
+ 248:	movups %xmm0,0xd8(%rbp)
+ 24f:	movups %xmm0,0xf0(%rbp)
+ 256:	movups %xmm0,0x108(%rbp)
+ 25d:	movups %xmm0,0x120(%rbp)
+ 264:	movups %xmm0,0x138(%rbp)
+ 26b:	movups %xmm0,0x178(%rbp)
+ 272:	mov    $0x10,%edi
+ 277:	call   27c <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x258>
+ 27c:	mov    $0x0,%esi
+ 281:	mov    %rax,%rdi
+ 284:	mov    %rax,%r12
+ 287:	call   28c <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x268>
+ 28c:	mov    $0x0,%edx
+ 291:	mov    $0x0,%esi
+ 296:	mov    %r12,%rdi
+ 299:	call   29e <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x27a>
+ 29e:	mov    %rax,%rbx
+ 2a1:	jmp    b9 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x95>
+ 2a6:	mov    %r12,%rdi
+ 2a9:	mov    %rax,%rbx
+ 2ac:	call   2b1 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x28d>
+ 2b1:	jmp    b9 <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x95>
+ 2b6:	mov    0x30(%rbp),%rdi
+ 2ba:	jmp    18b <sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]+0x167>
+
+00000000000002bf <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*) [clone .cold]>:
+ 2bf:	mov    %rbx,%rdi
+ 2c2:	mov    $0x198,%esi
+ 2c7:	call   2cc <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*) [clone .cold]+0xd>
+ 2cc:	mov    %rbp,%rdi
+ 2cf:	call   2d4 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*) [clone .cold]+0x15>
+ 2d4:	mov    0x18(%rsp),%rdi
+ 2d9:	test   %rdi,%rdi
+ 2dc:	je     2e4 <sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*) [clone .cold]+0x25>
+ 2de:	mov    (%rdi),%rax
+ 2e1:	call   *0x8(%rax)
+ 2e4:	mov    %rbx,%rdi
+ 2e7:	call   2ec <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]>
+
+00000000000002ec <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]>:
+ 2ec:	mov    %eax,%edi
+ 2ee:	call   2f3 <sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]+0x7>
+ 2f3:	nop
+
+00000000000002f4 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation) [clone .cold]>:
+ 2f4:	mov    %eax,%edi
+ 2f6:	mov    %r12,0x20(%rsp)
+ 2fb:	call   300 <sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation) [clone .cold]+0xc>
+ 300:	mov    %eax,%edi
+ 302:	mov    %r12,0x20(%rsp)
+ 307:	call   30c <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp) [clone .cold]>
+
+000000000000030c <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp) [clone .cold]>:
+ 30c:	mov    %eax,%edi
+ 30e:	call   313 <sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp) [clone .cold]+0x7>
+ 313:	nop
+
+0000000000000314 <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp) [clone .cold]>:
+ 314:	mov    %eax,%edi
+ 316:	call   31b <sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp) [clone .cold]+0x7>
+ 31b:	nop
+
+000000000000031c <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp) [clone .cold]>:
+ 31c:	mov    %eax,%edi
+ 31e:	call   323 <sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp) [clone .cold]+0x7>
+ 323:	nop
+
+0000000000000324 <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp) [clone .cold]>:
+ 324:	mov    %eax,%edi
+ 326:	call   32b <sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp) [clone .cold]+0x7>
+ 32b:	nop
+
+000000000000032c <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp) [clone .cold]>:
+ 32c:	mov    %eax,%edi
+ 32e:	call   333 <sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp) [clone .cold]+0x7>
+ 333:	nop
+
+0000000000000334 <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp) [clone .cold]>:
+ 334:	mov    %eax,%edi
+ 336:	call   33b <sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp) [clone .cold]+0x7>
+ 33b:	nop
+
+000000000000033c <sluice::async::ThreadPoolBackend::poll_progress() [clone .cold]>:
+ 33c:	mov    %eax,%edi
+ 33e:	mov    %rbp,0x60(%rsp)
+ 343:	call   348 <sluice::async::ThreadPoolBackend::poll_progress() [clone .cold]+0xc>
+ 348:	mov    %eax,%edi
+ 34a:	mov    %rbp,0x60(%rsp)
+ 34f:	mov    %r12,0x68(%rsp)
+ 354:	mov    %r13,0x70(%rsp)
+ 359:	mov    %r14,0x78(%rsp)
+ 35e:	mov    %r15,0x80(%rsp)
+ 366:	call   36b <sluice::async::ThreadPoolBackend::poll_progress() [clone .cold]+0x2f>
+ 36b:	nop
+
+000000000000036c <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]>:
+ 36c:	mov    %eax,%edi
+ 36e:	call   373 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x7>
+ 373:	mov    %eax,%edi
+ 375:	call   37a <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0xe>
+ 37a:	mov    %rax,%rdi
+ 37d:	call   382 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x16>
+ 382:	mov    $0x51,%edx
+ 387:	mov    $0x1,%esi
+ 38c:	mov    0x0(%rip),%rcx        # 393 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x27>
+ 393:	mov    $0x0,%edi
+ 398:	call   39d <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x31>
+ 39d:	mov    0x0(%rip),%rdi        # 3a4 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x38>
+ 3a4:	call   3a9 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x3d>
+ 3a9:	call   3ae <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x42>
+ 3ae:	mov    %eax,%edi
+ 3b0:	call   3b5 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x49>
+ 3b5:	mov    %eax,%edi
+ 3b7:	call   3bc <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x50>
+ 3bc:	mov    %eax,%edi
+ 3be:	call   3c3 <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x57>
+ 3c3:	cmpb   $0x0,0x88(%rsp)
+ 3cb:	je     3df <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x73>
+ 3cd:	mov    0x80(%rsp),%rdi
+ 3d5:	test   %rdi,%rdi
+ 3d8:	je     3df <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x73>
+ 3da:	call   3df <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x73>
+ 3df:	mov    %rbx,%rdi
+ 3e2:	jmp    37d <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x11>
+ 3e4:	mov    %rax,%rbx
+ 3e7:	call   3ec <sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]+0x80>
+ 3ec:	mov    %rbx,%rdi
+ 3ef:	call   3f4 <sluice::async::ThreadPoolBackend::signal_ready_progress() [clone .cold]>
+
+00000000000003f4 <sluice::async::ThreadPoolBackend::signal_ready_progress() [clone .cold]>:
+ 3f4:	mov    %eax,%edi
+ 3f6:	call   3fb <sluice::async::ThreadPoolBackend::signal_ready_progress() [clone .cold]+0x7>
+ 3fb:	nop
+
+00000000000003fc <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]>:
+ 3fc:	mov    %eax,%edi
+ 3fe:	call   403 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]+0x7>
+ 403:	mov    %eax,%edi
+ 405:	call   40a <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]+0xe>
+ 40a:	mov    %eax,%edi
+ 40c:	call   411 <sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]+0x15>
+ 411:	nop
+
+0000000000000412 <sluice::async::ThreadPoolBackend::dispatch_occupancy() const [clone .cold]>:
+ 412:	mov    %eax,%edi
+ 414:	mov    %rbx,0x8(%rsp)
+ 419:	call   41e <sluice::async::ThreadPoolBackend::active_workers() const [clone .cold]>
+
+000000000000041e <sluice::async::ThreadPoolBackend::active_workers() const [clone .cold]>:
+ 41e:	mov    %eax,%edi
+ 420:	mov    %rbx,0x8(%rsp)
+ 425:	call   42a <sluice::async::ThreadPoolBackend::close_admission() [clone .cold]>
+
+000000000000042a <sluice::async::ThreadPoolBackend::close_admission() [clone .cold]>:
+ 42a:	mov    %eax,%edi
+ 42c:	call   431 <sluice::async::ThreadPoolBackend::close_admission() [clone .cold]+0x7>

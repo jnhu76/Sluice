@@ -1,0 +1,11 @@
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -428,7 +428,7 @@ void ThreadPoolBackend::worker_loop() {
+                 sluice::FileInfo metadata;
+                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
+ 
+-                syscall_count_.fetch_add(1, std::memory_order_relaxed);
++                // TP-M1 mutant: increment suppressed
+                 {
+                     std::lock_guard<std::mutex> wl(work_mtx_);
+                     --active_workers_;
