@@ -1,0 +1,257 @@
+diff --git a/include/sluice/async/detail/threadpool_backend.hpp b/include/sluice/async/detail/threadpool_backend.hpp
+index cab651e8..3ae6487c 100644
+--- a/include/sluice/async/detail/threadpool_backend.hpp
++++ b/include/sluice/async/detail/threadpool_backend.hpp
+@@ -195,7 +195,7 @@ class ThreadPoolBackend : public AsyncBackend {
+ 
+     void signal_ready_progress() noexcept;
+ 
+-    bool any_event_owed_locked_() const noexcept;
++    bool any_event_owed_locked_(int site = 0) const noexcept;
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+diff --git a/src/async/threadpool_backend.cpp b/src/async/threadpool_backend.cpp
+index 515822ad..e4c3f804 100644
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -9,6 +9,7 @@
+ #include <cerrno>
+ #include <cstdint>
+ #include <cstdio>
++#include <cstdlib>
+ #include <cstring>
+ #include <limits>
+ #include <stdexcept>
+@@ -39,6 +40,117 @@ namespace {
+     std::terminate();
+ }
+ 
++#if defined(SLUICE_576_INSTRUMENT)
++
++struct S576Census {
++    std::atomic<std::uint64_t> s1_passes{0};
++    std::atomic<std::uint64_t> s1_slots{0};
++    std::atomic<std::uint64_t> s1_k_entry_sum{0};
++    std::atomic<std::uint64_t> s1_k_nonzero{0};
++    std::atomic<std::uint64_t> pub_entry_sum{0};
++    std::atomic<std::uint64_t> s2_checks{0};
++    std::atomic<std::uint64_t> s2_slots{0};
++    std::atomic<std::uint64_t> s2_found{0};
++    std::atomic<std::uint64_t> s3_checks{0};
++    std::atomic<std::uint64_t> s3_slots{0};
++    std::atomic<std::uint64_t> s4_checks{0};
++    std::atomic<std::uint64_t> s4_slots{0};
++    std::atomic<std::uint64_t> w1_resets{0};
++    std::atomic<std::uint64_t> w1_saw_true{0};
++    std::atomic<std::uint64_t> w2_sets{0};
++    std::atomic<std::uint64_t> w3_clears{0};
++};
++S576Census g_s576;
++
++void s576_note_owed_scan(int site, std::uint64_t inspected, bool found) noexcept {
++    switch (site) {
++    case 2:
++        g_s576.s2_checks.fetch_add(1, std::memory_order_relaxed);
++        g_s576.s2_slots.fetch_add(inspected, std::memory_order_relaxed);
++        if (found)
++            g_s576.s2_found.fetch_add(1, std::memory_order_relaxed);
++        break;
++    case 3:
++        g_s576.s3_checks.fetch_add(1, std::memory_order_relaxed);
++        g_s576.s3_slots.fetch_add(inspected, std::memory_order_relaxed);
++        break;
++    default:
++        g_s576.s4_checks.fetch_add(1, std::memory_order_relaxed);
++        g_s576.s4_slots.fetch_add(inspected, std::memory_order_relaxed);
++        break;
++    }
++}
++} // namespace
++
++extern "C" void sluice576_reset(void) noexcept {
++    g_s576.s1_passes.store(0, std::memory_order_relaxed);
++    g_s576.s1_slots.store(0, std::memory_order_relaxed);
++    g_s576.s1_k_entry_sum.store(0, std::memory_order_relaxed);
++    g_s576.s1_k_nonzero.store(0, std::memory_order_relaxed);
++    g_s576.pub_entry_sum.store(0, std::memory_order_relaxed);
++    g_s576.s2_checks.store(0, std::memory_order_relaxed);
++    g_s576.s2_slots.store(0, std::memory_order_relaxed);
++    g_s576.s2_found.store(0, std::memory_order_relaxed);
++    g_s576.s3_checks.store(0, std::memory_order_relaxed);
++    g_s576.s3_slots.store(0, std::memory_order_relaxed);
++    g_s576.s4_checks.store(0, std::memory_order_relaxed);
++    g_s576.s4_slots.store(0, std::memory_order_relaxed);
++    g_s576.w1_resets.store(0, std::memory_order_relaxed);
++    g_s576.w1_saw_true.store(0, std::memory_order_relaxed);
++    g_s576.w2_sets.store(0, std::memory_order_relaxed);
++    g_s576.w3_clears.store(0, std::memory_order_relaxed);
++}
++
++extern "C" void sluice576_snapshot(std::uint64_t* out, int n) noexcept {
++    const std::atomic<std::uint64_t>* const fields[] = {
++        &g_s576.s1_passes,     &g_s576.s1_slots,      &g_s576.s1_k_entry_sum,
++        &g_s576.s1_k_nonzero,  &g_s576.pub_entry_sum, &g_s576.s2_checks,
++        &g_s576.s2_slots,      &g_s576.s2_found,      &g_s576.s3_checks,
++        &g_s576.s3_slots,      &g_s576.s4_checks,     &g_s576.s4_slots,
++        &g_s576.w1_resets,     &g_s576.w1_saw_true,   &g_s576.w2_sets,
++        &g_s576.w3_clears};
++    for (int i = 0; i < n && i < 16; ++i)
++        out[i] = fields[i]->load(std::memory_order_relaxed);
++    for (int i = 16; i < n; ++i)
++        out[i] = 0;
++}
++
++namespace {
++struct S576ExitDump {
++    ~S576ExitDump() noexcept {
++        if (std::getenv("SLUICE_576_DUMP") == nullptr)
++            return;
++        std::uint64_t v[16];
++        sluice576_snapshot(v, 16);
++        std::fprintf(stderr,
++                     "S576_DUMP s1_passes=%llu s1_slots=%llu s1_k_entry_sum=%llu "
++                     "s1_k_nonzero=%llu pub_entry_sum=%llu s2_checks=%llu s2_slots=%llu "
++                     "s2_found=%llu s3_checks=%llu s3_slots=%llu s4_checks=%llu s4_slots=%llu "
++                     "w1_resets=%llu w1_saw_true=%llu w2_sets=%llu w3_clears=%llu\n",
++                     static_cast<unsigned long long>(v[0]),
++                     static_cast<unsigned long long>(v[1]),
++                     static_cast<unsigned long long>(v[2]),
++                     static_cast<unsigned long long>(v[3]),
++                     static_cast<unsigned long long>(v[4]),
++                     static_cast<unsigned long long>(v[5]),
++                     static_cast<unsigned long long>(v[6]),
++                     static_cast<unsigned long long>(v[7]),
++                     static_cast<unsigned long long>(v[8]),
++                     static_cast<unsigned long long>(v[9]),
++                     static_cast<unsigned long long>(v[10]),
++                     static_cast<unsigned long long>(v[11]),
++                     static_cast<unsigned long long>(v[12]),
++                     static_cast<unsigned long long>(v[13]),
++                     static_cast<unsigned long long>(v[14]),
++                     static_cast<unsigned long long>(v[15]));
++    }
++};
++const S576ExitDump g_s576_exit_dump;
++} // namespace
++
++namespace {
++#endif
++
+ }
+ 
+ void ThreadPoolBackend::BoundedHandleRing::push_back(detail::RequestReservation h) noexcept {
+@@ -261,6 +373,12 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::Oper
+     {
+         std::lock_guard<std::mutex> lk(work_mtx_);
+         DeliveryRecord& record = delivery_[h.slot.value];
++#if defined(SLUICE_576_INSTRUMENT)
++
++        g_s576.w1_resets.fetch_add(1, std::memory_order_relaxed);
++        if (record.event_owed)
++            g_s576.w1_saw_true.fetch_add(1, std::memory_order_relaxed);
++#endif
+         record.kind = kind;
+         record.event_owed = false;
+         record.owed_key = {};
+@@ -346,6 +464,10 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Re
+         DeliveryRecord& record = delivery_[h.slot.value];
+         record.event_owed = true;
+         record.owed_key = id;
++#if defined(SLUICE_576_INSTRUMENT)
++
++        g_s576.w2_sets.fetch_add(1, std::memory_order_relaxed);
++#endif
+     }
+     signal_ready_progress();
+ }
+@@ -557,6 +679,12 @@ ProgressPass ThreadPoolBackend::poll_progress() {
+     {
+         std::lock_guard<std::mutex> lk(work_mtx_);
+         const std::size_t pass_bound = publication_pending_.size();
++#if defined(SLUICE_576_INSTRUMENT)
++
++        g_s576.s1_passes.fetch_add(1, std::memory_order_relaxed);
++        g_s576.s1_slots.fetch_add(capacity_, std::memory_order_relaxed);
++        g_s576.pub_entry_sum.fetch_add(pass_bound, std::memory_order_relaxed);
++#endif
+         for (std::size_t n = 0; n < pass_bound; ++n) {
+             detail::RequestReservation h{};
+             if (!publication_pending_.pop_front(h))
+@@ -573,6 +701,13 @@ ProgressPass ThreadPoolBackend::poll_progress() {
+             record.owed_key = {};
+             ++owed_bound;
+         }
++#if defined(SLUICE_576_INSTRUMENT)
++
++        g_s576.s1_k_entry_sum.fetch_add(owed_bound, std::memory_order_relaxed);
++        if (owed_bound != 0)
++            g_s576.s1_k_nonzero.fetch_add(1, std::memory_order_relaxed);
++        g_s576.w3_clears.fetch_add(owed_bound, std::memory_order_relaxed);
++#endif
+     }
+     for (;;) {
+         detail::RequestReservation h{};
+@@ -594,7 +729,7 @@ ProgressPass ThreadPoolBackend::poll_progress() {
+     {
+         std::lock_guard<std::mutex> lk(work_mtx_);
+         pass.immediate_work_remains =
+-            !publication_pending_.empty() || any_event_owed_locked_();
++            !publication_pending_.empty() || any_event_owed_locked_(2);
+     }
+     pass.accepted_work_remains = core_ != nullptr && core_->outstanding_summary() != 0;
+     return pass;
+@@ -821,19 +956,29 @@ void ThreadPoolBackend::close_admission() {
+ #endif
+ }
+ 
+-bool ThreadPoolBackend::any_event_owed_locked_() const noexcept {
++bool ThreadPoolBackend::any_event_owed_locked_(int site) const noexcept {
++    std::uint64_t inspected = 0;
+     for (const DeliveryRecord& record : delivery_) {
++        ++inspected;
+         if (record.event_owed) {
++#if defined(SLUICE_576_INSTRUMENT)
++
++            s576_note_owed_scan(site, inspected, true);
++#endif
+             return true;
+         }
+     }
++#if defined(SLUICE_576_INSTRUMENT)
++
++    s576_note_owed_scan(site, inspected, false);
++#endif
+     return false;
+ }
+ 
+ bool ThreadPoolBackend::internal_work_retired() const noexcept {
+     std::lock_guard<std::mutex> lk(work_mtx_);
+     return dispatch_.empty() && active_workers_ == 0 && publication_pending_.empty() &&
+-           !any_event_owed_locked_();
++           !any_event_owed_locked_(3);
+ }
+ 
+ void ThreadPoolBackend::stop_execution() noexcept {
+@@ -863,7 +1008,7 @@ void ThreadPoolBackend::retire_execution_resources() noexcept {
+         // Published slots with live public bindings may remain: they are
+         // retained results; everything else accepted is unsettled work.
+         if (!dispatch_.empty() || active_workers_ != 0 || !publication_pending_.empty() ||
+-            any_event_owed_locked_() || occupancy.outstanding != 0 ||
++            any_event_owed_locked_(4) || occupancy.outstanding != 0 ||
+             occupancy.execution_refs != 0 || occupancy.control_refs != 0 ||
+             occupancy.publication_inflight != 0 || occupancy.observer_registrations != 0
+ #if defined(SLUICE_SHUTDOWN_MUTANT_M2_CONTROL_PIN_CALLER_VIOLATION)
+diff --git a/xmake/libraries.lua b/xmake/libraries.lua
+index b99c1366..1f34076e 100644
+--- a/xmake/libraries.lua
++++ b/xmake/libraries.lua
+@@ -54,6 +54,8 @@ target("sluice_async")
+     -- production now, so they are listed explicitly.
+     add_files(R .. "src/async/detail/context_identity.cpp",
+               R .. "src/async/detail/request_core.cpp")
++    -- #576 research-only instrumented build (branch research/576-instrumented).
++    add_defines("SLUICE_576_INSTRUMENT")
+     if is_plat("linux") then
+         add_arflags("-D", {force = true})
+     end
