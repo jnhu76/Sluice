@@ -1,0 +1,49 @@
+# PREREGISTERED PLAN — Phase 3.3 Final-HEAD Performance Regression Check
+# Written BEFORE any A/A or A/B sample of this session (2026-10-29 15:18 +0800).
+#
+# Pair: base = master 43cb8029ca60b572c91a9aa9dccb17d4300e2f88 (after C1 #602)
+#       cand = PR #612 re-anchored head 645082821a11ffcc1f835ab46088f54a5add4a64
+# Statistic: ladderA - ladderB = cand - base (paired2.sh, ladderA=ladder-cand,
+#       ladderB=ladder-base; odd pairs flipped by the ABBA schedule). Negative
+#       favors the candidate.
+#
+# Budget (mission 3.3 / E5 ask):
+#   A/A FIRST: 16 pairs per cell (ask floor: >=8), cand x cand, order-aware.
+#   A/B: 16 pairs per shape, HARD CAP 24 per shape.
+#   Extension rule: a shape may be extended beyond 16 pairs ONLY when its
+#   16-pair CI95 excludes 0 on the candidate-UNFAVORABLE (positive) side,
+#   to firm a suspected regression within the cap. NO extension to chase a
+#   win. comp-read-4k is NOT extended merely to resolve its win.
+#
+# Shapes/cells (arm, pattern, fixture):
+#   1 ax seq  read fixture   comp-read-4k   (charter check 3)
+#   2 ax tail read fixture   eofmix         (charter check 1)
+#   3 ac seq  read fixture   cursor         (charter check 2)
+#   4 a2 seq  read fixture   neg read_at    (charter check 4)
+#   5 w2 seq  write fixture  neg write_at   (charter check 4)
+#   6 wx seq  write fixture  write_all_at   (charter check 5)
+#   7 wc seq  write fixture  write_all      (charter check 5)
+# Write cells run on a byte-copy fixture /tmp/sluice600/data64m-write.bin so
+# the read fixture stays at its pinned sha256 bc020fd1...2993a.
+#
+# Decision rules (fixed before sampling):
+#   - Direction preservation (eofmix, cursor): median(cand-base) < 0 at 16
+#     pairs. Additionally report whether WIN evidence standard holds
+#     (CI95 excl 0 AND |median| >= MDE') but the ask requires only direction.
+#   - comp-read-4k regression: REGRESSION only if CI95 excl 0 with positive
+#     median AND |median| >= MDE'; if CI95 spans 0 -> INCONCLUSIVE, no claim
+#     either way; win semantics stay INCONCLUSIVE regardless (charter).
+#   - Negative controls (a2, w2): PARITY iff CI95 spans 0 AND |median| <
+#     MDE'; otherwise disclose as deviation.
+#   - Write paths (wx, wc): DISCLOSURE ONLY. Flag "apparent regression" if
+#     CI95 excl 0 positive. No performance improvement claims either way
+#     (write-composition claims need a new formal Wall experiment).
+#   - MDE' = t(0.975, n_pairs-1) * sd_AA / sqrt(n_pairs), sd_AA from this
+#     session's A/A of the same shape.
+#   - Verdict: NO_NEW_REGRESSION iff no shape meets the REGRESSION rule and
+#     negative controls are PARITY; REGRESSION_FOUND if any shape does;
+#     NOT_RUN_WITH_REASON if execution cannot complete.
+#
+# Hygiene: taskset -c 2, strictly serial invocations, no other measurement
+# process, loadavg recorded start/end, raw samples + # cmd: lines per cell,
+# no GitHub writes, no merges from this session.
