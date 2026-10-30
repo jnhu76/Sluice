@@ -1,0 +1,24 @@
+diff --git a/bench/bench_w02_pipeline.cpp b/bench/bench_w02_pipeline.cpp
+index 87dd02ac..9bcbd0e6 100644
+--- a/bench/bench_w02_pipeline.cpp
++++ b/bench/bench_w02_pipeline.cpp
+@@ -695,6 +695,19 @@ int main() {
+     }
+     // Opt-in: a default rebuild reproduces the frozen case list exactly.
+     if (std::getenv("SLUICE_BENCH_DIAGNOSTICS") != nullptr) {
++        // #593 research addition: the uring analog of the core64 capacity
++        // isolation, so the C>D slot-scan diagnostic exists for the ring
++        // backend too (stock G0 defines it for threadpool only).
++        PipelineParams uring_core;
++        uring_core.backend = &uring;
++        uring_core.block_size = 4096;
++        uring_core.request_count = 20000;
++        uring_core.depth = 16;
++        uring_core.scope_capacity = 16;
++        uring_core.core_capacity = 64;
++        uring_core.label_suffix = "-core64";
++        cases.push_back(uring_core);
++
+         PipelineParams p;
+         p.backend = &threadpool;
+         p.block_size = 4096;

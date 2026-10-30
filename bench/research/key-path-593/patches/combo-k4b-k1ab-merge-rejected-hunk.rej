@@ -1,0 +1,17 @@
+diff a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp	(rejected hunks)
+@@ -320,6 +327,15 @@ class UringAsyncBackend : public AsyncBackend {
+     mutable std::mutex dispatch_mtx_;
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
++    // K1-a elision: pass-boundary snapshot stores, sized once at construction
++    // so a pass performs no allocation after accepted work is queued.
++    std::unique_ptr<BoundedDispatchQueue> publish_batch_;
++    struct OwedDelivery {
++        detail::RequestKey key{};
++        detail::OperationKind kind = detail::OperationKind::read;
++        bool observer_armed = false;
++    };
++    std::vector<OwedDelivery> owed_batch_;
+ 
+     std::atomic<std::uint64_t> submit_flushes_{0};
+     std::atomic<std::size_t> live_cookies_{0};

@@ -1,0 +1,835 @@
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..cbf3e780 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -15,6 +15,8 @@
+ #include <sys/eventfd.h>
+ #include <unistd.h>
+ 
++#include "../../../../src/async/observe_counters.hpp"
++
+ namespace sluice::async {
+ class AsyncBackend;
+ class AsyncIoContext;
+@@ -40,6 +42,7 @@ class ProgressSource {
+     // it: the current control generation is recorded as observed so a later
+     // acknowledge_control() cannot retire control that arrived afterwards.
+     bool observe_pending_control() noexcept {
++        SLUICE_OBS_BUMP(ps_observe_control);
+         std::lock_guard<std::mutex> lk(mtx_);
+         if (!control_pending_nolock_()) {
+             return false;
+@@ -61,6 +64,7 @@ class ProgressSource {
+     // cannot distinguish silence from a lost wake, so every wait must observe
+     // the failure instead of a zero-completion report.
+     bool wait_health_failed() const noexcept {
++        SLUICE_OBS_BUMP(ps_wait_health);
+         std::lock_guard<std::mutex> lk(mtx_);
+         return health_failed_;
+     }
+@@ -89,6 +93,7 @@ class ProgressSource {
+     ProgressSource& operator=(const ProgressSource&) = delete;
+ 
+     Token snapshot() const noexcept {
++        SLUICE_OBS_BUMP(ps_snapshot);
+         std::lock_guard<std::mutex> lk(mtx_);
+         return Token{progress_epoch_, progress_exhaustion_};
+     }
+@@ -108,6 +113,7 @@ class ProgressSource {
+     WakeReason wait_if_unchanged(Token observed, std::chrono::nanoseconds max_park,
+                                  PhysicalProbe probe = nullptr,
+                                  void* probe_context = nullptr) noexcept {
++        SLUICE_OBS_BUMP(ps_wait_call);
+         const bool bounded_park = max_park != std::chrono::nanoseconds::max();
+         const auto now = std::chrono::steady_clock::now();
+         const auto park_deadline =
+@@ -200,6 +206,7 @@ class ProgressSource {
+             pfds[0].events = POLLIN;
+             pfds[0].revents = 0;
+ 
++            SLUICE_OBS_BUMP(ps_park_poll);
+             const int rc = ::poll(pfds, 1, timeout_ms);
+             {
+                 std::lock_guard<std::mutex> lk(mtx_);
+@@ -250,6 +257,7 @@ class ProgressSource {
+     }
+ 
+     void signal() noexcept {
++        SLUICE_OBS_BUMP(ps_signal);
+         std::lock_guard<std::mutex> lk(mtx_);
+         // Saturation, not wrap: an active token must never alias a later
+         // epoch. Once frozen, the exhaustion sequence carries freshness;
+@@ -401,6 +409,7 @@ class ProgressSource {
+         std::uint64_t value = 0;
+         for (;;) {
+             errno = 0;
++            SLUICE_OBS_BUMP(ps_drain_read);
+             const ssize_t n = ::read(notification_fd_, &value, sizeof(value));
+             if (n == static_cast<ssize_t>(sizeof(value))) {
+                 continue;
+diff --git a/src/async/async_io_context.cpp b/src/async/async_io_context.cpp
+index 5105ec28..961a43de 100644
+--- a/src/async/async_io_context.cpp
++++ b/src/async/async_io_context.cpp
+@@ -1,5 +1,7 @@
+ #include <sluice/async/async_io_context.hpp>
+ 
++#include "observe_counters.hpp"
++
+ #include <sluice/async/detail/async_backend.hpp>
+ #include <sluice/async/detail/context_identity.hpp>
+ #include <sluice/async/detail/fail_fast.hpp>
+@@ -13,6 +15,8 @@
+ 
+ namespace sluice::async {
+ 
++SLUICE_OBS_USE();
++
+ namespace {
+ 
+ // Retry cadence for a pass that left accepted transport outside the kernel
+@@ -177,6 +181,7 @@ AsyncIoContext& AsyncIoContext::operator=(AsyncIoContext&& other) noexcept {
+ }
+ 
+ bool AsyncIoContext::drive_entry_admitted_() noexcept {
++    SLUICE_OBS_BUMP(drive_admit);
+     std::lock_guard<std::mutex> lk(access_mtx_);
+     if (drive_active_ || !backend_) {
+         return false;
+@@ -247,12 +252,14 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
+ 
+ 
+ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
++    SLUICE_OBS_BUMP(ctx_submit_read);
+     if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
+         rejection.has_value()) {
+         return make_unexpected<Request<std::size_t>>(*rejection);
+     }
+ #if !defined(SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED)
+     std::lock_guard<std::mutex> lk(access_mtx_);
++    SLUICE_OBS_BUMP(ctx_access_lock);
+ #endif
+     if (!backend_)
+         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
+@@ -415,6 +422,7 @@ Result<std::size_t> AsyncIoContext::poll() {
+ }
+ 
+ ProgressPass AsyncIoContext::run_progress_pass_() {
++    SLUICE_OBS_BUMP(run_pass);
+     if (stats_)
+         ++stats_->poll_calls;
+     ProgressPass pass = backend_->poll_progress();
+@@ -422,6 +430,11 @@ ProgressPass AsyncIoContext::run_progress_pass_() {
+                          progress_->wait_health_failed();
+     if (stats_)
+         stats_->completed_ops += pass.completed;
++    if (pass.completed > 0) {
++        SLUICE_OBS_BUMP(pass_productive);
++    } else {
++        SLUICE_OBS_BUMP(pass_empty);
++    }
+     close_admission_on_progress_exhaustion_();
+     return pass;
+ }
+@@ -560,6 +573,7 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one() {
+ 
+ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
+     std::chrono::nanoseconds max_park) {
++    SLUICE_OBS_BUMP(wait_one);
+     if (backend_ == nullptr) {
+         return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::invalid_state});
+     }
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index ee2f147a..beea2d71 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -1,5 +1,7 @@
+ #include <sluice/async/detail/request_core.hpp>
+ 
++#include "../observe_counters.hpp"
++
+ #include <sluice/async/detail/async_backend.hpp>
+ #include <sluice/async/detail/fail_fast.hpp>
+ #include <sluice/async/request.hpp>
+@@ -10,6 +12,8 @@
+ 
+ namespace sluice::async::detail {
+ 
++SLUICE_OBS_USE();
++
+ namespace {
+ 
+ [[noreturn]] void request_core_invariant_fail_fast() noexcept { std::terminate(); }
+@@ -91,6 +95,7 @@ CoreOccupancy RequestCore::occupancy() const noexcept {
+ }
+ 
+ std::size_t RequestCore::outstanding_summary() const noexcept {
++    SLUICE_OBS_BUMP(core_outstanding_summary);
+     std::lock_guard<std::mutex> lock(mutex_);
+     return outstanding_;
+ }
+@@ -163,6 +168,7 @@ const RequestCore::Slot* RequestCore::resolve_public_(RequestKey id) const noexc
+ }
+ 
+ ReserveAttempt RequestCore::reserve() {
++    SLUICE_OBS_BUMP(core_reserve);
+     std::lock_guard<std::mutex> lock(mutex_);
+     if (!admission_open_) {
+         return ReserveAttempt{ReserveStatus::admission_closed, {}};
+@@ -184,6 +190,7 @@ ReserveAttempt RequestCore::reserve() {
+ AcceptAttempt RequestCore::accept(RequestReservation reservation,
+                                   const RequestDescriptor& descriptor,
+                                   BorrowFacts borrow) noexcept {
++    SLUICE_OBS_BUMP(core_accept);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_reserved_(reservation);
+     if (slot == nullptr) {
+@@ -212,6 +219,7 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
+ }
+ 
+ bool RequestCore::rollback(RequestReservation reservation) noexcept {
++    SLUICE_OBS_BUMP(core_rollback);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_reserved_(reservation);
+     if (slot == nullptr) {
+@@ -246,11 +254,13 @@ void RequestCore::note_health_failure() noexcept {
+ }
+ 
+ bool RequestCore::health_failed() const noexcept {
++    SLUICE_OBS_BUMP(core_health_failed);
+     std::lock_guard<std::mutex> lock(mutex_);
+     return health_failed_;
+ }
+ 
+ PublicLookup RequestCore::lookup(RequestKey id) const noexcept {
++    SLUICE_OBS_BUMP(request_ready_check);
+     std::lock_guard<std::mutex> lock(mutex_);
+     const Slot* slot = resolve_public_(id);
+     if (slot == nullptr) {
+@@ -325,6 +335,7 @@ PublicObservation RequestCore::observe_public_result(RequestKey id, IoOutcome* o
+ 
+ PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* out,
+                                                      sluice::FileInfo* metadata_out) noexcept {
++    SLUICE_OBS_BUMP(core_consume);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_public_(id);
+     if (slot == nullptr) {
+@@ -348,6 +359,7 @@ PublicConsumption RequestCore::consume_public_result(RequestKey id, IoOutcome* o
+ 
+ TerminalVerdict RequestCore::offer_terminal(RequestKey id,
+                                              const TerminalCandidate& candidate) noexcept {
++    SLUICE_OBS_BUMP(core_offer_terminal);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -369,6 +381,7 @@ TerminalVerdict RequestCore::offer_terminal(RequestKey id,
+ }
+ 
+ ExecutionClaim RequestCore::claim_execution(RequestKey id) noexcept {
++    SLUICE_OBS_BUMP(core_claim_execution);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -395,6 +408,7 @@ bool RequestCore::acquire_execution(RequestKey id) noexcept {
+ }
+ 
+ ExecutionRelease RequestCore::release_execution(RequestKey id) noexcept {
++    SLUICE_OBS_BUMP(core_release_execution);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -440,6 +454,7 @@ ControlRelease RequestCore::release_control(RequestKey id) noexcept {
+ }
+ 
+ PublicationGrant RequestCore::begin_publication(RequestKey id, PublicationPayload* out) noexcept {
++    SLUICE_OBS_BUMP(core_begin_publication);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -464,6 +479,7 @@ PublicationGrant RequestCore::begin_publication(RequestKey id, PublicationPayloa
+ }
+ 
+ PublicationCompletion RequestCore::complete_publication(RequestKey id) noexcept {
++    SLUICE_OBS_BUMP(core_complete_publication);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -515,6 +531,7 @@ ObserverRegistration RequestCore::register_observer(RequestKey id) noexcept {
+ }
+ 
+ ObserverDeliveryClaim RequestCore::claim_observer_delivery(RequestKey id) noexcept {
++    SLUICE_OBS_BUMP(core_claim_observer);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+@@ -562,6 +579,7 @@ ObserverCancellation RequestCore::cancel_observer(RequestKey id) noexcept {
+ }
+ 
+ ObserverDeliveryRetirement RequestCore::retire_observer_delivery(RequestKey id) noexcept {
++    SLUICE_OBS_BUMP(core_retire_observer);
+     std::lock_guard<std::mutex> lock(mutex_);
+     Slot* slot = resolve_internal_(id);
+     if (slot == nullptr) {
+diff --git a/src/async/observe_counters.hpp b/src/async/observe_counters.hpp
+new file mode 100644
+index 00000000..2c6dc6a9
+--- /dev/null
++++ b/src/async/observe_counters.hpp
+@@ -0,0 +1,196 @@
++// Test-only observation instrumentation for research #593 (Phase C).
++// Runtime-gated by SLUICE_OBSERVE=1 / SLUICE_OBSERVE_TRACE=1; when the gate is
++// off every bump is one relaxed load + branch. Never changes behavior.
++
++#pragma once
++
++#include <atomic>
++#include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <cstring>
++#include <vector>
++
++namespace sluice::observe {
++
++enum class C : unsigned {
++    // K1 completion -> publication -> observer
++    cqe_total = 0,
++    handle_one_cqe,
++    control_cqe,
++    finalize_terminal,
++    core_offer_terminal,
++    core_release_execution,
++    pub_pending_push,
++    pub_pending_pop,
++    publish_one,
++    core_begin_publication,
++    core_complete_publication,
++    deliver_event,
++    core_claim_observer,
++    core_retire_observer,
++    request_ready_check,
++    request_take,
++    core_consume,
++    // K2 submit -> admission -> dispatch
++    ctx_submit_read,
++    ctx_access_lock,
++    backend_validate,
++    core_reserve,
++    core_accept,
++    core_rollback,
++    prepared_write,
++    delivery_init_lock,
++    dispatch_after_accept,
++    dispatch_push,
++    dispatch_one_locked,
++    core_claim_execution,
++    dispatch_remove_exact,
++    ledger_append,
++    ledger_pop,
++    // K3 progress pass -> wakeup -> retry
++    backend_poll_progress,
++    backend_poll,
++    run_pass,
++    pass_productive,
++    pass_empty,
++    wait_one,
++    drive_admit,
++    ps_snapshot,
++    ps_wait_call,
++    ps_park_poll,
++    ps_drain_read,
++    ps_signal,
++    backend_signal,
++    probe_immediate,
++    pass_immediate_remains,
++    pass_retry_remains,
++    core_outstanding_summary,
++    core_health_failed,
++    ps_wait_health,
++    service_controls,
++    service_control_scans,
++    ps_observe_control,
++    // K4 SQE/CQE batching + kernel boundary
++    peek_batch_calls,
++    cq_ready_bound_sum,
++    batch_got_sum,
++    cqe_seen,
++    get_events,
++    submit_enter,
++    submit_sq_ready_sum,
++    submit_rc_sum,
++    submit_rc_positive,
++    router_lookup,
++    router_probe_sum,
++    reconcile_calls,
++    // sentinel
++    COUNT
++};
++
++struct alignas(64) CounterBlock {
++    std::atomic<std::uint64_t> v[static_cast<unsigned>(C::COUNT)];
++};
++
++inline CounterBlock g_obs{};
++inline std::atomic<bool> g_obs_enabled{false};
++inline std::atomic<bool> g_obs_trace_enabled{false};
++
++struct PassTraceRecord {
++    std::uint32_t cq_ready;
++    std::uint32_t reaped;
++    std::uint32_t submit_calls;
++    std::uint32_t sqes_submitted;
++    std::uint32_t published;
++    std::uint32_t pub_bound;
++};
++
++inline std::vector<PassTraceRecord>* g_obs_trace = nullptr;
++
++inline void obs_bump(C c, std::uint64_t n = 1) noexcept {
++    if (g_obs_enabled.load(std::memory_order_relaxed)) {
++        g_obs.v[static_cast<unsigned>(c)].fetch_add(n, std::memory_order_relaxed);
++    }
++}
++
++inline std::uint64_t obs_get(C c) noexcept {
++    return g_obs.v[static_cast<unsigned>(c)].load(std::memory_order_relaxed);
++}
++
++inline void obs_install() noexcept {
++    const bool counters_on = std::getenv("SLUICE_OBSERVE") != nullptr;
++    const bool trace_on = std::getenv("SLUICE_OBSERVE_TRACE") != nullptr;
++    if (counters_on) {
++        g_obs_enabled.store(true, std::memory_order_relaxed);
++    }
++    if (trace_on) {
++        g_obs_trace_enabled.store(true, std::memory_order_relaxed);
++        g_obs_enabled.store(true, std::memory_order_relaxed);
++        g_obs_trace = new std::vector<PassTraceRecord>();
++        g_obs_trace->reserve(1u << 16);
++    }
++}
++
++inline void obs_write_dump(std::FILE* f) noexcept {
++    static const char* names[static_cast<unsigned>(C::COUNT)] = {
++        "cqe_total", "handle_one_cqe", "control_cqe", "finalize_terminal",
++        "core_offer_terminal", "core_release_execution", "pub_pending_push",
++        "pub_pending_pop", "publish_one", "core_begin_publication",
++        "core_complete_publication", "deliver_event", "core_claim_observer",
++        "core_retire_observer", "request_ready_check", "request_take",
++        "core_consume", "ctx_submit_read", "ctx_access_lock", "backend_validate",
++        "core_reserve", "core_accept", "core_rollback", "prepared_write",
++        "delivery_init_lock", "dispatch_after_accept", "dispatch_push",
++        "dispatch_one_locked", "core_claim_execution", "dispatch_remove_exact",
++        "ledger_append", "ledger_pop", "backend_poll_progress", "backend_poll",
++        "run_pass", "pass_productive", "pass_empty", "wait_one", "drive_admit",
++        "ps_snapshot", "ps_wait_call", "ps_park_poll", "ps_drain_read",
++        "ps_signal", "backend_signal", "probe_immediate", "pass_immediate_remains",
++        "pass_retry_remains", "core_outstanding_summary", "core_health_failed",
++        "ps_wait_health", "service_controls", "service_control_scans",
++        "ps_observe_control", "peek_batch_calls", "cq_ready_bound_sum",
++        "batch_got_sum", "cqe_seen", "get_events", "submit_enter",
++        "submit_sq_ready_sum", "submit_rc_sum", "submit_rc_positive",
++        "router_lookup", "router_probe_sum", "reconcile_calls",
++    };
++    for (unsigned i = 0; i < static_cast<unsigned>(C::COUNT); ++i) {
++        std::fprintf(f, "OBS %s %llu\n", names[i],
++                     static_cast<unsigned long long>(g_obs.v[i].load(std::memory_order_relaxed)));
++    }
++    if (g_obs_trace != nullptr && !g_obs_trace->empty()) {
++        std::fprintf(f, "# trace cq_ready reaped submit_calls sqes_submitted published pub_bound\n");
++        for (const PassTraceRecord& r : *g_obs_trace) {
++            std::fprintf(f, "TRACE %u %u %u %u %u %u\n", r.cq_ready, r.reaped, r.submit_calls,
++                         r.sqes_submitted, r.published, r.pub_bound);
++        }
++    }
++}
++
++struct ObsDumper {
++    ~ObsDumper() {
++        if (!g_obs_enabled.load(std::memory_order_relaxed)) {
++            return;
++        }
++        const char* out = std::getenv("SLUICE_OBSERVE_OUT");
++        if (out != nullptr && *out != '\0') {
++            if (std::FILE* f = std::fopen(out, "w")) {
++                obs_write_dump(f);
++                std::fclose(f);
++                return;
++            }
++        }
++        obs_write_dump(stderr);
++    }
++};
++
++inline const bool g_obs_installed = [] {
++    obs_install();
++    static ObsDumper dumper;
++    return true;
++}();
++
++}  // namespace sluice::observe
++
++#define SLUICE_OBS_BUMP(counter) ::sluice::observe::obs_bump(::sluice::observe::C::counter)
++#define SLUICE_OBS_BUMP_N(counter, n) ::sluice::observe::obs_bump(::sluice::observe::C::counter, (n))
++#define SLUICE_OBS_USE() [[maybe_unused]] const bool k_sluice_obs_tu_anchor_ = ::sluice::observe::g_obs_installed
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..8da84e27 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -9,6 +9,8 @@
+ 
+ #include "uring_internal.hpp"
+ 
++#include "observe_counters.hpp"
++
+ #include <cstdio>
+ #include <limits>
+ #include <stdexcept>
+@@ -83,6 +85,8 @@ bool UringAsyncBackend::available() const noexcept {
+ 
+ #else
+ 
++SLUICE_OBS_USE();
++
+ namespace {
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -283,6 +287,7 @@ bool UringAsyncBackend::progress_port_attached() noexcept {
+ }
+ 
+ bool UringAsyncBackend::has_immediate_physical_work() const noexcept {
++    SLUICE_OBS_BUMP(probe_immediate);
+     // CQ visibility follows the kernel's CQ publication protocol, not the
+     // eventfd; the overflow flag covers completions parked outside the ring.
+     if (!have_ring_)
+@@ -302,6 +307,7 @@ bool UringAsyncBackend::any_event_owed_locked_() const noexcept {
+ }
+ 
+ ProgressPass UringAsyncBackend::poll_progress() {
++    SLUICE_OBS_BUMP(backend_poll_progress);
+     ProgressPass pass;
+     pass.completed = poll();
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -320,6 +326,12 @@ ProgressPass UringAsyncBackend::poll_progress() {
+         // the context composes it with the core and wait-domain verdicts.
+         pass.health_failed = fatal_error_.has_value();
+     }
++    if (pass.immediate_work_remains) {
++        SLUICE_OBS_BUMP(pass_immediate_remains);
++    }
++    if (pass.dispatch_retry_remains) {
++        SLUICE_OBS_BUMP(pass_retry_remains);
++    }
+     // A capped pass can leave reaped-eligible CQ entries behind; that
+     // leftover is immediate work the next pass owes.
+     pass.immediate_work_remains = pass.immediate_work_remains || has_immediate_physical_work();
+@@ -430,6 +442,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+     if (auto v = validate_op(op); !v.has_value()) {
+         return make_unexpected<detail::RequestKey>(v.error());
+     }
++    SLUICE_OBS_BUMP(backend_validate);
+     if (!have_ring_) {
+         return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
+     }
+@@ -484,9 +497,11 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+                          kind == detail::OperationKind::size)
+                             ? &statx_buffers_[h.slot.value]
+                             : nullptr};
++    SLUICE_OBS_BUMP(prepared_write);
+ 
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        SLUICE_OBS_BUMP(delivery_init_lock);
+         DeliveryRecord& record = delivery_[h.slot.value];
+         // A reserved slot cannot carry an owed event: the owed control
+         // reference pins the slot against reclaim until the delivery sweep
+@@ -576,6 +591,7 @@ void UringAsyncBackend::publish_zero_op_inline(detail::RequestKey id,
+ }
+ 
+ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
++    SLUICE_OBS_BUMP(publish_one);
+     const detail::RequestKey key{core_->context(), h.slot, h.generation};
+ #if defined(SLUICE_URING_MUTANT_PUBLICATION_BEGIN_SKIPPED)
+     const bool publication_granted = true;
+@@ -608,6 +624,7 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
+ }
+ 
+ void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
++    SLUICE_OBS_BUMP(deliver_event);
+     (void)core_->claim_observer_delivery(key);
+     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+     (void)core_->retire_observer_delivery(key);
+@@ -616,6 +633,13 @@ void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationK
+ std::size_t UringAsyncBackend::poll() {
+     if (!have_ring_)
+         return 0;
++    SLUICE_OBS_BUMP(backend_poll);
++    const bool trace_on = ::sluice::observe::g_obs_trace_enabled.load(std::memory_order_relaxed);
++    const std::uint64_t t_cqe0 = trace_on ? ::sluice::observe::obs_get(::sluice::observe::C::cqe_total) : 0;
++    const std::uint64_t t_ent0 = trace_on ? ::sluice::observe::obs_get(::sluice::observe::C::submit_enter) : 0;
++    const std::uint64_t t_sq0 = trace_on ? ::sluice::observe::obs_get(::sluice::observe::C::submit_rc_sum) : 0;
++    const std::uint32_t t_ready0 =
++        trace_on ? static_cast<std::uint32_t>(::io_uring_cq_ready(&ring_state_->ring)) : 0;
+ 
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+@@ -649,6 +673,9 @@ std::size_t UringAsyncBackend::poll() {
+         {
+             std::lock_guard<std::mutex> lk(dispatch_mtx_);
+             have = publication_pending_->pop_front(h);
++            if (have) {
++                SLUICE_OBS_BUMP(pub_pending_pop);
++            }
+         }
+         if (!have)
+             break;
+@@ -685,6 +712,21 @@ std::size_t UringAsyncBackend::poll() {
+         }
+     }
+ 
++    if (trace_on && ::sluice::observe::g_obs_trace != nullptr &&
++        ::sluice::observe::g_obs_trace->size() < (1u << 20)) {
++        const std::uint64_t t_cqe1 = ::sluice::observe::obs_get(::sluice::observe::C::cqe_total);
++        const std::uint64_t t_ent1 = ::sluice::observe::obs_get(::sluice::observe::C::submit_enter);
++        const std::uint64_t t_sq1 = ::sluice::observe::obs_get(::sluice::observe::C::submit_rc_sum);
++        ::sluice::observe::PassTraceRecord rec{};
++        rec.reaped = static_cast<std::uint32_t>(t_cqe1 - t_cqe0);
++        rec.submit_calls = static_cast<std::uint32_t>(t_ent1 - t_ent0);
++        rec.sqes_submitted = static_cast<std::uint32_t>(t_sq1 - t_sq0);
++        rec.published = static_cast<std::uint32_t>(published);
++        rec.pub_bound = static_cast<std::uint32_t>(pass_bound);
++        rec.cq_ready = t_ready0;
++        ::sluice::observe::g_obs_trace->push_back(rec);
++    }
++
+     return published;
+ }
+ 
+diff --git a/src/async/uring_completion.cpp b/src/async/uring_completion.cpp
+index df5b1baf..00729e45 100644
+--- a/src/async/uring_completion.cpp
++++ b/src/async/uring_completion.cpp
+@@ -5,6 +5,8 @@
+ 
+ #include "uring_internal.hpp"
+ 
++#include "observe_counters.hpp"
++
+ #include <sluice/async/detail/fail_fast.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ #include <sluice/error.hpp>
+@@ -20,6 +22,8 @@ namespace sluice::async {
+ 
+ #if defined(SLUICE_HAS_LIBURING)
+ 
++SLUICE_OBS_USE();
++
+ void UringAsyncBackend::finalize_operation_terminal_(
+     RouterEntry& route, std::size_t router_index, const sluice::detail::IoOutcome& terminal,
+     const sluice::FileInfo* metadata) noexcept {
+@@ -31,6 +35,7 @@ void UringAsyncBackend::finalize_operation_terminal_(
+     }
+ 
+     const detail::RequestKey key{core_->context(), route.handle.slot, route.handle.generation};
++    SLUICE_OBS_BUMP(finalize_terminal);
+     const PreparedUringOp& prep = prepared_ops_[route.handle.slot.value];
+     const bool is_byte_op =
+         prep.kind == detail::OperationKind::read || prep.kind == detail::OperationKind::write;
+@@ -85,11 +90,13 @@ void UringAsyncBackend::finalize_operation_terminal_(
+     route.terminal_delivered = true;
+ #if defined(SLUICE_URING_CORE_MUTANT_PUBLISH_BEFORE_BORROW_RETIREMENT)
+     publication_pending_->push_back(route.handle);
++    SLUICE_OBS_BUMP(pub_pending_push);
+ #else
+     if (core_->release_execution(key) != detail::ExecutionRelease::borrow_touch_fully_retired) {
+         detail::uring_core_handoff_fail_fast();
+     }
+     publication_pending_->push_back(route.handle);
++    SLUICE_OBS_BUMP(pub_pending_push);
+ #endif
+     if (route.control_state == RouterEntry::ControlState::none) {
+         retire_router_entry_(router_index);
+@@ -98,7 +105,9 @@ void UringAsyncBackend::finalize_operation_terminal_(
+ 
+ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcept {
+     std::lock_guard<std::mutex> lk(dispatch_mtx_);
++    SLUICE_OBS_BUMP(handle_one_cqe);
+     if (is_control_cookie(user_data)) {
++        SLUICE_OBS_BUMP(control_cqe);
+         const std::uint64_t target_cookie = control_target_cookie(user_data);
+         if (target_cookie == 0)
+             return;
+@@ -206,8 +215,11 @@ void UringAsyncBackend::reap_cqes() noexcept {
+     // immediate work, reported through has_immediate_physical_work().
+     const auto reap_visible_bounded = [&](std::size_t bound) noexcept {
+         std::size_t reaped = 0;
++        SLUICE_OBS_BUMP_N(cq_ready_bound_sum, bound);
+         while (reaped < bound) {
+             got = ::io_uring_peek_batch_cqe(&ring_state_->ring, cqes, BATCH);
++            SLUICE_OBS_BUMP(peek_batch_calls);
++            SLUICE_OBS_BUMP_N(batch_got_sum, got);
+             if (got == 0)
+                 break;
+             const std::size_t room = bound - reaped;
+@@ -218,6 +230,8 @@ void UringAsyncBackend::reap_cqes() noexcept {
+                 const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
+                 const int res = cqe->res;
+                 ::io_uring_cqe_seen(&ring_state_->ring, cqe);
++                SLUICE_OBS_BUMP(cqe_seen);
++                SLUICE_OBS_BUMP(cqe_total);
+ 
+                 handle_one_cqe(user_data, res);
+             }
+@@ -264,6 +278,7 @@ void UringAsyncBackend::reap_cqes() noexcept {
+ #endif
+         {
+             flush_rc = ::io_uring_get_events(&ring_state_->ring);
++            SLUICE_OBS_BUMP(get_events);
+         }
+         {
+             std::lock_guard<std::mutex> lk(dispatch_mtx_);
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..0e1ac670 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -6,6 +6,8 @@
+ 
+ #include "uring_internal.hpp"
+ 
++#include "observe_counters.hpp"
++
+ #include <sluice/async/detail/fail_fast.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ #include <sluice/error.hpp>
+@@ -18,6 +20,8 @@ namespace sluice::async {
+ 
+ #if defined(SLUICE_HAS_LIBURING)
+ 
++SLUICE_OBS_USE();
++
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+ std::size_t UringAsyncBackend::dispatch_size_for_test() const noexcept {
+@@ -41,6 +45,7 @@ std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
+ #endif
+ 
+ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noexcept {
++    SLUICE_OBS_BUMP(dispatch_after_accept);
+     bool injected_dispatch_failure = false;
+     bool newly_poisoned = false;
+     bool unsubmitted_after_dispatch = false;
+@@ -70,6 +75,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+ #endif
+         {
+             dispatch_->push_back(h);
++            SLUICE_OBS_BUMP(dispatch_push);
+ 
+             const bool poisoned_before = fatal_error_.has_value();
+             if (poisoned_before) {
+@@ -128,6 +134,7 @@ void UringAsyncBackend::retire_undispatched_after_poison_locked_() noexcept {
+ }
+ 
+ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexcept {
++    SLUICE_OBS_BUMP(dispatch_one_locked);
+     if (fatal_error_.has_value())
+         return false;
+ 
+@@ -155,6 +162,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+         // the ring accounting exact.
+         --ring_state_->ring.sq.sqe_tail;
+         (void)dispatch_->remove_exact(h);
++        SLUICE_OBS_BUMP(dispatch_remove_exact);
+         return true;
+     }
+ 
+@@ -197,6 +205,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+     const std::uint32_t physical_position =
+         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
++    SLUICE_OBS_BUMP(ledger_append);
+ 
+     if (!dispatch_->remove_exact(h)) {
+         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
+@@ -204,6 +213,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+         std::fflush(stderr);
+         std::terminate();
+     }
++    SLUICE_OBS_BUMP(dispatch_remove_exact);
+ 
+     return true;
+ }
+@@ -220,6 +230,9 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
+         return 0;
+ 
+     submit_flushes_.fetch_add(1, std::memory_order_relaxed);
++    SLUICE_OBS_BUMP(submit_enter);
++    SLUICE_OBS_BUMP_N(submit_sq_ready_sum,
++                      static_cast<std::uint64_t>(::io_uring_sq_ready(&ring_state_->ring)));
+     int rc = 0;
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+     if (ring_state_->test_hooks.submit != nullptr) {
+@@ -230,6 +243,10 @@ int UringAsyncBackend::submit_transport_locked() noexcept {
+ #else
+     rc = ::io_uring_submit(&ring_state_->ring);
+ #endif
++    if (rc > 0) {
++        SLUICE_OBS_BUMP_N(submit_rc_sum, static_cast<std::uint64_t>(rc));
++        SLUICE_OBS_BUMP(submit_rc_positive);
++    }
+     account_transport_result_locked(rc, true);
+     return rc;
+ }
+@@ -249,6 +266,7 @@ void UringAsyncBackend::account_transport_result_locked(int rc,
+         }
+         for (std::size_t i = 0; i < consumed; ++i) {
+             const TransportLedger::Entry entry = transport_ledger_->pop_front();
++            SLUICE_OBS_BUMP(ledger_pop);
+             if (entry.kind == TransportLedger::Kind::cancel_control) {
+                 mark_consumed_control_locked_(entry.cookie, entry.handle);
+             }
+@@ -296,6 +314,7 @@ void UringAsyncBackend::mark_consumed_control_locked_(std::uint64_t cookie,
+ }
+ 
+ std::size_t UringAsyncBackend::reconcile_ledger_with_kernel_locked_() noexcept {
++    SLUICE_OBS_BUMP(reconcile_calls);
+     if (transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+     const auto& sq = ring_state_->ring.sq;
+@@ -549,7 +568,9 @@ std::size_t UringAsyncBackend::find_live_router_index_(detail::RequestReservatio
+ }
+ 
+ std::size_t UringAsyncBackend::find_live_router_cookie_(std::uint64_t cookie) const noexcept {
++    SLUICE_OBS_BUMP(router_lookup);
+     for (std::size_t i = router_.size(); i-- > 0;) {
++        SLUICE_OBS_BUMP(router_probe_sum);
+         if (router_[i].in_use && router_[i].cookie == cookie)
+             return i;
+     }
+@@ -594,6 +615,7 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
+                 detail::uring_core_handoff_fail_fast();
+             }
+             publication_pending_->push_back(detail::RequestReservation{key.slot, key.generation});
++            SLUICE_OBS_BUMP(pub_pending_push);
+         } else if (disposition == detail::PublicCancel::requested) {
+             issue_running_cancel_locked_(detail::RequestReservation{key.slot, key.generation});
+         }
+@@ -693,14 +715,16 @@ void UringAsyncBackend::issue_running_cancel_locked_(detail::RequestReservation
+ }
+ 
+ void UringAsyncBackend::service_pending_controls_locked_() noexcept {
++    SLUICE_OBS_BUMP(service_controls);
+     if (fatal_error_.has_value())
+         return;
+ #if defined(SLUICE_URING_MUTANT_PENDING_CONTROL_GATE_ALWAYS_SKIPS)
+-    return;
+-#else
+-    if (pending_control_count_ == 0)
+         return;
++#else
++        if (pending_control_count_ == 0)
++            return;
+ #endif
++    SLUICE_OBS_BUMP_N(service_control_scans, router_.size());
+     for (std::size_t i = 0; i < router_.size(); ++i) {
+         const RouterEntry& route = router_[i];
+         if (route.in_use && route.control_state == RouterEntry::ControlState::none &&

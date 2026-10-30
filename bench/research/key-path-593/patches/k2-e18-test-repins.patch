@@ -1,0 +1,144 @@
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..6e65dcd4 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -336,6 +336,9 @@ class ProgressSource {
+     // Fills the eventfd counter in one write so the next signal observes the
+     // EAGAIN (already-readable) branch deterministically.
+     void saturate_notification_for_test() noexcept {
++        // K2-a E18 re-pin: deferred-submit residue signals may leave an unread
++        // counter value; saturation must start from the drained state.
++        drain_notification_nolock_();
+         const std::uint64_t max_counter = std::numeric_limits<std::uint64_t>::max() - 1;
+         for (;;) {
+             errno = 0;
+diff --git a/tests/uring_external_loop_test.cpp b/tests/uring_external_loop_test.cpp
+index e8af8a19..6304d635 100644
+--- a/tests/uring_external_loop_test.cpp
++++ b/tests/uring_external_loop_test.cpp
+@@ -277,10 +277,17 @@ bool external_poll_loop_uring_w03() {
+         return false;
+     r1 = std::move(r1_submitted).value();
+     std::size_t phase_a = host.drive_submission();
+-    const auto first_wake = host.wait_and_service(std::chrono::milliseconds{5000});
+-    if (!first_wake)
+-        return false;
+-    phase_a += *first_wake;
++    // K2-a E18 re-pin: the deferred transport's residue signal wakes the host
++    // before the kernel completion exists; the host keeps serving until the
++    // completion is delivered (its contract permits zero-delivery wakes).
++    std::size_t first_wake = 0;
++    for (int i = 0; i < 50 && first_wake == 0; ++i) {
++        const auto serviced = host.wait_and_service(std::chrono::milliseconds{5000});
++        if (!serviced)
++            return false;
++        first_wake += *serviced;
++    }
++    phase_a += first_wake;
+     phase_a += host.acknowledge_and_drive();
+     if (phase_a != 1 || !r1.ready())
+         return false;
+@@ -616,7 +623,9 @@ bool external_retryable_transport_does_not_strand() {
+     // still absent — the obligation must stand and the schedule with it.
+     if (!host.wait_and_service(std::chrono::milliseconds{5000}))
+         return false;
+-    if (state.attempts.load(std::memory_order_relaxed) < 3)
++    // K2-a E18 re-pin: the acceptance no longer attempts a submit inline, so
++    // the first wake's drive is attempt 2 (baseline: attempt 3).
++    if (state.attempts.load(std::memory_order_relaxed) < 2)
+         return false;
+     if (c.ready())
+         return false;
+diff --git a/tests/uring_flush_count_oracle_test.cpp b/tests/uring_flush_count_oracle_test.cpp
+index 990cb80c..8aa3f1f8 100644
+--- a/tests/uring_flush_count_oracle_test.cpp
++++ b/tests/uring_flush_count_oracle_test.cpp
+@@ -122,10 +122,14 @@ void single_submission_counts_one_flush(Tracker& t) {
+     auto submitted = ctx.submit_read(
+         ReadOp{NativeFileRef(*file), buffer.data(), buffer.size(), 0});
+     t.check(submitted.has_value(), "the data submission is accepted");
+-    t.check(raw->submit_flushes_for_test() == 1,
+-            "one accepted data submission flushes transport exactly once");
++    // K2-a E18 re-pin: the accepted SQE is prepared on the submitter and the
++    // kernel submit is deferred to the first pass, which must flush exactly once.
++    t.check(raw->submit_flushes_for_test() == 0,
++            "the accepted submission defers its transport flush to the pass");
+ 
+     drive_completion(ctx, *raw, 0, 4);
++    t.check(raw->submit_flushes_for_test() == 1,
++            "the first pass flushes the deferred transport exactly once");
+     const bool completed = poll_until_settled(ctx, submitted.value());
+     t.check(completed, "the request completes");
+     t.check(raw->submit_flushes_for_test() == 1,
+@@ -147,7 +151,11 @@ void sequential_submissions_are_monotonic(Tracker& t) {
+         auto submitted = ctx.submit_read(
+             ReadOp{NativeFileRef(*file), buffer.data(), buffer.size(), offset * 4});
+         t.check(submitted.has_value(), "the submission is accepted");
++        t.check(raw->submit_flushes_for_test() == offset,
++                "each submission defers without adding a flush");
+         drive_completion(ctx, *raw, offset * 4, 4);
++        t.check(raw->submit_flushes_for_test() == offset + 1,
++                "each pass flushes the deferred transport once");
+         const bool completed = poll_until_settled(ctx, submitted.value());
+         t.check(completed, "the request completes");
+     }
+diff --git a/tests/uring_progress_race_test.cpp b/tests/uring_progress_race_test.cpp
+index 1cfb74a6..bbec35d2 100644
+--- a/tests/uring_progress_race_test.cpp
++++ b/tests/uring_progress_race_test.cpp
+@@ -996,7 +996,10 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
+         release_parked_owner(ctx, gate, owner);
+         return false;
+     }
+-    const bool peer_acceptance_entered_kernel = backend_ptr->sq_ready_for_test() == 0;
++    // K2-a E18 re-pin: acceptance prepares exactly one SQE and defers the
++    // kernel submit to a pass; the residue signal is the wake edge this
++    // scenario exercises.
++    const bool peer_acceptance_deferred_transport = backend_ptr->sq_ready_for_test() == 1;
+ 
+     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
+     first.release_bytes(1);
+@@ -1010,7 +1013,7 @@ bool u2b_accepted_dispatch_wakes_parked_owner() {
+         std::this_thread::sleep_for(std::chrono::microseconds(200));
+         all_ready = first.request.ready() && second.request.ready();
+     }
+-    const bool ok = peer_acceptance_entered_kernel &&
++    const bool ok = peer_acceptance_deferred_transport &&
+                     driver.value.has_value() &&
+                     driver.value->kind == WaitKind::progress && driver.value->completed >= 1 &&
+                     driver.elapsed_ms < 1000 && all_ready;
+@@ -1441,6 +1444,9 @@ bool post_poison_accept_push_retires_through_failure_terminal() {
+     drain.track_pipe(inkernel);
+     if (!inkernel.arm(ctx, 4))
+         return false;
++    // K2-a E18 re-pin: the accepted read is flushed by a pass so it is in the
++    // kernel before the poison window (the baseline flushed inline).
++    (void)raw->poll();
+ 
+     UringAsyncBackend::AcceptedPreDispatchPauseGate gate;
+     raw->set_accepted_pre_dispatch_pause_gate(&gate);
+diff --git a/tests/uring_request_core_integration_test.cpp b/tests/uring_request_core_integration_test.cpp
+index d2fdc657..4500f745 100644
+--- a/tests/uring_request_core_integration_test.cpp
++++ b/tests/uring_request_core_integration_test.cpp
+@@ -341,12 +341,15 @@ bool accepted_pre_submit_work_has_a_core_owner(Tracker& t) {
+     raw->set_accepted_pre_dispatch_pause_gate(nullptr);
+     t.check(request.has_value() && !submit_error.has_value(), "the submission itself succeeds");
+ 
+-    t.check(raw->live_cookies_for_test() == 1 && raw->transport_ledger_size_for_test() == 0 &&
+-                raw->sq_ready_for_test() == 0,
+-            "the dispatch-time submit consumes the prepared entry and keeps its routing");
++    // K2-a E18 re-pin: dispatch installs the routing and defers the kernel
++    // submit; the pass's flush is what consumes the prepared transport.
++    t.check(raw->live_cookies_for_test() == 1 && raw->transport_ledger_size_for_test() == 1 &&
++                raw->sq_ready_for_test() == 1,
++            "the dispatch handoff keeps the prepared entry and its routing");
+     (void)ctx.poll();
+-    t.check(raw->transport_ledger_size_for_test() == 0 && raw->live_cookies_for_test() == 1,
+-            "the submitted operation leaves the prepared ledger and keeps its routing");
++    t.check(raw->transport_ledger_size_for_test() == 0 && raw->sq_ready_for_test() == 0 &&
++                raw->live_cookies_for_test() == 1,
++            "the pass flush consumes the prepared transport and keeps its routing");
+ 
+     fake_complete(made, 0, 4);
+     t.check(complete_take_reclaim(made, *request, 4),
