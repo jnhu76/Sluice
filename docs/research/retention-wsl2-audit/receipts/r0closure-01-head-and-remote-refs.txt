@@ -1,0 +1,14 @@
+# receipt r0closure-01: branch HEAD sha + remote refs (run 2026-10-29, repo /tmp/dududu-audit)
+$ git -C /tmp/dududu-audit rev-parse origin/sluice-r0-closure
+cc053cf9258b98546b16f9d2f08c5559fa73bc77
+$ git -C /tmp/dududu-audit ls-remote origin "refs/heads/*" "refs/pull/*/head"
+12a8712eb5ff5f48e570b49b1e01ad5821837dca	refs/heads/main
+47cd1976701a2c9e73fc31470f45aec236a3e0b2	refs/heads/r1-request-geometry
+4eafbc06d6a2e476055fe45fc75656e7e28a2183	refs/heads/r5-async-host-probe
+cc053cf9258b98546b16f9d2f08c5559fa73bc77	refs/heads/sluice-r0-closure
+cc321a4994ee638493fecda0c437481528f5cea9	refs/heads/sluice-r0-e5-verdict
+59cffffc2221502409d795c0ea8fe63d931939fb	refs/pull/1/head
+c4fe75f4257d0eef58523a3d6e0894f7f429dad6	refs/pull/2/head
+b07307ed545d6cdc815ea41df5f09c30e282a016	refs/pull/3/head
+cc321a4994ee638493fecda0c437481528f5cea9	refs/pull/7/head
+47cd1976701a2c9e73fc31470f45aec236a3e0b2	refs/pull/8/head

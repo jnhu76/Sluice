@@ -1,0 +1,13 @@
+# cmd: git -C /tmp/dududu-audit branch -a --contains cc321a4994ee638493fecda0c437481528f5cea9
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+  remotes/origin/r1-request-geometry
+  remotes/origin/sluice-r0-e5-verdict
+# cmd: git -C /tmp/dududu-audit rev-list --count main..origin/sluice-r0-e5-verdict
+0
+# cmd: git -C /tmp/dududu-audit log --oneline main..origin/sluice-r0-e5-verdict
+# cmd: git -C /tmp/dududu-audit merge-base main origin/sluice-r0-e5-verdict
+cc321a4994ee638493fecda0c437481528f5cea9
+# cmd: git -C /tmp/dududu-audit branch --list (local branches in audit clone)
+* main

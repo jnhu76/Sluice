@@ -1,0 +1,460 @@
++zsh:4> BR=refs/remotes/origin/research/r6-ac1-vectored-semantics 
++zsh:5> git -C /home/hoo/Projects/Sluice rev-list --objects refs/remotes/origin/research/r6-ac1-vectored-semantics '^origin/master'
++zsh:6> wc -l /tmp/r6ac1-rv-exclusion-objects.txt
+34 /tmp/r6ac1-rv-exclusion-objects.txt
++zsh:7> git -C /home/hoo/Projects/Sluice rev-list --objects refs/remotes/origin/research/r6-ac1-vectored-semantics
++zsh:7> awk '{print $1}'
++zsh:7> sort -u
++zsh:8> git -C /home/hoo/Projects/Sluice rev-list --objects origin/master
++zsh:8> awk '{print $1}'
++zsh:8> sort -u
++zsh:9> wc -l /tmp/r6ac1-rv-branch-objects.txt /tmp/r6ac1-rv-master-objects.txt
+  34680 /tmp/r6ac1-rv-branch-objects.txt
+  35416 /tmp/r6ac1-rv-master-objects.txt
+  70096 total
++zsh:10> comm -13 /tmp/r6ac1-rv-master-objects.txt /tmp/r6ac1-rv-branch-objects.txt
++zsh:11> wc -l /tmp/r6ac1-rv-unique-objects.txt
+5 /tmp/r6ac1-rv-unique-objects.txt
++zsh:12> echo '--- unique objects (in branch reachable set, not in master reachable set) ---'
+--- unique objects (in branch reachable set, not in master reachable set) ---
++zsh:13> read oid rest
++zsh:13> git -C /home/hoo/Projects/Sluice cat-file -t 076728bf76694951f34b6aba3d2260403c8c4fce
++zsh:13> printf '%s %s %s\n' 076728bf76694951f34b6aba3d2260403c8c4fce tree ''
+076728bf76694951f34b6aba3d2260403c8c4fce tree 
++zsh:13> read oid rest
++zsh:13> git -C /home/hoo/Projects/Sluice cat-file -t 2557b74abd9b5e33c32bbe2e965233da082cf3ba
++zsh:13> printf '%s %s %s\n' 2557b74abd9b5e33c32bbe2e965233da082cf3ba tree ''
+2557b74abd9b5e33c32bbe2e965233da082cf3ba tree 
++zsh:13> read oid rest
++zsh:13> git -C /home/hoo/Projects/Sluice cat-file -t 3ba4f8d83a7a7172d3a205b04386db220e074971
++zsh:13> printf '%s %s %s\n' 3ba4f8d83a7a7172d3a205b04386db220e074971 tree ''
+3ba4f8d83a7a7172d3a205b04386db220e074971 tree 
++zsh:13> read oid rest
++zsh:13> git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
++zsh:13> printf '%s %s %s\n' 999b5305ae7d413a2a71acde926f8c6cfef6876a commit ''
+999b5305ae7d413a2a71acde926f8c6cfef6876a commit 
++zsh:13> read oid rest
++zsh:13> git -C /home/hoo/Projects/Sluice cat-file -t b115306c8cc6873b6cd4f0809ace784502529d45
++zsh:13> printf '%s %s %s\n' b115306c8cc6873b6cd4f0809ace784502529d45 tree ''
+b115306c8cc6873b6cd4f0809ace784502529d45 tree 
++zsh:13> read oid rest
++zsh:14> echo '--- exclusion-form output blobs, each tested for membership in master reachable set ---'
+--- exclusion-form output blobs, each tested for membership in master reachable set ---
++zsh:15> read oid
++zsh:15> awk 'NF>1{print $1}' /tmp/r6ac1-rv-exclusion-objects.txt
++zsh:15> grep -qx 3ba4f8d83a7a7172d3a205b04386db220e074971 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=3ba4f8d83a7a7172d3a205b04386db220e074971
++grep:3> case 3ba4f8d83a7a7172d3a205b04386db220e074971 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 3ba4f8d83a7a7172d3a205b04386db220e074971 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'NOT-IN-MASTER 3ba4f8d83a7a7172d3a205b04386db220e074971'
+NOT-IN-MASTER 3ba4f8d83a7a7172d3a205b04386db220e074971
++zsh:15> read oid
++zsh:15> grep -qx 2557b74abd9b5e33c32bbe2e965233da082cf3ba /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=2557b74abd9b5e33c32bbe2e965233da082cf3ba
++grep:3> case 2557b74abd9b5e33c32bbe2e965233da082cf3ba (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 2557b74abd9b5e33c32bbe2e965233da082cf3ba /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'NOT-IN-MASTER 2557b74abd9b5e33c32bbe2e965233da082cf3ba'
+NOT-IN-MASTER 2557b74abd9b5e33c32bbe2e965233da082cf3ba
++zsh:15> read oid
++zsh:15> grep -qx b115306c8cc6873b6cd4f0809ace784502529d45 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=b115306c8cc6873b6cd4f0809ace784502529d45
++grep:3> case b115306c8cc6873b6cd4f0809ace784502529d45 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx b115306c8cc6873b6cd4f0809ace784502529d45 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'NOT-IN-MASTER b115306c8cc6873b6cd4f0809ace784502529d45'
+NOT-IN-MASTER b115306c8cc6873b6cd4f0809ace784502529d45
++zsh:15> read oid
++zsh:15> grep -qx a49e118cc0a041de2f3d1b483c382ea854295092 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=a49e118cc0a041de2f3d1b483c382ea854295092
++grep:3> case a49e118cc0a041de2f3d1b483c382ea854295092 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx a49e118cc0a041de2f3d1b483c382ea854295092 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER a49e118cc0a041de2f3d1b483c382ea854295092'
+IN-MASTER a49e118cc0a041de2f3d1b483c382ea854295092
++zsh:15> read oid
++zsh:15> grep -qx f7b54ba6d879fafd34a90c84bd481151b56818ea /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=f7b54ba6d879fafd34a90c84bd481151b56818ea
++grep:3> case f7b54ba6d879fafd34a90c84bd481151b56818ea (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx f7b54ba6d879fafd34a90c84bd481151b56818ea /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER f7b54ba6d879fafd34a90c84bd481151b56818ea'
+IN-MASTER f7b54ba6d879fafd34a90c84bd481151b56818ea
++zsh:15> read oid
++zsh:15> grep -qx e25e27705740347ff186d48ab7650913f7bd130d /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=e25e27705740347ff186d48ab7650913f7bd130d
++grep:3> case e25e27705740347ff186d48ab7650913f7bd130d (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx e25e27705740347ff186d48ab7650913f7bd130d /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER e25e27705740347ff186d48ab7650913f7bd130d'
+IN-MASTER e25e27705740347ff186d48ab7650913f7bd130d
++zsh:15> read oid
++zsh:15> grep -qx afdcc871413c2bc94a7f155243cb72af4bef1c1c /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=afdcc871413c2bc94a7f155243cb72af4bef1c1c
++grep:3> case afdcc871413c2bc94a7f155243cb72af4bef1c1c (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx afdcc871413c2bc94a7f155243cb72af4bef1c1c /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER afdcc871413c2bc94a7f155243cb72af4bef1c1c'
+IN-MASTER afdcc871413c2bc94a7f155243cb72af4bef1c1c
++zsh:15> read oid
++zsh:15> grep -qx 1321b1a43dc3a47febf0a07d83704cea3f2cc93d /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=1321b1a43dc3a47febf0a07d83704cea3f2cc93d
++grep:3> case 1321b1a43dc3a47febf0a07d83704cea3f2cc93d (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 1321b1a43dc3a47febf0a07d83704cea3f2cc93d /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 1321b1a43dc3a47febf0a07d83704cea3f2cc93d'
+IN-MASTER 1321b1a43dc3a47febf0a07d83704cea3f2cc93d
++zsh:15> read oid
++zsh:15> grep -qx d4b8d1a181c4bde6606b005f8844ad00404fe052 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=d4b8d1a181c4bde6606b005f8844ad00404fe052
++grep:3> case d4b8d1a181c4bde6606b005f8844ad00404fe052 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx d4b8d1a181c4bde6606b005f8844ad00404fe052 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER d4b8d1a181c4bde6606b005f8844ad00404fe052'
+IN-MASTER d4b8d1a181c4bde6606b005f8844ad00404fe052
++zsh:15> read oid
++zsh:15> grep -qx 78b5852d01724ca6b250a606db887b3a5ea8a1cb /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=78b5852d01724ca6b250a606db887b3a5ea8a1cb
++grep:3> case 78b5852d01724ca6b250a606db887b3a5ea8a1cb (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 78b5852d01724ca6b250a606db887b3a5ea8a1cb /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 78b5852d01724ca6b250a606db887b3a5ea8a1cb'
+IN-MASTER 78b5852d01724ca6b250a606db887b3a5ea8a1cb
++zsh:15> read oid
++zsh:15> grep -qx efe5d174c6bb57cf4623a8f34aef9381cb0cdaea /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++grep:3> case efe5d174c6bb57cf4623a8f34aef9381cb0cdaea (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx efe5d174c6bb57cf4623a8f34aef9381cb0cdaea /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER efe5d174c6bb57cf4623a8f34aef9381cb0cdaea'
+IN-MASTER efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++zsh:15> read oid
++zsh:15> grep -qx 7b85ab623a5c06a51b6c75b70577e12e36e9e229 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=7b85ab623a5c06a51b6c75b70577e12e36e9e229
++grep:3> case 7b85ab623a5c06a51b6c75b70577e12e36e9e229 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 7b85ab623a5c06a51b6c75b70577e12e36e9e229 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 7b85ab623a5c06a51b6c75b70577e12e36e9e229'
+IN-MASTER 7b85ab623a5c06a51b6c75b70577e12e36e9e229
++zsh:15> read oid
++zsh:15> grep -qx c185c7c1e6f860fc3667fcc71672891ba5e44222 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=c185c7c1e6f860fc3667fcc71672891ba5e44222
++grep:3> case c185c7c1e6f860fc3667fcc71672891ba5e44222 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx c185c7c1e6f860fc3667fcc71672891ba5e44222 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER c185c7c1e6f860fc3667fcc71672891ba5e44222'
+IN-MASTER c185c7c1e6f860fc3667fcc71672891ba5e44222
++zsh:15> read oid
++zsh:15> grep -qx 5659240f0db734ab9a5a50c8440598a0881e4113 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=5659240f0db734ab9a5a50c8440598a0881e4113
++grep:3> case 5659240f0db734ab9a5a50c8440598a0881e4113 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 5659240f0db734ab9a5a50c8440598a0881e4113 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 5659240f0db734ab9a5a50c8440598a0881e4113'
+IN-MASTER 5659240f0db734ab9a5a50c8440598a0881e4113
++zsh:15> read oid
++zsh:15> grep -qx 930c046698e2eb20ccc31b392297c06d150e8b49 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=930c046698e2eb20ccc31b392297c06d150e8b49
++grep:3> case 930c046698e2eb20ccc31b392297c06d150e8b49 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 930c046698e2eb20ccc31b392297c06d150e8b49 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 930c046698e2eb20ccc31b392297c06d150e8b49'
+IN-MASTER 930c046698e2eb20ccc31b392297c06d150e8b49
++zsh:15> read oid
++zsh:15> grep -qx 2bca64d75c4402e81ad9321114fb89303eccce0d /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=2bca64d75c4402e81ad9321114fb89303eccce0d
++grep:3> case 2bca64d75c4402e81ad9321114fb89303eccce0d (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 2bca64d75c4402e81ad9321114fb89303eccce0d /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 2bca64d75c4402e81ad9321114fb89303eccce0d'
+IN-MASTER 2bca64d75c4402e81ad9321114fb89303eccce0d
++zsh:15> read oid
++zsh:15> grep -qx 0152147f6e39c9efc982cdab63dc1aed24070a13 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=0152147f6e39c9efc982cdab63dc1aed24070a13
++grep:3> case 0152147f6e39c9efc982cdab63dc1aed24070a13 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 0152147f6e39c9efc982cdab63dc1aed24070a13 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 0152147f6e39c9efc982cdab63dc1aed24070a13'
+IN-MASTER 0152147f6e39c9efc982cdab63dc1aed24070a13
++zsh:15> read oid
++zsh:15> grep -qx a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
++grep:3> case a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee'
+IN-MASTER a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
++zsh:15> read oid
++zsh:15> grep -qx 1fd560759e7edd3fefed571f9fa7a46a0fb6d918 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=1fd560759e7edd3fefed571f9fa7a46a0fb6d918
++grep:3> case 1fd560759e7edd3fefed571f9fa7a46a0fb6d918 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 1fd560759e7edd3fefed571f9fa7a46a0fb6d918 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 1fd560759e7edd3fefed571f9fa7a46a0fb6d918'
+IN-MASTER 1fd560759e7edd3fefed571f9fa7a46a0fb6d918
++zsh:15> read oid
++zsh:15> grep -qx 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++grep:3> case 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4'
+IN-MASTER 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++zsh:15> read oid
++zsh:15> grep -qx 7f321ea867737a3567b81277f15a8676b5e8be5a /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=7f321ea867737a3567b81277f15a8676b5e8be5a
++grep:3> case 7f321ea867737a3567b81277f15a8676b5e8be5a (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 7f321ea867737a3567b81277f15a8676b5e8be5a /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 7f321ea867737a3567b81277f15a8676b5e8be5a'
+IN-MASTER 7f321ea867737a3567b81277f15a8676b5e8be5a
++zsh:15> read oid
++zsh:15> grep -qx 4b30d1aea58a149191060f638232657e71d73579 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=4b30d1aea58a149191060f638232657e71d73579
++grep:3> case 4b30d1aea58a149191060f638232657e71d73579 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 4b30d1aea58a149191060f638232657e71d73579 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 4b30d1aea58a149191060f638232657e71d73579'
+IN-MASTER 4b30d1aea58a149191060f638232657e71d73579
++zsh:15> read oid
++zsh:15> grep -qx 97ed6fbc72985919cc125d830722786b81734c6e /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=97ed6fbc72985919cc125d830722786b81734c6e
++grep:3> case 97ed6fbc72985919cc125d830722786b81734c6e (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 97ed6fbc72985919cc125d830722786b81734c6e /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 97ed6fbc72985919cc125d830722786b81734c6e'
+IN-MASTER 97ed6fbc72985919cc125d830722786b81734c6e
++zsh:15> read oid
++zsh:15> grep -qx bf96d70d119a83ddc974b558b8c697140a541530 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=bf96d70d119a83ddc974b558b8c697140a541530
++grep:3> case bf96d70d119a83ddc974b558b8c697140a541530 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx bf96d70d119a83ddc974b558b8c697140a541530 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER bf96d70d119a83ddc974b558b8c697140a541530'
+IN-MASTER bf96d70d119a83ddc974b558b8c697140a541530
++zsh:15> read oid
++zsh:15> grep -qx b7713e4bf1c785374e3db01b90e8edccc900fa3d /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=b7713e4bf1c785374e3db01b90e8edccc900fa3d
++grep:3> case b7713e4bf1c785374e3db01b90e8edccc900fa3d (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx b7713e4bf1c785374e3db01b90e8edccc900fa3d /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER b7713e4bf1c785374e3db01b90e8edccc900fa3d'
+IN-MASTER b7713e4bf1c785374e3db01b90e8edccc900fa3d
++zsh:15> read oid
++zsh:15> grep -qx c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++grep:3> case c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9'
+IN-MASTER c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++zsh:15> read oid
++zsh:15> grep -qx 79a5e391db6fe3736632efc17e22c1fe98cef828 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=79a5e391db6fe3736632efc17e22c1fe98cef828
++grep:3> case 79a5e391db6fe3736632efc17e22c1fe98cef828 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 79a5e391db6fe3736632efc17e22c1fe98cef828 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 79a5e391db6fe3736632efc17e22c1fe98cef828'
+IN-MASTER 79a5e391db6fe3736632efc17e22c1fe98cef828
++zsh:15> read oid
++zsh:15> grep -qx 784ea063a1c3655cf9bbfa0abf431ea461256814 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=784ea063a1c3655cf9bbfa0abf431ea461256814
++grep:3> case 784ea063a1c3655cf9bbfa0abf431ea461256814 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 784ea063a1c3655cf9bbfa0abf431ea461256814 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 784ea063a1c3655cf9bbfa0abf431ea461256814'
+IN-MASTER 784ea063a1c3655cf9bbfa0abf431ea461256814
++zsh:15> read oid
++zsh:15> grep -qx 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
++grep:3> case 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41'
+IN-MASTER 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
++zsh:15> read oid
++zsh:15> grep -qx 69fe688cabc997528e1f376296d3f931c8e6d60b /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=69fe688cabc997528e1f376296d3f931c8e6d60b
++grep:3> case 69fe688cabc997528e1f376296d3f931c8e6d60b (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 69fe688cabc997528e1f376296d3f931c8e6d60b /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 69fe688cabc997528e1f376296d3f931c8e6d60b'
+IN-MASTER 69fe688cabc997528e1f376296d3f931c8e6d60b
++zsh:15> read oid
++zsh:15> grep -qx 4b11a5c3186af53eb450ff8235b6c54958cacee3 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=4b11a5c3186af53eb450ff8235b6c54958cacee3
++grep:3> case 4b11a5c3186af53eb450ff8235b6c54958cacee3 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx 4b11a5c3186af53eb450ff8235b6c54958cacee3 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER 4b11a5c3186af53eb450ff8235b6c54958cacee3'
+IN-MASTER 4b11a5c3186af53eb450ff8235b6c54958cacee3
++zsh:15> read oid
++zsh:15> grep -qx cb11c1444ec3aff6d4d4bf9975408e4da6363693 /tmp/r6ac1-rv-master-objects.txt
++grep:1> local _zcode_grep_arg
++grep:2> _zcode_grep_arg=-qx
++grep:3> case -qx (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=cb11c1444ec3aff6d4d4bf9975408e4da6363693
++grep:3> case cb11c1444ec3aff6d4d4bf9975408e4da6363693 (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:2> _zcode_grep_arg=/tmp/r6ac1-rv-master-objects.txt
++grep:3> case /tmp/r6ac1-rv-master-objects.txt (-*-filter* | -*-pager* | -*-view* | -*-format-open* | -*-config* | ---* | -@* | -*-save-config* | -[Zz]* | -[!-]*[Zz]* | --null | --null-data)
++grep:5> command -v /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep
++grep:6> /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/tools/ugrep/ugrep -G --ignore-files --hidden -I '--exclude-dir=.git' '--exclude-dir=.svn' '--exclude-dir=.hg' '--exclude-dir=.bzr' '--exclude-dir=.jj' '--exclude-dir=.sl' -qx cb11c1444ec3aff6d4d4bf9975408e4da6363693 /tmp/r6ac1-rv-master-objects.txt
++zsh:15> echo 'IN-MASTER cb11c1444ec3aff6d4d4bf9975408e4da6363693'
+IN-MASTER cb11c1444ec3aff6d4d4bf9975408e4da6363693
++zsh:15> read oid

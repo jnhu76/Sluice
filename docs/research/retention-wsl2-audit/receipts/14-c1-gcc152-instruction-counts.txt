@@ -1,0 +1,18 @@
+# Whole-function instruction counts, GCC 15.2.0 -O3 -DNDEBUG x86_64, no sanitizers
+# (objdump -d --no-show-raw-insn; .comment verified GCC 15.2.0; xmake config: --toolchain=gcc -m release --liburing=n --sanitizers=)
+# E5 ledger (research/600-direct-excess-cost/DIRECT_MACHINE_COST_LEDGER.md) counts the
+# success/exact path only on E5 gcc 16.2.1 — different host, different counting convention;
+# the counts below are NOT comparable to it and transfer nothing semantic.
+read_at          111
+write_at         111
+read             101
+write            101
+sync_data        69
+file_info        105
+size             89
+resize           82
+sync_all         69
+read_exact_at    163
+write_all_at     178
+read_exact       148
+write_all        159

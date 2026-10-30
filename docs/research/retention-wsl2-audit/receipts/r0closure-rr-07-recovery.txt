@@ -1,0 +1,47 @@
+## r0closure-rr-07 recovery re-verification (re-review, 2026-10-30T00:08:43+08:00)
+
+### 1. remote branches containing tip
+$ git -C /tmp/dududu-audit branch -r --contains cc053cf9258b98546b16f9d2f08c5559fa73bc77
+  origin/HEAD -> origin/main
+  origin/main
+  origin/r1-request-geometry
+  origin/r5-async-host-probe
+  origin/sluice-r0-closure
+  origin/sluice-r0-e5-verdict
+exit=0
+
+### 2. strongest simulation of post-deletion state: fresh single-branch clone of main ONLY
+$ git clone --single-branch --branch main https://github.com/jnhu76/dududu.git /tmp/sluice-val-dududu-recovery-clone
+Cloning into '/tmp/sluice-val-dududu-recovery-clone'...
+clone-exit=0
+
+$ git -C /tmp/sluice-val-dududu-recovery-clone branch -a   (expected: only main/remotes/origin/main — no sluice-r0-closure)
+* main
+  remotes/origin/main
+exit=0
+
+### 3. is the recorded SHA recoverable from that main-only clone?
+$ git -C /tmp/sluice-val-dududu-recovery-clone cat-file -t cc053cf9258b98546b16f9d2f08c5559fa73bc77
+commit
+cat-file-exit=0
+
+$ git -C /tmp/sluice-val-dududu-recovery-clone log -1 --format='%H %ci %an %s' cc053cf9258b98546b16f9d2f08c5559fa73bc77
+cc053cf9258b98546b16f9d2f08c5559fa73bc77 2026-10-29 08:15:25 +0800 jnhu bench(duckdb): record dataset and oracle prep receipts
+exit=0
+
+$ git -C /tmp/sluice-val-dududu-recovery-clone merge-base --is-ancestor cc053cf9258b98546b16f9d2f08c5559fa73bc77 main && echo TIP-IN-MAIN-HISTORY
+TIP-IN-MAIN-HISTORY
+
+### 4. full 7-file content recovery from the main-only clone (spot: one blob per dir)
+$ git -C /tmp/sluice-val-dududu-recovery-clone rev-parse main:benchmarks/duckdb-r0/results/prep-record.md main:benchmarks/fio-r0/README.md
+19ffa28cde9cb53ec719ba28247318c9cd2e185c
+4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a
+exit=0
+(must equal 19ffa28cde9cb53ec719ba28247318c9cd2e185c / 4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a from r0closure-rr-03)
+
+### 5. bare-SHA fetch while branch still exists (original r0closure-08, re-run)
+$ git -C /tmp/dududu-audit fetch origin cc053cf9258b98546b16f9d2f08c5559fa73bc77
+From https://github.com/jnhu76/dududu
+ * branch            cc053cf9258b98546b16f9d2f08c5559fa73bc77 -> FETCH_HEAD
+fetch-exit=0
+NOTE: after branch deletion GitHub gives no guarantee for bare-SHA fetch; the binding recovery path is (2)-(4): tip is in main history, any fetch of main restores all objects and content.

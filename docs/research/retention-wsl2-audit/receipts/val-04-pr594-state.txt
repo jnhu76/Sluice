@@ -1,0 +1,1 @@
+{"baseRefName":"master","headRefName":"research/593-key-path","mergedAt":null,"number":594,"state":"OPEN","title":"research(593): E5 native key-path discovery \u0026 mechanism-elision campaign"}

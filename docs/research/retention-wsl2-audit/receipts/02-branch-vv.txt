@@ -1,0 +1,2 @@
+$ git -C /home/hoo/Projects/Sluice branch -vv
+* master 84e1b7d5 [origin/master] perf(direct): P2C1 read compositions run prevalidated register-resident steps (#608) (#612)

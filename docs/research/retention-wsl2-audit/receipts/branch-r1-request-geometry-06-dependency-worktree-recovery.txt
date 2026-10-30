@@ -1,0 +1,44 @@
+# branch r1-request-geometry (dududu) — active dependency, worktree, dirty, recovery
+# date: 2026-10-29T23:19:23+08:00
+
+## Active dependency
+$ git -C /tmp/dududu-audit ls-remote origin "refs/pull/8/head"
+47cd1976701a2c9e73fc31470f45aec236a3e0b2	refs/pull/8/head
+(PR #8 jnhu76/dududu: state OPEN per audit-input PR list; headSha matches 47cd1976…)
+
+$ grep -rn "r1-request-geometry" in dududu working tree (tracked files only):
+(no reference outside the branch's own study docs)
+
+$ dududu CI: .github/workflows/repo-policy.yml — branch-name pins:
+(no branch-name pin)
+
+$ grep -rn "r1-request-geometry" /home/hoo/Projects/Sluice (excluding audit dir):
+(no reference)
+
+## Worktree checkout / dirty
+$ git -C /tmp/dududu-audit worktree list
+/tmp/dududu-audit 12a8712 [main]
+
+$ git -C /tmp/dududu-audit branch -a (local heads — is the branch checked out anywhere here?)
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+  remotes/origin/r1-request-geometry
+  remotes/origin/r5-async-host-probe
+  remotes/origin/sluice-r0-closure
+  remotes/origin/sluice-r0-e5-verdict
+
+$ ls /home/hoo/Projects (any other local dududu working copy?)
+Sluice
+blog
+comment-bench
+hashjoin-lab
+language-os
+markit
+markit-workload.zip
+
+## Recovery
+$ git -C /tmp/dududu-audit ls-remote origin refs/heads/r1-request-geometry refs/pull/8/head
+47cd1976701a2c9e73fc31470f45aec236a3e0b2	refs/heads/r1-request-geometry
+47cd1976701a2c9e73fc31470f45aec236a3e0b2	refs/pull/8/head
+restore commands (NOT run): git -C /tmp/dududu-audit fetch origin r1-request-geometry && git -C /tmp/dududu-audit branch r1-request-geometry FETCH_HEAD

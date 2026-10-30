@@ -1,0 +1,17 @@
+$ git -C /home/hoo/Projects/Sluice branch -a --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a
+  remotes/origin/research/r6-ac1-vectored-semantics
+
+$ git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/research/r6-ac1-vectored-semantics
+1
+
+$ git -C /home/hoo/Projects/Sluice log --oneline origin/master..origin/research/r6-ac1-vectored-semantics
+999b5305 research(ac1): E5 semantic closure for positional vectored I/O (#605)
+
+$ git -C /home/hoo/Projects/Sluice merge-base origin/master origin/research/r6-ac1-vectored-semantics
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+
+$ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice      84e1b7d5 [master]
+/tmp/sluice-val-c1-plat        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention 2714aa65 (detached HEAD)
+/tmp/sluice-val-p2c1           84e1b7d5 (detached HEAD)

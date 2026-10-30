@@ -1,0 +1,60 @@
+# Receipt 06 — E5 raw evidence accessibility re-check (E5 evidence-preservation planner)
+# Date (UTC): 2026-10-29
+# Host: WSL2 (linux 6.18.54.1-microsoft-standard-WSL2 x86_64), local Sluice worktree
+#        /home/hoo/Projects/Sluice @ master 84e1b7d5
+# All commands read-only. Nothing was modified, moved or deleted.
+
+$ date -u
+Fri Oct 31 05:12:xx UTC 2026  (session clock; exact stamp in shell transcript)
+
+$ whoami; id
+hoo
+uid=1000(hoo) gid=1000(hoo) groups=1000(hoo),4(adm),24(cdrom),27(sudo),30(dip),46(plugdev),100(users),1001(docker)
+
+$ ls -la /home/jnhu/sluice-593-research/evidence
+ls: cannot access '/home/jnhu/sluice-593-research/evidence': No such file or directory
+
+$ ls -la /home/jnhu/sluice-593-research
+ls: cannot access '/home/jnhu/sluice-593-research': No such file or directory
+
+$ ls -la /home/jnhu/
+ls: cannot access '/home/jnhu/': No such file or directory
+
+$ ls -la /home/
+total 12
+drwxr-xr-x  3 root root 4096 May 16 21:27 .
+drwxr-xr-x 31 root root 4096 Oct 29 21:29 ..
+drwxr-x--- 63 hoo  hoo  4096 Oct 29 21:30 hoo
+
+$ ls /mnt/
+c  d  e  wsl  wslg
+
+$ find /home/hoo -maxdepth 4 -type d -name 'sluice-593*'
+(no output)
+
+$ find /mnt -maxdepth 3 -type d -iname '*sluice-593*'
+(no output)
+
+# Conclusion: the E5 raw evidence directory /home/jnhu/sluice-593-research/evidence
+# is NOT accessible from this WSL2 host. /home/jnhu does not exist at all; the only
+# home directory is /home/hoo. Re-check confirms the pre-check result (false).
+# Status recorded for this audit round: E5_RAW_ARCHIVE_PENDING.
+
+# --- Independent read-only re-check of the #594 preservation surface ---
+
+$ git rev-parse origin/research/593-key-path
+2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+
+$ git log --oneline -3 origin/research/593-key-path
+2714aa65 research(593): anchor final block to PR #594
+7bf55a87 research(key-path): archive #593 E5 critical-path campaign
+bdfd0d8d research(uring): archive #580 evidence — NO_TRIGGER_NO_CHANGE (#592)
+
+$ gh pr view 594 --repo jnhu76/Sluice --json number,state,headRefName,headRefOid,title
+{"headRefName":"research/593-key-path","headRefOid":"2714aa65fe4837d30f5fa3fcdb27db38c23b7136","number":594,"state":"OPEN","title":"research(593): E5 native key-path discovery & mechanism-elision campaign"}
+
+$ git grep -n -iE "disk-fixture|fallocate|mkfs\.btrfs|truncate -s" origin/research/593-key-path -- 'bench/research/key-path-593' 'docs/research/key-path-593'
+origin/research/593-key-path:docs/research/key-path-593/evidence-index.md:45:| `baseline/disk-fixture/` | 10 | 1,353,326,592 | 64 MiB fixtures on btrfs (data, not results) |
+origin/research/593-key-path:docs/research/key-path-593/evidence-index.md:68:Large non-result artifacts are called out: `baseline/disk-fixture` (1.35 GB of
+origin/research/593-key-path:docs/research/key-path-593/evidence-index.md:205:  - Two large categories are inputs, not results: `baseline/disk-fixture`
+(no fixture-generator script is committed on the branch)

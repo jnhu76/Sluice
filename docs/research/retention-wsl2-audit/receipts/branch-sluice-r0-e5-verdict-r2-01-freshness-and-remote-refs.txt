@@ -1,0 +1,12 @@
+# receipt r2-01: freshness & remote refs (recheck of branch-sluice-r0-e5-verdict)
+# date: 2026-10-30 ; repo: /tmp/dududu-audit (origin=https://github.com/jnhu76/dududu.git)
+$ git -C /tmp/dududu-audit ls-remote origin refs/heads/sluice-r0-e5-verdict refs/heads/main refs/pull/7/head
+12a8712eb5ff5f48e570b49b1e01ad5821837dca	refs/heads/main
+cc321a4994ee638493fecda0c437481528f5cea9	refs/heads/sluice-r0-e5-verdict
+cc321a4994ee638493fecda0c437481528f5cea9	refs/pull/7/head
+$ git -C /tmp/dududu-audit rev-parse origin/sluice-r0-e5-verdict origin/main origin/HEAD
+cc321a4994ee638493fecda0c437481528f5cea9
+12a8712eb5ff5f48e570b49b1e01ad5821837dca
+12a8712eb5ff5f48e570b49b1e01ad5821837dca
+$ git -C /tmp/dududu-audit status --porcelain | wc -l
+0

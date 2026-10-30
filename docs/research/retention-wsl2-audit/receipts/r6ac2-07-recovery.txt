@@ -1,0 +1,10 @@
+# cmd: git show -s --format='%h %ci %s' of fork/base/tip/master
+bdfd0d8d 2026-10-25 20:55:08 +0800 research(uring): archive #580 evidence — NO_TRIGGER_NO_CHANGE (#592)
+999b5305 2026-10-29 08:02:26 +0800 research(ac1): E5 semantic closure for positional vectored I/O (#605)
+ac995641 2026-10-29 13:30:53 +0800 research(direct-beyond-parity): archive #603 P0-P6 evidence with sha256 manifest (#610)
+84e1b7d5 2026-10-29 19:41:19 +0800 perf(direct): P2C1 read compositions run prevalidated register-resident steps (#608) (#612)
+# recovery: remote refs at exact SHA (see r6ac2-01): refs/heads/research/r6-ac1-vectored-semantics and refs/pull/611/head both = 999b5305ae7d413a2a71acde926f8c6cfef6876a
+# recovery plan (NOT executed):
+#   pre-deletion:  git fetch origin research/r6-ac1-vectored-semantics
+#   post-deletion: git fetch origin refs/pull/611/head && git branch research/r6-ac1-vectored-semantics FETCH_HEAD
+# provenance also recorded on master: closure/r9-archive-increment.md:96 (branch name + commit 999b5305 + PR #611)

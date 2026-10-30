@@ -1,0 +1,77 @@
++ R=/home/hoo/Projects/Sluice
++ T=/tmp/sluice-val-r6ac3-recovery
+++ git -C /home/hoo/Projects/Sluice remote get-url origin
++ URL=git@github.com:jnhu76/Sluice.git
+++ date -Is
++ echo '=== r6ac3-06 recovery / SHA fetchability (2026-10-30T00:16:02+08:00) ==='
+=== r6ac3-06 recovery / SHA fetchability (2026-10-30T00:16:02+08:00) ===
++ echo '# main repo origin url: git@github.com:jnhu76/Sluice.git (read only; no fetch into main repo)'
+# main repo origin url: git@github.com:jnhu76/Sluice.git (read only; no fetch into main repo)
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head'
+# cmd: git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head
++ git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head
+999b5305ae7d413a2a71acde926f8c6cfef6876a	refs/heads/research/r6-ac1-vectored-semantics
+999b5305ae7d413a2a71acde926f8c6cfef6876a	refs/pull/611/head
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a (local object present)'
+# cmd: git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a (local object present)
++ git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
+commit
++ echo
+
++ echo '# end-to-end fetch proof in throwaway repo (non-destructive; writes only under /tmp/sluice-val-r6ac3-recovery)'
+# end-to-end fetch proof in throwaway repo (non-destructive; writes only under /tmp/sluice-val-r6ac3-recovery)
++ rm -rf /tmp/sluice-val-r6ac3-recovery
++ git init -q /tmp/sluice-val-r6ac3-recovery
++ git -C /tmp/sluice-val-r6ac3-recovery remote add origin git@github.com:jnhu76/Sluice.git
++ echo '# cmd: git -C /tmp/sluice-val-r6ac3-recovery fetch --depth=1 origin refs/pull/611/head'
+# cmd: git -C /tmp/sluice-val-r6ac3-recovery fetch --depth=1 origin refs/pull/611/head
++ git -C /tmp/sluice-val-r6ac3-recovery fetch --depth=1 origin refs/pull/611/head
+From github.com:jnhu76/Sluice
+ * branch            refs/pull/611/head -> FETCH_HEAD
++ echo '# cmd: git -C /tmp/sluice-val-r6ac3-recovery rev-parse FETCH_HEAD'
+# cmd: git -C /tmp/sluice-val-r6ac3-recovery rev-parse FETCH_HEAD
++ git -C /tmp/sluice-val-r6ac3-recovery rev-parse FETCH_HEAD
+999b5305ae7d413a2a71acde926f8c6cfef6876a
++ echo '# cmd: git -C /tmp/sluice-val-r6ac3-recovery cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a'
+# cmd: git -C /tmp/sluice-val-r6ac3-recovery cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ git -C /tmp/sluice-val-r6ac3-recovery cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
+commit
++ echo '# cmd: git -C /tmp/sluice-val-r6ac3-recovery log -1 --format='\''%H %s'\'' FETCH_HEAD'
+# cmd: git -C /tmp/sluice-val-r6ac3-recovery log -1 --format='%H %s' FETCH_HEAD
++ git -C /tmp/sluice-val-r6ac3-recovery log -1 '--format=%H %s' FETCH_HEAD
+999b5305ae7d413a2a71acde926f8c6cfef6876a research(ac1): E5 semantic closure for positional vectored I/O (#605)
++ echo '# cmd: git -C /tmp/sluice-val-r6ac3-recovery ls-tree -r --name-only FETCH_HEAD | grep -c r6-ac1 (tip tree arrived with the archive subtree)'
+# cmd: git -C /tmp/sluice-val-r6ac3-recovery ls-tree -r --name-only FETCH_HEAD | grep -c r6-ac1 (tip tree arrived with the archive subtree)
++ git -C /tmp/sluice-val-r6ac3-recovery ls-tree -r --name-only FETCH_HEAD
++ grep -c r6-ac1
+34
++ echo
+
++ echo '# cmd: git -C /tmp/sluice-val-r6ac3-recovery fetch --depth=1 origin refs/heads/research/r6-ac1-vectored-semantics (branch ref also fetchable)'
+# cmd: git -C /tmp/sluice-val-r6ac3-recovery fetch --depth=1 origin refs/heads/research/r6-ac1-vectored-semantics (branch ref also fetchable)
++ git -C /tmp/sluice-val-r6ac3-recovery fetch --depth=1 origin refs/heads/research/r6-ac1-vectored-semantics
+From github.com:jnhu76/Sluice
+ * branch            research/r6-ac1-vectored-semantics -> FETCH_HEAD
+ * [new branch]      research/r6-ac1-vectored-semantics -> origin/research/r6-ac1-vectored-semantics
++ git -C /tmp/sluice-val-r6ac3-recovery rev-parse FETCH_HEAD
+999b5305ae7d413a2a71acde926f8c6cfef6876a
++ echo
+
++ echo '# recorded (NOT executed): post-deletion recovery command'
+# recorded (NOT executed): post-deletion recovery command
++ echo '  git fetch origin refs/pull/611/head && git branch research/r6-ac1-vectored-semantics FETCH_HEAD'
+  git fetch origin refs/pull/611/head && git branch research/r6-ac1-vectored-semantics FETCH_HEAD
++ echo '# provenance on master (branch name + commit + PR):'
+# provenance on master (branch name + commit + PR):
++ git -C /home/hoo/Projects/Sluice show origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md
++ sed -n 92,97p
+  `bdfd0d8d…`); Research PR: https://github.com/jnhu76/Sluice/pull/610
+  (OPEN, not merged) — updated in place by this increment.
+- Cross-reference: `closure/r6-ac1*` is additionally carried by the AC-1
+  design PR https://github.com/jnhu76/Sluice/pull/611 (branch
+  `research/r6-ac1-vectored-semantics`, commit `999b5305`, OPEN); the two
+  research branches intentionally overlap on that subtree. `DUCKDB_FIO_R0_PREREG.md`

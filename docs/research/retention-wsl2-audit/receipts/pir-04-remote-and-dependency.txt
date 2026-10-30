@@ -1,0 +1,31 @@
+# receipt: remote state, worktrees, scripts/CI references, running processes
+
+$ git config remote.origin.url
+git@github.com:jnhu76/Sluice.git
+
+$ git ls-remote origin refs/heads/research/product-integration-records "refs/heads/backup/*"
+e4bb8833699d0ca5dee191883f3fec6d41b221b2	refs/heads/backup/pr-601-original-head-e4bb8833
+70d48f5eb55a664544b5160cd4675d32150bb21e	refs/heads/backup/pr-612-original-head-70d48f5e
+4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35	refs/heads/research/product-integration-records
+
+$ git worktree list
+/home/hoo/Projects/Sluice      84e1b7d5 [master]
+/tmp/sluice-val-c1-plat        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention 2714aa65 (detached HEAD)
+/tmp/sluice-val-p2c1           84e1b7d5 (detached HEAD)
+
+$ git grep -n product-integration-records origin/master -- || echo NO_MATCH_ON_MASTER (covers tracked scripts/.github/CI on master)
+NO_MATCH_ON_MASTER
+
+$ grep -rln product-integration-records <worktree> --exclude-dir=.git (working tree incl. untracked audit docs)
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/pir-02-commit-reachability.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/sluice-master-02-remotes.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/01-remote-refs.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/pir-01-head-and-refs.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/sluice-master-retention-value.md
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/REPOSITORY_REF_SNAPSHOT.md
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/receipts/r6ac1-06-tip-vs-tip.txt
+/home/hoo/Projects/Sluice/docs/research/retention-wsl2-audit/state-freeze-report.md
+
+$ ps aux | grep -i product-integration | grep -v grep
+NO_PROCESS

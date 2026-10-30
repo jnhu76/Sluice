@@ -1,0 +1,26 @@
+# receipts/17-top-edge-einval-platform.txt
+date: 2026-10-29T23:13:21+08:00
+kernel: 6.18.54.1-microsoft-standard-WSL2
+
+## probe_thresh2.c output (pread on tmpfs, count/offset matrix):
+max-8, cnt 8                           off=0x7ffffffffffffff8 cnt= 8 n=-1 EINVAL
+max-8, cnt 4                           off=0x7ffffffffffffff8 cnt= 4 n= 0
+max-8, cnt 1                           off=0x7ffffffffffffff8 cnt= 1 n= 0
+max-7, cnt 8                           off=0x7ffffffffffffff9 cnt= 8 n=-1 EINVAL
+max-4, cnt 4                           off=0x7ffffffffffffffc cnt= 4 n=-1 EINVAL
+max-3, cnt 4                           off=0x7ffffffffffffffd cnt= 4 n=-1 EINVAL
+max-3, cnt 3                           off=0x7ffffffffffffffd cnt= 3 n=-1 EINVAL
+max-2, cnt 2                           off=0x7ffffffffffffffe cnt= 2 n=-1 EINVAL
+max-1, cnt 1                           off=0x7fffffffffffffff cnt= 1 n=-1 EINVAL
+half, cnt 8                            off=0x4000000000000000 cnt= 8 n= 0
+16E-8, cnt 8                           off=0xe000000000000000 cnt= 8 n=-1 EINVAL
+
+## probe_dbg (tmpfs + ext4, read_exact_at at 0x7FFFFFFFFFFFFFF8 len 8):
+raw pread at 0x7FFFFFFFFFFFFFF8: n=-1 errno=22
+outcome: confirmed=0 end=3 accounted=1 err=22
+ext4 raw pread at boundary: n=-1 errno=22
+ext4 outcome: confirmed=0 end=3
+
+## rule inferred: kernel 6.18.54.1-microsoft-standard-WSL2 rejects pread with
+## EINVAL when (loff_t)pos < 0 or pos+count overflows signed off_t; provenance
+## of this check in mainline vs WSL2 patch: UNKNOWN (kernel source not inspected).

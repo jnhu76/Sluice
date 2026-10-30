@@ -1,0 +1,29 @@
+=== reval recovery 2026-10-29T16:04:28Z ===
+$ git ls-remote origin refs/heads/r5-async-host-probe  (recorded SHA still live on remote)
+4eafbc06d6a2e476055fe45fc75656e7e28a2183	refs/heads/r5-async-host-probe
+$ git rev-parse origin/r5-async-host-probe  (local remote-tracking matches)
+4eafbc06d6a2e476055fe45fc75656e7e28a2183
+$ git cat-file -t 4eafbc06d6a2e476055fe45fc75656e7e28a2183
+commit
+$ git cat-file -p 4eafbc06d6a2e476055fe45fc75656e7e28a2183 | head -6
+tree cbeef0b8cef2a15a3a57bc26ab8607dc5ecd5d12
+parent cc053cf9258b98546b16f9d2f08c5559fa73bc77
+author jnhu <me@hoooo.org> 1793234196 +0800
+committer jnhu <me@hoooo.org> 1793234196 +0800
+
+bench(duckdb): probe async host protocol boundary
+--- post-deletion reachability redundancy (tip contained in 3 other refs) ---
+contained in origin/main: YES
+contained in origin/r1-request-geometry: YES
+contained in origin/sluice-r0-e5-verdict: YES
+--- restore command preconditions verified; restore command itself NOT executed (would create refs; non-destructive discipline) ---
+documented restore: git fetch origin && git branch r5-async-host-probe 4eafbc06d6a2e476055fe45fc75656e7e28a2183
+documented restore: git push origin 4eafbc06d6a2e476055fe45fc75656e7e28a2183:refs/heads/r5-async-host-probe
+--- stray file characterization (not a checkout) ---
+$ file /tmp/r0e5-prereg-dududu.md; head -3 /tmp/r0e5-prereg-dududu.md
+/tmp/r0e5-prereg-dududu.md: Unicode text, UTF-8 text
+# DUCKDB_FIO_R0_PREREG — #578 R0 verdict and next-owner-gate preregistration
+
+Date: 2026-10-29. Scope: Sluice E5 closure workflow §8.5 (R5, issue
+$ git -C /tmp/dududu-audit stash list | wc -l
+0

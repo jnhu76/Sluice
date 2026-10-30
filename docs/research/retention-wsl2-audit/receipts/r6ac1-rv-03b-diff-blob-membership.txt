@@ -1,0 +1,14 @@
+The 8 DIFF paths from r6ac1-rv-03: branch blob tested for membership in the FULL origin/master reachable object set
+(master reachable set = every blob version reachable from master's whole history, /tmp/r6ac1-rv-master-objects.txt from receipt r6ac1-rv-02)
+
+IN-MASTER-HISTORY 7e97aad9b88d439795ba3540f7e9c94798019143 docs/roadmap/v2-conformance.md
+IN-MASTER-HISTORY 8f256df24aab0342fa8f87a4a49564e3007117e4 include/sluice/detail/file_semantics.hpp
+IN-MASTER-HISTORY 701f9414438b4d8bbadf7aa5b7a7fcf501b542b0 scripts/check_cpp_comment_authority.py
+IN-MASTER-HISTORY 8d2e453287a0d3d05b1a5f776889d0d7bc5946d8 scripts/test_check_cpp_comment_authority.py
+IN-MASTER-HISTORY b9c0def804dc027a62693267d9a7d6b924f0c351 src/blocking_file.cpp
+IN-MASTER-HISTORY a680eb8f507e82b35881cac91b40dfc69391c257 tests/direct_composition_fault_test.cpp
+IN-MASTER-HISTORY f47ca6c1214a33b46e671e08a130983b43797c44 tests/semantic_range_test.cpp
+IN-MASTER-HISTORY 70327072db016faa7df63d57ebf9856321282f3b xmake/tests.lua
+
+crosscheck: the 34 three-dot (merge-base) files all MATCH on master tip?
+three-dot files=34, matched-identical-on-master-tip=34

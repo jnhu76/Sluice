@@ -1,0 +1,6 @@
+# Implicit narrowing scan of src/blocking_file.cpp (C1 file), both audit compilers
+# gcc:  g++ -std=c++20 -m64 -I include -I src -c src/blocking_file.cpp -o /dev/null -Wall -Wextra -Wconversion -Wsign-conversion
+gcc-exit=0
+
+# clang: clang++ -std=c++20 -m64 -I include -I src -c src/blocking_file.cpp -o /dev/null -Wall -Wextra -Wconversion -Wsign-conversion
+clang-exit=0

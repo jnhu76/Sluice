@@ -1,0 +1,34 @@
+=== reval active dependency 2026-10-29T16:03:15Z ===
+$ git grep -n 'r5-async-host-probe' origin/main
+origin/main:benchmarks/duckdb-r0/async-host-probe/README.md:40:- dududu: branch `r5-async-host-probe` (based on `sluice-r0-closure`).
+origin/main:benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp:405:	probe.path = "/tmp/sluice-r5-async-host-probe.bin";
+origin/main:docs/DUCKDB_FIO_R0_PREREG.md:225:- Non-invasive probe [RUN], dududu branch `r5-async-host-probe` @ `4eafbc0`
+origin/main:docs/DUCKDB_FIO_R0_PREREG.md:300:| Async host admission + probe | `r5-async-host.md`, dududu branch `r5-async-host-probe` (`benchmarks/duckdb-r0/async-host-probe/`) |
+(hit count: 4)
+$ git grep -n 'r5-async-host-probe' origin/main -- .github || echo NO-HIT-IN-.github
+NO-HIT-IN-.github
+$ git grep -c '4eafbc0' origin/main -- docs/DUCKDB_FIO_R0_PREREG.md || true
+origin/main:docs/DUCKDB_FIO_R0_PREREG.md:225:- Non-invasive probe [RUN], dududu branch `r5-async-host-probe` @ `4eafbc0`
+$ git ls-tree -r --name-only origin/main .github
+.github/workflows/repo-policy.yml
+$ git worktree list
+/tmp/dududu-audit 12a8712 [main]
+$ git branch --list (local branches in audit clone)
+* main
+$ git status --porcelain | wc -l
+0
+$ ls /home/hoo/Projects/
+Sluice
+blog
+comment-bench
+hashjoin-lab
+language-os
+markit
+markit-workload.zip
+$ ls -d /tmp/*dududu* 2>/dev/null
+/tmp/dududu-audit
+/tmp/r0e5-prereg-dududu.md
+--- PR state via GitHub API ---
+$ gh pr list --repo jnhu76/dududu --state all --limit 50 --json number,state,headRefName,headRefOid
+[{"headRefName":"r1-request-geometry","headRefOid":"47cd1976701a2c9e73fc31470f45aec236a3e0b2","number":8,"state":"OPEN"},{"headRefName":"sluice-r0-e5-verdict","headRefOid":"cc321a4994ee638493fecda0c437481528f5cea9","number":7,"state":"MERGED"},{"headRefName":"r1-parquet-sluice-bench","headRefOid":"b07307ed545d6cdc815ea41df5f09c30e282a016","number":3,"state":"MERGED"},{"headRefName":"r0-1-repository-policy","headRefOid":"c4fe75f4257d0eef58523a3d6e0894f7f429dad6","number":2,"state":"MERGED"},{"headRefName":"r0-foundation","headRefOid":"59cffffc2221502409d795c0ea8fe63d931939fb","number":1,"state":"MERGED"}]
+$ gh pr list --repo jnhu76/dududu --head r5-async-host-probe --state all

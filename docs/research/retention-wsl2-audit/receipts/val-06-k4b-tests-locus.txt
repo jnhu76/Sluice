@@ -1,0 +1,21 @@
+# cmd: git grep -n 'k4_residue_wake_test|k4_retry_residue_wake_test' -- bench/research/key-path-593/patches/ (worktree at 2714aa65)
+# result: tests defined in k4b-final.diff (:391, :591), k4-defer-arm.patch (:46), k4-defer-observe.patch (:675), combo-k4b-k1ab.diff (:617, :817)
+# master check: git ls-tree --name-only origin/master tests/ | grep k4 => only uring_owed_residue_test.cpp
+
+123:diff --git a/tests/k2_e18_poison_eligibility_test.cpp b/tests/k2_e18_poison_eligibility_test.cpp
+391:diff --git a/tests/k4_residue_wake_test.cpp b/tests/k4_residue_wake_test.cpp
+395:+++ b/tests/k4_residue_wake_test.cpp
+585:+        std::printf("[k4_residue_wake_test] FAILED\n");
+588:+    std::printf("[k4_residue_wake_test] deferred submission wakes the parked owner\n");
+591:diff --git a/tests/k4_retry_residue_wake_test.cpp b/tests/k4_retry_residue_wake_test.cpp
+595:+++ b/tests/k4_retry_residue_wake_test.cpp
+818:+        std::printf("[k4_retry_residue_wake_test] FAILED\n");
+821:+    std::printf("[k4_retry_residue_wake_test] retryable flush residue wakes the parked owner\n");
+824:diff --git a/tests/uring_progress_race_test.cpp b/tests/uring_progress_race_test.cpp
+849:diff --git a/xmake/tests.lua b/xmake/tests.lua
+859:+    uring_progress_target("k4_residue_wake_test",
+860:+                              R .. "tests/k4_residue_wake_test.cpp")
+862:+                              R .. "tests/k4_residue_wake_test.cpp",
+864:+    uring_progress_target("k4_retry_residue_wake_test",
+865:+                              R .. "tests/k4_retry_residue_wake_test.cpp")
+867:+                              R .. "tests/k4_retry_residue_wake_test.cpp",

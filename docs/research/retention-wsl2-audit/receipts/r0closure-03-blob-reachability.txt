@@ -1,0 +1,7 @@
+# receipt r0closure-03: blob reachability (run 2026-10-29)
+$ git -C /tmp/dududu-audit merge-base --is-ancestor origin/sluice-r0-closure main && echo IS-ANCESTOR
+IS-ANCESTOR-OF-MAIN
+$ git -C /tmp/dududu-audit rev-list --objects origin/sluice-r0-closure ^main  (empty = zero unique objects)
+(end of object list)
+$ git -C /tmp/dududu-audit diff --name-only main...origin/sluice-r0-closure  (empty = zero changed files)
+(end of file list)

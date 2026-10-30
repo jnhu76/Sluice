@@ -1,0 +1,30 @@
+=== reval blob uniqueness 2026-10-29T16:02:36Z ===
+$ git rev-list --objects origin/r5-async-host-probe ^origin/main  (expect empty)
+unique-object line count: 0
+$ git rev-parse origin/r5-async-host-probe^{tree} origin/main^{tree}  (informational; main may have moved past tip)
+cbeef0b8cef2a15a3a57bc26ab8607dc5ecd5d12
+731e518af903fe49beb798d80d269eeaceb53794
+$ git diff --name-status origin/main...origin/r5-async-host-probe  (three-dot vs merge-base=tip; expect empty)
+(three-dot diff line count: 0)
+$ git diff --name-status b94041d918672d113ea0ca667ba8ccdabf329c80 origin/r5-async-host-probe  (branch segment changed files)
+A	benchmarks/duckdb-r0/README.md
+A	benchmarks/duckdb-r0/async-host-probe/README.md
+A	benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp
+A	benchmarks/duckdb-r0/oracle.sql
+A	benchmarks/duckdb-r0/results/prep-record.md
+A	benchmarks/fio-r0/README.md
+A	benchmarks/fio-r0/r0-randrw-4k.fio
+A	benchmarks/fio-r0/r0-read-4k.fio
+A	benchmarks/fio-r0/r0-seqread-1m.fio
+--- per-file blob SHA comparison: branch tip vs origin/main ---
+benchmarks/duckdb-r0/README.md MATCH blob=d5a6299566644deef80c608bbfbbcc82084a3e6f
+benchmarks/duckdb-r0/async-host-probe/README.md MATCH blob=5d5b8520380d402b3c2c236f00dd6dc6bdda18e6
+benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp MATCH blob=a6cdfc0f979e03fa2ae813f20ca4e2e72d9a3b84
+benchmarks/duckdb-r0/oracle.sql MATCH blob=34a8a95398a58ecf028b28989882a22d7fa49423
+benchmarks/duckdb-r0/results/prep-record.md MATCH blob=19ffa28cde9cb53ec719ba28247318c9cd2e185c
+benchmarks/fio-r0/README.md MATCH blob=4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a
+benchmarks/fio-r0/r0-randrw-4k.fio MATCH blob=3d1ca048973e1e62f1d3c7f0c84ace01f09ae172
+benchmarks/fio-r0/r0-read-4k.fio MATCH blob=4a3f2c07c586089c1f5b0424ae90a78ab0083707
+benchmarks/fio-r0/r0-seqread-1m.fio MATCH blob=8e1526b9008015074f6c7d99d5946a3da5673815
+--- extra: every non-A (M/D/R) changed file in segment, if any ---
+(non-A count: 0)

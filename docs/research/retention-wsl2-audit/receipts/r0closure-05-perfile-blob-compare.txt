@@ -1,0 +1,20 @@
+# receipt r0closure-05: per-file blob comparison, branch tip vs main (run 2026-10-29)
+# files added by the branch own commits bbce768..cc053cf9 (diff base b94041d)
+$ git -C /tmp/dududu-audit diff --stat b94041d..cc053cf9
+ benchmarks/duckdb-r0/README.md              | 126 ++++++++++++++++++++++++++++
+ benchmarks/duckdb-r0/oracle.sql             |  49 +++++++++++
+ benchmarks/duckdb-r0/results/prep-record.md |  69 +++++++++++++++
+ benchmarks/fio-r0/README.md                 | 103 +++++++++++++++++++++++
+ benchmarks/fio-r0/r0-randrw-4k.fio          |  24 ++++++
+ benchmarks/fio-r0/r0-read-4k.fio            |  40 +++++++++
+ benchmarks/fio-r0/r0-seqread-1m.fio         |  20 +++++
+ 7 files changed, 431 insertions(+)
+
+# loop: rev-parse <sha>:path vs main:path, SAME/DIFF
+SAME d5a6299566644deef80c608bbfbbcc82084a3e6f benchmarks/duckdb-r0/README.md
+SAME 34a8a95398a58ecf028b28989882a22d7fa49423 benchmarks/duckdb-r0/oracle.sql
+SAME 19ffa28cde9cb53ec719ba28247318c9cd2e185c benchmarks/duckdb-r0/results/prep-record.md
+SAME 4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a benchmarks/fio-r0/README.md
+SAME 3d1ca048973e1e62f1d3c7f0c84ace01f09ae172 benchmarks/fio-r0/r0-randrw-4k.fio
+SAME 4a3f2c07c586089c1f5b0424ae90a78ab0083707 benchmarks/fio-r0/r0-read-4k.fio
+SAME 8e1526b9008015074f6c7d99d5946a3da5673815 benchmarks/fio-r0/r0-seqread-1m.fio

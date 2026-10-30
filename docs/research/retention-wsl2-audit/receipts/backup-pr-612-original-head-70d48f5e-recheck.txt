@@ -1,0 +1,115 @@
+# Recheck receipt: backup/pr-612-original-head-70d48f5e (DELETE_CANDIDATE)
+Generated: 2026-10-30, session recheck of the 2026-10-29 original audit
+(receipts/backup-pr-612-original-head-70d48f5e.txt R1-R9).
+Scope: re-verify uniqueEvidence, activeDependency, recovery only. Read-only:
+no branch/worktree/ref deleted, no fetch run, no destructive git command.
+git status before/after recheck: only pre-existing untracked
+docs/research/retention-wsl2-audit/.
+
+## R1 tip + repo state
+$ git rev-parse --verify origin/backup/pr-612-original-head-70d48f5e^{commit}
+70d48f5eb55a664544b5160cd4675d32150bb21e
+$ git rev-parse origin/master
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+$ git status --porcelain
+?? docs/research/retention-wsl2-audit/
+$ git merge-base origin/master origin/backup/pr-612-original-head-70d48f5e
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+
+## R2 remote truth (network, read-only)
+$ git ls-remote --heads origin | grep -i backup
+e4bb8833699d0ca5dee191883f3fec6d41b221b2  refs/heads/backup/pr-601-original-head-e4bb8833
+70d48f5eb55a664544b5160cd4675d32150bb21e  refs/heads/backup/pr-612-original-head-70d48f5e
+$ git ls-remote origin 'refs/pull/*/head' | grep -c 70d48f5eb55a664544b5160cd4675d32150bb21e
+0                       (no pull ref head equals the backup tip)
+refs/pull/612/head = e4c9588ae8754ea44cf52194294103a7795aa1a0 (matches original audit)
+
+## R3 uniqueEvidence: object census
+$ git rev-list --count origin/master..origin/backup/pr-612-original-head-70d48f5e
+6
+$ git rev-list --objects origin/master..origin/backup/pr-612-original-head-70d48f5e | wc -l
+42
+$ ... | awk '{print $1}' | git cat-file --batch-check | awk '{print $2}' | sort | uniq -c
+     12 blob
+      6 commit
+     24 tree
+(matches original R4 exactly)
+
+## R4 uniqueEvidence: changed files + per-file blob compare
+$ git diff --name-only origin/master...origin/backup/pr-612-original-head-70d48f5e
+docs/roadmap/v2-conformance.md
+include/sluice/detail/file_semantics.hpp
+src/blocking_file.cpp
+tests/direct_composition_fault_test.cpp
+tests/semantic_range_test.cpp
+xmake/tests.lua
+Per-file: git rev-parse origin/master:<f> vs origin/backup/pr-612-original-head-70d48f5e:<f>
+SAME_BLOB docs/roadmap/v2-conformance.md            cfd8e7db017e710a43ed3daf484759d6a7753385
+SAME_BLOB include/sluice/detail/file_semantics.hpp  d009089703de400e7712b77f1748a5d42d3fb097
+SAME_BLOB src/blocking_file.cpp                     8a27525d045b9c206549e05876039e82dbcf8cae
+SAME_BLOB tests/direct_composition_fault_test.cpp  1945fc7985e399c8a8db8bfaeb1f4dcc35dd6ab8
+SAME_BLOB tests/semantic_range_test.cpp             0d3eb7e0151ee10c3864209e55fbc202730f81d1
+SAME_BLOB xmake/tests.lua                           c55e97be3a44cced8caecc29580a6c26ca9d918e
+6/6 SAME_BLOB, SHAs identical to original audit R4/R5.
+
+## R5 uniqueEvidence refinement: strict master-unreachable set
+Method: comm -23 of (objects of backup branch) minus (objects of origin/master),
+then typed via git cat-file --batch-check.
+Result: exactly
+  6 commits: 70d48f5e b12fb551 cc8ad2ab 42f5eef9 77e5399a 4c3e698d
+  8 trees
+  2 blobs:   6448f1a1a32977fad522d77b0896b3ad2f207242
+             eb9b35bee9ccd3bc472124dcb98fec426ec88ee3
+Blob->path mapping (git rev-list --objects | git cat-file --batch-check='%(objectname) %(objecttype) %(rest)'):
+all 12 range-listed blobs belong to the 6 PR files; per-commit per-file table
+(git rev-parse <commit>:<file>) shows src/blocking_file.cpp evolution
+6660a423(base) -> eb9b35be(42f5eef9) -> 6448f1a1(cc8ad2ab) -> 8a27525d(final, = master).
+So the only byte-unique content on the branch is 2 intermediate review versions
+of one merged file; no docs/scripts/receipts are unique to the branch.
+Note: the original audit's census wording "all 12 unique blobs" overstates
+unreachability (10 of the 12 range-listed blobs are reachable from
+origin/master); this refinement strengthens, not weakens, the case.
+
+## R6 activeDependency
+$ git branch -a --contains 70d48f5eb55a664544b5160cd4675d32150bb21e
+  remotes/origin/backup/pr-612-original-head-70d48f5e     (only container)
+$ git worktree list --porcelain
+15 worktrees: main repo at master 84e1b7d5 (branch refs/heads/master);
+14 detached worktrees at 84e1b7d5 (12), 77e5399a (1), 2714aa65 (1).
+No worktree checks out the backup branch.
+$ gh pr list --repo jnhu76/Sluice --state open --json number,headRefName,headRefOid
+[{"headRefName":"research/593-key-path","headRefOid":"2714aa65fe4837d30f5fa3fcdb27db38c23b7136","number":594}]
+Only open PR is #594; no open PR headRef matches the backup branch.
+$ grep -rln --binary-files=without-match --exclude-dir=.git 'backup/pr-612-original-head-70d48f5e' /home/hoo/Projects/Sluice
+12 hits, all inside docs/research/retention-wsl2-audit/ (audit docs + receipts).
+Project .zcode and ~/.zcode workflow dirs contain no reference (grep = no hits);
+the .zcode tooling references named in the original audit no longer exist.
+
+## R7 recovery
+Recovery channel alive today: git ls-remote origin backup/pr-612-original-head-70d48f5e
+= 70d48f5eb55a664544b5160cd4675d32150bb21e (R2), so
+'git fetch origin backup/pr-612-original-head-70d48f5e' recovers the chain.
+Full SHA + chain composition archived on origin/master (git show greps):
+research/direct-beyond-parity/EVIDENCE_MANIFEST.json:247,555  source_sha = 70d48f5eb55a66...
+research/direct-beyond-parity/WSL2_VALIDATION_HANDOFF.md:11-29 (chain 42f5eef9 -> cc8ad2ab ->
+  b12fb551 -> 70d48f5e over base 77e5399a; dududu cherry-pick origin d79244b0/31d18b6a at :11)
+research/direct-beyond-parity/closure/perf-p2c1/SUMMARY.md:10,13,25,161 (candidate SHA + worktree
+  recreation command)
+research/direct-beyond-parity/closure/r4-p2c1.md:15,70-71 (commit sequence)
+Residual re-verified: 70d48f5e is NOT an ancestor of refs/pull/612/head
+($ git merge-base --is-ancestor 70d48f5e e4c9588; echo $?  -> 1), and no pull
+ref head equals it (R2). If the remote branch is deleted there is no
+PR-ref recovery channel for the 4 original P2C1 commits — same residual the
+pr-601 sibling audit accepted. Final file content is not at risk regardless:
+$ git diff --stat 70d48f5e 64508282 -- <6 PR files>  -> empty
+$ git diff --stat 70d48f5e e4c9588 -- <6 PR files>   -> empty
+(64508282/e4c9588 commit objects present in local odb as unreachable leftovers
+of the original audit's fetch; no new fetch was performed in this recheck.)
+
+## Verdict
+uniqueEvidence: HOLDS (strict unique set is even smaller: 2 blobs).
+activeDependency: HOLDS (fresh gh + ls-remote + contains + worktree + grep).
+recovery: HOLDS (ls-remote exact-SHA + 4 master archive locations; residual as stated).
+Decision: DELETE_CANDIDATE maintained.
+Not run: any deletion, any fetch, any build, any dududu clone (branch is a
+jnhu76/Sluice ref; supplied dududu PR heads are different-repo refs).

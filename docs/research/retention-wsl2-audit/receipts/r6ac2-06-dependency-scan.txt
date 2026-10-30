@@ -1,0 +1,14 @@
+# cmd: gh pr list --repo jnhu76/Sluice --state open (live OPEN PR heads)
+594 research/593-key-path 2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+# cmd: gh pr view 611 --repo jnhu76/Sluice
+{"baseRefName":"master","headRefName":"research/r6-ac1-vectored-semantics","headRefOid":"999b5305ae7d413a2a71acde926f8c6cfef6876a","number":611,"state":"CLOSED","title":"research(ac1): E5 semantic closure for positional vectored I/O (#605)","url":"https://github.com/jnhu76/Sluice/pull/611"}
+# cmd: gh issue view 605 --repo jnhu76/Sluice (#605 in commit subject is an issue)
+605 OPEN Design decision: positional vectored read/write (AC-1, M1 Case A) — Awaiting Owner
+# cmd: git grep -c vectored-semantics origin/master (branch-name consumers on master)
+origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md:1
+# cmd: working-tree grep excluding audit dir
+/home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r9-archive-increment.md
+# cmd: dududu origin/main grep for r6-ac1/r6ac1/vectored-semantics
+no dududu match
+# cmd: git branch --list 'sluice/*' (ask-label prefix has no such local branch)
+(empty = none)

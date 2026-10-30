@@ -1,0 +1,13 @@
+# receipts/12-asan-ubsan-wsl2.txt
+date: 2026-10-29T23:12:00+08:00; config: -m release --sanitizers=asan,ubsan (UBSan: -fno-sanitize-recover=all)
+
+== direct_composition_fault_test == exit=0
+all 15 direct composition fault-injection tests passed
+== semantic_short_io_reference_test == exit=0
+all 9 short-I/O reference tests passed (8 primitive cases)
+== blocking_file_read_test == exit=0
+all 6 blocking file read tests passed
+== blocking_file_sequential_test == exit=0
+all 13 blocking file sequential tests passed
+== blocking_file_state_test == exit=0
+all 14 blocking file state tests passed

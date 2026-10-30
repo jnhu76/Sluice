@@ -1,0 +1,415 @@
++ R=/home/hoo/Projects/Sluice
++ B=origin/research/r6-ac1-vectored-semantics
+++ date -Is
++ echo '=== r6ac3-03 per-file blob comparison (2026-10-30T00:12:10+08:00) ==='
+=== r6ac3-03 per-file blob comparison (2026-10-30T00:12:10+08:00) ===
++ echo '# cmd: git -C /home/hoo/Projects/Sluice diff --name-status origin/master...origin/research/r6-ac1-vectored-semantics  (three-dot vs merge-base: full set of branch-side changes)'
+# cmd: git -C /home/hoo/Projects/Sluice diff --name-status origin/master...origin/research/r6-ac1-vectored-semantics  (three-dot vs merge-base: full set of branch-side changes)
++ git -C /home/hoo/Projects/Sluice diff --name-status origin/master...origin/research/r6-ac1-vectored-semantics
++ tee /tmp/sluice-val-r6ac3/branch-paths.txt
+A	research/direct-beyond-parity/closure/r6-ac1.md
+A	research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
+A	research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
+A	research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
+A	research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+A	research/direct-beyond-parity/closure/r6-ac1/README.md
+A	research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
+A	research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
+A	research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
+A	research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
+A	research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt
+++ grep -c . /tmp/sluice-val-r6ac3/branch-paths.txt
++ echo '# path count: 34'
+# path count: 34
++ echo
+
++ echo '# cmd: per-path blob SHA compare: rev-parse origin/research/r6-ac1-vectored-semantics:<path> vs origin/master:<path>'
+# cmd: per-path blob SHA compare: rev-parse origin/research/r6-ac1-vectored-semantics:<path> vs origin/master:<path>
++ same=0
++ diff_=0
++ missing=0
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1.md
++ bs=a49e118cc0a041de2f3d1b483c382ea854295092
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1.md
++ ms=a49e118cc0a041de2f3d1b483c382ea854295092
++ '[' a49e118cc0a041de2f3d1b483c382ea854295092 = a49e118cc0a041de2f3d1b483c382ea854295092 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1.md  a49e118cc0a041de2f3d1b483c382ea854295092'
+SAME  research/direct-beyond-parity/closure/r6-ac1.md  a49e118cc0a041de2f3d1b483c382ea854295092
++ same=1
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
++ bs=e25e27705740347ff186d48ab7650913f7bd130d
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
++ ms=e25e27705740347ff186d48ab7650913f7bd130d
++ '[' e25e27705740347ff186d48ab7650913f7bd130d = e25e27705740347ff186d48ab7650913f7bd130d ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md  e25e27705740347ff186d48ab7650913f7bd130d'
+SAME  research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md  e25e27705740347ff186d48ab7650913f7bd130d
++ same=2
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
++ bs=afdcc871413c2bc94a7f155243cb72af4bef1c1c
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
++ ms=afdcc871413c2bc94a7f155243cb72af4bef1c1c
++ '[' afdcc871413c2bc94a7f155243cb72af4bef1c1c = afdcc871413c2bc94a7f155243cb72af4bef1c1c ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md  afdcc871413c2bc94a7f155243cb72af4bef1c1c'
+SAME  research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md  afdcc871413c2bc94a7f155243cb72af4bef1c1c
++ same=3
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
++ bs=1321b1a43dc3a47febf0a07d83704cea3f2cc93d
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
++ ms=1321b1a43dc3a47febf0a07d83704cea3f2cc93d
++ '[' 1321b1a43dc3a47febf0a07d83704cea3f2cc93d = 1321b1a43dc3a47febf0a07d83704cea3f2cc93d ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md  1321b1a43dc3a47febf0a07d83704cea3f2cc93d'
+SAME  research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md  1321b1a43dc3a47febf0a07d83704cea3f2cc93d
++ same=4
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
++ bs=d4b8d1a181c4bde6606b005f8844ad00404fe052
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
++ ms=d4b8d1a181c4bde6606b005f8844ad00404fe052
++ '[' d4b8d1a181c4bde6606b005f8844ad00404fe052 = d4b8d1a181c4bde6606b005f8844ad00404fe052 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md  d4b8d1a181c4bde6606b005f8844ad00404fe052'
+SAME  research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md  d4b8d1a181c4bde6606b005f8844ad00404fe052
++ same=5
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/README.md
++ bs=78b5852d01724ca6b250a606db887b3a5ea8a1cb
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/README.md
++ ms=78b5852d01724ca6b250a606db887b3a5ea8a1cb
++ '[' 78b5852d01724ca6b250a606db887b3a5ea8a1cb = 78b5852d01724ca6b250a606db887b3a5ea8a1cb ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/README.md  78b5852d01724ca6b250a606db887b3a5ea8a1cb'
+SAME  research/direct-beyond-parity/closure/r6-ac1/README.md  78b5852d01724ca6b250a606db887b3a5ea8a1cb
++ same=6
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
++ bs=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
++ ms=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++ '[' efe5d174c6bb57cf4623a8f34aef9381cb0cdaea = efe5d174c6bb57cf4623a8f34aef9381cb0cdaea ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md  efe5d174c6bb57cf4623a8f34aef9381cb0cdaea'
+SAME  research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md  efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++ same=7
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
++ bs=c185c7c1e6f860fc3667fcc71672891ba5e44222
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
++ ms=c185c7c1e6f860fc3667fcc71672891ba5e44222
++ '[' c185c7c1e6f860fc3667fcc71672891ba5e44222 = c185c7c1e6f860fc3667fcc71672891ba5e44222 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c  c185c7c1e6f860fc3667fcc71672891ba5e44222'
+SAME  research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c  c185c7c1e6f860fc3667fcc71672891ba5e44222
++ same=8
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
++ bs=5659240f0db734ab9a5a50c8440598a0881e4113
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
++ ms=5659240f0db734ab9a5a50c8440598a0881e4113
++ '[' 5659240f0db734ab9a5a50c8440598a0881e4113 = 5659240f0db734ab9a5a50c8440598a0881e4113 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh  5659240f0db734ab9a5a50c8440598a0881e4113'
+SAME  research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh  5659240f0db734ab9a5a50c8440598a0881e4113
++ same=9
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
++ bs=2bca64d75c4402e81ad9321114fb89303eccce0d
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
++ ms=2bca64d75c4402e81ad9321114fb89303eccce0d
++ '[' 2bca64d75c4402e81ad9321114fb89303eccce0d = 2bca64d75c4402e81ad9321114fb89303eccce0d ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt  2bca64d75c4402e81ad9321114fb89303eccce0d'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt  2bca64d75c4402e81ad9321114fb89303eccce0d
++ same=10
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
++ bs=0152147f6e39c9efc982cdab63dc1aed24070a13
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
++ ms=0152147f6e39c9efc982cdab63dc1aed24070a13
++ '[' 0152147f6e39c9efc982cdab63dc1aed24070a13 = 0152147f6e39c9efc982cdab63dc1aed24070a13 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt  0152147f6e39c9efc982cdab63dc1aed24070a13'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt  0152147f6e39c9efc982cdab63dc1aed24070a13
++ same=11
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
++ bs=a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
++ ms=a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
++ '[' a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee = a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt  a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt  a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
++ same=12
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
++ bs=1fd560759e7edd3fefed571f9fa7a46a0fb6d918
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
++ ms=1fd560759e7edd3fefed571f9fa7a46a0fb6d918
++ '[' 1fd560759e7edd3fefed571f9fa7a46a0fb6d918 = 1fd560759e7edd3fefed571f9fa7a46a0fb6d918 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt  1fd560759e7edd3fefed571f9fa7a46a0fb6d918'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt  1fd560759e7edd3fefed571f9fa7a46a0fb6d918
++ same=13
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
++ bs=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
++ ms=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++ '[' 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 = 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt  4a2c5509c3a850a52b2122a06d7ba41d8c39eff4'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt  4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++ same=14
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
++ bs=7f321ea867737a3567b81277f15a8676b5e8be5a
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
++ ms=7f321ea867737a3567b81277f15a8676b5e8be5a
++ '[' 7f321ea867737a3567b81277f15a8676b5e8be5a = 7f321ea867737a3567b81277f15a8676b5e8be5a ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt  7f321ea867737a3567b81277f15a8676b5e8be5a'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt  7f321ea867737a3567b81277f15a8676b5e8be5a
++ same=15
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
++ bs=4b30d1aea58a149191060f638232657e71d73579
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
++ ms=4b30d1aea58a149191060f638232657e71d73579
++ '[' 4b30d1aea58a149191060f638232657e71d73579 = 4b30d1aea58a149191060f638232657e71d73579 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt  4b30d1aea58a149191060f638232657e71d73579'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt  4b30d1aea58a149191060f638232657e71d73579
++ same=16
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
++ bs=97ed6fbc72985919cc125d830722786b81734c6e
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
++ ms=97ed6fbc72985919cc125d830722786b81734c6e
++ '[' 97ed6fbc72985919cc125d830722786b81734c6e = 97ed6fbc72985919cc125d830722786b81734c6e ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt  97ed6fbc72985919cc125d830722786b81734c6e'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt  97ed6fbc72985919cc125d830722786b81734c6e
++ same=17
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
++ bs=bf96d70d119a83ddc974b558b8c697140a541530
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
++ ms=bf96d70d119a83ddc974b558b8c697140a541530
++ '[' bf96d70d119a83ddc974b558b8c697140a541530 = bf96d70d119a83ddc974b558b8c697140a541530 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt  bf96d70d119a83ddc974b558b8c697140a541530'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt  bf96d70d119a83ddc974b558b8c697140a541530
++ same=18
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt
++ bs=bf96d70d119a83ddc974b558b8c697140a541530
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt
++ ms=bf96d70d119a83ddc974b558b8c697140a541530
++ '[' bf96d70d119a83ddc974b558b8c697140a541530 = bf96d70d119a83ddc974b558b8c697140a541530 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt  bf96d70d119a83ddc974b558b8c697140a541530'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt  bf96d70d119a83ddc974b558b8c697140a541530
++ same=19
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
++ bs=b7713e4bf1c785374e3db01b90e8edccc900fa3d
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
++ ms=b7713e4bf1c785374e3db01b90e8edccc900fa3d
++ '[' b7713e4bf1c785374e3db01b90e8edccc900fa3d = b7713e4bf1c785374e3db01b90e8edccc900fa3d ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt  b7713e4bf1c785374e3db01b90e8edccc900fa3d'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt  b7713e4bf1c785374e3db01b90e8edccc900fa3d
++ same=20
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt
++ bs=b7713e4bf1c785374e3db01b90e8edccc900fa3d
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt
++ ms=b7713e4bf1c785374e3db01b90e8edccc900fa3d
++ '[' b7713e4bf1c785374e3db01b90e8edccc900fa3d = b7713e4bf1c785374e3db01b90e8edccc900fa3d ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt  b7713e4bf1c785374e3db01b90e8edccc900fa3d'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt  b7713e4bf1c785374e3db01b90e8edccc900fa3d
++ same=21
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
++ bs=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
++ ms=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ '[' c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 = c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt  c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt  c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ same=22
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt
++ bs=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt
++ ms=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ '[' c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 = c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt  c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt  c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ same=23
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt
++ bs=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt
++ ms=c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ '[' c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 = c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt  c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt  c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ same=24
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
++ bs=79a5e391db6fe3736632efc17e22c1fe98cef828
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
++ ms=79a5e391db6fe3736632efc17e22c1fe98cef828
++ '[' 79a5e391db6fe3736632efc17e22c1fe98cef828 = 79a5e391db6fe3736632efc17e22c1fe98cef828 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt  79a5e391db6fe3736632efc17e22c1fe98cef828'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt  79a5e391db6fe3736632efc17e22c1fe98cef828
++ same=25
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
++ bs=784ea063a1c3655cf9bbfa0abf431ea461256814
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
++ ms=784ea063a1c3655cf9bbfa0abf431ea461256814
++ '[' 784ea063a1c3655cf9bbfa0abf431ea461256814 = 784ea063a1c3655cf9bbfa0abf431ea461256814 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt  784ea063a1c3655cf9bbfa0abf431ea461256814'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt  784ea063a1c3655cf9bbfa0abf431ea461256814
++ same=26
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt
++ bs=784ea063a1c3655cf9bbfa0abf431ea461256814
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt
++ ms=784ea063a1c3655cf9bbfa0abf431ea461256814
++ '[' 784ea063a1c3655cf9bbfa0abf431ea461256814 = 784ea063a1c3655cf9bbfa0abf431ea461256814 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt  784ea063a1c3655cf9bbfa0abf431ea461256814'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt  784ea063a1c3655cf9bbfa0abf431ea461256814
++ same=27
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
++ bs=0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
++ ms=0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
++ '[' 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 = 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt  0b9b5fec9c1948ccce966c47a1aaab6ea3636d41'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt  0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
++ same=28
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
++ bs=69fe688cabc997528e1f376296d3f931c8e6d60b
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
++ ms=69fe688cabc997528e1f376296d3f931c8e6d60b
++ '[' 69fe688cabc997528e1f376296d3f931c8e6d60b = 69fe688cabc997528e1f376296d3f931c8e6d60b ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt  69fe688cabc997528e1f376296d3f931c8e6d60b'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt  69fe688cabc997528e1f376296d3f931c8e6d60b
++ same=29
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt
++ bs=69fe688cabc997528e1f376296d3f931c8e6d60b
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt
++ ms=69fe688cabc997528e1f376296d3f931c8e6d60b
++ '[' 69fe688cabc997528e1f376296d3f931c8e6d60b = 69fe688cabc997528e1f376296d3f931c8e6d60b ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt  69fe688cabc997528e1f376296d3f931c8e6d60b'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt  69fe688cabc997528e1f376296d3f931c8e6d60b
++ same=30
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
++ bs=4b11a5c3186af53eb450ff8235b6c54958cacee3
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
++ ms=4b11a5c3186af53eb450ff8235b6c54958cacee3
++ '[' 4b11a5c3186af53eb450ff8235b6c54958cacee3 = 4b11a5c3186af53eb450ff8235b6c54958cacee3 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt  4b11a5c3186af53eb450ff8235b6c54958cacee3'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt  4b11a5c3186af53eb450ff8235b6c54958cacee3
++ same=31
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt
++ bs=4b11a5c3186af53eb450ff8235b6c54958cacee3
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt
++ ms=4b11a5c3186af53eb450ff8235b6c54958cacee3
++ '[' 4b11a5c3186af53eb450ff8235b6c54958cacee3 = 4b11a5c3186af53eb450ff8235b6c54958cacee3 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt  4b11a5c3186af53eb450ff8235b6c54958cacee3'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt  4b11a5c3186af53eb450ff8235b6c54958cacee3
++ same=32
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
++ bs=cb11c1444ec3aff6d4d4bf9975408e4da6363693
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
++ ms=cb11c1444ec3aff6d4d4bf9975408e4da6363693
++ '[' cb11c1444ec3aff6d4d4bf9975408e4da6363693 = cb11c1444ec3aff6d4d4bf9975408e4da6363693 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt  cb11c1444ec3aff6d4d4bf9975408e4da6363693'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt  cb11c1444ec3aff6d4d4bf9975408e4da6363693
++ same=33
++ IFS=$'\t'
++ read -r st p
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt
++ bs=cb11c1444ec3aff6d4d4bf9975408e4da6363693
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt
++ ms=cb11c1444ec3aff6d4d4bf9975408e4da6363693
++ '[' cb11c1444ec3aff6d4d4bf9975408e4da6363693 = cb11c1444ec3aff6d4d4bf9975408e4da6363693 ']'
++ echo 'SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt  cb11c1444ec3aff6d4d4bf9975408e4da6363693'
+SAME  research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt  cb11c1444ec3aff6d4d4bf9975408e4da6363693
++ same=34
++ IFS=$'\t'
++ read -r st p
++ echo '# RESULT: SAME=34 DIFF=0 MISSING=0'
+# RESULT: SAME=34 DIFF=0 MISSING=0
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice diff origin/master origin/research/r6-ac1-vectored-semantics -- '\''research/direct-beyond-parity/closure/r6-ac1*'\'' | wc -l  (tip-vs-tip restricted two-dot diff)'
+# cmd: git -C /home/hoo/Projects/Sluice diff origin/master origin/research/r6-ac1-vectored-semantics -- 'research/direct-beyond-parity/closure/r6-ac1*' | wc -l  (tip-vs-tip restricted two-dot diff)
++ git -C /home/hoo/Projects/Sluice diff origin/master origin/research/r6-ac1-vectored-semantics -- 'research/direct-beyond-parity/closure/r6-ac1*'
++ wc -l
+0
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice diff --stat origin/master origin/research/r6-ac1-vectored-semantics | tail -5  (full two-dot context: master-side-only changes)'
+# cmd: git -C /home/hoo/Projects/Sluice diff --stat origin/master origin/research/r6-ac1-vectored-semantics | tail -5  (full two-dot context: master-side-only changes)
++ git -C /home/hoo/Projects/Sluice diff --stat origin/master origin/research/r6-ac1-vectored-semantics
++ tail -5
+ src/blocking_file.cpp                              |   278 +-
+ tests/direct_composition_fault_test.cpp            |    27 -
+ tests/semantic_range_test.cpp                      |    19 +-
+ xmake/tests.lua                                    |    46 -
+ 798 files changed, 139 insertions(+), 103171 deletions(-)

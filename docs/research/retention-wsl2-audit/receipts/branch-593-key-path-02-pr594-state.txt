@@ -1,0 +1,3 @@
+# 02 PR 594 state
+## $ gh pr view 594 --repo jnhu76/Sluice --json number,state,headRefName,headRefOid,baseRefName,mergedAt,url,title
+{"baseRefName":"master","headRefName":"research/593-key-path","headRefOid":"2714aa65fe4837d30f5fa3fcdb27db38c23b7136","mergedAt":null,"number":594,"state":"OPEN","title":"research(593): E5 native key-path discovery & mechanism-elision campaign","url":"https://github.com/jnhu76/Sluice/pull/594"}

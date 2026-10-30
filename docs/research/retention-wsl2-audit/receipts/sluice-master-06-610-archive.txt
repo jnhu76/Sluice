@@ -1,0 +1,31 @@
+$ git -C /home/hoo/Projects/Sluice show --stat --format='%s' ac995641 | head -30   # PR #610 archive location on master
+research(direct-beyond-parity): archive #603 P0-P6 evidence with sha256 manifest (#610)
+
+ .../API_CAPABILITY_CANDIDATES.md                   |   391 +
+ .../direct-beyond-parity/CANDIDATE_GAP_REGISTER.md |   239 +
+ research/direct-beyond-parity/DIRECT_COST_FLOOR.md |   462 +
+ .../direct-beyond-parity/DIRECT_HOTPATH_LEDGER.md  |   115 +
+ .../direct-beyond-parity/EVIDENCE_MANIFEST.json    |  9000 ++++++++++++++
+ .../INTEGRATION_AND_INDEPENDENT_REVIEW.md          |   800 ++
+ .../IO_WORK_REDUCTION_LEDGER.md                    |   349 +
+ research/direct-beyond-parity/MISSION.md           |  1028 ++
+ .../P0_BASELINE_AND_OWNERSHIP.md                   |   754 ++
+ .../direct-beyond-parity/P1_MEASUREMENT_PLAN.md    |   457 +
+ research/direct-beyond-parity/P2_CANDIDATE_P2C1.md |   733 ++
+ research/direct-beyond-parity/P2_CANDIDATE_P2C2.md |   417 +
+ .../direct-beyond-parity/P2_EXPERIMENT_PLAN.md     |   532 +
+ .../P3_MECHANISM_STUDY_PLAN.md                     |   549 +
+ .../P4_WORKLOAD_COMPETITION_PLAN.md                |   616 +
+ .../direct-beyond-parity/P5_INTERACTION_OUTCOME.md |   248 +
+ .../direct-beyond-parity/P5_INTERACTION_PLAN.md    |   528 +
+ .../REAL_WORKLOAD_COMPETITION.md                   |   670 +
+ .../STRUCTURAL_IO_MECHANISM_STUDY.md               |   776 ++
+ .../WSL2_VALIDATION_HANDOFF.md                     |   260 +
+ .../closure/DUCKDB_FIO_R0_PREREG.md                |   295 +
+ .../closure/E5_CLOSURE_SNAPSHOT.md                 |   206 +
+ .../closure/perf-p2c1/ENV-P2C1.txt                 |    25 +
+ .../closure/perf-p2c1/SUMMARY.md                   |   197 +
+ .../closure/perf-p2c1/aa-cursor-4k-cand.txt        |    42 +
+ .../closure/perf-p2c1/aa-eofmix-4k-cand.txt        |    42 +
+ .../closure/perf-p2c1/aa-neg-4k-cand.txt           |    42 +
+ .../closure/perf-p2c1/aa-read-4k-base.txt          |    42 +

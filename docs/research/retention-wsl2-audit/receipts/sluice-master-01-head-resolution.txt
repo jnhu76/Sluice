@@ -1,0 +1,14 @@
+$ git -C /home/hoo/Projects/Sluice rev-parse origin/master
+84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+
+$ git -C /home/hoo/Projects/Sluice rev-parse sluice/master   # literal-name probe
+fatal: ambiguous argument 'sluice/master': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+sluice/master
+
+$ git -C /home/hoo/Projects/Sluice rev-parse refs/remotes/sluice/master   # literal-name probe
+fatal: ambiguous argument 'refs/remotes/sluice/master': unknown revision or path not in the working tree.
+Use '--' to separate paths from revisions, like this:
+'git <command> [<revision>...] -- [<file>...]'
+refs/remotes/sluice/master

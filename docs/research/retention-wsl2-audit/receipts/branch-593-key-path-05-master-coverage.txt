@@ -1,0 +1,16 @@
+# 05 master coverage scan
+## $ git ls-tree --name-only origin/master docs/research/
+docs/research/mw-hw-1
+docs/research/native-linux-m2
+docs/research/state-complexity
+docs/research/uring-router-580
+## $ git ls-tree --name-only origin/master bench/research/
+bench/research/uring-router-580
+## $ git grep -rn "593-key-path" origin/master
+origin/master:research/direct-beyond-parity/closure/E5_CLOSURE_SNAPSHOT.md:150:- `research/593-key-path` @ 2714aa65 = [origin/research/593-key-path] (worktree)
+origin/master:research/direct-beyond-parity/closure/E5_CLOSURE_SNAPSHOT.md:167:| `/home/jnhu/sluice-593-research/worktrees/pr` | 2714aa65 | research/593-key-path | clean (0) |
+## $ git grep -rln "key-path-593" origin/master  (empty = zero hits)
+grep2 exit=1 (1 = no matches)
+## E5_CLOSURE_SNAPSHOT.md lines referencing the branch (origin/master:research/direct-beyond-parity/closure/E5_CLOSURE_SNAPSHOT.md:150,167)
+- `research/593-key-path` @ 2714aa65 = [origin/research/593-key-path] (worktree)
+| `/home/jnhu/sluice-593-research/worktrees/pr` | 2714aa65 | research/593-key-path | clean (0) |

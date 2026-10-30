@@ -1,0 +1,37 @@
+$ git cat-file -p 999b5305ae7d413a2a71acde926f8c6cfef6876a   (tip commit: tree, parents)
+tree 076728bf76694951f34b6aba3d2260403c8c4fce
+parent bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+author jnhu <me@hoooo.org> 1793232146 +0800
+committer jnhu <me@hoooo.org> 1793232146 +0800
+
+research(ac1): E5 semantic closure for positional vectored I/O (#605)
+
+Independent preadv/pwritev probe session on E5 closing the ten R6 items:
+measured semantic table (S1-S18), error matrix with the fs-split
+write-side iov-fault row, IOV_MAX boundary, sum-overflow clamp regimes,
+partial/EINTR/cursor rows, the no-snapshot atomicity record, SEM-03/04/05
+mapping, support matrix and fallback rules, a non-adopted API draft, and
+the Owner decision packet (reject-vs-split quantified, recommendation
+recorded, choice left open).
+
+Design evidence only: no public API, no product code, no v2-r1 change.
+
+$ git merge-base origin/master refs/remotes/origin/research/r6-ac1-vectored-semantics
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
+
+$ git merge-base --is-ancestor bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57 origin/master; exit code:
+is-ancestor exit=0
+
+$ git worktree add --detach /tmp/sluice-val-r6ac1-reverify origin/master   (own verification worktree; script will clean up)
+Preparing worktree (detached HEAD 84e1b7d5)
+HEAD is now at 84e1b7d5 perf(direct): P2C1 read compositions run prevalidated register-resident steps (#608) (#612)
+
+$ git -C /tmp/sluice-val-r6ac1-reverify fetch origin refs/pull/611/head   (real recovery fetch test)
+From github.com:jnhu76/Sluice
+ * branch              refs/pull/611/head -> FETCH_HEAD
+fetch exit=0
+
+$ git -C /tmp/sluice-val-r6ac1-reverify rev-parse FETCH_HEAD
+999b5305ae7d413a2a71acde926f8c6cfef6876a
+
+EXPECTED: FETCH_HEAD == 999b5305ae7d413a2a71acde926f8c6cfef6876a and parent bdfd0d8d is ancestor of origin/master

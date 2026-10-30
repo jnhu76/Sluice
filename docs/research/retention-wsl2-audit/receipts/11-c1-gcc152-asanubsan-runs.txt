@@ -1,0 +1,19 @@
+# C1 suites, GCC 15.2.0 release + ASan+UBSan (--sanitizers=asan,ubsan, --liburing=n)
+# config: xmake f --toolchain=gcc -m release --liburing=n --sanitizers=asan,ubsan
+
+== semantic_range_test
+all 7 range semantic tests passed (13 range table cases)
+== semantic_short_io_reference_test
+all 9 short-I/O reference tests passed (8 primitive cases)
+== direct_composition_fault_test
+all 15 direct composition fault-injection tests passed
+== file_close_semantics_test
+all 8 canonical File close-semantics tests passed
+== blocking_file_read_test
+all 6 blocking file read tests passed
+== blocking_file_sequential_test
+all 13 blocking file sequential tests passed
+== blocking_file_state_test
+all 14 blocking file state tests passed
+== blocking_file_write_test
+all 8 blocking file write tests passed

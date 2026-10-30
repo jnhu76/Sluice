@@ -1,0 +1,30 @@
+# 02 commit reachability (2026-10-29T15:30:14Z)
+$ git branch -a --contains e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+  remotes/origin/research/575-native-e5-atomic-rmw
+
+$ git tag --contains e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+(empty)
+
+$ git rev-list --count origin/master..origin/research/575-native-e5-atomic-rmw
+9
+
+$ git rev-list --count origin/research/575-native-e5-atomic-rmw..origin/master
+10
+
+$ git merge-base origin/master origin/research/575-native-e5-atomic-rmw
+3df10dc44d84799cccb18d29f20149d2983137ec
+3df10dc44d84799cccb18d29f20149d2983137ec 2026-10-23T23:53:28+08:00 Merge pull request #583 from jnhu76/release/v0.0.3
+
+$ git log -1 --format="%H %ad %s" --date=iso-strict origin/research/575-native-e5-atomic-rmw
+e9baafb9d117cbaf387dde9f4433ebbacb4a73b3 2026-10-24T19:01:16+08:00 research(575): closeout evidence-integrity revision of the research records
+
+$ git log --oneline origin/master..origin/research/575-native-e5-atomic-rmw
+e9baafb9 research(575): closeout evidence-integrity revision of the research records
+f209ce88 research(575): R9 independent reviews, verdict and post-review revisions
+a7d0afdd research(575): R5-R8 native-E5 calibration, A/B campaigns, attribution and causal analysis
+f0a33e01 research(575): add attribution campaigns with plain-increment control arms
+5af54359 research(575): fix W-03 threadpool case id (worker suffix)
+3dfdc81e research(575): runner v3 — shared per-rep tmpdir path; arm-derived path names measurably biased identical binaries
+77a9a028 research(575): runner v2 — two warmup rounds per invocation after A/A exposed frequency-state carry-over
+58ce65c0 research(575): freeze the paired A/B runner and self-tested reduction script
+45a34296 research(575): R0-R4 native-E5 audit, arms, correctness and mutation evidence

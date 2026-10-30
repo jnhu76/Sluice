@@ -1,0 +1,45 @@
+# cmd: git rev-list --objects origin/research/r6-ac1-vectored-semantics --not origin/master  (ANOMALY: see report)
+999b5305ae7d413a2a71acde926f8c6cfef6876a
+076728bf76694951f34b6aba3d2260403c8c4fce 
+3ba4f8d83a7a7172d3a205b04386db220e074971 research
+2557b74abd9b5e33c32bbe2e965233da082cf3ba research/direct-beyond-parity
+b115306c8cc6873b6cd4f0809ace784502529d45 research/direct-beyond-parity/closure
+a49e118cc0a041de2f3d1b483c382ea854295092 research/direct-beyond-parity/closure/r6-ac1.md
+f7b54ba6d879fafd34a90c84bd481151b56818ea research/direct-beyond-parity/closure/r6-ac1
+e25e27705740347ff186d48ab7650913f7bd130d research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
+afdcc871413c2bc94a7f155243cb72af4bef1c1c research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
+1321b1a43dc3a47febf0a07d83704cea3f2cc93d research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
+d4b8d1a181c4bde6606b005f8844ad00404fe052 research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+78b5852d01724ca6b250a606db887b3a5ea8a1cb research/direct-beyond-parity/closure/r6-ac1/README.md
+efe5d174c6bb57cf4623a8f34aef9381cb0cdaea research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
+7b85ab623a5c06a51b6c75b70577e12e36e9e229 research/direct-beyond-parity/closure/r6-ac1/probes
+c185c7c1e6f860fc3667fcc71672891ba5e44222 research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
+5659240f0db734ab9a5a50c8440598a0881e4113 research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
+930c046698e2eb20ccc31b392297c06d150e8b49 research/direct-beyond-parity/closure/r6-ac1/raw
+2bca64d75c4402e81ad9321114fb89303eccce0d research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
+0152147f6e39c9efc982cdab63dc1aed24070a13 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
+a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
+1fd560759e7edd3fefed571f9fa7a46a0fb6d918 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
+4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+7f321ea867737a3567b81277f15a8676b5e8be5a research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
+4b30d1aea58a149191060f638232657e71d73579 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
+97ed6fbc72985919cc125d830722786b81734c6e research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
+bf96d70d119a83ddc974b558b8c697140a541530 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
+b7713e4bf1c785374e3db01b90e8edccc900fa3d research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
+c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
+79a5e391db6fe3736632efc17e22c1fe98cef828 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
+784ea063a1c3655cf9bbfa0abf431ea461256814 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
+0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
+69fe688cabc997528e1f376296d3f931c8e6d60b research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
+4b11a5c3186af53eb450ff8235b6c54958cacee3 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
+cb11c1444ec3aff6d4d4bf9975408e4da6363693 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
+# cmd: arbitration - git rev-list --objects origin/master | grep -E r6-ac1-blob-SHAs (found => master reaches them)
+a49e118cc0a041de2f3d1b483c382ea854295092 research/direct-beyond-parity/closure/r6-ac1.md
+f7b54ba6d879fafd34a90c84bd481151b56818ea research/direct-beyond-parity/closure/r6-ac1
+d4b8d1a181c4bde6606b005f8844ad00404fe052 research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+c185c7c1e6f860fc3667fcc71672891ba5e44222 research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
+2bca64d75c4402e81ad9321114fb89303eccce0d research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
+# cmd: git rev-parse --is-shallow-repository / grafts / replace refs
+false
+ls: cannot access '.git/shallow': No such file or directory
+ls: cannot access '.git/info/grafts': No such file or directory

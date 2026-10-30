@@ -1,0 +1,130 @@
+# Recheck receipt: backup/pr-601-original-head-e4bb8833 (DELETE_CANDIDATE re-verification)
+# Date: 2026-10-29. Read-only session. No branch/PR/worktree modified anywhere;
+# the only ref deletion was inside the disposable /tmp bare clone described in R9.
+# All git commands below ran with `git -C /home/hoo/Projects/Sluice` unless noted.
+
+R1  rev-parse origin/master origin/backup/pr-601-original-head-e4bb8833 ea2fc4fc e4bb8833
+    -> 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+       e4bb8833699d0ca5dee191883f3fec6d41b221b2   (matches expected head)
+       ea2fc4fca1a65a63ef3664f71dab1014e98c3b25
+       e4bb8833699d0ca5dee191883f3fec6d41b221b2
+
+R2  rev-list --count origin/master..origin/backup/pr-601-original-head-e4bb8833
+    -> 2
+
+R3  rev-list --objects origin/backup/pr-601-original-head-e4bb8833 ^origin/master | wc -l
+    -> 21   (reproduces the original audit's 21)
+    Also: ... ^84a0cc1d | wc -l = 21 ; ... ^bdfd0d8d | wc -l = 21
+    CAVEAT (new finding): listing-mode `rev-list --objects A ^B` does NOT reliably
+    exclude blobs reachable from the excluded side. Controlled repro in
+    /tmp/sluice-val-pr601-t/excl-test (fresh repo, identical blob on both branches):
+      `git rev-list --objects side ^master` listed commit + root tree + docs.md
+      although side:docs.md == master:docs.md == fe1dce6a (rev-parse both).
+    Therefore the 21 count is standard git behavior, NOT a unique-content measure.
+
+R4  Authoritative unique-object set (full set difference):
+    rev-list --objects e4bb8833 | cut -d' ' -f1 | sort -u  -> 34,667 objects
+    rev-list --objects origin/master | cut -d' ' -f1 | sort -u -> 35,416 objects
+    comm -23 branch-objs master-objs ->
+      006c31d19cfd5013d9069a479163837234e2b894  (root tree of ea2fc4fc)
+      20485468aa39cac4392ab8d4e9e5ae1c6e88f57d  (root tree of e4bb8833)
+      e4bb8833699d0ca5dee191883f3fec6d41b221b2  (commit)
+      ea2fc4fca1a65a63ef3664f71dab1014e98c3b25  (commit)
+    = exactly 2 commits + 2 root trees. ZERO unique blobs, ZERO unique subtrees.
+
+R5  Per-file blob compare, `ls-tree` at e4bb8833 / origin/master / 43cb8029
+    for the 9 files of `diff --name-only origin/master...<branch>`:
+      research/600-direct-excess-cost/DIRECT_COST_DAG.md            b9b0b233  = master = 43cb8029
+      research/600-direct-excess-cost/DIRECT_MACHINE_COST_LEDGER.md 1741c098  = master = 43cb8029
+      research/600-direct-excess-cost/EVIDENCE_INDEX.md             a5bbf1cf  = master = 43cb8029
+      research/600-direct-excess-cost/PHASE3_VALIDATION.md          89141091  = master = 43cb8029
+      research/600-direct-excess-cost/PHASE_I_COST_ATTRIBUTION.md   cfad9902  = master = 43cb8029
+      tests/semantic_range_test.cpp                                 0d3eb7e0  = master = 43cb8029
+      include/sluice/detail/file_semantics.hpp                      e39760ae  != master(d0090897) = 43cb8029
+      src/blocking_file.cpp                                         6660a423  != master(8a27525d) = 43cb8029
+      xmake/tests.lua                                               febe6515  != master(c55e97be) = 43cb8029
+    Subtree tree research/600-direct-excess-cost = 45d388ea on BOTH branch and master
+    (`ls-tree origin/master research/`).
+    `git diff ea2fc4fc 43cb8029 -- include/sluice/detail/file_semantics.hpp
+     src/blocking_file.cpp xmake/tests.lua tests/semantic_range_test.cpp` -> empty, exit 0.
+    `git log origin/master --find-object=0d3eb7e0...` -> 43cb8029 (test blob on master).
+
+R6  Merge status of the squashes:
+    merge-base --is-ancestor 84a0cc1d origin/master -> exit 0  (#601 squash)
+    merge-base --is-ancestor 43cb8029 origin/master -> exit 0  (#602 squash)
+    Both listed in `git log --oneline origin/master` (positions 5 and 3).
+
+R7  Identity archive verification (research/direct-beyond-parity/closure/r2-pr-boundary.md,
+    merged via #610, read this session):
+      :63-66  backup push command to refs/heads/backup/pr-601-original-head-e4bb8833
+      :70-76  ls-remote verification, EVIDENCE_INDEX blob a5bbf1cf...527e recorded
+      :78-90  commit 1 ea2fc4fca1a65a63ef3664f71dab1014e98c3b25 patch-id 8ed5d3c0...f520;
+              commit 2 e4bb8833699d0ca5dee191883f3fec6d41b221b2 patch-id 70a0899c...b25c;
+              full diff 9 files +463/-98
+      :146-151 PHASE3_VALIDATION CANDIDATE_SHA = ea2fc4fca1a6...
+      :166-170 deletion deferred to Owner/R9 closeout, only after #602 AND #601 merge
+    Recomputed this session:
+      `git show ea2fc4fc | git patch-id --stable`
+        -> 8ed5d3c0ae157859c44548fe838824aecbfbf520  (matches archive)
+      `git show e4bb8833 | git patch-id --stable`
+        -> 70a0899cf8d428c3bbee01163d8c34129df7b25c (matches archive)
+      `git diff --stat bdfd0d8d e4bb8833 | tail -1`
+        -> "9 files changed, 463 insertions(+), 98 deletions(-)" (matches :84)
+    Deletion precondition check: both #601 and #602 merged (R6) -> condition satisfied.
+
+R8  Dependency greps:
+    git grep -I -nE 'backup/pr-601|pr-601-original-head' origin/master
+      -> exactly 6 prose lines, all in
+         research/direct-beyond-parity/closure/r2-pr-boundary.md:64,65,70,73,145,168
+    Working-tree grep (grep -rnI --exclude-dir=.git, full log preserved in the
+    recheck report): same 6 lines + hits ONLY under
+    docs/research/retention-wsl2-audit/ (earlier audit reports/receipts:
+    backup-pr-601-original-head-e4bb8833.txt, ...-pass2.txt, ...-retention.md,
+    REPOSITORY_REF_SNAPSHOT.md, state-freeze-report.md, sluice-master-retention-value.md,
+    r6-ac1-vectored-semantics-retention-value.md, E5_RAW_EVIDENCE_PRESERVATION_PLAN.md,
+    receipts/01-remote-refs.txt, receipts/pir-04-remote-and-dependency.txt,
+    receipts/sluice-master-02-remotes.txt, receipts/backup-pr-612-original-head-70d48f5e.txt).
+    No script, CI, build config or code consumer. (Audit artifacts are not consumers.)
+
+R9  Recovery / post-deletion containment scan (isolated disposable bare clone):
+    git clone --bare git@github.com:jnhu76/Sluice.git /tmp/sluice-val-pr601-recheck.git
+    git -C ... fetch origin '+refs/pull/*/head:refs/pull/*'   -> 376 pull refs (ls-remote count)
+    git -C ... update-ref -d refs/heads/backup/pr-601-original-head-e4bb8833
+      (delete ONLY inside the /tmp clone, simulating post-deletion remote state;
+       the real remote branch and the main repo were not touched)
+    git -C ... for-each-ref --format='%(refname)' --contains=e4bb8833... -> EMPTY
+    git -C ... for-each-ref --format='%(refname)' --contains=ea2fc4fc... -> EMPTY
+      => after deletion NO remaining remote ref (any branch, tag, or any of the
+         376 pull refs) retains either commit.
+    git -C ... rev-list --count refs/pull/601 -> 2324
+    git -C ... merge-base --is-ancestor bdfd0d8d refs/pull/601 -> exit 0
+      => PR #601's ref keeps the old base but (per the empty containment scan)
+         neither backup tip.
+    Note: the original audit reported "1345 commits" for its PR-ref fetch count;
+    this session counts 2324 via rev-list --count refs/pull/601. The count differs;
+    the substantive conclusion (base kept, tips not retained) is identical.
+    Remote refs observed:
+      git ls-remote origin refs/heads/backup/pr-601-original-head-e4bb8833
+        -> e4bb8833699d0ca5dee191883f3fec6d41b221b2  (branch still on GitHub)
+      git ls-remote origin refs/pull/601/head refs/pull/602/head
+        -> 2fcc79646ee42d1699468e0a50c0269f405b92d3 / 77e5399a45998dea396699fa2e063c94a665945a
+
+R10 Open-PR dependency check:
+    gh pr list --repo jnhu76/Sluice --state open --json number,headRefName
+      -> only: 594 research/593-key-path   (exit 0)
+    No open PR has this branch as head. dududu: the branch lives in the Sluice
+    remote and its name references Sluice PR #601; no dududu relation, no
+    dududu clone needed.
+
+R11 Worktrees (git worktree list --porcelain): 16 worktrees. None checks out this
+    branch: main on master 84e1b7d5; /tmp/sluice-val-* detached at 84e1b7d5;
+    /tmp/sluice-perf-base detached at 77e5399a (#602's original head, not this
+    branch); /tmp/sluice-val-k594-retention detached at 2714aa6.
+
+Sanity checks run for traversal soundness (all negative): no .git/shallow,
+no remote.origin.promisor / partialclonefilter, no .git/objects/info/alternates,
+no refs/replace/, no .git/info/grafts; rev-list result unchanged with
+-c core.commitGraph=false.
+
+VERDICT: uniqueEvidence / activeDependency / recovery all re-verified as stated
+in the original audit. Decision stays DELETE_CANDIDATE.

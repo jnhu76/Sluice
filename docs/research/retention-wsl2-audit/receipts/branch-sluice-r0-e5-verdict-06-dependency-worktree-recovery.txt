@@ -1,0 +1,31 @@
+# active-dependency scan for branch sluice-r0-e5-verdict (dududu)
+
+# [PR head] from the provided PR list: dududu PR #7 headRef=sluice-r0-e5-verdict headSha=cc321a4... state=MERGED (base main).
+# OPEN PRs in list: sluice #594 (research/593-key-path), dududu #8 (r1-request-geometry) — neither is this branch. -> NOT an OPEN PR head.
+
+# cmd: git -C /tmp/dududu-audit grep -n "sluice-r0-e5-verdict" main --
+  grep exit=1 (1 = no reference in dududu main tracked files)
+
+# cmd: grep -rn sluice-r0-e5-verdict /tmp/dududu-audit (working tree, excluding .git)
+  matches above (none expected)
+
+# cmd: git -C /home/hoo/Projects/Sluice grep -n "sluice-r0-e5-verdict" master --
+  grep exit=1 (1 = no reference in sluice master tracked files / CI)
+
+# cmd: git -C /tmp/dududu-audit worktree list
+/tmp/dududu-audit 12a8712 [main]
+# cmd: find /tmp /home/hoo/Projects -maxdepth 3 -type d -iname "*dududu*"
+/tmp/dududu-audit
+# -> only this audit clone; no other dududu working copy or worktree on disk.
+
+# cmd: ps -eo pid,etime,cmd | grep -iE "dududu|r0-e5" | grep -v grep
+  ps exit=1 (1 = no running process depends on it)
+
+# working tree dirty check: branch is NOT checked out by any worktree -> N/A. This audit clone sits on main (12a8712) and was used read-only.
+
+# RECOVERY (if branch ref deleted later):
+  1. Content already on default branch: dududu main merge commit 12a8712 (parents b94041d9 + cc321a49).
+  2. Remote still serves the tip now: refs/heads/sluice-r0-e5-verdict = cc321a4994ee638493fecda0c437481528f5cea9 (git ls-remote receipt 01).
+  3. After branch deletion GitHub keeps refs/pull/7/head = cc321a4994ee638493fecda0c437481528f5cea9 (receipt 01).
+  4. Recover commits: git -C <clone> fetch origin pull/7/head:refs/heads/sluice-r0-e5-verdict  (or fetch origin sluice-r0-e5-verdict while the branch still exists).
+  5. Provenance: MERGED PR #7 https://github.com/jnhu76/dududu/pull/7 (headSha cc321a4... matches).

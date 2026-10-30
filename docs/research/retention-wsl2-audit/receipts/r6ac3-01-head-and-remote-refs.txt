@@ -1,0 +1,95 @@
++ R=/home/hoo/Projects/Sluice
+++ date -Is
++ echo '=== r6ac3-01 head-and-remote-refs (2026-10-30T00:10:22+08:00) ==='
+=== r6ac3-01 head-and-remote-refs (2026-10-30T00:10:22+08:00) ===
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-parse --verify origin/research/r6-ac1-vectored-semantics^{commit}'
+# cmd: git -C /home/hoo/Projects/Sluice rev-parse --verify origin/research/r6-ac1-vectored-semantics^{commit}
++ git -C /home/hoo/Projects/Sluice rev-parse --verify 'origin/research/r6-ac1-vectored-semantics^{commit}'
+999b5305ae7d413a2a71acde926f8c6cfef6876a
++ echo '# cmd: git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a'
+# cmd: git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
+commit
++ echo '# cmd: git -C /home/hoo/Projects/Sluice log -1 --format=fuller origin/research/r6-ac1-vectored-semantics'
+# cmd: git -C /home/hoo/Projects/Sluice log -1 --format=fuller origin/research/r6-ac1-vectored-semantics
++ git -C /home/hoo/Projects/Sluice log -1 --format=fuller origin/research/r6-ac1-vectored-semantics
+commit 999b5305ae7d413a2a71acde926f8c6cfef6876a
+Author:     jnhu <me@hoooo.org>
+AuthorDate: Thu Oct 29 08:02:26 2026 +0800
+Commit:     jnhu <me@hoooo.org>
+CommitDate: Thu Oct 29 08:02:26 2026 +0800
+
+    research(ac1): E5 semantic closure for positional vectored I/O (#605)
+    
+    Independent preadv/pwritev probe session on E5 closing the ten R6 items:
+    measured semantic table (S1-S18), error matrix with the fs-split
+    write-side iov-fault row, IOV_MAX boundary, sum-overflow clamp regimes,
+    partial/EINTR/cursor rows, the no-snapshot atomicity record, SEM-03/04/05
+    mapping, support matrix and fallback rules, a non-adopted API draft, and
+    the Owner decision packet (reject-vs-split quantified, recommendation
+    recorded, choice left open).
+    
+    Design evidence only: no public API, no product code, no v2-r1 change.
++ echo '# cmd: git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head'
+# cmd: git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head
++ git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head
+999b5305ae7d413a2a71acde926f8c6cfef6876a	refs/heads/research/r6-ac1-vectored-semantics
+999b5305ae7d413a2a71acde926f8c6cfef6876a	refs/pull/611/head
++ echo '# cmd: git -C /home/hoo/Projects/Sluice branch -a --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a'
+# cmd: git -C /home/hoo/Projects/Sluice branch -a --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ git -C /home/hoo/Projects/Sluice branch -a --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a
+  remotes/origin/research/r6-ac1-vectored-semantics
++ echo '# cmd: git -C /home/hoo/Projects/Sluice tag --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a (empty => no tag)'
+# cmd: git -C /home/hoo/Projects/Sluice tag --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a (empty => no tag)
++ git -C /home/hoo/Projects/Sluice tag --contains 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/research/r6-ac1-vectored-semantics'
+# cmd: git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/research/r6-ac1-vectored-semantics
++ git -C /home/hoo/Projects/Sluice rev-list --count origin/master..origin/research/r6-ac1-vectored-semantics
+1
++ echo '# cmd: git -C /home/hoo/Projects/Sluice merge-base origin/master origin/research/r6-ac1-vectored-semantics'
+# cmd: git -C /home/hoo/Projects/Sluice merge-base origin/master origin/research/r6-ac1-vectored-semantics
++ git -C /home/hoo/Projects/Sluice merge-base origin/master origin/research/r6-ac1-vectored-semantics
+bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
++ echo '# cmd: git -C /home/hoo/Projects/Sluice merge-base --is-ancestor <merge-base> origin/master; echo exit=0'
+# cmd: git -C /home/hoo/Projects/Sluice merge-base --is-ancestor <merge-base> origin/master; echo exit=0
+++ git -C /home/hoo/Projects/Sluice merge-base origin/master origin/research/r6-ac1-vectored-semantics
++ MB=bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
++ git -C /home/hoo/Projects/Sluice merge-base --is-ancestor bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57 origin/master
++ echo exit=0
+exit=0
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-list --count bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57..origin/master'
+# cmd: git -C /home/hoo/Projects/Sluice rev-list --count bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57..origin/master
++ git -C /home/hoo/Projects/Sluice rev-list --count bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57..origin/master
+5
++ echo '# cmd: git -C /home/hoo/Projects/Sluice worktree list'
+# cmd: git -C /home/hoo/Projects/Sluice worktree list
++ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice       84e1b7d5 [master]
+/tmp/sluice-perf-base           77e5399a (detached HEAD)
+/tmp/sluice-perf-master         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan-ubsan      84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-mutation     84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-plat         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-debug           84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention  2714aa65 (detached HEAD)
+/tmp/sluice-val-liburing        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-a 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-b 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-r6ac1-reverify  84e1b7d5 (detached HEAD)
+/tmp/sluice-val-release         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-sdk             84e1b7d5 (detached HEAD)
+/tmp/sluice-val-ubsan           84e1b7d5 (detached HEAD)
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-parse --is-shallow-repository; ls .git/shallow .git/info/grafts; git replace -l'
+# cmd: git -C /home/hoo/Projects/Sluice rev-parse --is-shallow-repository; ls .git/shallow .git/info/grafts; git replace -l
++ git -C /home/hoo/Projects/Sluice rev-parse --is-shallow-repository
+false
++ ls /home/hoo/Projects/Sluice/.git/shallow /home/hoo/Projects/Sluice/.git/info/grafts
+ls: cannot access '/home/hoo/Projects/Sluice/.git/shallow': No such file or directory
+ls: cannot access '/home/hoo/Projects/Sluice/.git/info/grafts': No such file or directory
++ git -C /home/hoo/Projects/Sluice replace -l
++ echo '# cmd: git --version'
+# cmd: git --version
++ git --version
+git version 2.53.0

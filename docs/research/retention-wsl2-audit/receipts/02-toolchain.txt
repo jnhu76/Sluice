@@ -1,0 +1,20 @@
+# receipt: toolchain — captured 2026-10-29T22:37:17+08:00
+$ gcc --version
+gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Copyright (C) 2025 Free Software Foundation, Inc.
+
+$ g++ --version
+g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Copyright (C) 2025 Free Software Foundation, Inc.
+
+$ clang --version
+Ubuntu clang version 21.1.8 (6ubuntu1)
+Target: x86_64-pc-linux-gnu
+
+$ ldd --version
+ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+Copyright (C) 2024 Free Software Foundation, Inc.
+
+$ xmake --version (ANSI stripped)
+xmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua
+xmake-exit=0

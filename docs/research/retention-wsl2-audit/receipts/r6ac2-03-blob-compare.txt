@@ -1,0 +1,37 @@
+# cmd: per-file blob compare, origin/research/r6-ac1-vectored-semantics vs origin/master, all files of origin/master...branch three-dot diff
+SAME    research/direct-beyond-parity/closure/r6-ac1.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/README.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
+SAME    research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
+SAME    research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep3.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
+SAME    research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow.txt
+# cmd: git diff origin/master origin/research/r6-ac1-vectored-semantics -- research/direct-beyond-parity/closure/r6-ac1.md research/direct-beyond-parity/closure/r6-ac1 | wc -l (0 = tip-vs-tip identical)
+0

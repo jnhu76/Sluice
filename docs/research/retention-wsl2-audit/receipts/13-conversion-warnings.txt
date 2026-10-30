@@ -1,0 +1,12 @@
+# receipts/13-conversion-warnings.txt
+date: 2026-10-29T23:12:19+08:00
+
+## GCC 15.2.0, production shape (no SLUICE_FILE_INTERNAL_TESTING), -O3
+$ g++ -c -m64 -O3 -std=c++20 -Wall -Werror -DNDEBUG -Iinclude -o bf_prod.o src/blocking_file.cpp -Wconversion -Wsign-conversion -Wextra -Wshadow -Wnull-dereference -Wduplicated-cond -Wlogical-op -Wuseless-cast
+exit=0 (no output = zero warnings)
+
+## GCC 15.2.0, seam shape (-DSLUICE_FILE_INTERNAL_TESTING), -O3
+exit=0
+
+## clang 21.1.8, -O3
+exit=0

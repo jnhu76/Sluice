@@ -1,0 +1,9 @@
+$ git -C /home/hoo/Projects/Sluice for-each-ref refs/remotes --format='%(refname) %(objectname)'
+refs/remotes/origin/HEAD 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+refs/remotes/origin/backup/pr-601-original-head-e4bb8833 e4bb8833699d0ca5dee191883f3fec6d41b221b2
+refs/remotes/origin/backup/pr-612-original-head-70d48f5e 70d48f5eb55a664544b5160cd4675d32150bb21e
+refs/remotes/origin/master 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+refs/remotes/origin/research/575-native-e5-atomic-rmw e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+refs/remotes/origin/research/593-key-path 2714aa65fe4837d30f5fa3fcdb27db38c23b7136
+refs/remotes/origin/research/product-integration-records 4d621d91692a13c3bc4ebd5fcddaa8e5b18a8a35
+refs/remotes/origin/research/r6-ac1-vectored-semantics 999b5305ae7d413a2a71acde926f8c6cfef6876a

@@ -1,0 +1,49 @@
+# branch r1-request-geometry (dududu) — blob reachability
+# date: 2026-10-29T23:15:04+08:00
+
+$ git -C /tmp/dududu-audit rev-list --objects origin/r1-request-geometry ^main | wc -l
+27
+
+$ git -C /tmp/dududu-audit rev-list --objects origin/r1-request-geometry ^main
+47cd1976701a2c9e73fc31470f45aec236a3e0b2
+47c9a29ee89cfd18f466d622379c6a2ca429a46b
+434416ebb1e5d707b815c1f563131e99422bb8e7
+b2dced46cd05d0737e97fd857d0be7f814e982b5
+dbf965ddc2f0ac22edaaab9f90138119151aae54 
+cae77dbb42088512b70e9726900779b054ff564e benchmarks
+7ec39b5321070e2ad7f5f80a5e4b59392f80788f benchmarks/duckdb-request-geometry
+7a60b85e148f80966a550e5ab6a762a907c69ca6 benchmarks/duckdb-request-geometry/.gitignore
+eb4c7a6ad14dc1dbcdb0cb4001a9483e455a130c benchmarks/duckdb-request-geometry/DUCKDB_METADATA_OPPORTUNITY_GATE.md
+ff070c6845abe8067f28a472c34dcc2864538a47 benchmarks/duckdb-request-geometry/DUCKDB_METADATA_REQUEST_GEOMETRY.md
+9e23f923748ad3f69f02e4300cb6031ff3005f6b benchmarks/duckdb-request-geometry/README.md
+49ad99851b849a0bc95fc58fbb1ad27fce47d16e benchmarks/duckdb-request-geometry/SLUICE_AC_RECOMMENDATIONS.md
+e39ec60fce0e428d6a8d0cadee938cea4d07efd5 benchmarks/duckdb-request-geometry/analyze_pread_geometry.py
+f6422608289d5f4f7df6bccf3ad2705356defb42 benchmarks/duckdb-request-geometry/results
+29be5cbff75636b507245398cba8203c5851dc4d benchmarks/duckdb-request-geometry/results/.gitignore
+b34c587ca4db8566c71d1510d89e317248a68c56 benchmarks/duckdb-request-geometry/results/trace-index.md
+63e17be72aa15908c9c79ec9858ca72b71ba15a0 
+16c23ab6279400f2b6ebcf9090656fba1f7453e4 benchmarks
+c3257892aaafdedde708e7f6ca16e2c05d0c8fbe benchmarks/duckdb-request-geometry
+2b78e21594cf16acdd53014972fc4c37ef0a3b44 benchmarks/duckdb-request-geometry/README.md
+041f384ce95ee064b9612af345623e3278560623 
+cce98ead96dbc1bef0f3684d702f08744bf9c03a benchmarks
+86e5cf5d55560e9674e24a4776d558fe25cea8e2 benchmarks/duckdb-request-geometry
+ffd3c9aab731d9081b3f009900efbfbb584f78f0 benchmarks/duckdb-request-geometry/README.md
+d95d120bfdca092e06c6aad206e90802b6451760 
+59373a563155c33d5875b8fd37ad820908e8f82d benchmarks
+de1c054fb42b51ce7d5b2516ca4a959b9087b7ee benchmarks/duckdb-request-geometry
+
+$ git -C /tmp/dududu-audit diff --name-status main...origin/r1-request-geometry
+A	benchmarks/duckdb-request-geometry/.gitignore
+A	benchmarks/duckdb-request-geometry/DUCKDB_METADATA_OPPORTUNITY_GATE.md
+A	benchmarks/duckdb-request-geometry/DUCKDB_METADATA_REQUEST_GEOMETRY.md
+A	benchmarks/duckdb-request-geometry/README.md
+A	benchmarks/duckdb-request-geometry/SLUICE_AC_RECOMMENDATIONS.md
+A	benchmarks/duckdb-request-geometry/analyze_pread_geometry.py
+A	benchmarks/duckdb-request-geometry/results/.gitignore
+A	benchmarks/duckdb-request-geometry/results/trace-index.md
+
+$ git -C /tmp/dududu-audit diff --stat main...origin/r1-request-geometry | tail -3
+ .../duckdb-request-geometry/results/.gitignore     |   3 +
+ .../duckdb-request-geometry/results/trace-index.md |  48 ++++
+ 8 files changed, 996 insertions(+)

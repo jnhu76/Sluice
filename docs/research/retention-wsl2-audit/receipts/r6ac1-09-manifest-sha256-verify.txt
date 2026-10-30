@@ -1,0 +1,13 @@
+# Verify #610 sha256 manifest entries against branch blob content
+
+$ git show origin/master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json | python3 - <<parse>
+sample manifest entries for r6-ac1 files: 34
+{"arm": "closure", "host": "E5", "path": "research/direct-beyond-parity/closure/r6-ac1.md", "report_ref": "", "reproduction": "", "sha256": "e578d0a8b562c7b00e7d8f0828c3a0c36a6dd7cadf858afeb743d149f38eb4a7", "source_sha": "", "status": "REPORT", "toolchain": ""}
+{"arm": "closure/r6-ac1", "host": "", "path": "research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md", "report_ref": "", "reproduction": "", "sha256": "a31502531c39a825122b18013e6b37d3c9fb87edd8a902d957431b910d99429b", "source_sha": "", "status": "REPORT", "toolchain": ""}
+{"arm": "closure/r6-ac1", "host": "E5", "path": "research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md", "report_ref": "", "reproduction": "", "sha256": "746351a804aa58d55a6b678951918c5ffb7ce8f461db9ae9c505fdd3f4f9d925", "source_sha": "", "status": "REPORT", "toolchain": ""}
+{"arm": "closure/r6-ac1", "host": "E5", "path": "research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md", "report_ref": "", "reproduction": "", "sha256": "4ced1c48cd73edbd9769624448afa3c90690a8d3959386b5a464383beed1b5d5", "source_sha": "", "status": "REPORT", "toolchain": ""}
+
+$ sha256sum of branch-side content for the same files (git cat-file blob | sha256sum)
+branch research/direct-beyond-parity/closure/r6-ac1.md -> sha256 e578d0a8b562c7b00e7d8f0828c3a0c36a6dd7cadf858afeb743d149f38eb4a7
+branch research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt -> sha256 fc2160c6f38fab77357d62e3d6b43dae72335151dc5a197a1cda8a0cb37889dc
+branch research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c -> sha256 9e364ff767cc716bba4d31d19d189d7f128eae1edabbab630660c9ec26cf56a9

@@ -1,0 +1,19 @@
+# receipt: commit reachability vs origin/master
+
+$ git merge-base origin/master origin/research/product-integration-records
+4b962abbd26156bb15c4378b90811e9889795c03
+
+$ git rev-list --count origin/master..origin/research/product-integration-records
+2
+
+$ git log --oneline origin/master..origin/research/product-integration-records
+4d621d91 research(integration): record archive push SHA in Phase 8 log
+8c3adf6c research(integration): archive E5 product integration records and Phase 3.3 final-head perf receipts
+
+$ git diff --name-only origin/master...origin/research/product-integration-records | grep -E "^(include|src|apps|xmake)" || echo NO_PRODUCT_PATHS_IN_DIFF
+NO_PRODUCT_PATHS_IN_DIFF
+
+$ git diff --stat origin/master...origin/research/product-integration-records | tail -3
+ .../closure/perf-p2c1-finalhead/run_aa.sh          |   10 +
+ .../closure/perf-p2c1-finalhead/run_ab.sh          |   11 +
+ 38 files changed, 5028 insertions(+)

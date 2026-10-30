@@ -1,0 +1,4 @@
+$ Verify ALL 34 r6-ac1 manifest entries: manifest sha256 vs sha256(branch blob content)
+manifest entries with r6-ac1 path: 34
+MATCHED: 34
+MISMATCHED: 0

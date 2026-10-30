@@ -1,0 +1,31 @@
+# C1 suites + mutant kills, clang 21.1.8 release (-O3 -DNDEBUG, --liburing=n)
+# config: xmake f --toolchain=clang -m release --liburing=n (binaries verified via .comment)
+
+== semantic_range_test
+all 7 range semantic tests passed (13 range table cases)
+== semantic_short_io_reference_test
+all 9 short-I/O reference tests passed (8 primitive cases)
+== direct_composition_fault_test
+all 15 direct composition fault-injection tests passed
+== file_close_semantics_test
+all 8 canonical File close-semantics tests passed
+== blocking_file_read_test
+all 6 blocking file read tests passed
+== blocking_file_sequential_test
+all 13 blocking file sequential tests passed
+== blocking_file_state_test
+all 14 blocking file state tests passed
+== blocking_file_write_test
+all 8 blocking file write tests passed
+
+# mutant kills (exit 1 = killed)
+blocking_file_mut_admit_invalid_range exit=1
+blocking_file_mut_empty_before_closed exit=1
+blocking_file_mut_admit_unrepresentable_size exit=1
+blocking_file_mut_advance_by_requested exit=1
+blocking_file_mut_retry_zero_progress exit=1
+blocking_file_mut_short_io_retry_zero_progress exit=1
+blocking_file_mut_failure_accounted exit=1
+blocking_file_mut_skip_impossible_count exit=1
+blocking_file_mut_step_reports_full_count exit=1
+blocking_file_mut_step_skips_eintr_retry exit=1

@@ -1,0 +1,14 @@
+# receipt r0closure-06: branch-name references (run 2026-10-29)
+== dududu clone (full tree incl .github) ==
+/tmp/dududu-audit/benchmarks/duckdb-r0/results/prep-record.md:9:- DUDUDU branch `sluice-r0-closure` from `origin/main` =
+/tmp/dududu-audit/docs/DUCKDB_FIO_R0_PREREG.md:226:  (based on `sluice-r0-closure` @ `cc053cf`), deterministic assertions, no
+/tmp/dududu-audit/benchmarks/duckdb-r0/README.md:17:| `DUDUDU_SHA` | branch `sluice-r0-closure` from `origin/main` = `b94041d918672d113ea0ca667ba8ccdabf329c80` | `git rev-parse origin/main` after fetch, 2026-10-29 |
+/tmp/dududu-audit/benchmarks/duckdb-r0/async-host-probe/README.md:40:- dududu: branch `r5-async-host-probe` (based on `sluice-r0-closure`).
+exit=0
+== sluice workspace (excluding this audit dir) ==
+/home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-async-host.md:185:`sluice-r0-closure` @ `cc053cf`），commit `4eafbc0`
+/home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/r5-prep.md:10:- dududu 研究分支 `sluice-r0-closure`，基线 = 远端 live
+/home/hoo/Projects/Sluice/research/direct-beyond-parity/closure/DUCKDB_FIO_R0_PREREG.md:220:  (based on `sluice-r0-closure` @ `cc053cf`), deterministic assertions, no
+== dududu CI workflows ==
+/tmp/dududu-audit/.github/workflows/repo-policy.yml
+ci-grep exit=1 (1 = no hits)

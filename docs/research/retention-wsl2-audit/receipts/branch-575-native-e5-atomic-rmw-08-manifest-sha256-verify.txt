@@ -1,0 +1,7 @@
+# 08 manifest.json sha256 verification (2026-10-29T15:33:34Z)
+$ git -C /home/hoo/Projects/Sluice archive origin/research/575-native-e5-atomic-rmw docs/research/mw-hw-575-native-e5 | tar -x -C /tmp/sluice-575-audit-extract
+$ python3 (compare sha256 of each file at branch tip against manifest.json "files")
+checked=113 ok=113 mismatch=0 missing=0
+files not in manifest: 0
+# manifest covers 113 files (manifest.json itself is the 114th); every checksum matches the branch-tip content —
+# the evidence tree is self-consistent and can be archived as-is (same pattern as #610 EVIDENCE_MANIFEST.json).

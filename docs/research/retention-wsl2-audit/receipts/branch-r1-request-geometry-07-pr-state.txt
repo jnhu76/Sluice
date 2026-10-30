@@ -1,0 +1,4 @@
+# branch r1-request-geometry (dududu) — PR state via gh (independent check)
+# date: 2026-10-29T23:22:36+08:00
+$ gh pr view 8 -R jnhu76/dududu --json number,state,headRefName,headRefOid,baseRefName,title,url
+{"baseRefName":"main","headRefName":"r1-request-geometry","headRefOid":"47cd1976701a2c9e73fc31470f45aec236a3e0b2","number":8,"state":"OPEN","title":"docs(bench): record metadata micro-read study and opportunity gate","url":"https://github.com/jnhu76/dududu/pull/8"}

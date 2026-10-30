@@ -1,0 +1,21 @@
+# 07 recovery path (2026-10-29T15:32:26Z)
+
+$ git -C /home/hoo/Projects/Sluice ls-remote origin refs/heads/research/575-native-e5-atomic-rmw refs/pull/584/head
+e9baafb9d117cbaf387dde9f4433ebbacb4a73b3	refs/heads/research/575-native-e5-atomic-rmw
+e9baafb9d117cbaf387dde9f4433ebbacb4a73b3	refs/pull/584/head
+(branch still exists on origin AND GitHub PR ref refs/pull/584/head resolves to the same SHA)
+
+$ git -C /home/hoo/Projects/Sluice cat-file -t e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+commit
+$ git -C /home/hoo/Projects/Sluice cat-file -t 28e779264310c145116c8a3988ca42cd9fac1300
+blob
+(objects present in the local clone right now)
+
+# recovery steps if the branch ref is deleted:
+# 1) from origin branch ref (if it still exists): git -C /home/hoo/Projects/Sluice fetch origin research/575-native-e5-atomic-rmw
+# 2) from closed PR head ref (kept by GitHub even for CLOSED-not-merged PRs):
+#    git -C /home/hoo/Projects/Sluice fetch origin pull/584/head
+# 3) by full SHA from any clone holding the objects: git fetch origin e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+#    (server must have uploadpack.allowAnySHA1InWant / allowReachableSHA1InWant; otherwise use route 1 or 2)
+# PR #584 (CLOSED, https://github.com/jnhu76/Sluice/pull/584) headSha=e9baafb9d117cbaf387dde9f4433ebbacb4a73b3
+# is traceable in the ask-provided PR list and on GitHub; its refs/pull/584/head was verified live above.

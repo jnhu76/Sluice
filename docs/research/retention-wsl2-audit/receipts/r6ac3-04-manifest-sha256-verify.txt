@@ -1,0 +1,13 @@
++ R=/home/hoo/Projects/Sluice
+++ date -Is
++ echo '=== r6ac3-04 manifest sha256 verify (2026-10-30T00:13:14+08:00) ==='
+=== r6ac3-04 manifest sha256 verify (2026-10-30T00:13:14+08:00) ===
++ python3 - /home/hoo/Projects/Sluice
+manifest r6-ac1 path entries: 34
+RESULT: matched=34 mismatched=0 (branch blob bytes vs origin/master EVIDENCE_MANIFEST.json sha256)
++ echo
+
++ echo '# cross-check: same verify against origin/master blobs (the archived copy must also match its own manifest)'
+# cross-check: same verify against origin/master blobs (the archived copy must also match its own manifest)
++ python3 - /home/hoo/Projects/Sluice
+RESULT(master side): matched=34 mismatched=0

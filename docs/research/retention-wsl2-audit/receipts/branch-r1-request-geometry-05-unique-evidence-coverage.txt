@@ -1,0 +1,20 @@
+# branch r1-request-geometry (dududu) — unique evidence coverage
+# date: 2026-10-29T23:16:42+08:00
+
+## A. dududu main / other branches: any path or content overlap
+$ git -C /tmp/dududu-audit grep -l "duckdb-request-geometry" main $(git -C /tmp/dududu-audit for-each-ref --format="%(refname)" refs/remotes/origin | grep -v r1-request-geometry) || echo "(no match on other refs)"
+(no match on other refs)
+
+## B. Sluice repo (master + worktree): references to request-geometry study
+$ grep -rn "request-geometry\|DUCKDB_METADATA\|micro-read" /home/hoo/Projects/Sluice --include="*.md" -l | grep -v retention-wsl2-audit || echo "(no match outside audit dir)"
+(no match outside audit dir)
+
+$ ls /home/hoo/Projects/Sluice/docs/research/ (Sluice #610-era archive dirs)
+mw-hw-1
+native-linux-m2
+retention-wsl2-audit
+state-complexity
+uring-router-580
+
+$ grep -rln "request.geometry\|micro-read" /home/hoo/Projects/Sluice/docs/research/direct-beyond-parity/ 2>/dev/null || echo "(no match in #610 archive)"
+(no match in #610 archive)

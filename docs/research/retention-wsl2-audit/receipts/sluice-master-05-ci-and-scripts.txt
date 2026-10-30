@@ -1,0 +1,11 @@
+$ grep -rn -i master .github/
+/home/hoo/Projects/Sluice/.github/ISSUE_TEMPLATE/bug.yml:15:      placeholder: master@<sha>
+/home/hoo/Projects/Sluice/.github/ISSUE_TEMPLATE/audit.yml:15:      placeholder: master@<sha>, TLC ..., clang ...
+/home/hoo/Projects/Sluice/.github/CONTRIBUTING.md:38:Use a focused branch from current `master`. Suggested prefixes:
+/home/hoo/Projects/Sluice/.github/workflows/ci.yml:6:      - master
+/home/hoo/Projects/Sluice/.github/workflows/ci.yml:18:      - master
+/home/hoo/Projects/Sluice/.github/ISSUE_TEMPLATE/performance.yml:15:      placeholder: master@<sha> / candidate@<sha>
+/home/hoo/Projects/Sluice/.github/ISSUE_TEMPLATE/config.yml:4:    url: https://github.com/jnhu76/Sluice/blob/master/.github/CONTRIBUTING.md
+
+$ grep -rn -E '(origin/)?master' scripts/ xmake/ xmake.lua
+(exit 0)

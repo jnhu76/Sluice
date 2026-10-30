@@ -1,0 +1,609 @@
++ R=/home/hoo/Projects/Sluice
++ W=/tmp/sluice-val-r6ac3
+++ date -Is
++ echo '=== r6ac3-02 unique-objects arbitration (2026-10-30T00:11:18+08:00) ==='
+=== r6ac3-02 unique-objects arbitration (2026-10-30T00:11:18+08:00) ===
++ echo '# cmd: git -C /home/hoo/Projects/Sluice log -1 --format='\''%H parent=%P'\'' origin/research/r6-ac1-vectored-semantics'
+# cmd: git -C /home/hoo/Projects/Sluice log -1 --format='%H parent=%P' origin/research/r6-ac1-vectored-semantics
++ git -C /home/hoo/Projects/Sluice log -1 '--format=%H parent=%P' origin/research/r6-ac1-vectored-semantics
+999b5305ae7d413a2a71acde926f8c6cfef6876a parent=bdfd0d8d4595fd82d1cd4b099af8ed37851e6d57
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-list --objects origin/research/r6-ac1-vectored-semantics --not origin/master'
+# cmd: git -C /home/hoo/Projects/Sluice rev-list --objects origin/research/r6-ac1-vectored-semantics --not origin/master
++ git -C /home/hoo/Projects/Sluice rev-list --objects origin/research/r6-ac1-vectored-semantics --not origin/master
++ tee /tmp/sluice-val-r6ac3/branch-only.txt
+999b5305ae7d413a2a71acde926f8c6cfef6876a
+076728bf76694951f34b6aba3d2260403c8c4fce 
+3ba4f8d83a7a7172d3a205b04386db220e074971 research
+2557b74abd9b5e33c32bbe2e965233da082cf3ba research/direct-beyond-parity
+b115306c8cc6873b6cd4f0809ace784502529d45 research/direct-beyond-parity/closure
+a49e118cc0a041de2f3d1b483c382ea854295092 research/direct-beyond-parity/closure/r6-ac1.md
+f7b54ba6d879fafd34a90c84bd481151b56818ea research/direct-beyond-parity/closure/r6-ac1
+e25e27705740347ff186d48ab7650913f7bd130d research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
+afdcc871413c2bc94a7f155243cb72af4bef1c1c research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
+1321b1a43dc3a47febf0a07d83704cea3f2cc93d research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
+d4b8d1a181c4bde6606b005f8844ad00404fe052 research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
+78b5852d01724ca6b250a606db887b3a5ea8a1cb research/direct-beyond-parity/closure/r6-ac1/README.md
+efe5d174c6bb57cf4623a8f34aef9381cb0cdaea research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
+7b85ab623a5c06a51b6c75b70577e12e36e9e229 research/direct-beyond-parity/closure/r6-ac1/probes
+c185c7c1e6f860fc3667fcc71672891ba5e44222 research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
+5659240f0db734ab9a5a50c8440598a0881e4113 research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
+930c046698e2eb20ccc31b392297c06d150e8b49 research/direct-beyond-parity/closure/r6-ac1/raw
+2bca64d75c4402e81ad9321114fb89303eccce0d research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
+0152147f6e39c9efc982cdab63dc1aed24070a13 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
+a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
+1fd560759e7edd3fefed571f9fa7a46a0fb6d918 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
+4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+7f321ea867737a3567b81277f15a8676b5e8be5a research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
+4b30d1aea58a149191060f638232657e71d73579 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
+97ed6fbc72985919cc125d830722786b81734c6e research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
+bf96d70d119a83ddc974b558b8c697140a541530 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
+b7713e4bf1c785374e3db01b90e8edccc900fa3d research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
+c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
+79a5e391db6fe3736632efc17e22c1fe98cef828 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
+784ea063a1c3655cf9bbfa0abf431ea461256814 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
+0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
+69fe688cabc997528e1f376296d3f931c8e6d60b research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
+4b11a5c3186af53eb450ff8235b6c54958cacee3 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
+cb11c1444ec3aff6d4d4bf9975408e4da6363693 research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
+++ wc -l
++ echo '# count: 34 branch-only objects listed'
+# count: 34 branch-only objects listed
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-list --objects origin/research/r6-ac1-vectored-semantics ^origin/master (identical form check)'
+# cmd: git -C /home/hoo/Projects/Sluice rev-list --objects origin/research/r6-ac1-vectored-semantics ^origin/master (identical form check)
++ git -C /home/hoo/Projects/Sluice rev-list --objects origin/research/r6-ac1-vectored-semantics '^origin/master'
++ diff /tmp/sluice-val-r6ac3/branch-only.txt /tmp/sluice-val-r6ac3/branch-only-caret.txt
++ echo 'IDENTICAL output with ^ form'
+IDENTICAL output with ^ form
++ echo
+
++ echo '# cmd: git -C /home/hoo/Projects/Sluice rev-list --objects origin/master | cut -d'\'' '\'' -f1 | sort -u  -> master reachable object set'
+# cmd: git -C /home/hoo/Projects/Sluice rev-list --objects origin/master | cut -d' ' -f1 | sort -u  -> master reachable object set
++ git -C /home/hoo/Projects/Sluice rev-list --objects origin/master
++ cut '-d ' -f1
++ sort -u
+++ wc -l
++ echo 'master set size: 35416 objects'
+master set size: 35416 objects
++ echo
+
++ echo '# per-object: SHA, type (cat-file -t), path (if any), membership in master reachable set'
+# per-object: SHA, type (cat-file -t), path (if any), membership in master reachable set
++ echo 'format: <sha> <type> <in-master-set:YES/NO> <path>'
+format: <sha> <type> <in-master-set:YES/NO> <path>
++ awk '{print $1}' /tmp/sluice-val-r6ac3/branch-only.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ t=commit
++ grep -q '^999b5305ae7d413a2a71acde926f8c6cfef6876a$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=NO
+++ grep '^999b5305ae7d413a2a71acde926f8c6cfef6876a ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=
++ echo '999b5305ae7d413a2a71acde926f8c6cfef6876a commit in-master-set=NO path=<none>'
+999b5305ae7d413a2a71acde926f8c6cfef6876a commit in-master-set=NO path=<none>
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 076728bf76694951f34b6aba3d2260403c8c4fce
++ t=tree
++ grep -q '^076728bf76694951f34b6aba3d2260403c8c4fce$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=NO
+++ grep '^076728bf76694951f34b6aba3d2260403c8c4fce ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=
++ echo '076728bf76694951f34b6aba3d2260403c8c4fce tree in-master-set=NO path=<none>'
+076728bf76694951f34b6aba3d2260403c8c4fce tree in-master-set=NO path=<none>
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 3ba4f8d83a7a7172d3a205b04386db220e074971
++ t=tree
++ grep -q '^3ba4f8d83a7a7172d3a205b04386db220e074971$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=NO
+++ grep '^3ba4f8d83a7a7172d3a205b04386db220e074971 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research
++ echo '3ba4f8d83a7a7172d3a205b04386db220e074971 tree in-master-set=NO path=research'
+3ba4f8d83a7a7172d3a205b04386db220e074971 tree in-master-set=NO path=research
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 2557b74abd9b5e33c32bbe2e965233da082cf3ba
++ t=tree
++ grep -q '^2557b74abd9b5e33c32bbe2e965233da082cf3ba$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=NO
+++ grep '^2557b74abd9b5e33c32bbe2e965233da082cf3ba ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity
++ echo '2557b74abd9b5e33c32bbe2e965233da082cf3ba tree in-master-set=NO path=research/direct-beyond-parity'
+2557b74abd9b5e33c32bbe2e965233da082cf3ba tree in-master-set=NO path=research/direct-beyond-parity
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t b115306c8cc6873b6cd4f0809ace784502529d45
++ t=tree
++ grep -q '^b115306c8cc6873b6cd4f0809ace784502529d45$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=NO
+++ grep '^b115306c8cc6873b6cd4f0809ace784502529d45 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure
++ echo 'b115306c8cc6873b6cd4f0809ace784502529d45 tree in-master-set=NO path=research/direct-beyond-parity/closure'
+b115306c8cc6873b6cd4f0809ace784502529d45 tree in-master-set=NO path=research/direct-beyond-parity/closure
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t a49e118cc0a041de2f3d1b483c382ea854295092
++ t=blob
++ grep -q '^a49e118cc0a041de2f3d1b483c382ea854295092$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^a49e118cc0a041de2f3d1b483c382ea854295092 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1.md
++ echo 'a49e118cc0a041de2f3d1b483c382ea854295092 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1.md'
+a49e118cc0a041de2f3d1b483c382ea854295092 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t f7b54ba6d879fafd34a90c84bd481151b56818ea
++ t=tree
++ grep -q '^f7b54ba6d879fafd34a90c84bd481151b56818ea$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^f7b54ba6d879fafd34a90c84bd481151b56818ea ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1
++ echo 'f7b54ba6d879fafd34a90c84bd481151b56818ea tree in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1'
+f7b54ba6d879fafd34a90c84bd481151b56818ea tree in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t e25e27705740347ff186d48ab7650913f7bd130d
++ t=blob
++ grep -q '^e25e27705740347ff186d48ab7650913f7bd130d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^e25e27705740347ff186d48ab7650913f7bd130d ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
++ echo 'e25e27705740347ff186d48ab7650913f7bd130d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md'
+e25e27705740347ff186d48ab7650913f7bd130d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/API_DRAFT.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t afdcc871413c2bc94a7f155243cb72af4bef1c1c
++ t=blob
++ grep -q '^afdcc871413c2bc94a7f155243cb72af4bef1c1c$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^afdcc871413c2bc94a7f155243cb72af4bef1c1c ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
++ echo 'afdcc871413c2bc94a7f155243cb72af4bef1c1c blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md'
+afdcc871413c2bc94a7f155243cb72af4bef1c1c blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 1321b1a43dc3a47febf0a07d83704cea3f2cc93d
++ t=blob
++ grep -q '^1321b1a43dc3a47febf0a07d83704cea3f2cc93d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^1321b1a43dc3a47febf0a07d83704cea3f2cc93d ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
++ echo '1321b1a43dc3a47febf0a07d83704cea3f2cc93d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md'
+1321b1a43dc3a47febf0a07d83704cea3f2cc93d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/ERROR_MATRIX.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t d4b8d1a181c4bde6606b005f8844ad00404fe052
++ t=blob
++ grep -q '^d4b8d1a181c4bde6606b005f8844ad00404fe052$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^d4b8d1a181c4bde6606b005f8844ad00404fe052 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
++ echo 'd4b8d1a181c4bde6606b005f8844ad00404fe052 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md'
+d4b8d1a181c4bde6606b005f8844ad00404fe052 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/OWNER_DECISION_PACKET.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 78b5852d01724ca6b250a606db887b3a5ea8a1cb
++ t=blob
++ grep -q '^78b5852d01724ca6b250a606db887b3a5ea8a1cb$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^78b5852d01724ca6b250a606db887b3a5ea8a1cb ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/README.md
++ echo '78b5852d01724ca6b250a606db887b3a5ea8a1cb blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/README.md'
+78b5852d01724ca6b250a606db887b3a5ea8a1cb blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/README.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++ t=blob
++ grep -q '^efe5d174c6bb57cf4623a8f34aef9381cb0cdaea$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^efe5d174c6bb57cf4623a8f34aef9381cb0cdaea ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
++ echo 'efe5d174c6bb57cf4623a8f34aef9381cb0cdaea blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md'
+efe5d174c6bb57cf4623a8f34aef9381cb0cdaea blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 7b85ab623a5c06a51b6c75b70577e12e36e9e229
++ t=tree
++ grep -q '^7b85ab623a5c06a51b6c75b70577e12e36e9e229$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^7b85ab623a5c06a51b6c75b70577e12e36e9e229 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/probes
++ echo '7b85ab623a5c06a51b6c75b70577e12e36e9e229 tree in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/probes'
+7b85ab623a5c06a51b6c75b70577e12e36e9e229 tree in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/probes
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t c185c7c1e6f860fc3667fcc71672891ba5e44222
++ t=blob
++ grep -q '^c185c7c1e6f860fc3667fcc71672891ba5e44222$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^c185c7c1e6f860fc3667fcc71672891ba5e44222 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
++ echo 'c185c7c1e6f860fc3667fcc71672891ba5e44222 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c'
+c185c7c1e6f860fc3667fcc71672891ba5e44222 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 5659240f0db734ab9a5a50c8440598a0881e4113
++ t=blob
++ grep -q '^5659240f0db734ab9a5a50c8440598a0881e4113$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^5659240f0db734ab9a5a50c8440598a0881e4113 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
++ echo '5659240f0db734ab9a5a50c8440598a0881e4113 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh'
+5659240f0db734ab9a5a50c8440598a0881e4113 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 930c046698e2eb20ccc31b392297c06d150e8b49
++ t=tree
++ grep -q '^930c046698e2eb20ccc31b392297c06d150e8b49$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^930c046698e2eb20ccc31b392297c06d150e8b49 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw
++ echo '930c046698e2eb20ccc31b392297c06d150e8b49 tree in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw'
+930c046698e2eb20ccc31b392297c06d150e8b49 tree in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 2bca64d75c4402e81ad9321114fb89303eccce0d
++ t=blob
++ grep -q '^2bca64d75c4402e81ad9321114fb89303eccce0d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^2bca64d75c4402e81ad9321114fb89303eccce0d ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
++ echo '2bca64d75c4402e81ad9321114fb89303eccce0d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt'
+2bca64d75c4402e81ad9321114fb89303eccce0d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/env-pin.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 0152147f6e39c9efc982cdab63dc1aed24070a13
++ t=blob
++ grep -q '^0152147f6e39c9efc982cdab63dc1aed24070a13$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^0152147f6e39c9efc982cdab63dc1aed24070a13 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
++ echo '0152147f6e39c9efc982cdab63dc1aed24070a13 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt'
+0152147f6e39c9efc982cdab63dc1aed24070a13 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-array-order.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
++ t=blob
++ grep -q '^a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
++ echo 'a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt'
+a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep2.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 1fd560759e7edd3fefed571f9fa7a46a0fb6d918
++ t=blob
++ grep -q '^1fd560759e7edd3fefed571f9fa7a46a0fb6d918$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^1fd560759e7edd3fefed571f9fa7a46a0fb6d918 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
++ echo '1fd560759e7edd3fefed571f9fa7a46a0fb6d918 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt'
+1fd560759e7edd3fefed571f9fa7a46a0fb6d918 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity-rep3.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++ t=blob
++ grep -q '^4a2c5509c3a850a52b2122a06d7ba41d8c39eff4$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
++ echo '4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt'
+4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 7f321ea867737a3567b81277f15a8676b5e8be5a
++ t=blob
++ grep -q '^7f321ea867737a3567b81277f15a8676b5e8be5a$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^7f321ea867737a3567b81277f15a8676b5e8be5a ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
++ echo '7f321ea867737a3567b81277f15a8676b5e8be5a blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt'
+7f321ea867737a3567b81277f15a8676b5e8be5a blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-cursor.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 4b30d1aea58a149191060f638232657e71d73579
++ t=blob
++ grep -q '^4b30d1aea58a149191060f638232657e71d73579$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^4b30d1aea58a149191060f638232657e71d73579 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
++ echo '4b30d1aea58a149191060f638232657e71d73579 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt'
+4b30d1aea58a149191060f638232657e71d73579 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-eintr.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 97ed6fbc72985919cc125d830722786b81734c6e
++ t=blob
++ grep -q '^97ed6fbc72985919cc125d830722786b81734c6e$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^97ed6fbc72985919cc125d830722786b81734c6e ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
++ echo '97ed6fbc72985919cc125d830722786b81734c6e blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt'
+97ed6fbc72985919cc125d830722786b81734c6e blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-env.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t bf96d70d119a83ddc974b558b8c697140a541530
++ t=blob
++ grep -q '^bf96d70d119a83ddc974b558b8c697140a541530$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^bf96d70d119a83ddc974b558b8c697140a541530 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
++ echo 'bf96d70d119a83ddc974b558b8c697140a541530 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt'
+bf96d70d119a83ddc974b558b8c697140a541530 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-fsize-partial-write-btrfs.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t b7713e4bf1c785374e3db01b90e8edccc900fa3d
++ t=blob
++ grep -q '^b7713e4bf1c785374e3db01b90e8edccc900fa3d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^b7713e4bf1c785374e3db01b90e8edccc900fa3d ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
++ echo 'b7713e4bf1c785374e3db01b90e8edccc900fa3d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt'
+b7713e4bf1c785374e3db01b90e8edccc900fa3d blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-read-btrfs.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ t=blob
++ grep -q '^c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
++ echo 'c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt'
+c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write-btrfs-rep2.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 79a5e391db6fe3736632efc17e22c1fe98cef828
++ t=blob
++ grep -q '^79a5e391db6fe3736632efc17e22c1fe98cef828$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^79a5e391db6fe3736632efc17e22c1fe98cef828 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
++ echo '79a5e391db6fe3736632efc17e22c1fe98cef828 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt'
+79a5e391db6fe3736632efc17e22c1fe98cef828 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iov-fault-write.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 784ea063a1c3655cf9bbfa0abf431ea461256814
++ t=blob
++ grep -q '^784ea063a1c3655cf9bbfa0abf431ea461256814$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^784ea063a1c3655cf9bbfa0abf431ea461256814 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
++ echo '784ea063a1c3655cf9bbfa0abf431ea461256814 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt'
+784ea063a1c3655cf9bbfa0abf431ea461256814 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-iovmax-btrfs.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
++ t=blob
++ grep -q '^0b9b5fec9c1948ccce966c47a1aaab6ea3636d41$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
++ echo '0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt'
+0b9b5fec9c1948ccce966c47a1aaab6ea3636d41 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-nonseekable.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 69fe688cabc997528e1f376296d3f931c8e6d60b
++ t=blob
++ grep -q '^69fe688cabc997528e1f376296d3f931c8e6d60b$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^69fe688cabc997528e1f376296d3f931c8e6d60b ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
++ echo '69fe688cabc997528e1f376296d3f931c8e6d60b blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt'
+69fe688cabc997528e1f376296d3f931c8e6d60b blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-null-empty-btrfs.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 4b11a5c3186af53eb450ff8235b6c54958cacee3
++ t=blob
++ grep -q '^4b11a5c3186af53eb450ff8235b6c54958cacee3$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^4b11a5c3186af53eb450ff8235b6c54958cacee3 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
++ echo '4b11a5c3186af53eb450ff8235b6c54958cacee3 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt'
+4b11a5c3186af53eb450ff8235b6c54958cacee3 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-short-read-btrfs.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t cb11c1444ec3aff6d4d4bf9975408e4da6363693
++ t=blob
++ grep -q '^cb11c1444ec3aff6d4d4bf9975408e4da6363693$' /tmp/sluice-val-r6ac3/master-objects.txt
++ m=YES
+++ grep '^cb11c1444ec3aff6d4d4bf9975408e4da6363693 ' /tmp/sluice-val-r6ac3/branch-only.txt
+++ cut '-d ' -f2-
++ p=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
++ echo 'cb11c1444ec3aff6d4d4bf9975408e4da6363693 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt'
+cb11c1444ec3aff6d4d4bf9975408e4da6363693 blob in-master-set=YES path=research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-sum-overflow-btrfs.txt
++ read -r sha
++ echo
+
++ echo '# summary: branch-only blobs NOT in master'\''s reachable set (genuinely unique content):'
+# summary: branch-only blobs NOT in master's reachable set (genuinely unique content):
++ awk '{print $1}' /tmp/sluice-val-r6ac3/branch-only.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ t=commit
++ grep -q '^999b5305ae7d413a2a71acde926f8c6cfef6876a$' /tmp/sluice-val-r6ac3/master-objects.txt
++ echo 'UNIQUE commit 999b5305ae7d413a2a71acde926f8c6cfef6876a'
+UNIQUE commit 999b5305ae7d413a2a71acde926f8c6cfef6876a
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 076728bf76694951f34b6aba3d2260403c8c4fce
++ t=tree
++ grep -q '^076728bf76694951f34b6aba3d2260403c8c4fce$' /tmp/sluice-val-r6ac3/master-objects.txt
++ echo 'UNIQUE tree 076728bf76694951f34b6aba3d2260403c8c4fce'
+UNIQUE tree 076728bf76694951f34b6aba3d2260403c8c4fce
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 3ba4f8d83a7a7172d3a205b04386db220e074971
++ t=tree
++ grep -q '^3ba4f8d83a7a7172d3a205b04386db220e074971$' /tmp/sluice-val-r6ac3/master-objects.txt
++ echo 'UNIQUE tree 3ba4f8d83a7a7172d3a205b04386db220e074971'
+UNIQUE tree 3ba4f8d83a7a7172d3a205b04386db220e074971
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 2557b74abd9b5e33c32bbe2e965233da082cf3ba
++ t=tree
++ grep -q '^2557b74abd9b5e33c32bbe2e965233da082cf3ba$' /tmp/sluice-val-r6ac3/master-objects.txt
++ echo 'UNIQUE tree 2557b74abd9b5e33c32bbe2e965233da082cf3ba'
+UNIQUE tree 2557b74abd9b5e33c32bbe2e965233da082cf3ba
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t b115306c8cc6873b6cd4f0809ace784502529d45
++ t=tree
++ grep -q '^b115306c8cc6873b6cd4f0809ace784502529d45$' /tmp/sluice-val-r6ac3/master-objects.txt
++ echo 'UNIQUE tree b115306c8cc6873b6cd4f0809ace784502529d45'
+UNIQUE tree b115306c8cc6873b6cd4f0809ace784502529d45
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t a49e118cc0a041de2f3d1b483c382ea854295092
++ t=blob
++ grep -q '^a49e118cc0a041de2f3d1b483c382ea854295092$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t f7b54ba6d879fafd34a90c84bd481151b56818ea
++ t=tree
++ grep -q '^f7b54ba6d879fafd34a90c84bd481151b56818ea$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t e25e27705740347ff186d48ab7650913f7bd130d
++ t=blob
++ grep -q '^e25e27705740347ff186d48ab7650913f7bd130d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t afdcc871413c2bc94a7f155243cb72af4bef1c1c
++ t=blob
++ grep -q '^afdcc871413c2bc94a7f155243cb72af4bef1c1c$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 1321b1a43dc3a47febf0a07d83704cea3f2cc93d
++ t=blob
++ grep -q '^1321b1a43dc3a47febf0a07d83704cea3f2cc93d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t d4b8d1a181c4bde6606b005f8844ad00404fe052
++ t=blob
++ grep -q '^d4b8d1a181c4bde6606b005f8844ad00404fe052$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 78b5852d01724ca6b250a606db887b3a5ea8a1cb
++ t=blob
++ grep -q '^78b5852d01724ca6b250a606db887b3a5ea8a1cb$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++ t=blob
++ grep -q '^efe5d174c6bb57cf4623a8f34aef9381cb0cdaea$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 7b85ab623a5c06a51b6c75b70577e12e36e9e229
++ t=tree
++ grep -q '^7b85ab623a5c06a51b6c75b70577e12e36e9e229$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t c185c7c1e6f860fc3667fcc71672891ba5e44222
++ t=blob
++ grep -q '^c185c7c1e6f860fc3667fcc71672891ba5e44222$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 5659240f0db734ab9a5a50c8440598a0881e4113
++ t=blob
++ grep -q '^5659240f0db734ab9a5a50c8440598a0881e4113$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 930c046698e2eb20ccc31b392297c06d150e8b49
++ t=tree
++ grep -q '^930c046698e2eb20ccc31b392297c06d150e8b49$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 2bca64d75c4402e81ad9321114fb89303eccce0d
++ t=blob
++ grep -q '^2bca64d75c4402e81ad9321114fb89303eccce0d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 0152147f6e39c9efc982cdab63dc1aed24070a13
++ t=blob
++ grep -q '^0152147f6e39c9efc982cdab63dc1aed24070a13$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee
++ t=blob
++ grep -q '^a33f6e0bf4c210c1358a7ab038f2ff0c93d6c5ee$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 1fd560759e7edd3fefed571f9fa7a46a0fb6d918
++ t=blob
++ grep -q '^1fd560759e7edd3fefed571f9fa7a46a0fb6d918$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++ t=blob
++ grep -q '^4a2c5509c3a850a52b2122a06d7ba41d8c39eff4$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 7f321ea867737a3567b81277f15a8676b5e8be5a
++ t=blob
++ grep -q '^7f321ea867737a3567b81277f15a8676b5e8be5a$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 4b30d1aea58a149191060f638232657e71d73579
++ t=blob
++ grep -q '^4b30d1aea58a149191060f638232657e71d73579$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 97ed6fbc72985919cc125d830722786b81734c6e
++ t=blob
++ grep -q '^97ed6fbc72985919cc125d830722786b81734c6e$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t bf96d70d119a83ddc974b558b8c697140a541530
++ t=blob
++ grep -q '^bf96d70d119a83ddc974b558b8c697140a541530$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t b7713e4bf1c785374e3db01b90e8edccc900fa3d
++ t=blob
++ grep -q '^b7713e4bf1c785374e3db01b90e8edccc900fa3d$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9
++ t=blob
++ grep -q '^c88d8172e1da0da7aae6e6d1d22f10ccee0a1bf9$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 79a5e391db6fe3736632efc17e22c1fe98cef828
++ t=blob
++ grep -q '^79a5e391db6fe3736632efc17e22c1fe98cef828$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 784ea063a1c3655cf9bbfa0abf431ea461256814
++ t=blob
++ grep -q '^784ea063a1c3655cf9bbfa0abf431ea461256814$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 0b9b5fec9c1948ccce966c47a1aaab6ea3636d41
++ t=blob
++ grep -q '^0b9b5fec9c1948ccce966c47a1aaab6ea3636d41$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 69fe688cabc997528e1f376296d3f931c8e6d60b
++ t=blob
++ grep -q '^69fe688cabc997528e1f376296d3f931c8e6d60b$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t 4b11a5c3186af53eb450ff8235b6c54958cacee3
++ t=blob
++ grep -q '^4b11a5c3186af53eb450ff8235b6c54958cacee3$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
+++ git -C /home/hoo/Projects/Sluice cat-file -t cb11c1444ec3aff6d4d4bf9975408e4da6363693
++ t=blob
++ grep -q '^cb11c1444ec3aff6d4d4bf9975408e4da6363693$' /tmp/sluice-val-r6ac3/master-objects.txt
++ read -r sha
++ echo '(empty above => every branch-only tree/blob also reachable from origin/master)'
+(empty above => every branch-only tree/blob also reachable from origin/master)
++ echo
+
++ echo '# explanation check: sample — are the r6-ac1 file blobs in master set? (rev-list --not listed them)'
+# explanation check: sample — are the r6-ac1 file blobs in master set? (rev-list --not listed them)
++ for p in research/direct-beyond-parity/closure/r6-ac1.md research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1.md
++ bs=a49e118cc0a041de2f3d1b483c382ea854295092
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1.md
++ ms=a49e118cc0a041de2f3d1b483c382ea854295092
++ grep -q '^a49e118cc0a041de2f3d1b483c382ea854295092$' /tmp/sluice-val-r6ac3/master-objects.txt
++ im=YES
+++ '[' a49e118cc0a041de2f3d1b483c382ea854295092 = a49e118cc0a041de2f3d1b483c382ea854295092 ']'
+++ echo YES
++ echo 'research/direct-beyond-parity/closure/r6-ac1.md branch_blob=a49e118cc0a041de2f3d1b483c382ea854295092 master_blob=a49e118cc0a041de2f3d1b483c382ea854295092 same=YES in-master-set=YES'
+research/direct-beyond-parity/closure/r6-ac1.md branch_blob=a49e118cc0a041de2f3d1b483c382ea854295092 master_blob=a49e118cc0a041de2f3d1b483c382ea854295092 same=YES in-master-set=YES
++ for p in research/direct-beyond-parity/closure/r6-ac1.md research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
++ bs=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md
++ ms=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea
++ grep -q '^efe5d174c6bb57cf4623a8f34aef9381cb0cdaea$' /tmp/sluice-val-r6ac3/master-objects.txt
++ im=YES
+++ '[' efe5d174c6bb57cf4623a8f34aef9381cb0cdaea = efe5d174c6bb57cf4623a8f34aef9381cb0cdaea ']'
+++ echo YES
++ echo 'research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md branch_blob=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea master_blob=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea same=YES in-master-set=YES'
+research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md branch_blob=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea master_blob=efe5d174c6bb57cf4623a8f34aef9381cb0cdaea same=YES in-master-set=YES
++ for p in research/direct-beyond-parity/closure/r6-ac1.md research/direct-beyond-parity/closure/r6-ac1/SEMANTICS.md research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/research/r6-ac1-vectored-semantics:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
++ bs=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
+++ git -C /home/hoo/Projects/Sluice rev-parse origin/master:research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt
++ ms=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4
++ grep -q '^4a2c5509c3a850a52b2122a06d7ba41d8c39eff4$' /tmp/sluice-val-r6ac3/master-objects.txt
++ im=YES
+++ '[' 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 = 4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 ']'
+++ echo YES
++ echo 'research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt branch_blob=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 master_blob=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 same=YES in-master-set=YES'
+research/direct-beyond-parity/closure/r6-ac1/raw/r6ac1-atomicity.txt branch_blob=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 master_blob=4a2c5509c3a850a52b2122a06d7ba41d8c39eff4 same=YES in-master-set=YES

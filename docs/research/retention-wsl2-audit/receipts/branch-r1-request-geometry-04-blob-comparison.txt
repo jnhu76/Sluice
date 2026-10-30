@@ -1,0 +1,39 @@
+# branch r1-request-geometry (dududu) — per-file blob comparison vs main
+# date: 2026-10-29T23:16:07+08:00
+# For each file added by the branch:
+#  - branch blob SHA
+#  - whether same path exists on main
+#  - whether that exact blob SHA is reachable from main (move/rename coverage)
+
+== benchmarks/duckdb-request-geometry/.gitignore
+  branch blob: 7a60b85e148f80966a550e5ab6a762a907c69ca6
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/DUCKDB_METADATA_OPPORTUNITY_GATE.md
+  branch blob: eb4c7a6ad14dc1dbcdb0cb4001a9483e455a130c
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/DUCKDB_METADATA_REQUEST_GEOMETRY.md
+  branch blob: ff070c6845abe8067f28a472c34dcc2864538a47
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/README.md
+  branch blob: 9e23f923748ad3f69f02e4300cb6031ff3005f6b
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/SLUICE_AC_RECOMMENDATIONS.md
+  branch blob: 49ad99851b849a0bc95fc58fbb1ad27fce47d16e
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/analyze_pread_geometry.py
+  branch blob: e39ec60fce0e428d6a8d0cadee938cea4d07efd5
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/results/.gitignore
+  branch blob: 29be5cbff75636b507245398cba8203c5851dc4d
+  main same path: ABSENT
+  identical blob reachable from main: NO
+== benchmarks/duckdb-request-geometry/results/trace-index.md
+  branch blob: b34c587ca4db8566c71d1510d89e317248a68c56
+  main same path: ABSENT
+  identical blob reachable from main: NO

@@ -1,0 +1,50 @@
+## r0closure-rr-03 per-file blob compare: branch tip vs origin/main (re-review, 2026-10-30T00:05:41+08:00)
+
+SAME benchmarks/duckdb-r0/README.md
+  blob=d5a6299566644deef80c608bbfbbcc82084a3e6f
+SAME benchmarks/duckdb-r0/oracle.sql
+  blob=34a8a95398a58ecf028b28989882a22d7fa49423
+SAME benchmarks/duckdb-r0/results/prep-record.md
+  blob=19ffa28cde9cb53ec719ba28247318c9cd2e185c
+SAME benchmarks/fio-r0/README.md
+  blob=4b6a2b7e3fa4a1733d3eb5c95d856bcd80920e0a
+SAME benchmarks/fio-r0/r0-randrw-4k.fio
+  blob=3d1ca048973e1e62f1d3c7f0c84ace01f09ae172
+SAME benchmarks/fio-r0/r0-read-4k.fio
+  blob=4a3f2c07c586089c1f5b0424ae90a78ab0083707
+SAME benchmarks/fio-r0/r0-seqread-1m.fio
+  blob=8e1526b9008015074f6c7d99d5946a3da5673815
+
+SUMMARY: same=7 diff-or-missing=0 (expected same=7 diff=0)
+
+### content spot-check of the benchmark receipt that carries the evidence
+$ git -C /tmp/dududu-audit show origin/main:benchmarks/duckdb-r0/results/prep-record.md | head -15
+# DuckDB R0 prep receipts — E5 (2026-10-29)
+
+Preparation evidence for the R0 closure protocol in this directory. Every line
+below was executed on the E5 host during prep; none of it is a timing result.
+Reproduce via the commands in `../README.md`.
+
+## Identities
+
+- DUDUDU branch `sluice-r0-closure` from `origin/main` =
+  `b94041d918672d113ea0ca667ba8ccdabf329c80`.
+- DUCKDB pin `069cc9f9b5be802405797faecc284961b07c70ef` (= remote
+  `refs/tags/v1.5.6`, `git ls-remote` this host); submodule porcelain clean.
+- Build: upstream options only, GCC 16.2.1, CMake 4.3.0, Ninja 1.13.2,
+  `build/duckdb-native/069cc9f9…/`. `duckdb --version` prints
+  `v0.0.1 (Unknown Version) 069cc9f9` — depth-1 checkout without the tag
+
+### confirm these 7 paths exist in main tree
+$ git -C /tmp/dududu-audit ls-tree -r --name-only origin/main benchmarks/ | grep -E 'duckdb-r0|fio-r0'
+benchmarks/duckdb-r0/README.md
+benchmarks/duckdb-r0/async-host-probe/README.md
+benchmarks/duckdb-r0/async-host-probe/async_host_probe.cpp
+benchmarks/duckdb-r0/oracle.sql
+benchmarks/duckdb-r0/results/lane-record.md
+benchmarks/duckdb-r0/results/prep-record.md
+benchmarks/fio-r0/README.md
+benchmarks/fio-r0/r0-randrw-4k.fio
+benchmarks/fio-r0/r0-read-4k.fio
+benchmarks/fio-r0/r0-seqread-1m.fio
+exit=0

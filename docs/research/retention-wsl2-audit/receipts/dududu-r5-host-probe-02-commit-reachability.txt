@@ -1,0 +1,32 @@
+# dududu r5-async-host-probe — commit reachability（receipt 02）
+
+$ git -C /tmp/dududu-audit rev-list --count main..origin/r5-async-host-probe
+0
+
+$ git -C /tmp/dududu-audit merge-base main origin/r5-async-host-probe
+4eafbc06d6a2e476055fe45fc75656e7e28a2183
+
+$ git -C /tmp/dududu-audit merge-base --is-ancestor origin/r5-async-host-probe main && echo IS-ANCESTOR
+r5-async-host-probe IS ancestor of main
+
+$ git -C /tmp/dududu-audit branch -a --contains 4eafbc06d6a2e476055fe45fc75656e7e28a2183
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+  remotes/origin/r1-request-geometry
+  remotes/origin/r5-async-host-probe
+  remotes/origin/sluice-r0-e5-verdict
+
+$ git -C /tmp/dududu-audit for-each-ref --contains 4eafbc06d6a2e476055fe45fc75656e7e28a2183 --format="%(refname) %(objectname:short)"
+refs/heads/main 12a8712
+refs/remotes/origin/HEAD 12a8712
+refs/remotes/origin/main 12a8712
+refs/remotes/origin/r1-request-geometry 47cd197
+refs/remotes/origin/r5-async-host-probe 4eafbc0
+refs/remotes/origin/sluice-r0-e5-verdict cc321a4
+
+$ git -C /tmp/dududu-audit log --oneline main | grep -E "4eafbc0|cc053cf|732a8fb|bbce768"  # 分支专属提交在 main 历史中的位置
+4eafbc0 bench(duckdb): probe async host protocol boundary
+cc053cf bench(duckdb): record dataset and oracle prep receipts
+732a8fb bench(duckdb): pin the sql oracle and io exposure protocol
+bbce768 bench(fio): freeze e5 native storage baseline job set

@@ -1,0 +1,20 @@
+# receipts/10-wsl2-gcc-suite-run.txt
+date: 2026-10-29T22:53:41+08:00
+worktree: /tmp/sluice-val-p2c1 @ 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+compiler: g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+
+$ xmake f -y --plat=linux -m release
+config: release, liburing capability ok (see build log above)
+
+$ xmake -y direct_composition_fault_test semantic_short_io_reference_test
+build ok
+
+$ ./build/linux/x86_64/release/direct_composition_fault_test
+composition read_exact_at/write_all_at: 16 scenarios compared, 5 not drivable, 0 divergences
+composition read_exact/write_all: 11 scenarios compared, 10 not drivable (verdicts needing a caller-supplied offset), 0 divergences
+all 15 direct composition fault-injection tests passed
+exit=0
+
+$ ./build/linux/x86_64/release/semantic_short_io_reference_test
+all 9 short-I/O reference tests passed (8 primitive cases)
+exit=0

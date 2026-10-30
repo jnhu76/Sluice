@@ -1,0 +1,25 @@
+# receipt r0closure-07: worktree dependency + dirty check (run 2026-10-29)
+$ git -C /home/hoo/Projects/Sluice worktree list
+/home/hoo/Projects/Sluice       84e1b7d5 [master]
+/tmp/sluice-perf-base           77e5399a (detached HEAD)
+/tmp/sluice-perf-master         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-asan-ubsan      84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-mutation     84e1b7d5 (detached HEAD)
+/tmp/sluice-val-c1-plat         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-debug           84e1b7d5 (detached HEAD)
+/tmp/sluice-val-k594-retention  2714aa65 (detached HEAD)
+/tmp/sluice-val-liburing        84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1            84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-a 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-p2c1-mutation-b 84e1b7d5 (detached HEAD)
+/tmp/sluice-val-release         84e1b7d5 (detached HEAD)
+/tmp/sluice-val-sdk             84e1b7d5 (detached HEAD)
+/tmp/sluice-val-ubsan           84e1b7d5 (detached HEAD)
+$ git -C /tmp/dududu-audit worktree list
+/tmp/dududu-audit 12a8712 [main]
+$ no worktree checks out sluice-r0-closure; dirty check vacuous (nothing checked out)
+$ git -C /tmp/dududu-audit branch -a | grep r0-closure
+  remotes/origin/sluice-r0-closure
+DUDUDU_PS_EXIT=0
+$ ps aux | grep -i r0-closure | grep -v grep  -> no output, exit 1 (no running process references the branch, run 2026-10-29)

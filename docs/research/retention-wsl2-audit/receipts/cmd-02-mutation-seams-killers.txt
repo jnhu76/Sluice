@@ -1,0 +1,40 @@
+# Receipt cmd-02 — C1/P2C1 mutation seams and killer assertions on master @ 84e1b7d578c2c58a3c46033487d9e1ac7c639b8b
+# date: 2026-10-29T22:53:18+08:00
+
+== mutant target registrations (xmake/tests.lua, all set_default(false), NO add_tests) ==
+81:    local function direct_mutant_target(name, killer_source, define)
+91:    direct_mutant_target("blocking_file_mut_admit_invalid_range",
+94:    direct_mutant_target("blocking_file_mut_empty_before_closed",
+97:    direct_mutant_target("blocking_file_mut_admit_unrepresentable_size",
+100:    direct_mutant_target("blocking_file_mut_advance_by_requested",
+103:    direct_mutant_target("blocking_file_mut_retry_zero_progress",
+106:    direct_mutant_target("blocking_file_mut_short_io_retry_zero_progress",
+109:    direct_mutant_target("blocking_file_mut_failure_accounted",
+112:    direct_mutant_target("blocking_file_mut_skip_impossible_count",
+115:    direct_mutant_target("blocking_file_mut_step_reports_full_count",
+118:    direct_mutant_target("blocking_file_mut_step_skips_eintr_retry",
+
+== seam locations in production sources ==
+/home/hoo/Projects/Sluice/src/blocking_file.cpp:79:#if defined(SLUICE_DIRECT_MUTANT_STEP_SKIPS_EINTR_RETRY)
+/home/hoo/Projects/Sluice/src/blocking_file.cpp:245:#if defined(SLUICE_COMPOSE_MUTANT_FAILURE_ACCOUNTED)
+/home/hoo/Projects/Sluice/src/blocking_file.cpp:308:#if defined(SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED) || \
+/home/hoo/Projects/Sluice/src/blocking_file.cpp:309:    defined(SLUICE_DIRECT_MUTANT_STEP_REPORTS_FULL_COUNT)
+/home/hoo/Projects/Sluice/src/blocking_file.cpp:314:#if !defined(SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT)
+/home/hoo/Projects/Sluice/src/blocking_file.cpp:323:#if !defined(SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS)
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp:158:#if defined(SLUICE_SEM_MUTANT_EMPTY_BEFORE_CLOSED)
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp:168:#if defined(SLUICE_SEM_MUTANT_ADMIT_INVALID_RANGE)
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp:192:#if !defined(SLUICE_SEM_MUTANT_ADMIT_UNREPRESENTABLE_SIZE)
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp:248:#if defined(SLUICE_COMPOSE_MUTANT_ADVANCE_BY_REQUESTED)
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp:251:#if defined(SLUICE_COMPOSE_MUTANT_SKIP_IMPOSSIBLE_COUNT)
+/home/hoo/Projects/Sluice/include/sluice/detail/file_semantics.hpp:264:#if !defined(SLUICE_COMPOSE_MUTANT_RETRY_ZERO_PROGRESS)
+
+== killer assertion definitions ==
+/home/hoo/Projects/Sluice/tests/blocking_file_read_test.cpp:122:bool read_with_illegal_offset_reports_invalid_argument() {
+/home/hoo/Projects/Sluice/tests/blocking_file_sequential_test.cpp:392:bool sequential_read_on_write_only_file_rejected_upfront() {
+/home/hoo/Projects/Sluice/tests/blocking_file_state_test.cpp:320:bool resize_overflow_reports_invalid_argument() {
+/home/hoo/Projects/Sluice/tests/direct_composition_fault_test.cpp:63:bool short_reads_report_eof_before_full_with_the_prefix() {
+/home/hoo/Projects/Sluice/tests/direct_composition_fault_test.cpp:197:bool error_after_confirmed_prefix_keeps_the_prefix() {
+/home/hoo/Projects/Sluice/tests/direct_composition_fault_test.cpp:224:bool primitive_retries_eintr_without_a_completed_count() {
+/home/hoo/Projects/Sluice/tests/direct_composition_fault_test.cpp:340:bool impossible_count_stops_immediately() {
+/home/hoo/Projects/Sluice/tests/direct_composition_fault_test.cpp:365:bool write_all_impossible_count_stops_immediately() {
+/home/hoo/Projects/Sluice/tests/semantic_short_io_reference_test.cpp:59:bool read_exact_accumulates_a_short_prefix_then_reports_eof() {

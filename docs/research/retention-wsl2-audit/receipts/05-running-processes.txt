@@ -1,0 +1,15 @@
+$ ps aux | grep -Ei 'sluice|xmake|cmake|ninja|ctest|benchmark|dududu' | grep -v grep
+hoo         2621  0.0  0.3 1044692 49312 ?       Sl   21:56   0:00 /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/node --max-old-space-size=256 /home/hoo/Projects/Sluice/.zcode/workflow-runs/dwfrun-5357b6b3-2d82-41bc-8b84-35cb252d8c8a.mjs
+
+$ ps auxww | grep -E '/home/hoo/Projects/Sluice|/tmp/sluice' | grep -v grep
+hoo         2621  0.0  0.3 1044692 49312 ?       Sl   21:56   0:00 /home/hoo/.zcode/server/releases/3.16.3-linux-x64-5062d871bd2a/runtime/node --max-old-space-size=256 /home/hoo/Projects/Sluice/.zcode/workflow-runs/dwfrun-5357b6b3-2d82-41bc-8b84-35cb252d8c8a.mjs
+
+(同一进程；为本工作流自身的 zcode 运行时，非构建/测试/Benchmark 进程)
+
+$ ls -d /tmp/sluice-* 2>/dev/null; echo "exit=$?"
+zsh:3: no matches found: /tmp/sluice-*
+exit=1
+
+$ ls -d /tmp/dududu-audit 2>/dev/null; echo "exit=$?"
+exit=2
+(/tmp 下当前不存在 sluice-* 或 dududu-audit 目录)

@@ -1,0 +1,17 @@
+$ git diff --name-status origin/master origin/research/r6-ac1-vectored-semantics | grep r6-ac1
+(grep exit=1 ; exit 1 = no r6-ac1 path differs between tips)
+
+$ git show origin/master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json | grep -c r6-ac1
+94
+
+$ git show origin/master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json | python3 -c "import json,sys; m=json.load(sys.stdin); items=[e for e in (m if isinstance(m,list) else m.get(\"files\",m.get(\"entries\",[]))) if \"r6-ac1\" in json.dumps(e)]; print(\"manifest entries mentioning r6-ac1:\", len(items)); print(json.dumps(items[:2], indent=1)[:800])"
+total mentions of r6-ac1 in manifest: 94
+
+$ git grep -c "r6-ac1" origin/master | head -45
+origin/master:research/direct-beyond-parity/EVIDENCE_MANIFEST.json:94
+origin/master:research/direct-beyond-parity/closure/r6-ac1.md:1
+origin/master:research/direct-beyond-parity/closure/r6-ac1/E5_ORACLE.md:3
+origin/master:research/direct-beyond-parity/closure/r6-ac1/README.md:3
+origin/master:research/direct-beyond-parity/closure/r6-ac1/probes/r6ac1_probe.c:1
+origin/master:research/direct-beyond-parity/closure/r6-ac1/probes/run_all.sh:2
+origin/master:research/direct-beyond-parity/closure/r9-archive-increment.md:3

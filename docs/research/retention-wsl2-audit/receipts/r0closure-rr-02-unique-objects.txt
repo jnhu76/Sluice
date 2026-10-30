@@ -1,0 +1,36 @@
+## r0closure-rr-02 unique objects & reachability (re-review, 2026-10-30T00:05:07+08:00)
+
+$ git -C /tmp/dududu-audit rev-list --count origin/main..origin/sluice-r0-closure   (expected 0)
+0
+
+$ git -C /tmp/dududu-audit rev-list --count origin/sluice-r0-closure..origin/main   (main ahead)
+4
+
+$ git -C /tmp/dududu-audit merge-base --is-ancestor origin/sluice-r0-closure origin/main && echo IS-ANCESTOR-OF-MAIN
+IS-ANCESTOR-OF-MAIN
+
+$ git -C /tmp/dududu-audit merge-base origin/main origin/sluice-r0-closure   (expected = branch tip)
+cc053cf9258b98546b16f9d2f08c5559fa73bc77
+
+### strongest check: unique objects vs ALL refs (local+remote+tags), expected EMPTY
+$ git -C /tmp/dududu-audit rev-list --objects origin/sluice-r0-closure --not --all
+rev-list-objects-not-all-exit=0 (empty output above = zero unique commit/tree/blob)
+
+### three-dot diff main...branch, expected EMPTY
+$ git -C /tmp/dududu-audit diff --name-only origin/main...origin/sluice-r0-closure
+threedot-diff-exit=0 (empty output above = zero changed files)
+
+### branch's own files vs its base b94041d
+$ git -C /tmp/dududu-audit diff --name-status b94041d cc053cf9258b98546b16f9d2f08c5559fa73bc77
+A	benchmarks/duckdb-r0/README.md
+A	benchmarks/duckdb-r0/oracle.sql
+A	benchmarks/duckdb-r0/results/prep-record.md
+A	benchmarks/fio-r0/README.md
+A	benchmarks/fio-r0/r0-randrw-4k.fio
+A	benchmarks/fio-r0/r0-read-4k.fio
+A	benchmarks/fio-r0/r0-seqread-1m.fio
+exit=0
+
+### cc053cf9 present in main history?
+$ git -C /tmp/dududu-audit rev-list origin/main | grep -c cc053cf9258b98546b16f9d2f08c5559fa73bc77
+1

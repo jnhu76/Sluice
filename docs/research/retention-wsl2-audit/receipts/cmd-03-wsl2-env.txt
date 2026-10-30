@@ -1,0 +1,56 @@
+# Receipt cmd-03 — WSL2 environment facts relevant to the command matrix
+# date: 2026-10-29T22:53:36+08:00
+
+== toolchain ==
+/home/hoo/.local/bin/xmake
+/usr/bin/g++
+/usr/bin/python3
+/usr/bin/strace
+xmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua
+g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+Python 3.14.4
+
+== kernel ==
+6.18.54.1-microsoft-standard-WSL2
+
+== liburing surface (xmake/uring.lua capability probe needs header+library) ==
+-rw-r--r-- 1 root root 62116 Feb 13  2026 /usr/include/liburing.h
+	liburing.so.2 (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/liburing.so.2
+	liburing.so (libc6,x86-64) => /usr/lib/x86_64-linux-gnu/liburing.so
+
+== io_uring kernel gate ==
+0
+
+== filesystem identity (handoff §7.4: fixtures on native fs or tmpfs, never /mnt/*) ==
+tmpfs          tmpfs   8189788 138156   8051632   2% /tmp
+/dev/sdd       ext4 1055762868 151472400 850586996  16% /
+
+== xmake test CLI filter semantics (captured from /tmp, no project touched) ==
+                                         3. The Current Directory
+
+Command options (test):
+    -g GROUP, --group=GROUP          Run all tests of the given group. It supports path pattern matching.
+                                     e.g.
+                                         xmake test -g test
+                                         xmake test -g test_*
+                                         xmake test --group=benchmark/*
+    -w WORKDIR, --workdir=WORKDIR    Work directory of running targets, default is folder of targetfile
+                                     e.g.
+                                         xmake test -w .
+                                         xmake test --workdir=`pwd`
+    -j JOBS, --jobs=JOBS             Set the number of parallel compilation jobs. (default: 10)
+    -r, --rebuild                    Rebuild the target.
+        --output-on-failure          Show the output of the tests that did not behave as expected.
+                                     e.g.
+                                         xmake test --output-on-failure
+                                         xmake test --output-on-failure test_*/*
+
+          tests ...                  The test names. It supports pattern matching.
+                                     e.g.
+                                         xmake test foo
+                                         xmake test */foo
+                                         xmake test targetname/*
+
+== correction note ==
+the 'xmake --version' banner above was color-stripped; version line verified separately:
+xmake v3.1.2+HEAD.5d21e9d (from `xmake --version` run in this session, output captured in transcript)

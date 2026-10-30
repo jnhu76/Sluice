@@ -1,0 +1,7 @@
+# cmd: git rev-parse origin/research/r6-ac1-vectored-semantics
+999b5305ae7d413a2a71acde926f8c6cfef6876a
+# cmd: git for-each-ref | grep -i vectored
+refs/remotes/origin/research/r6-ac1-vectored-semantics 999b5305ae7d413a2a71acde926f8c6cfef6876a
+# cmd: git ls-remote origin refs/heads/research/r6-ac1-vectored-semantics refs/pull/611/head
+999b5305ae7d413a2a71acde926f8c6cfef6876a	refs/heads/research/r6-ac1-vectored-semantics
+999b5305ae7d413a2a71acde926f8c6cfef6876a	refs/pull/611/head
