@@ -232,6 +232,11 @@ what was measured.
   and perf `.data` are **not hash-anchored**. A reader without access to that
   host cannot retrieve the raw data. `EVIDENCE_PRESERVATION: PARTIAL` — see
   [evidence-index.md](evidence-index.md) §7.
+- **Preservation update (2026-10-30).** The cross-host preservation state of
+  the raw evidence and this record's closeout disposition are recorded in
+  [EVIDENCE_PRESERVATION_SUPPLEMENT_20261030.md](EVIDENCE_PRESERVATION_SUPPLEMENT_20261030.md);
+  the `EVIDENCE_PRESERVATION: PARTIAL` statement above remains the historical
+  status at measurement time.
 - The 4.79 % campaign band's provenance and the fact that it is not defined in
   the brief are disclosed in [measurement-review.md](measurement-review.md) §4;
   the K1 and combo verdicts are threshold-dependent and say so.

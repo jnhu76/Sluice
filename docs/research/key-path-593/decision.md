@@ -96,7 +96,8 @@ valid runs, of which 60 are the increment comparison.
 1. **The critical path is the kernel boundary.** One enter, the io-wq dispatch,
    and the copy on a worker sharing the application's logical CPU. The worker
    share is 32.5–40.4 % of all cycles across two 0/1 records. User-space
-   coordination is 23–25 % of cycles, and all mutexes together are 3.4 %.
+   coordination is 23–25 % of cycles at d16 (W-02 d1: 17.6 %), and all
+   mutexes together are 3.4 %.
 2. **The only material avoidable work is the per-op `io_uring_enter`.** Every
    other provable redundancy is real and sub-threshold.
 3. **K2-a and K4-b are one mechanism with two gates.** They cannot be combined
@@ -208,3 +209,8 @@ OWNER_DECISION: PENDING
 
 END_SLUICE_593_E5_KEY_PATH_RESEARCH
 ```
+
+`EVIDENCE_PRESERVATION: PARTIAL` above is the historical status at measurement
+time and is kept unchanged. The 2026-10-30 cross-host preservation state and
+this round's disposition are recorded in
+[EVIDENCE_PRESERVATION_SUPPLEMENT_20261030.md](EVIDENCE_PRESERVATION_SUPPLEMENT_20261030.md).

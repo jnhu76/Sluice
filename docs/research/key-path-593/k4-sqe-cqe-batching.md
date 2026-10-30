@@ -180,7 +180,7 @@ rounds; p95 is reported from `pair-results.json` / raw JSONL):
 
 \* saturate latency is not instrumented (`lat_n = 0`); the archived compact
 summaries encode it as +0.00 %/+0.00 %, which is a reducer artifact, not a
-measurement (see [measurement-review.md](measurement-review.md) §6).
+measurement (see [measurement-review.md](measurement-review.md) §9.7).
 
 Context switches: d16 vctx/ictx 17,850/16,477 → 4,985/4,532; d64
 16,848/16,532 → 1,228/1,221; W-03 13,337/8,295 → 12,881/8,095. Poll/op −16.34 %,

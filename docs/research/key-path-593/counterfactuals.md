@@ -15,8 +15,20 @@ distinguishes them. Arms are test-only and live in
 | ELISION ARM | K1-a + K1-b merged | E18 ungated deferral | three same-lock fusions | depth-gated deferral, then topology+depth-gated |
 | COMBINATION | — | — | — | K4-b + K1(a+b) in one worktree |
 
-Each elision arm was required to show `BASE GREEN → MUTANT RED → RESTORED GREEN`
-before its A/B was accepted.
+The `BASE GREEN → MUTANT RED → RESTORED GREEN` gate holds dedicated mutant
+receipts for the K2 and K4 elision arms (5 K2-a + 6 K4-b formal receipts) and
+one guarded-mutant receipt for K3, whose unguarded draft was killed by two
+oracles with no mutant build and no restored-green log. K1 has no dedicated
+mutant binary: its only kill is an over-elided sink build caught by two
+oracles, after which the corrected build passes the suite with no formal
+restored-green log, and lost publication / `publish_batch_` double count /
+K1-b false negative are unmutated. K1's A/B was accepted on the
+frozen-baseline identity check, the per-run G0 and 64 MiB byte oracles, the
+session A/A controls and the W-02 `published == reaped` trace invariant —
+correctness evidence, not a mutation receipt — and "no K1 mutant" is recorded
+among the reasons the arm is not a candidate
+([correctness-review.md](correctness-review.md) §3,
+[measurement-review.md](measurement-review.md) §10).
 
 ## 1. K1 — completion/publication/observer
 

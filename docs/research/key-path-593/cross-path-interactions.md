@@ -38,7 +38,7 @@ submission inline; that is exactly the regression-avoidance mechanism.
 > in the split-owner form too (and pays the tail cost), while K4-b's topology
 > gate does not defer there. The interaction conclusion (same mechanism, two
 > gates) is unchanged; the draft's ratio table was wrong for W-03. See
-> [measurement-review.md](measurement-review.md) §6.
+> [measurement-review.md](measurement-review.md) §9.2.
 
 **Interaction verdict: strong coupling, not independent, not additive.**
 Same-thread CPU falls from −32.20 % to −28.07 % (d16), −37.66 % to −35.53 %

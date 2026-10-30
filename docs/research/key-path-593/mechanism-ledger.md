@@ -207,4 +207,4 @@ and from 14.7 to 12.1 (`core`) as D rises.
 - A census summary header in the K4-b A/B directory carries a stale "K2-a
   census medians" banner; the values are K4-b's and match its README. One pair
   runner carries the same stale banner. See
-  [measurement-review.md](measurement-review.md) §6.
+  [measurement-review.md](measurement-review.md) §9.3–§9.4.
