@@ -429,10 +429,19 @@ void ThreadPoolBackend::worker_loop() {
                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
 
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
+#if defined(SLUICE_RESEARCH_ELIDE_008) || defined(SLUICE_RESEARCH_ELIDE_008_SHAPE_CONTROL)
+#if defined(SLUICE_RESEARCH_ELIDE_008_MUTANT_PUSH_BEFORE_OFFER)
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                    publication_pending_.push_back(h);
+                }
+#endif
+#else
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     --active_workers_;
                 }
+#endif
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
                 wait_worker_outcome_pre_terminal_pause_();
@@ -455,10 +464,40 @@ void ThreadPoolBackend::worker_loop() {
                     detail::ExecutionRelease::borrow_touch_fully_retired) {
                     detail::threadpool_core_handoff_fail_fast();
                 }
+#if defined(SLUICE_RESEARCH_ELIDE_008)
+#if defined(SLUICE_RESEARCH_ELIDE_008_MUTANT_PUSH_BEFORE_OFFER)
+#elif defined(SLUICE_RESEARCH_ELIDE_008_MUTANT_DROP_DECREMENT)
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     publication_pending_.push_back(h);
                 }
+#else
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                    --active_workers_;
+                    publication_pending_.push_back(h);
+                }
+#if defined(SLUICE_RESEARCH_ELIDE_008_MUTANT_PRESPLIT)
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                }
+#endif
+#endif
+#elif defined(SLUICE_RESEARCH_ELIDE_008_SHAPE_CONTROL)
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                    --active_workers_;
+                    publication_pending_.push_back(h);
+                }
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                }
+#else
+                {
+                    std::lock_guard<std::mutex> wl(work_mtx_);
+                    publication_pending_.push_back(h);
+                }
+#endif
 
                 signal_ready_progress();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
