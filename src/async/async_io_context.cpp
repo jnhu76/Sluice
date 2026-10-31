@@ -187,6 +187,10 @@ bool AsyncIoContext::drive_entry_admitted_() noexcept {
         return false;
     }
     drive_active_ = true;
+#if defined(SLUICE_RESEARCH_ELIDE_007_MUTANT_FOLD_INTO_DRIVE_GATE)
+    if (stats_)
+        ++stats_->wait_calls;
+#endif
     return true;
 }
 
@@ -566,6 +570,8 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     if (!backend_->signals_physical_progress()) {
         return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::not_supported});
     }
+#if defined(SLUICE_RESEARCH_ELIDE_007)
+#if defined(SLUICE_RESEARCH_ELIDE_007_MUTANT_RE_SPLIT)
     {
         std::lock_guard<std::mutex> lk(access_mtx_);
         if (execution_closed_) {
@@ -579,6 +585,55 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
         if (stats_)
             ++stats_->wait_calls;
     }
+#elif defined(SLUICE_RESEARCH_ELIDE_007_MUTANT_FOLD_INTO_DRIVE_GATE) || \
+    defined(SLUICE_RESEARCH_ELIDE_007_MUTANT_DROP_COUNT)
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (execution_closed_) {
+            return make_unexpected<ProgressWaitOutcome>(
+                IoError{IoError::Code::invalid_state});
+        }
+    }
+#else
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (execution_closed_) {
+            return make_unexpected<ProgressWaitOutcome>(
+                IoError{IoError::Code::invalid_state});
+        }
+        if (stats_)
+            ++stats_->wait_calls;
+    }
+#endif
+#elif defined(SLUICE_RESEARCH_ELIDE_007_SHAPE_CONTROL)
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (execution_closed_) {
+            return make_unexpected<ProgressWaitOutcome>(
+                IoError{IoError::Code::invalid_state});
+        }
+        if (stats_)
+            ++stats_->wait_calls;
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+    }
+#else
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (execution_closed_) {
+            return make_unexpected<ProgressWaitOutcome>(
+                IoError{IoError::Code::invalid_state});
+        }
+    }
+
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        if (stats_)
+            ++stats_->wait_calls;
+    }
+#endif
 
     if (!drive_entry_admitted_()) {
         return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::invalid_state});
