@@ -1041,6 +1041,49 @@ do
                               "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
 end
 
+-- Submit stats seam oracle over the six submit entry points' stats
+-- accounting. Self-contained seam-build shape: the targets compile their own
+-- copies of the async TUs and link neither sluice_async nor the other seam
+-- builds. The source expectations dispatch on the research macro, so one
+-- target serves both experiment arms; the named mutation builds carry their
+-- own research macro, so they behave identically from any arm's build dir.
+-- Executed and recorded manually, never run as regular tests.
+do
+    local function submit_stats_seam_target(name, extra_defines, extra_cxxflags)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            for _, d in ipairs(extra_defines or {}) do
+                add_defines(d)
+            end
+            if extra_cxxflags ~= nil then
+                add_cxxflags(extra_cxxflags)
+            end
+            add_files(R .. "tests/submit_stats_seam_oracle_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/threadpool_backend.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+    end
+
+    submit_stats_seam_target("submit_stats_seam_oracle_test")
+    submit_stats_seam_target("submit_stats_seam_mut_restore_unguarded",
+                             {"SLUICE_RESEARCH_ELIDE_001",
+                              "SLUICE_RESEARCH_ELIDE_001_MUTANT_RESTORE_UNGUARDED"})
+    -- The drop mutation removes the TU's only six calls of
+    -- update_max_outstanding, so -Wunused-function (promoted by -Werror)
+    -- fails this one mutation build; the suppression is scoped to it.
+    submit_stats_seam_target("submit_stats_seam_mut_drop_stats_update",
+                             {"SLUICE_RESEARCH_ELIDE_001",
+                              "SLUICE_RESEARCH_ELIDE_001_MUTANT_DROP_STATS_UPDATE"},
+                             "-Wno-unused-function")
+end
+
 -- RequestScope evidence. Same self-contained seam-build shape as the
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
