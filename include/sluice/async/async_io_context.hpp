@@ -313,7 +313,11 @@ class AsyncIoContext {
 
     // One backend progress pass for a caller already holding the drive
     // domain; the public drive entry points gate before using this.
+#if defined(SLUICE_RESEARCH_ELIDE_013)
+    ProgressPass run_progress_pass_(bool* progress_wait_health_failed = nullptr);
+#else
     ProgressPass run_progress_pass_();
+#endif
 
     // Drives to the execution-closed transition. The caller holds the drive
     // domain (shutdown) or the destructor's exclusive position.

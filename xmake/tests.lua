@@ -512,6 +512,46 @@ do
                         R .. "tests/threadpool_external_loop_test.cpp")
 end
 
+-- Settle-loop health observation evidence: the probe counter pins the exact
+-- wait-health acquisition shape of a settle, the pre-settle sticky witness
+-- pins the health_failed outcome only that observation produces, and the
+-- settle-window gate witness pins the window-write property against both
+-- observation forms. Same self-contained seam-build shape as the threadpool
+-- progress targets. The mutation builds each drop one load-bearing edge of
+-- the observation and must be killed by the named witness; they are executed
+-- and recorded manually, never run as regular tests.
+do
+    local function settle_health_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            add_files(R .. "tests/settle_health_observation_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/threadpool_backend.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    settle_health_target("settle_health_observation_test")
+    settle_health_target("settle_health_mut_carry_dropped",
+                         "SLUICE_RESEARCH_ELIDE_013_MUTANT_CARRY_DROPPED")
+    settle_health_target("settle_health_mut_settle_requery_dropped",
+                         "SLUICE_SHUTDOWN_SETTLE_REQUERY_MUTANT_DROPPED")
+    settle_health_target("settle_health_mut_park_entry_dropped",
+                         "SLUICE_PROGRESS_SOURCE_MUTANT_PARK_ENTRY_HEALTH_DROPPED")
+end
+
 -- W-03 stop-order protocol: the external driver re-checks the shared stop
 -- flag only between epoll_wait returns, so the flag must be published before
 -- request_stop's unconditional wake. The mutant build reverts the order and
