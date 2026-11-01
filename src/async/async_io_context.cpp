@@ -257,8 +257,10 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
     if (!backend_)
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_read(op);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {
+        tally_submit(stats_, r);
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value())
         return make_unexpected<Request<std::size_t>>(r.error());
     return Request<std::size_t>{core_.get(), backend_.get(),
@@ -275,8 +277,10 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
     if (!backend_)
         return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_write(op);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {
+        tally_submit(stats_, r);
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value())
         return make_unexpected<Request<std::size_t>>(r.error());
     return Request<std::size_t>{core_.get(), backend_.get(),
@@ -293,8 +297,10 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
     if (!backend_)
         return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_sync_data(op);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {
+        tally_submit(stats_, r);
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value())
         return make_unexpected<Request<void>>(r.error());
     return Request<void>{core_.get(), backend_.get(),
@@ -311,8 +317,10 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
     if (!backend_)
         return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_sync_all(op);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {
+        tally_submit(stats_, r);
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value())
         return make_unexpected<Request<void>>(r.error());
     return Request<void>{core_.get(), backend_.get(),
@@ -329,8 +337,10 @@ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
     if (!backend_)
         return make_unexpected<Request<FileInfo>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_file_info(op);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {
+        tally_submit(stats_, r);
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value())
         return make_unexpected<Request<FileInfo>>(r.error());
     return Request<FileInfo>{core_.get(), backend_.get(),
@@ -347,8 +357,10 @@ Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
     if (!backend_)
         return make_unexpected<Request<FileSize>>(IoError{IoError::Code::invalid_state});
     auto r = backend_->submit_size(op);
-    tally_submit(stats_, r);
-    update_max_outstanding(stats_, backend_->outstanding());
+    if (stats_) {
+        tally_submit(stats_, r);
+        update_max_outstanding(stats_, backend_->outstanding());
+    }
     if (!r.has_value())
         return make_unexpected<Request<FileSize>>(r.error());
     return Request<FileSize>{core_.get(), backend_.get(),
