@@ -237,7 +237,9 @@ class RequestCore {
         bool published = false;
         bool publication_inflight = false;
         bool execution_claimed = false;
+#if !defined(SLUICE_RESEARCH_ELIDE_016)
         bool cancel_intent = false;
+#endif
         ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;
@@ -264,7 +266,11 @@ class RequestCore {
         bool published = false;
         bool publication_inflight = false;
         bool execution_claimed = false;
+#if !defined(SLUICE_RESEARCH_ELIDE_016)
         bool cancel_intent = false;
+#else
+        std::uint8_t cancel_intent_layout_pad = 0;
+#endif
         bool zero_op = false;
         ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
