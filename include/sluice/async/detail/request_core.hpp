@@ -237,7 +237,6 @@ class RequestCore {
         bool published = false;
         bool publication_inflight = false;
         bool execution_claimed = false;
-        bool cancel_intent = false;
         ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;
@@ -264,7 +263,7 @@ class RequestCore {
         bool published = false;
         bool publication_inflight = false;
         bool execution_claimed = false;
-        bool cancel_intent = false;
+        std::uint8_t cancel_intent_layout_pad = 0;
         std::uint8_t zero_op_layout_pad = 0;
         ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
