@@ -271,7 +271,8 @@ Result<CompositionOutcome> primitive_error_outcome(std::size_t confirmed_bytes,
 
 // The composition entry admitted the whole request before compose() runs, so
 // the step offsets below stay inside the validated range; the off_t casts
-// cannot lose bits.
+// cannot lose bits. The same entry verdict and loop invariant carry the write
+// step twins below.
 Result<std::size_t> prevalidated_pread_step(const File& file, std::uint64_t offset,
                                             std::span<std::byte> dst) {
     ssize_t n = step_retry_on_eintr([&] {
@@ -293,6 +294,30 @@ Result<std::size_t> prevalidated_read_step(const File& file, std::span<std::byte
     }
     return static_cast<std::size_t>(n);
 }
+
+#if defined(SLUICE_RESEARCH_ELIDE_012)
+Result<std::size_t> prevalidated_pwrite_step(const File& file, std::uint64_t offset,
+                                             std::span<const std::byte> src) {
+    ssize_t n = step_retry_on_eintr([&] {
+        return native_pwrite(file.native_handle(), src.data(), src.size(),
+                             static_cast<off_t>(offset));
+    });
+    if (n < 0) {
+        return make_unexpected<std::size_t>(from_errno_value(errno));
+    }
+    return static_cast<std::size_t>(n);
+}
+
+Result<std::size_t> prevalidated_write_step(const File& file, std::span<const std::byte> src) {
+    ssize_t n = step_retry_on_eintr([&] {
+        return native_write(file.native_handle(), src.data(), src.size());
+    });
+    if (n < 0) {
+        return make_unexpected<std::size_t>(from_errno_value(errno));
+    }
+    return static_cast<std::size_t>(n);
+}
+#endif
 
 // `confirmed` never exceeds the validated request, so the arithmetic cannot
 // overflow.
@@ -361,7 +386,11 @@ Result<CompositionOutcome> write_all_at(const File& file, std::uint64_t offset,
         return make_unexpected<CompositionOutcome>(
             IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::write_all, src.size(), [&](std::size_t confirmed) {
+#if defined(SLUICE_RESEARCH_ELIDE_012)
+        return prevalidated_pwrite_step(file, offset + confirmed, src.subspan(confirmed));
+#else
         return write_at(file, offset + confirmed, src.subspan(confirmed));
+#endif
     });
 }
 
@@ -388,7 +417,13 @@ Result<CompositionOutcome> write_all(const File& file, std::span<const std::byte
         return make_unexpected<CompositionOutcome>(
             IoError{.code = IoError::Code::invalid_argument});
     return compose(CompositionKind::write_all, src.size(),
-                   [&](std::size_t confirmed) { return write(file, src.subspan(confirmed)); });
+                   [&](std::size_t confirmed) {
+#if defined(SLUICE_RESEARCH_ELIDE_012)
+                       return prevalidated_write_step(file, src.subspan(confirmed));
+#else
+                       return write(file, src.subspan(confirmed));
+#endif
+                   });
 }
 
 }

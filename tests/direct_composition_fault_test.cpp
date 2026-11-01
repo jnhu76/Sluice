@@ -295,6 +295,14 @@ bool primitive_write_retries_eintr_then_stops_at_the_first_count() {
         ok = ok && script.last_call().count == src.size();
         ok = ok && script.last_call().offset == 0;
     }
+    {
+        NativeScript script(kTransferCalls, fd, {{-1, EINTR}, {5, 0}});
+        auto composed = sluice::blocking::write_all_at(file, 0, src);
+        ok = ok && composed.has_value();
+        ok = ok && composed.value().complete();
+        ok = ok && composed.value().confirmed_bytes == 5;
+        ok = ok && script.calls() == 2;
+    }
     ::unlink(path.c_str());
     return ok;
 }
