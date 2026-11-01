@@ -534,6 +534,9 @@ Result<std::size_t> AsyncIoContext::poll() {
 
 #if defined(SLUICE_RESEARCH_ELIDE_013)
 ProgressPass AsyncIoContext::run_progress_pass_(bool* progress_wait_health_failed) {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    progress_pass_calls_.fetch_add(1, std::memory_order_relaxed);
+#endif
     if (stats_)
         ++stats_->poll_calls;
     ProgressPass pass = backend_->poll_progress();
