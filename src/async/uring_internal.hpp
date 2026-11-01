@@ -103,26 +103,26 @@ class UringAsyncBackend::BoundedDispatchQueue {
             std::fflush(stderr);
             std::terminate();
         }
-        storage_[(head_ + size_) % capacity_] = h;
+        storage_[wrap_index_(head_ + size_)] = h;
         ++size_;
     }
     bool pop_front(detail::RequestReservation& out) noexcept {
         if (size_ == 0)
             return false;
         out = storage_[head_];
-        head_ = (head_ + 1) % capacity_;
+        head_ = wrap_index_(head_ + 1);
         --size_;
         return true;
     }
 
     bool remove_exact(detail::RequestReservation h) noexcept {
         for (std::size_t i = 0; i < size_; ++i) {
-            std::size_t idx = (head_ + i) % capacity_;
+            std::size_t idx = wrap_index_(head_ + i);
             if (storage_[idx].slot.value == h.slot.value &&
                 storage_[idx].generation.value == h.generation.value) {
                 for (std::size_t j = i; j + 1 < size_; ++j) {
-                    std::size_t a = (head_ + j) % capacity_;
-                    std::size_t b = (head_ + j + 1) % capacity_;
+                    std::size_t a = wrap_index_(head_ + j);
+                    std::size_t b = wrap_index_(head_ + j + 1);
                     storage_[a] = storage_[b];
                 }
                 --size_;
@@ -133,6 +133,10 @@ class UringAsyncBackend::BoundedDispatchQueue {
     }
 
   private:
+    std::size_t wrap_index_(std::size_t index) const noexcept {
+        return index >= capacity_ ? index - capacity_ : index;
+    }
+
     std::vector<detail::RequestReservation> storage_;
     std::size_t head_ = 0;
     std::size_t size_ = 0;
