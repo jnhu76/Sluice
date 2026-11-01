@@ -100,6 +100,15 @@ Result<void> RequestScope::settle_and_release_(bool cancel_for_cleanup) noexcept
         if (settled) {
             break;
         }
+#if defined(SLUICE_RESEARCH_ELIDE_010)
+#if defined(SLUICE_REQUEST_SCOPE_MUTANT_SETTLE_RETAINS_EXTRA_POLL_PASS)
+        auto pass = ctx_.poll_progress();
+        if (!pass.has_value()) {
+            detail::request_scope_settlement_driver_fail_fast();
+        }
+#endif
+        auto woke = ctx_.wait_one();
+#else
         auto pass = ctx_.poll_progress();
         if (!pass.has_value()) {
             detail::request_scope_settlement_driver_fail_fast();
@@ -116,6 +125,7 @@ Result<void> RequestScope::settle_and_release_(bool cancel_for_cleanup) noexcept
             break;
         }
         auto woke = ctx_.wait_one();
+#endif
         if (!woke.has_value()) {
             detail::request_scope_settlement_driver_fail_fast();
         }

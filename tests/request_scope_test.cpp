@@ -1085,6 +1085,64 @@ bool near_max_bound_waits_out_a_stalled_operation(Tracker& t) {
     return true;
 }
 
+bool destructor_settlement_consumes_exactly_the_frozen_poll_passes(Tracker& t) {
+    auto file = open_temp_file(t, "sluice request scope pass identity\n");
+    if (!file.has_value())
+        return false;
+
+    auto backend = make_backend(2);
+    Backend* raw = backend.get();
+    sluice::AsyncStats stats;
+    AsyncIoContext ctx = detail::make_context(std::move(backend), &stats);
+    RequestCore& core = *detail::TestAccess::context_core(ctx);
+
+    const std::uint64_t poll_before = stats.poll_calls;
+    const std::uint64_t wait_before = stats.wait_calls;
+    std::vector<std::byte> buffer(7, std::byte{0});
+    {
+        Backend::WorkerClaimedPauseGate gate;
+        raw->set_worker_claimed_pause_gate(&gate);
+        GateGuard<Backend::WorkerClaimedPauseGate> guard{gate};
+        std::thread resumer;
+        {
+            RequestScope scope(ctx, 1, ScopeCleanupPolicy::drain);
+
+            auto ticket =
+                scope.submit_read(ReadOp{NativeFileRef{*file}, buffer.data(), buffer.size(), 0});
+            t.check(ticket.has_value(), "the gated request is accepted");
+            if (!ticket.has_value())
+                return false;
+            wait_threadpool_gate_paused(gate);
+            t.check(stats.poll_calls == poll_before && stats.wait_calls == wait_before,
+                    "the gated stall itself consumes no settlement passes");
+
+            resumer = std::thread([&] {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                resume_threadpool_gate(gate);
+            });
+        }
+        resumer.join();
+        wait_threadpool_gate_exited(gate);
+    }
+    raw->set_worker_claimed_pause_gate(nullptr);
+
+    const std::uint64_t poll_delta = stats.poll_calls - poll_before;
+    const std::uint64_t wait_delta = stats.wait_calls - wait_before;
+#if defined(SLUICE_RESEARCH_ELIDE_010)
+    t.check(poll_delta == 2 && wait_delta == 1,
+            "the drain settlement runs exactly the two wait_one passes with no "
+            "pre-wait poll pass");
+#else
+    t.check(poll_delta == 3 && wait_delta == 1,
+            "the drain settlement runs the pre-wait poll pass plus the two "
+            "wait_one passes");
+#endif
+    t.check(std::memcmp(buffer.data(), "sluice ", 7) == 0,
+            "the settlement ended the borrow only with the acquired publication");
+    t.check(core_is_idle(core.snapshot()), "the settlement identity pipeline reclaimed");
+    return true;
+}
+
 bool explicit_finish_does_not_invoke_the_cleanup_cancel(Tracker& t) {
     auto file = open_temp_file(t, "sluice");
     if (!file.has_value())
@@ -1405,6 +1463,8 @@ int main() {
          cancel_won_before_execution_settles_as_a_canceled_terminal},
         {"health_failure_during_cleanup_fails_fast_instead_of_returning",
          health_failure_during_cleanup_fails_fast_instead_of_returning},
+        {"destructor_settlement_consumes_exactly_the_frozen_poll_passes",
+         destructor_settlement_consumes_exactly_the_frozen_poll_passes},
 #endif
 #if !defined(SLUICE_TSAN_TESTING)
         {"submit_path_allocates_nothing_after_acceptance",

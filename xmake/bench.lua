@@ -30,3 +30,12 @@ target("bench_w03_external_loop")
     add_deps("sluice_core", "sluice_async")
     add_includedirs(R .. "bench")
     add_files(R .. "bench/bench_w03_external_loop.cpp")
+
+-- ELIDE-010 research driver (research branch only): settlement-shape A/B.
+target("bench_settle_shape")
+    set_kind("binary")
+    set_default(false)
+    set_group("bench")
+    add_deps("sluice_core", "sluice_async")
+    add_includedirs(R .. "bench")
+    add_files(R .. "bench/research/settle-010/settle_shape_bench.cpp")
