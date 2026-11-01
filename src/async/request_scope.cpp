@@ -100,21 +100,6 @@ Result<void> RequestScope::settle_and_release_(bool cancel_for_cleanup) noexcept
         if (settled) {
             break;
         }
-        auto pass = ctx_.poll_progress();
-        if (!pass.has_value()) {
-            detail::request_scope_settlement_driver_fail_fast();
-        }
-        settled = true;
-        for (std::size_t i = 0; i < capacity_; ++i) {
-            const Slot& slot = slots_[i];
-            if (slot.state == Slot::State::owning && !request_ready_(slot)) {
-                settled = false;
-                break;
-            }
-        }
-        if (settled) {
-            break;
-        }
         auto woke = ctx_.wait_one();
         if (!woke.has_value()) {
             detail::request_scope_settlement_driver_fail_fast();

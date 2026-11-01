@@ -193,16 +193,14 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
         return AcceptAttempt{AcceptStatus::admission_closed, {}};
     }
     slot->phase = SlotPhase::accepted;
-    slot->accepted = true;
     slot->binding_live = true;
     slot->execution_claimed = false;
-    slot->cancel_intent = false;
+    slot->cancel_intent_layout_pad = 0;
     slot->descriptor = descriptor;
     slot->borrow = borrow;
     slot->execution_refs = 1;
     ++outstanding_;
     if (descriptor.zero_op) {
-        slot->zero_op = true;
         slot->terminal_chosen = true;
         slot->outcome = IoOutcome::success(0);
         slot->execution_refs = 0;
@@ -269,7 +267,6 @@ PublicCancel RequestCore::cancel(RequestKey id) noexcept {
         return PublicCancel::already_terminal;
     }
     if (slot->execution_claimed) {
-        slot->cancel_intent = true;
         return PublicCancel::requested;
     }
     slot->terminal_chosen = true;
@@ -364,7 +361,6 @@ TerminalVerdict RequestCore::offer_terminal(RequestKey id,
     if (candidate.has_metadata) {
         slot->metadata = candidate.metadata;
     }
-    slot->cancel_intent = false;
     return TerminalVerdict::chosen;
 }
 
@@ -602,14 +598,13 @@ void RequestCore::try_reclaim_(Slot& slot, std::size_t index) noexcept {
 
 void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.phase = SlotPhase::free;
-    slot.accepted = false;
     slot.binding_live = false;
     slot.terminal_chosen = false;
     slot.published = false;
     slot.publication_inflight = false;
     slot.execution_claimed = false;
-    slot.cancel_intent = false;
-    slot.zero_op = false;
+    slot.cancel_intent_layout_pad = 0;
+    slot.zero_op_layout_pad = 0;
 #if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OBSERVER_CLEAR)
     slot.observer_phase = ObserverPhase::unattached;
 #endif
@@ -646,13 +641,12 @@ std::optional<RequestCore::SlotObservation> RequestCore::observe_slot(SlotIndex 
     SlotObservation observation;
     observation.phase = s.phase;
     observation.generation = s.generation;
-    observation.accepted = s.accepted;
+    observation.accepted = s.phase == SlotPhase::accepted;
     observation.binding_live = s.binding_live;
     observation.terminal_chosen = s.terminal_chosen;
     observation.published = s.published;
     observation.publication_inflight = s.publication_inflight;
     observation.execution_claimed = s.execution_claimed;
-    observation.cancel_intent = s.cancel_intent;
     observation.observer_phase = s.observer_phase;
     observation.execution_refs = s.execution_refs;
     observation.control_refs = s.control_refs;
