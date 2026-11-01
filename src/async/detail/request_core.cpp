@@ -204,7 +204,9 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
     slot->execution_refs = 1;
     ++outstanding_;
     if (descriptor.zero_op) {
+#if !defined(SLUICE_RESEARCH_ELIDE_004)
         slot->zero_op = true;
+#endif
         slot->terminal_chosen = true;
         slot->outcome = IoOutcome::success(0);
         slot->execution_refs = 0;
@@ -613,7 +615,11 @@ void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.publication_inflight = false;
     slot.execution_claimed = false;
     slot.cancel_intent = false;
+#if !defined(SLUICE_RESEARCH_ELIDE_004)
     slot.zero_op = false;
+#else
+    slot.zero_op_layout_pad = 0;
+#endif
 #if !defined(SLUICE_REQUEST_CORE_MUTANT_RELEASE_SKIPS_OBSERVER_CLEAR)
     slot.observer_phase = ObserverPhase::unattached;
 #endif
