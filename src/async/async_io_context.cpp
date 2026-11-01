@@ -553,6 +553,9 @@ ProgressPass AsyncIoContext::run_progress_pass_(bool* progress_wait_health_faile
 }
 #else
 ProgressPass AsyncIoContext::run_progress_pass_() {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    progress_pass_calls_.fetch_add(1, std::memory_order_relaxed);
+#endif
     if (stats_)
         ++stats_->poll_calls;
     ProgressPass pass = backend_->poll_progress();
@@ -580,6 +583,9 @@ void AsyncIoContext::close_admission_on_progress_exhaustion_() noexcept {
 }
 
 void AsyncIoContext::cancel_outstanding_for_stop_() noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    cancel_outstanding_calls_.fetch_add(1, std::memory_order_relaxed);
+#endif
     std::vector<detail::RequestKey> outstanding;
     core_->collect_outstanding(outstanding);
     for (const detail::RequestKey key : outstanding) {
@@ -594,6 +600,9 @@ void AsyncIoContext::upgrade_stop_policy_(ShutdownPolicy policy) noexcept {
 }
 
 bool AsyncIoContext::settlement_converged_() const noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    settlement_converged_calls_.fetch_add(1, std::memory_order_relaxed);
+#endif
     if (!backend_->internal_work_retired()) {
         return false;
     }
@@ -602,6 +611,25 @@ bool AsyncIoContext::settlement_converged_() const noexcept {
            occupancy.control_refs == 0 && occupancy.publication_inflight == 0 &&
            occupancy.observer_registrations == 0;
 }
+
+#if defined(SLUICE_RESEARCH_ELIDE_014)
+ShutdownOutcome AsyncIoContext::settle_completed_() {
+#if defined(SLUICE_SHUTDOWN_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
+    if (core_->occupancy().public_bindings != 0) {
+        return ShutdownOutcome::health_unresolved;
+    }
+#endif
+    backend_->stop_execution();
+    backend_->retire_execution_resources();
+    progress_->retire_notification();
+    {
+        std::lock_guard<std::mutex> lk(access_mtx_);
+        execution_closed_ = true;
+        settlement_outcome_ = ShutdownOutcome::completed;
+    }
+    return ShutdownOutcome::completed;
+}
+#endif
 
 ShutdownOutcome AsyncIoContext::drive_settlement_() {
     if (execution_closed_) {
@@ -615,6 +643,16 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
     if (cancellation_applied) {
         cancel_outstanding_for_stop_();
     }
+
+#if defined(SLUICE_RESEARCH_ELIDE_014) && !defined(SLUICE_RESEARCH_ELIDE_014_MUTANT_EARLY_CHECK_DROPPED)
+#if defined(SLUICE_RESEARCH_ELIDE_014_MUTANT_COMPLETE_WITHOUT_CONVERGENCE)
+    return settle_completed_();
+#else
+    if (settlement_converged_()) {
+        return settle_completed_();
+    }
+#endif
+#endif
 
 #if defined(SLUICE_SHUTDOWN_MUTANT_M1_OCCUPANCY_ZERO_DESTROYABLE)
     {
@@ -646,12 +684,16 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
 #endif
 
         if (settlement_converged_()) {
+#if defined(SLUICE_RESEARCH_ELIDE_014)
+            return settle_completed_();
+#else
 #if defined(SLUICE_SHUTDOWN_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
             if (core_->occupancy().public_bindings != 0) {
                 return ShutdownOutcome::health_unresolved;
             }
 #endif
             break;
+#endif
         }
 
 #if defined(SLUICE_RESEARCH_ELIDE_013)
@@ -694,6 +736,7 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
         }
     }
 
+#if !defined(SLUICE_RESEARCH_ELIDE_014)
     backend_->stop_execution();
     backend_->retire_execution_resources();
     progress_->retire_notification();
@@ -703,6 +746,7 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
         settlement_outcome_ = ShutdownOutcome::completed;
     }
     return ShutdownOutcome::completed;
+#endif
 }
 
 bool AsyncIoContext::backend_has_immediate_physical_work_() noexcept {

@@ -95,6 +95,9 @@ class ProgressSource {
     ProgressSource& operator=(const ProgressSource&) = delete;
 
     Token snapshot() const noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        snapshot_calls_.fetch_add(1, std::memory_order_relaxed);
+#endif
         std::lock_guard<std::mutex> lk(mtx_);
         return Token{progress_epoch_, progress_exhaustion_};
     }
@@ -308,6 +311,10 @@ class ProgressSource {
         wait_health_probe_counter_.store(counter, std::memory_order_release);
     }
 
+    int snapshot_calls_for_test() const noexcept {
+        return snapshot_calls_.load(std::memory_order_relaxed);
+    }
+
     // Deterministic pause points inside the park handshake. The prerevalidate
     // gate holds before the epoch revalidation; the prepark gate holds after
     // it and after the stale-readiness drain, immediately before poll(2).
@@ -499,6 +506,7 @@ class ProgressSource {
     std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
     std::atomic<std::atomic<int>*> wait_health_probe_counter_{nullptr};
     std::atomic<PauseGate*> settle_window_pause_gate_{nullptr};
+    mutable std::atomic<int> snapshot_calls_{0};
 #endif
 };
 
