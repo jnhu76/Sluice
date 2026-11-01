@@ -193,7 +193,9 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
         return AcceptAttempt{AcceptStatus::admission_closed, {}};
     }
     slot->phase = SlotPhase::accepted;
+#if !defined(SLUICE_RESEARCH_ELIDE_003)
     slot->accepted = true;
+#endif
     slot->binding_live = true;
     slot->execution_claimed = false;
     slot->cancel_intent = false;
@@ -602,7 +604,9 @@ void RequestCore::try_reclaim_(Slot& slot, std::size_t index) noexcept {
 
 void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.phase = SlotPhase::free;
+#if !defined(SLUICE_RESEARCH_ELIDE_003)
     slot.accepted = false;
+#endif
     slot.binding_live = false;
     slot.terminal_chosen = false;
     slot.published = false;
@@ -646,7 +650,11 @@ std::optional<RequestCore::SlotObservation> RequestCore::observe_slot(SlotIndex 
     SlotObservation observation;
     observation.phase = s.phase;
     observation.generation = s.generation;
+#if !defined(SLUICE_RESEARCH_ELIDE_003)
     observation.accepted = s.accepted;
+#else
+    observation.accepted = s.phase == SlotPhase::accepted;
+#endif
     observation.binding_live = s.binding_live;
     observation.terminal_chosen = s.terminal_chosen;
     observation.published = s.published;

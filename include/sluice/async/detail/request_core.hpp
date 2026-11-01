@@ -258,7 +258,11 @@ class RequestCore {
     struct Slot {
         SlotPhase phase = SlotPhase::free;
         Generation generation{0};
+#if !defined(SLUICE_RESEARCH_ELIDE_003)
         bool accepted = false;
+#else
+        std::uint8_t accepted_layout_pad = 0;
+#endif
         bool binding_live = false;
         bool terminal_chosen = false;
         bool published = false;
