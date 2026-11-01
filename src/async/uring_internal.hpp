@@ -145,7 +145,6 @@ class UringAsyncBackend::TransportLedger {
 
     struct Entry {
         std::uint64_t sequence = 0;
-        std::uint32_t physical_position = 0;
         Kind kind = Kind::operation;
         std::uint64_t cookie = 0;
         detail::RequestReservation handle{};
@@ -181,7 +180,7 @@ class UringAsyncBackend::TransportLedger {
             std::terminate();
         }
         storage_[(head_ + size_) % capacity_] =
-            Entry{next_sequence_++, physical_position, kind, cookie, handle, false};
+            Entry{next_sequence_++, kind, cookie, handle, false};
         last_sequence_ = next_sequence_ - 1u;
         last_physical_position_ = physical_position;
         ++size_;
