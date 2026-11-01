@@ -28,6 +28,22 @@ struct TestAccess {
         return ProgressSource::Token{};
     }
 
+    static int context_progress_pass_calls(const AsyncIoContext& ctx) noexcept {
+        return ctx.progress_pass_calls_.load(std::memory_order_relaxed);
+    }
+
+    static int context_progress_snapshot_calls(const AsyncIoContext& ctx) noexcept {
+        return ctx.progress_ != nullptr ? ctx.progress_->snapshot_calls_for_test() : 0;
+    }
+
+    static int context_settlement_converged_calls(const AsyncIoContext& ctx) noexcept {
+        return ctx.settlement_converged_calls_.load(std::memory_order_relaxed);
+    }
+
+    static int context_cancel_outstanding_calls(const AsyncIoContext& ctx) noexcept {
+        return ctx.cancel_outstanding_calls_.load(std::memory_order_relaxed);
+    }
+
     static void context_set_ready_sink(AsyncIoContext& ctx,
                                        SynchronousReadySink* sink) noexcept {
         std::lock_guard<std::mutex> lk(ctx.access_mtx_);

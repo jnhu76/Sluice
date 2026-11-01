@@ -321,6 +321,10 @@ class AsyncIoContext {
 
     bool settlement_converged_() const noexcept;
 
+#if defined(SLUICE_RESEARCH_ELIDE_014)
+    ShutdownOutcome settle_completed_();
+#endif
+
     void cancel_outstanding_for_stop_() noexcept;
 
     void upgrade_stop_policy_(ShutdownPolicy policy) noexcept;
@@ -348,6 +352,12 @@ class AsyncIoContext {
     // the resources they describe were retired, so it is not recomputable.
     bool execution_closed_ = false;
     ShutdownOutcome settlement_outcome_ = ShutdownOutcome::health_failed;
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    mutable std::atomic<int> settlement_converged_calls_{0};
+    std::atomic<int> progress_pass_calls_{0};
+    std::atomic<int> cancel_outstanding_calls_{0};
+#endif
 };
 
 }
