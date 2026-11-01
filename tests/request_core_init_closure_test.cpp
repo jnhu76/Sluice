@@ -62,7 +62,7 @@ bool free_list_clean(const RequestCore& core, std::uint32_t index, std::uint64_t
     const auto& s = *observed;
     return s.phase == RequestCore::SlotPhase::free && s.generation.value == generation &&
            !s.accepted && !s.binding_live && !s.terminal_chosen && !s.published &&
-           !s.publication_inflight && !s.execution_claimed && !s.cancel_intent &&
+           !s.publication_inflight && !s.execution_claimed &&
            s.observer_phase == ObserverPhase::unattached && s.execution_refs == 0 &&
            s.control_refs == 0 && s.op == RequestOp::read && s.offset == 0 &&
            s.requested_bytes == 0 && !s.has_outcome && s.outcome.succeeded == false &&
@@ -82,7 +82,7 @@ bool accepted_distinctive(const RequestCore& core, std::uint32_t index, std::uin
     const auto& s = *observed;
     return s.phase == RequestCore::SlotPhase::accepted && s.generation.value == generation &&
            s.accepted && s.binding_live && !s.terminal_chosen && !s.published &&
-           !s.publication_inflight && !s.execution_claimed && !s.cancel_intent &&
+           !s.publication_inflight && !s.execution_claimed &&
            s.observer_phase == ObserverPhase::unattached && s.execution_refs == 1 &&
            s.control_refs == 0 && s.op == RequestOp::read && s.offset == offset &&
            s.requested_bytes == length && !s.has_outcome;

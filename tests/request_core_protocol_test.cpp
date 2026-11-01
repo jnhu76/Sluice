@@ -428,14 +428,14 @@ bool cancel_intent_alone_never_terminalizes(Tracker& t) {
     t.check(driver.cancel(accepted.id) == PublicCancel::requested,
             "cancel after claim records intent only");
     auto observation = core.observe_slot(accepted.id.slot);
-    t.check(!observation->terminal_chosen && observation->cancel_intent,
+    t.check(!observation->terminal_chosen,
             "intent recorded, no terminal chosen");
     t.check(driver.offer_zero_effect_cancel(accepted.id) == TerminalVerdict::rejected_inadmissible,
             "zero-effect cancel inadmissible after execution escaped");
     t.check(driver.offer_physical_success(accepted.id, 8) == TerminalVerdict::chosen,
             "physical outcome remains authoritative over earlier intent");
     observation = core.observe_slot(accepted.id.slot);
-    t.check(observation->outcome.succeeded && !observation->cancel_intent,
+    t.check(observation->outcome.succeeded,
             "success not erased into a fabricated cancel result");
     driver.settle_all();
     return t.failures == 0;

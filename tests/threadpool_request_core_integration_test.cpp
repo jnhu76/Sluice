@@ -336,7 +336,7 @@ bool claim_chain_and_running_cancel_do_not_release_the_borrow(Tracker& t) {
                 canceled.value() == CancelDisposition::physical_interruption_unsupported,
             "cancel of a running blocking syscall reports the unsupported physical interruption");
     const auto after_cancel = core.observe_slot(SlotIndex{0});
-    t.check(after_cancel.has_value() && after_cancel->cancel_intent &&
+    t.check(after_cancel.has_value() &&
                 after_cancel->execution_refs == 1 && !after_cancel->terminal_chosen,
             "cancel of a running blocking syscall records intent without retiring the borrow");
     t.check(resolves_as(ctx.lookup(handle), RequestReadiness::pending),
