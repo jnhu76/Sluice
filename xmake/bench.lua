@@ -39,3 +39,12 @@ target("bench_settle_shape")
     add_deps("sluice_core", "sluice_async")
     add_includedirs(R .. "bench")
     add_files(R .. "bench/research/settle-010/settle_shape_bench.cpp")
+
+-- ELIDE-007 research driver (research branch only): wait_one entry-shape A/B.
+target("bench_wait_one_007")
+    set_kind("binary")
+    set_default(false)
+    set_group("bench")
+    add_deps("sluice_core", "sluice_async")
+    add_includedirs(R .. "bench")
+    add_files(R .. "bench/research/wait-one-007/wait_one_bench.cpp")

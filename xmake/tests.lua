@@ -1259,3 +1259,43 @@ if has_config("liburing") then
                          "SLUICE_URING_CORE_MUTANT_PREMATURE_ZERO_OP_DISPATCH")
 end
 
+-- wait_one entry-semantics oracle. The entry region under study lives in the
+-- context TU itself, so this target compiles its own copies of the async TUs
+-- and links neither sluice_async nor the other seam builds, mirroring the
+-- threadpool integration target's shape.
+do
+    local function wait_one_entry_target(name, extra_defines)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            for _, d in ipairs(extra_defines or {}) do
+                add_defines(d)
+            end
+            add_files(R .. "tests/wait_one_entry_semantics_oracle_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/threadpool_backend.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+    end
+
+    wait_one_entry_target("wait_one_entry_semantics_oracle_test")
+    wait_one_entry_target("wait_one_entry_semantics_mut_fold_into_drive_gate",
+                          {"SLUICE_RESEARCH_ELIDE_007",
+                           "SLUICE_RESEARCH_ELIDE_007_MUTANT_FOLD_INTO_DRIVE_GATE"})
+    wait_one_entry_target("wait_one_entry_semantics_mut_drop_count",
+                          {"SLUICE_RESEARCH_ELIDE_007",
+                           "SLUICE_RESEARCH_ELIDE_007_MUTANT_DROP_COUNT"})
+    -- The re-split mutation restores the second entry lock round-trip and is
+    -- behaviorally identical to the candidate; its killer is the E4 static
+    -- shape gate, so this binary exists for that disassembly check, not for a
+    -- runtime failure.
+    wait_one_entry_target("wait_one_entry_semantics_mut_re_split",
+                          {"SLUICE_RESEARCH_ELIDE_007",
+                           "SLUICE_RESEARCH_ELIDE_007_MUTANT_RE_SPLIT"})
+end
+
