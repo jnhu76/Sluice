@@ -145,7 +145,9 @@ class UringAsyncBackend::TransportLedger {
 
     struct Entry {
         std::uint64_t sequence = 0;
+#if !defined(SLUICE_RESEARCH_ELIDE_002) || defined(SLUICE_URING_MUTANT_PP_RESTORE)
         std::uint32_t physical_position = 0;
+#endif
         Kind kind = Kind::operation;
         std::uint64_t cookie = 0;
         detail::RequestReservation handle{};
@@ -181,7 +183,11 @@ class UringAsyncBackend::TransportLedger {
             std::terminate();
         }
         storage_[(head_ + size_) % capacity_] =
+#if !defined(SLUICE_RESEARCH_ELIDE_002) || defined(SLUICE_URING_MUTANT_PP_RESTORE)
             Entry{next_sequence_++, physical_position, kind, cookie, handle, false};
+#else
+            Entry{next_sequence_++, kind, cookie, handle, false};
+#endif
         last_sequence_ = next_sequence_ - 1u;
         last_physical_position_ = physical_position;
         ++size_;
