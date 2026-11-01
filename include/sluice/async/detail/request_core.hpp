@@ -258,7 +258,7 @@ class RequestCore {
     struct Slot {
         SlotPhase phase = SlotPhase::free;
         Generation generation{0};
-        bool accepted = false;
+        std::uint8_t accepted_layout_pad = 0;
         bool binding_live = false;
         bool terminal_chosen = false;
         bool published = false;

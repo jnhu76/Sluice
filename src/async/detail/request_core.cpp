@@ -193,7 +193,6 @@ AcceptAttempt RequestCore::accept(RequestReservation reservation,
         return AcceptAttempt{AcceptStatus::admission_closed, {}};
     }
     slot->phase = SlotPhase::accepted;
-    slot->accepted = true;
     slot->binding_live = true;
     slot->execution_claimed = false;
     slot->cancel_intent = false;
@@ -602,7 +601,6 @@ void RequestCore::try_reclaim_(Slot& slot, std::size_t index) noexcept {
 
 void RequestCore::release_slot_(Slot& slot, std::size_t index) noexcept {
     slot.phase = SlotPhase::free;
-    slot.accepted = false;
     slot.binding_live = false;
     slot.terminal_chosen = false;
     slot.published = false;
@@ -646,7 +644,7 @@ std::optional<RequestCore::SlotObservation> RequestCore::observe_slot(SlotIndex 
     SlotObservation observation;
     observation.phase = s.phase;
     observation.generation = s.generation;
-    observation.accepted = s.accepted;
+    observation.accepted = s.phase == SlotPhase::accepted;
     observation.binding_live = s.binding_live;
     observation.terminal_chosen = s.terminal_chosen;
     observation.published = s.published;
