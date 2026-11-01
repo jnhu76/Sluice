@@ -532,6 +532,26 @@ Result<std::size_t> AsyncIoContext::poll() {
     return pass.value().completed;
 }
 
+#if defined(SLUICE_RESEARCH_ELIDE_013)
+ProgressPass AsyncIoContext::run_progress_pass_(bool* progress_wait_health_failed) {
+    if (stats_)
+        ++stats_->poll_calls;
+    ProgressPass pass = backend_->poll_progress();
+    const bool progress_wait_health = progress_->wait_health_failed();
+    pass.health_failed = pass.health_failed || core_->health_failed() || progress_wait_health;
+#if !defined(SLUICE_RESEARCH_ELIDE_013_MUTANT_CARRY_DROPPED)
+    if (progress_wait_health_failed != nullptr) {
+        *progress_wait_health_failed = progress_wait_health;
+    }
+#else
+    (void)progress_wait_health_failed;
+#endif
+    if (stats_)
+        stats_->completed_ops += pass.completed;
+    close_admission_on_progress_exhaustion_();
+    return pass;
+}
+#else
 ProgressPass AsyncIoContext::run_progress_pass_() {
     if (stats_)
         ++stats_->poll_calls;
@@ -543,6 +563,7 @@ ProgressPass AsyncIoContext::run_progress_pass_() {
     close_admission_on_progress_exhaustion_();
     return pass;
 }
+#endif
 
 Result<ProgressPass> AsyncIoContext::poll_progress() {
     if (!drive_entry_admitted_()) {
@@ -614,7 +635,15 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
             cancel_outstanding_for_stop_();
         }
         const detail::ProgressSource::Token token = progress_->snapshot();
+#if defined(SLUICE_RESEARCH_ELIDE_013)
+        bool progress_wait_health = false;
+        const ProgressPass pass = run_progress_pass_(&progress_wait_health);
+#else
         const ProgressPass pass = run_progress_pass_();
+#endif
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        progress_->pause_at_settle_window_gate_for_test();
+#endif
 
         if (settlement_converged_()) {
 #if defined(SLUICE_SHUTDOWN_MUTANT_M4_CLOSE_REQUIRES_CONSUMPTION)
@@ -625,7 +654,15 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
             break;
         }
 
+#if defined(SLUICE_RESEARCH_ELIDE_013)
+        if (progress_wait_health) {
+#else
+#if defined(SLUICE_SHUTDOWN_SETTLE_REQUERY_MUTANT_DROPPED)
+        if (false) {
+#else
         if (progress_->wait_health_failed()) {
+#endif
+#endif
             return ShutdownOutcome::health_failed;
         }
 

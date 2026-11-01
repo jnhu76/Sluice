@@ -61,6 +61,12 @@ class ProgressSource {
     // cannot distinguish silence from a lost wake, so every wait must observe
     // the failure instead of a zero-completion report.
     bool wait_health_failed() const noexcept {
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+        if (auto* c = wait_health_probe_counter_.load(std::memory_order_acquire)) {
+            c->fetch_add(1, std::memory_order_relaxed);
+            c->notify_all();
+        }
+#endif
         std::lock_guard<std::mutex> lk(mtx_);
         return health_failed_;
     }
@@ -121,7 +127,11 @@ class ProgressSource {
         for (;;) {
             {
                 std::lock_guard<std::mutex> lk(mtx_);
+#if defined(SLUICE_PROGRESS_SOURCE_MUTANT_PARK_ENTRY_HEALTH_DROPPED)
+                if (false) {
+#else
                 if (health_failed_) {
+#endif
                     return WakeReason::failed;
                 }
             }
@@ -294,6 +304,10 @@ class ProgressSource {
         prepark_counter_.store(counter, std::memory_order_release);
     }
 
+    void set_wait_health_probe_counter_for_test(std::atomic<int>* counter) noexcept {
+        wait_health_probe_counter_.store(counter, std::memory_order_release);
+    }
+
     // Deterministic pause points inside the park handshake. The prerevalidate
     // gate holds before the epoch revalidation; the prepark gate holds after
     // it and after the stale-readiness drain, immediately before poll(2).
@@ -309,6 +323,17 @@ class ProgressSource {
 
     void set_prepark_pause_gate_for_test(PauseGate* gate) noexcept {
         prepark_pause_gate_.store(gate, std::memory_order_release);
+    }
+
+    // Pause point owned by the settle loop, between its pass and its health
+    // observation: the only position from which a test can inject a wait
+    // health verdict inside that observation window.
+    void set_settle_window_pause_gate_for_test(PauseGate* gate) noexcept {
+        settle_window_pause_gate_.store(gate, std::memory_order_release);
+    }
+
+    void pause_at_settle_window_gate_for_test() noexcept {
+        pause_at_gate_(settle_window_pause_gate_);
     }
 
     void set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
@@ -472,6 +497,8 @@ class ProgressSource {
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
     std::atomic<PauseGate*> prerevalidate_pause_gate_{nullptr};
     std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
+    std::atomic<std::atomic<int>*> wait_health_probe_counter_{nullptr};
+    std::atomic<PauseGate*> settle_window_pause_gate_{nullptr};
 #endif
 };
 

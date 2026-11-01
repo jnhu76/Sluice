@@ -43,6 +43,20 @@ struct TestAccess {
         }
     }
 
+    static void context_set_wait_health_probe_counter(AsyncIoContext& ctx,
+                                                      std::atomic<int>* counter) noexcept {
+        if (ctx.progress_ != nullptr) {
+            ctx.progress_->set_wait_health_probe_counter_for_test(counter);
+        }
+    }
+
+    static void context_set_settle_window_pause_gate(
+        AsyncIoContext& ctx, ProgressSource::PauseGate* gate) noexcept {
+        if (ctx.progress_ != nullptr) {
+            ctx.progress_->set_settle_window_pause_gate_for_test(gate);
+        }
+    }
+
     static void context_set_prerevalidate_pause_gate(AsyncIoContext& ctx,
                                                      ProgressSource::PauseGate* gate) noexcept {
         if (ctx.progress_ != nullptr) {
