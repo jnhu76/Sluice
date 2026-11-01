@@ -1299,3 +1299,44 @@ do
                            "SLUICE_RESEARCH_ELIDE_007_MUTANT_RE_SPLIT"})
 end
 
+-- ThreadPool completion-quiescence oracle. The studied region lives in the
+-- threadpool backend TU, so this target compiles its own copies of the async
+-- TUs and links neither sluice_async nor the other seam builds, mirroring the
+-- threadpool request-core integration target's shape.
+do
+    local function completion_quiescence_target(name, extra_defines)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            for _, d in ipairs(extra_defines or {}) do
+                add_defines(d)
+            end
+            add_files(R .. "tests/threadpool_completion_quiescence_oracle_test.cpp",
+                      R .. "src/async/threadpool_backend.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+    end
+
+    completion_quiescence_target("threadpool_completion_quiescence_oracle_test")
+    -- Named mutation builds, executed and recorded manually, never run as
+    -- regular tests.
+    completion_quiescence_target("threadpool_completion_quiescence_mut_drop_decrement",
+                         {"SLUICE_RESEARCH_ELIDE_008",
+                          "SLUICE_RESEARCH_ELIDE_008_MUTANT_DROP_DECREMENT"})
+    completion_quiescence_target("threadpool_completion_quiescence_mut_push_before_offer",
+                         {"SLUICE_RESEARCH_ELIDE_008",
+                          "SLUICE_RESEARCH_ELIDE_008_MUTANT_PUSH_BEFORE_OFFER"})
+    -- The presplit mutation restores the second completion lock round-trip and
+    -- is behaviorally identical to the candidate; its killer is the E4 static
+    -- shape gate, so this binary exists for that disassembly check, not for a
+    -- runtime failure.
+    completion_quiescence_target("threadpool_completion_quiescence_mut_presplit",
+                         {"SLUICE_RESEARCH_ELIDE_008",
+                          "SLUICE_RESEARCH_ELIDE_008_MUTANT_PRESPLIT"})
+end
