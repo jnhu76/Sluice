@@ -1,0 +1,18 @@
+{
+ "phase": "aa-noise-w03-d4",
+ "case": "W03-uring-4k-d4",
+ "pairs": 24,
+ "arms": "AA",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+ "binary_sha256": "1e548bc68ca44427ad06a8706689a0bbf45a7d9c339ba795b45b02c71653a642",
+ "env_overrides": [],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T12:22:10+0800",
+ "loadavg_start": [
+  1.5849609375,
+  1.47802734375,
+  1.306640625
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

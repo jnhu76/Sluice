@@ -1,0 +1,326 @@
+{
+ "round": "uring-submit-policy/round-e5-20261104",
+ "issue": "jnhu76/Sluice#595",
+ "generated_utc": "2026-11-04T06:33:09Z",
+ "decision": {
+  "verdict": "KEEP_IMMEDIATE",
+  "product": "HOLD",
+  "product_pr": "NONE",
+  "merged": "NO"
+ },
+ "source": {
+  "base_sha": "271b81bfc9d64eecc0266fe7066b9040525dd710",
+  "base_is_622_anchor": true,
+  "research_branch": "research-595-bounded-progress (execution worktree, local only)",
+  "archive_branch": "research/595-e5-submission-archive",
+  "patch_path": "bench/research/uring-submit-policy/round-e5-20261104/patch.diff",
+  "patch_sha256": "7be9d0145a8c268a62d9fa90338b7cda95cefc5f8ad2976e4706cb192fb1eaf0",
+  "patch_files": [
+   "src/async/uring_transport.cpp",
+   "src/async/uring_backend.cpp",
+   "include/sluice/async/detail/uring_backend.hpp",
+   "bench/bench_w02_pipeline.cpp",
+   "xmake/tests.lua",
+   "tests/uring_595_bounded_progress_test.cpp (new)"
+  ]
+ },
+ "build": {
+  "gcc": "16.2.1",
+  "liburing": "2.13-2",
+  "xmake": "3.1.2+HEAD.5d21e9d",
+  "flags": "-O3 -std=c++20 -Wall -Werror -DNDEBUG -DSLUICE_HAS_LIBURING -DSLUICE_ASYNC_INTERNAL_TESTING(test only)",
+  "binaries": {
+   "bench_w02_pipeline": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+   "bench_w03_external_loop": "1e548bc68ca44427ad06a8706689a0bbf45a7d9c339ba795b45b02c71653a642",
+   "uring_595_bounded_progress_test": "865de828f9b4bc95146caa15101921a28d7298247f8d2130d6d7be56db2b069a"
+  }
+ },
+ "host": {
+  "cpu": "Intel Xeon E5-2666 v3 (10C/20T, 1 NUMA)",
+  "kernel": "7.2.11-200.fc44.x86_64",
+  "virt": "none (bare metal)",
+  "governor": "schedutil 1.2-3.5 GHz (unchanged)",
+  "perf_event_paranoid": 2,
+  "fixture": "warm tmpfs /tmp/sluice-595-bench, 64 MiB pattern",
+  "pinning": "taskset -c 2 default; SMT {2,12} and cross {2,8} checks"
+ },
+ "measurement": {
+  "arm_selector": "SLUICE_595_ARM env, read once at backend construction",
+  "sampling_unit": "20,000 valid 4 KiB reads per measured rep (64 KiB: 2,000)",
+  "pairing": "24 balanced interleaved pairs per shape (placement/probes 8-12)",
+  "bootstrap": {
+   "resamples": 10000,
+   "seed": 5950,
+   "method": "percentile CI over pairs"
+  },
+  "control_family": {
+   "shapes": 9,
+   "alpha": 0.05,
+   "correction": "Holm-Bonferroni, one-sided non-inferiority",
+   "bounds": {
+    "cpu": 0.05,
+    "p95": 0.05,
+    "p99": 0.05,
+    "tput": 0.03
+   }
+  },
+  "aa_gates": {
+   "cpu_half_width": 0.05,
+   "tput_half_width": 0.03,
+   "p99_half_width": 0.03
+  },
+  "sanctioned_repair": "WARMUP=1 MEASURED=5 per pair member; both receipts kept",
+  "scripts": {
+   "pair_runner.py_sha256": "d7c74c3e38462ab0eae162b6bd9df4ce5d38a0426dec85394b4721ffadd52b3f",
+   "analyze.py_sha256": "7805c4fa280074f03e0ea5398be85516cd52326a3651281de501e98cf5ebbea8"
+  }
+ },
+ "datasets": [
+  {
+   "phase": "aa-calib-w02-4k-d16",
+   "case": "W02-uring-4k-d16",
+   "arms": "AA",
+   "pairs": 24,
+   "records": 48,
+   "role": "A/A pre-repair receipt (p99 3.71pp FAIL)",
+   "results_jsonl_sha256": "ece10193fa23efbaebda9d6d12efef405a15e37826edf4f5ddb0eb0d2aca7bd4",
+   "header_json_sha256": "a2dd79cf40d63a0e04ec72e3687dae47949b5d2a32dd7c2e1604584518f5d385"
+  },
+  {
+   "phase": "aa-calib2-w02-4k-d16-smt",
+   "case": "W02-uring-4k-d16",
+   "arms": "AA",
+   "pairs": 24,
+   "records": 48,
+   "role": "SMT placement probe, rejected as repair",
+   "results_jsonl_sha256": "0d1d83799643b2873ea09620d5770a13ac856a58a7632e710ab967f158ee1dcc",
+   "header_json_sha256": "de3f2b1cdd6ed4c2677c9c6abd42f48d29c75c5f123f5f52f2a19db89f6825f0"
+  },
+  {
+   "phase": "aa-noise-ctl-d2",
+   "case": "W02-uring-4k-d2",
+   "arms": "AA",
+   "pairs": 24,
+   "records": 48,
+   "role": "D2 shape noise floor",
+   "results_jsonl_sha256": "4595b79849adec9447f98e2be71c828482619edf1357bb13bebe75283ad3a343",
+   "header_json_sha256": "62cc6cf329488eb576856fe326b0510f10a3a455958086e28b50464d50b90b9e"
+  },
+  {
+   "phase": "aa-noise-w03-d4",
+   "case": "W03-uring-4k-d4",
+   "arms": "AA",
+   "pairs": 24,
+   "records": 48,
+   "role": "W-03 d4 shape noise floor",
+   "results_jsonl_sha256": "081b677fb2548d45d4e3364884d79f07fa16d473ffcf7b6ec8469ccd0c0cf1bb",
+   "header_json_sha256": "c2dccbf8a893da9960f0e35aa72a6332d209d13a8723f00a907785ac7d109a97"
+  },
+  {
+   "phase": "aa-noise-w03-d64",
+   "case": "W03-uring-4k-d64",
+   "arms": "AA",
+   "pairs": 24,
+   "records": 48,
+   "role": "W-03 d64 shape noise floor",
+   "results_jsonl_sha256": "24e194b0a55d138ea098358cb55b3be9947f500f6fb5dbe85d0bed91b4c1394e",
+   "header_json_sha256": "aa9727ae94b8c467112b52a6e87539310518cfd9366b3681836c078f25a5ae4a"
+  },
+  {
+   "phase": "aa-probe-cpu8",
+   "case": "W02-uring-4k-d16",
+   "arms": "AA",
+   "pairs": 12,
+   "records": 24,
+   "role": "cpu8 placement probe, rejected as repair",
+   "results_jsonl_sha256": "28d16dcd0badd75db6403136fefcf5558f26733c7af7b7b7bf4ef3bd728996f0",
+   "header_json_sha256": "4109b2a54acd765496f2ef26d12d617291d2c2e9482817984ec42fe2d690c41c"
+  },
+  {
+   "phase": "aa-repair-w02-4k-d16-m5",
+   "case": "W02-uring-4k-d16",
+   "arms": "AA",
+   "pairs": 24,
+   "records": 48,
+   "role": "A/A repaired receipt (the sanctioned repair)",
+   "results_jsonl_sha256": "d22292e05ad2a66f11b1cfcff4c776a035c3c4c85febb1b46f89cc4e3f3ffd8b",
+   "header_json_sha256": "9ede6aecfcddbec44575990b035eac3c637259fcceb3b32bde4ca5feab6096c2"
+  },
+  {
+   "phase": "ab-main-w02-4k-d16",
+   "case": "W02-uring-4k-d16",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "main decision shape (net win + protection)",
+   "results_jsonl_sha256": "12b4c444dc6c29bb268d280af35b7f213e5982a23b2b1b52719606a9d4a2e661",
+   "header_json_sha256": "492ac9c3ef0367956d552c836559c227ee69d79d1046e9c086d0ba71b43b22ca"
+  },
+  {
+   "phase": "ctl-64k",
+   "case": "W02-uring-64k-d16",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control 64 KiB payload",
+   "results_jsonl_sha256": "a8e9d9ee32f1db3306b335aa7c158c9a15573f32c04bee848426ecf2c68f5363",
+   "header_json_sha256": "ba54ca373349d643050eb31651176ce2fcd0ba95d473753fd1637ca35ed205a6"
+  },
+  {
+   "phase": "ctl-d1",
+   "case": "W02-uring-4k-d1",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control D1",
+   "results_jsonl_sha256": "ef10b58c07d8fc559f1cfa061c91a761bee0f6fb4f7db0a309974e570ac4208e",
+   "header_json_sha256": "483d82f9c6b0525f70a936ab487dbc70d41e591b38f22916213c2ff5826abd1f"
+  },
+  {
+   "phase": "ctl-d2",
+   "case": "W02-uring-4k-d2",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control D2 (protection FAIL)",
+   "results_jsonl_sha256": "a40c5d34ad31b38faa6ccf2bde6cd4824c5addcfd971e433a87807e58a2f0dbd",
+   "header_json_sha256": "c5b4f46573e3f3a5112c2d8b5aca0c88ed64e6e45418b1bad4238b1705a0265c"
+  },
+  {
+   "phase": "ctl-d2-repl",
+   "case": "W02-uring-4k-d2",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "D2 replication (confirmation only)",
+   "results_jsonl_sha256": "911bbea36a25540a7e3b9c00242aebe9f6055b277c0fcbe418d62ca4182dfb6e",
+   "header_json_sha256": "fda39ce127a132423ff4d4a734c37b4fd2d758981ea03b7e8e6e3f4e5436aa1a"
+  },
+  {
+   "phase": "ctl-d3",
+   "case": "W02-uring-4k-d3",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control D3",
+   "results_jsonl_sha256": "d745ef04e9d672b786459fda316c1b71b03896247ef7a163e23ddf93034c9e9a",
+   "header_json_sha256": "ea3e0d65283d7e35ac1953a3fac401e46bb7ab7db61d527c9c7e149352720d88"
+  },
+  {
+   "phase": "ctl-saturate",
+   "case": "W02-uring-4k-d16-saturate",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "saturation control",
+   "results_jsonl_sha256": "08bf92d65ca12c34a9758f5d3720bce9595694de5d10c82cec6c121f94ba92a9",
+   "header_json_sha256": "f7a9bdf1089170cdc61b93dd99c9ce6895bac358ed5ea6ad0e21b2111f54eefd"
+  },
+  {
+   "phase": "ctl-threadpool",
+   "case": "W02-threadpool-4k-d16-w4",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "threadpool no-enter control",
+   "results_jsonl_sha256": "04dc9bd76d631a155284baad90e720c9b37311a5021d7dc9e00d04b45e320ecc",
+   "header_json_sha256": "4bc19bf02975f23ff019b73625f5267e96caf7529b560bfe6099ba6d506d27da"
+  },
+  {
+   "phase": "ctl-w03-d16",
+   "case": "W03-uring-4k-d16",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control W-03 d16",
+   "results_jsonl_sha256": "dd282b43f4add1aa10602b794e0a03ab629f283fc2d53cdfd720588d81142859",
+   "header_json_sha256": "b26d3c6642e21d4f5e054d6d3ee74e955b0a3ee90556d45d7453eec03a7d9ab1"
+  },
+  {
+   "phase": "ctl-w03-d4",
+   "case": "W03-uring-4k-d4",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control W-03 split-owner d4",
+   "results_jsonl_sha256": "8084df6da4b233f677dcf88dbd6b45c1d0fece83b65eaa226f2db6492f95e469",
+   "header_json_sha256": "679ef9c16de96481a500a743e2b8e030f7f0239a7cdf26adf371b68d1235834b"
+  },
+  {
+   "phase": "ctl-w03-d64",
+   "case": "W03-uring-4k-d64",
+   "arms": "AB",
+   "pairs": 24,
+   "records": 48,
+   "role": "negative control W-03 d64",
+   "results_jsonl_sha256": "fcf46ee0b011ddd700298d52589f1b6ec862abeec7802883ae6d289956faa4d2",
+   "header_json_sha256": "c85285248cdc74d0b60cc3ed1a52616c8829eb64c1173b6b7ddc28165fd263f9"
+  },
+  {
+   "phase": "harness-smoke",
+   "case": "W02-uring-4k-d16",
+   "arms": "AB",
+   "pairs": 2,
+   "records": 4,
+   "role": "machinery validation only, no analysis",
+   "results_jsonl_sha256": "3bbbaee54385d7021adf06660b96a7e4079509249ff3cf3fac72fe06fe2b4a68",
+   "header_json_sha256": "0918eddd03a28d61acb42acf3d0aad9a8a3408d204a0013142a872a883ab6846"
+  },
+  {
+   "phase": "place-w02-cpu8",
+   "case": "W02-uring-4k-d16",
+   "arms": "AB",
+   "pairs": 8,
+   "records": 16,
+   "role": "placement: main shape on cpu8",
+   "results_jsonl_sha256": "73faeeb798415f1673894f7eb93fa19922307b042e267aedc3a291be33156be9",
+   "header_json_sha256": "9aa52e2690e02a4e79a99169bfc7e55659cf56dba4ee639cf589d76b4b11cde5"
+  },
+  {
+   "phase": "place-w03-cross",
+   "case": "W03-uring-4k-d16",
+   "arms": "AB",
+   "pairs": 8,
+   "records": 16,
+   "role": "placement: W-03 cross {2,8}",
+   "results_jsonl_sha256": "b71850928fc38f3dac0774be6b8b5283c6d1e5f71977e01970a01b3bd6a72ecf",
+   "header_json_sha256": "fd2e24b26f45bf22587861c2971239a20cc8407aa55b8371c990a37e1b034f04"
+  },
+  {
+   "phase": "place-w03-smt",
+   "case": "W03-uring-4k-d16",
+   "arms": "AB",
+   "pairs": 8,
+   "records": 16,
+   "role": "placement: W-03 SMT {2,12}",
+   "results_jsonl_sha256": "136fbc34549326445395c601d8da0e92d46c89ed9e83940a2cce8229953ff12f",
+   "header_json_sha256": "3499fb9c3d4a617aadf1cf5fe799d4a7a34a2c1256a002e28e5eade5460a24ce"
+  },
+  {
+   "phase": "threadcheck-w02",
+   "case": "W02-uring-4k-d16",
+   "arms": "AA",
+   "pairs": 2,
+   "records": 2,
+   "role": "/proc accounting consistency check",
+   "results_jsonl_sha256": "4d4eac8e333750f1a5e01600251b00e50f307e9e9c485dd5af118aa4800b39c1",
+   "header_json_sha256": "754011ebd628e4ecdf414bbc8e250779b6cf466a234ad27e1af52fbb6c008184"
+  }
+ ],
+ "full_archive": {
+  "root": "/home/jnhu/sluice-595-e5/evidence",
+  "manifest_entries": 1859,
+  "manifest_sha256": "dfdb447119c2af5ade4a401a21283bfb7b1eb733f27bae61f3be9cd684fe27e3",
+  "verified": "2026-11-04 sha256sum -c: all pass",
+  "backup": "/home/jnhu/sluice-595-e5/backup/sluice-595-e5-full-evidence-20261104.tar.gz",
+  "backup_sha256": "c384c910116a3b2022c9871b229ad0aacfaebf6cb124228fe7d5f8c856dbdeb4",
+  "backup_verified": "extract-and-check: all pass",
+  "off_host_copy": "none (same-host backup only; not durably persisted off-host)"
+ },
+ "reanalysis": {
+  "date": "2026-11-04",
+  "match": "YES",
+  "receipt": "bench/research/uring-submit-policy/round-e5-20261104/analysis/reanalysis-receipt.md",
+  "method": "committed analyze.py on committed raw results.jsonl, diffed vs stored JSONs (bit-exact via seeded bootstrap)"
+ }
+}

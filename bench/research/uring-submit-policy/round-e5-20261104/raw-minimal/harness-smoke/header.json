@@ -1,0 +1,17 @@
+{
+ "phase": "smoke",
+ "case": "W02-uring-4k-d16",
+ "pairs": 2,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "env_overrides": [],
+ "started": "2026-11-04T11:55:18+0800",
+ "loadavg_start": [
+  0.10791015625,
+  0.21044921875,
+  0.30859375
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

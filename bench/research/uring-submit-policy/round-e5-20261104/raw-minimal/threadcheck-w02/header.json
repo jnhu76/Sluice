@@ -1,0 +1,18 @@
+{
+ "phase": "threadcheck-w02",
+ "case": "W02-uring-4k-d16",
+ "pairs": 1,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "env_overrides": [],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T12:16:41+0800",
+ "loadavg_start": [
+  1.1953125,
+  1.77490234375,
+  1.330078125
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

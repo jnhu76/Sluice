@@ -1,0 +1,91 @@
+# perf stat, W02-uring-4k-d16, taskset -c 2, warmup=0 measured=1, paranoid=2, 3 interleaved reps/arm
+== rep 1 arm A ==
+[sudo] password for jnhu: ========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0699s 286318 ops/s 1118.4 MiB/s cpu=0.070s util=99.9% | lat p50=59683 p95=73218 p99=86007 max=217515 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+774400903,,cycles,272523300,100.00,,
+765014177,,instructions,272523300,100.00,,
+272.52,msec,task-clock,272523300,100.00,,
+26254,,context-switches,272523300,100.00,,
+1,,cpu-migrations,272523300,100.00,,
+847,,page-faults,272523300,100.00,,
+== rep 1 arm B ==
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0453s 441969 ops/s 1726.4 MiB/s cpu=0.045s util=99.9% | lat p50=35510 p95=49925 p99=56132 max=125361 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+612350272,,cycles,182548262,100.00,,
+641594576,,instructions,182548262,100.00,,
+182.55,msec,task-clock,182548262,100.00,,
+10967,,context-switches,182548262,100.00,,
+1,,cpu-migrations,182548262,100.00,,
+845,,page-faults,182548262,100.00,,
+== rep 2 arm A ==
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0610s 327788 ops/s 1280.4 MiB/s cpu=0.061s util=100.0% | lat p50=54525 p95=67418 p99=81698 max=166494 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+792153848,,cycles,236939775,100.00,,
+791269151,,instructions,236939775,100.00,,
+236.94,msec,task-clock,236939775,100.00,,
+29189,,context-switches,236939775,100.00,,
+1,,cpu-migrations,236939775,100.00,,
+840,,page-faults,236939775,100.00,,
+== rep 2 arm B ==
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0452s 442674 ops/s 1729.2 MiB/s cpu=0.045s util=99.9% | lat p50=35434 p95=46062 p99=54910 max=124266 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+604586628,,cycles,179504311,100.00,,
+640893868,,instructions,179504311,100.00,,
+179.50,msec,task-clock,179504311,100.00,,
+10845,,context-switches,179504311,100.00,,
+1,,cpu-migrations,179504311,100.00,,
+845,,page-faults,179504311,100.00,,
+== rep 3 arm A ==
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0582s 343464 ops/s 1341.7 MiB/s cpu=0.058s util=100.0% | lat p50=49922 p95=62227 p99=71767 max=139517 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+763734423,,cycles,227707582,100.00,,
+772513778,,instructions,227707582,100.00,,
+227.71,msec,task-clock,227707582,100.00,,
+26561,,context-switches,227707582,100.00,,
+1,,cpu-migrations,227707582,100.00,,
+842,,page-faults,227707582,100.00,,
+== rep 3 arm B ==
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=0 measured_repetitions=1 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d16 rep=0] ops=20000 wall=0.0455s 439528 ops/s 1716.9 MiB/s cpu=0.045s util=100.0% | lat p50=35808 p95=50652 p99=56551 max=112232 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+604141507,,cycles,180734569,100.00,,
+641581521,,instructions,180734569,100.00,,
+180.73,msec,task-clock,180734569,100.00,,
+10994,,context-switches,180734569,100.00,,
+1,,cpu-migrations,180734569,100.00,,
+851,,page-faults,180734569,100.00,,

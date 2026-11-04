@@ -1,0 +1,1145 @@
+diff --git a/bench/bench_w02_pipeline.cpp b/bench/bench_w02_pipeline.cpp
+index 87dd02ac..bf832d99 100644
+--- a/bench/bench_w02_pipeline.cpp
++++ b/bench/bench_w02_pipeline.cpp
+@@ -693,6 +693,16 @@ int main() {
+         p.label_suffix = "-scope64";
+         cases.push_back(p);
+     }
++    // Opt-in (#595): shallow-depth negative controls D2/D3 absent from the
++    // frozen G0 list; a default rebuild reproduces the frozen case list
++    // exactly.
++    if (std::getenv("SLUICE_BENCH_595_DEPTHS") != nullptr) {
++        add_tp(4096, 20000, 2, 2, false);
++        add_uring(4096, 20000, 2, false);
++        add_tp(4096, 20000, 3, 3, false);
++        add_uring(4096, 20000, 3, false);
++    }
++
+     // Opt-in: a default rebuild reproduces the frozen case list exactly.
+     if (std::getenv("SLUICE_BENCH_DIAGNOSTICS") != nullptr) {
+         PipelineParams p;
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..ab390e7b 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -15,6 +15,7 @@
+ #include <mutex>
+ #include <optional>
+ #include <type_traits>
++#include <thread>
+ #include <vector>
+ 
+ #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -111,6 +112,8 @@ class UringAsyncBackend : public AsyncBackend {
+ 
+     PendingControlSnapshot pending_control_snapshot_for_test() const noexcept;
+ 
++    static constexpr std::size_t defer_cap_for_test() noexcept { return kDeferCap; }
++
+     std::size_t dispatch_size_for_test() const noexcept;
+     std::size_t transport_ledger_size_for_test() const noexcept;
+     std::size_t sq_ready_for_test() const noexcept;
+@@ -281,6 +284,32 @@ class UringAsyncBackend : public AsyncBackend {
+     void issue_running_cancel_locked_(detail::RequestReservation h) noexcept;
+     void service_pending_controls_locked_() noexcept;
+ 
++    // #595 research arm B (BOUNDED_PROGRESS): hold the kernel flush of an
++    // eligible dispatched batch for a later progress boundary. Derived from
++    // already-authoritative facts only: the submitting thread is the most
++    // recent progress driver, a kernel-visible un-retired dispatched request
++    // exists (live router entries minus unconsumed ledger entries), the
++    // reservation is a regular 4 KiB read, and fewer than kDeferCap SQEs are
++    // held. Control urgency keeps the existing ordering: a control SQE rides
++    // the next flush boundary, bounded by the 10 ms retry cadence. Both
++    // flush choices are semantically complete; a stale summary only changes
++    // timing.
++    static constexpr std::size_t kDeferCap = 8;
++
++    bool defer_transport_flush_locked_(detail::RequestReservation h) const noexcept;
++
++    void note_progress_driver_locked_() noexcept {
++        const std::thread::id self = std::this_thread::get_id();
++        if (!progress_driver_seen_) {
++            progress_driver_seen_ = true;
++            progress_driver_recent_ = self;
++            return;
++        }
++        if (self == progress_driver_recent_)
++            return;
++        progress_driver_recent_ = self;
++    }
++
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     void wait_submit_entry_pause_() noexcept;
+@@ -321,6 +350,14 @@ class UringAsyncBackend : public AsyncBackend {
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
+ 
++    // #595 research arm selector (read once at construction from
++    // SLUICE_595_ARM; anything other than "B" keeps the frozen immediate
++    // path). Research evidence instrumentation only: it is not a public knob
++    // and ships nowhere.
++    bool bounded_progress_ = false;
++    bool progress_driver_seen_ = false;
++    std::thread::id progress_driver_recent_{};
++
+     std::atomic<std::uint64_t> submit_flushes_{0};
+     std::atomic<std::size_t> live_cookies_{0};
+     std::atomic<std::size_t> live_control_sqes_{0};
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..f52b221a 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -10,6 +10,7 @@
+ #include "uring_internal.hpp"
+ 
+ #include <cstdio>
++#include <cstdlib>
+ #include <limits>
+ #include <stdexcept>
+ #include <utility>
+@@ -166,6 +167,9 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
+         cookie_free_list_[i] = detail::SlotIndex{i};
+     }
++    if (const char* arm = std::getenv("SLUICE_595_ARM"); arm != nullptr && arm[0] == 'B') {
++        bounded_progress_ = true;
++    }
+     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) != 0) {
+@@ -619,6 +623,7 @@ std::size_t UringAsyncBackend::poll() {
+ 
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        note_progress_driver_locked_();
+         if (!fatal_error_.has_value()) {
+             while (!dispatch_->empty()) {
+                 detail::RequestReservation h = dispatch_->front();
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..dcd8c507 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -84,8 +84,12 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+                         break;
+                 }
+                 if (!fatal_error_.has_value()) {
+-                    (void)submit_transport_locked();
+-                    service_pending_controls_locked_();
++                    if (defer_transport_flush_locked_(h)) {
++                        service_pending_controls_locked_();
++                    } else {
++                        (void)submit_transport_locked();
++                        service_pending_controls_locked_();
++                    }
+                 }
+                 newly_poisoned = !poisoned_before && fatal_error_.has_value();
+             }
+@@ -95,8 +99,15 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+             !fatal_error_.has_value() && dispatch_retry_remains_locked_();
+ #endif
+     }
+-    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch ||
+-        post_poison_push_retired) {
++#if defined(SLUICE_595_MUTANT_DEFER_RESIDUE_SIGNAL_DROPPED)
++    (void)unsubmitted_after_dispatch;
++    const bool advertise_residue =
++        injected_dispatch_failure || newly_poisoned || post_poison_push_retired;
++#else
++    const bool advertise_residue = injected_dispatch_failure || newly_poisoned ||
++                                   unsubmitted_after_dispatch || post_poison_push_retired;
++#endif
++    if (advertise_residue) {
+         signal_ready_progress();
+     }
+ }
+@@ -215,6 +226,42 @@ bool UringAsyncBackend::dispatch_retry_remains_locked_() const noexcept {
+            !transport_ledger_->all_class_a_recovery_retired();
+ }
+ 
++bool UringAsyncBackend::defer_transport_flush_locked_(
++    detail::RequestReservation h) const noexcept {
++    if (!bounded_progress_) {
++        return false;
++    }
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_OWNER)
++    if (false)
++#else
++    if (!progress_driver_seen_ || std::this_thread::get_id() != progress_driver_recent_)
++#endif
++        return false;
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_PAYLOAD)
++    if (false)
++#else
++    const PreparedUringOp& prep = prepared_ops_[h.slot.value];
++    if (prep.kind != detail::OperationKind::read || prep.native_length != 4096)
++#endif
++        return false;
++    // Kernel-visible un-retired witness: router entries alive beyond the
++    // unconsumed ledger tail. Held-only batches and blocked transports have
++    // no witness and keep the immediate path.
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_WITNESS)
++    if (false)
++#else
++    if (live_cookies_.load(std::memory_order_relaxed) <= transport_ledger_->size())
++#endif
++        return false;
++#if defined(SLUICE_595_MUTANT_DEFER_NO_CAP)
++    if (false)
++#else
++    if (transport_ledger_->size() >= kDeferCap)
++#endif
++        return false;
++    return true;
++}
++
+ int UringAsyncBackend::submit_transport_locked() noexcept {
+     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+diff --git a/tests/uring_595_bounded_progress_test.cpp b/tests/uring_595_bounded_progress_test.cpp
+new file mode 100644
+index 00000000..1ff0e17e
+--- /dev/null
++++ b/tests/uring_595_bounded_progress_test.cpp
+@@ -0,0 +1,906 @@
++// #595 arm-B (BOUNDED_PROGRESS) oracles. Each test pins one obligation the
++// deferral policy newly relies on: a finite progress path for held entries
++// without a second submit, the cap bound, deferred multi-entry partial
++// submit and retryable failure reconciliation, cancel urgency, the owner /
++// witness / payload eligibility gates, the prepark residue handoff, and
++// poison/shutdown settlement of held batches. The eligibility gates are
++// falsified by the SLUICE_595_MUTANT_* builds; every RED receipt must be the
++// named assertion, not a crash or timeout.
++
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/test_access.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/file_resource.hpp>
++#include <sluice/result.hpp>
++
++#include <atomic>
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <memory>
++#include <optional>
++#include <string>
++#include <thread>
++#include <vector>
++
++#include <fcntl.h>
++#include <liburing.h>
++#include <unistd.h>
++
++#ifndef SLUICE_HAS_LIBURING
++#error "the 595 bounded-progress oracle must receive SLUICE_HAS_LIBURING"
++#endif
++
++namespace {
++
++using namespace sluice::async;
++using sluice::File;
++using sluice::async::detail::TestAccess;
++
++struct Tracker {
++    const char* name;
++    int failures = 0;
++
++    void check(bool ok, const char* label) {
++        if (!ok) {
++            ++failures;
++            std::fprintf(stderr, "FAIL [%s] %s\n", name, label);
++        }
++    }
++};
++
++std::string make_temp_file(std::size_t bytes) {
++    char path[] = "/tmp/sluice_595_defer_XXXXXX";
++    const int fd = ::mkstemp(path);
++    if (fd < 0)
++        return {};
++    std::string content(bytes, 'x');
++    std::size_t written = 0;
++    while (written < bytes) {
++        const ssize_t n = ::write(fd, content.data() + written, content.size() - written);
++        if (n <= 0) {
++            ::close(fd);
++            return {};
++        }
++        written += static_cast<std::size_t>(n);
++    }
++    ::close(fd);
++    return path;
++}
++
++std::optional<File> open_file(Tracker& t, const std::string& path) {
++    auto opened = File::open(path);
++    if (!opened.has_value()) {
++        t.check(false, "fixture file opens");
++        return std::nullopt;
++    }
++    return std::optional<File>{std::move(opened.value())};
++}
++
++// A pipe-backed read cannot complete until the write end is used, so
++// "kernel-visible and un-retired" is a deterministically holdable state that
++// also satisfies the deferral witness.
++struct BlockedPipeRead {
++    int r = -1;
++    int w = -1;
++    Request<std::size_t> request;
++    std::vector<std::byte> buffer;
++
++    bool arm(AsyncIoContext& ctx) {
++        int fds[2];
++        if (::pipe(fds) != 0)
++            return false;
++        r = fds[0];
++        w = fds[1];
++        buffer.assign(4096, std::byte{0});
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(r, sluice::FileAccess::read_only), buffer.data(),
++                   buffer.size(), 0});
++        if (!submitted.has_value())
++            return false;
++        request = std::move(submitted).value();
++        return true;
++    }
++
++    void release_one_byte() {
++        const char payload = 'p';
++        const ssize_t wrote = ::write(w, &payload, 1);
++        (void)wrote;
++    }
++
++    void close_pipe() {
++        if (r >= 0)
++            ::close(r);
++        if (w >= 0)
++            ::close(w);
++        r = -1;
++        w = -1;
++    }
++};
++
++struct DriverClaim {
++    std::optional<ProgressOwner> owner;
++    explicit DriverClaim(AsyncIoContext& ctx) {
++        if (auto claimed = ctx.claim_progress_owner(); claimed.has_value())
++            owner = std::move(claimed).value();
++    }
++};
++
++// Scripted fake kernel: models consumption by moving the kernel SQ head, so
++// ledger reconciliation runs against a consistent kernel view instead of a
++// bare return code. When `prefetch_at_call` arms that submit call, it
++// consumes one SQE and then reports EAGAIN — the partial-fetch-before-error
++// hazard the reconciliation exists for.
++struct ScriptedKernel {
++    std::vector<int> script;
++    std::size_t index = 0;
++    int calls = 0;
++    int prefetch_at_call = 0;
++    int prefetched = 0;
++
++    int scripted_rc(unsigned ready) noexcept {
++        ++calls;
++        if (index < script.size())
++            return script[index++];
++        return static_cast<int>(ready);
++    }
++};
++
++int scripted_submit(void* context, ::io_uring* ring) noexcept {
++    auto* kernel = static_cast<ScriptedKernel*>(context);
++    const unsigned ready = ::io_uring_sq_ready(ring);
++    const int rc = kernel->scripted_rc(ready);
++    *ring->sq.ktail = ring->sq.sqe_tail;
++    if (kernel->prefetch_at_call == kernel->calls && ready > 0) {
++        kernel->prefetch_at_call = 0;
++        kernel->prefetched += 1;
++        *ring->sq.khead += 1;
++        return -EAGAIN;
++    }
++    if (rc > 0) {
++        const unsigned take = static_cast<unsigned>(rc) > ready ? ready : static_cast<unsigned>(rc);
++        *ring->sq.khead += take;
++        return static_cast<int>(take);
++    }
++    return rc;
++}
++
++int full_consume_submit(void*, ::io_uring* ring) noexcept {
++    const unsigned ready = ::io_uring_sq_ready(ring);
++    *ring->sq.ktail = ring->sq.sqe_tail;
++    *ring->sq.khead = ring->sq.sqe_tail;
++    return static_cast<int>(ready);
++}
++
++void wait_gate_paused(detail::ProgressSource::PauseGate& gate) {
++    std::atomic<bool>& paused = gate.paused;
++    bool seen = paused.load(std::memory_order_acquire);
++    while (!seen) {
++        paused.wait(seen, std::memory_order_acquire);
++        seen = paused.load(std::memory_order_acquire);
++    }
++}
++
++void resume_gate(detail::ProgressSource::PauseGate& gate) noexcept {
++    gate.resume.store(true, std::memory_order_release);
++    gate.resume.notify_all();
++}
++
++bool settle_with_passes(AsyncIoContext& ctx, Request<std::size_t>& request, int rounds = 512) {
++    for (int i = 0; i < rounds && !request.ready(); ++i)
++        (void)ctx.poll();
++    return request.ready();
++}
++
++// Held-batch oracle 1: with no second submit, a single progress entry flushes
++// the held batch and every held request settles through its real path. The
++// witness (pipe read) stays blocked, so the held entries are the only work a
++// pass could complete.
++bool last_deferred_item_completes_without_second_submit(Tracker& t) {
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 16});
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    BlockedPipeRead witness;
++    t.check(witness.arm(ctx), "the witness pipe read is accepted");
++    t.check(raw->submit_flushes_for_test() == 1 && raw->transport_ledger_size_for_test() == 0,
++            "the first submission of a burst takes the immediate path");
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> held;
++    for (int i = 0; i < 2; ++i) {
++        auto submitted = ctx.submit_read(ReadOp{
++            NativeFileRef(*file), buffers[i].data(), 4096, static_cast<std::uint64_t>(i) * 4096});
++        t.check(submitted.has_value(), "the held submission is accepted");
++        held.push_back(std::move(submitted).value());
++    }
++    t.check(raw->submit_flushes_for_test() == 1,
++            "eligible follow-on submissions hold the kernel flush");
++    t.check(raw->transport_ledger_size_for_test() == 2 && raw->sq_ready_for_test() == 2,
++            "two SQEs are prepared and held");
++
++    const auto waited = ctx.wait_one(std::chrono::seconds{5});
++    t.check(waited.has_value() && waited.value().kind ==
++                                      AsyncIoContext::ProgressWaitOutcome::Kind::progress &&
++                waited.value().completed >= 1,
++            "one wait entry progresses the held batch without a second submit");
++    for (int i = 0; i < 2; ++i) {
++        t.check(settle_with_passes(ctx, held[i]), "a held request settles");
++        if (held[i].ready()) {
++            const auto observed = held[i].take_result();
++            t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
++                        observed.result.value() == 4096,
++                    "the held read returns its bytes");
++        }
++    }
++    t.check(raw->transport_ledger_size_for_test() == 0, "the ledger drains");
++
++    witness.release_one_byte();
++    t.check(settle_with_passes(ctx, witness.request), "the witness settles after its pipe write");
++    if (witness.request.ready())
++        (void)witness.request.take_result();
++    witness.request.discard();
++    for (auto& h : held)
++        h.discard();
++    witness.close_pipe();
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Held-batch oracle 2: the cap. A burst larger than the hold bound flushes
++// inline at the bound; entries below the bound accumulate and the burst never
++// leaves more than the bound waiting for a pass.
++bool cap_flushes_held_batch_inline(Tracker& t) {
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{32, 32});
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    BlockedPipeRead witness;
++    t.check(witness.arm(ctx), "the witness pipe read is accepted");
++
++    const std::string path = make_temp_file(4096 * 16);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    const std::size_t burst = UringAsyncBackend::defer_cap_for_test() + 1;
++    std::vector<std::vector<std::byte>> buffers(burst, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> requests;
++    for (std::size_t i = 0; i < burst; ++i) {
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(*file), buffers[i].data(), 4096,
++                   static_cast<std::uint64_t>(i) * 4096});
++        t.check(submitted.has_value(), "the burst submission is accepted");
++        requests.push_back(std::move(submitted).value());
++        if (i + 1 < UringAsyncBackend::defer_cap_for_test()) {
++            t.check(raw->submit_flushes_for_test() == 1 &&
++                        raw->transport_ledger_size_for_test() == i + 1,
++                    "below the bound the submission is held");
++        } else if (i + 1 == UringAsyncBackend::defer_cap_for_test()) {
++            t.check(raw->submit_flushes_for_test() == 2 &&
++                        raw->transport_ledger_size_for_test() == 0,
++                    "the submission that reaches the bound flushes the batch inline");
++        }
++    }
++    t.check(raw->transport_ledger_size_for_test() == 1,
++            "the post-flush submission holds again under the bound");
++
++    const auto waited = ctx.wait_one(std::chrono::seconds{5});
++    t.check(waited.has_value() && waited.value().completed >= 1, "the flushed batch completes");
++    for (auto& r : requests) {
++        t.check(settle_with_passes(ctx, r), "a burst request settles");
++        if (r.ready())
++            (void)r.take_result();
++        else
++            r.discard();
++    }
++    witness.release_one_byte();
++    t.check(settle_with_passes(ctx, witness.request), "the witness settles");
++    witness.request.discard();
++    witness.close_pipe();
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Held-batch oracle 3: a deferred multi-entry batch meets a partial submit —
++// the kernel consumed one entry and then reported a retryable failure. The
++// ledger must reconcile against the kernel head exactly: the fetched entry
++// retires through reconciliation, the tail survives to the retry, and every
++// request settles exactly once with duplicate CQEs ignored.
++bool deferred_partial_submit_reconciles_prefix_and_retries(Tracker& t) {
++    ScriptedKernel kernel;
++    kernel.prefetch_at_call = 2;
++    UringBackendSubmitTestHooks hooks;
++    hooks.context = &kernel;
++    hooks.submit = scripted_submit;
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(4, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> requests;
++    for (int i = 0; i < 4; ++i) {
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(*file), buffers[i].data(), 4096,
++                   static_cast<std::uint64_t>(i) * 4096});
++        t.check(submitted.has_value(), "the submission is accepted");
++        requests.push_back(std::move(submitted).value());
++    }
++    t.check(raw->submit_flushes_for_test() == 1 && raw->transport_ledger_size_for_test() == 3,
++            "the first submission flushes; three SQEs stay held");
++
++    {
++        DriverClaim claim{ctx};
++        const auto pass = ctx.poll_progress();
++        t.check(pass.has_value(), "the pass runs");
++        t.check(pass.value().dispatch_retry_remains,
++                "a partially consumed held batch advertises retry work");
++        t.check(raw->submit_flushes_for_test() == 2, "the pass-start flush ran once");
++        t.check(kernel.prefetched == 1,
++                "the retryable failure followed a one-entry kernel fetch");
++        t.check(raw->transport_ledger_size_for_test() == 2,
++                "reconciliation retired the fetched prefix, the tail survives");
++    }
++
++    for (int i = 0; i < 4; ++i) {
++        const auto cookie =
++            raw->live_cookie_for_offset_for_test(static_cast<std::uint64_t>(i) * 4096);
++        t.check(cookie.has_value(), "a live cookie exists for each accepted read");
++        if (cookie.has_value())
++            raw->inject_cqe_for_test(*cookie, 4096);
++    }
++    for (int i = 0; i < 4; ++i) {
++        t.check(settle_with_passes(ctx, requests[i]), "the request settles after its CQE");
++        if (requests[i].ready()) {
++            const auto observed = requests[i].take_result();
++            t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
++                        observed.result.value() == 4096,
++                    "the read returns its bytes");
++        }
++    }
++    t.check(raw->transport_ledger_size_for_test() == 0 && raw->live_cookies_for_test() == 0,
++            "the ledger and router drain");
++
++    const auto settled_cookie = raw->live_cookie_for_offset_for_test(0);
++    t.check(!settled_cookie.has_value(), "the retired request has no live cookie");
++    raw->inject_cqe_for_test(1, 4096);
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++    t.check(raw->live_cookies_for_test() == 0, "a duplicate CQE for a retired route is ignored");
++
++    for (auto& r : requests)
++        r.discard();
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Cancel oracle: cancelling a held (dispatched, not kernel-visible) request
++// flushes the transport in the same critical section, so a cancel never waits
++// for a pass, and the request still reaches exactly one terminal whose
++// outcome matches the physical effect.
++bool cancel_of_held_request_flushes_immediately(Tracker& t) {
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 16});
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    BlockedPipeRead witness;
++    t.check(witness.arm(ctx), "the witness pipe read is accepted");
++
++    const std::string path = make_temp_file(4096 * 2);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::byte> buffer(4096);
++    auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4096, 4096});
++    t.check(submitted.has_value(), "the held submission is accepted");
++    Request<std::size_t> held = std::move(submitted).value();
++    t.check(raw->transport_ledger_size_for_test() == 1, "the read is prepared and held");
++
++    const auto disposition = ctx.cancel(held.id());
++    t.check(disposition.has_value() && disposition.value() == CancelDisposition::requested,
++            "the cancel of a held request is requested");
++    t.check(raw->transport_ledger_size_for_test() == 2,
++            "the cancel control joins the held batch under the existing control ordering");
++
++    bool settled = false;
++    for (int i = 0; i < 512 && !settled; ++i) {
++        (void)ctx.poll();
++        settled = held.ready();
++    }
++    t.check(raw->live_control_sqes_for_test() == 0,
++            "the cancel control retires after its CQE");
++    t.check(settled, "the cancelled held request reaches exactly one terminal");
++    if (settled) {
++        const auto observed = held.take_result();
++        const bool legal_outcome =
++            observed.readiness != RequestReadiness::ready ||
++            (observed.result.has_value() && observed.result.value() == 4096) ||
++            !observed.result.has_value();
++        t.check(legal_outcome, "the terminal matches the physical effect");
++    } else {
++        held.discard();
++    }
++
++    witness.release_one_byte();
++    t.check(settle_with_passes(ctx, witness.request), "the witness settles");
++    witness.request.discard();
++    witness.close_pipe();
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Owner oracle: only the most recent progress driver's submissions defer. A
++// split-owner submitter keeps the immediate path; once that thread drives one
++// pass, its own submissions defer.
++bool owner_gate_splits_immediate_from_deferred(Tracker& t) {
++    UringBackendSubmitTestHooks hooks;
++    hooks.submit = full_consume_submit;
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++
++    std::thread driver([&] {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    });
++    driver.join();
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(3, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> requests;
++    const std::uint64_t offsets[3] = {0, 4096, 8192};
++    for (int i = 0; i < 2; ++i) {
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(*file), buffers[i].data(), 4096, offsets[i]});
++        t.check(submitted.has_value(), "the split-owner submission is accepted");
++        requests.push_back(std::move(submitted).value());
++        t.check(raw->submit_flushes_for_test() == static_cast<std::uint64_t>(i + 1) &&
++                    raw->transport_ledger_size_for_test() == 0,
++                "a split-owner submission flushes immediately");
++    }
++
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++    {
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(*file), buffers[2].data(), 4096, offsets[2]});
++        t.check(submitted.has_value(), "the successor submission after driving is accepted");
++        requests.push_back(std::move(submitted).value());
++    }
++    t.check(raw->submit_flushes_for_test() == 2 && raw->transport_ledger_size_for_test() == 1,
++            "the driving thread's own submission defers");
++
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto cookie = raw->live_cookie_for_offset_for_test(offsets[i]);
++        t.check(cookie.has_value(), "a live cookie exists for the read");
++        if (cookie.has_value())
++            raw->inject_cqe_for_test(*cookie, 4096);
++    }
++    for (auto& r : requests) {
++        t.check(settle_with_passes(ctx, r), "the request settles");
++        if (r.ready())
++            (void)r.take_result();
++        else
++            r.discard();
++    }
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Witness oracle: with nothing kernel-visible and un-retired (the sequential
++// D1 shape), every submission flushes inline; deferral would strand the only
++// outstanding work behind a pass that nothing else needs.
++bool witness_gate_keeps_sequential_submissions_immediate(Tracker& t) {
++    UringBackendSubmitTestHooks hooks;
++    hooks.submit = full_consume_submit;
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::byte> buffer(4096);
++    for (int i = 0; i < 3; ++i) {
++        {
++            DriverClaim claim{ctx};
++            (void)ctx.poll();
++        }
++        const std::uint64_t offset = static_cast<std::uint64_t>(i) * 4096;
++        auto submitted = ctx.submit_read(ReadOp{NativeFileRef(*file), buffer.data(), 4096, offset});
++        t.check(submitted.has_value(), "the sequential submission is accepted");
++        const auto cookie = raw->live_cookie_for_offset_for_test(offset);
++        t.check(cookie.has_value(), "the cookie is live after the inline flush");
++        if (cookie.has_value())
++            raw->inject_cqe_for_test(*cookie, 4096);
++        t.check(settle_with_passes(ctx, submitted.value()), "the request settles before the next");
++        if (submitted.value().ready())
++            (void)submitted.value().take_result();
++        else
++            submitted.value().discard();
++        t.check(raw->submit_flushes_for_test() == static_cast<std::uint64_t>(i + 1),
++                "each sequential submission flushed inline");
++    }
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Payload oracle: an ineligible payload (64 KiB) keeps the immediate path
++// even for the driving thread with a live witness.
++bool payload_gate_keeps_large_reads_immediate(Tracker& t) {
++    UringBackendSubmitTestHooks hooks;
++    hooks.submit = full_consume_submit;
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    const std::string path = make_temp_file(65536 * 2);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(65536));
++    std::vector<Request<std::size_t>> requests;
++    const std::uint64_t offsets[2] = {0, 65536};
++    for (int i = 0; i < 2; ++i) {
++        auto submitted =
++            ctx.submit_read(ReadOp{NativeFileRef(*file), buffers[i].data(), 65536, offsets[i]});
++        t.check(submitted.has_value(), "the large submission is accepted");
++        requests.push_back(std::move(submitted).value());
++        t.check(raw->submit_flushes_for_test() == static_cast<std::uint64_t>(i + 1),
++                "each large read flushes inline despite a live witness");
++        t.check(raw->transport_ledger_size_for_test() == 0, "nothing is held");
++    }
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto cookie = raw->live_cookie_for_offset_for_test(offsets[i]);
++        if (cookie.has_value())
++            raw->inject_cqe_for_test(*cookie, 65536);
++    }
++    for (auto& r : requests) {
++        t.check(settle_with_passes(ctx, r), "the large read settles");
++        if (r.ready())
++            (void)r.take_result();
++        else
++            r.discard();
++    }
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Control oracle: a sticky cancel intent (its control SQE could not be
++// allocated because a full held batch occupies the SQ ring) must be serviced
++// inside the same critical section as the next accepted submission — the
++// existing control ordering — so the pending obligation never waits for a
++// driven pass, and the cancelled request still settles exactly once.
++bool pending_control_intent_forces_immediate_path(Tracker& t) {
++    ScriptedKernel kernel;
++    kernel.script = {1, 0, 0, 2};
++    UringBackendSubmitTestHooks hooks;
++    hooks.context = &kernel;
++    hooks.submit = scripted_submit;
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 2}, hooks);
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(4, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> requests;
++    const std::uint64_t offsets[4] = {0, 4096, 8192, 12288};
++    for (int i = 0; i < 3; ++i) {
++        auto submitted =
++            ctx.submit_read(ReadOp{NativeFileRef(*file), buffers[i].data(), 4096, offsets[i]});
++        t.check(submitted.has_value(), "the submission is accepted");
++        requests.push_back(std::move(submitted).value());
++    }
++    t.check(raw->transport_ledger_size_for_test() == 2,
++            "two SQEs fill the two-entry SQ ring as the held batch");
++
++    const auto disposition = ctx.cancel(requests[1].id());
++    t.check(disposition.has_value() && disposition.value() == CancelDisposition::requested,
++            "the cancel of a held request is requested");
++    const auto snapshot = raw->pending_control_snapshot_for_test();
++    t.check(snapshot.authoritative_pending == 1,
++            "the un-allocatable control SQE stays a sticky intent");
++    const std::uint64_t flushes_at_intent = raw->submit_flushes_for_test();
++
++    {
++        auto submitted =
++            ctx.submit_read(ReadOp{NativeFileRef(*file), buffers[3].data(), 4096, offsets[3]});
++        t.check(submitted.has_value(), "the submission under a pending intent is accepted");
++        requests.push_back(std::move(submitted).value());
++    }
++    t.check(raw->submit_flushes_for_test() > flushes_at_intent,
++            "a pending control intent is serviced without waiting for a pass");
++
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++    const auto canceled_cookie = raw->live_cookie_for_offset_for_test(offsets[1]);
++    for (int i = 0; i < 4; ++i) {
++        const auto cookie = raw->live_cookie_for_offset_for_test(offsets[i]);
++        if (!cookie.has_value())
++            continue;
++        if (i == 1)
++            continue;
++        raw->inject_cqe_for_test(*cookie, 4096);
++    }
++    if (canceled_cookie.has_value()) {
++        raw->inject_cqe_for_test(*canceled_cookie, -ECANCELED);
++        raw->inject_cqe_for_test(static_cast<std::uint64_t>(1) << 63u | *canceled_cookie, 0);
++    }
++    for (auto& r : requests) {
++        t.check(settle_with_passes(ctx, r), "the request settles");
++        if (r.ready())
++            (void)r.take_result();
++        else
++            r.discard();
++    }
++    t.check(raw->live_cookies_for_test() == 0 && raw->live_control_sqes_for_test() == 0,
++            "the control obligation and routes retire");
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Pre-park oracle: before the owner parks, the pass that precedes the park
++// has already flushed the held batch (the residue handoff). The owner is
++// frozen at the deterministic prepark gate while the test observes the
++// flushed ledger; the wake afterwards is attributable to the released held
++// read alone because the witness pipe is never written until later.
++bool prepark_handoff_flushes_held_residue(Tracker& t) {
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 16});
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    BlockedPipeRead witness;
++    t.check(witness.arm(ctx), "the witness pipe read is accepted");
++
++    BlockedPipeRead held;
++    t.check(held.arm(ctx), "the held pipe read is accepted");
++    t.check(raw->transport_ledger_size_for_test() == 1, "the held read stays unsubmitted");
++
++    detail::ProgressSource::PauseGate gate;
++    TestAccess::context_set_prepark_pause_gate(ctx, &gate);
++    std::atomic<bool> woke{false};
++    std::atomic<long long> elapsed_ms{0};
++    std::thread owner([&] {
++        DriverClaim claim{ctx};
++        const auto start = std::chrono::steady_clock::now();
++        const auto waited = ctx.wait_one(std::chrono::seconds{5});
++        elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
++                         std::chrono::steady_clock::now() - start)
++                         .count();
++        woke = waited.has_value() &&
++               waited.value().kind == AsyncIoContext::ProgressWaitOutcome::Kind::progress &&
++               waited.value().completed >= 1;
++    });
++    wait_gate_paused(gate);
++    t.check(raw->transport_ledger_size_for_test() == 0 && raw->sq_ready_for_test() == 0,
++            "the pass before the park flushed the held residue");
++    t.check(raw->live_cookies_for_test() == 2, "both reads are kernel-visible while parked");
++
++    held.release_one_byte();
++    resume_gate(gate);
++    owner.join();
++    t.check(woke.load(), "the parked owner woke on the released held read");
++    t.check(elapsed_ms.load() < 4000, "the wake arrives well inside the bound");
++
++    t.check(settle_with_passes(ctx, held.request), "the held read settles");
++    if (held.request.ready()) {
++        const auto observed = held.request.take_result();
++        t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
++                    observed.result.value() == 1,
++                "the held pipe read returned its byte");
++    } else {
++        held.request.discard();
++    }
++    witness.release_one_byte();
++    t.check(settle_with_passes(ctx, witness.request), "the witness settles");
++    witness.request.discard();
++    witness.close_pipe();
++    held.close_pipe();
++    return t.failures == 0;
++}
++
++// Poison oracle: a hard submit failure on a held batch retires every held
++// entry through the failure terminal (they are provably kernel-invisible),
++// releases borrows, and poisons admission. The already-consumed first op
++// still settles through its real CQE: the reap path stays live after poison.
++bool poison_with_held_batch_retires_through_failure(Tracker& t) {
++    ScriptedKernel kernel;
++    kernel.script = {1, -EIO};
++    UringBackendSubmitTestHooks hooks;
++    hooks.context = &kernel;
++    hooks.submit = scripted_submit;
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{8, 8}, hooks);
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(3, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> requests;
++    for (int i = 0; i < 3; ++i) {
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(*file), buffers[i].data(), 4096,
++                   static_cast<std::uint64_t>(i) * 4096});
++        t.check(submitted.has_value(), "the submission is accepted");
++        requests.push_back(std::move(submitted).value());
++    }
++    t.check(raw->transport_ledger_size_for_test() == 2,
++            "the first submission flushed inline; two SQEs stay held");
++
++    const auto first_cookie = raw->live_cookie_for_offset_for_test(0);
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    if (first_cookie.has_value())
++        raw->inject_cqe_for_test(*first_cookie, 4096);
++    std::vector<bool> settled(requests.size(), false);
++    for (int round = 0; round < 512; ++round) {
++        bool all = true;
++        for (std::size_t i = 0; i < requests.size(); ++i) {
++            if (!settled[i] && requests[i].ready())
++                settled[i] = true;
++            all = all && settled[i];
++        }
++        if (all)
++            break;
++        (void)ctx.poll();
++    }
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        t.check(settled[i], "the request settles after poison");
++        if (!settled[i]) {
++            requests[i].discard();
++        }
++    }
++    if (settled[0]) {
++        const auto observed = requests[0].take_result();
++        t.check(observed.readiness == RequestReadiness::ready && observed.result.has_value() &&
++                    observed.result.value() == 4096,
++                "the consumed op settled through its real CQE");
++    }
++    for (std::size_t i = 1; i < requests.size(); ++i) {
++        if (settled[i]) {
++            const auto observed = requests[i].take_result();
++            t.check(observed.readiness == RequestReadiness::ready && !observed.result.has_value(),
++                    "the held entry retired through the failure terminal");
++        }
++    }
++    auto rejected = ctx.submit_read(ReadOp{NativeFileRef(*file), buffers[0].data(), 4096, 0});
++    t.check(!rejected.has_value(), "admission observes the poison");
++    t.check(raw->live_cookies_for_test() == 0,
++            "the held routes retire through the failure terminal");
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++// Shutdown oracle: settlement drives passes that flush a held batch, so
++// shutdown with unsubmitted entries still converges.
++bool shutdown_with_held_batch_settles(Tracker& t) {
++    auto backend = std::make_unique<UringAsyncBackend>(UringConfig{16, 16});
++    UringAsyncBackend* raw = backend.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(backend));
++    {
++        DriverClaim claim{ctx};
++        (void)ctx.poll();
++    }
++
++    BlockedPipeRead witness;
++    t.check(witness.arm(ctx), "the witness pipe read is accepted");
++
++    const std::string path = make_temp_file(4096 * 4);
++    auto file = open_file(t, path);
++    if (!file.has_value())
++        return false;
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    std::vector<Request<std::size_t>> held;
++    for (int i = 0; i < 2; ++i) {
++        auto submitted = ctx.submit_read(
++            ReadOp{NativeFileRef(*file), buffers[i].data(), 4096,
++                   static_cast<std::uint64_t>(i) * 4096});
++        t.check(submitted.has_value(), "the held submission is accepted");
++        held.push_back(std::move(submitted).value());
++    }
++    t.check(raw->transport_ledger_size_for_test() == 2, "two SQEs stay held");
++
++    witness.release_one_byte();
++    const auto outcome = ctx.shutdown(ShutdownPolicy::drain);
++    t.check(outcome.has_value() && outcome.value() == ShutdownOutcome::completed,
++            "shutdown flushes and settles the held batch");
++    for (auto& h : held) {
++        t.check(h.ready(), "the held request settled during shutdown");
++        if (h.ready())
++            (void)h.take_result();
++        else
++            h.discard();
++    }
++    witness.request.discard();
++    witness.close_pipe();
++    ::unlink(path.c_str());
++    return t.failures == 0;
++}
++
++} // namespace
++
++int main() {
++    const char* arm = std::getenv("SLUICE_595_ARM");
++    if (arm == nullptr) {
++        ::setenv("SLUICE_595_ARM", "B", 1);
++    } else if (arm[0] != 'B') {
++        std::fprintf(stderr, "[uring_595_bounded_progress_test] SLUICE_595_ARM=B is required\n");
++        return 2;
++    }
++    Tracker t{"uring_595_bounded_progress"};
++    last_deferred_item_completes_without_second_submit(t);
++    cap_flushes_held_batch_inline(t);
++    deferred_partial_submit_reconciles_prefix_and_retries(t);
++    cancel_of_held_request_flushes_immediately(t);
++    pending_control_intent_forces_immediate_path(t);
++    owner_gate_splits_immediate_from_deferred(t);
++    witness_gate_keeps_sequential_submissions_immediate(t);
++    payload_gate_keeps_large_reads_immediate(t);
++    prepark_handoff_flushes_held_residue(t);
++    poison_with_held_batch_retires_through_failure(t);
++    shutdown_with_held_batch_settles(t);
++    if (t.failures == 0) {
++        std::printf("[uring_595_bounded_progress_test] all checks passed\n");
++        return 0;
++    }
++    std::printf("[uring_595_bounded_progress_test] %d check(s) failed\n", t.failures);
++    return 1;
++}
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index c55e97be..a88afefc 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -656,6 +656,28 @@ if has_config("liburing") then
+     uring_progress_target("uring_pending_control_mut_retire_stale_count",
+                               R .. "tests/uring_pending_control_parity_test.cpp",
+                               "SLUICE_URING_MUTANT_PENDING_CONTROL_RETIRE_STALE_COUNT")
++
++    -- #595 arm-B (BOUNDED_PROGRESS) deferral oracles: held-batch progress
++    -- without a second submit, the cap bound, deferred partial-submit and
++    -- prefetch-then-EAGAIN reconciliation, cancel servicing, and the owner /
++    -- witness / payload gates, plus prepark residue handoff and poison and
++    -- shutdown settlement of held batches. The mutant builds falsify one
++    -- eligibility gate each and must be killed by the named assertion of
++    -- this suite; they are executed and recorded manually.
++    uring_progress_target("uring_595_bounded_progress_test",
++                              R .. "tests/uring_595_bounded_progress_test.cpp")
++    uring_progress_target("uring_595_mut_defer_no_cap",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_NO_CAP")
++    uring_progress_target("uring_595_mut_defer_ignores_witness",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_WITNESS")
++    uring_progress_target("uring_595_mut_defer_ignores_owner",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_OWNER")
++    uring_progress_target("uring_595_mut_defer_ignores_payload",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_PAYLOAD")
+ end
+ 
+ -- Public Request<T> evidence. Same self-contained seam-build shape as

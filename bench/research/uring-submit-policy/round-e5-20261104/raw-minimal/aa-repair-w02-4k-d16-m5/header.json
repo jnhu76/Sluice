@@ -1,0 +1,18 @@
+{
+ "phase": "aa-repair-w02-4k-d16-m5",
+ "case": "W02-uring-4k-d16",
+ "pairs": 24,
+ "arms": "AA",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "env_overrides": [],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T11:59:54+0800",
+ "loadavg_start": [
+  0.2861328125,
+  0.33544921875,
+  0.34228515625
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}
