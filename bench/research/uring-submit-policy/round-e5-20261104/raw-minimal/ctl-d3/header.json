@@ -1,0 +1,20 @@
+{
+ "phase": "ctl-d3",
+ "case": "W02-uring-4k-d3",
+ "pairs": 24,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T12:05:46+0800",
+ "loadavg_start": [
+  1.57421875,
+  1.13525390625,
+  0.7099609375
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

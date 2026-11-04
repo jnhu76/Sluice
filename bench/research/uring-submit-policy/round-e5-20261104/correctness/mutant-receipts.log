@@ -1,0 +1,30 @@
+MUTANT RECEIPTS (final mechanism; regenerated 2026-11-04T12:31+08:00 with correct exit-code capture;
+the earlier copy's rc=0 was a shell expansion artifact and is superseded by this file)
+BASE GREEN:
+[uring_595_bounded_progress_test] all checks passed
+rc=0
+--- MUTANT uring_595_mut_defer_no_cap:
+FAIL [uring_595_bounded_progress] the submission that reaches the bound flushes the batch inline
+FAIL [uring_595_bounded_progress] the post-flush submission holds again under the bound
+[uring_595_bounded_progress_test] 2 check(s) failed
+rc=1
+--- MUTANT uring_595_mut_defer_ignores_witness:
+FAIL [uring_595_bounded_progress] the first submission of a burst takes the immediate path
+FAIL [uring_595_bounded_progress] eligible follow-on submissions hold the kernel flush
+FAIL [uring_595_bounded_progress] two SQEs are prepared and held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+rc=1
+--- MUTANT uring_595_mut_defer_ignores_owner:
+FAIL [uring_595_bounded_progress] a split-owner submission flushes immediately
+[uring_595_bounded_progress_test] 1 check(s) failed
+rc=1
+--- MUTANT uring_595_mut_defer_ignores_payload:
+FAIL [uring_595_bounded_progress] each large read flushes inline despite a live witness
+FAIL [uring_595_bounded_progress] nothing is held
+[uring_595_bounded_progress_test] 2 check(s) failed
+rc=1
+RESTORED GREEN:
+[uring_595_bounded_progress_test] all checks passed
+rc=0

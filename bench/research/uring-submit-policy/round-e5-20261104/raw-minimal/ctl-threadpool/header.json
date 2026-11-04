@@ -1,0 +1,18 @@
+{
+ "phase": "ctl-threadpool",
+ "case": "W02-threadpool-4k-d16-w4",
+ "pairs": 24,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "env_overrides": [],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T12:12:04+0800",
+ "loadavg_start": [
+  2.3994140625,
+  1.79931640625,
+  1.13671875
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}
