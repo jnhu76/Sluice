@@ -1,0 +1,17 @@
+{
+ "kind": "enter-trace",
+ "case": "W03-uring-4k-d2-r3d2pos",
+ "arm": "B",
+ "bpftrace_rc": 0,
+ "attached": false,
+ "bench": {
+  "exit": 0,
+  "wall_s": 0.0518425020018185,
+  "ru_utime_s": 0.007025999999999999,
+  "ru_stime_s": 0.044,
+  "ru_nvcsw": 29,
+  "ru_nivcsw": 19
+ },
+ "ts_utc": "2026-11-05T11:56:27Z",
+ "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt"
+}

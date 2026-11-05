@@ -1,0 +1,15 @@
+acquired_utc=2026-11-05T11:25:33Z
+wait_s=0
+inode=6941075 dev=53 size=0 mtime=2026-11-05 19:15:14.016429403 +0800
+fuser_at_acquire:
+                     USER        PID ACCESS COMMAND
+/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock:
+                     jnhu      55734 F.... bash
+exclusivity_probe (must fail):
+probe_rc=1
+freq2=1200000
+freq12=3500000
+gov2=schedutil
+loadavg=0.98 0.81 0.54 1/2018 55748
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            32G  918M   31G   3% /tmp

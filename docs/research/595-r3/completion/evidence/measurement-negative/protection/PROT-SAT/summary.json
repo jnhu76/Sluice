@@ -1,0 +1,89 @@
+{
+ "a0_enters": {
+  "pure_submit": 9600,
+  "source": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/DIAG-SAT-A0/logs/sat.strace",
+  "to_submit_hist": {
+   "1": 9604
+  },
+  "total": 9604
+ },
+ "a0_metrics": {
+  "cpu_ns_per_op": {
+   "mean": 3338.312083333333,
+   "n": 3
+  },
+  "extra_a": {
+   "mean": 3200.0,
+   "n": 3
+  },
+  "extra_b": {
+   "mean": 200.0,
+   "n": 3
+  },
+  "ops_per_sec": {
+   "mean": 301509.1472880831,
+   "n": 3
+  },
+  "p50_ns": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "p95_ns": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "p99_ns": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "peak_rss_kb": {
+   "mean": 20620.0,
+   "n": 3
+  },
+  "stats_completed_ops": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_max_outstanding": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_queue_full_retries": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_submit_calls": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_submitted_ops": {
+   "mean": 0.0,
+   "n": 3
+  }
+ },
+ "a0_stats": {
+  "accepted_at_saturation": 3200,
+  "ops": 3200,
+  "rejected_at_saturation": 200,
+  "source": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/SAFE-A0-W02-SAT-d16-stats/run.jsonl (SLUICE_BENCH_STATS=1)",
+  "stats_completed_ops": 3200,
+  "stats_max_outstanding": 16,
+  "stats_poll_calls": 551,
+  "stats_queue_full_retries": 0,
+  "stats_submit_calls": 3200,
+  "stats_submitted_ops": 3200,
+  "stats_wait_calls": 364,
+  "submits": 3400,
+  "waits": 3200,
+  "would_block": 200
+ },
+ "a0_threads": 2,
+ "a0_time_v_max_rss_kb": [
+  5212
+ ],
+ "case": "W02-uring-4k-d16-saturate",
+ "comparison": "B_R2 - A_R2 / B - A0 (NOT RUN: NO_W02_R3_ARM; not in frozen enabledBlocks)",
+ "kind": "R3 B has no W-02 arm; A0-only descriptive saturation",
+ "phase": "PROT-SAT",
+ "verdict": "NOT_ESTABLISHED"
+}

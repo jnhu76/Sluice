@@ -1,0 +1,32 @@
+# main tree 2026-11-05T08:38:42Z
+--- rev-parse HEAD ---
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+--- branch ---
+research/595-causal-r2
+--- status --porcelain ---
+--- end status ---
+--- worktree list ---
+worktree /home/jnhu/Source/Sluice
+HEAD 0a22a79195f1b913145fcd443496e7f70b08cdcf
+branch refs/heads/research/595-causal-r2
+
+worktree /home/jnhu/sluice-595-e5/archive-wt
+HEAD 3492dd3d1d1ae6e47d50b86311699f3c39e8b402
+branch refs/heads/research/595-e5-submission-archive
+
+worktree /home/jnhu/sluice-595-e5/causal-r2/worktree
+HEAD 271b81bfc9d64eecc0266fe7066b9040525dd710
+branch refs/heads/research-595-r2-causal
+
+worktree /home/jnhu/sluice-595-e5/causal-r2/worktree-timing
+HEAD 271b81bfc9d64eecc0266fe7066b9040525dd710
+branch refs/heads/research-595-r2-timing
+
+worktree /home/jnhu/sluice-595-e5/r3/worktree
+HEAD 0a22a79195f1b913145fcd443496e7f70b08cdcf
+branch refs/heads/research-595-r3
+
+worktree /home/jnhu/sluice-595-e5/worktree
+HEAD 271b81bfc9d64eecc0266fe7066b9040525dd710
+branch refs/heads/research-595-bounded-progress
+

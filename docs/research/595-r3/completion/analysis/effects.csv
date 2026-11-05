@@ -1,0 +1,82 @@
+block,case,comparison,metric,unit,n_pairs,tree,baseline_abs,candidate_abs,est_pct,ci95_lo_pct,ci95_hi_pct,bound_used,bound_pct,threshold_pct,halfwidth_pct,gate_family,coverage,source
+AA-W03-D16,W03-uring-4k-d16,m2-m1,cpu,% (negative = improvement),24,R3 (0a22a791 + r3-completion.patch),3154.7465,3128.3278,-0.8155,-1.6165,-0.0218,upper1_pct,-0.1440,5.0000,0.7973,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W03-D16,W03-uring-4k-d16,m2-m1,p50,% (negative = improvement),24,R3 (0a22a791 + r3-completion.patch),36199.5667,36117.5750,-0.2174,-0.6499,0.2139,upper1_pct,0.1473,5.0000,0.4319,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W03-D16,W03-uring-4k-d16,m2-m1,p95,% (negative = improvement),24,R3 (0a22a791 + r3-completion.patch),43650.3833,43403.4500,-0.5041,-1.6478,0.4270,upper1_pct,0.3017,5.0000,1.0374,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W03-D16,W03-uring-4k-d16,m2-m1,p99,% (negative = improvement),24,R3 (0a22a791 + r3-completion.patch),49334.3417,49377.3333,0.3129,-1.7849,2.2922,upper1_pct,2.0136,5.0000,2.0385,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W03-D16,W03-uring-4k-d16,m2-m1,tput,% (positive = improvement),24,R3 (0a22a791 + r3-completion.patch),317258.8581,319945.4888,0.8697,0.0573,1.6986,lower1_pct,1.5592,-3.0000,0.8207,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W02-D2,W02-uring-4k-d2,m2-m1,cpu,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),4830.7118,4858.2323,0.5835,-0.2696,1.4538,upper1_pct,1.3140,5.0000,0.8617,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+AA-W02-D2,W02-uring-4k-d2,m2-m1,p50,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),8310.8500,8315.3750,0.0574,-0.4211,0.5593,upper1_pct,0.4752,5.0000,0.4902,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+AA-W02-D2,W02-uring-4k-d2,m2-m1,p95,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),12898.6667,12894.2417,-0.0283,-0.6494,0.6194,upper1_pct,0.5045,5.0000,0.6344,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+AA-W02-D2,W02-uring-4k-d2,m2-m1,p99,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),13929.8250,13860.1250,-0.4066,-1.8629,0.9777,upper1_pct,0.7609,5.0000,1.4203,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+AA-W02-D2,W02-uring-4k-d2,m2-m1,tput,% (positive = improvement),24,R2 (271b81bf + R2 patch 7be9d014),206812.2377,205668.7584,-0.5390,-1.3973,0.3096,lower1_pct,0.1847,-3.0000,0.8534,AA,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+LEGACY-W02-D2 (R2-D2),W02-uring-4k-d2,B-A,cpu,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),4850.4057,5015.8293,3.4347,2.6732,4.1601,upper1_pct,4.0646,5.0000,0.7435,NC-D2,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+LEGACY-W02-D2 (R2-D2),W02-uring-4k-d2,B-A,p50,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),8313.6000,8503.9417,2.2943,1.8071,2.7857,upper1_pct,2.7059,5.0000,0.4893,NC-D2,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+LEGACY-W02-D2 (R2-D2),W02-uring-4k-d2,B-A,p95,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),12895.9167,13568.9333,5.2327,4.4331,6.0302,upper1_pct,5.9060,5.0000,0.7985,NC-D2,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+LEGACY-W02-D2 (R2-D2),W02-uring-4k-d2,B-A,p99,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),13860.7167,14825.6667,7.0524,4.8436,9.5139,upper1_pct,9.0667,5.0000,2.3352,NC-D2,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+LEGACY-W02-D2 (R2-D2),W02-uring-4k-d2,B-A,tput,% (positive = improvement),24,R2 (271b81bf + R2 patch 7be9d014),205994.4093,199154.4700,-3.2978,-3.9759,-2.5739,lower1_pct,-2.7024,-3.0000,0.7010,NC-D2,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+PROT-W02-D3 (R2),W02-uring-4k-d3,B-A,cpu,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),4355.5478,4035.4544,-7.3269,-8.1037,-6.5412,upper1_pct,-6.6734,5.0000,0.7813,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D3 (R2),W02-uring-4k-d3,B-A,p50,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),11293.6917,10896.9500,-3.5086,-4.1491,-2.7895,upper1_pct,-2.9165,5.0000,0.6798,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D3 (R2),W02-uring-4k-d3,B-A,p95,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),19151.2000,16687.6833,-12.7954,-14.7251,-10.3595,upper1_pct,-10.8317,5.0000,2.1828,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D3 (R2),W02-uring-4k-d3,B-A,p99,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),22949.2333,20162.2333,-11.5114,-16.2123,-6.3902,upper1_pct,-7.2876,5.0000,4.9111,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D3 (R2),W02-uring-4k-d3,B-A,tput,% (positive = improvement),24,R2 (271b81bf + R2 patch 7be9d014),229371.7570,247603.4663,7.9750,7.0577,8.8969,lower1_pct,8.7502,-3.0000,0.9196,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D16 (R2),W02-uring-4k-d16,B-A,cpu,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),2982.9165,2143.5629,-28.1111,-28.7015,-27.5274,upper1_pct,-27.6128,5.0000,0.5871,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+PROT-W02-D16 (R2),W02-uring-4k-d16,B-A,p50,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),50940.8333,34094.3833,-33.0564,-33.4909,-32.6806,upper1_pct,-32.7326,5.0000,0.4052,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+PROT-W02-D16 (R2),W02-uring-4k-d16,B-A,p95,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),66669.7667,44949.0333,-32.5900,-33.4792,-31.6523,upper1_pct,-31.8186,5.0000,0.9135,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+PROT-W02-D16 (R2),W02-uring-4k-d16,B-A,p99,% (negative = improvement),24,R2 (271b81bf + R2 patch 7be9d014),81010.1417,54609.9167,-32.3997,-33.9068,-30.9715,upper1_pct,-31.1791,5.0000,1.4677,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+PROT-W02-D16 (R2),W02-uring-4k-d16,B-A,tput,% (positive = improvement),24,R2 (271b81bf + R2 patch 7be9d014),335222.2194,466584.6230,39.2409,38.0980,40.3952,lower1_pct,40.2132,-3.0000,1.1486,PROT,GATE_GRADE_24PAIRS,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+MAIN-W03-D16,W03-uring-4k-d16,B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A1,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A1,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A1,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,B-A1,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,A1-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,A1-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,A1-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+MAIN-W03-D16,W03-uring-4k-d16,A1-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D4,W03-uring-4k-d4,B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D4,W03-uring-4k-d4,B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D4,W03-uring-4k-d4,B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D4,W03-uring-4k-d4,B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D64,W03-uring-4k-d64,B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D64,W03-uring-4k-d64,B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D64,W03-uring-4k-d64,B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+CROSS-W03-D64,W03-uring-4k-d64,B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-W03-D16-B (R3),W03-uring-4k-d16,B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-W03-D16-B (R3),W03-uring-4k-d16,B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-W03-D16-B (R3),W03-uring-4k-d16,B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-W03-D16-B (R3),W03-uring-4k-d16,B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-64K-D16-B,W03-uring-64k-d16,B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-64K-D16-B,W03-uring-64k-d16,B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-64K-D16-B,W03-uring-64k-d16,B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-64K-D16-B,W03-uring-64k-d16,B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-THREADPOOL-B,W03-uring-4k-d16-threadpool,B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-THREADPOOL-B,W03-uring-4k-d16-threadpool,B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-THREADPOOL-B,W03-uring-4k-d16-threadpool,B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-THREADPOOL-B,W03-uring-4k-d16-threadpool,B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-SMT-2-12-B,"W03-uring-4k-d16 @cpu2,12",B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-SMT-2-12-B,"W03-uring-4k-d16 @cpu2,12",B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-SMT-2-12-B,"W03-uring-4k-d16 @cpu2,12",B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-SMT-2-12-B,"W03-uring-4k-d16 @cpu2,12",B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-XPHYS-2-8-B,"W03-uring-4k-d16 @cpu2,8",B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-XPHYS-2-8-B,"W03-uring-4k-d16 @cpu2,8",B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-XPHYS-2-8-B,"W03-uring-4k-d16 @cpu2,8",B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+PROT-XPHYS-2-8-B,"W03-uring-4k-d16 @cpu2,8",B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,BLOCKED_SEMANTICS_NOT_READY,prereg §14 / MECHANISM_SUMMARY §7
+NEG-W02-D2-NEW-B,W02-uring-4k-d2 (R3 tree has no W-02 arm),B-A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,NOT_RUN_NO_W02_R3_ARM,prereg §14 / MECHANISM_SUMMARY §7
+NEG-W02-D2-NEW-B,W02-uring-4k-d2 (R3 tree has no W-02 arm),B-A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,NOT_RUN_NO_W02_R3_ARM,prereg §14 / MECHANISM_SUMMARY §7
+NEG-W02-D2-NEW-B,W02-uring-4k-d2 (R3 tree has no W-02 arm),B-A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,NOT_RUN_NO_W02_R3_ARM,prereg §14 / MECHANISM_SUMMARY §7
+NEG-W02-D2-NEW-B,W02-uring-4k-d2 (R3 tree has no W-02 arm),B-A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,NOT_RUN_NO_W02_R3_ARM,prereg §14 / MECHANISM_SUMMARY §7
+MECH-POS-D2POS,W03-uring-4k-d2pos,B vs A0/A1,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+MECH-POS-D2POS,W03-uring-4k-d2pos,B vs A0/A1,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+MECH-POS-D2POS,W03-uring-4k-d2pos,B vs A0/A1,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+MECH-POS-D2POS,W03-uring-4k-d2pos,B vs A0/A1,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+RESOURCE-B,d16,B vs A0,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+RESOURCE-B,d16,B vs A0,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+RESOURCE-B,d16,B vs A0,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+RESOURCE-B,d16,B vs A0,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,PARTIAL_DIAGNOSTIC_ONLY,prereg §14 / MECHANISM_SUMMARY §7
+PRODUCT-604,#604 admitted application,real app,cpu,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,HOLD_NO_REAL_APPLICATION,prereg §14 / MECHANISM_SUMMARY §7
+PRODUCT-604,#604 admitted application,real app,tput,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,HOLD_NO_REAL_APPLICATION,prereg §14 / MECHANISM_SUMMARY §7
+PRODUCT-604,#604 admitted application,real app,p95,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,HOLD_NO_REAL_APPLICATION,prereg §14 / MECHANISM_SUMMARY §7
+PRODUCT-604,#604 admitted application,real app,p99,% (see figure note),0,R3,,,,,,,,,,PREREG_BLOCKED,HOLD_NO_REAL_APPLICATION,prereg §14 / MECHANISM_SUMMARY §7

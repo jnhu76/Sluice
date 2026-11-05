@@ -1,0 +1,16 @@
+# started on Thu Nov  5 19:53:16 2026
+
+
+ Performance counter stats for '/bin/true':
+
+           262,448      cycles:u                                                              
+         1,815,461      cycles:k                                                              
+           137,212      instructions:u                                                        
+         1,823,674      instructions:k                                                        
+
+       0.001155891 seconds time elapsed
+
+       0.000624000 seconds user
+       0.000624000 seconds sys
+
+

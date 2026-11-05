@@ -1,0 +1,24 @@
+MECH_ENTER_TRACE_BEGIN
+MECH_ENTER_TRACE_END
+
+
+@cqe_res[-17]: 1
+@cqe_res[0]: 4
+@cqe_total: 5
+@defer_total: 0
+@enter_bench: 0
+@enter_global: 5
+@epoll_wait: 0
+@eventfd2: 0
+@eventfd_write: 0
+@exit_total: 0
+@futex_total: 0
+@futex_wait: 0
+@futex_wake: 0
+@iouring_register: 0
+@iouring_setup: 0
+@queue_async_work: 0
+@sqe_opcode[29]: 5
+@sqe_total: 5
+@timer_create: 0
+@timerfd_create: 102

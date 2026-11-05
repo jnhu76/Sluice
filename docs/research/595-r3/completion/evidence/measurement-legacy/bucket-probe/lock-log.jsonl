@@ -1,0 +1,2 @@
+{"event": "acquired+released", "start_utc": "2026-11-05T11:12:45Z", "end_utc": "2026-11-05T11:12:49Z", "meta": {"lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock", "inode": 6941075, "dev_major": 0, "dev_minor": 53}, "exclusivity_check": "EXCLUSIVITY_CHECK: blocked as expected"}
+{"event": "acquired+released", "start_utc": "2026-11-05T11:15:13Z", "end_utc": "2026-11-05T11:15:17Z", "meta": {"lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock", "inode": 6941075, "dev_major": 0, "dev_minor": 53}, "exclusivity_check": "EXCLUSIVITY_CHECK: blocked as expected"}

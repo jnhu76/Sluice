@@ -1,0 +1,10 @@
+{
+ "ts_utc": "2026-11-05T11:53:16Z",
+ "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+ "loadavg": "0.04 0.22 0.41 1/1991 61677",
+ "cpuinfo_cpu2": "1200000",
+ "governor_cpu2": "schedutil",
+ "perf_event_paranoid": "2",
+ "unprivileged_bpf_disabled": "2",
+ "kernel": "7.2.11-200.fc44.x86_64"
+}

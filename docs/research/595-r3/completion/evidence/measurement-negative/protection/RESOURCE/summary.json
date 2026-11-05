@@ -1,0 +1,47 @@
+{
+ "a0_threads": {
+  "W02-sat-d16": 2,
+  "W03-4k-d16": 3,
+  "W03-64k-d16": 3,
+  "W03-threadpool-4k-d16": 6
+ },
+ "a0_time_v_max_rss_kb": {
+  "W02-sat-d16": [
+   5212
+  ],
+  "W03-4k-d16-cpu2": [
+   5352
+  ],
+  "W03-4k-d16-cpu8": [
+   5308
+  ],
+  "W03-4k-d16-smt": [
+   5324
+  ],
+  "W03-4k-d16-xphys": [
+   5212
+  ],
+  "W03-64k-d16": [
+   5948,
+   5840,
+   5592
+  ],
+  "W03-threadpool-4k-d16": [
+   5352
+  ]
+ },
+ "allocation_slope": "NOT_RUN: frozen bench has no 512/1024 request-count knob; B blocked",
+ "comparison": "B - A0 resource gate (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "kind": "resource gate needs B/A1; semanticsReady=false -> B blocked; A0 baseline + static audit",
+ "phase": "RESOURCE",
+ "static_audit": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/RESOURCE-STATIC-AUDIT/audit.txt",
+ "syscall_diag_a0_d16": {
+  "clone3": 4,
+  "epoll_create1": 3,
+  "eventfd2": 4,
+  "source": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/RESOURCE-SYSCALL-A0-D16/syscalls.txt",
+  "timer_create": 0
+ },
+ "verdict": "NOT_ESTABLISHED",
+ "wait4_crosscheck": "INVALID_METHOD: Python posix_spawn uses clone3(CLONE_VM|CLONE_VFORK); ru_maxrss contaminated (20,620 KB vs /usr/bin/time -v 5,352 KB; /bin/true control 9,860-10,116 vs 1,312-1,324 KB)"
+}

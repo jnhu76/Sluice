@@ -1,0 +1,24 @@
+{
+ "utc": "2026-11-05T11:08:21Z",
+ "loadavg": [
+  1.576171875,
+  1.1201171875,
+  0.5947265625
+ ],
+ "tmp": {
+  "total": 33626267648,
+  "avail": 32664731648
+ },
+ "cpufreq": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": "2900000"
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": "2200000"
+  }
+ },
+ "df_h_tmp": "Filesystem      Size  Used Avail Use% Mounted on\ntmpfs            32G  917M   31G   3% /tmp\n",
+ "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock"
+}

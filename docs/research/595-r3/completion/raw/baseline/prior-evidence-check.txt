@@ -1,0 +1,17 @@
+# prior R3 evidence verification 2026-11-05T08:38:52Z
+--- MANIFEST.sha256.hash ---
+8cae1ec7096989d9a22b80071ab30aee0c432d8311b893ea7d16106f99d4de16  /home/jnhu/sluice-595-e5/r3/evidence/MANIFEST.sha256
+--- sha256sum -c MANIFEST.sha256.hash ---
+/home/jnhu/sluice-595-e5/r3/evidence/MANIFEST.sha256: OK
+hash_check_exit=0
+--- sha256sum -c main MANIFEST.sha256 ---
+main_check_exit=0
+main_OK=246 main_FAILED=0
+no FAILED lines
+--- correctness MANIFEST (cwd r3) ---
+correctness_check_exit=0
+correctness_OK=33 correctness_FAILED=0
+no FAILED lines
+--- patch hashes ---
+10ce088a4b3219ba57ee0e63fa8f46d506ac763abc73eea073f833ecb8ce1622  /home/jnhu/sluice-595-e5/r3/evidence/r3-final.patch
+a9eeeac56acf34a3f9857993058b319df5b2e01b4f01643aead98b776e4cf63f  /home/jnhu/sluice-595-e5/r3/evidence/r3.patch

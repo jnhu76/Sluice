@@ -1,0 +1,1808 @@
+diff --git a/bench/bench_common.hpp b/bench/bench_common.hpp
+index bccd2ae9..e5d122b9 100644
+--- a/bench/bench_common.hpp
++++ b/bench/bench_common.hpp
+@@ -305,6 +305,17 @@ struct Record {
+     std::uint64_t stats_max_outstanding = 0;
+     std::uint64_t stats_queue_full_retries = 0;
+     std::uint64_t stats_invalid_state = 0;
++
++    std::uint64_t r3_arm = 0;
++    std::uint64_t r3_entry_calls = 0;
++    std::uint64_t r3_group_calls = 0;
++    std::uint64_t r3_single_calls = 0;
++    std::uint64_t r3_accepted = 0;
++    std::uint64_t r3_prefix_max = 0;
++    std::uint64_t r3_suffix_single_calls = 0;
++    std::uint64_t r3_flush_attempts = 0;
++    std::uint64_t r3_ineligible_fallbacks = 0;
++    std::uint64_t r3_untouched = 0;
+ };
+ 
+ inline std::string json_escape(const std::string& in) {
+@@ -369,6 +380,10 @@ inline void emit_record(const Record& r) {
+         "\"lat_p99_ns\":%.1f,\"lat_max_ns\":%.1f,\"lat_mean_ns\":%.1f,\"lat_stddev_ns\":%.1f,"
+         "\"submits\":%llu,\"would_block\":%llu,\"notifications\":%llu,\"empty_wakes\":%llu,"
+         "\"passes\":%llu,\"waits\":%llu,\"extra_a\":%llu,\"extra_b\":%llu,"
++        "\"r3_arm\":%llu,\"r3_entry_calls\":%llu,\"r3_group_calls\":%llu,"
++        "\"r3_single_calls\":%llu,\"r3_accepted\":%llu,\"r3_prefix_max\":%llu,"
++        "\"r3_suffix_single_calls\":%llu,\"r3_flush_attempts\":%llu,"
++        "\"r3_ineligible_fallbacks\":%llu,\"r3_untouched\":%llu,"
+         "\"stats_submit_calls\":%llu,\"stats_submitted_ops\":%llu,\"stats_poll_calls\":%llu,"
+         "\"stats_wait_calls\":%llu,\"stats_completed_ops\":%llu,\"stats_canceled_ops\":%llu,"
+         "\"stats_completion_errors\":%llu,\"stats_short_completions\":%llu,"
+@@ -389,6 +404,16 @@ inline void emit_record(const Record& r) {
+         static_cast<unsigned long long>(r.empty_wakes),
+         static_cast<unsigned long long>(r.passes), static_cast<unsigned long long>(r.waits),
+         static_cast<unsigned long long>(r.extra_a), static_cast<unsigned long long>(r.extra_b),
++        static_cast<unsigned long long>(r.r3_arm),
++        static_cast<unsigned long long>(r.r3_entry_calls),
++        static_cast<unsigned long long>(r.r3_group_calls),
++        static_cast<unsigned long long>(r.r3_single_calls),
++        static_cast<unsigned long long>(r.r3_accepted),
++        static_cast<unsigned long long>(r.r3_prefix_max),
++        static_cast<unsigned long long>(r.r3_suffix_single_calls),
++        static_cast<unsigned long long>(r.r3_flush_attempts),
++        static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
++        static_cast<unsigned long long>(r.r3_untouched),
+         static_cast<unsigned long long>(r.stats_submit_calls),
+         static_cast<unsigned long long>(r.stats_submitted_ops),
+         static_cast<unsigned long long>(r.stats_poll_calls),
+@@ -414,6 +439,21 @@ inline void print_record(const Record& r) {
+         r.case_id.c_str(), r.rep, r.measured ? "" : " warmup", r.ops, r.wall_s, r.ops_per_sec,
+         r.mib_per_sec, r.cpu_s, r.cpu_util * 100.0, r.latency.p50_ns, r.latency.p95_ns,
+         r.latency.p99_ns, r.latency.max_ns, r.latency.n);
++    if (r.r3_arm != 0) {
++        std::printf("      r3 arm=%llu entries=%llu groups=%llu singles=%llu accepted=%llu "
++                    "prefix_max=%llu suffix_singles=%llu flushes=%llu ineligible=%llu "
++                    "untouched=%llu\n",
++                    static_cast<unsigned long long>(r.r3_arm),
++                    static_cast<unsigned long long>(r.r3_entry_calls),
++                    static_cast<unsigned long long>(r.r3_group_calls),
++                    static_cast<unsigned long long>(r.r3_single_calls),
++                    static_cast<unsigned long long>(r.r3_accepted),
++                    static_cast<unsigned long long>(r.r3_prefix_max),
++                    static_cast<unsigned long long>(r.r3_suffix_single_calls),
++                    static_cast<unsigned long long>(r.r3_flush_attempts),
++                    static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
++                    static_cast<unsigned long long>(r.r3_untouched));
++    }
+ }
+ 
+ // One timestamp pair; the throughput phase must not call the clock inside its
+diff --git a/bench/bench_w03_external_loop.cpp b/bench/bench_w03_external_loop.cpp
+index c94edd81..af5a67ec 100644
+--- a/bench/bench_w03_external_loop.cpp
++++ b/bench/bench_w03_external_loop.cpp
+@@ -2,6 +2,7 @@
+ // submitter parks on its own condition variable; neither thread busy-polls.
+ 
+ #include "bench_common.hpp"
++#include "r3_ready_batch.hpp"
+ 
+ #include <sluice/async/async_io_context.hpp>
+ #include <sluice/async/request.hpp>
+@@ -133,6 +134,9 @@ struct LoopParams {
+     std::size_t request_count = 20000;
+     std::size_t depth = 16;
+     std::size_t workers = 4;
++    // 0 means "same as depth".
++    std::size_t max_refill = 0;
++    std::string label_suffix;
+ };
+ 
+ // Shared between the driver thread (progress owner) and the submitter. The
+@@ -165,6 +169,7 @@ struct PhaseResult {
+     std::uint64_t passes = 0;
+     std::uint64_t retry_scheduled = 0;
+     std::uint64_t submits = 0;
++    bench::r3::Counters r3;
+     std::vector<double> latencies;
+     AsyncStats stats_delta;
+ };
+@@ -258,7 +263,8 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+ }
+ 
+ PhaseResult run_external_phase(const LoopParams& params, const std::string& path,
+-                               bool instrument, bool verify, bool stats_enabled) {
++                               bool instrument, bool verify, bool stats_enabled,
++                               bench::r3::Arm arm) {
+     PhaseResult phase;
+ 
+     auto opened = File::open(path, rw_open_existing());
+@@ -312,6 +318,10 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+                            [&] { return shared.driver_attached || shared.driver_failed; });
+     }
+ 
++    std::optional<bench::r3::Adapter> adapter;
++    if (arm != bench::r3::Arm::a0)
++        adapter.emplace(ctx, arm);
++
+     const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
+     std::vector<std::vector<std::byte>> buffers(
+         params.depth, std::vector<std::byte>(params.block_size));
+@@ -334,27 +344,88 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+     bool failed = false;
+     std::string failure;
+ 
++    const std::size_t max_refill =
++        params.max_refill != 0 ? params.max_refill : params.depth;
++    std::vector<ReadOp> ready;
++    std::vector<Request<std::size_t>> accepted;
++    ready.reserve(params.depth);
++    accepted.reserve(params.depth);
+     const bench::TimePoint start = bench::now();
+     while (settled < params.request_count && !failed) {
+         while (window.size() < params.depth && submitted < params.request_count) {
+-            const std::size_t slot = submitted % params.depth;
+-            const std::uint64_t offset =
+-                static_cast<std::uint64_t>(submitted % blocks) * params.block_size;
+-            ReadOp op;
+-            op.file = NativeFileRef(file);
+-            op.dst = buffers[slot].data();
+-            op.len = params.block_size;
+-            op.offset = offset;
+-            ++phase.submits;
+-            auto result = ctx.submit_read(op);
+-            if (!result.has_value()) {
+-                failure = "submit_read rejected: " + describe(result.error());
+-                failed = true;
++            const std::size_t want = std::min(
++                {params.depth - window.size(), params.request_count - submitted, max_refill});
++            const std::size_t base = submitted;
++            ready.clear();
++            ready.reserve(want);
++            for (std::size_t k = 0; k < want; ++k) {
++                const std::size_t sequence = base + k;
++                const std::size_t slot = sequence % params.depth;
++                ReadOp op;
++                op.file = NativeFileRef(file);
++                op.dst = buffers[slot].data();
++                op.len = params.block_size;
++                op.offset = static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
++                ready.push_back(op);
++            }
++            if (adapter.has_value()) {
++                auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
++                                               accepted);
++                phase.r3.entry_calls += outcome.counters.entry_calls;
++                phase.r3.group_calls += outcome.counters.group_calls;
++                phase.r3.single_calls += outcome.counters.single_calls;
++                phase.r3.accepted += outcome.counters.accepted;
++                phase.r3.prefix_max =
++                    std::max(phase.r3.prefix_max, outcome.counters.prefix_max);
++                phase.r3.suffix_single_calls += outcome.counters.suffix_single_calls;
++                phase.r3.flush_attempts += outcome.counters.flush_attempts;
++                phase.r3.ineligible_fallbacks += outcome.counters.ineligible_fallbacks;
++                phase.r3.rejected_calls += outcome.counters.rejected_calls;
++                phase.r3.untouched += outcome.counters.untouched;
++                const std::size_t accepted_count = accepted.size();
++                for (std::size_t k = 0; k < accepted_count; ++k) {
++                    const std::size_t sequence = base + k;
++                    window.push_back(
++                        Inflight{std::move(accepted[k]), sequence % params.depth,
++                                 static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
++                                 instrument ? bench::now_ns() : 0.0});
++                }
++                phase.submits += accepted_count;
++                submitted += accepted_count;
++                if (outcome.error.has_value()) {
++                    failure = "submit_read rejected: " + describe(*outcome.error);
++                    failed = true;
++                    break;
++                }
++                if (accepted_count != want) {
++                    failure = "research adapter disposed " + std::to_string(accepted_count) +
++                              " of " + std::to_string(want) + " ready reads";
++                    failed = true;
++                    break;
++                }
++            } else {
++                for (std::size_t k = 0; k < want; ++k) {
++                    ++phase.submits;
++                    auto result = ctx.submit_read(ready[k]);
++                    if (!result.has_value()) {
++                        failure = "submit_read rejected: " + describe(result.error());
++                        failed = true;
++                        break;
++                    }
++                    const std::size_t sequence = base + k;
++                    window.push_back(
++                        Inflight{std::move(result).value(), sequence % params.depth,
++                                 static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
++                                 instrument ? bench::now_ns() : 0.0});
++                    ++submitted;
++                }
++                if (failed) {
++                    break;
++                }
++            }
++            if (params.max_refill != 0) {
+                 break;
+             }
+-            window.push_back(Inflight{std::move(result).value(), slot, offset,
+-                                      instrument ? bench::now_ns() : 0.0});
+-            ++submitted;
+         }
+         if (failed) {
+             break;
+@@ -470,12 +541,16 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+ 
+ bench::CaseMeta make_meta(const LoopParams& params) {
+     bench::CaseMeta meta;
+-    meta.case_id = "W03-" + params.backend->name + "-4k-d" + std::to_string(params.depth) +
++    meta.case_id = "W03-" + params.backend->name + "-" +
++                   (params.block_size == 4096 ? "4k" : "64k") + "-d" +
++                   std::to_string(params.depth) +
+                    (params.backend->name == "threadpool" ? "-w" + std::to_string(params.workers)
+-                                                         : "");
++                                                         : "") +
++                   params.label_suffix;
+     meta.workload = "W-03";
+     meta.backend = params.backend->name;
+-    meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, 4096B positional reads";
++    meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, " +
++                   std::to_string(params.block_size) + "B positional reads";
+     meta.cache_policy = "page_cache_resident";
+     meta.filesystem = "tmpfs";
+     meta.notes = "app-owned epoll loop on the borrowed progress notification fd; "
+@@ -504,9 +579,11 @@ void fill_stats(bench::Record& record, const AsyncStats& s) {
+ 
+ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+                        const std::string& path, std::size_t order_index, std::size_t rep,
+-                       bool measured) {
++                       bool measured, bench::r3::Arm arm) {
+     const bench::CaseMeta meta = make_meta(params);
+     bench::Record record = bench::make_record(meta, cfg, rep, measured, order_index);
++    record.r3_arm = static_cast<std::uint64_t>(arm);
++    record.notes += std::string("; r3_arm=") + bench::r3::arm_name(arm);
+ 
+     if (!params.backend->available) {
+         record.ok = false;
+@@ -518,7 +595,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+ 
+     const double cpu_before = bench::process_cpu_seconds();
+     const PhaseResult phase =
+-        run_external_phase(params, path, false, false, cfg.stats_enabled);
++        run_external_phase(params, path, false, false, cfg.stats_enabled, arm);
+     const double cpu_after = bench::process_cpu_seconds();
+ 
+     if (!phase.ok) {
+@@ -543,6 +620,15 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     record.empty_wakes = phase.empty_wakes;
+     record.passes = phase.passes;
+     record.extra_a = phase.retry_scheduled;
++    record.r3_entry_calls = phase.r3.entry_calls;
++    record.r3_group_calls = phase.r3.group_calls;
++    record.r3_single_calls = phase.r3.single_calls;
++    record.r3_accepted = phase.r3.accepted;
++    record.r3_prefix_max = phase.r3.prefix_max;
++    record.r3_suffix_single_calls = phase.r3.suffix_single_calls;
++    record.r3_flush_attempts = phase.r3.flush_attempts;
++    record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
++    record.r3_untouched = phase.r3.untouched;
+ 
+     std::optional<std::string> stats_failure =
+         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+@@ -582,7 +668,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     int failed = 0;
+ 
+     const PhaseResult oracle =
+-        run_external_phase(params, path, false, true, cfg.stats_enabled);
++        run_external_phase(params, path, false, true, cfg.stats_enabled, arm);
+     if (!oracle.ok) {
+         record.ok = false;
+         record.failure = "correctness oracle: " + oracle.failure;
+@@ -590,7 +676,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     }
+ 
+     const PhaseResult instrumented =
+-        run_external_phase(params, path, true, false, cfg.stats_enabled);
++        run_external_phase(params, path, true, false, cfg.stats_enabled, arm);
+     if (!instrumented.ok) {
+         record.ok = false;
+         record.failure = "latency pass: " + instrumented.failure;
+@@ -651,6 +737,31 @@ int main() {
+     add(threadpool, 64, 4);
+     add(uring, 64, 0);
+ 
++    if (bench::r3::research_cases_enabled()) {
++        auto add_r3 = [&](std::size_t block_size, std::size_t request_count, std::size_t depth,
++                          std::size_t max_refill, const char* suffix) {
++            LoopParams p;
++            p.backend = &uring;
++            p.block_size = block_size;
++            p.request_count = request_count;
++            p.depth = depth;
++            p.workers = 0;
++            p.max_refill = max_refill;
++            p.label_suffix = suffix;
++            cases.push_back(p);
++        };
++        add_r3(4096, 2, 2, 2, "-r3d2pos");
++        add_r3(4096, 20000, 2, 1, "-r3d2serial");
++        add_r3(4096, 20000, 3, 3, "-r3d3");
++        add_r3(4096, 64, 16, 16, "-r3d16cap");
++        add_r3(65536, 2000, 16, 16, "-r3d16-64k");
++    }
++
++    const bench::r3::Arm arm = bench::r3::arm_from_env();
++    std::printf("research arm=%s (SLUICE_595_R3_ARM), research cases=%s\n",
++                bench::r3::arm_name(arm),
++                bench::r3::research_cases_enabled() ? "on" : "off");
++
+     int failed = bench::oracle_self_test_case(cfg);
+     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
+         const bool measured = round >= cfg.warmup;
+@@ -662,7 +773,7 @@ int main() {
+                 continue;
+             }
+             failed += run_one_repetition(cfg, params, path, position,
+-                                        measured ? round - cfg.warmup : round, measured);
++                                        measured ? round - cfg.warmup : round, measured, arm);
+         }
+     }
+ 
+diff --git a/bench/r3_ready_batch.hpp b/bench/r3_ready_batch.hpp
+new file mode 100644
+index 00000000..aa3ca436
+--- /dev/null
++++ b/bench/r3_ready_batch.hpp
+@@ -0,0 +1,172 @@
++#pragma once
++
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/test_access.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/error.hpp>
++
++#include <cstddef>
++#include <cstdint>
++#include <cstdlib>
++#include <optional>
++#include <span>
++#include <utility>
++#include <vector>
++
++namespace bench::r3 {
++
++using sluice::async::AsyncIoContext;
++using sluice::async::ReadOp;
++using sluice::async::Request;
++using sluice::async::UringAsyncBackend;
++using sluice::IoError;
++
++enum class Arm : std::uint8_t { a0 = 0, a1 = 1, b = 2 };
++
++inline Arm arm_from_env() {
++    const char* value = std::getenv("SLUICE_595_R3_ARM");
++    if (value == nullptr)
++        return Arm::a0;
++    if ((value[0] == 'A' || value[0] == 'a') && value[1] == '1')
++        return Arm::a1;
++    if (value[0] == 'B' || value[0] == 'b')
++        return Arm::b;
++    return Arm::a0;
++}
++
++inline const char* arm_name(Arm arm) {
++    switch (arm) {
++    case Arm::a1:
++        return "A1";
++    case Arm::b:
++        return "B";
++    case Arm::a0:
++    default:
++        return "A0";
++    }
++}
++
++inline bool research_cases_enabled() {
++    const char* value = std::getenv("SLUICE_595_R3_CASES");
++    return value != nullptr && value[0] != '0';
++}
++
++struct Counters {
++    std::uint64_t entry_calls = 0;
++    std::uint64_t group_calls = 0;
++    std::uint64_t single_calls = 0;
++    std::uint64_t accepted = 0;
++    std::uint64_t prefix_max = 0;
++    std::uint64_t suffix_single_calls = 0;
++    std::uint64_t flush_attempts = 0;
++    std::uint64_t ineligible_fallbacks = 0;
++    std::uint64_t rejected_calls = 0;
++    std::uint64_t untouched = 0;
++};
++
++class Adapter {
++  public:
++    Adapter(AsyncIoContext& ctx, Arm arm) : ctx_(ctx), arm_(arm) {
++        backend_ = dynamic_cast<UringAsyncBackend*>(
++            sluice::async::detail::TestAccess::context_backend(ctx));
++    }
++
++    Arm arm() const noexcept { return arm_; }
++
++    bool batching() const noexcept { return arm_ == Arm::b && backend_ != nullptr; }
++
++    struct Outcome {
++        std::optional<IoError> error;
++        Counters counters;
++    };
++
++    Outcome submit(std::span<const ReadOp> ready,
++                   std::vector<Request<std::size_t>>& accepted) {
++        Outcome out;
++        accepted.clear();
++        if (arm_ == Arm::a0 || (arm_ == Arm::b && backend_ == nullptr)) {
++            for (const ReadOp& op : ready) {
++                auto submitted = ctx_.submit_read(op);
++                if (!submitted.has_value()) {
++                    out.error = submitted.error();
++                    break;
++                }
++                accepted.push_back(std::move(submitted).value());
++            }
++            return out;
++        }
++        if (arm_ == Arm::a1) {
++            for (const ReadOp& op : ready) {
++                auto submitted = ctx_.submit_read(op);
++                ++out.counters.entry_calls;
++                ++out.counters.single_calls;
++                if (!submitted.has_value()) {
++                    out.error = submitted.error();
++                    ++out.counters.rejected_calls;
++                    break;
++                }
++                accepted.push_back(std::move(submitted).value());
++                ++out.counters.accepted;
++                ++out.counters.flush_attempts;
++            }
++            return out;
++        }
++
++        const auto report = backend_->submit_ready_reads(ready);
++        account(report, ready.size(), out);
++        for (std::size_t index = 0; index < report.accepted; ++index) {
++            accepted.push_back(sluice::async::detail::TestAccess::make_request<std::size_t>(
++                ctx_, report.keys[index]));
++        }
++        if (report.stop == UringAsyncBackend::ReadyBatchStop::rejected) {
++            out.error = report.error;
++            ++out.counters.rejected_calls;
++            return out;
++        }
++        for (std::size_t index = report.untouched_begin; index < ready.size(); ++index) {
++            if (!submit_single(ready[index], out, accepted, true))
++                break;
++        }
++        return out;
++    }
++
++  private:
++    void account(const UringAsyncBackend::ReadyReadBatchReport& report, std::size_t group_size,
++                 Outcome& out) {
++        ++out.counters.entry_calls;
++        if (group_size > 1)
++            ++out.counters.group_calls;
++        else
++            ++out.counters.single_calls;
++        out.counters.accepted += report.accepted;
++        out.counters.untouched += report.untouched;
++        out.counters.flush_attempts += report.flush_attempts;
++        if (report.accepted > out.counters.prefix_max)
++            out.counters.prefix_max = report.accepted;
++        if (report.stop == UringAsyncBackend::ReadyBatchStop::ineligible)
++            ++out.counters.ineligible_fallbacks;
++    }
++
++    bool submit_single(const ReadOp& op, Outcome& out,
++                       std::vector<Request<std::size_t>>& accepted, bool suffix) {
++        const auto report = backend_->submit_ready_reads(std::span<const ReadOp>(&op, 1));
++        account(report, 1, out);
++        if (suffix)
++            ++out.counters.suffix_single_calls;
++        if (report.accepted == 1) {
++            accepted.push_back(
++                sluice::async::detail::TestAccess::make_request<std::size_t>(ctx_, report.keys[0]));
++            return true;
++        }
++        out.error = report.error;
++        ++out.counters.rejected_calls;
++        return false;
++    }
++
++    AsyncIoContext& ctx_;
++    Arm arm_ = Arm::a0;
++    UringAsyncBackend* backend_ = nullptr;
++};
++
++}
+diff --git a/include/sluice/async/detail/test_access.hpp b/include/sluice/async/detail/test_access.hpp
+index f93873b0..8bd3bb4c 100644
+--- a/include/sluice/async/detail/test_access.hpp
++++ b/include/sluice/async/detail/test_access.hpp
+@@ -17,6 +17,13 @@ namespace sluice::async::detail {
+ struct TestAccess {
+     static RequestCore* context_core(AsyncIoContext& ctx) noexcept { return ctx.core_.get(); }
+ 
++    static AsyncBackend* context_backend(AsyncIoContext& ctx) noexcept { return ctx.backend_.get(); }
++
++    template <class T>
++    static Request<T> make_request(AsyncIoContext& ctx, RequestKey key) noexcept {
++        return Request<T>{ctx.core_.get(), ctx.backend_.get(), request_id_of(key)};
++    }
++
+     static ProgressSource* context_progress_source(AsyncIoContext& ctx) noexcept {
+         return ctx.progress_.get();
+     }
+@@ -36,6 +43,8 @@ struct TestAccess {
+         }
+     }
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++
+     static void context_set_progress_prepark_counter(AsyncIoContext& ctx,
+                                                      std::atomic<int>* counter) noexcept {
+         if (ctx.progress_ != nullptr) {
+@@ -88,6 +97,8 @@ struct TestAccess {
+         }
+     }
+ 
++#endif
++
+     static bool context_progress_exhausted(const AsyncIoContext& ctx) noexcept {
+         return ctx.progress_ != nullptr && ctx.progress_->exhausted();
+     }
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..a8ab51e0 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -7,6 +7,7 @@
+ #include <sluice/error.hpp>
+ #include <sluice/result.hpp>
+ 
++#include <array>
+ #include <atomic>
+ #include <cassert>
+ #include <cstddef>
+@@ -14,6 +15,7 @@
+ #include <memory>
+ #include <mutex>
+ #include <optional>
++#include <span>
+ #include <type_traits>
+ #include <vector>
+ 
+@@ -86,6 +88,32 @@ class UringAsyncBackend : public AsyncBackend {
+ 
+     void close_admission();
+ 
++  public:
++    static constexpr std::size_t ready_batch_cap = 8;
++
++    enum class ReadyBatchStop : std::uint8_t {
++        input_exhausted,
++        rejected,
++        cap,
++        sq_budget,
++        control,
++        recovery,
++        ineligible,
++    };
++
++    struct ReadyReadBatchReport {
++        std::size_t accepted = 0;
++        std::size_t untouched_begin = 0;
++        std::size_t untouched = 0;
++        ReadyBatchStop stop = ReadyBatchStop::input_exhausted;
++        IoError error{};
++        std::array<detail::RequestKey, ready_batch_cap> keys{};
++        std::size_t flush_attempts = 0;
++        bool residue_advertised = false;
++    };
++
++    ReadyReadBatchReport submit_ready_reads(std::span<const ReadOp> ready) noexcept;
++
+ #if defined(SLUICE_HAS_LIBURING)
+ 
+     std::size_t slot_capacity() const noexcept override { return capacity_; }
+@@ -225,6 +253,18 @@ class UringAsyncBackend : public AsyncBackend {
+         }
+     }
+ 
++    struct AdmittedOp {
++        detail::RequestKey key{};
++        detail::RequestReservation reservation{};
++        bool zero_op = false;
++    };
++
++    void reset_delivery_locked_(detail::SlotIndex slot, detail::OperationKind kind) noexcept;
++
++    template <class Op>
++    Result<AdmittedOp> admit_(Op op, detail::OperationKind kind, detail::RequestOp core_op,
++                              bool dispatch_locked = false);
++
+     template <class Op>
+     Result<detail::RequestKey> submit_request(Op op, detail::OperationKind kind,
+                                               detail::RequestOp core_op);
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..e969cf31 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -69,6 +69,14 @@ Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp) {
+ std::size_t UringAsyncBackend::poll() {
+     return 0;
+ }
++UringAsyncBackend::ReadyReadBatchReport
++UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
++    ReadyReadBatchReport report;
++    report.untouched = ready.size();
++    report.stop = ReadyBatchStop::recovery;
++    report.error = IoError{IoError::Code::backend_error};
++    return report;
++}
+ void UringAsyncBackend::close_admission() {}
+ std::size_t UringAsyncBackend::outstanding() const noexcept {
+     return 0;
+@@ -373,6 +381,10 @@ bool UringAsyncBackend::internal_work_retired() const noexcept {
+ }
+ 
+ void UringAsyncBackend::retire_execution_resources() noexcept {
++    if (!have_ring_) {
++        return;
++    }
++    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+     if (!have_ring_) {
+         return;
+     }
+@@ -397,8 +409,8 @@ void UringAsyncBackend::retire_execution_resources() noexcept {
+         }
+         eventfd_registered_ = false;
+     }
+-    ::io_uring_queue_exit(&ring_state_->ring);
+     have_ring_ = false;
++    ::io_uring_queue_exit(&ring_state_->ring);
+ }
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -420,27 +432,219 @@ bool UringAsyncBackend::injected_opcode_probe_failure() noexcept {
+ 
+ #endif
+ 
++namespace {
++
++constexpr bool batch_eligible_read(const ReadOp& op) noexcept {
++    return op.len == 4096 && op.dst != nullptr;
++}
++
++}
++
++UringAsyncBackend::ReadyReadBatchReport
++UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
++    ReadyReadBatchReport report;
++    if (ready.empty())
++        return report;
++    if (!have_ring_) {
++        report.stop = ReadyBatchStop::recovery;
++        report.error = IoError{IoError::Code::backend_error};
++        report.untouched_begin = 0;
++        report.untouched = ready.size();
++        return report;
++    }
++
++    const auto note_outcome = [this](bool accepted, const IoError& error) noexcept {
++        bump(stats_, &AsyncStats::submit_calls);
++        if (accepted) {
++            bump(stats_, &AsyncStats::submitted_ops);
++        } else if (error.code == IoError::Code::would_block) {
++            bump(stats_, &AsyncStats::queue_full_retries);
++        } else if (error.code == IoError::Code::invalid_state) {
++            bump(stats_, &AsyncStats::invalid_state_rejections);
++        }
++    };
++    const auto note_outstanding = [this]() noexcept {
++        if (stats_ == nullptr)
++            return;
++        const std::size_t current = outstanding();
++        if (current > stats_->max_outstanding)
++            stats_->max_outstanding = current;
++    };
++
++    if (ready.size() == 1 || !batch_eligible_read(ready.front())) {
++        const auto admitted =
++            admit_(ready.front(), detail::OperationKind::read, detail::RequestOp::read);
++        if (!admitted.has_value()) {
++            report.stop = ReadyBatchStop::rejected;
++            report.error = admitted.error();
++            report.untouched_begin = 1;
++            report.untouched = ready.size() - 1;
++            note_outcome(false, admitted.error());
++            return report;
++        }
++        const AdmittedOp& a = admitted.value();
++        if (a.zero_op) {
++            publish_zero_op_inline(a.key, a.reservation);
++        } else {
++            dispatch_after_accept(a.reservation);
++            report.flush_attempts = 1;
++        }
++        report.keys[0] = a.key;
++        report.accepted = 1;
++        report.untouched_begin = 1;
++        report.untouched = ready.size() - 1;
++        report.stop = ready.size() == 1 ? ReadyBatchStop::input_exhausted
++                                        : ReadyBatchStop::ineligible;
++        note_outcome(true, IoError{});
++        note_outstanding();
++        return report;
++    }
++
++    bool rejected = false;
++    bool ineligible = false;
++    bool advertise = false;
++    {
++        std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        if (!have_ring_) {
++            report.stop = ReadyBatchStop::recovery;
++            report.error = IoError{IoError::Code::backend_error};
++            report.untouched = ready.size();
++            return report;
++        }
++        if (fatal_error_.has_value()) {
++            report.stop = ReadyBatchStop::recovery;
++            report.error = *fatal_error_;
++            report.untouched = ready.size();
++            return report;
++        }
++        if (pending_control_count_ != 0) {
++            report.stop = ReadyBatchStop::control;
++            report.untouched = ready.size();
++            return report;
++        }
++        if (dispatch_retry_remains_locked_()) {
++            report.stop = ReadyBatchStop::recovery;
++            report.untouched = ready.size();
++            return report;
++        }
++        const std::size_t sq_budget =
++            static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
++        if (sq_budget == 0) {
++            report.stop = ReadyBatchStop::sq_budget;
++            report.untouched = ready.size();
++            return report;
++        }
++        const std::size_t limit = std::min({ready.size(), ready_batch_cap, sq_budget});
++
++        for (std::size_t i = 0; i < limit; ++i) {
++            if (!batch_eligible_read(ready[i])) {
++                ineligible = true;
++                break;
++            }
++            const auto admitted = admit_(ready[i], detail::OperationKind::read,
++                                         detail::RequestOp::read, true);
++            if (!admitted.has_value()) {
++                rejected = true;
++                report.error = admitted.error();
++                note_outcome(false, admitted.error());
++                break;
++            }
++            report.keys[report.accepted] = admitted.value().key;
++            ++report.accepted;
++            note_outcome(true, IoError{});
++        }
++
++        if (report.accepted != 0) {
++            const bool poisoned_before = fatal_error_.has_value();
++            for (std::size_t i = 0; i < report.accepted; ++i) {
++                dispatch_->push_back(
++                    detail::RequestReservation{report.keys[i].slot, report.keys[i].generation});
++            }
++            if (poisoned_before) {
++                retire_undispatched_after_poison_locked_();
++                advertise = true;
++            } else {
++                // SQ space is read under the lock that serializes every
++                // user-space SQE allocation, so the dispatch loop never
++                // submits mid-batch to make room.
++                const std::size_t sq_free =
++                    static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
++                const std::size_t dispatchable = std::min(report.accepted, sq_free);
++                for (std::size_t i = 0; i < dispatchable; ++i) {
++                    if (!dispatch_one_locked(detail::RequestReservation{
++                            report.keys[i].slot, report.keys[i].generation})) {
++                        break;
++                    }
++                }
++                if (!fatal_error_.has_value()) {
++                    (void)submit_transport_locked();
++                    report.flush_attempts = 1;
++                    service_pending_controls_locked_();
++                }
++                if (fatal_error_.has_value() || dispatch_retry_remains_locked_())
++                    advertise = true;
++            }
++        }
++    }
++
++    if (ineligible) {
++        report.stop = ReadyBatchStop::ineligible;
++    } else if (rejected) {
++        report.stop = ReadyBatchStop::rejected;
++    } else if (report.accepted == ready.size()) {
++        report.stop = ReadyBatchStop::input_exhausted;
++    } else if (report.accepted == ready_batch_cap) {
++        report.stop = ReadyBatchStop::cap;
++    } else {
++        report.stop = ReadyBatchStop::sq_budget;
++    }
++    report.untouched_begin = report.accepted + (rejected ? 1 : 0);
++    report.untouched = ready.size() - report.untouched_begin;
++
++    if (report.accepted != 0)
++        note_outstanding();
++    if (advertise) {
++        report.residue_advertised = true;
++        signal_ready_progress();
++    }
++    return report;
++}
++
++
++void UringAsyncBackend::reset_delivery_locked_(detail::SlotIndex slot,
++                                               detail::OperationKind kind) noexcept {
++    DeliveryRecord& record = delivery_[slot.value];
++    if (record.event_owed) {
++        detail::uring_core_handoff_fail_fast();
++    }
++    record.kind = kind;
++    record.event_owed = false;
++    record.owed_key = {};
++}
++
+ template <class Op>
+-Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
+-                                                             detail::RequestOp core_op) {
++Result<UringAsyncBackend::AdmittedOp> UringAsyncBackend::admit_(Op op,
++                                                                detail::OperationKind kind,
++                                                                detail::RequestOp core_op,
++                                                                bool dispatch_locked) {
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     wait_submit_entry_pause_();
+ #endif
+     if (auto v = validate_op(op); !v.has_value()) {
+-        return make_unexpected<detail::RequestKey>(v.error());
++        return make_unexpected<AdmittedOp>(v.error());
+     }
+     if (!have_ring_) {
+-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
++        return make_unexpected<AdmittedOp>(IoError{IoError::Code::backend_error});
+     }
+     if (fatal_error_.has_value()) {
+-        return make_unexpected<detail::RequestKey>(*fatal_error_);
++        return make_unexpected<AdmittedOp>(*fatal_error_);
+     }
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     if (auto inj = injected_precommit_stage_failure_(SubmitStage::reserve); inj.has_value()) {
+-        return make_unexpected<detail::RequestKey>(*inj);
++        return make_unexpected<AdmittedOp>(*inj);
+     }
+ #endif
+ 
+@@ -453,7 +657,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+                                        ? IoError::Code::invalid_state
+                                        : IoError::Code::would_block;
+ #endif
+-        return make_unexpected<detail::RequestKey>(IoError{code});
++        return make_unexpected<AdmittedOp>(IoError{code});
+     }
+     const detail::RequestReservation h{reservation.reservation.slot, reservation.reservation.generation};
+ 
+@@ -461,7 +665,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+ 
+     if (auto inj = injected_precommit_stage_failure_(SubmitStage::prepare); inj.has_value()) {
+         (void)core_->rollback(reservation.reservation);
+-        return make_unexpected<detail::RequestKey>(*inj);
++        return make_unexpected<AdmittedOp>(*inj);
+     }
+ #endif
+ 
+@@ -485,25 +689,18 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+                             ? &statx_buffers_[h.slot.value]
+                             : nullptr};
+ 
+-    {
++    if (dispatch_locked) {
++        reset_delivery_locked_(h.slot, kind);
++    } else {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-        DeliveryRecord& record = delivery_[h.slot.value];
+-        // A reserved slot cannot carry an owed event: the owed control
+-        // reference pins the slot against reclaim until the delivery sweep
+-        // clears the flag.
+-        if (record.event_owed) {
+-            detail::uring_core_handoff_fail_fast();
+-        }
+-        record.kind = kind;
+-        record.event_owed = false;
+-        record.owed_key = {};
++        reset_delivery_locked_(h.slot, kind);
+     }
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     if (auto inj = injected_precommit_stage_failure_(SubmitStage::commit); inj.has_value()) {
+         (void)core_->rollback(reservation.reservation);
+-        return make_unexpected<detail::RequestKey>(*inj);
++        return make_unexpected<AdmittedOp>(*inj);
+     }
+ 
+     wait_pre_accept_commit_pause_();
+@@ -514,19 +711,30 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
+     if (!accepted.ok()) {
+         (void)core_->rollback(reservation.reservation);
+-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
++        return make_unexpected<AdmittedOp>(IoError{IoError::Code::invalid_state});
+     }
+ 
+-    if (descriptor.zero_op) {
+-        publish_zero_op_inline(accepted.id, h);
++    return AdmittedOp{accepted.id, h, descriptor.zero_op};
++}
++
++template <class Op>
++Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
++                                                             detail::RequestOp core_op) {
++    const auto admitted = admit_(op, kind, core_op);
++    if (!admitted.has_value()) {
++        return make_unexpected<detail::RequestKey>(admitted.error());
++    }
++    const AdmittedOp& a = admitted.value();
++    if (a.zero_op) {
++        publish_zero_op_inline(a.key, a.reservation);
+     } else {
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+         wait_accepted_pre_dispatch_pause_();
+ #endif
+-        dispatch_after_accept(h);
++        dispatch_after_accept(a.reservation);
+     }
+-    return accepted.id;
++    return a.key;
+ }
+ 
+ Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp op) {
+diff --git a/tests/uring_ready_batch_fault_test.cpp b/tests/uring_ready_batch_fault_test.cpp
+new file mode 100644
+index 00000000..2a810f8c
+--- /dev/null
++++ b/tests/uring_ready_batch_fault_test.cpp
+@@ -0,0 +1,335 @@
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/test_access.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/file_resource.hpp>
++#include <sluice/result.hpp>
++
++#include <chrono>
++#include <cstddef>
++#include <cstdio>
++#include <cstring>
++#include <memory>
++#include <optional>
++#include <string>
++#include <utility>
++#include <vector>
++
++#include <fcntl.h>
++#include <liburing.h>
++#include <unistd.h>
++
++#ifndef SLUICE_HAS_LIBURING
++#error "the ready-batch fault oracle must receive SLUICE_HAS_LIBURING"
++#endif
++#ifndef SLUICE_ASYNC_INTERNAL_TESTING
++#error "the ready-batch fault oracle must receive SLUICE_ASYNC_INTERNAL_TESTING"
++#endif
++
++namespace {
++
++using namespace sluice::async;
++using sluice::File;
++using sluice::IoError;
++using sluice::async::detail::TestAccess;
++
++constexpr std::uint64_t kControlTag = std::uint64_t{1} << 63u;
++
++struct ScriptedKernel {
++    enum class Mode { consume_all, partial_first, poison, hold };
++
++    Mode mode = Mode::consume_all;
++    int calls = 0;
++};
++
++int scripted_submit(void* context, ::io_uring* ring) noexcept {
++    auto* kernel = static_cast<ScriptedKernel*>(context);
++    const unsigned ready = ::io_uring_sq_ready(ring);
++    *ring->sq.ktail = ring->sq.sqe_tail;
++    ++kernel->calls;
++    switch (kernel->mode) {
++    case ScriptedKernel::Mode::consume_all:
++        *ring->sq.khead += ready;
++        return static_cast<int>(ready);
++    case ScriptedKernel::Mode::partial_first:
++        if (kernel->calls == 1 && ready > 0) {
++            *ring->sq.khead += 1;
++            kernel->mode = ScriptedKernel::Mode::consume_all;
++            return 1;
++        }
++        *ring->sq.khead += ready;
++        return static_cast<int>(ready);
++    case ScriptedKernel::Mode::poison:
++        kernel->mode = ScriptedKernel::Mode::consume_all;
++        return -EIO;
++    case ScriptedKernel::Mode::hold:
++        return 0;
++    }
++    return 0;
++}
++
++struct Tracker {
++    const char* name;
++    int failures = 0;
++
++    void check(bool ok, const char* label) {
++        if (!ok) {
++            ++failures;
++            std::fprintf(stderr, "FAIL [%s] %s\n", name, label);
++        }
++    }
++};
++
++struct Fixture {
++    std::optional<File> file;
++    std::vector<std::byte> shadow;
++};
++
++std::optional<Fixture> make_fixture(Tracker& t, std::size_t bytes) {
++    char path[] = "/tmp/sluice_595_r3_fault_XXXXXX";
++    const int fd = ::mkstemp(path);
++    if (fd < 0) {
++        t.check(false, "temporary fixture file is created");
++        return std::nullopt;
++    }
++    Fixture fixture;
++    fixture.shadow.resize(bytes);
++    for (std::size_t i = 0; i < bytes; ++i)
++        fixture.shadow[i] = static_cast<std::byte>(static_cast<unsigned char>((i * 131u + 7u) & 0xffu));
++    std::size_t written = 0;
++    while (written < bytes) {
++        const ssize_t n = ::write(fd, fixture.shadow.data() + written, bytes - written);
++        if (n <= 0) {
++            ::close(fd);
++            ::unlink(path);
++            t.check(false, "temporary fixture file is written");
++            return std::nullopt;
++        }
++        written += static_cast<std::size_t>(n);
++    }
++    ::close(fd);
++    auto opened = File::open(path);
++    ::unlink(path);
++    if (!opened.has_value()) {
++        t.check(false, "temporary fixture file opens");
++        return std::nullopt;
++    }
++    fixture.file.emplace(std::move(opened).value());
++    return fixture;
++}
++
++std::optional<AsyncIoContext> make_ctx(Tracker& t, std::size_t capacity, std::size_t ring_depth,
++                                       ScriptedKernel& kernel, UringAsyncBackend** out) {
++    UringBackendSubmitTestHooks hooks;
++    hooks.context = &kernel;
++    hooks.submit = scripted_submit;
++    auto owned = std::make_unique<UringAsyncBackend>(
++        UringConfig{capacity, static_cast<unsigned>(ring_depth)}, hooks);
++    *out = owned.get();
++    AsyncIoContext ctx = sluice::async::detail::make_context(std::move(owned));
++    return std::optional<AsyncIoContext>{std::move(ctx)};
++}
++
++std::vector<Request<std::size_t>>
++requests_for(AsyncIoContext& ctx, const UringAsyncBackend::ReadyReadBatchReport& report) {
++    std::vector<Request<std::size_t>> requests;
++    for (std::size_t i = 0; i < report.accepted; ++i)
++        requests.push_back(TestAccess::make_request<std::size_t>(ctx, report.keys[i]));
++    return requests;
++}
++
++bool all_ready(const std::vector<Request<std::size_t>>& requests) {
++    for (const Request<std::size_t>& request : requests) {
++        if (!request.ready())
++            return false;
++    }
++    return true;
++}
++
++bool poll_ready(AsyncIoContext& ctx, const std::vector<Request<std::size_t>>& requests) {
++    for (int round = 0; round < 64; ++round) {
++        if (all_ready(requests))
++            return true;
++        (void)ctx.poll();
++    }
++    return all_ready(requests);
++}
++
++void partial_submit_keeps_residue(Tracker& t) {
++    ScriptedKernel kernel;
++    kernel.mode = ScriptedKernel::Mode::partial_first;
++    UringAsyncBackend* backend = nullptr;
++    auto ctx = make_ctx(t, 2, 2, kernel, &backend);
++    auto fixture = make_fixture(t, 8192);
++    if (!ctx.has_value() || !fixture.has_value())
++        return;
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 4096;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 2, "both reads are accepted before the partial flush");
++    t.check(report.flush_attempts == 1, "the batch attempts exactly one flush");
++    t.check(report.residue_advertised, "partial kernel consumption advertises dispatch residue");
++    t.check(backend->transport_ledger_size_for_test() == 1,
++            "one prepared SQE stays in the transport ledger");
++    t.check(backend->submit_flushes_for_test() == 1, "one transport flush so far");
++
++    (void)ctx->poll();
++    t.check(backend->transport_ledger_size_for_test() == 0,
++            "the next progress pass consumes the remaining ledger prefix");
++    t.check(backend->submit_flushes_for_test() == 2,
++            "the residue costs exactly one further transport flush");
++
++    const auto cookie0 = backend->live_cookie_for_offset_for_test(0);
++    const auto cookie1 = backend->live_cookie_for_offset_for_test(4096);
++    t.check(cookie0.has_value() && cookie1.has_value(), "both dispatched routes stay live");
++    if (cookie0.has_value())
++        backend->inject_cqe_for_test(*cookie0, 4096);
++    if (cookie1.has_value())
++        backend->inject_cqe_for_test(*cookie1, 4096);
++    auto requests = requests_for(*ctx, report);
++    t.check(poll_ready(*ctx, requests), "both retried reads reach a terminal");
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto observed = requests[i].take_result();
++        t.check(observed.readiness == RequestReadiness::ready &&
++                    observed.result.has_value() && observed.result.value() == 4096,
++                "each read keeps its own byte count after the retry");
++    }
++}
++
++void poison_on_batch_flush_settles_every_member(Tracker& t) {
++    ScriptedKernel kernel;
++    kernel.mode = ScriptedKernel::Mode::poison;
++    UringAsyncBackend* backend = nullptr;
++    auto ctx = make_ctx(t, 2, 2, kernel, &backend);
++    auto fixture = make_fixture(t, 8192);
++    if (!ctx.has_value() || !fixture.has_value())
++        return;
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 4096;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 2, "both reads are accepted before the poisoned flush");
++    t.check(report.residue_advertised, "a poisoned flush advertises the residue wake");
++
++    auto requests = requests_for(*ctx, report);
++    t.check(poll_ready(*ctx, requests), "both poisoned members reach a terminal");
++    for (Request<std::size_t>& request : requests) {
++        const auto observed = request.take_result();
++        t.check(observed.readiness == RequestReadiness::ready,
++                "the poisoned member publishes a terminal");
++        t.check(!observed.result.has_value() &&
++                    observed.result.error().code == IoError::Code::backend_error,
++                "the poisoned member reports the physical failure, never success");
++    }
++    const auto outcome = ctx->shutdown(ShutdownPolicy::drain);
++    t.check(outcome.has_value() && outcome.value() == ShutdownOutcome::completed,
++            "a poisoned batch settles without unresolved accepted work");
++}
++
++void control_intent_stops_the_batch(Tracker& t) {
++    ScriptedKernel kernel;
++    kernel.mode = ScriptedKernel::Mode::hold;
++    UringAsyncBackend* backend = nullptr;
++    auto ctx = make_ctx(t, 4, 4, kernel, &backend);
++    auto fixture = make_fixture(t, 4 * 4096);
++    if (!ctx.has_value() || !fixture.has_value())
++        return;
++
++    std::vector<std::vector<std::byte>> buffers(4, std::vector<std::byte>(4096));
++    ReadOp ops[4];
++    for (std::size_t i = 0; i < 4; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 4096;
++    }
++    const auto held = backend->submit_ready_reads(std::span<const ReadOp>(ops, 4));
++    t.check(held.accepted == 4, "the held batch fills the SQ");
++    t.check(backend->transport_ledger_size_for_test() == 4,
++            "the held batch keeps every SQE unproven");
++
++    auto held_requests = requests_for(*ctx, held);
++    const auto cancel = held_requests.front().cancel();
++    t.check(cancel.has_value(), "a batched member can be cancelled");
++    t.check(backend->pending_control_snapshot_for_test().authoritative_pending != 0,
++            "the cancel leaves a sticky control intent");
++
++    ReadOp extra[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        extra[i].file = NativeFileRef(*fixture->file);
++        extra[i].dst = buffers[i].data();
++        extra[i].len = buffers[i].size();
++        extra[i].offset = i * 4096;
++    }
++    const auto stopped = backend->submit_ready_reads(std::span<const ReadOp>(extra, 2));
++    t.check(stopped.accepted == 0, "an owed control intent accepts no batch member");
++    t.check(stopped.stop == UringAsyncBackend::ReadyBatchStop::control,
++            "the control boundary is reported");
++    t.check(stopped.untouched_begin == 0 && stopped.untouched == 2,
++            "the whole group stays untouched at the control boundary");
++
++    kernel.mode = ScriptedKernel::Mode::consume_all;
++    (void)ctx->poll();
++    (void)ctx->poll();
++
++    const auto cookie0 = backend->live_cookie_for_offset_for_test(0);
++    const auto cookie1 = backend->live_cookie_for_offset_for_test(4096);
++    const auto cookie2 = backend->live_cookie_for_offset_for_test(8192);
++    const auto cookie3 = backend->live_cookie_for_offset_for_test(12288);
++    if (cookie0.has_value()) {
++        backend->inject_cqe_for_test(*cookie0, -ECANCELED);
++        backend->inject_cqe_for_test(kControlTag | *cookie0, 0);
++    }
++    if (cookie1.has_value())
++        backend->inject_cqe_for_test(*cookie1, 4096);
++    if (cookie2.has_value())
++        backend->inject_cqe_for_test(*cookie2, 4096);
++    if (cookie3.has_value())
++        backend->inject_cqe_for_test(*cookie3, 4096);
++
++    t.check(poll_ready(*ctx, held_requests), "every held member reaches a terminal");
++    for (std::size_t i = 0; i < held_requests.size(); ++i) {
++        const auto observed = held_requests[i].take_result();
++        t.check(observed.readiness == RequestReadiness::ready,
++                "each held member publishes a terminal");
++        if (i == 0) {
++            t.check(!observed.result.has_value() &&
++                        observed.result.error().code == IoError::Code::canceled,
++                    "the cancelled member reports cancellation");
++        } else {
++            t.check(observed.result.has_value() && observed.result.value() == 4096,
++                    "the untouched members keep their own results");
++        }
++    }
++    const auto outcome = ctx->shutdown(ShutdownPolicy::drain);
++    t.check(outcome.has_value() && outcome.value() == ShutdownOutcome::completed,
++            "the control path settles");
++}
++
++} // namespace
++
++int main() {
++    Tracker tracker{"uring_ready_batch_fault"};
++    partial_submit_keeps_residue(tracker);
++    poison_on_batch_flush_settles_every_member(tracker);
++    control_intent_stops_the_batch(tracker);
++    if (tracker.failures != 0) {
++        std::fprintf(stderr, "%s: %d failure(s)\n", tracker.name, tracker.failures);
++        return 1;
++    }
++    std::printf("%s: all research fault oracles passed\n", tracker.name);
++    return 0;
++}
+diff --git a/tests/uring_ready_batch_research_test.cpp b/tests/uring_ready_batch_research_test.cpp
+new file mode 100644
+index 00000000..049e766e
+--- /dev/null
++++ b/tests/uring_ready_batch_research_test.cpp
+@@ -0,0 +1,462 @@
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/test_access.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/async/uring_backend.hpp>
++#include <sluice/file_resource.hpp>
++#include <sluice/result.hpp>
++
++#include <chrono>
++#include <cstddef>
++#include <cstdio>
++#include <cstring>
++#include <optional>
++#include <string>
++#include <vector>
++
++#include <fcntl.h>
++#include <unistd.h>
++
++#ifndef SLUICE_HAS_LIBURING
++#error "the ready-batch research oracle must receive SLUICE_HAS_LIBURING"
++#endif
++
++namespace {
++
++using namespace sluice::async;
++using sluice::File;
++using sluice::IoError;
++using sluice::async::detail::TestAccess;
++
++struct Tracker {
++    const char* name;
++    int failures = 0;
++
++    void check(bool ok, const char* label) {
++        if (!ok) {
++            ++failures;
++            std::fprintf(stderr, "FAIL [%s] %s\n", name, label);
++        }
++    }
++};
++
++std::byte pattern_byte(std::size_t index) {
++    return static_cast<std::byte>(static_cast<unsigned char>((index * 131u + 7u) & 0xffu));
++}
++
++struct Fixture {
++    std::optional<File> file;
++    std::vector<std::byte> shadow;
++};
++
++std::optional<Fixture> make_fixture(Tracker& t, std::size_t bytes) {
++    char path[] = "/tmp/sluice_595_r3_batch_XXXXXX";
++    const int fd = ::mkstemp(path);
++    if (fd < 0) {
++        t.check(false, "temporary fixture file is created");
++        return std::nullopt;
++    }
++    Fixture fixture;
++    fixture.shadow.resize(bytes);
++    for (std::size_t i = 0; i < bytes; ++i)
++        fixture.shadow[i] = pattern_byte(i);
++    std::size_t written = 0;
++    while (written < bytes) {
++        const ssize_t n = ::write(fd, fixture.shadow.data() + written, bytes - written);
++        if (n <= 0) {
++            ::close(fd);
++            ::unlink(path);
++            t.check(false, "temporary fixture file is written");
++            return std::nullopt;
++        }
++        written += static_cast<std::size_t>(n);
++    }
++    ::close(fd);
++    auto opened = File::open(path);
++    ::unlink(path);
++    if (!opened.has_value()) {
++        t.check(false, "temporary fixture file opens");
++        return std::nullopt;
++    }
++    fixture.file.emplace(std::move(opened).value());
++    return fixture;
++}
++
++std::optional<AsyncIoContext> make_ctx(Tracker& t, std::size_t capacity) {
++    UringConfig config;
++    config.request_capacity = capacity;
++    config.queue_depth = static_cast<unsigned>(capacity);
++    auto made = make_uring_context(config);
++    if (!made.has_value()) {
++        t.check(false, "io_uring context is constructed");
++        return std::nullopt;
++    }
++    return std::optional<AsyncIoContext>{std::move(made).value()};
++}
++
++UringAsyncBackend* backend_of(AsyncIoContext& ctx) {
++    return dynamic_cast<UringAsyncBackend*>(TestAccess::context_backend(ctx));
++}
++
++bool settle(AsyncIoContext& ctx, std::vector<Request<std::size_t>>& requests,
++            std::chrono::milliseconds budget) {
++    const auto deadline = std::chrono::steady_clock::now() + budget;
++    for (;;) {
++        bool all_ready = true;
++        for (const Request<std::size_t>& request : requests) {
++            if (!request.ready()) {
++                all_ready = false;
++                break;
++            }
++        }
++        if (all_ready)
++            return true;
++        if (std::chrono::steady_clock::now() >= deadline)
++            return false;
++        (void)ctx.wait_one(std::chrono::milliseconds(5));
++    }
++}
++
++std::vector<Request<std::size_t>>
++requests_for(AsyncIoContext& ctx, const UringAsyncBackend::ReadyReadBatchReport& report) {
++    std::vector<Request<std::size_t>> requests;
++    for (std::size_t i = 0; i < report.accepted; ++i)
++        requests.push_back(TestAccess::make_request<std::size_t>(ctx, report.keys[i]));
++    return requests;
++}
++
++void check_bytes(Tracker& t, const std::vector<std::byte>& buffer, const Fixture& fixture,
++                 std::size_t offset, const char* label) {
++    if (offset + buffer.size() > fixture.shadow.size()) {
++        t.check(false, label);
++        return;
++    }
++    t.check(std::memcmp(buffer.data(), fixture.shadow.data() + offset, buffer.size()) == 0, label);
++}
++
++void two_ready_reads_one_flush(Tracker& t) {
++    auto fixture = make_fixture(t, 8192);
++    auto ctx = make_ctx(t, 2);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++    t.check(backend != nullptr, "the context exposes the uring backend");
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 4096;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 2, "both simultaneously ready reads are accepted");
++    t.check(report.untouched_begin == 2, "the untouched suffix starts after both accepted reads");
++    t.check(report.untouched == 0, "no untouched suffix when the group fits");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::input_exhausted,
++            "the group stops at input exhaustion");
++    t.check(report.flush_attempts == 1, "the accepted prefix uses exactly one transport flush");
++    t.check(!report.residue_advertised, "a fully consumed prefix advertises no residue");
++
++    auto requests = requests_for(*ctx, report);
++    t.check(requests.size() == 2, "both accepted reads produce a request");
++    t.check(settle(*ctx, requests, std::chrono::seconds(5)), "both reads reach a terminal");
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto observed = requests[i].take_result();
++        t.check(observed.readiness == RequestReadiness::ready, "terminal is consumable");
++        t.check(observed.result.has_value() && observed.result.value() == 4096,
++                "each independent read reports its own byte count");
++    }
++    check_bytes(t, buffers[0], *fixture, 0, "read 0 lands its own bytes");
++    check_bytes(t, buffers[1], *fixture, 4096, "read 1 lands its own bytes");
++}
++
++void cap_leaves_suffix_untouched(Tracker& t) {
++    constexpr std::size_t kCount = 16;
++    auto fixture = make_fixture(t, kCount * 4096);
++    auto ctx = make_ctx(t, kCount);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++    t.check(backend != nullptr, "the context exposes the uring backend");
++
++    std::vector<std::vector<std::byte>> buffers(kCount, std::vector<std::byte>(4096));
++    std::vector<ReadOp> ops;
++    ops.reserve(kCount);
++    for (std::size_t i = 0; i < kCount; ++i) {
++        ReadOp op;
++        op.file = NativeFileRef(*fixture->file);
++        op.dst = buffers[i].data();
++        op.len = buffers[i].size();
++        op.offset = i * 4096;
++        ops.push_back(op);
++    }
++
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops.data(), ops.size()));
++    t.check(report.accepted == UringAsyncBackend::ready_batch_cap,
++            "the accepted prefix stops at the research cap");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::cap, "the stop reason is the cap");
++    t.check(report.untouched_begin == report.accepted,
++            "the untouched suffix starts at the accepted prefix boundary");
++    t.check(report.untouched == kCount - report.accepted, "the cap stop leaves the rest untouched");
++
++    std::vector<Request<std::size_t>> requests = requests_for(*ctx, report);
++    std::vector<RequestId> ids;
++    for (const Request<std::size_t>& request : requests)
++        ids.push_back(request.id());
++
++    for (std::size_t index = report.accepted; index < kCount; ++index) {
++        const auto single =
++            backend->submit_ready_reads(std::span<const ReadOp>(&ops[index], 1));
++        t.check(single.accepted == 1, "an untouched suffix item takes the immediate path");
++        t.check(single.untouched == 0, "a single-read call has no suffix");
++        t.check(single.stop == UringAsyncBackend::ReadyBatchStop::input_exhausted,
++                "a single-read call stops at input exhaustion");
++        requests.push_back(TestAccess::make_request<std::size_t>(*ctx, single.keys[0]));
++        ids.push_back(requests.back().id());
++    }
++    t.check(requests.size() == kCount, "every ready read is accepted exactly once");
++    bool duplicate = false;
++    for (std::size_t i = 0; i < ids.size(); ++i)
++        for (std::size_t j = i + 1; j < ids.size(); ++j)
++            duplicate = duplicate || ids[i] == ids[j];
++    t.check(!duplicate, "no accepted request is returned again in the suffix");
++    t.check(settle(*ctx, requests, std::chrono::seconds(10)), "all sixteen reads terminate");
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto observed = requests[i].take_result();
++        t.check(observed.readiness == RequestReadiness::ready &&
++                    observed.result.has_value() && observed.result.value() == 4096,
++                "every request keeps its own terminal");
++    }
++    for (std::size_t i = 0; i < kCount; ++i)
++        check_bytes(t, buffers[i], *fixture, i * 4096, "order-preserving bytes at every offset");
++}
++
++void single_read_keeps_immediate_path(Tracker& t) {
++    auto fixture = make_fixture(t, 4096);
++    auto ctx = make_ctx(t, 1);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++
++    std::vector<std::byte> buffer(4096);
++    ReadOp op;
++    op.file = NativeFileRef(*fixture->file);
++    op.dst = buffer.data();
++    op.len = buffer.size();
++    op.offset = 0;
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(&op, 1));
++    t.check(report.accepted == 1, "a single read is accepted through the immediate path");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::input_exhausted,
++            "a single read stops at input exhaustion");
++    t.check(report.flush_attempts == 1, "the immediate path flushes once");
++    auto requests = requests_for(*ctx, report);
++    t.check(settle(*ctx, requests, std::chrono::seconds(5)), "the single read terminates");
++    const auto observed = requests.front().take_result();
++    t.check(observed.result.has_value() && observed.result.value() == 4096,
++            "the single read transfers its bytes");
++    check_bytes(t, buffer, *fixture, 0, "the single read lands its own bytes");
++}
++
++void ineligible_head_keeps_immediate_path(Tracker& t) {
++    auto fixture = make_fixture(t, 16384);
++    auto ctx = make_ctx(t, 2);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(8192));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 8192;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 1, "a non-4KiB head takes the immediate path on its own");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::ineligible,
++            "the ineligible head is reported, not silently batched");
++    t.check(report.untouched_begin == 1, "the untouched suffix starts after the immediate head");
++    t.check(report.untouched == 1, "the rest of an ineligible group stays untouched");
++    auto requests = requests_for(*ctx, report);
++
++    const auto second = backend->submit_ready_reads(std::span<const ReadOp>(&ops[1], 1));
++    t.check(second.accepted == 1, "the untouched ineligible item takes the immediate path");
++    requests.push_back(TestAccess::make_request<std::size_t>(*ctx, second.keys[0]));
++    t.check(settle(*ctx, requests, std::chrono::seconds(5)), "both 8KiB reads terminate");
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto observed = requests[i].take_result();
++        t.check(observed.result.has_value() && observed.result.value() == 8192,
++                "the ineligible read keeps its byte count");
++        check_bytes(t, buffers[i], *fixture, i * 8192, "the ineligible read keeps its bytes");
++    }
++}
++
++void cancel_terminates_one_member(Tracker& t) {
++    auto ctx = make_ctx(t, 2);
++    if (!ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++    int fds[2];
++    if (::pipe(fds) != 0) {
++        t.check(false, "pipe fixture is created");
++        return;
++    }
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(fds[0], sluice::FileAccess::read_only);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = 0;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 2, "both pipe reads are accepted as independent members");
++    auto requests = requests_for(*ctx, report);
++    const auto disposition = requests[1].cancel();
++    t.check(disposition.has_value(), "cancel of a batched member returns a disposition");
++
++    std::vector<std::byte> payload(4096, std::byte{0x5a});
++    const ssize_t wrote = ::write(fds[1], payload.data(), payload.size());
++    t.check(wrote == static_cast<ssize_t>(payload.size()), "the pipe releases the blocked reads");
++    ::close(fds[1]);
++
++    t.check(settle(*ctx, requests, std::chrono::seconds(5)),
++            "both batched members reach a terminal after cancel");
++    std::size_t bytes = 0;
++    for (std::size_t i = 0; i < requests.size(); ++i) {
++        const auto observed = requests[i].take_result();
++        t.check(observed.readiness == RequestReadiness::ready,
++                "the canceled member still publishes a terminal");
++        if (observed.result.has_value())
++            bytes += observed.result.value();
++    }
++    t.check(bytes == 4096, "cancel and completion do not double-consume the pipe payload");
++    ::close(fds[0]);
++}
++
++void closed_admission_stops_before_accept(Tracker& t) {
++    auto fixture = make_fixture(t, 8192);
++    auto ctx = make_ctx(t, 2);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++    ctx->close_admission();
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 4096;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 0, "closed admission accepts no batched read");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::rejected,
++            "closed admission stops at the authoritative rejection");
++    t.check(report.error.code == IoError::Code::invalid_state,
++            "closed admission keeps the existing invalid_state mapping");
++    t.check(report.untouched_begin == 1, "the rejected item is not reported as untouched");
++    t.check(report.untouched == 1, "the unaccepted item is reported untouched, not accepted");
++}
++
++void capacity_exhaustion_stops_mid_group(Tracker& t) {
++    auto fixture = make_fixture(t, 3 * 4096);
++    auto ctx = make_ctx(t, 2);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++
++    std::vector<std::vector<std::byte>> held(1, std::vector<std::byte>(4096));
++    ReadOp first;
++    first.file = NativeFileRef(*fixture->file);
++    first.dst = held[0].data();
++    first.len = held[0].size();
++    first.offset = 0;
++    const auto held_report = backend->submit_ready_reads(std::span<const ReadOp>(&first, 1));
++    t.check(held_report.accepted == 1, "the first capacity slot is occupied");
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = (i + 1) * 4096;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 1, "the batch accepts only the free capacity slot");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::rejected,
++            "capacity exhaustion stops at the authoritative reserve rejection");
++    t.check(report.error.code == IoError::Code::would_block,
++            "capacity exhaustion keeps the existing would_block mapping");
++    t.check(report.untouched_begin == 2,
++            "the rejected item sits after the accepted prefix, not in the suffix");
++    t.check(report.untouched == 0, "a rejected tail item is not reported as untouched");
++
++    std::vector<Request<std::size_t>> requests = requests_for(*ctx, held_report);
++    for (std::size_t i = 0; i < report.accepted; ++i)
++        requests.push_back(TestAccess::make_request<std::size_t>(*ctx, report.keys[i]));
++    t.check(settle(*ctx, requests, std::chrono::seconds(5)),
++            "the held and accepted reads terminate");
++    for (Request<std::size_t>& request : requests) {
++        const auto observed = request.take_result();
++        t.check(observed.readiness == RequestReadiness::ready &&
++                    observed.result.has_value() && observed.result.value() == 4096,
++                "each accepted read keeps its own terminal");
++    }
++    check_bytes(t, held[0], *fixture, 0, "the held read keeps its bytes");
++    check_bytes(t, buffers[0], *fixture, 4096, "the accepted batch read keeps its bytes");
++}
++
++void post_shutdown_entry_returns_recovery(Tracker& t) {
++    auto fixture = make_fixture(t, 8192);
++    auto ctx = make_ctx(t, 2);
++    if (!fixture.has_value() || !ctx.has_value())
++        return;
++    UringAsyncBackend* backend = backend_of(*ctx);
++
++    ctx->close_admission();
++    const auto outcome = ctx->shutdown(ShutdownPolicy::drain);
++    t.check(outcome.has_value() && outcome.value() == ShutdownOutcome::completed,
++            "the fresh context settles cleanly");
++
++    std::vector<std::vector<std::byte>> buffers(2, std::vector<std::byte>(4096));
++    ReadOp ops[2];
++    for (std::size_t i = 0; i < 2; ++i) {
++        ops[i].file = NativeFileRef(*fixture->file);
++        ops[i].dst = buffers[i].data();
++        ops[i].len = buffers[i].size();
++        ops[i].offset = i * 4096;
++    }
++    const auto report = backend->submit_ready_reads(std::span<const ReadOp>(ops, 2));
++    t.check(report.accepted == 0, "a retired ring accepts nothing");
++    t.check(report.stop == UringAsyncBackend::ReadyBatchStop::recovery,
++            "a retired ring is reported as the recovery boundary");
++    t.check(report.error.code == IoError::Code::backend_error,
++            "a retired ring reports the existing backend_error");
++    t.check(report.untouched == 2, "both writes to a retired ring stay untouched");
++}
++
++} // namespace
++
++int main() {
++    Tracker tracker{"uring_ready_batch_research"};
++    two_ready_reads_one_flush(tracker);
++    cap_leaves_suffix_untouched(tracker);
++    single_read_keeps_immediate_path(tracker);
++    ineligible_head_keeps_immediate_path(tracker);
++    cancel_terminates_one_member(tracker);
++    closed_admission_stops_before_accept(tracker);
++    capacity_exhaustion_stops_mid_group(tracker);
++    post_shutdown_entry_returns_recovery(tracker);
++    if (tracker.failures != 0) {
++        std::fprintf(stderr, "%s: %d failure(s)\n", tracker.name, tracker.failures);
++        return 1;
++    }
++    std::printf("%s: all research oracles passed\n", tracker.name);
++    return 0;
++}
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index c55e97be..89cf321b 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -578,6 +578,12 @@ if has_config("liburing") then
+     uring_progress_target("uring_flush_count_oracle_test",
+                               R .. "tests/uring_flush_count_oracle_test.cpp")
+ 
++    -- Links the shipped archive rather than a private backend copy.
++    sluice_one_file_target("binary", "test", "uring_ready_batch_research_test", "tests",
++                           {"sluice_core", "sluice_async"})
++    uring_progress_target("uring_ready_batch_fault_test",
++                          R .. "tests/uring_ready_batch_fault_test.cpp")
++
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of
+     -- the race suite; they are executed and recorded manually, never run as

@@ -1,0 +1,79 @@
+{
+ "a0_enters": {
+  "lines_with_enter": 6004,
+  "present": true,
+  "pure_submit": 6000,
+  "to_submit_hist": {
+   "1": 6004
+  },
+  "total": 6004
+ },
+ "a0_metrics": {
+  "cpu_ns_per_op": {
+   "mean": 12351.554766666668,
+   "n": 3
+  },
+  "extra_a": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "extra_b": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "ops_per_sec": {
+   "mean": 81802.8268574671,
+   "n": 3
+  },
+  "p50_ns": {
+   "mean": 184793.53333333333,
+   "n": 3
+  },
+  "p95_ns": {
+   "mean": 228429.53333333333,
+   "n": 3
+  },
+  "p99_ns": {
+   "mean": 265278.93333333335,
+   "n": 3
+  },
+  "peak_rss_kb": {
+   "mean": 5545.333333333333,
+   "n": 3
+  },
+  "stats_completed_ops": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_max_outstanding": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_queue_full_retries": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_submit_calls": {
+   "mean": 0.0,
+   "n": 3
+  },
+  "stats_submitted_ops": {
+   "mean": 0.0,
+   "n": 3
+  }
+ },
+ "a0_threads": 3,
+ "a0_time_v_max_rss_kb": [
+  5948,
+  5840,
+  5592
+ ],
+ "case_actual": "W03-uring-64k-d16-r3d16-64k",
+ "case_requested_by_prereg": "W03-uring-64k-d16",
+ "comparison": "B - A0 (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "kind": "B vs A0 blocked (semanticsReady=false); A0-only baseline + static ineligibility",
+ "phase": "PROT-64K-D16",
+ "static_ineligibility": "src/async/uring_backend.cpp:437-439 batch_eligible_read = (len==4096 && dst!=nullptr); 64 KiB -> immediate first member, stop=ineligible, suffix singles",
+ "verdict": "BLOCKED_SEMANTICS_NOT_READY",
+ "why_actual": "the frozen R3 binary only has the research 64 KiB case; label_suffix '-r3d16-64k'"
+}

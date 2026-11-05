@@ -1,0 +1,19 @@
+{
+ "aaNote": "AA-W03-D16 and AA-W02-D2 PASS from the prior calibration session; verified summaries, not rerun by this subagent",
+ "aaPassed": true,
+ "blocks": {
+  "PROT-64K-D16": "BLOCKED_SEMANTICS_NOT_READY",
+  "PROT-PLACEMENT": "NOT_ESTABLISHED",
+  "PROT-SAT": "NOT_ESTABLISHED",
+  "PROT-THREADPOOL": "BLOCKED_SEMANTICS_NOT_READY",
+  "PROT-W02-D16": "PASS",
+  "PROT-W02-D3": "PASS",
+  "RESOURCE": "NOT_ESTABLISHED"
+ },
+ "note": "PROT-W02-D3/D16 PASS are R2 same-SHA legacy reproductions, not R3 B results; all new R3 B/A1 blocks remain blocked under semanticsReady=false.",
+ "product": "HOLD (no #604 handoff)",
+ "r2LegacyExecuted": true,
+ "r3BArmExecuted": false,
+ "repairUsed": false,
+ "semanticsReady": false
+}

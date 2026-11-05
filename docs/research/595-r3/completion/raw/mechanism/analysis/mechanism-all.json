@@ -1,0 +1,2768 @@
+{
+ "alloc": {
+  "d16-A0": {
+   "attached": null,
+   "lost": [],
+   "scalars": {
+    "calloc_bytes": 8560,
+    "calloc_calls": 5,
+    "free_calls": 8840,
+    "malloc_bytes": 6531664,
+    "malloc_calls": 8796,
+    "memalign_calls": 0,
+    "realloc_calls": 0
+   }
+  },
+  "d16-A1": {
+   "attached": null,
+   "lost": [],
+   "scalars": {
+    "calloc_bytes": 8560,
+    "calloc_calls": 5,
+    "free_calls": 8846,
+    "malloc_bytes": 6535504,
+    "malloc_calls": 8802,
+    "memalign_calls": 0,
+    "realloc_calls": 0
+   }
+  },
+  "d16-B": {
+   "attached": null,
+   "lost": [],
+   "scalars": {
+    "calloc_bytes": 8560,
+    "calloc_calls": 5,
+    "free_calls": 8846,
+    "malloc_bytes": 6535503,
+    "malloc_calls": 8802,
+    "memalign_calls": 0,
+    "realloc_calls": 0
+   }
+  }
+ },
+ "baseline": {
+  "attached": null,
+  "counts": {
+   "cqe_total": 5,
+   "defer_total": 0,
+   "enter_bench": 0,
+   "enter_global": 5,
+   "epoll_wait": 0,
+   "eventfd2": 0,
+   "eventfd_write": 0,
+   "exit_total": 0,
+   "futex_total": 0,
+   "futex_wait": 0,
+   "futex_wake": 0,
+   "iouring_register": 0,
+   "iouring_setup": 0,
+   "queue_async_work": 0,
+   "sqe_total": 5,
+   "timer_create": 0,
+   "timerfd_create": 102
+  },
+  "duration_s": 39.0,
+  "lost": [],
+  "rates_per_s": {
+   "cqe_total": 0.128205,
+   "defer_total": 0.0,
+   "enter_bench": 0.0,
+   "enter_global": 0.128205,
+   "epoll_wait": 0.0,
+   "eventfd2": 0.0,
+   "eventfd_write": 0.0,
+   "exit_total": 0.0,
+   "futex_total": 0.0,
+   "futex_wait": 0.0,
+   "futex_wake": 0.0,
+   "iouring_register": 0.0,
+   "iouring_setup": 0.0,
+   "queue_async_work": 0.0,
+   "sqe_total": 0.128205,
+   "timer_create": 0.0,
+   "timerfd_create": 2.615385
+  }
+ },
+ "bucket": [
+  {
+   "arm": "A0",
+   "bench": {
+    "cpu_ns_per_op": 3809.7568,
+    "cpu_s": 0.076195136,
+    "ops": 20000,
+    "ops_per_sec": 262793.466,
+    "p50_ns": 44901.0,
+    "p95_ns": 53529.0,
+    "p99_ns": 56845.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62571
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62572
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62573
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 8,
+     "threads": [
+      {
+       "comm": "iou-wrk-62567",
+       "samples": 12,
+       "stime": 8,
+       "ticks": 8,
+       "tid": 62570
+      }
+     ],
+     "ticks": 8
+    },
+    "main": {
+     "stime": 10,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 16,
+       "stime": 10,
+       "ticks": 17,
+       "tid": 62567
+      }
+     ],
+     "ticks": 17
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 65,
+    "1": 16,
+    "10": 33,
+    "11": 0,
+    "12": 0,
+    "13": 0,
+    "14": 0,
+    "15": 2,
+    "16": 16,
+    "17": 1,
+    "18": 0,
+    "19": 0,
+    "2": 359,
+    "3": 7,
+    "4": 24,
+    "5": 6,
+    "6": 3,
+    "7": 3,
+    "8": 3,
+    "9": 8,
+    "total": 546
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A0-r1.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A0-r1.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 19356,
+   "ru_ticks_est": 32.341,
+   "ru_total": 0.323407,
+   "tag": "R3-W03-D16-A0-r1",
+   "thread_ticks_total": 25,
+   "ts_utc": "2026-11-05T12:01:09Z",
+   "unattributed_ticks_est": 7.341,
+   "wall_s": 0.3256216290028533
+  },
+  {
+   "arm": "A0",
+   "bench": {
+    "cpu_ns_per_op": 3680.1568,
+    "cpu_s": 0.073603136,
+    "ops": 20000,
+    "ops_per_sec": 272176.328,
+    "p50_ns": 37694.0,
+    "p95_ns": 45190.0,
+    "p99_ns": 54558.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62578
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 1,
+       "tid": 62579
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62580
+      }
+     ],
+     "ticks": 1
+    },
+    "io_wq": {
+     "stime": 8,
+     "threads": [
+      {
+       "comm": "iou-wrk-62574",
+       "samples": 12,
+       "stime": 8,
+       "ticks": 8,
+       "tid": 62577
+      }
+     ],
+     "ticks": 8
+    },
+    "main": {
+     "stime": 8,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 14,
+       "stime": 8,
+       "ticks": 14,
+       "tid": 62574
+      }
+     ],
+     "ticks": 14
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 84,
+    "1": 3,
+    "10": 19,
+    "11": 4,
+    "12": 1,
+    "13": 3,
+    "14": 6,
+    "15": 0,
+    "16": 7,
+    "17": 0,
+    "18": 1,
+    "19": 0,
+    "2": 296,
+    "3": 6,
+    "4": 12,
+    "5": 0,
+    "6": 2,
+    "7": 7,
+    "8": 1,
+    "9": 2,
+    "total": 454
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A0-r2.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A0-r2.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20068,
+   "ru_ticks_est": 26.828,
+   "ru_total": 0.268282,
+   "tag": "R3-W03-D16-A0-r2",
+   "thread_ticks_total": 23,
+   "ts_utc": "2026-11-05T12:01:09Z",
+   "unattributed_ticks_est": 3.828,
+   "wall_s": 0.2695912560011493
+  },
+  {
+   "arm": "A0",
+   "bench": {
+    "cpu_ns_per_op": 3040.36175,
+    "cpu_s": 0.060807235,
+    "ops": 20000,
+    "ops_per_sec": 329615.121,
+    "p50_ns": 36480.0,
+    "p95_ns": 43617.0,
+    "p99_ns": 47926.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62585
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62586
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62587
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62581",
+       "samples": 10,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62584
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 12,
+       "stime": 6,
+       "ticks": 11,
+       "tid": 62581
+      }
+     ],
+     "ticks": 11
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 79,
+    "1": 8,
+    "10": 6,
+    "11": 0,
+    "12": 0,
+    "13": 0,
+    "14": 5,
+    "15": 0,
+    "16": 1,
+    "17": 0,
+    "18": 1,
+    "19": 1,
+    "2": 266,
+    "3": 1,
+    "4": 23,
+    "5": 0,
+    "6": 1,
+    "7": 2,
+    "8": 0,
+    "9": 0,
+    "total": 394
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A0-r3.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A0-r3.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20068,
+   "ru_ticks_est": 23.715,
+   "ru_total": 0.237153,
+   "tag": "R3-W03-D16-A0-r3",
+   "thread_ticks_total": 17,
+   "ts_utc": "2026-11-05T12:01:10Z",
+   "unattributed_ticks_est": 6.715,
+   "wall_s": 0.23837713200191502
+  },
+  {
+   "arm": "A0",
+   "bench": {
+    "cpu_ns_per_op": 3747.5899,
+    "cpu_s": 0.074951798,
+    "ops": 20000,
+    "ops_per_sec": 267266.909,
+    "p50_ns": 44932.0,
+    "p95_ns": 53512.0,
+    "p99_ns": 56988.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62606
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62607
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 1,
+       "tid": 62608
+      }
+     ],
+     "ticks": 1
+    },
+    "io_wq": {
+     "stime": 8,
+     "threads": [
+      {
+       "comm": "iou-wrk-62602",
+       "samples": 12,
+       "stime": 8,
+       "ticks": 8,
+       "tid": 62605
+      }
+     ],
+     "ticks": 8
+    },
+    "main": {
+     "stime": 9,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 16,
+       "stime": 9,
+       "ticks": 16,
+       "tid": 62602
+      }
+     ],
+     "ticks": 16
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 48,
+    "1": 22,
+    "10": 0,
+    "11": 1,
+    "12": 0,
+    "13": 0,
+    "14": 1,
+    "15": 0,
+    "16": 17,
+    "17": 0,
+    "18": 0,
+    "19": 0,
+    "2": 348,
+    "3": 1,
+    "4": 31,
+    "5": 0,
+    "6": 3,
+    "7": 1,
+    "8": 1,
+    "9": 2,
+    "total": 476
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A0-r1.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A0-r1.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 19476,
+   "ru_ticks_est": 31.772,
+   "ru_total": 0.317723,
+   "tag": "R3-W03-D16-A0-r1",
+   "thread_ticks_total": 25,
+   "ts_utc": "2026-11-05T12:01:27Z",
+   "unattributed_ticks_est": 6.772,
+   "wall_s": 0.31983973299793433
+  },
+  {
+   "arm": "A0",
+   "bench": {
+    "cpu_ns_per_op": 3687.17635,
+    "cpu_s": 0.073743527,
+    "ops": 20000,
+    "ops_per_sec": 271496.027,
+    "p50_ns": 38183.0,
+    "p95_ns": 46146.0,
+    "p99_ns": 58475.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 1,
+       "tid": 62613
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62614
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62615
+      }
+     ],
+     "ticks": 1
+    },
+    "io_wq": {
+     "stime": 8,
+     "threads": [
+      {
+       "comm": "iou-wrk-62609",
+       "samples": 12,
+       "stime": 8,
+       "ticks": 8,
+       "tid": 62612
+      }
+     ],
+     "ticks": 8
+    },
+    "main": {
+     "stime": 7,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 14,
+       "stime": 7,
+       "ticks": 13,
+       "tid": 62609
+      }
+     ],
+     "ticks": 13
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 95,
+    "1": 21,
+    "10": 16,
+    "11": 0,
+    "12": 11,
+    "13": 1,
+    "14": 5,
+    "15": 2,
+    "16": 13,
+    "17": 4,
+    "18": 2,
+    "19": 1,
+    "2": 299,
+    "3": 27,
+    "4": 70,
+    "5": 14,
+    "6": 1,
+    "7": 0,
+    "8": 1,
+    "9": 2,
+    "total": 585
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A0-r2.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A0-r2.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20004,
+   "ru_ticks_est": 27.285,
+   "ru_total": 0.27285499999999996,
+   "tag": "R3-W03-D16-A0-r2",
+   "thread_ticks_total": 22,
+   "ts_utc": "2026-11-05T12:01:27Z",
+   "unattributed_ticks_est": 5.285,
+   "wall_s": 0.27423924100003205
+  },
+  {
+   "arm": "A0",
+   "bench": {
+    "cpu_ns_per_op": 3020.7119,
+    "cpu_s": 0.060414238,
+    "ops": 20000,
+    "ops_per_sec": 331794.735,
+    "p50_ns": 36358.0,
+    "p95_ns": 43388.0,
+    "p99_ns": 47360.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62620
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 1,
+       "tid": 62621
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 1,
+       "tid": 62622
+      }
+     ],
+     "ticks": 2
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62616",
+       "samples": 10,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62619
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 12,
+       "stime": 6,
+       "ticks": 11,
+       "tid": 62616
+      }
+     ],
+     "ticks": 11
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 82,
+    "1": 3,
+    "10": 0,
+    "11": 0,
+    "12": 0,
+    "13": 0,
+    "14": 4,
+    "15": 6,
+    "16": 0,
+    "17": 0,
+    "18": 1,
+    "19": 0,
+    "2": 252,
+    "3": 3,
+    "4": 18,
+    "5": 0,
+    "6": 3,
+    "7": 0,
+    "8": 0,
+    "9": 0,
+    "total": 372
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A0-r3.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A0-r3.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20004,
+   "ru_ticks_est": 23.293,
+   "ru_total": 0.23292600000000002,
+   "tag": "R3-W03-D16-A0-r3",
+   "thread_ticks_total": 19,
+   "ts_utc": "2026-11-05T12:01:28Z",
+   "unattributed_ticks_est": 4.293,
+   "wall_s": 0.2341311370000767
+  },
+  {
+   "arm": "A1",
+   "bench": {
+    "cpu_ns_per_op": 3408.2111,
+    "cpu_s": 0.068164222,
+    "ops": 20000,
+    "ops_per_sec": 294191.848,
+    "p50_ns": 30606.0,
+    "p95_ns": 33745.0,
+    "p99_ns": 37283.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62628
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62629
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62630
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 7,
+     "threads": [
+      {
+       "comm": "iou-wrk-62624",
+       "samples": 10,
+       "stime": 7,
+       "ticks": 7,
+       "tid": 62627
+      }
+     ],
+     "ticks": 7
+    },
+    "main": {
+     "stime": 10,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 14,
+       "stime": 10,
+       "ticks": 15,
+       "tid": 62624
+      }
+     ],
+     "ticks": 15
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 48,
+    "1": 11,
+    "10": 0,
+    "11": 0,
+    "12": 0,
+    "13": 1,
+    "14": 0,
+    "15": 0,
+    "16": 16,
+    "17": 0,
+    "18": 0,
+    "19": 0,
+    "2": 295,
+    "3": 1,
+    "4": 11,
+    "5": 0,
+    "6": 13,
+    "7": 0,
+    "8": 2,
+    "9": 2,
+    "total": 400
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A1-r1.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A1-r1.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 19356,
+   "ru_ticks_est": 28.231,
+   "ru_total": 0.282315,
+   "tag": "R3-W03-D16-A1-r1",
+   "thread_ticks_total": 22,
+   "ts_utc": "2026-11-05T12:01:28Z",
+   "unattributed_ticks_est": 6.231,
+   "wall_s": 0.284242711000843
+  },
+  {
+   "arm": "A1",
+   "bench": {
+    "cpu_ns_per_op": 3097.1002,
+    "cpu_s": 0.061942004,
+    "ops": 20000,
+    "ops_per_sec": 323236.826,
+    "p50_ns": 30701.0,
+    "p95_ns": 34089.0,
+    "p99_ns": 44382.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62635
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 1,
+       "tid": 62636
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62637
+      }
+     ],
+     "ticks": 1
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62631",
+       "samples": 10,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62634
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 12,
+       "stime": 6,
+       "ticks": 11,
+       "tid": 62631
+      }
+     ],
+     "ticks": 11
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 93,
+    "1": 9,
+    "10": 3,
+    "11": 0,
+    "12": 0,
+    "13": 0,
+    "14": 0,
+    "15": 1,
+    "16": 0,
+    "17": 0,
+    "18": 3,
+    "19": 1,
+    "2": 262,
+    "3": 4,
+    "4": 0,
+    "5": 0,
+    "6": 17,
+    "7": 1,
+    "8": 0,
+    "9": 0,
+    "total": 394
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A1-r2.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A1-r2.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20068,
+   "ru_ticks_est": 24.3,
+   "ru_total": 0.242996,
+   "tag": "R3-W03-D16-A1-r2",
+   "thread_ticks_total": 18,
+   "ts_utc": "2026-11-05T12:01:28Z",
+   "unattributed_ticks_est": 6.3,
+   "wall_s": 0.2442499869976018
+  },
+  {
+   "arm": "A1",
+   "bench": {
+    "cpu_ns_per_op": 3277.8961000000004,
+    "cpu_s": 0.065557922,
+    "ops": 20000,
+    "ops_per_sec": 305702.57,
+    "p50_ns": 30370.0,
+    "p95_ns": 33341.0,
+    "p99_ns": 35694.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62642
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 4,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62643
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62644
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62638",
+       "samples": 10,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62641
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 12,
+       "stime": 6,
+       "ticks": 11,
+       "tid": 62638
+      }
+     ],
+     "ticks": 11
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 70,
+    "1": 9,
+    "10": 2,
+    "11": 2,
+    "12": 1,
+    "13": 1,
+    "14": 6,
+    "15": 2,
+    "16": 6,
+    "17": 0,
+    "18": 0,
+    "19": 0,
+    "2": 263,
+    "3": 3,
+    "4": 8,
+    "5": 1,
+    "6": 16,
+    "7": 0,
+    "8": 1,
+    "9": 2,
+    "total": 393
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-A1-r3.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-A1-r3.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20068,
+   "ru_ticks_est": 24.641,
+   "ru_total": 0.24640599999999996,
+   "tag": "R3-W03-D16-A1-r3",
+   "thread_ticks_total": 17,
+   "ts_utc": "2026-11-05T12:01:29Z",
+   "unattributed_ticks_est": 7.641,
+   "wall_s": 0.2475103590004437
+  },
+  {
+   "arm": "B",
+   "bench": {
+    "cpu_ns_per_op": 3118.1681,
+    "cpu_s": 0.062363362,
+    "ops": 20000,
+    "ops_per_sec": 321157.467,
+    "p50_ns": 30782.0,
+    "p95_ns": 37849.0,
+    "p99_ns": 49741.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62650
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62651
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62652
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62646",
+       "samples": 9,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62649
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 8,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 13,
+       "stime": 8,
+       "ticks": 13,
+       "tid": 62646
+      }
+     ],
+     "ticks": 13
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 37,
+    "1": 15,
+    "10": 3,
+    "11": 0,
+    "12": 0,
+    "13": 0,
+    "14": 1,
+    "15": 0,
+    "16": 6,
+    "17": 0,
+    "18": 0,
+    "19": 1,
+    "2": 301,
+    "3": 16,
+    "4": 9,
+    "5": 0,
+    "6": 17,
+    "7": 0,
+    "8": 1,
+    "9": 2,
+    "total": 409
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-B-r1.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-B-r1.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 19428,
+   "ru_ticks_est": 25.358,
+   "ru_total": 0.25357799999999997,
+   "tag": "R3-W03-D16-B-r1",
+   "thread_ticks_total": 19,
+   "ts_utc": "2026-11-05T12:01:29Z",
+   "unattributed_ticks_est": 6.358,
+   "wall_s": 0.25567407800190267
+  },
+  {
+   "arm": "B",
+   "bench": {
+    "cpu_ns_per_op": 2737.7223,
+    "cpu_s": 0.054754446,
+    "ops": 20000,
+    "ops_per_sec": 366039.178,
+    "p50_ns": 30325.0,
+    "p95_ns": 33958.0,
+    "p99_ns": 44659.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62657
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62658
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62659
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62653",
+       "samples": 9,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62656
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 11,
+       "stime": 6,
+       "ticks": 10,
+       "tid": 62653
+      }
+     ],
+     "ticks": 10
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 86,
+    "1": 0,
+    "10": 0,
+    "11": 0,
+    "12": 0,
+    "13": 0,
+    "14": 0,
+    "15": 0,
+    "16": 2,
+    "17": 0,
+    "18": 0,
+    "19": 0,
+    "2": 235,
+    "3": 1,
+    "4": 1,
+    "5": 0,
+    "6": 16,
+    "7": 1,
+    "8": 2,
+    "9": 0,
+    "total": 344
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-B-r2.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-B-r2.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20140,
+   "ru_ticks_est": 20.658,
+   "ru_total": 0.206583,
+   "tag": "R3-W03-D16-B-r2",
+   "thread_ticks_total": 16,
+   "ts_utc": "2026-11-05T12:01:29Z",
+   "unattributed_ticks_est": 4.658,
+   "wall_s": 0.207609108001634
+  },
+  {
+   "arm": "B",
+   "bench": {
+    "cpu_ns_per_op": 2741.34155,
+    "cpu_s": 0.054826831,
+    "ops": 20000,
+    "ops_per_sec": 365759.979,
+    "p50_ns": 30356.0,
+    "p95_ns": 34248.0,
+    "p99_ns": 45606.0,
+    "stats_completed_ops": 20000,
+    "stats_submitted_ops": 20000
+   },
+   "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+   "buckets": {
+    "driver": {
+     "stime": 0,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62664
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62665
+      },
+      {
+       "comm": "bench_w03_exter",
+       "samples": 3,
+       "stime": 0,
+       "ticks": 0,
+       "tid": 62666
+      }
+     ],
+     "ticks": 0
+    },
+    "io_wq": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "iou-wrk-62660",
+       "samples": 9,
+       "stime": 6,
+       "ticks": 6,
+       "tid": 62663
+      }
+     ],
+     "ticks": 6
+    },
+    "main": {
+     "stime": 6,
+     "threads": [
+      {
+       "comm": "bench_w03_exter",
+       "samples": 11,
+       "stime": 6,
+       "ticks": 10,
+       "tid": 62660
+      }
+     ],
+     "ticks": 10
+    }
+   },
+   "case": "W03-uring-4k-d16",
+   "exit": 0,
+   "irq_delta": {
+    "0": 65,
+    "1": 3,
+    "10": 3,
+    "11": 1,
+    "12": 0,
+    "13": 1,
+    "14": 0,
+    "15": 0,
+    "16": 0,
+    "17": 1,
+    "18": 1,
+    "19": 0,
+    "2": 238,
+    "3": 4,
+    "4": 0,
+    "5": 0,
+    "6": 19,
+    "7": 2,
+    "8": 0,
+    "9": 0,
+    "total": 338
+   },
+   "jsonl": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/jsonl/R3-W03-D16-B-r3.jsonl",
+   "log": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/bucket/logs/R3-W03-D16-B-r3.log",
+   "max_user_threads": 3,
+   "ru_maxrss_kb": 20140,
+   "ru_ticks_est": 20.681,
+   "ru_total": 0.206806,
+   "tag": "R3-W03-D16-B-r3",
+   "thread_ticks_total": 16,
+   "ts_utc": "2026-11-05T12:01:29Z",
+   "unattributed_ticks_est": 4.681,
+   "wall_s": 0.2079434190018219
+  }
+ ],
+ "comm_probe": {
+  "bench_exit": null,
+  "comms_by_tid": {
+   "61703": "bench_w03_exter"
+  },
+  "ts_utc": "2026-11-05T11:53:16Z",
+  "unique_comms": [
+   "bench_w03_exter"
+  ]
+ },
+ "pmu": {
+  "d16-A0": {
+   "csv": [
+    {
+     "event": "cycles",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 288176880,
+     "value": 854149299
+    },
+    {
+     "event": "instructions",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 288176880,
+     "value": 709777889
+    },
+    {
+     "event": "cache-references",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 288176880,
+     "value": 12238156
+    },
+    {
+     "event": "cache-misses",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 288176880,
+     "value": 1611585
+    },
+    {
+     "event": "branch-misses",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 288176880,
+     "value": 1548700
+    },
+    {
+     "event": "context-switches",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 288176880,
+     "value": 20090
+    }
+   ],
+   "scaled_lines": []
+  },
+  "d16-A1": {
+   "csv": [
+    {
+     "event": "cycles",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 253493902,
+     "value": 852427314
+    },
+    {
+     "event": "instructions",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 253493902,
+     "value": 745464639
+    },
+    {
+     "event": "cache-references",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 253493902,
+     "value": 12514274
+    },
+    {
+     "event": "cache-misses",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 253493902,
+     "value": 1616737
+    },
+    {
+     "event": "branch-misses",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 253493902,
+     "value": 1613861
+    },
+    {
+     "event": "context-switches",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 253493902,
+     "value": 23125
+    }
+   ],
+   "scaled_lines": []
+  },
+  "d16-B": {
+   "csv": [
+    {
+     "event": "cycles",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 217132925,
+     "value": 733912392
+    },
+    {
+     "event": "instructions",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 217132925,
+     "value": 651993702
+    },
+    {
+     "event": "cache-references",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 217132925,
+     "value": 12470428
+    },
+    {
+     "event": "cache-misses",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 217132925,
+     "value": 1651593
+    },
+    {
+     "event": "branch-misses",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 217132925,
+     "value": 1438557
+    },
+    {
+     "event": "context-switches",
+     "time_enabled_pct": 100.0,
+     "time_running_ns": 217132925,
+     "value": 14830
+    }
+   ],
+   "scaled_lines": []
+  }
+ },
+ "resource": {
+  "A0": {
+   "strace_calls": {
+    "brk": 18,
+    "clone3": 4,
+    "epoll_create1": 3,
+    "eventfd2": 4,
+    "io_uring_register": 12,
+    "io_uring_setup": 4,
+    "mmap": 82,
+    "munmap": 17
+   },
+   "time_v": {
+    "exit_status": 0,
+    "involuntary_csw": 9182,
+    "max_rss_kb": 5204,
+    "voluntary_csw": 13895
+   }
+  },
+  "A1": {
+   "strace_calls": {
+    "brk": 18,
+    "clone3": 4,
+    "epoll_create1": 3,
+    "eventfd2": 4,
+    "io_uring_register": 12,
+    "io_uring_setup": 4,
+    "mmap": 82,
+    "munmap": 17
+   },
+   "time_v": {
+    "exit_status": 0,
+    "involuntary_csw": 10936,
+    "max_rss_kb": 5268,
+    "voluntary_csw": 16533
+   }
+  },
+  "B": {
+   "strace_calls": {
+    "brk": 18,
+    "clone3": 4,
+    "epoll_create1": 3,
+    "eventfd2": 4,
+    "io_uring_register": 12,
+    "io_uring_setup": 4,
+    "mmap": 82,
+    "munmap": 17
+   },
+   "time_v": {
+    "exit_status": 0,
+    "involuntary_csw": 5218,
+    "max_rss_kb": 5252,
+    "voluntary_csw": 9406
+   }
+  }
+ },
+ "runs": {
+  "d16-A0": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d16",
+    "cpu_s": 0.113059114,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 44266.0,
+    "lat_p95_ns": 58988.0,
+    "lat_p99_ns": 68837.0,
+    "notifications": 3151,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 176930.304,
+    "passes": 3151,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 20000,
+    "stats_completed_ops": 20000,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 3152,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 20000,
+    "stats_submitted_ops": 20000,
+    "stats_wait_calls": 0,
+    "submits": 20000
+   },
+   "bucket_map": {
+    "1, 0, 0": 60000,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 60000,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 60000,
+     "sum_to_submit_all": 60004,
+     "sum_to_submit_submit_classes": 60004
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 60004,
+    "flags_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "main_tid": 61771,
+    "map_enter_bench": 60004,
+    "map_enter_global": 60023,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "61771": 60000
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 60000
+    },
+    "ret_hist": {
+     "1": 60004
+    },
+    "submitter_pure_submits": 60000,
+    "sum_to_submit": 60004,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total_events_parsed": 60004
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "0": 80,
+     "4096": 60000
+    },
+    "cqe_total": 60080,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 60004,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 60000,
+     "29": 76
+    },
+    "sqe_total": 60080,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "A0",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 26185,
+     "ru_nvcsw": 31084,
+     "ru_stime_s": 0.283251,
+     "ru_utime_s": 0.10836599999999999,
+     "wall_s": 0.3940644460017211
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d16",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:53:49Z"
+   },
+   "park_wake": {
+    "epoll_wait": 10075,
+    "futex_total": 33242,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d16-A1": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d16",
+    "cpu_s": 0.12690222,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 36134.0,
+    "lat_p95_ns": 48045.0,
+    "lat_p99_ns": 57269.0,
+    "notifications": 3200,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 157462.416,
+    "passes": 3200,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 20000,
+    "r3_entry_calls": 20000,
+    "r3_flush_attempts": 20000,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 1,
+    "r3_single_calls": 20000,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 20000,
+    "stats_completed_ops": 20000,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 3201,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 20000,
+    "stats_submitted_ops": 20000,
+    "stats_wait_calls": 0,
+    "submits": 20000
+   },
+   "bucket_map": {
+    "1, 0, 0": 60000,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 60000,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 60000,
+     "sum_to_submit_all": 60004,
+     "sum_to_submit_submit_classes": 60004
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 60004,
+    "flags_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "main_tid": 61817,
+    "map_enter_bench": 60004,
+    "map_enter_global": 60009,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "61817": 60000
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 60000
+    },
+    "ret_hist": {
+     "1": 60004
+    },
+    "submitter_pure_submits": 60000,
+    "sum_to_submit": 60004,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total_events_parsed": 60004
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "-17": 1,
+     "0": 8,
+     "4096": 60000
+    },
+    "cqe_total": 60009,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 5,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 60004,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 60000,
+     "29": 5
+    },
+    "sqe_total": 60009,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "A1",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 25089,
+     "ru_nvcsw": 30638,
+     "ru_stime_s": 0.293068,
+     "ru_utime_s": 0.12720399999999998,
+     "wall_s": 0.42412203200001386
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d16",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:54:20Z"
+   },
+   "park_wake": {
+    "epoll_wait": 9981,
+    "futex_total": 32685,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d16-B": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d16",
+    "cpu_s": 0.08014893,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 33310.0,
+    "lat_p95_ns": 42139.0,
+    "lat_p99_ns": 51963.0,
+    "notifications": 1434,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 249784.221,
+    "passes": 1434,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 20000,
+    "r3_entry_calls": 10515,
+    "r3_flush_attempts": 10515,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 1355,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 8,
+    "r3_single_calls": 9160,
+    "r3_suffix_single_calls": 9160,
+    "r3_untouched": 9160,
+    "request_count": 20000,
+    "stats_completed_ops": 20000,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 1435,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 20000,
+    "stats_submitted_ops": 20000,
+    "stats_wait_calls": 0,
+    "submits": 20000
+   },
+   "bucket_map": {
+    "1, 0, 0": 24826,
+    "1, 1, 1": 4,
+    "2, 0, 0": 1,
+    "3, 0, 0": 2,
+    "6, 0, 0": 1,
+    "8, 0, 0": 4395
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 29225,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 60000,
+     "sum_to_submit_all": 60004,
+     "sum_to_submit_submit_classes": 60004
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 29229,
+    "flags_hist": {
+     "0": 29225,
+     "1": 4
+    },
+    "main_tid": 61882,
+    "map_enter_bench": 29229,
+    "map_enter_global": 29229,
+    "max_to_submit": 8,
+    "min_complete_hist": {
+     "0": 29225,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "61882": 29225
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 24826,
+     "2": 1,
+     "3": 2,
+     "6": 1,
+     "8": 4395
+    },
+    "ret_hist": {
+     "1": 24830,
+     "2": 1,
+     "3": 2,
+     "6": 1,
+     "8": 4395
+    },
+    "submitter_pure_submits": 29225,
+    "sum_to_submit": 60004,
+    "to_submit_hist": {
+     "1": 24830,
+     "2": 1,
+     "3": 2,
+     "6": 1,
+     "8": 4395
+    },
+    "total_events_parsed": 29229
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "0": 4,
+     "4096": 60000
+    },
+    "cqe_total": 60004,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 60004,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 60000
+    },
+    "sqe_total": 60004,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "B",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 9556,
+     "ru_nvcsw": 13206,
+     "ru_stime_s": 0.220516,
+     "ru_utime_s": 0.071237,
+     "wall_s": 0.2947986879989912
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d16",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:54:52Z"
+   },
+   "park_wake": {
+    "epoll_wait": 4862,
+    "futex_total": 14878,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d2pos-A0": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d2-r3d2pos",
+    "cpu_s": 0.000399109,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 22189.0,
+    "lat_p95_ns": 22189.0,
+    "lat_p99_ns": 22189.0,
+    "notifications": 3,
+    "ok": true,
+    "ops": 2,
+    "ops_per_sec": 23123.259,
+    "passes": 3,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 2,
+    "stats_completed_ops": 2,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 4,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 2,
+    "stats_submitted_ops": 2,
+    "stats_wait_calls": 0,
+    "submits": 2
+   },
+   "bucket_map": {
+    "1, 0, 0": 6,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 6,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 6,
+     "sum_to_submit_all": 10,
+     "sum_to_submit_submit_classes": 10
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 10,
+    "flags_hist": {
+     "0": 6,
+     "1": 4
+    },
+    "main_tid": 61929,
+    "map_enter_bench": 10,
+    "map_enter_global": 10,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 6,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "61929": 6
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 6
+    },
+    "ret_hist": {
+     "1": 10
+    },
+    "submitter_pure_submits": 6,
+    "sum_to_submit": 10,
+    "to_submit_hist": {
+     "1": 10
+    },
+    "total_events_parsed": 10
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "0": 4,
+     "4096": 6
+    },
+    "cqe_total": 10,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 6,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 10,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 6
+    },
+    "sqe_total": 10,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "A0",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 22,
+     "ru_nvcsw": 39,
+     "ru_stime_s": 0.039307999999999996,
+     "ru_utime_s": 0.008985,
+     "wall_s": 0.04907192300015595
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d2-r3d2pos",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:55:24Z"
+   },
+   "park_wake": {
+    "epoll_wait": 9,
+    "futex_total": 37,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d2pos-A1": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d2-r3d2pos",
+    "cpu_s": 0.000405418,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 1189.0,
+    "lat_p95_ns": 1189.0,
+    "lat_p99_ns": 1189.0,
+    "notifications": 3,
+    "ok": true,
+    "ops": 2,
+    "ops_per_sec": 22157.964,
+    "passes": 3,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 2,
+    "r3_entry_calls": 2,
+    "r3_flush_attempts": 2,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 1,
+    "r3_single_calls": 2,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 2,
+    "stats_completed_ops": 2,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 4,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 2,
+    "stats_submitted_ops": 2,
+    "stats_wait_calls": 0,
+    "submits": 2
+   },
+   "bucket_map": {
+    "1, 0, 0": 6,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 6,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 6,
+     "sum_to_submit_all": 10,
+     "sum_to_submit_submit_classes": 10
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 10,
+    "flags_hist": {
+     "0": 6,
+     "1": 4
+    },
+    "main_tid": 62068,
+    "map_enter_bench": 10,
+    "map_enter_global": 55,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 6,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "62068": 6
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 6
+    },
+    "ret_hist": {
+     "1": 10
+    },
+    "submitter_pure_submits": 6,
+    "sum_to_submit": 10,
+    "to_submit_hist": {
+     "1": 10
+    },
+    "total_events_parsed": 10
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "0": 232,
+     "4096": 6
+    },
+    "cqe_total": 238,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 10,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 6,
+     "29": 228
+    },
+    "sqe_total": 238,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "A1",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 22,
+     "ru_nvcsw": 39,
+     "ru_stime_s": 0.041518,
+     "ru_utime_s": 0.010154999999999999,
+     "wall_s": 0.05252232299972093
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d2-r3d2pos",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:55:55Z"
+   },
+   "park_wake": {
+    "epoll_wait": 9,
+    "futex_total": 37,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d2pos-B": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d2-r3d2pos",
+    "cpu_s": 0.000389376,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 1426.0,
+    "lat_p95_ns": 1426.0,
+    "lat_p99_ns": 1426.0,
+    "notifications": 2,
+    "ok": true,
+    "ops": 2,
+    "ops_per_sec": 27498.591,
+    "passes": 2,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 2,
+    "r3_entry_calls": 1,
+    "r3_flush_attempts": 1,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 1,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 2,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 2,
+    "stats_completed_ops": 2,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 3,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 2,
+    "stats_submitted_ops": 2,
+    "stats_wait_calls": 0,
+    "submits": 2
+   },
+   "bucket_map": {
+    "1, 1, 1": 4,
+    "2, 0, 0": 3
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 3,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 6,
+     "sum_to_submit_all": 10,
+     "sum_to_submit_submit_classes": 10
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 7,
+    "flags_hist": {
+     "0": 3,
+     "1": 4
+    },
+    "main_tid": 62114,
+    "map_enter_bench": 7,
+    "map_enter_global": 13,
+    "max_to_submit": 2,
+    "min_complete_hist": {
+     "0": 3,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "62114": 3
+    },
+    "pure_submit_to_submit_hist": {
+     "2": 3
+    },
+    "ret_hist": {
+     "1": 4,
+     "2": 3
+    },
+    "submitter_pure_submits": 3,
+    "sum_to_submit": 10,
+    "to_submit_hist": {
+     "1": 4,
+     "2": 3
+    },
+    "total_events_parsed": 7
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "0": 14,
+     "4096": 6
+    },
+    "cqe_total": 20,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 10,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 6,
+     "29": 10
+    },
+    "sqe_total": 20,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "B",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 19,
+     "ru_nvcsw": 29,
+     "ru_stime_s": 0.044,
+     "ru_utime_s": 0.007025999999999999,
+     "wall_s": 0.0518425020018185
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d2-r3d2pos",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:56:27Z"
+   },
+   "park_wake": {
+    "epoll_wait": 6,
+    "futex_total": 28,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d2serial-A0": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d2-r3d2serial",
+    "cpu_s": 0.39044633,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 8378.0,
+    "lat_p95_ns": 13580.0,
+    "lat_p99_ns": 20666.0,
+    "notifications": 20001,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 49598.017,
+    "passes": 20001,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 20000,
+    "stats_completed_ops": 20000,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 20002,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 20000,
+    "stats_submitted_ops": 20000,
+    "stats_wait_calls": 0,
+    "submits": 20000
+   },
+   "bucket_map": {
+    "1, 0, 0": 60000,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 60000,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 60000,
+     "sum_to_submit_all": 60004,
+     "sum_to_submit_submit_classes": 60004
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 60004,
+    "flags_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "main_tid": 62159,
+    "map_enter_bench": 60004,
+    "map_enter_global": 60059,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "62159": 60000
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 60000
+    },
+    "ret_hist": {
+     "1": 60004
+    },
+    "submitter_pure_submits": 60000,
+    "sum_to_submit": 60004,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total_events_parsed": 60004
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "-17": 1,
+     "0": 58,
+     "4096": 60000
+    },
+    "cqe_total": 60059,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 60004,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 60000,
+     "29": 55
+    },
+    "sqe_total": 60059,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "A0",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 87301,
+     "ru_nvcsw": 202007,
+     "ru_stime_s": 0.951189,
+     "ru_utime_s": 0.26028599999999996,
+     "wall_s": 1.2516733789998398
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d2-r3d2serial",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:56:59Z"
+   },
+   "park_wake": {
+    "epoll_wait": 60003,
+    "futex_total": 263254,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d2serial-A1": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d2-r3d2serial",
+    "cpu_s": 0.377044394,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 8606.0,
+    "lat_p95_ns": 14274.0,
+    "lat_p99_ns": 22478.0,
+    "notifications": 20001,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 51213.27,
+    "passes": 20001,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 20000,
+    "r3_entry_calls": 20000,
+    "r3_flush_attempts": 20000,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 1,
+    "r3_single_calls": 20000,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 20000,
+    "stats_completed_ops": 20000,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 20002,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 20000,
+    "stats_submitted_ops": 20000,
+    "stats_wait_calls": 0,
+    "submits": 20000
+   },
+   "bucket_map": {
+    "1, 0, 0": 60000,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 60000,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 60000,
+     "sum_to_submit_all": 60004,
+     "sum_to_submit_submit_classes": 60004
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 60004,
+    "flags_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "main_tid": 62215,
+    "map_enter_bench": 60004,
+    "map_enter_global": 60010,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "62215": 60000
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 60000
+    },
+    "ret_hist": {
+     "1": 60004
+    },
+    "submitter_pure_submits": 60000,
+    "sum_to_submit": 60004,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total_events_parsed": 60004
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "-17": 2,
+     "0": 8,
+     "4096": 60000
+    },
+    "cqe_total": 60010,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 60004,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 60000,
+     "29": 6
+    },
+    "sqe_total": 60010,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "A1",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 85716,
+     "ru_nvcsw": 195571,
+     "ru_stime_s": 0.8896489999999999,
+     "ru_utime_s": 0.28923,
+     "wall_s": 1.2222785169979034
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d2-r3d2serial",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:57:32Z"
+   },
+   "park_wake": {
+    "epoll_wait": 60003,
+    "futex_total": 250998,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  },
+  "d2serial-B": {
+   "bench_record": {
+    "case_id": "W03-uring-4k-d2-r3d2serial",
+    "cpu_s": 0.438188682,
+    "empty_wakes": 0,
+    "failure": "",
+    "lat_p50_ns": 8434.0,
+    "lat_p95_ns": 13947.0,
+    "lat_p99_ns": 23677.0,
+    "notifications": 20001,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 44161.603,
+    "passes": 20001,
+    "peak_rss_kb": 21544,
+    "r3_accepted": 20000,
+    "r3_entry_calls": 20000,
+    "r3_flush_attempts": 20000,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 1,
+    "r3_single_calls": 20000,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "request_count": 20000,
+    "stats_completed_ops": 20000,
+    "stats_invalid_state": 0,
+    "stats_poll_calls": 20002,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 20000,
+    "stats_submitted_ops": 20000,
+    "stats_wait_calls": 0,
+    "submits": 20000
+   },
+   "bucket_map": {
+    "1, 0, 0": 60000,
+    "1, 1, 1": 4
+   },
+   "enter": {
+    "classes": {
+     "pure_submit": 60000,
+     "submit_with_flags": 4
+    },
+    "coverage": {
+     "delta_all": 4,
+     "expected_data_sqe": 60000,
+     "sum_to_submit_all": 60004,
+     "sum_to_submit_submit_classes": 60004
+    },
+    "driver_pure_submits": 0,
+    "exit_total": 60004,
+    "flags_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "main_tid": 62260,
+    "map_enter_bench": 60004,
+    "map_enter_global": 60004,
+    "max_to_submit": 1,
+    "min_complete_hist": {
+     "0": 60000,
+     "1": 4
+    },
+    "parsed_equals_map": true,
+    "pure_submit_by_tid": {
+     "62260": 60000
+    },
+    "pure_submit_to_submit_hist": {
+     "1": 60000
+    },
+    "ret_hist": {
+     "1": 60004
+    },
+    "submitter_pure_submits": 60000,
+    "sum_to_submit": 60004,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total_events_parsed": 60004
+   },
+   "global_kernel": {
+    "cqe_res": {
+     "0": 4,
+     "4096": 60000
+    },
+    "cqe_total": 60004,
+    "defer_opcode": {},
+    "defer_total": 0,
+    "eventfd2": 4,
+    "eventfd_write": 0,
+    "iouring_register": 12,
+    "iouring_setup": 4,
+    "queue_async_work": 60004,
+    "sqe_opcode": {
+     "21": 4,
+     "22": 60000
+    },
+    "sqe_total": 60004,
+    "timer_create": 0,
+    "timerfd_create": 102
+   },
+   "meta": {
+    "arm": "B",
+    "attached": false,
+    "bench": {
+     "exit": 0,
+     "ru_nivcsw": 85588,
+     "ru_nvcsw": 198647,
+     "ru_stime_s": 0.942703,
+     "ru_utime_s": 0.30827,
+     "wall_s": 1.2958847820009396
+    },
+    "bpftrace_rc": 0,
+    "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+    "case": "W03-uring-4k-d2-r3d2serial",
+    "kind": "enter-trace",
+    "ts_utc": "2026-11-05T11:58:05Z"
+   },
+   "park_wake": {
+    "epoll_wait": 60002,
+    "futex_total": 257731,
+    "futex_wait": 0,
+    "futex_wake": 0
+   },
+   "trace_health": {
+    "attached_from_stderr": 21,
+    "attached_probes": null,
+    "lost_events": [],
+    "stderr_has_lost": false
+   }
+  }
+ }
+}

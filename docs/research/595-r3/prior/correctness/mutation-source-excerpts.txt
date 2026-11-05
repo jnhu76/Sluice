@@ -1,0 +1,89 @@
+== src/async/uring_backend.cpp:519-535 (M1 gate)
+        }
+        if (pending_control_count_ != 0) {
+            report.stop = ReadyBatchStop::control;
+            report.untouched = ready.size();
+            return report;
+        }
+#if !defined(SLUICE_R3_MUTANT_BATCH_INCLUDES_NOT_READY_TRANSPORT)
+        if (dispatch_retry_remains_locked_()) {
+            report.stop = ReadyBatchStop::recovery;
+            report.untouched = ready.size();
+            return report;
+        }
+        const std::size_t sq_budget =
+            static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
+        if (sq_budget == 0) {
+            report.stop = ReadyBatchStop::sq_budget;
+            report.untouched = ready.size();
+
+== src/async/uring_backend.cpp:575-591 (M3 duplicate push)
+                    static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
+                const std::size_t dispatchable = std::min(report.accepted, sq_free);
+                for (std::size_t i = 0; i < dispatchable; ++i) {
+                    const detail::RequestReservation emitted{report.keys[i].slot,
+                                                             report.keys[i].generation};
+                    if (!dispatch_one_locked(emitted)) {
+                        break;
+                    }
+#if defined(SLUICE_R3_MUTANT_BATCH_REDISPATCHES_CONSUMED)
+                    dispatch_->push_back(emitted);
+#endif
+                }
+                if (!fatal_error_.has_value()) {
+                    (void)submit_transport_locked();
+                    report.flush_attempts = 1;
+                    service_pending_controls_locked_();
+                }
+
+== src/async/uring_backend.cpp:608,619 (M2 residue drop)
+    }
+    report.untouched_begin = report.accepted + (rejected ? 1 : 0);
+    report.untouched = ready.size() - report.untouched_begin;
+
+    if (report.accepted != 0)
+        note_outstanding();
+#if defined(SLUICE_R3_MUTANT_BATCH_RESIDUE_NOT_ADVERTISED)
+    advertise = false;
+#endif
+    if (advertise) {
+        report.residue_advertised = true;
+        signal_ready_progress();
+
+== xmake/tests.lua:588-623
+    -- readiness/accounting edge each and must be killed by the named assertion
+    -- of the base suite; they are executed and recorded manually.
+    local function r3_ready_batch_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async", R .. "bench")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_HAS_LIBURING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            add_links("uring")
+            add_files(R .. "tests/uring_ready_batch_deterministic_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/uring_transport.cpp",
+                      R .. "src/async/uring_completion.cpp",
+                      R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    r3_ready_batch_target("uring_ready_batch_deterministic_test")
+    r3_ready_batch_target("uring_ready_batch_det_mut_includes_not_ready",
+                          "SLUICE_R3_MUTANT_BATCH_INCLUDES_NOT_READY_TRANSPORT")
+    r3_ready_batch_target("uring_ready_batch_det_mut_residue_dropped",
+                          "SLUICE_R3_MUTANT_BATCH_RESIDUE_NOT_ADVERTISED")
+    r3_ready_batch_target("uring_ready_batch_det_mut_redispatch_consumed",
+                          "SLUICE_R3_MUTANT_BATCH_REDISPATCHES_CONSUMED")
+
+    -- Corrective-round mutation builds. Each restores one abandoned

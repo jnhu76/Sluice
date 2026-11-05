@@ -1,0 +1,7 @@
+released_utc=2026-11-05T11:24:33Z
+block_rc_d3=0 block_rc_d16=0
+freq2=3500000
+freq12=3274372
+loadavg=1.70 0.87 0.54 1/2017 55699
+Filesystem      Size  Used Avail Use% Mounted on
+tmpfs            32G  918M   31G   3% /tmp

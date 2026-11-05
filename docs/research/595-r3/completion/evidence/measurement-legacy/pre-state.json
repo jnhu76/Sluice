@@ -1,0 +1,44 @@
+{
+ "utc": "2026-11-05T11:03:31Z",
+ "loadavg": [
+  0.09912109375,
+  0.14111328125,
+  0.166015625
+ ],
+ "tmp": {
+  "total": 33626267648,
+  "avail": 32798965760
+ },
+ "cpufreq": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": "1200000"
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": "1842569"
+  }
+ },
+ "nproc": 20,
+ "df_h_tmp": "Filesystem      Size  Used Avail Use% Mounted on\ntmpfs            32G  789M   31G   3% /tmp\n",
+ "ps_top": [
+  "    PID PSR %CPU COMMAND",
+  "  51968   0 75.0 python3",
+  "  51956  15 10.5 bash",
+  "   2992  14  7.5 zcode-cli",
+  "   2627   6  1.9 node",
+  "  51910  12  1.3 MainThread",
+  "  51673  19  1.0 zcode-cli",
+  "  51781  16  1.0 npm exec chrome",
+  "  51898  10  0.9 npm exec mcp-re",
+  "  51765  11  0.9 npm exec @playw",
+  "  51856   4  0.9 chrome-devtools",
+  "  51794   5  0.9 npm exec chrome",
+  "  51850   0  0.9 chrome-devtools",
+  "  51694   8  0.9 npm exec duckdu",
+  "  51839  13  0.9 chrome-devtools"
+ ],
+ "perf_event_paranoid": "2",
+ "unprivileged_bpf_disabled": "2",
+ "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock"
+}

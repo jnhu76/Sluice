@@ -1,0 +1,10 @@
+MECH_ALLOC_TRACE_END
+
+
+@calloc_bytes: 8560
+@calloc_calls: 5
+@free_calls: 8846
+@malloc_bytes: 6535503
+@malloc_calls: 8802
+@memalign_calls: 0
+@realloc_calls: 0

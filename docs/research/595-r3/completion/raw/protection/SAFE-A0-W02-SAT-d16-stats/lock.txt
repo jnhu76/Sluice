@@ -1,0 +1,7 @@
+acquired_utc=2026-11-05T11:31:10Z
+fuser:
+                     USER        PID ACCESS COMMAND
+/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock:
+                     jnhu      57347 F.... bash
+bench_rc=0
+released_utc=2026-11-05T11:31:10Z

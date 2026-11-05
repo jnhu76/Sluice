@@ -1,0 +1,112 @@
+{
+ "A": {
+  "repeats": 3,
+  "pure_submit_enters_mean": 60004.0,
+  "total_enters_mean": 60004.0,
+  "zero_submit_enters_mean": 0.0,
+  "sqes_mean": 60004.0,
+  "sqe_per_enter_mean": 1.0,
+  "max_to_submit": 1,
+  "to_submit_histogram_total": {
+   "1": 180012
+  },
+  "enters_by_tid_total": {
+   "53606": 60004,
+   "53611": 60004,
+   "53616": 60004
+  },
+  "register_calls_mean": 12.0,
+  "eventfd_calls_mean": 4.0,
+  "enter_flags_total": {
+   "IORING_ENTER_GETEVENTS": 12,
+   "0": 180000
+  },
+  "bench": {
+   "cpu_ns_per_op_mean": 11463.452816666666,
+   "ops_per_sec_mean": 26479.739,
+   "p50_ns_mean": 30358.333333333332,
+   "p95_ns_mean": 34659.0,
+   "p99_ns_mean": 40109.0,
+   "ops": [
+    20000,
+    20000,
+    20000
+   ],
+   "stats_submitted_ops": [
+    20000,
+    20000,
+    20000
+   ],
+   "stats_completed_ops": [
+    20000,
+    20000,
+    20000
+   ],
+   "stats_queue_full_retries": [
+    0,
+    0,
+    0
+   ],
+   "stats_invalid_state": [
+    0,
+    0,
+    0
+   ]
+  }
+ },
+ "B": {
+  "repeats": 3,
+  "pure_submit_enters_mean": 60004.0,
+  "total_enters_mean": 60004.0,
+  "zero_submit_enters_mean": 0.0,
+  "sqes_mean": 60004.0,
+  "sqe_per_enter_mean": 1.0,
+  "max_to_submit": 1,
+  "to_submit_histogram_total": {
+   "1": 180012
+  },
+  "enters_by_tid_total": {
+   "53621": 60004,
+   "53626": 60004,
+   "53631": 60004
+  },
+  "register_calls_mean": 12.0,
+  "eventfd_calls_mean": 4.0,
+  "enter_flags_total": {
+   "IORING_ENTER_GETEVENTS": 12,
+   "0": 180000
+  },
+  "bench": {
+   "cpu_ns_per_op_mean": 11219.973716666667,
+   "ops_per_sec_mean": 26792.021999999997,
+   "p50_ns_mean": 55953.0,
+   "p95_ns_mean": 64728.0,
+   "p99_ns_mean": 69197.33333333333,
+   "ops": [
+    20000,
+    20000,
+    20000
+   ],
+   "stats_submitted_ops": [
+    20000,
+    20000,
+    20000
+   ],
+   "stats_completed_ops": [
+    20000,
+    20000,
+    20000
+   ],
+   "stats_queue_full_retries": [
+    0,
+    0,
+    0
+   ],
+   "stats_invalid_state": [
+    0,
+    0,
+    0
+   ]
+  }
+ }
+}

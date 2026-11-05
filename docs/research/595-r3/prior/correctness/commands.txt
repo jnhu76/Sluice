@@ -1,0 +1,67 @@
+# #595 R3 确定性正确性 — 实际执行的命令（worktree=/home/jnhu/sluice-595-e5/r3/worktree）
+# 所有运行均为 correctness oracle；未持有 MEASUREMENT.lock；无计时。
+
+cd /home/jnhu/sluice-595-e5/r3/worktree
+xmake f -m release --liburing=y            # 既有配置（build/.xmake 已为 release+liburing）
+
+# 1) BASE 构建
+xmake build -y uring_ready_batch_deterministic_test
+
+# 2) BASE GREEN（全量 13 场景；随后又重复 5 次，见 raw/correctness/r3det-run-*.log）
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test
+
+# 3) BASE GREEN（三个变异目标场景）
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test --only=d2_positive
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test --only=sq_full_residue
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test --only=partial_submit
+
+# 4) 三个变异构建（同一测试 TU，逐目标 -D）
+xmake build -y uring_ready_batch_det_mut_includes_not_ready \
+    uring_ready_batch_det_mut_residue_dropped \
+    uring_ready_batch_det_mut_redispatch_consumed
+
+# 5) MUTANT RED（目标场景，命名断言）
+./build/linux/x86_64/release/uring_ready_batch_det_mut_includes_not_ready --only=sq_full_residue
+./build/linux/x86_64/release/uring_ready_batch_det_mut_residue_dropped --only=partial_submit
+./build/linux/x86_64/release/uring_ready_batch_det_mut_redispatch_consumed --only=d2_positive
+
+# 6) MUTANT 全量运行（仅记录；M3 的附带 abort 不作为 RED 见证）
+./build/linux/x86_64/release/uring_ready_batch_det_mut_includes_not_ready
+./build/linux/x86_64/release/uring_ready_batch_det_mut_residue_dropped
+./build/linux/x86_64/release/uring_ready_batch_det_mut_redispatch_consumed
+
+# 7) RESTORED GREEN：强制重编 BASE 后全量与目标场景
+touch src/async/uring_backend.cpp
+xmake build -y uring_ready_batch_deterministic_test
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test --only=d2_positive
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test --only=sq_full_residue
+./build/linux/x86_64/release/uring_ready_batch_deterministic_test --only=partial_submit
+
+# 8) 既有回归（当前源码，变异宏未定义）
+xmake build -y uring_ready_batch_research_test uring_ready_batch_fault_test \
+    uring_submit_boundary_test uring_progress_race_test \
+    uring_flush_count_oracle_test uring_external_loop_test
+./build/linux/x86_64/release/uring_ready_batch_research_test
+./build/linux/x86_64/release/uring_ready_batch_fault_test
+./build/linux/x86_64/release/uring_submit_boundary_test
+./build/linux/x86_64/release/uring_progress_race_test
+./build/linux/x86_64/release/uring_flush_count_oracle_test
+./build/linux/x86_64/release/uring_external_loop_test
+
+# 9) 产物/开关证据
+sha256sum ./build/linux/x86_64/release/uring_ready_batch_deterministic_test \
+    ./build/linux/x86_64/release/uring_ready_batch_det_mut_includes_not_ready \
+    ./build/linux/x86_64/release/uring_ready_batch_det_mut_residue_dropped \
+    ./build/linux/x86_64/release/uring_ready_batch_det_mut_redispatch_consumed
+grep -n "SLUICE_R3_MUTANT" src/async/uring_backend.cpp
+grep -n "r3_ready_batch_target\|uring_ready_batch_det_mut\|uring_ready_batch_deterministic_test" xmake/tests.lua
+# compile-defines.txt 由 python3 读取 compile_commands.json，提取每个测试 TU 的 -DSLUICE*
+# （脚本为一次性命令，未提交；输出已归档）
+
+# 10) 工作树状态
+cd /home/jnhu/Source/Sluice && git status --porcelain
+cd /home/jnhu/sluice-595-e5/r3/worktree && git status --porcelain && git rev-parse HEAD
+
+# 11) 证据清单
+cd /home/jnhu/sluice-595-e5/r3 && sha256sum -c evidence/correctness/MANIFEST.sha256

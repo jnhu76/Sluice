@@ -1,0 +1,20 @@
+{
+ "phase": "diag-r2",
+ "case": "W02-uring-4k-d2",
+ "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "repeats_per_arm": 3,
+ "arms": [
+  "A",
+  "B"
+ ],
+ "cpu_set": "2",
+ "warmup": 0,
+ "measured": 1,
+ "stats": 1,
+ "env": {
+  "SLUICE_BENCH_595_DEPTHS": "1"
+ },
+ "started_utc": "2026-11-05T11:08:07Z",
+ "note": "syscall counting only; no PMU/ftrace; numbers are mechanism evidence"
+}

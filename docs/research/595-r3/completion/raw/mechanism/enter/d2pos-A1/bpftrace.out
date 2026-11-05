@@ -1,0 +1,45 @@
+MECH_ENTER_TRACE_BEGIN
+E 62068 62068 3 1 1 1
+E 62068 62068 5 1 1 1
+E 62068 62068 5 1 0 0
+E 62068 62068 5 1 0 0
+E 62068 62068 5 1 1 1
+E 62068 62068 5 1 0 0
+E 62068 62068 5 1 0 0
+E 62068 62068 5 1 1 1
+E 62068 62068 5 1 0 0
+E 62068 62068 5 1 0 0
+MECH_ENTER_TRACE_END
+
+
+@bucket[1, 1, 1]: 4
+@bucket[1, 0, 0]: 6
+@cqe_res[4096]: 6
+@cqe_res[0]: 232
+@cqe_total: 238
+@defer_total: 0
+@enter_bench: 10
+@enter_by_tid[62068]: 10
+@enter_global: 55
+@epoll_wait: 9
+@eventfd2: 4
+@eventfd_write: 0
+@exit_total: 10
+@flags_hist[1]: 4
+@flags_hist[0]: 6
+@futex_total: 37
+@futex_wait: 0
+@futex_wake: 0
+@iouring_register: 12
+@iouring_setup: 4
+@mc_hist[1]: 4
+@mc_hist[0]: 6
+@queue_async_work: 10
+@ret_hist[1]: 10
+@sqe_opcode[21]: 4
+@sqe_opcode[22]: 6
+@sqe_opcode[29]: 228
+@sqe_total: 238
+@timer_create: 0
+@timerfd_create: 102
+@ts_hist[1]: 10

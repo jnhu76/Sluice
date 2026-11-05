@@ -1,0 +1,56 @@
+# NUMERIC_QA — 图/CSV/正文数值一致性（qa_gate.py 自动生成）
+
+检查总数：50；通过：50；失败：0。
+
+| 组 | 检查 | 结果 |
+|---|---|---|
+| tables | metrics.csv rows=26 | OK |
+| tables | effects.csv rows=81 | OK |
+| tables | gates.csv rows=19 | OK |
+| tables | NOT_RUN rows numeric-free | OK |
+| tables | gate-grade effect rows=25 (5 blocks x 5 metrics) | OK |
+| F2a | CPU / op | OK |
+| F2a | throughput | OK |
+| F2a | p50 | OK |
+| F2a | p95 | OK |
+| F2a | p99 | OK |
+| F2b | B 3 enters x2 | OK |
+| F2b | A0/A1 6 enters x1 | OK |
+| F3a | A0 | OK |
+| F3a | A1 | OK |
+| F3a | B | OK |
+| F3b | sum(counts)==enters | OK |
+| F3b | sum(k*counts)==ops | OK |
+| F3c | accepted==20000 | OK |
+| F3c | 1355*8+single==20000 | OK |
+| F3c | untouched==suffix==9160 | OK |
+| F3c | group+single==entry==flush | OK |
+| F3d | A0/cycles | OK |
+| F3d | A0/instructions | OK |
+| F3d | A1/cycles | OK |
+| F3d | A1/instructions | OK |
+| F3d | B/cycles | OK |
+| F3d | B/instructions | OK |
+| F4 | LEGACY-W02-D2 (R2-D2) p50 | OK |
+| F4 | LEGACY-W02-D2 (R2-D2) p95 | OK |
+| F4 | LEGACY-W02-D2 (R2-D2) p99 | OK |
+| F4 | PROT-W02-D3 (R2) p50 | OK |
+| F4 | PROT-W02-D3 (R2) p95 | OK |
+| F4 | PROT-W02-D3 (R2) p99 | OK |
+| F4 | PROT-W02-D16 (R2) p50 | OK |
+| F4 | PROT-W02-D16 (R2) p95 | OK |
+| F4 | PROT-W02-D16 (R2) p99 | OK |
+| F4 | AA-W03-D16 p50 | OK |
+| F4 | AA-W03-D16 p95 | OK |
+| F4 | AA-W03-D16 p99 | OK |
+| F4 | AA-W02-D2 p50 | OK |
+| F4 | AA-W02-D2 p95 | OK |
+| F4 | AA-W02-D2 p99 | OK |
+| files | F2_d2_regression.svg | OK |
+| files | F2_d2_regression.png | OK |
+| files | F3_batch_mechanism.svg | OK |
+| files | F3_batch_mechanism.png | OK |
+| files | F4_tail_guardrails.svg | OK |
+| files | F4_tail_guardrails.png | OK |
+| files | F5_observed_regimes.svg | OK |
+| files | F5_observed_regimes.png | OK |

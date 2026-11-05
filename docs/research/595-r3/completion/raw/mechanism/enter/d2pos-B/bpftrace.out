@@ -1,0 +1,44 @@
+MECH_ENTER_TRACE_BEGIN
+E 62114 62114 3 1 1 1
+E 62114 62114 5 1 1 1
+E 62114 62114 5 2 0 0
+E 62114 62114 5 1 1 1
+E 62114 62114 5 2 0 0
+E 62114 62114 5 1 1 1
+E 62114 62114 5 2 0 0
+MECH_ENTER_TRACE_END
+
+
+@bucket[2, 0, 0]: 3
+@bucket[1, 1, 1]: 4
+@cqe_res[4096]: 6
+@cqe_res[0]: 14
+@cqe_total: 20
+@defer_total: 0
+@enter_bench: 7
+@enter_by_tid[62114]: 7
+@enter_global: 13
+@epoll_wait: 6
+@eventfd2: 4
+@eventfd_write: 0
+@exit_total: 7
+@flags_hist[0]: 3
+@flags_hist[1]: 4
+@futex_total: 28
+@futex_wait: 0
+@futex_wake: 0
+@iouring_register: 12
+@iouring_setup: 4
+@mc_hist[0]: 3
+@mc_hist[1]: 4
+@queue_async_work: 10
+@ret_hist[2]: 3
+@ret_hist[1]: 4
+@sqe_opcode[21]: 4
+@sqe_opcode[22]: 6
+@sqe_opcode[29]: 10
+@sqe_total: 20
+@timer_create: 0
+@timerfd_create: 102
+@ts_hist[2]: 3
+@ts_hist[1]: 4

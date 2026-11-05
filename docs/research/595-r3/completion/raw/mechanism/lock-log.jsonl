@@ -1,0 +1,4 @@
+{"event": "mechanism-diagnostic-session", "acquired_utc": "2026-11-05T11:52:01Z", "released_utc": "2026-11-05T11:52:01Z", "wait_s": 0.0, "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock", "inode": 6941075}
+{"event": "mechanism-diagnostic-session", "acquired_utc": "2026-11-05T11:53:16Z", "released_utc": "2026-11-05T12:00:21Z", "wait_s": 0.0, "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock", "inode": 6941075}
+{"event": "mechanism-diagnostic-phase2", "acquired_utc": "2026-11-05T12:01:08Z", "released_utc": "2026-11-05T12:01:10Z", "wait_s": 0.0, "inode": 6941075}
+{"event": "mechanism-diagnostic-phase2", "acquired_utc": "2026-11-05T12:01:27Z", "released_utc": "2026-11-05T12:01:38Z", "wait_s": 0.0, "inode": 6941075}

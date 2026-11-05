@@ -1,0 +1,3 @@
+                     USER        PID ACCESS COMMAND
+/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock:
+                     jnhu      53937 F.... bash

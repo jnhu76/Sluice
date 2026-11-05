@@ -1,0 +1,7 @@
+{
+ "phase": "PROT-W02-D16",
+ "verdict": "PASS",
+ "comparison": "B_R2 - A_R2",
+ "semanticsReady": false,
+ "source": "SUMMARY.json"
+}
