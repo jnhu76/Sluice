@@ -317,6 +317,20 @@ struct Record {
     std::uint64_t r3_ineligible_fallbacks = 0;
     std::uint64_t r3_gate_stops = 0;
     std::uint64_t r3_untouched = 0;
+
+    std::uint64_t r4_batch_presentations = 0;
+    std::uint64_t r4_cap_reentries = 0;
+    std::uint64_t r4_chunk_reentries = 0;
+    std::uint64_t r4_immediate_decisions = 0;
+    std::uint64_t r4_authority_exits = 0;
+    std::uint64_t r4_quantum1 = 0;
+    std::uint64_t r4_quantum2 = 0;
+    std::uint64_t r4_quantum8 = 0;
+    std::uint64_t r4_active_zero_decisions = 0;
+    std::uint64_t r4_pressure_decisions = 0;
+    std::uint64_t r4_shadow_decisions = 0;
+    std::uint64_t r4_shadow_outstanding_sum = 0;
+    std::uint64_t r4_shadow_window_sum = 0;
 };
 
 inline std::string json_escape(const std::string& in) {
@@ -386,6 +400,12 @@ inline void emit_record(const Record& r) {
         "\"r3_suffix_single_calls\":%llu,\"r3_flush_attempts\":%llu,"
         "\"r3_ineligible_fallbacks\":%llu,\"r3_gate_stops\":%llu,"
         "\"r3_untouched\":%llu,"
+        "\"r4_batch_presentations\":%llu,\"r4_cap_reentries\":%llu,"
+        "\"r4_chunk_reentries\":%llu,\"r4_immediate_decisions\":%llu,"
+        "\"r4_authority_exits\":%llu,\"r4_quantum1\":%llu,\"r4_quantum2\":%llu,"
+        "\"r4_quantum8\":%llu,\"r4_active_zero_decisions\":%llu,"
+        "\"r4_pressure_decisions\":%llu,\"r4_shadow_decisions\":%llu,"
+        "\"r4_shadow_outstanding_sum\":%llu,\"r4_shadow_window_sum\":%llu,"
         "\"stats_submit_calls\":%llu,\"stats_submitted_ops\":%llu,\"stats_poll_calls\":%llu,"
         "\"stats_wait_calls\":%llu,\"stats_completed_ops\":%llu,\"stats_canceled_ops\":%llu,"
         "\"stats_completion_errors\":%llu,\"stats_short_completions\":%llu,"
@@ -417,6 +437,19 @@ inline void emit_record(const Record& r) {
         static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
         static_cast<unsigned long long>(r.r3_gate_stops),
         static_cast<unsigned long long>(r.r3_untouched),
+        static_cast<unsigned long long>(r.r4_batch_presentations),
+        static_cast<unsigned long long>(r.r4_cap_reentries),
+        static_cast<unsigned long long>(r.r4_chunk_reentries),
+        static_cast<unsigned long long>(r.r4_immediate_decisions),
+        static_cast<unsigned long long>(r.r4_authority_exits),
+        static_cast<unsigned long long>(r.r4_quantum1),
+        static_cast<unsigned long long>(r.r4_quantum2),
+        static_cast<unsigned long long>(r.r4_quantum8),
+        static_cast<unsigned long long>(r.r4_active_zero_decisions),
+        static_cast<unsigned long long>(r.r4_pressure_decisions),
+        static_cast<unsigned long long>(r.r4_shadow_decisions),
+        static_cast<unsigned long long>(r.r4_shadow_outstanding_sum),
+        static_cast<unsigned long long>(r.r4_shadow_window_sum),
         static_cast<unsigned long long>(r.stats_submit_calls),
         static_cast<unsigned long long>(r.stats_submitted_ops),
         static_cast<unsigned long long>(r.stats_poll_calls),
@@ -457,6 +490,25 @@ inline void print_record(const Record& r) {
                     static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
                     static_cast<unsigned long long>(r.r3_gate_stops),
                     static_cast<unsigned long long>(r.r3_untouched));
+    }
+    if (r.r4_batch_presentations != 0 || r.r4_shadow_decisions != 0) {
+        std::printf("      r4 presentations=%llu cap_reentries=%llu chunk_reentries=%llu "
+                    "immediate=%llu authority=%llu q1=%llu q2=%llu q8=%llu "
+                    "active_zero=%llu pressure=%llu shadow_decisions=%llu "
+                    "shadow_outstanding_sum=%llu shadow_window_sum=%llu\n",
+                    static_cast<unsigned long long>(r.r4_batch_presentations),
+                    static_cast<unsigned long long>(r.r4_cap_reentries),
+                    static_cast<unsigned long long>(r.r4_chunk_reentries),
+                    static_cast<unsigned long long>(r.r4_immediate_decisions),
+                    static_cast<unsigned long long>(r.r4_authority_exits),
+                    static_cast<unsigned long long>(r.r4_quantum1),
+                    static_cast<unsigned long long>(r.r4_quantum2),
+                    static_cast<unsigned long long>(r.r4_quantum8),
+                    static_cast<unsigned long long>(r.r4_active_zero_decisions),
+                    static_cast<unsigned long long>(r.r4_pressure_decisions),
+                    static_cast<unsigned long long>(r.r4_shadow_decisions),
+                    static_cast<unsigned long long>(r.r4_shadow_outstanding_sum),
+                    static_cast<unsigned long long>(r.r4_shadow_window_sum));
     }
 }
 
