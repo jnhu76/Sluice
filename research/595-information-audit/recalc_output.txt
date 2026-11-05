@@ -1,0 +1,95 @@
+== TRIPLET-W03-D16 ==
+A0: invocations=120 unique_ts=24 all_ok=True ops=2400000 entry=0 group=0 single=0 suffix=0 accepted=0 prefix_max=0
+A1: invocations=120 unique_ts=24 all_ok=True ops=2400000 entry=2400000 group=0 single=2400000 suffix=0 accepted=2400000 prefix_max=1
+B: invocations=120 unique_ts=24 all_ok=True ops=2400000 entry=1324370 group=153700 single=1170670 suffix=1170640 accepted=2400000 prefix_max=8
+B measured reps=120 invocations(24 expected)=24
+B total requests=2400000 multi-member group entries=153700
+single_calls - suffix_single_calls = 30
+avg ACCEPTED prefix per multi-member group = 8.00 (cap)
+avg PRESENTED size per multi-member group = 15.61 (accepted prefix + untouched suffix; caller refill span)
+identity: top-level presentations 2400000 + suffix re-presentations 1170640 = 3570640 entry presentations (each of 2400000 ops presented once at top level)
+
+== AB-W02R3-D2 ==
+B: reps=120 ops=2400000 entry=2399880 group=120 single=2399760 suffix=0 prefix_max=2
+
+== mechanism-9_3 enter_summary.json ==
+{
+ "note": "positional strace parse: io_uring_enter(fd,to_submit,min_complete,flags,...); pure = to_submit>0 and min_complete==0; per run = 3 phases x 20000 = 60000 data SQE",
+ "arms": {
+  "A0": [
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   }
+  ],
+  "A1": [
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   }
+  ],
+  "B": [
+   {
+    "pure_submit_enters": 33750,
+    "to_submit_hist": {
+     "8": 3750,
+     "1": 30000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 33750,
+    "to_submit_hist": {
+     "8": 3750,
+     "1": 30000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submi
+
+== published summaries ==
+--- TRIPLET-W03-D16/summary.json: top-level keys = ['bootstrap', 'comparisons', 'label', 'main_gate_B_A0', 'main_gate_sign_consistency', 'main_gate_stats', 'mechanism_counters', 'n_triplets', 'phase_dir', 'records_total', 'records_valid']
+--- AB-W02R3-D2/summary.json: top-level keys = ['arms', 'label', 'metrics', 'n_pairs', 'nc_pass', 'negative_control', 'phase_dir', 'records_total', 'records_valid', 'verdict']

@@ -1,0 +1,680 @@
+{
+  "meta": {
+    "audit": "#595 scheduling-information supply and gap audit",
+    "product_sha": "48d9be5e276ef4a978e4ee298e21a0a065f282f9",
+    "r3_tree_sha": "0ac2b582c36f0a9013cfc1b3d024fd3bf258d837",
+    "source_ref_prefixes": {
+      "P:": "product origin/master 48d9be5e file:line",
+      "R3:": "PR #627 tree (patch files under docs/research/595-r3/)"
+    },
+    "availability_vocabulary": [
+      "USED_NOW",
+      "READABLE_AT_DECISION",
+      "DERIVABLE_WITH_LOCAL_COST",
+      "CROSS_OWNER_OR_NEW_SYNC",
+      "CALLER_HINT_REQUIRED",
+      "BENCH_OR_DIAGNOSTIC_ONLY",
+      "NOT_AVAILABLE"
+    ],
+    "notes": "R3 scope rows describe patch-only prototype mechanisms; none are in master. Access costs marked UNMEASURED were not measured this round."
+  },
+  "items": [
+    {
+      "id": "I01_ready_set_presentation",
+      "meaning": "Caller-owned set of dependency-satisfied ReadOps not yet handed to the context: exact count, member order, group (refill-burst) boundary. Unit: items per presentation.",
+      "scope": "PRODUCT bench caller constructs ops one-at-a-time (no batch presentation); R3 delta_w03 refills into a ready span and presents it to the batch entry",
+      "producer": "application/bench loop",
+      "authoritative_owner": "application (window deque / ready vector)",
+      "update_events": "window fill/resize, per settled request, refill granularity choice",
+      "readers": "P: bench/bench_w03_external_loop.cpp:330-419 (A0 inline submit); R3: continuation/evidence/delta_w03.patch (ready vector + adapter->submit)",
+      "decision_site": "PRODUCT submit decision is per-item at ctx.submit_read; the set never exists as one object. R3: decision at adapter submit sees ready.size()",
+      "source_refs": [
+        "P: bench/bench_w03_external_loop.cpp:339-358",
+        "R3: continuation/evidence/delta_w03.patch:27-52",
+        "R3: completion/evidence/r3-completion.patch:451-502 (Adapter::submit)"
+      ],
+      "availability": "CALLER_HINT_REQUIRED",
+      "consistency": "exact within the caller thread; no cross-thread exposure",
+      "access_cost": "free for the caller; invisible to the library unless a batch entry presents it",
+      "semantic_limit": "presentation shape is a caller policy; readiness of an op means caller dependency satisfied, not admission granted",
+      "algorithm_action": "determines the maximum batch the backend may form without waiting; the only input that made R3 batching possible in W03",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "product has no API to present it; W02 caller presents 1 per refill (RECALCULATED: entry=19,999/rep)"
+    },
+    {
+      "id": "I02_core_admission_capacity",
+      "meaning": "RequestCore slot availability and admission_open. reserve() returns capacity/would_block/admission_closed. Unit: slots.",
+      "scope": "PRODUCT + R3",
+      "producer": "RequestCore::reserve/rollback/accept/reclaim",
+      "authoritative_owner": "RequestCore (mutex_)",
+      "update_events": "reserve, rollback, accept, reclaim, close_admission",
+      "readers": "every submit; P: src/async/async_io_context.cpp:356-363 (under access_mtx_), src/async/uring_backend.cpp:447-457 (reserve inside submit_request)",
+      "decision_site": "THE per-request admission decision; batch entry performs the same reserve per member",
+      "source_refs": [
+        "P: include/sluice/async/detail/request_core.hpp:166-198,287-295",
+        "P: src/async/uring_backend.cpp:447",
+        "R3: completion/evidence/r3-completion.patch:1096-1112 (admit_ loop)"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact under core mutex_; reserve is the commit point (REQ-02)",
+      "access_cost": "mutex + slot pop per request; uncontended in single-submitter W03",
+      "semantic_limit": "admission decision only; capacity!=queue_depth!=device queue (TERM-01 discipline)",
+      "algorithm_action": "stop accepting / backpressure a batch member (would_block)",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I03_dispatch_queue_depth",
+      "meaning": "Accepted requests pushed to BoundedDispatchQueue but not yet converted to SQE. Unit: entries.",
+      "scope": "PRODUCT + R3",
+      "producer": "dispatch_after_accept / batch push (R3)",
+      "authoritative_owner": "UringAsyncBackend (dispatch_mtx_)",
+      "update_events": "push after accept, pop by dispatch_one_locked, poison drain",
+      "readers": "drain loop in poll() and dispatch_after_accept; P: src/async/uring_transport.cpp:72-95,130-209,211-216; depth accessor exists only as dispatch_size_for_test",
+      "decision_site": "drain loop reads front/empty each iteration; depth number itself is not read by any production decision",
+      "source_refs": [
+        "P: src/async/uring_transport.cpp:79-91",
+        "P: include/sluice/async/detail/uring_backend.hpp:114,321-322"
+      ],
+      "availability": "READABLE_AT_DECISION",
+      "consistency": "exact under dispatch_mtx_",
+      "access_cost": "mutex-held ordinary read; bounded ring O(1)",
+      "semantic_limit": "residue>0 means a dispatch obligation (PROG-01); it is not an enter-amortization signal by itself",
+      "algorithm_action": "batch drains it; depth-delta across passes would be the Shenango-style congestion signal",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "production has no numeric reader (test seam only)"
+    },
+    {
+      "id": "I04_transport_ledger_residue",
+      "meaning": "SQEs prepared but not yet consumed by an io_uring enter (operation + cancel_control kinds, physical position, cookie). Unit: entries.",
+      "scope": "PRODUCT + R3",
+      "producer": "dispatch_one_locked append; issue_running_cancel_locked_ append",
+      "authoritative_owner": "TransportLedger under dispatch_mtx_ (authoritative vs kernel SQ head)",
+      "update_events": "append on SQE prep, pop_front on enter success, reconcile on retryable error/poison/overflow flush",
+      "readers": "submit_transport_locked (empty->no enter), dispatch_retry_remains_locked_, reconcile; size accessor test-only",
+      "decision_site": "empty test gates whether an enter happens at all; residue>0 = retry obligation reported in ProgressPass",
+      "source_refs": [
+        "P: src/async/uring_transport.cpp:218-235,211-216,298-335",
+        "P: src/async/uring_backend.hpp:208,314"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact vs kernel SQ head (io_uring_sq_ready free-running counters)",
+      "access_cost": "mutex-held; size O(1)",
+      "semantic_limit": "prepared != consumed != in-flight; counts cancel controls too (separable by Kind)",
+      "algorithm_action": "enter/no-enter decision; retry-cadence scheduling (10ms)",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I05_kernel_consumed_inflight_data",
+      "meaning": "Data SQEs consumed by the kernel with no terminal yet: router entries in_use with terminal_delivered=false, counted by live_cookies_. Unit: entries.",
+      "scope": "PRODUCT + R3",
+      "producer": "dispatch_one_locked (cookie alloc), finalize_operation_terminal_ (terminal), retire_router_entry_",
+      "authoritative_owner": "router_ vector + live_cookies_ atomic (backend)",
+      "update_events": "SQE prep, CQE handled, control CQE, poison Class-A recovery",
+      "readers": "destructor/internal_work_retired quiescence checks; count readable but no production numeric reader",
+      "decision_site": "not read by any submit decision; used for shutdown convergence only",
+      "source_refs": [
+        "P: src/async/uring_transport.cpp:161-208,559-582",
+        "P: src/async/uring_completion.cpp:23-97,148-198",
+        "P: include/sluice/async/detail/uring_backend.hpp:324-326"
+      ],
+      "availability": "READABLE_AT_DECISION",
+      "consistency": "exact (single authority); live_cookies_ atomic relaxed is a count only",
+      "access_cost": "count free (atomic); per-entry detail needs dispatch_mtx_",
+      "semantic_limit": "inflight>0 does NOT promise a timely CQE nor justify deferring anything; includes no cancel/control (those are I06)",
+      "algorithm_action": "VLDB-style 'outstanding' input for a defer-to-batch rule — but deferring contradicts IMMEDIATE, so no current consumer",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "no accessor outside backend; per-request age absent (see I14)"
+    },
+    {
+      "id": "I06_control_sqes_and_intents",
+      "meaning": "Cancel machinery: pending_control_count_ (intents without SQE), RouterEntry.control_state none/prepared/submitted, live_control_sqes_ (consumed, awaiting control CQE), control_pending flags. Unit: entries.",
+      "scope": "PRODUCT + R3",
+      "producer": "cancel_key/issue_running_cancel_locked_/service_pending_controls_locked_",
+      "authoritative_owner": "backend under dispatch_mtx_ + core control refs",
+      "update_events": "cancel request, SQE alloc failure->intent, enter consumption, control CQE, poison",
+      "readers": "service_pending_controls gate (pending_control_count_!=0); R3 batch entry reads pending_control_count_!=0 as a batch gate (ReadyBatchStop::control)",
+      "decision_site": "PRODUCT: controls serviced each pass; R3: stops the batch prefix when nonzero",
+      "source_refs": [
+        "P: src/async/uring_transport.cpp:584-711",
+        "R3: completion/evidence/r3-completion.patch:1077-1081"
+      ],
+      "availability": "PRODUCT USED_NOW / R3 USED_NOW (as gate)",
+      "consistency": "exact under dispatch_mtx_; mutant-guarded counters",
+      "access_cost": "int read under lock; service scan is capacity-sized only when count!=0",
+      "semantic_limit": "a prepared cancel SQE is mandatory progress work, never deferrable behind a batch",
+      "algorithm_action": "priority stop: data batching must yield to controls (R3 stop=control)",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I07_cq_available",
+      "meaning": "CQEs visible now (io_uring_cq_ready) plus parked overflow (cq_has_overflow). Unit: entries; overflow is a boolean.",
+      "scope": "PRODUCT + R3",
+      "producer": "kernel posts; read at reap and probe",
+      "authoritative_owner": "kernel shared CQ memory",
+      "update_events": "kernel completion posting, get_events overflow flush, cqe_seen",
+      "readers": "reap_cqes bound (snapshot at entry), has_immediate_physical_work (progress probe + immediate_work_remains)",
+      "decision_site": "wait_one/shutdown park handshake probe; reap bound",
+      "source_refs": [
+        "P: src/async/uring_completion.cpp:200-278",
+        "P: src/async/uring_backend.cpp:285-293,325",
+        "P: include/sluice/async/detail/progress_source.hpp:104-181 (probe slot)"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact snapshot at read; volatile against kernel",
+      "access_cost": "shared-memory read, no syscall; overflow flag cheap",
+      "semantic_limit": "CQE count != runnable app tasks; overflow!=N completions; count at entry is the pass boundary (contract PROG-01)",
+      "algorithm_action": "bounds this pass's reap; residue advertises next-pass obligation",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I08_publication_pending",
+      "meaning": "Terminal chosen and execution borrow retired, not yet published to core. Unit: entries.",
+      "scope": "PRODUCT + R3",
+      "producer": "finalize/poison/cancel push publication_pending_",
+      "authoritative_owner": "backend (dispatch_mtx_)",
+      "update_events": "push on terminal finalize, pop by publish_one in poll pass",
+      "readers": "poll pass_bound snapshot, poll_progress immediate_work_remains",
+      "decision_site": "drives pass work bound and post-pass honest residue (PROG-01)",
+      "source_refs": [
+        "P: src/async/uring_backend.cpp:638-657,310-313",
+        "P: src/async/uring_completion.cpp:85-96"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact under dispatch_mtx_; pass bound is an entry snapshot",
+      "access_cost": "mutex-held size",
+      "semantic_limit": "these are immediate driver work, not accepted-kernel work",
+      "algorithm_action": "sets per-pass publication budget; residue keeps the owner from parking",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I09_owed_delivery",
+      "meaning": "Zero-op publications awaiting delivery sweep: delivery_[slot].event_owed + owed_count_. Unit: entries.",
+      "scope": "PRODUCT + R3",
+      "producer": "publish_zero_op_inline",
+      "authoritative_owner": "backend under dispatch_mtx_ (paired with core control refs)",
+      "update_events": "zero-op publish set, delivery sweep clears",
+      "readers": "poll() owed sweep trigger, owed_visible_locked_ in poll_progress",
+      "decision_site": "immediate_work_remains composition",
+      "source_refs": [
+        "P: src/async/uring_backend.cpp:553-576,658-686,261-267"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact under lock; full capacity scan only when count!=0",
+      "access_cost": "count under lock; scan O(capacity) when owed",
+      "semantic_limit": "delivery obligation; not a latency signal",
+      "algorithm_action": "prevents parking with an owed event",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I10_published_unobserved",
+      "meaning": "Results published with live public bindings not yet observed/consumed. Unit: bindings.",
+      "scope": "PRODUCT + R3",
+      "producer": "core publication transitions",
+      "authoritative_owner": "RequestCore (occupancy().public_bindings)",
+      "update_events": "complete_publication, take_result/consume, discard",
+      "readers": "settlement_converged_, destructor invariant, bench settle loop via request.ready()/take_result",
+      "decision_site": "shutdown convergence; bench settle order (oldest-first FIFO prefix)",
+      "source_refs": [
+        "P: include/sluice/async/detail/request_core.hpp:150-158,178",
+        "P: src/async/async_io_context.cpp:469-477",
+        "P: bench/bench_w03_external_loop.cpp:387-418"
+      ],
+      "availability": "READABLE_AT_DECISION (context-internal); bench reads per-handle readiness",
+      "consistency": "exact under core mutex_",
+      "access_cost": "mutex-held occupancy()",
+      "semantic_limit": "published-unobserved count does not tell which app tasks are runnable (result->task mapping is caller knowledge)",
+      "algorithm_action": "none for submission policy",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I11_cap_depth_budget_distinction",
+      "meaning": "Three different bounds: R3 batch cap=8 (fixed constant), context request_capacity/dispatch bound (configuration), progress-pass work budgets (entry snapshots: publication_pending size, cq_ready at entry). Product has NO batch cap.",
+      "scope": "PRODUCT (capacity, pass budgets) / R3 (cap=8 added)",
+      "producer": "config; R3 constant ready_batch_cap",
+      "authoritative_owner": "backend config / R3 constant",
+      "update_events": "construction; cap never changes",
+      "readers": "R3 submit_ready_reads limit=min(ready,cap,sq_budget); product pass bounds",
+      "decision_site": "R3 batch size; product pass bounds",
+      "source_refs": [
+        "R3: completion/evidence/r3-completion.patch:792,1091 (cap; sq_budget min)",
+        "P: src/async/uring_backend.cpp:639-646,207-229 (pass bounds)",
+        "P: include/sluice/async/detail/uring_backend.hpp:301"
+      ],
+      "availability": "PRODUCT USED_NOW (its own bounds) / R3 USED_NOW",
+      "consistency": "exact",
+      "access_cost": "free",
+      "semantic_limit": "cap is a batch-size bound, not depth control (Kyber contrast); depth!=SQ free!=device queue",
+      "algorithm_action": "R3: stops prefix (stop=cap); adaptive cap would need a policy input (none exists)",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "cap value never tuned; UNMEASURED whether other values help"
+    },
+    {
+      "id": "I12_ready_ns_timestamp",
+      "meaning": "Per-request ready timestamp recorded at ReadOp construction; latency=observed-ready_ns. Unit: ns.",
+      "scope": "BENCH_ONLY (continuation delta, both arms, same semantic point)",
+      "producer": "bench loop (delta_w03.patch)",
+      "authoritative_owner": "bench Inflight record",
+      "update_events": "per constructed op",
+      "readers": "bench latency vector only; never passed to adapter/library/algorithm",
+      "decision_site": "none in-library",
+      "source_refs": [
+        "R3: continuation/evidence/delta_w03.patch:3-12,36-48,52-76",
+        "R3: continuation/evidence/PREREG_ADDENDUM_CONTINUATION.md:26-45"
+      ],
+      "availability": "BENCH_OR_DIAGNOSTIC_ONLY",
+      "consistency": "exact per rep; instrument flag off => zeros",
+      "access_cost": "bench::now_ns per op (instrumented runs only)",
+      "semantic_limit": "post-hoc observability, not online input; unified metric made tail regression visible (owner correction #1)",
+      "algorithm_action": "measurement of ready->observed; would be the per-request age input IF materialized in-library (I14)",
+      "evidence_grade": "RAW_VERIFIED_BY_FLASH (records read in archived jsonl)",
+      "gaps": "not in product; adding it in-library is a per-request cost decision"
+    },
+    {
+      "id": "I13_stage_timestamps_and_enter_hist",
+      "meaning": "Boundaries: construct/submit-call/accept/SQE-prep/enter/return/publish/observe; kernel-side enter to_submit histograms via strace.",
+      "scope": "DIAGNOSTIC_ONLY (R3 harness; mechanism-9_3 strace; buckets sampler app/driver/kernel ticks)",
+      "producer": "R3 harness + strace parse",
+      "authoritative_owner": "E5 session artifacts archived under continuation/raw",
+      "update_events": "per measurement block",
+      "readers": "analysis scripts, receipts",
+      "decision_site": "none",
+      "source_refs": [
+        "R3: continuation/raw/mechanism-9_3/enter_summary.json",
+        "R3: continuation/raw/TRIPLET-W03-D16/results.jsonl (buckets)",
+        "R3: continuation/evidence/A0_AND_SUFFIX_RECEIPT.md:38-56"
+      ],
+      "availability": "BENCH_OR_DIAGNOSTIC_ONLY",
+      "consistency": "exact for what was sampled; windows differ per session",
+      "access_cost": "offline; strace overhead makes instrumented timing non-product-grade",
+      "semantic_limit": "owner correction #4: cycles-delta/enter is a correlated average, not a causal per-enter cost; histograms are post-split submit sizes",
+      "algorithm_action": "none online; evidence for machine-step census",
+      "evidence_grade": "RAW_VERIFIED_BY_FLASH (enter_summary + buckets read directly)",
+      "gaps": "no in-product timing exists at all"
+    },
+    {
+      "id": "I14_request_age_oldest",
+      "meaning": "Per-request arrival/ready age; oldest-ready age; oldest-unsubmitted age. Unit: ns since ready.",
+      "scope": "not in PRODUCT state; not in R3 state; earliest time exists only in bench (I12)",
+      "producer": "would need a timestamp written at readiness (new per-request state)",
+      "authoritative_owner": "none today",
+      "update_events": "n/a",
+      "readers": "none",
+      "decision_site": "would be read at a defer/batch-flush decision; none exists in product",
+      "source_refs": [
+        "P: include/sluice/async/detail/request_core.hpp:257-275 (Slot has no time field)",
+        "P: include/sluice/async/detail/uring_backend.hpp:178-204 (RouterEntry has no time field)"
+      ],
+      "availability": "NOT_AVAILABLE",
+      "consistency": "n/a",
+      "access_cost": "if added: 1 clock read + store per request (per-Request cost, explicitly not assumed free)",
+      "semantic_limit": "mq-deadline needs this only because it queues; Sluice's immediate per-item path has no queue to age-check, and R3's untouched residue lives <1 refill",
+      "algorithm_action": "would gate a defer-until-age-X rule (Kyber/deadline style) — only meaningful if a legal defer path returns",
+      "evidence_grade": "SOURCE_VERIFIED (absence verified by reading Slot/RouterEntry/ReadOp fields)",
+      "gaps": "design decision, not a missing bug"
+    },
+    {
+      "id": "I15_queue_head_tail_sequence",
+      "meaning": "Dispatch/publication ring indices and free-running SQ counters advancing across passes; generation guards for slot reuse/cancel.",
+      "scope": "PRODUCT + R3",
+      "producer": "BoundedDispatchQueue push/pop, sq.sqe_tail, kernel khead, RequestKey generation",
+      "authoritative_owner": "backend (rings) + core (generations)",
+      "update_events": "every push/pop/prep/consume",
+      "readers": "reconcile (sq_ready), cookie identity checks; cross-pass delta computed by nobody",
+      "decision_site": "correctness only today",
+      "source_refs": [
+        "P: src/async/uring_transport.cpp:196-199,298-335",
+        "P: include/sluice/async/detail/request_key.hpp"
+      ],
+      "availability": "DERIVABLE_WITH_LOCAL_COST",
+      "consistency": "exact under locks; generations prevent reuse aliasing",
+      "access_cost": "reading two counters per pass",
+      "semantic_limit": "Shenango-style 'queue grew across checks' is derivable pass-to-pass; not sampled periodically (no sampler exists in-library)",
+      "algorithm_action": "could drive a congestion signal; action today would still be batch-size only",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "no consumer"
+    },
+    {
+      "id": "I16_stage_cost_estimates",
+      "meaning": "Per-stage CPU cost of prep/scan/submit. Online: none. Offline: A1-A0 (adapter prep path) and B-A1 attribution terms.",
+      "scope": "DIAGNOSTIC_ONLY",
+      "producer": "R3 continuation measurements",
+      "authoritative_owner": "archived analysis",
+      "update_events": "per round",
+      "readers": "analysis",
+      "decision_site": "none",
+      "source_refs": [
+        "R3: continuation/analysis/RESULTS_CONTINUATION.md:31-35",
+        "R3: continuation/evidence/PREREG_ADDENDUM_CONTINUATION.md:17-20 (correction #4)"
+      ],
+      "availability": "BENCH_OR_DIAGNOSTIC_ONLY",
+      "consistency": "statistical (bootstrap, triplet-paired)",
+      "access_cost": "offline",
+      "semantic_limit": "A1-A0 is whole-path difference, not per-item isolation; no per-enter causal constant may be derived (forbidden inference)",
+      "algorithm_action": "none",
+      "evidence_grade": "RECALCULATED (headline numbers re-derived from summary.json/raw)",
+      "gaps": "UNMEASURED per-mechanism costs in product"
+    },
+    {
+      "id": "I17_latency_distribution_in_library",
+      "meaning": "Latency histogram/percentiles by op/backend/shape maintained where decisions could read them.",
+      "scope": "not in PRODUCT; BENCH_ONLY percentiles per rep",
+      "producer": "AsyncStats has counters only (P: include/sluice/measurement.hpp:83-97); bench computes percentiles",
+      "authoritative_owner": "n/a in-library",
+      "update_events": "bench per rep",
+      "readers": "bench/analysis",
+      "decision_site": "none",
+      "source_refs": [
+        "P: include/sluice/measurement.hpp:83-97",
+        "R3: continuation/raw/TRIPLET-W03-D16/results.jsonl (metrics.p95_ns/p99_ns)"
+      ],
+      "availability": "NOT_AVAILABLE (in-library) / BENCH_OR_DIAGNOSTIC_ONLY (offline)",
+      "consistency": "bench: exact per-rep; library: absent",
+      "access_cost": "Kyber-style histogram would need per-completion timestamps + buckets (per-request cost + memory)",
+      "semantic_limit": "statistical latency targets are policy input, not per-request deadlines; none provided by API",
+      "algorithm_action": "would enable Kyber-like depth tuning; out of current scope",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "deliberate absence; TERM-01 derived-summary rules would apply"
+    },
+    {
+      "id": "I18_progress_owner_identity",
+      "meaning": "Which thread is the fixed progress owner; drive domain active; owner claimed handle. Unit: thread id + flags.",
+      "scope": "PRODUCT + R3",
+      "producer": "drive_entry_admitted_/claim_progress_owner/release",
+      "authoritative_owner": "AsyncIoContext access_mtx_ state",
+      "update_events": "first drive, claim, release",
+      "readers": "every poll_progress/wait_one entry; submit path does not need it (THREAD-01 allows any-thread submit)",
+      "decision_site": "drive gating",
+      "source_refs": [
+        "P: src/async/async_io_context.cpp:179-224",
+        "P: include/sluice/async/async_io_context.hpp:93-111,146-158,336-339"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact under access_mtx_",
+      "access_cost": "one mutex per drive entry",
+      "semantic_limit": "single fixed owner; no live transfer; submitter/driver may differ (W03 bench: submitter thread + driver thread)",
+      "algorithm_action": "ensures one driver executes progress policy",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I19_progress_pass_facts",
+      "meaning": "ProgressPass{completed, immediate_work_remains, accepted_work_remains, dispatch_retry_remains, health_failed} post-pass facts.",
+      "scope": "PRODUCT + R3",
+      "producer": "backend poll_progress composition + core/progress verdicts",
+      "authoritative_owner": "composed per pass from authoritative sources (queue states, outstanding summary, health)",
+      "update_events": "every pass",
+      "readers": "wait_one loop, shutdown loop, external host (W03 driver)",
+      "decision_site": "park vs another pass; retry cadence; the contract-mandated decision inputs",
+      "source_refs": [
+        "P: include/sluice/async/async_io_context.hpp:68-78",
+        "P: src/async/uring_backend.cpp:304-328",
+        "P: src/async/async_io_context.cpp:429-453,573-663"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact per phase; booleans are post-pass facts, not guesses",
+      "access_cost": "a few lock acquisitions per pass",
+      "semantic_limit": "progress-available != request terminal (PROG-01); wake is not a completion guarantee",
+      "algorithm_action": "drives scheduling of the next pass; NOT a batching signal",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I20_park_runnable_waiting_fibers",
+      "meaning": "Caller about to wait/park; other runnable app work exists; count of coroutines/fibers waiting on I/O. Unit: counts/booleans.",
+      "scope": "CALLER_ONLY (product has no runtime; no fiber count anywhere)",
+      "producer": "application/runtime",
+      "authoritative_owner": "application",
+      "update_events": "app scheduling decisions",
+      "readers": "none in-library",
+      "decision_site": "would be the VLDB §3.3.3 ratio input (outstanding I/O vs waiting fibers)",
+      "source_refs": [
+        "R3: VLDB26 §3.3.3 (adaptive batch from outstanding/waiting-fiber ratio) — external",
+        "P: contract TERM-01 Progress owner; W-03 external loop (host owns scheduling)"
+      ],
+      "availability": "CALLER_HINT_REQUIRED",
+      "consistency": "n/a (not provided; no public API exists — must not be invented in the audit)",
+      "access_cost": "if ever provided: one hint per park cycle, producer = app",
+      "semantic_limit": "library cannot guess; wrong guess violates IMMEDIATE; wait_one(timeout) is NOT this budget",
+      "algorithm_action": "defer-enter-to-accumulate rule (VLDB) requires it; without it, batching must be consume-only (IX)",
+      "evidence_grade": "SOURCE_VERIFIED (absence)",
+      "gaps": "design decision whether such a hint should exist"
+    },
+    {
+      "id": "I21_eventfd_handshake_state",
+      "meaning": "notification_pending_ bit + eventfd readable state + drain/acknowledge protocol + io_uring eventfd registration.",
+      "scope": "PRODUCT + R3",
+      "producer": "signal()/interrupt() writes; drain_notification_nolock_; kernel eventfd writes",
+      "authoritative_owner": "ProgressSource (mtx_) + kernel",
+      "update_events": "signal, drain, poll wakeup",
+      "readers": "wait_if_unchanged handshake, external epoll host",
+      "decision_site": "park handshake (PROG-02 five conditions)",
+      "source_refs": [
+        "P: include/sluice/async/detail/progress_source.hpp:397-449,252-264",
+        "P: src/async/uring_backend.cpp:259-283"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact under mtx_; pending bit avoids redundant writes",
+      "access_cost": "eventfd read/write syscalls only when needed",
+      "semantic_limit": "eventfd readable != N data completions; coalescing legal (PROG-02)",
+      "algorithm_action": "wakeup decision",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I22_submitter_driver_split",
+      "meaning": "Submitters may be other threads than the owner (THREAD-01); W03 bench has separate submitter and driver.",
+      "scope": "PRODUCT + R3",
+      "producer": "contract/architecture",
+      "authoritative_owner": "access_mtx_ submit serialization + drive domain",
+      "update_events": "every submit/drive",
+      "readers": "submit path (access_mtx_), drive path",
+      "decision_site": "submit decisions run on submitter thread under access_mtx_; backend dispatch_mtx_ serializes with driver",
+      "source_refs": [
+        "P: docs/explicit-io-contract.md:830-833 (PROG-01)",
+        "P: src/async/async_io_context.cpp:356-363",
+        "P: bench/bench_w03_external_loop.cpp:306-313 (driver thread)"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact via two-mutex layering (access_mtx_ -> dispatch_mtx_ -> core mutex_)",
+      "access_cost": "contention possible across threads; UNMEASURED in product",
+      "semantic_limit": "no owner migration; nested polling forbidden",
+      "algorithm_action": "any batch decision made at submit time is already on the submitting thread (no cross-owner sync needed for caller-presented facts)",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I23_topology_affinity",
+      "meaning": "CPU affinity, SMT/NUMA, thread states. Decision-grade semantics: none in-library.",
+      "scope": "DIAGNOSTIC_ONLY (R3 buckets sampler records per-thread ticks/processor_last; SLUICE_595 cpu_set pinning in bench)",
+      "producer": "OS environment; bench harness",
+      "authoritative_owner": "OS",
+      "update_events": "external",
+      "readers": "harness/analysis",
+      "decision_site": "none",
+      "source_refs": [
+        "R3: continuation/raw/TRIPLET-W03-D16/results.jsonl (before/after cpufreq, cpu_set, buckets.threads)"
+      ],
+      "availability": "BENCH_OR_DIAGNOSTIC_ONLY",
+      "consistency": "sampled (21 samples/invocation, 100Hz ticks)",
+      "access_cost": "harness sampling only",
+      "semantic_limit": "environment config; no in-library decision may depend on it; NOT_RUN: SMT/cross-physical variants",
+      "algorithm_action": "none (Shenango-style core allocation out of library scope)",
+      "evidence_grade": "RAW_VERIFIED_BY_FLASH (bucket records read)",
+      "gaps": "UNMEASURED topology sensitivity (registered NOT_RUN in continuation)"
+    },
+    {
+      "id": "I24_op_semantics_fields",
+      "meaning": "ReadOp{fd, access, dst, len, offset} + zero-op + alignment-agnostic contract semantics; backend prepared_ops_ copy.",
+      "scope": "PRODUCT + R3",
+      "producer": "application constructs; backend validates/copies at accept",
+      "authoritative_owner": "ReadOp (caller) / PreparedUringOp (backend copy)",
+      "update_events": "construction, accept",
+      "readers": "validation (validate_read), SQE prep, R3 batch_eligible_read(len==4096 && dst!=nullptr)",
+      "decision_site": "per-request admission validation; R3 eligibility gate",
+      "source_refs": [
+        "P: include/sluice/async/async_io_context.hpp:30-63",
+        "P: src/async/uring_backend.cpp:94-137,479-486",
+        "R3: completion/evidence/r3-completion.patch:995-1001 (batch_eligible_read)"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact; borrow facts recorded in core at accept",
+      "access_cost": "field reads",
+      "semantic_limit": "len/offset proximity does NOT imply mergeability; zero-len is a legal inline-complete op; R3 eligibility (4k) is a research restriction, not a contract fact",
+      "algorithm_action": "eligibility filter for batching members",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "R3 eligibility restricted to len==4096 (registration noted in RESULTS/README)"
+    },
+    {
+      "id": "I25_dependency_group_wal_knowledge",
+      "meaning": "App-known independence/dependencies, group commit/WAL boundaries, persistence ordering.",
+      "scope": "CALLER_ONLY",
+      "producer": "application",
+      "authoritative_owner": "application",
+      "update_events": "app logic",
+      "readers": "none in-library",
+      "decision_site": "none",
+      "source_refs": [
+        "P: docs/explicit-io-contract.md:195-221 (TERM-01: no scheduling semantics attached to requests)"
+      ],
+      "availability": "CALLER_HINT_REQUIRED",
+      "consistency": "n/a",
+      "access_cost": "n/a",
+      "semantic_limit": "library must not infer groups from fd/offset adjacency (audit constraint); none of this exists as input today",
+      "algorithm_action": "ordering/prioritization would require it; nothing current",
+      "evidence_grade": "SOURCE_VERIFIED (absence)",
+      "gaps": "no API; adding one is a root-amendment matter"
+    },
+    {
+      "id": "I26_deadline_priority_budget",
+      "meaning": "Per-request deadline, max additional submit delay, priority class, throughput/latency preference.",
+      "scope": "NOT_AVAILABLE (no such input exists; wait_one/observer timeouts are wait bounds, not I/O deadlines)",
+      "producer": "none",
+      "authoritative_owner": "n/a",
+      "update_events": "n/a",
+      "readers": "n/a",
+      "decision_site": "n/a",
+      "source_refs": [
+        "P: docs/explicit-io-contract.md:219 (TERM-01 Deadline: time bound on waiting, NOT physical cancellation/settlement)",
+        "P: docs/explicit-io-contract.md:937-949 (PROG-04: expired deadline never cancels I/O)",
+        "P: src/async/async_io_context.hpp:160-168 (wait_one deadline semantics)"
+      ],
+      "availability": "NOT_AVAILABLE",
+      "consistency": "n/a",
+      "access_cost": "n/a",
+      "semantic_limit": "audit constraint: wait timeouts must not be reinterpreted as defer budgets; mq-deadline's soft deadlines have no Sluice counterpart input",
+      "algorithm_action": "priority ordering would need it; nothing current",
+      "evidence_grade": "SOURCE_VERIFIED (absence + contract terms)",
+      "gaps": "would require public API change (root amendment)"
+    },
+    {
+      "id": "I27_mandatory_progress_obligations",
+      "meaning": "fatal_error_/poison, pending controls, close admission, retry residue, shutdown policy/stop, overflow flush duty.",
+      "scope": "PRODUCT + R3",
+      "producer": "backend/core/context transitions",
+      "authoritative_owner": "backend (fatal_error_, pending_control_count_), core (admission_open_, health_failed_), context (stop_policy_, execution_closed_)",
+      "update_events": "poison path, cancel, close_admission, request_stop, overflow flush failure",
+      "readers": "poll_progress health/retry facts, batch gates (R3), wait/shutdown loops",
+      "decision_site": "PRODUCT: gates immediate work + park; R3: ReadyBatchStop::recovery/control stops",
+      "source_refs": [
+        "P: src/async/uring_transport.cpp:337-524,691-711",
+        "P: src/async/async_io_context.cpp:479-563",
+        "R3: completion/evidence/r3-completion.patch:1063-1094"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact; poison sticky under lock; stop_policy monotone atomic",
+      "access_cost": "lock-held reads",
+      "semantic_limit": "obligations are non-deferrable: no batching may delay them (R3 encodes exactly this)",
+      "algorithm_action": "hard stops for any batch policy",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I28_batch_stop_reason_report",
+      "meaning": "R3-only: per-batch report {accepted, untouched_begin, stop: input_exhausted|cap|sq_budget|control|recovery|ineligible|rejected, flush_attempts, residue_advertised, keys[]}.",
+      "scope": "R3 (patch-only)",
+      "producer": "UringAsyncBackend::submit_ready_reads (patch)",
+      "authoritative_owner": "backend under dispatch_mtx_ at the batch call",
+      "update_events": "per batch entry",
+      "readers": "TestAccess::context_submit_ready_reads -> bench Adapter (counter accounting + suffix loop)",
+      "decision_site": "the R3 submit decision: prefix size + suffix per-item fallback",
+      "source_refs": [
+        "R3: completion/evidence/r3-completion.patch:792-815,1003-1179",
+        "R3: completion/evidence/r3-completion.patch:637-746 (context entry incl. precheck prefix, execution_closed_, recovery mapping)",
+        "R3: completion/evidence/r3-completion.patch:483-501 (adapter suffix on untouched_begin)"
+      ],
+      "availability": "BENCH_OR_DIAGNOSTIC_ONLY in product terms (patch not merged); USED_NOW within R3",
+      "consistency": "exact under dispatch_mtx_; sq_budget read under the lock serializing SQE allocation",
+      "access_cost": "one io_uring_sq_space_left shared-memory read per batch + existing locks; UNMEASURED absolute ns",
+      "semantic_limit": "stop reason says why the prefix ended; it is sufficient to re-batch the untouched remainder (same call) without any new state",
+      "algorithm_action": "prefix sizing + suffix policy; re-entry on stop==cap/sq_budget is the identified unused lever",
+      "evidence_grade": "SOURCE_VERIFIED (patch read line-by-line)",
+      "gaps": "not in master; adapter currently discards stop==cap by falling to singles"
+    },
+    {
+      "id": "I29_sq_space_left",
+      "meaning": "io_uring SQ free slots at decision time. Unit: slots.",
+      "scope": "R3 (read at decision); PRODUCT reads sq_ready only inside reconcile accounting, never as a submit limit",
+      "producer": "kernel shared SQ state",
+      "authoritative_owner": "kernel; userspace tail under dispatch_mtx_",
+      "update_events": "continuous (kernel consumption) + local prep",
+      "readers": "R3 submit_ready_reads (limit + post-batch dispatchable clamp); P: reconcile_ledger_with_kernel_locked_",
+      "decision_site": "R3 batch size bound",
+      "source_refs": [
+        "R3: completion/evidence/r3-completion.patch:1088-1094,1120-1131",
+        "P: src/async/uring_transport.cpp:298-335"
+      ],
+      "availability": "R3 USED_NOW / PRODUCT READABLE_AT_DECISION (unused as limit)",
+      "consistency": "approximate-vs-kernel but exact-vs-local-tail under the lock that serializes SQE allocation",
+      "access_cost": "shared-memory read; UNMEASURED",
+      "semantic_limit": "SQ free != core free slots != config depth != device queue",
+      "algorithm_action": "prevents mid-batch enter-for-room; product gets the same effect lazily via dispatch_one_locked's submit-on-full",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "none"
+    },
+    {
+      "id": "I30_outstanding_summary_and_occupancy",
+      "meaning": "Derived outstanding count (updated in the same critical sections) and full occupancy{accepted_live, execution_refs, control_refs, publication_inflight, observer_registrations, public_bindings}.",
+      "scope": "PRODUCT + R3",
+      "producer": "RequestCore transitions",
+      "authoritative_owner": "RequestCore (occupancy() authority; summary explicitly derived, TERM-01)",
+      "update_events": "reserve/accept/publish/observe/release/reclaim",
+      "readers": "outstanding(): backend (accepted_work_remains), context tally (max_outstanding); occupancy(): settlement_converged_, destructor invariant; collect_outstanding: shutdown cancel",
+      "decision_site": "park decision (accepted_work_remains), shutdown convergence",
+      "source_refs": [
+        "P: include/sluice/async/detail/request_core.hpp:135-158,178-197,287-295",
+        "P: src/async/uring_backend.cpp:706-708",
+        "P: src/async/async_io_context.cpp:429-439,469-477"
+      ],
+      "availability": "USED_NOW",
+      "consistency": "exact under core mutex_; summary is non-authoritative by contract (settlement/admission may not rest on it)",
+      "access_cost": "mutex per read; UNMEASURED absolute cost",
+      "semantic_limit": "single undifferentiated outstanding: does NOT separate dispatch/ledger/inflight/published dimensions (I03/I04/I05 do); AsyncStats max_outstanding is a watermark only",
+      "algorithm_action": "VLDB-ratio numerator exists; no denominator (I20); no current batching consumer",
+      "evidence_grade": "SOURCE_VERIFIED",
+      "gaps": "stats-off => max_outstanding watermark absent; counters non-atomic plain fields under distinct locks (bump under dispatch_mtx_, tally under access_mtx_) — consistent by lock discipline, not atomics"
+    }
+  ],
+  "pipeline_census_check": {
+    "claim": "Per-request stage decomposition is exactly tracked by distinct authorities; none is interchangeable",
+    "stages": [
+      {"state": "caller-ready, unsubmitted", "authority": "application window/ready vector (I01)"},
+      {"state": "reserved, accepted (core)", "authority": "RequestCore slots (I02)"},
+      {"state": "dispatched-to-backend, no SQE", "authority": "BoundedDispatchQueue (I03)"},
+      {"state": "SQE prepared, unconsumed", "authority": "TransportLedger (I04)"},
+      {"state": "kernel-consumed, no CQE terminal", "authority": "router_ entries/live_cookies_ (I05)"},
+      {"state": "CQE available, unreaped", "authority": "kernel CQ (I07)"},
+      {"state": "terminal chosen, execution retired, unpublished", "authority": "publication_pending_ (I08); zero-op variant owed_count_ (I09)"},
+      {"state": "published, unobserved", "authority": "core public bindings (I10)"},
+      {"state": "cancel/control SQEs", "authority": "control states + live_control_sqes_ (I06)"}
+    ],
+    "exclusivity": "accepted-side stages are mutually exclusive per request at rest and sum to core accepted_live while in flight; dimensions may coexist transiently during transitions guarded by locks; SQ-free/core-slots/config-depth/inflight/device-capacity are four distinct quantities",
+    "evidence_grade": "SOURCE_VERIFIED"
+  }
+}
