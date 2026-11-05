@@ -151,6 +151,11 @@ struct SharedLoop {
     std::uint64_t empty_wakes = 0;
     std::uint64_t passes = 0;
     std::uint64_t retry_scheduled = 0;
+    // Facts of the most recent owner pass, published for the state-aware
+    // arms; zero new polls are issued for them.
+    std::uint64_t last_pass_completed = 0;
+    bool last_pass_immediate_work = false;
+    bool pressure_seen = false;
     bool driver_attached = false;
     bool stop = false;
     bool driver_failed = false;
@@ -218,6 +223,9 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
         std::size_t batch_completions = 0;
         bool retry_remains = false;
         bool pass_failed = false;
+        std::size_t last_pass_completed = 0;
+        bool last_pass_immediate_work = false;
+        bool saw_pass = false;
         // A pass that owes another transport attempt is handled by the next
         // epoll_wait timeout, so a retry never spins and never strands it.
         for (std::size_t guard = 0; guard < 1000000; ++guard) {
@@ -228,6 +236,9 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
             }
             batch_completions += pass.value().completed;
             retry_remains = pass.value().dispatch_retry_remains;
+            last_pass_completed = pass.value().completed;
+            last_pass_immediate_work = pass.value().immediate_work_remains;
+            saw_pass = true;
             if (!pass.value().immediate_work_remains) {
                 break;
             }
@@ -239,6 +250,11 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
             shared.completions += batch_completions;
             if (retry_remains) {
                 ++shared.retry_scheduled;
+            }
+            if (saw_pass) {
+                shared.last_pass_completed = last_pass_completed;
+                shared.last_pass_immediate_work = last_pass_immediate_work;
+                shared.pressure_seen = true;
             }
             if (pass_failed) {
                 shared.driver_failed = true;
@@ -264,7 +280,7 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
 
 PhaseResult run_external_phase(const LoopParams& params, const std::string& path,
                                bool instrument, bool verify, bool stats_enabled,
-                               bench::r3::Arm arm) {
+                               bench::r3::Arm arm, const char* diag_tag = nullptr) {
     PhaseResult phase;
 
     auto opened = File::open(path, rw_open_existing());
@@ -322,6 +338,24 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
     if (arm != bench::r3::Arm::a0)
         adapter.emplace(ctx, arm);
 
+    // Diagnostic runs only: SLUICE_595_R4_DIAG_LINES=<path> appends one
+    // structured line per budget decision. Never set during timed runs.
+    static std::FILE* diag_stream = [] {
+        const char* path = std::getenv("SLUICE_595_R4_DIAG_LINES");
+        if (path == nullptr || *path == '\0') {
+            return static_cast<std::FILE*>(nullptr);
+        }
+        return std::fopen(path, "a");
+    }();
+    bench::r3::Adapter::TraceSink trace_sink;
+    if (diag_stream != nullptr && adapter.has_value()) {
+        if (diag_tag != nullptr) {
+            std::fprintf(diag_stream, "# phase %s arm=%s\n", diag_tag,
+                         bench::r3::arm_name(arm));
+        }
+        adapter->set_trace_sink(&trace_sink);
+    }
+
     const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
     std::vector<std::vector<std::byte>> buffers(
         params.depth, std::vector<std::byte>(params.block_size));
@@ -378,8 +412,16 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                     ready.push_back(op);
                     ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
                 }
+                bench::r3::DecisionFacts facts;
+                facts.caller_window = window.size();
+                if (adapter->reads_pressure_facts()) {
+                    std::lock_guard<std::mutex> lock(shared.mutex);
+                    facts.last_pass_completed = shared.last_pass_completed;
+                    facts.last_pass_immediate_work = shared.last_pass_immediate_work;
+                    facts.pressure_known = shared.pressure_seen;
+                }
                 auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
-                                               accepted);
+                                               accepted, facts);
                 phase.r3.entry_calls += outcome.counters.entry_calls;
                 phase.r3.group_calls += outcome.counters.group_calls;
                 phase.r3.single_calls += outcome.counters.single_calls;
@@ -392,6 +434,29 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                 phase.r3.gate_stops += outcome.counters.gate_stops;
                 phase.r3.rejected_calls += outcome.counters.rejected_calls;
                 phase.r3.untouched += outcome.counters.untouched;
+                phase.r3.r4_batch_presentations += outcome.counters.r4_batch_presentations;
+                phase.r3.r4_cap_reentries += outcome.counters.r4_cap_reentries;
+                phase.r3.r4_chunk_reentries += outcome.counters.r4_chunk_reentries;
+                phase.r3.r4_immediate_decisions += outcome.counters.r4_immediate_decisions;
+                phase.r3.r4_authority_exits += outcome.counters.r4_authority_exits;
+                phase.r3.r4_quantum1 += outcome.counters.r4_quantum1;
+                phase.r3.r4_quantum2 += outcome.counters.r4_quantum2;
+                phase.r3.r4_quantum8 += outcome.counters.r4_quantum8;
+                phase.r3.r4_active_zero_decisions += outcome.counters.r4_active_zero_decisions;
+                phase.r3.r4_pressure_decisions += outcome.counters.r4_pressure_decisions;
+                phase.r3.r4_shadow_decisions += outcome.counters.r4_shadow_decisions;
+                phase.r3.r4_shadow_outstanding_sum +=
+                    outcome.counters.r4_shadow_outstanding_sum;
+                phase.r3.r4_shadow_window_sum += outcome.counters.r4_shadow_window_sum;
+                if (!trace_sink.records.empty()) {
+                    std::string line;
+                    for (const bench::r3::DecisionRecord& record : trace_sink.records) {
+                        bench::r3::format_decision_record(record, line);
+                        std::fprintf(diag_stream, "%s\n", line.c_str());
+                    }
+                    std::fflush(diag_stream);
+                    trace_sink.records.clear();
+                }
                 const std::size_t accepted_count = accepted.size();
                 for (std::size_t k = 0; k < accepted_count; ++k) {
                     const std::size_t sequence = base + k;
@@ -612,8 +677,11 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     }
 
     const double cpu_before = bench::process_cpu_seconds();
-    const PhaseResult phase =
-        run_external_phase(params, path, false, false, cfg.stats_enabled, arm);
+    const PhaseResult phase = run_external_phase(
+        params, path, false, false, cfg.stats_enabled, arm,
+        (meta.case_id + "/rep" + std::to_string(rep) +
+         (measured ? "/measured" : "/warmup"))
+            .c_str());
     const double cpu_after = bench::process_cpu_seconds();
 
     if (!phase.ok) {
@@ -648,6 +716,19 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
     record.r3_gate_stops = phase.r3.gate_stops;
     record.r3_untouched = phase.r3.untouched;
+    record.r4_batch_presentations = phase.r3.r4_batch_presentations;
+    record.r4_cap_reentries = phase.r3.r4_cap_reentries;
+    record.r4_chunk_reentries = phase.r3.r4_chunk_reentries;
+    record.r4_immediate_decisions = phase.r3.r4_immediate_decisions;
+    record.r4_authority_exits = phase.r3.r4_authority_exits;
+    record.r4_quantum1 = phase.r3.r4_quantum1;
+    record.r4_quantum2 = phase.r3.r4_quantum2;
+    record.r4_quantum8 = phase.r3.r4_quantum8;
+    record.r4_active_zero_decisions = phase.r3.r4_active_zero_decisions;
+    record.r4_pressure_decisions = phase.r3.r4_pressure_decisions;
+    record.r4_shadow_decisions = phase.r3.r4_shadow_decisions;
+    record.r4_shadow_outstanding_sum = phase.r3.r4_shadow_outstanding_sum;
+    record.r4_shadow_window_sum = phase.r3.r4_shadow_window_sum;
 
     std::optional<std::string> stats_failure =
         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
@@ -686,16 +767,18 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
 
     int failed = 0;
 
-    const PhaseResult oracle =
-        run_external_phase(params, path, false, true, cfg.stats_enabled, arm);
+    const PhaseResult oracle = run_external_phase(
+        params, path, false, true, cfg.stats_enabled, arm,
+        (meta.case_id + "/rep" + std::to_string(rep) + "/oracle").c_str());
     if (!oracle.ok) {
         record.ok = false;
         record.failure = "correctness oracle: " + oracle.failure;
         failed = 1;
     }
 
-    const PhaseResult instrumented =
-        run_external_phase(params, path, true, false, cfg.stats_enabled, arm);
+    const PhaseResult instrumented = run_external_phase(
+        params, path, true, false, cfg.stats_enabled, arm,
+        (meta.case_id + "/rep" + std::to_string(rep) + "/instrumented").c_str());
     if (!instrumented.ok) {
         record.ok = false;
         record.failure = "latency pass: " + instrumented.failure;
