@@ -578,6 +578,48 @@ if has_config("liburing") then
     uring_progress_target("uring_flush_count_oracle_test",
                               R .. "tests/uring_flush_count_oracle_test.cpp")
 
+    -- Links the shipped archive rather than a private backend copy.
+    sluice_one_file_target("binary", "test", "uring_ready_batch_research_test", "tests",
+                           {"sluice_core", "sluice_async"})
+    uring_progress_target("uring_ready_batch_fault_test",
+                          R .. "tests/uring_ready_batch_fault_test.cpp")
+
+    -- #595 R3 deterministic ready-batch oracles. The mutant builds falsify one
+    -- readiness/accounting edge each and must be killed by the named assertion
+    -- of the base suite; they are executed and recorded manually.
+    local function r3_ready_batch_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async", R .. "bench")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_HAS_LIBURING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            add_links("uring")
+            add_files(R .. "tests/uring_ready_batch_deterministic_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/uring_transport.cpp",
+                      R .. "src/async/uring_completion.cpp",
+                      R .. "src/async/uring_backend.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    r3_ready_batch_target("uring_ready_batch_deterministic_test")
+    r3_ready_batch_target("uring_ready_batch_det_mut_includes_not_ready",
+                          "SLUICE_READY_BATCH_MUTANT_INCLUDES_PENDING_TRANSPORT")
+    r3_ready_batch_target("uring_ready_batch_det_mut_residue_dropped",
+                          "SLUICE_READY_BATCH_MUTANT_RESIDUE_UNADVERTISED")
+    r3_ready_batch_target("uring_ready_batch_det_mut_redispatch_consumed",
+                          "SLUICE_READY_BATCH_MUTANT_REDISPATCHES_CONSUMED")
+
     -- Corrective-round mutation builds. Each restores one abandoned
     -- advertisement/health mechanism and must be killed by the named test of
     -- the race suite; they are executed and recorded manually, never run as

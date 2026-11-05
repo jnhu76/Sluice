@@ -69,6 +69,14 @@ Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp) {
 std::size_t UringAsyncBackend::poll() {
     return 0;
 }
+UringAsyncBackend::ReadyReadBatchReport
+UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
+    ReadyReadBatchReport report;
+    report.untouched = ready.size();
+    report.stop = ReadyBatchStop::recovery;
+    report.error = IoError{IoError::Code::backend_error};
+    return report;
+}
 void UringAsyncBackend::close_admission() {}
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
@@ -376,6 +384,10 @@ void UringAsyncBackend::retire_execution_resources() noexcept {
     if (!have_ring_) {
         return;
     }
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    if (!have_ring_) {
+        return;
+    }
     if (eventfd_registered_) {
         int rc = 0;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -397,8 +409,8 @@ void UringAsyncBackend::retire_execution_resources() noexcept {
         }
         eventfd_registered_ = false;
     }
-    ::io_uring_queue_exit(&ring_state_->ring);
     have_ring_ = false;
+    ::io_uring_queue_exit(&ring_state_->ring);
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -420,27 +432,234 @@ bool UringAsyncBackend::injected_opcode_probe_failure() noexcept {
 
 #endif
 
+namespace {
+
+constexpr bool batch_eligible_read(const ReadOp& op) noexcept {
+    return op.len == 4096 && op.dst != nullptr;
+}
+
+}
+
+UringAsyncBackend::ReadyReadBatchReport
+UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
+    ReadyReadBatchReport report;
+    if (ready.empty())
+        return report;
+
+    const auto note_outcome = [this](bool accepted, const IoError& error) noexcept {
+        bump(stats_, &AsyncStats::submit_calls);
+        if (accepted) {
+            bump(stats_, &AsyncStats::submitted_ops);
+        } else if (error.code == IoError::Code::would_block) {
+            bump(stats_, &AsyncStats::queue_full_retries);
+        } else if (error.code == IoError::Code::invalid_state) {
+            bump(stats_, &AsyncStats::invalid_state_rejections);
+        }
+    };
+    const auto note_outstanding = [this]() noexcept {
+        if (stats_ == nullptr)
+            return;
+        const std::size_t current = outstanding();
+        if (current > stats_->max_outstanding)
+            stats_->max_outstanding = current;
+    };
+
+    if (ready.size() == 1 || !batch_eligible_read(ready.front())) {
+        const auto admitted =
+            admit_(ready.front(), detail::OperationKind::read, detail::RequestOp::read);
+        if (!admitted.has_value()) {
+            report.stop = ReadyBatchStop::rejected;
+            report.error = admitted.error();
+            report.untouched_begin = 1;
+            report.untouched = ready.size() - 1;
+            note_outcome(false, admitted.error());
+            return report;
+        }
+        const AdmittedOp& a = admitted.value();
+        if (a.zero_op) {
+            publish_zero_op_inline(a.key, a.reservation);
+        } else {
+            const std::uint64_t flushes_before =
+                submit_flushes_.load(std::memory_order_relaxed);
+            dispatch_after_accept(a.reservation);
+            report.flush_attempts = static_cast<std::size_t>(
+                submit_flushes_.load(std::memory_order_relaxed) - flushes_before);
+        }
+        report.keys[0] = a.key;
+        report.accepted = 1;
+        report.untouched_begin = 1;
+        report.untouched = ready.size() - 1;
+        report.stop = ready.size() == 1 ? ReadyBatchStop::input_exhausted
+                                        : ReadyBatchStop::ineligible;
+        note_outcome(true, IoError{});
+        note_outstanding();
+        return report;
+    }
+
+    bool rejected = false;
+    bool ineligible = false;
+    bool advertise = false;
+    std::optional<IoError> poison_error;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        if (!have_ring_) {
+            report.stop = ReadyBatchStop::recovery;
+            report.error = IoError{IoError::Code::backend_error};
+            report.untouched = ready.size();
+            return report;
+        }
+        if (fatal_error_.has_value()) {
+            report.stop = ReadyBatchStop::recovery;
+            report.error = *fatal_error_;
+            report.untouched = ready.size();
+            return report;
+        }
+        if (pending_control_count_ != 0) {
+            report.stop = ReadyBatchStop::control;
+            report.untouched = ready.size();
+            return report;
+        }
+#if !defined(SLUICE_READY_BATCH_MUTANT_INCLUDES_PENDING_TRANSPORT)
+        if (dispatch_retry_remains_locked_()) {
+            report.stop = ReadyBatchStop::recovery;
+            report.error = IoError{IoError::Code::would_block};
+            report.untouched = ready.size();
+            return report;
+        }
+        const std::size_t sq_budget =
+            static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
+        const std::size_t limit = std::min({ready.size(), ready_batch_cap, sq_budget});
+#else
+        const std::size_t limit = std::min(ready.size(), ready_batch_cap);
+#endif
+
+        for (std::size_t i = 0; i < limit; ++i) {
+            if (!batch_eligible_read(ready[i])) {
+                ineligible = true;
+                break;
+            }
+            const auto admitted = admit_(ready[i], detail::OperationKind::read,
+                                         detail::RequestOp::read, true);
+            if (!admitted.has_value()) {
+                rejected = true;
+                report.error = admitted.error();
+                note_outcome(false, admitted.error());
+                break;
+            }
+            report.keys[report.accepted] = admitted.value().key;
+            ++report.accepted;
+            note_outcome(true, IoError{});
+        }
+
+        if (report.accepted != 0) {
+            for (std::size_t i = 0; i < report.accepted; ++i) {
+                dispatch_->push_back(
+                    detail::RequestReservation{report.keys[i].slot, report.keys[i].generation});
+            }
+            // SQ space is read under the lock that serializes every user-space
+            // SQE allocation, so the dispatch loop never submits mid-batch to
+            // make room.
+            const std::uint64_t flushes_before =
+                submit_flushes_.load(std::memory_order_relaxed);
+            const std::size_t sq_free =
+                static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
+            const std::size_t dispatchable = std::min(report.accepted, sq_free);
+            for (std::size_t i = 0; i < dispatchable; ++i) {
+                const detail::RequestReservation emitted{report.keys[i].slot,
+                                                         report.keys[i].generation};
+                if (!dispatch_one_locked(emitted)) {
+                    break;
+                }
+#if defined(SLUICE_READY_BATCH_MUTANT_REDISPATCHES_CONSUMED)
+                dispatch_->push_back(emitted);
+#endif
+            }
+            if (!fatal_error_.has_value()) {
+                (void)submit_transport_locked();
+                service_pending_controls_locked_();
+            }
+            report.flush_attempts = static_cast<std::size_t>(
+                submit_flushes_.load(std::memory_order_relaxed) - flushes_before);
+            if (fatal_error_.has_value()) {
+                poison_error = *fatal_error_;
+                advertise = true;
+            } else if (dispatch_retry_remains_locked_()) {
+                advertise = true;
+            }
+        }
+    }
+
+    if (poison_error.has_value()) {
+        report.stop = ReadyBatchStop::recovery;
+        report.error = *poison_error;
+    } else if (ineligible) {
+        report.stop = ReadyBatchStop::ineligible;
+    } else if (rejected) {
+        report.stop = ReadyBatchStop::rejected;
+    } else if (report.accepted == ready.size()) {
+        report.stop = ReadyBatchStop::input_exhausted;
+    } else if (report.accepted == ready_batch_cap) {
+        report.stop = ReadyBatchStop::cap;
+    } else {
+        report.stop = ReadyBatchStop::sq_budget;
+    }
+    report.untouched_begin = report.accepted + (rejected ? 1 : 0);
+    report.untouched = ready.size() - report.untouched_begin;
+
+    if (report.accepted != 0)
+        note_outstanding();
+#if defined(SLUICE_READY_BATCH_MUTANT_RESIDUE_UNADVERTISED)
+    advertise = false;
+#endif
+    if (advertise) {
+        report.residue_advertised = true;
+        signal_ready_progress();
+    }
+    return report;
+}
+
+
+void UringAsyncBackend::reset_delivery_locked_(detail::SlotIndex slot,
+                                               detail::OperationKind kind) noexcept {
+    DeliveryRecord& record = delivery_[slot.value];
+    if (record.event_owed) {
+        detail::uring_core_handoff_fail_fast();
+    }
+    record.kind = kind;
+    record.event_owed = false;
+    record.owed_key = {};
+}
+
 template <class Op>
-Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
-                                                             detail::RequestOp core_op) {
+Result<UringAsyncBackend::AdmittedOp> UringAsyncBackend::admit_(Op op,
+                                                                detail::OperationKind kind,
+                                                                detail::RequestOp core_op,
+                                                                bool dispatch_locked) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     wait_submit_entry_pause_();
 #endif
     if (auto v = validate_op(op); !v.has_value()) {
-        return make_unexpected<detail::RequestKey>(v.error());
+        return make_unexpected<AdmittedOp>(v.error());
     }
     if (!have_ring_) {
-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
+        return make_unexpected<AdmittedOp>(IoError{IoError::Code::backend_error});
     }
-    if (fatal_error_.has_value()) {
-        return make_unexpected<detail::RequestKey>(*fatal_error_);
+    if (dispatch_locked) {
+        if (fatal_error_.has_value()) {
+            return make_unexpected<AdmittedOp>(*fatal_error_);
+        }
+    } else {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        if (fatal_error_.has_value()) {
+            return make_unexpected<AdmittedOp>(*fatal_error_);
+        }
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::reserve); inj.has_value()) {
-        return make_unexpected<detail::RequestKey>(*inj);
+        return make_unexpected<AdmittedOp>(*inj);
     }
 #endif
 
@@ -453,7 +672,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
                                        ? IoError::Code::invalid_state
                                        : IoError::Code::would_block;
 #endif
-        return make_unexpected<detail::RequestKey>(IoError{code});
+        return make_unexpected<AdmittedOp>(IoError{code});
     }
     const detail::RequestReservation h{reservation.reservation.slot, reservation.reservation.generation};
 
@@ -461,7 +680,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::prepare); inj.has_value()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<detail::RequestKey>(*inj);
+        return make_unexpected<AdmittedOp>(*inj);
     }
 #endif
 
@@ -485,25 +704,18 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
                             ? &statx_buffers_[h.slot.value]
                             : nullptr};
 
-    {
+    if (dispatch_locked) {
+        reset_delivery_locked_(h.slot, kind);
+    } else {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
-        DeliveryRecord& record = delivery_[h.slot.value];
-        // A reserved slot cannot carry an owed event: the owed control
-        // reference pins the slot against reclaim until the delivery sweep
-        // clears the flag.
-        if (record.event_owed) {
-            detail::uring_core_handoff_fail_fast();
-        }
-        record.kind = kind;
-        record.event_owed = false;
-        record.owed_key = {};
+        reset_delivery_locked_(h.slot, kind);
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     if (auto inj = injected_precommit_stage_failure_(SubmitStage::commit); inj.has_value()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<detail::RequestKey>(*inj);
+        return make_unexpected<AdmittedOp>(*inj);
     }
 
     wait_pre_accept_commit_pause_();
@@ -514,19 +726,30 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
     if (!accepted.ok()) {
         (void)core_->rollback(reservation.reservation);
-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
+        return make_unexpected<AdmittedOp>(IoError{IoError::Code::invalid_state});
     }
 
-    if (descriptor.zero_op) {
-        publish_zero_op_inline(accepted.id, h);
+    return AdmittedOp{accepted.id, h, descriptor.zero_op};
+}
+
+template <class Op>
+Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
+                                                             detail::RequestOp core_op) {
+    const auto admitted = admit_(op, kind, core_op);
+    if (!admitted.has_value()) {
+        return make_unexpected<detail::RequestKey>(admitted.error());
+    }
+    const AdmittedOp& a = admitted.value();
+    if (a.zero_op) {
+        publish_zero_op_inline(a.key, a.reservation);
     } else {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
         wait_accepted_pre_dispatch_pause_();
 #endif
-        dispatch_after_accept(h);
+        dispatch_after_accept(a.reservation);
     }
-    return accepted.id;
+    return a.key;
 }
 
 Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp op) {
@@ -732,6 +955,9 @@ void UringAsyncBackend::wait_submit_entry_pause_() noexcept {
 void UringAsyncBackend::wait_pre_accept_commit_pause_() noexcept {
     auto* g = pre_accept_commit_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
+        return;
+    const unsigned call = g->calls.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (call != g->target.load(std::memory_order_acquire))
         return;
     g->exited.store(false, std::memory_order_release);
     g->paused.store(true, std::memory_order_release);

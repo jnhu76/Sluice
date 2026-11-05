@@ -305,6 +305,18 @@ struct Record {
     std::uint64_t stats_max_outstanding = 0;
     std::uint64_t stats_queue_full_retries = 0;
     std::uint64_t stats_invalid_state = 0;
+
+    std::uint64_t r3_arm = 0;
+    std::uint64_t r3_entry_calls = 0;
+    std::uint64_t r3_group_calls = 0;
+    std::uint64_t r3_single_calls = 0;
+    std::uint64_t r3_accepted = 0;
+    std::uint64_t r3_prefix_max = 0;
+    std::uint64_t r3_suffix_single_calls = 0;
+    std::uint64_t r3_flush_attempts = 0;
+    std::uint64_t r3_ineligible_fallbacks = 0;
+    std::uint64_t r3_gate_stops = 0;
+    std::uint64_t r3_untouched = 0;
 };
 
 inline std::string json_escape(const std::string& in) {
@@ -369,6 +381,11 @@ inline void emit_record(const Record& r) {
         "\"lat_p99_ns\":%.1f,\"lat_max_ns\":%.1f,\"lat_mean_ns\":%.1f,\"lat_stddev_ns\":%.1f,"
         "\"submits\":%llu,\"would_block\":%llu,\"notifications\":%llu,\"empty_wakes\":%llu,"
         "\"passes\":%llu,\"waits\":%llu,\"extra_a\":%llu,\"extra_b\":%llu,"
+        "\"r3_arm\":%llu,\"r3_entry_calls\":%llu,\"r3_group_calls\":%llu,"
+        "\"r3_single_calls\":%llu,\"r3_accepted\":%llu,\"r3_prefix_max\":%llu,"
+        "\"r3_suffix_single_calls\":%llu,\"r3_flush_attempts\":%llu,"
+        "\"r3_ineligible_fallbacks\":%llu,\"r3_gate_stops\":%llu,"
+        "\"r3_untouched\":%llu,"
         "\"stats_submit_calls\":%llu,\"stats_submitted_ops\":%llu,\"stats_poll_calls\":%llu,"
         "\"stats_wait_calls\":%llu,\"stats_completed_ops\":%llu,\"stats_canceled_ops\":%llu,"
         "\"stats_completion_errors\":%llu,\"stats_short_completions\":%llu,"
@@ -389,6 +406,17 @@ inline void emit_record(const Record& r) {
         static_cast<unsigned long long>(r.empty_wakes),
         static_cast<unsigned long long>(r.passes), static_cast<unsigned long long>(r.waits),
         static_cast<unsigned long long>(r.extra_a), static_cast<unsigned long long>(r.extra_b),
+        static_cast<unsigned long long>(r.r3_arm),
+        static_cast<unsigned long long>(r.r3_entry_calls),
+        static_cast<unsigned long long>(r.r3_group_calls),
+        static_cast<unsigned long long>(r.r3_single_calls),
+        static_cast<unsigned long long>(r.r3_accepted),
+        static_cast<unsigned long long>(r.r3_prefix_max),
+        static_cast<unsigned long long>(r.r3_suffix_single_calls),
+        static_cast<unsigned long long>(r.r3_flush_attempts),
+        static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
+        static_cast<unsigned long long>(r.r3_gate_stops),
+        static_cast<unsigned long long>(r.r3_untouched),
         static_cast<unsigned long long>(r.stats_submit_calls),
         static_cast<unsigned long long>(r.stats_submitted_ops),
         static_cast<unsigned long long>(r.stats_poll_calls),
@@ -414,6 +442,22 @@ inline void print_record(const Record& r) {
         r.case_id.c_str(), r.rep, r.measured ? "" : " warmup", r.ops, r.wall_s, r.ops_per_sec,
         r.mib_per_sec, r.cpu_s, r.cpu_util * 100.0, r.latency.p50_ns, r.latency.p95_ns,
         r.latency.p99_ns, r.latency.max_ns, r.latency.n);
+    if (r.r3_arm != 0) {
+        std::printf("      r3 arm=%llu entries=%llu groups=%llu singles=%llu accepted=%llu "
+                    "prefix_max=%llu suffix_singles=%llu flushes=%llu ineligible=%llu "
+                    "gate_stops=%llu untouched=%llu\n",
+                    static_cast<unsigned long long>(r.r3_arm),
+                    static_cast<unsigned long long>(r.r3_entry_calls),
+                    static_cast<unsigned long long>(r.r3_group_calls),
+                    static_cast<unsigned long long>(r.r3_single_calls),
+                    static_cast<unsigned long long>(r.r3_accepted),
+                    static_cast<unsigned long long>(r.r3_prefix_max),
+                    static_cast<unsigned long long>(r.r3_suffix_single_calls),
+                    static_cast<unsigned long long>(r.r3_flush_attempts),
+                    static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
+                    static_cast<unsigned long long>(r.r3_gate_stops),
+                    static_cast<unsigned long long>(r.r3_untouched));
+    }
 }
 
 // One timestamp pair; the throughput phase must not call the clock inside its

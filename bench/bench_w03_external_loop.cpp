@@ -2,6 +2,7 @@
 // submitter parks on its own condition variable; neither thread busy-polls.
 
 #include "bench_common.hpp"
+#include "r3_ready_batch.hpp"
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/request.hpp>
@@ -133,6 +134,9 @@ struct LoopParams {
     std::size_t request_count = 20000;
     std::size_t depth = 16;
     std::size_t workers = 4;
+    // 0 means "same as depth".
+    std::size_t max_refill = 0;
+    std::string label_suffix;
 };
 
 // Shared between the driver thread (progress owner) and the submitter. The
@@ -165,6 +169,7 @@ struct PhaseResult {
     std::uint64_t passes = 0;
     std::uint64_t retry_scheduled = 0;
     std::uint64_t submits = 0;
+    bench::r3::Counters r3;
     std::vector<double> latencies;
     AsyncStats stats_delta;
 };
@@ -258,7 +263,8 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
 }
 
 PhaseResult run_external_phase(const LoopParams& params, const std::string& path,
-                               bool instrument, bool verify, bool stats_enabled) {
+                               bool instrument, bool verify, bool stats_enabled,
+                               bench::r3::Arm arm) {
     PhaseResult phase;
 
     auto opened = File::open(path, rw_open_existing());
@@ -312,6 +318,10 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                            [&] { return shared.driver_attached || shared.driver_failed; });
     }
 
+    std::optional<bench::r3::Adapter> adapter;
+    if (arm != bench::r3::Arm::a0)
+        adapter.emplace(ctx, arm);
+
     const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
     std::vector<std::vector<std::byte>> buffers(
         params.depth, std::vector<std::byte>(params.block_size));
@@ -323,7 +333,10 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
         Request<std::size_t> request;
         std::size_t slot = 0;
         std::uint64_t offset = 0;
-        double submitted_ns = 0.0;
+        // Unified latency origin: the instant the ReadOp for this item is fully
+        // built, before any arm-specific submission work. Both arms record it at
+        // the same semantic point so latencies include prep, scan and submit.
+        double ready_ns = 0.0;
     };
 
     AsyncStats before = stats;
@@ -334,27 +347,103 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
     bool failed = false;
     std::string failure;
 
+    const std::size_t max_refill =
+        params.max_refill != 0 ? params.max_refill : params.depth;
+    std::vector<ReadOp> ready;
+    std::vector<double> ready_ns;
+    std::vector<Request<std::size_t>> accepted;
+    if (adapter.has_value()) {
+        ready.reserve(params.depth);
+        ready_ns.reserve(params.depth);
+        accepted.reserve(params.depth);
+    }
     const bench::TimePoint start = bench::now();
     while (settled < params.request_count && !failed) {
         while (window.size() < params.depth && submitted < params.request_count) {
-            const std::size_t slot = submitted % params.depth;
-            const std::uint64_t offset =
-                static_cast<std::uint64_t>(submitted % blocks) * params.block_size;
-            ReadOp op;
-            op.file = NativeFileRef(file);
-            op.dst = buffers[slot].data();
-            op.len = params.block_size;
-            op.offset = offset;
-            ++phase.submits;
-            auto result = ctx.submit_read(op);
-            if (!result.has_value()) {
-                failure = "submit_read rejected: " + describe(result.error());
-                failed = true;
+            const std::size_t want = std::min(
+                {params.depth - window.size(), params.request_count - submitted, max_refill});
+            const std::size_t base = submitted;
+            if (adapter.has_value()) {
+                ready.clear();
+                ready_ns.clear();
+                ready.reserve(want);
+                for (std::size_t k = 0; k < want; ++k) {
+                    const std::size_t sequence = base + k;
+                    const std::size_t slot = sequence % params.depth;
+                    ReadOp op;
+                    op.file = NativeFileRef(file);
+                    op.dst = buffers[slot].data();
+                    op.len = params.block_size;
+                    op.offset = static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
+                    ready.push_back(op);
+                    ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
+                }
+                auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
+                                               accepted);
+                phase.r3.entry_calls += outcome.counters.entry_calls;
+                phase.r3.group_calls += outcome.counters.group_calls;
+                phase.r3.single_calls += outcome.counters.single_calls;
+                phase.r3.accepted += outcome.counters.accepted;
+                phase.r3.prefix_max =
+                    std::max(phase.r3.prefix_max, outcome.counters.prefix_max);
+                phase.r3.suffix_single_calls += outcome.counters.suffix_single_calls;
+                phase.r3.flush_attempts += outcome.counters.flush_attempts;
+                phase.r3.ineligible_fallbacks += outcome.counters.ineligible_fallbacks;
+                phase.r3.gate_stops += outcome.counters.gate_stops;
+                phase.r3.rejected_calls += outcome.counters.rejected_calls;
+                phase.r3.untouched += outcome.counters.untouched;
+                const std::size_t accepted_count = accepted.size();
+                for (std::size_t k = 0; k < accepted_count; ++k) {
+                    const std::size_t sequence = base + k;
+                    window.push_back(
+                        Inflight{std::move(accepted[k]), sequence % params.depth,
+                                 static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
+                                 ready_ns[k]});
+                }
+                phase.submits += accepted_count;
+                submitted += accepted_count;
+                if (outcome.error.has_value()) {
+                    failure = "submit_read rejected: " + describe(*outcome.error);
+                    failed = true;
+                    break;
+                }
+                if (accepted_count != want) {
+                    failure = "research adapter disposed " + std::to_string(accepted_count) +
+                              " of " + std::to_string(want) + " ready reads";
+                    failed = true;
+                    break;
+                }
+            } else {
+                for (std::size_t k = 0; k < want; ++k) {
+                    const std::size_t sequence = base + k;
+                    const std::size_t slot = sequence % params.depth;
+                    ReadOp op;
+                    op.file = NativeFileRef(file);
+                    op.dst = buffers[slot].data();
+                    op.len = params.block_size;
+                    op.offset =
+                        static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
+                    const double op_ready_ns = instrument ? bench::now_ns() : 0.0;
+                    ++phase.submits;
+                    auto result = ctx.submit_read(op);
+                    if (!result.has_value()) {
+                        failure = "submit_read rejected: " + describe(result.error());
+                        failed = true;
+                        break;
+                    }
+                    window.push_back(
+                        Inflight{std::move(result).value(), slot,
+                                 static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
+                                 op_ready_ns});
+                    ++submitted;
+                }
+                if (failed) {
+                    break;
+                }
+            }
+            if (params.max_refill != 0) {
                 break;
             }
-            window.push_back(Inflight{std::move(result).value(), slot, offset,
-                                      instrument ? bench::now_ns() : 0.0});
-            ++submitted;
         }
         if (failed) {
             break;
@@ -409,7 +498,7 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                 }
             }
             if (instrument) {
-                phase.latencies.push_back(bench::now_ns() - front.submitted_ns);
+                phase.latencies.push_back(bench::now_ns() - front.ready_ns);
             }
             phase.bytes += observed.result.value();
             ++phase.ops;
@@ -470,12 +559,16 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
 
 bench::CaseMeta make_meta(const LoopParams& params) {
     bench::CaseMeta meta;
-    meta.case_id = "W03-" + params.backend->name + "-4k-d" + std::to_string(params.depth) +
+    meta.case_id = "W03-" + params.backend->name + "-" +
+                   (params.block_size == 4096 ? "4k" : "64k") + "-d" +
+                   std::to_string(params.depth) +
                    (params.backend->name == "threadpool" ? "-w" + std::to_string(params.workers)
-                                                         : "");
+                                                         : "") +
+                   params.label_suffix;
     meta.workload = "W-03";
     meta.backend = params.backend->name;
-    meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, 4096B positional reads";
+    meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, " +
+                   std::to_string(params.block_size) + "B positional reads";
     meta.cache_policy = "page_cache_resident";
     meta.filesystem = "tmpfs";
     meta.notes = "app-owned epoll loop on the borrowed progress notification fd; "
@@ -504,9 +597,11 @@ void fill_stats(bench::Record& record, const AsyncStats& s) {
 
 int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
                        const std::string& path, std::size_t order_index, std::size_t rep,
-                       bool measured) {
+                       bool measured, bench::r3::Arm arm) {
     const bench::CaseMeta meta = make_meta(params);
     bench::Record record = bench::make_record(meta, cfg, rep, measured, order_index);
+    record.r3_arm = static_cast<std::uint64_t>(arm);
+    record.notes += std::string("; r3_arm=") + bench::r3::arm_name(arm);
 
     if (!params.backend->available) {
         record.ok = false;
@@ -518,7 +613,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
 
     const double cpu_before = bench::process_cpu_seconds();
     const PhaseResult phase =
-        run_external_phase(params, path, false, false, cfg.stats_enabled);
+        run_external_phase(params, path, false, false, cfg.stats_enabled, arm);
     const double cpu_after = bench::process_cpu_seconds();
 
     if (!phase.ok) {
@@ -543,6 +638,16 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     record.empty_wakes = phase.empty_wakes;
     record.passes = phase.passes;
     record.extra_a = phase.retry_scheduled;
+    record.r3_entry_calls = phase.r3.entry_calls;
+    record.r3_group_calls = phase.r3.group_calls;
+    record.r3_single_calls = phase.r3.single_calls;
+    record.r3_accepted = phase.r3.accepted;
+    record.r3_prefix_max = phase.r3.prefix_max;
+    record.r3_suffix_single_calls = phase.r3.suffix_single_calls;
+    record.r3_flush_attempts = phase.r3.flush_attempts;
+    record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
+    record.r3_gate_stops = phase.r3.gate_stops;
+    record.r3_untouched = phase.r3.untouched;
 
     std::optional<std::string> stats_failure =
         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
@@ -582,7 +687,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     int failed = 0;
 
     const PhaseResult oracle =
-        run_external_phase(params, path, false, true, cfg.stats_enabled);
+        run_external_phase(params, path, false, true, cfg.stats_enabled, arm);
     if (!oracle.ok) {
         record.ok = false;
         record.failure = "correctness oracle: " + oracle.failure;
@@ -590,7 +695,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
     }
 
     const PhaseResult instrumented =
-        run_external_phase(params, path, true, false, cfg.stats_enabled);
+        run_external_phase(params, path, true, false, cfg.stats_enabled, arm);
     if (!instrumented.ok) {
         record.ok = false;
         record.failure = "latency pass: " + instrumented.failure;
@@ -651,6 +756,31 @@ int main() {
     add(threadpool, 64, 4);
     add(uring, 64, 0);
 
+    if (bench::r3::research_cases_enabled()) {
+        auto add_r3 = [&](std::size_t block_size, std::size_t request_count, std::size_t depth,
+                          std::size_t max_refill, const char* suffix) {
+            LoopParams p;
+            p.backend = &uring;
+            p.block_size = block_size;
+            p.request_count = request_count;
+            p.depth = depth;
+            p.workers = 0;
+            p.max_refill = max_refill;
+            p.label_suffix = suffix;
+            cases.push_back(p);
+        };
+        add_r3(4096, 2, 2, 2, "-r3d2pos");
+        add_r3(4096, 20000, 2, 1, "-r3d2serial");
+        add_r3(4096, 20000, 3, 3, "-r3d3");
+        add_r3(4096, 64, 16, 16, "-r3d16cap");
+        add_r3(65536, 2000, 16, 16, "-r3d16-64k");
+    }
+
+    const bench::r3::Arm arm = bench::r3::arm_from_env();
+    std::printf("research arm=%s (SLUICE_595_R3_ARM), research cases=%s\n",
+                bench::r3::arm_name(arm),
+                bench::r3::research_cases_enabled() ? "on" : "off");
+
     int failed = bench::oracle_self_test_case(cfg);
     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
         const bool measured = round >= cfg.warmup;
@@ -662,7 +792,7 @@ int main() {
                 continue;
             }
             failed += run_one_repetition(cfg, params, path, position,
-                                        measured ? round - cfg.warmup : round, measured);
+                                        measured ? round - cfg.warmup : round, measured, arm);
         }
     }
 

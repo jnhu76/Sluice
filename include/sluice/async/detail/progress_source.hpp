@@ -311,6 +311,14 @@ class ProgressSource {
         prepark_pause_gate_.store(gate, std::memory_order_release);
     }
 
+    void set_settlement_start_pause_gate_for_test(PauseGate* gate) noexcept {
+        settlement_start_gate_.store(gate, std::memory_order_release);
+    }
+
+    void wait_at_settlement_start_for_test() noexcept {
+        pause_at_gate_(settlement_start_gate_);
+    }
+
     void set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
         std::lock_guard<std::mutex> lk(mtx_);
         progress_epoch_ = epoch;
@@ -472,6 +480,7 @@ class ProgressSource {
     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
     std::atomic<PauseGate*> prerevalidate_pause_gate_{nullptr};
     std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
+    std::atomic<PauseGate*> settlement_start_gate_{nullptr};
 #endif
 };
 

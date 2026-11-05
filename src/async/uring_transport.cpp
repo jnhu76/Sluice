@@ -35,6 +35,11 @@ std::size_t UringAsyncBackend::sq_ready_for_test() const noexcept {
     return have_ring_ ? static_cast<std::size_t>(::io_uring_sq_ready(&ring_state_->ring)) : 0;
 }
 
+bool UringAsyncBackend::cq_overflow_for_test() const noexcept {
+    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+    return have_ring_ && ::io_uring_cq_has_overflow(&ring_state_->ring);
+}
+
 std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
     return live_control_sqes_.load(std::memory_order_relaxed);
 }

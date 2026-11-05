@@ -3,11 +3,11 @@
 #include <sluice/async/detail/async_backend.hpp>
 #include <sluice/async/detail/context_identity.hpp>
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/initiation_precheck.hpp>
 #include <sluice/async/detail/request_core.hpp>
 #include <sluice/detail/file_semantics.hpp>
 
 #include <algorithm>
-#include <optional>
 #include <utility>
 #include <vector>
 
@@ -20,10 +20,6 @@ namespace {
 // explicitly scheduled; the interval bounds the retry rate so a persistent
 // EAGAIN/EBUSY cannot busy-spin the owner.
 constexpr std::chrono::milliseconds kTransportRetryInterval{10};
-
-std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::detail::FileOperation op) {
-    return sluice::detail::rejection_of(sluice::detail::precheck_state_op(file.fd < 0, file.access, op));
-}
 
 }
 
@@ -247,7 +243,7 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
 
 
 Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
+    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::read);
         rejection.has_value()) {
         return make_unexpected<Request<std::size_t>>(*rejection);
     }
@@ -269,7 +265,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
 }
 
 Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
+    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::write);
         rejection.has_value()) {
         return make_unexpected<Request<std::size_t>>(*rejection);
     }
@@ -289,7 +285,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
 }
 
 Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
+    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
         rejection.has_value()) {
         return make_unexpected<Request<void>>(*rejection);
     }
@@ -309,7 +305,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
 }
 
 Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
+    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
         rejection.has_value()) {
         return make_unexpected<Request<void>>(*rejection);
     }
@@ -329,7 +325,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
 }
 
 Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
+    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
         rejection.has_value()) {
         return make_unexpected<Request<FileInfo>>(*rejection);
     }
@@ -349,7 +345,7 @@ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
 }
 
 Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
+    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
         rejection.has_value()) {
         return make_unexpected<Request<FileSize>>(*rejection);
     }
@@ -480,6 +476,10 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
     if (execution_closed_) {
         return settlement_outcome_;
     }
+
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    progress_->wait_at_settlement_start_for_test();
+#endif
 
     (void)core_->close_admission();
 

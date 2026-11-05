@@ -38,6 +38,8 @@ struct UringAsyncBackend::PreAcceptCommitPauseGate {
     std::atomic<bool> paused{false};
     std::atomic<bool> resume{false};
     std::atomic<bool> exited{true};
+    std::atomic<unsigned> calls{0};
+    std::atomic<unsigned> target{1};
 };
 
 struct UringAsyncBackend::AcceptedPreDispatchPauseGate {

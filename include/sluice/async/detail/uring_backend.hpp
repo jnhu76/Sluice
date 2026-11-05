@@ -7,6 +7,7 @@
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
 
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <cstddef>
@@ -14,6 +15,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <type_traits>
 #include <vector>
 
@@ -86,6 +88,32 @@ class UringAsyncBackend : public AsyncBackend {
 
     void close_admission();
 
+  public:
+    static constexpr std::size_t ready_batch_cap = 8;
+
+    enum class ReadyBatchStop : std::uint8_t {
+        input_exhausted,
+        rejected,
+        cap,
+        sq_budget,
+        control,
+        recovery,
+        ineligible,
+    };
+
+    struct ReadyReadBatchReport {
+        std::size_t accepted = 0;
+        std::size_t untouched_begin = 0;
+        std::size_t untouched = 0;
+        ReadyBatchStop stop = ReadyBatchStop::input_exhausted;
+        IoError error{};
+        std::array<detail::RequestKey, ready_batch_cap> keys{};
+        std::size_t flush_attempts = 0;
+        bool residue_advertised = false;
+    };
+
+    ReadyReadBatchReport submit_ready_reads(std::span<const ReadOp> ready) noexcept;
+
 #if defined(SLUICE_HAS_LIBURING)
 
     std::size_t slot_capacity() const noexcept override { return capacity_; }
@@ -114,6 +142,7 @@ class UringAsyncBackend : public AsyncBackend {
     std::size_t dispatch_size_for_test() const noexcept;
     std::size_t transport_ledger_size_for_test() const noexcept;
     std::size_t sq_ready_for_test() const noexcept;
+    bool cq_overflow_for_test() const noexcept;
     std::size_t live_control_sqes_for_test() const noexcept;
     unsigned eventfd_registrations_for_test() const noexcept;
     unsigned eventfd_unregistrations_for_test() const noexcept;
@@ -225,6 +254,18 @@ class UringAsyncBackend : public AsyncBackend {
         }
     }
 
+    struct AdmittedOp {
+        detail::RequestKey key{};
+        detail::RequestReservation reservation{};
+        bool zero_op = false;
+    };
+
+    void reset_delivery_locked_(detail::SlotIndex slot, detail::OperationKind kind) noexcept;
+
+    template <class Op>
+    Result<AdmittedOp> admit_(Op op, detail::OperationKind kind, detail::RequestOp core_op,
+                              bool dispatch_locked = false);
+
     template <class Op>
     Result<detail::RequestKey> submit_request(Op op, detail::OperationKind kind,
                                               detail::RequestOp core_op);
@@ -313,7 +354,9 @@ class UringAsyncBackend : public AsyncBackend {
     std::unique_ptr<UringRingState> ring_state_;
     std::unique_ptr<TransportLedger> transport_ledger_;
 
-    bool have_ring_ = false;
+    // Retirement writes it under dispatch_mtx_; submit may read it
+    // concurrently, so the witness itself is atomic.
+    std::atomic<bool> have_ring_{false};
     bool eventfd_registered_ = false;
     std::optional<IoError> fatal_error_;
 
