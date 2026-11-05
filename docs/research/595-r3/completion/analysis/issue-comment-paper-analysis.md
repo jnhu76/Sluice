@@ -22,7 +22,9 @@ bootstrap 10k seed 5950、百分位 95% CI、单侧界、Holm。未测单元一�
 enter 与 A0 完全相同）；cap/suffix 对账闭合（1,355×8+9,160 单=20,000；untouched==
 suffix；flush==entry 无 defer）；两条就绪正控 B 3×to_submit=2；单条补发负控三臂
 逐项相同。PMU cycles −14.1%、进程 CPU −18.1%——方向有利但单窗口带仪器，不作结论。
-与 census 预测（91.5–93.3%）的差距来自稳态 ready 多为 1–2 条与 cap=8 拆批（已登记）。
+与 census 预测（91.5–93.3%）的差距：单条 enter 是拆批后提交尺寸（`single==suffix==
+9,160` → span=1 入口全部为 cap 拆批成员，调用者呈现 ready≥2），主因 cap=8 拆批
+（16→8+逐条 suffix；已登记，口径更正见 analysis/CORRECTIONS.md）。
 
 **裁决**：机制性能 INCONCLUSIVE（W-03 d16 主门一次未测）；产品
 HOLD_NO_REAL_APPLICATION（#604 无 READY_FOR_595）。阻塞链：变异体三态实际已通过

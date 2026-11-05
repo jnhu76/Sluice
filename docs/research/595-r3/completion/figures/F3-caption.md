@@ -20,6 +20,8 @@ time-running=100% / 20 ms 逐 tid 分桶），单窗口，**禁入预注册门�
 
 **主要发现**：减少的 enter 来自**真实的 span>1 成批提交**而非工作转移——A1 走与 B
 完全相同的 adapter 准备路径但 enter 数与 A0 完全相同（60,000）。理论潜力（census 预测
-91.5–93.3%）未全部实现：稳态窗口 ready 多为 1–2 条（24,826/29,225 个 enter 为单条），
-外部循环按完成粒度补发，且 cap=8 把 16 深窗口拆为前缀 8 + 逐条 suffix（设计如此，
-suffix 不二次成组）——与 census 的 d16_full 整窗假设不符（已登记偏差）。
+91.5–93.3%）未全部实现：单条 enter（24,826）是**拆批后**的提交尺寸——计时相位
+`single_calls == suffix_single_calls == 9,160` 说明 span=1 入口全部为 cap 拆批成员
+（调用者每次呈现 ready ≥2，不能由单条 enter 反推组小，2026-11-05 所有者修正）；主因
+是 cap=8 把 16 深窗口拆为前缀 8 + 逐条 suffix（设计如此，suffix 不二次成组）——与
+census 的 d16_full 整窗假设不符（已登记偏差；口径更正见 `analysis/CORRECTIONS.md`）。

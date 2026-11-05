@@ -1,0 +1,11 @@
+acquired_utc=2026-11-05T14:47:27Z
+arm=A0 run=1 rc=0
+arm=A0 run=2 rc=0
+arm=A0 run=3 rc=0
+arm=A1 run=1 rc=0
+arm=A1 run=2 rc=0
+arm=A1 run=3 rc=0
+arm=B run=1 rc=0
+arm=B run=2 rc=0
+arm=B run=3 rc=0
+released_utc=2026-11-05T14:47:54Z

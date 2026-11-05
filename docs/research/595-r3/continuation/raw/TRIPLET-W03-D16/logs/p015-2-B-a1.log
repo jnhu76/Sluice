@@ -1,0 +1,20 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=5 stats_wiring=off
+========================================================
+research arm=B (SLUICE_595_R3_ARM), research cases=off
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-uring-4k-d16 rep=0 warmup] ops=20000 wall=0.0556s 359503 ops/s 1404.3 MiB/s cpu=0.056s util=100.3% | lat p50=42720 p95=50115 p99=72219 max=172080 ns (n=20000)
+      r3 arm=2 entries=11218 groups=1260 singles=9958 accepted=20000 prefix_max=8 suffix_singles=9956 flushes=11218 ineligible=0 gate_stops=0 untouched=9956
+  [W03-uring-4k-d16 rep=0] ops=20000 wall=0.0536s 373040 ops/s 1457.2 MiB/s cpu=0.054s util=100.2% | lat p50=42251 p95=64910 p99=78274 max=172235 ns (n=20000)
+      r3 arm=2 entries=11065 groups=1277 singles=9788 accepted=20000 prefix_max=8 suffix_singles=9788 flushes=11065 ineligible=0 gate_stops=0 untouched=9788
+  [W03-uring-4k-d16 rep=1] ops=20000 wall=0.0536s 373083 ops/s 1457.4 MiB/s cpu=0.054s util=100.1% | lat p50=42305 p95=49762 p99=70642 max=133908 ns (n=20000)
+      r3 arm=2 entries=11064 groups=1277 singles=9787 accepted=20000 prefix_max=8 suffix_singles=9787 flushes=11064 ineligible=0 gate_stops=0 untouched=9787
+  [W03-uring-4k-d16 rep=2] ops=20000 wall=0.0532s 376010 ops/s 1468.8 MiB/s cpu=0.053s util=100.1% | lat p50=41987 p95=50696 p99=71207 max=179965 ns (n=20000)
+      r3 arm=2 entries=11108 groups=1271 singles=9837 accepted=20000 prefix_max=8 suffix_singles=9837 flushes=11108 ineligible=0 gate_stops=0 untouched=9837
+  [W03-uring-4k-d16 rep=3] ops=20000 wall=0.0535s 373943 ops/s 1460.7 MiB/s cpu=0.054s util=100.1% | lat p50=42783 p95=63983 p99=80933 max=131262 ns (n=20000)
+      r3 arm=2 entries=11092 groups=1273 singles=9819 accepted=20000 prefix_max=8 suffix_singles=9819 flushes=11092 ineligible=0 gate_stops=0 untouched=9819
+  [W03-uring-4k-d16 rep=4] ops=20000 wall=0.0554s 360824 ops/s 1409.5 MiB/s cpu=0.055s util=100.1% | lat p50=42215 p95=58597 p99=72274 max=107499 ns (n=20000)
+      r3 arm=2 entries=11026 groups=1282 singles=9744 accepted=20000 prefix_max=8 suffix_singles=9744 flushes=11026 ineligible=0 gate_stops=0 untouched=9744
+
+=== W-03 complete, failing repetitions=0 ===

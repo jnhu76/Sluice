@@ -1,0 +1,32 @@
+{
+ "issue": "header.json balance_check.balanced==False is a checker bug: it compared per-position counts to rounds=4; the frozen rule is 8 per position (24 triplets / 3 arms). The schedule field itself is what was executed.",
+ "schedule_matches_frozen_algorithm": true,
+ "orders_match": true,
+ "per_position_counts": {
+  "0": {
+   "A0": 8,
+   "A1": 8,
+   "B": 8
+  },
+  "1": {
+   "A0": 8,
+   "A1": 8,
+   "B": 8
+  },
+  "2": {
+   "A0": 8,
+   "A1": 8,
+   "B": 8
+  }
+ },
+ "per_position_balanced_8": true,
+ "each_permutation_times": {
+  "BA1A0": 4,
+  "A0A1B": 4,
+  "A1BA0": 4,
+  "A0BA1": 4,
+  "BA0A1": 4,
+  "A1A0B": 4
+ },
+ "each_permutation_is_4": true
+}

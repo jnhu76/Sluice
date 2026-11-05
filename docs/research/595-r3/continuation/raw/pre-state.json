@@ -1,0 +1,40 @@
+{
+ "utc": "2026-11-05T14:37:45Z",
+ "loadavg": [
+  0.283203125,
+  0.2021484375,
+  0.2197265625
+ ],
+ "tmp": {
+  "total": 33626267648,
+  "avail": 32454328320
+ },
+ "cpufreq": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": "1197185"
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": "1197277"
+  }
+ },
+ "ps_top": [
+  "    PID PSR %CPU COMMAND",
+  "  74363  18 66.6 python3",
+  "  74357  16 28.5 run_session_fli",
+  "   2992  14  8.1 zcode-cli",
+  "   2627   3  2.1 node",
+  "   2379  15  0.2 plasma-login-gr",
+  "   2183   9  0.2 kwin_wayland",
+  "   2457   2  0.2 sshd-session",
+  "   2985  10  0.2 zcode-cli",
+  "   1142  16  0.1 systemd-oomd",
+  "    542   4  0.0 btrfs-transaction",
+  "   1953  16  0.0 verge-mihomo",
+  "   1440   3  0.0 containerd",
+  "  73999   8  0.0 kworker/u80:46-btrfs-endio-write",
+  "   1066  15  0.0 irq/45-iwlwifi:default_queue"
+ ],
+ "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock"
+}

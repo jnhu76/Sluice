@@ -1,0 +1,98 @@
+{
+ "phase": "SMOKE-W02",
+ "case": "W02-uring-4k-d2",
+ "pairs": 1,
+ "arms": "AA",
+ "arm_var": "SLUICE_595_R3_ARM",
+ "arm_a": "A0",
+ "arm_b": "A0",
+ "cpu_set": "2",
+ "cpus_monitored": [
+  "2",
+  "12"
+ ],
+ "binary": "/tmp/r3c2-build/linux/x86_64/release/bench_w02_pipeline",
+ "binary_sha256": "5104ce250e073f3403eaec3cab5d441d68965817fa802e37450d62cdcd3b12ab",
+ "expect_sha": "5104ce250e073f3403eaec3cab5d441d68965817fa802e37450d62cdcd3b12ab",
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "warmup": 0,
+ "measured": 1,
+ "stats": 0,
+ "expected_ops": 20000,
+ "tmp_dir": "/tmp/sluice-595-r3flip-bench",
+ "order_rule": "AA: pair even m1,m2 / odd m2,m1",
+ "lock": {
+  "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+  "inode": 6941075,
+  "dev_major": 0,
+  "dev_minor": 53,
+  "holders": []
+ },
+ "started_utc": "2026-11-05T14:37:46Z",
+ "loadavg_start": [
+  0.283203125,
+  0.2021484375,
+  0.2197265625
+ ],
+ "tmp_start": {
+  "total_bytes": 33626267648,
+  "avail_bytes": 32387219456,
+  "used_pct": 3.68
+ },
+ "cpufreq_start": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 3500000
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 1200000
+  }
+ },
+ "binary_sha_ok_start": true,
+ "host_kernel": "7.2.11-200.fc44.x86_64",
+ "runner_argv": [
+  "/home/jnhu/sluice-595-e5/r3-flip-20261105T1428Z/harness/measure_pairs_cont.py",
+  "--phase",
+  "SMOKE-W02",
+  "--phase-dir",
+  "/home/jnhu/sluice-595-e5/r3-flip-20261105T1428Z/raw/smoke-w02",
+  "--case",
+  "W02-uring-4k-d2",
+  "--pairs",
+  "1",
+  "--binary",
+  "/tmp/r3c2-build/linux/x86_64/release/bench_w02_pipeline",
+  "--expect-sha",
+  "5104ce250e073f3403eaec3cab5d441d68965817fa802e37450d62cdcd3b12ab",
+  "--cpu",
+  "2",
+  "--cpus",
+  "2,12",
+  "--arms",
+  "AA",
+  "--arm-var",
+  "SLUICE_595_R3_ARM",
+  "--arm-a",
+  "A0",
+  "--arm-b",
+  "A0",
+  "--env",
+  "SLUICE_BENCH_595_DEPTHS=1",
+  "--warmup",
+  "0",
+  "--measured",
+  "1",
+  "--stats",
+  "0",
+  "--expected-ops",
+  "20000",
+  "--tmp-dir",
+  "/tmp/sluice-595-r3flip-bench",
+  "--lock-file",
+  "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock"
+ ],
+ "runner_sha256": "81b939cf8f5d262f2c1079b3d9d3e18c3eb972a46eeda7f76388379a5c468fdb"
+}

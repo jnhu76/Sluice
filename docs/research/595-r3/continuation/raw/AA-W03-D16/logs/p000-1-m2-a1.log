@@ -1,0 +1,14 @@
+========================================================
+G0 W-03 external event loop benchmark
+warmup=1 measured_repetitions=5 stats_wiring=off
+========================================================
+research arm=A0 (SLUICE_595_R3_ARM), research cases=off
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W03-uring-4k-d16 rep=0 warmup] ops=20000 wall=0.0600s 333601 ops/s 1303.1 MiB/s cpu=0.060s util=100.3% | lat p50=37402 p95=44769 p99=49552 max=113584 ns (n=20000)
+  [W03-uring-4k-d16 rep=0] ops=20000 wall=0.0614s 325985 ops/s 1273.4 MiB/s cpu=0.061s util=100.1% | lat p50=37283 p95=44865 p99=54489 max=103165 ns (n=20000)
+  [W03-uring-4k-d16 rep=1] ops=20000 wall=0.0625s 319920 ops/s 1249.7 MiB/s cpu=0.063s util=100.1% | lat p50=37186 p95=44455 p99=47588 max=86463 ns (n=20000)
+  [W03-uring-4k-d16 rep=2] ops=20000 wall=0.0623s 320995 ops/s 1253.9 MiB/s cpu=0.062s util=100.1% | lat p50=37398 p95=45140 p99=51803 max=154173 ns (n=20000)
+  [W03-uring-4k-d16 rep=3] ops=20000 wall=0.0617s 324309 ops/s 1266.8 MiB/s cpu=0.062s util=100.1% | lat p50=37223 p95=44600 p99=50117 max=99099 ns (n=20000)
+  [W03-uring-4k-d16 rep=4] ops=20000 wall=0.0624s 320727 ops/s 1252.8 MiB/s cpu=0.062s util=100.1% | lat p50=37041 p95=44776 p99=49431 max=102522 ns (n=20000)
+
+=== W-03 complete, failing repetitions=0 ===

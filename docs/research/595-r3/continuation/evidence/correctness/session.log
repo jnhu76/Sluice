@@ -1,0 +1,72 @@
+=== VERIFIER SESSION (independent, §14.3) ===
+acquired_utc=2026-11-05T14:30:48Z
+=== PRE-STATE ===
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+16
+73fa116ff668ea58143ab6666d24684f0eea7f39fcb9e6c03572ae00a7df5560  -
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_deterministic_test
+2dc7b1233d4f602201f0510a4c8f64322409b55cfe4e301432fec781d057bef1  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_det_mut_includes_not_ready
+a90b4916071ba745a8b16ca9795853fbb7b2b5e851ef3d2666809640186d7117  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_det_mut_residue_dropped
+4d5f4390890fa7a01ac85b1e52b3fa23ba51c67a799157e2e77c8113e29c00ad  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_det_mut_redispatch_consumed
+1372b3468b8489367bfe0944bf3f537775cb8d4de9391165ae03120485770a31  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_research_test
+18395c0a570862147436ff11624eec7276ed1851546df8ebb4ad6590a4fe3bba  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_fault_test
+3ccec804d5257a67ccc796b0128b14a704316ee50b591adb5467447327f7bcbf  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/shutdown_lifecycle_test
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  /tmp/r3c2-build/linux/x86_64/release/uring_ready_batch_deterministic_test
+bb142d69788a5931406190022d9774b3c99e1db8f74a523748730271522e73d3  /tmp/r3c2-build/linux/x86_64/release/bench_w03_external_loop
+5104ce250e073f3403eaec3cab5d441d68965817fa802e37450d62cdcd3b12ab  /tmp/r3c2-build/linux/x86_64/release/bench_w02_pipeline
+=== BASE GREEN (frozen deterministic binary, aggregate) ===
+uring_ready_batch_deterministic: all deterministic ready-batch oracles passed
+base_aggregate_rc=0
+=== BASE GREEN (per-scenario, frozen binary) ===
+scenario context_precheck rc=0
+scenario context_cap_suffix rc=0
+scenario inert_context rc=0
+scenario capacity_boundary rc=0
+scenario acceptance_barrier rc=0
+scenario mixed_acceptance rc=0
+scenario shutdown_accepted rc=0
+scenario partial_modes rc=0
+scenario poison_report rc=0
+scenario control_stop rc=0
+scenario gate_defer rc=0
+scenario post_poison_single rc=0
+scenario sq_partial_residue rc=0
+scenario d2_positive rc=0
+scenario d2_negative rc=0
+scenario d1_dependency rc=0
+scenario d3_budget rc=0
+scenario sq_full_residue rc=0
+scenario partial_submit rc=0
+scenario cancel_ordering rc=0
+scenario prepark_wake rc=0
+scenario overflow rc=0
+scenario poison rc=0
+scenario shutdown rc=0
+scenario borrow rc=0
+scenario stale_generation rc=0
+all_scenarios_green=1
+=== MUTANT RED (frozen mutant binaries) ===
+mut_includes_not_ready rc=1
+mut_residue_dropped rc=1
+/home/jnhu/sluice-595-e5/r3-flip-20261105T1428Z/evidence/correctness/run_verification.sh: line 65: 74021 Aborted                    (core dumped) "$FROZEN/uring_ready_batch_det_mut_${m}" > /dev/null 2>&1
+mut_redispatch_consumed rc=134
+=== RESTORED GREEN (isolated-builddir rebuild of same source) ===
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  /tmp/r3c2-build/linux/x86_64/release/uring_ready_batch_deterministic_test
+uring_ready_batch_deterministic: all deterministic ready-batch oracles passed
+restored_green_rc=0
+=== EXISTING REGRESSIONS (frozen binaries) ===
+uring_ready_batch_research_test rc=0
+uring_ready_batch_fault_test rc=0
+uring_submit_boundary_test rc=0
+uring_progress_race_test rc=0
+uring_flush_count_oracle_test rc=0
+uring_external_loop_test rc=0
+uring_public_consumer_probe rc=0
+uring_request_core_integration_test rc=0
+shutdown_lifecycle_test rc=0
+=== POST-STATE ===
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+16
+73fa116ff668ea58143ab6666d24684f0eea7f39fcb9e6c03572ae00a7df5560  -
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_deterministic_test
+released_utc=2026-11-05T14:30:51Z

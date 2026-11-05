@@ -110,17 +110,25 @@ ops，两项恒等式闭合）；每次入口调用恰一次 flush（10,515==10,
 Context 入口但 span=1，其 enter 数与 A0 逐项相同（60,000×1）——enter 减少只能来自
 span>1 的提交分组本身。B−A1 是分离"分组机制"效应的受控对照（配对版未测）。
 
-**理论潜力为何没有全部实现（census 预测 91.5–93.3% vs 实测 51.29%）**：
+**理论潜力为何没有全部实现（census 预测 91.5–93.3% vs 实测 51.29%；口径更正见
+`analysis/CORRECTIONS.md`）**：
 
-1. **稳态 ready 形状**：外部循环按完成粒度补发，稳态窗口 ready 多为 1–2 条
-   （24,826/29,225 个 enter 为单条）——census 的 `d16_full` 整窗 16 条假设与该调用者
-   实际呈现的窗口不符（已登记偏差，未放宽任何门槛）。
-2. **cap=8 拆批**：16 深窗口被 cap 截为前缀 8 + 后 8 条逐条 suffix（设计如此，suffix
-   不二次成组）；SQ 容量 16 本可 8+8 合一次 enter，该策略把后 8 条留在逐条路径。
-3. **首次提交延迟**：B 的组调用在同一 Context 入口内完成 accept→prepare→dispatch→
+1. **enter 直方图是拆批后的提交尺寸，不是进入算法前的组大小**：计数器可区分二者——
+   计时相位 `single_calls == suffix_single_calls == 9,160`，即 span=1 入口**全部**是
+   cap 拆批的 suffix 成员，该相位调用者每次入口呈现的 ready 组 ≥2 条；因此
+   "24,826/29,225 个 enter 为单条"**不能**反推调用者 ready 组多为 1–2 条（2026-11-05
+   所有者修正 #3，原文已更正）。进入算法前的组大小分布未被直接测量；若要归因，须在
+   adapter 入口按呈现尺寸分桶（后续独立候选）。
+2. **cap=8 拆批（当前证据下的主因）**：16 深窗口被 cap 截为前缀 8 + 后 8 条逐条
+   suffix（设计如此，suffix 不二次成组）；SQ 容量 16 本可 8+8 合一次 enter，该策略
+   把后 8 条留在逐条路径——与 census 的 `d16_full` 整窗假设不符（已登记偏差，未放宽
+   任何门槛）。
+3. **SQE/enter 粘连**：hist 中的 2/3/6 条 enter 表明相邻 SQE 偶尔共享一次 enter
+   （flush 边界），对 census 口径的节省率是次级修正。
+4. **首次提交延迟**：B 的组调用在同一 Context 入口内完成 accept→prepare→dispatch→
    一次 flush，无 park/wait 边界（纯 wait enter=0、`submit_with_flags` 仅 4 个探针）；
    入口→enter 的纳秒级延迟因二进制 stripped 不可观测（登记）。
-4. **driver**：三臂 driver 纯 submit 均为 0，提交全部在 submitter 主线程——收益
+5. **driver**：三臂 driver 纯 submit 均为 0，提交全部在 submitter 主线程——收益
    不来自 driver 侧变化。
 
 **通知/等待侧（诊断）**：B 的 completion 通知 1,434 vs A0 3,151（更少的完成批）、
