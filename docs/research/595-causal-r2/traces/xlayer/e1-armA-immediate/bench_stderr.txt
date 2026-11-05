@@ -1,0 +1,2 @@
+S595_TRACE_HOLD waiting for stdin
+S595_TRACE_DUMP path=/home/jnhu/sluice-595-e5/causal-r2/evidence/traces/xlayer/e1-armA-immediate/ev.bin sizeof_record=64 head=42000 kept=42000 dropped=0

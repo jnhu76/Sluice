@@ -1,0 +1,14 @@
+== toolchain ==
+g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+[0m[1mxmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua[0m[0m
+liburing-devel-2.13-2.fc44.x86_64
+Python 3.14.8
+Linux E5 7.2.11-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Thu Oct 15 15:58:58 UTC 2026 x86_64 GNU/Linux
+
+== cpu freq (after runs) ==
+cpu MHz		: 3500.000
+schedutil
+3500000
+
+== perf paranoid ==
+2

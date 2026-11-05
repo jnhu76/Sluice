@@ -1,0 +1,82 @@
+[
+ {
+  "label": "frozen",
+  "phases": {
+   "1": {
+    "defer": 1065,
+    "immediate": 935,
+    "flush": 2000,
+    "defer_ratio": 0.5325,
+    "flush_pred": {
+     "defer": 1065,
+     "immediate": 935,
+     "other": 0
+    }
+   },
+   "2": {
+    "defer": 1043,
+    "immediate": 957,
+    "flush": 2000,
+    "defer_ratio": 0.5215,
+    "flush_pred": {
+     "defer": 1043,
+     "immediate": 957,
+     "other": 0
+    }
+   },
+   "3": {
+    "defer": 1055,
+    "immediate": 945,
+    "flush": 2000,
+    "defer_ratio": 0.5275,
+    "flush_pred": {
+     "defer": 1055,
+     "immediate": 945,
+     "other": 0
+    }
+   }
+  },
+  "exit": 0,
+  "dump_line": "S595_TRACE_DUMP path=raw/trace-companion-cf2/frozen.bin sizeof_record=64 head=42000 kept=42000 dropped=0"
+ },
+ {
+  "label": "deferoff",
+  "phases": {
+   "1": {
+    "defer": 0,
+    "immediate": 2000,
+    "flush": 2000,
+    "defer_ratio": 0.0,
+    "flush_pred": {
+     "defer": 0,
+     "immediate": 2000,
+     "other": 0
+    }
+   },
+   "2": {
+    "defer": 0,
+    "immediate": 2000,
+    "flush": 2000,
+    "defer_ratio": 0.0,
+    "flush_pred": {
+     "defer": 0,
+     "immediate": 2000,
+     "other": 0
+    }
+   },
+   "3": {
+    "defer": 0,
+    "immediate": 2000,
+    "flush": 2000,
+    "defer_ratio": 0.0,
+    "flush_pred": {
+     "defer": 0,
+     "immediate": 2000,
+     "other": 0
+    }
+   }
+  },
+  "exit": 0,
+  "dump_line": "S595_TRACE_DUMP path=raw/trace-companion-cf2/deferoff.bin sizeof_record=64 head=42000 kept=42000 dropped=0"
+ }
+]

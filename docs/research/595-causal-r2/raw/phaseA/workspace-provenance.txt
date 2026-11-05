@@ -1,0 +1,12 @@
+# causal-r2 phaseA workspace provenance (recorded 2026-11-04T16:21:47+08:00)
+base_commit=271b81bfc9d64eecc0266fe7066b9040525dd710
+branch=research-595-r2-causal
+patch_file=/home/jnhu/sluice-595-e5/evidence/measurement/patch.diff
+patch_sha256=7be9d0145a8c268a62d9fa90338b7cda95cefc5f8ad2976e4706cb192fb1eaf0
+tree_diff_sha256=b006dbbf751f5fb2bbe8fb9edb091ae66e57a181b8cf2470d880c9589e1f4072
+reverse_apply_check=PASS
+host_kernel=7.2.11-200.fc44.x86_64
+cpu_model=Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+cpus=20
+governor_cpu2=schedutil
+perf_paranoid=2

@@ -1,0 +1,18 @@
+== 3 generic ==
+        19,224,840      branches                                                              
+            49,372      cache-references                                                      
+             2,815      cache-misses                                                          
+       0.069276342 seconds time elapsed
+== 4 generic ==
+        19,228,525      branches                                                              
+           164,450      branch-misses                                                         
+            54,081      cache-references                                                      
+             3,007      cache-misses                                                          
+       0.067325927 seconds time elapsed
+== 5 generic ==
+        19,240,838      branches                                                                (79.56%)
+           166,532      branch-misses                                                           (79.60%)
+            61,604      cache-references                                                        (79.57%)
+             2,032      cache-misses                                                            (80.83%)
+         6,318,508      bus-cycles                                                              (80.44%)
+       0.063854936 seconds time elapsed

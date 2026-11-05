@@ -1,0 +1,52 @@
+=====syscalls:sys_enter_io_uring_enter=====
+[sudo] password for jnhu: tracepoint:syscalls:sys_enter_io_uring_enter
+    int __syscall_nr
+    unsigned int fd
+    u32 to_submit
+    u32 min_complete
+    u32 flags
+    const void * argp
+    size_t argsz
+=====syscalls:sys_exit_io_uring_enter=====
+tracepoint:syscalls:sys_exit_io_uring_enter
+    int __syscall_nr
+    long ret
+=====io_uring:io_uring_submit_req=====
+tracepoint:io_uring:io_uring_submit_req
+    void * ctx
+    void * req
+    unsigned long long user_data
+    u8 opcode
+    unsigned long long flags
+    bool sq_thread
+    __data_loc char[] op_str
+=====io_uring:io_uring_complete=====
+tracepoint:io_uring:io_uring_complete
+    void * ctx
+    void * req
+    u64 user_data
+    int res
+    unsigned cflags
+    u64 extra1
+    u64 extra2
+=====io_uring:io_uring_task_work_run=====
+tracepoint:io_uring:io_uring_task_work_run
+    void * tctx
+    unsigned int count
+=====io_uring:io_uring_local_work_run=====
+tracepoint:io_uring:io_uring_local_work_run
+    void * ctx
+    int count
+    unsigned int loops
+=====io_uring:io_uring_cqring_wait=====
+tracepoint:io_uring:io_uring_cqring_wait
+    void * ctx
+    int min_events
+=====io_uring:io_uring_task_add=====
+tracepoint:io_uring:io_uring_task_add
+    void * ctx
+    void * req
+    unsigned long long user_data
+    u8 opcode
+    int mask
+    __data_loc char[] op_str

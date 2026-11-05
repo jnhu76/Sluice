@@ -1,0 +1,23 @@
+{
+ "phase": "c1-d2",
+ "case": "W02-uring-4k-d2",
+ "trios": 2,
+ "arms": "ABC",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/three_arm/bin_bench_c1",
+ "binary_sha256": "a5c437f09376880667f858d01f922ef67ecebcc103a58dd0437aaafd4d6660bd",
+ "env_overrides": [
+  "SLUICE_595_C1=1",
+  "SLUICE_595_COUNTERS=0",
+  "SLUICE_BENCH_595_DEPTHS=1",
+  "SLUICE_BENCH_TMP_DIR=/tmp/sluice-595-cost"
+ ],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T23:04:11+0800",
+ "loadavg_start": [
+  0.94189453125,
+  1.23828125,
+  0.8115234375
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

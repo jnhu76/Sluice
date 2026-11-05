@@ -1,0 +1,10 @@
+[sudo] password for jnhu: CPU18 data recorded at offset=0x395000
+    135 bytes in size (4096 uncompressed)
+CPU19 data recorded at offset=0x396000
+    0 bytes in size (0 uncompressed)
+cpus=20
+           sleep-41663 [016] d..2. 18403.476537: sched_switch:         sleep:41663 [120] S ==> swapper/16:0 [120]
+          <idle>-0     [002] d..2. 18403.479069: sched_switch:         swapper/2:0 [120] R ==> rcu_preempt:16 [120]
+     rcu_preempt-16    [002] d..2. 18403.479091: sched_switch:         rcu_preempt:16 [120] I ==> swapper/2:0 [120]
+          <idle>-0     [008] d..2. 18403.479118: sched_switch:         swapper/8:0 [120] R ==> kworker/8:0:37674 [120]
+     kworker/8:0-37674 [008] d..2. 18403.479124: sched_switch:         kworker/8:0:37674 [120] D ==> swapper/8:0 [120]

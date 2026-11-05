@@ -1,0 +1,2 @@
+# ext4 (home fs, page-cache warm) run at archive time:
+path=/tmp/c3-obs/ext4probe rounds=3000 immediate_after_submit=2990 (99.67%) yield1=1 yield2=0 yield3=0 giveup=9

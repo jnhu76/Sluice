@@ -1,0 +1,22 @@
+== 2026-11-04T18:11:49+08:00
+== cmd: bpftool btf dump file /sys/kernel/btf/vmlinux format c | grep -n 'trace_event_raw_io_uring' (struct names only)
+152532:struct trace_event_raw_io_uring_complete {
+152544:struct trace_event_raw_io_uring_cqe_overflow {
+152554:struct trace_event_raw_io_uring_cqring_wait {
+152561:struct trace_event_raw_io_uring_create {
+152571:struct trace_event_raw_io_uring_defer {
+152581:struct trace_event_raw_io_uring_fail_link {
+152592:struct trace_event_raw_io_uring_file_get {
+152601:struct trace_event_raw_io_uring_link {
+152609:struct trace_event_raw_io_uring_local_work_run {
+152617:struct trace_event_raw_io_uring_poll_arm {
+152629:struct trace_event_raw_io_uring_queue_async_work {
+152642:struct trace_event_raw_io_uring_register {
+152652:struct trace_event_raw_io_uring_req_failed {
+152674:struct trace_event_raw_io_uring_short_write {
+152683:struct trace_event_raw_io_uring_submit_req {
+152695:struct trace_event_raw_io_uring_task_add {
+152706:struct trace_event_raw_io_uring_task_work_run {
+155558:struct trace_event_raw_sys_enter {
+155565:struct trace_event_raw_sys_exit {
+rc=0

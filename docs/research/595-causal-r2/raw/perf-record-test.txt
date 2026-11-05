@@ -1,0 +1,14 @@
+[sudo] password for jnhu: [ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.207 MB /tmp/perf-test.data (1014 samples) ]
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 1K of event 'cpu/cycles/P'
+# Event count (approx.): 3251872529
+#
+# Children      Self  Command  Shared Object         Symbol                                      
+# ........  ........  .......  ....................  ............................................
+#
+    99.92%     0.00%  sh       bash                  [.] _start

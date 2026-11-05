@@ -1,0 +1,34 @@
+CF-2 DEFEROFF MUTANT RECEIPTS (frozen-config builds, 2026-11-04T23:45:21+08:00)
+BASE GREEN (uring_595_bounded_progress_test, arm B):
+[uring_595_bounded_progress_test] all checks passed
+rc=0
+--- MUTANT uring_595_mut_defer_decision_dropped (arm B):
+FAIL [uring_595_bounded_progress] eligible follow-on submissions hold the kernel flush
+FAIL [uring_595_bounded_progress] two SQEs are prepared and held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] below the bound the submission is held
+FAIL [uring_595_bounded_progress] the submission that reaches the bound flushes the batch inline
+FAIL [uring_595_bounded_progress] the post-flush submission holds again under the bound
+FAIL [uring_595_bounded_progress] the first submission flushes; three SQEs stay held
+FAIL [uring_595_bounded_progress] a partially consumed held batch advertises retry work
+FAIL [uring_595_bounded_progress] the pass-start flush ran once
+FAIL [uring_595_bounded_progress] reconciliation retired the fetched prefix, the tail survives
+FAIL [uring_595_bounded_progress] the read is prepared and held
+FAIL [uring_595_bounded_progress] the cancel control joins the held batch under the existing control ordering
+FAIL [uring_595_bounded_progress] the un-allocatable control SQE stays a sticky intent
+FAIL [uring_595_bounded_progress] the driving thread's own submission defers
+FAIL [uring_595_bounded_progress] the held read stays unsubmitted
+FAIL [uring_595_bounded_progress] the submission is accepted
+FAIL [uring_595_bounded_progress] the first submission flushed inline; two SQEs stay held
+sluice::async::Request: public binding reached a protocol-unreachable state (invariant violation)
+terminate called without an active exception
+rc=134
+--- MUTANT target default-env (arm A explicit expectation rc=2):
+sluice::async::Request: public binding reached a protocol-unreachable state (invariant violation)
+terminate called without an active exception
+rc=134

@@ -1,0 +1,5 @@
+label=e3-fsync-iowq
+arm=A
+bench_pid=8168
+bench_rc=0
+extra_env=SLUICE_BENCH_595_FSYNC=1 SLUICE_BENCH_CASE_FILTER=fsync SLUICE_BENCH_595_OPS=64

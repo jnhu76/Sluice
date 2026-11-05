@@ -1,0 +1,82 @@
+[
+ {
+  "label": "frozen",
+  "phases": {
+   "1": {
+    "defer": 1061,
+    "immediate": 939,
+    "flush": 2000,
+    "defer_ratio": 0.5305,
+    "flush_pred": {
+     "defer": 1061,
+     "immediate": 939,
+     "other": 0
+    }
+   },
+   "2": {
+    "defer": 1047,
+    "immediate": 953,
+    "flush": 2000,
+    "defer_ratio": 0.5235,
+    "flush_pred": {
+     "defer": 1047,
+     "immediate": 953,
+     "other": 0
+    }
+   },
+   "3": {
+    "defer": 1047,
+    "immediate": 953,
+    "flush": 2000,
+    "defer_ratio": 0.5235,
+    "flush_pred": {
+     "defer": 1047,
+     "immediate": 953,
+     "other": 0
+    }
+   }
+  },
+  "exit": 0,
+  "dump_line": "S595_TRACE_DUMP path=raw/trace-companion/frozen.bin sizeof_record=64 head=42000 kept=42000 dropped=0"
+ },
+ {
+  "label": "sigdrop",
+  "phases": {
+   "1": {
+    "defer": 1057,
+    "immediate": 943,
+    "flush": 2000,
+    "defer_ratio": 0.5285,
+    "flush_pred": {
+     "defer": 1057,
+     "immediate": 943,
+     "other": 0
+    }
+   },
+   "2": {
+    "defer": 1039,
+    "immediate": 961,
+    "flush": 2000,
+    "defer_ratio": 0.5195,
+    "flush_pred": {
+     "defer": 1039,
+     "immediate": 961,
+     "other": 0
+    }
+   },
+   "3": {
+    "defer": 1041,
+    "immediate": 959,
+    "flush": 2000,
+    "defer_ratio": 0.5205,
+    "flush_pred": {
+     "defer": 1041,
+     "immediate": 959,
+     "other": 0
+    }
+   }
+  },
+  "exit": 0,
+  "dump_line": "S595_TRACE_DUMP path=raw/trace-companion/sigdrop.bin sizeof_record=64 head=42000 kept=42000 dropped=0"
+ }
+]

@@ -1,0 +1,15 @@
+analyzing CPU 12:
+  driver: intel_cpufreq
+  CPUs which run at the same hardware frequency: 12
+  CPUs which need to have their frequency coordinated by software: 12
+  maximum transition latency: 20.0 us
+  hardware limits: 1.20 GHz - 3.50 GHz
+  available cpufreq governors: conservative ondemand userspace powersave performance schedutil
+  current policy: frequency should be within 1.20 GHz and 3.50 GHz.
+                  The governor "schedutil" may decide which speed to use
+                  within this range.
+  current CPU frequency: Unable to call hardware
+  current CPU frequency: 2.29 GHz (asserted by call to kernel)
+  boost state support:
+    Supported: yes
+    Active: yes

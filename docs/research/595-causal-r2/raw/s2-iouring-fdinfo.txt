@@ -1,0 +1,29 @@
+total 0
+lr-x------. 1 jnhu jnhu 64 Nov  4 16:14 0 -> /dev/null
+l-wx------. 1 jnhu jnhu 64 Nov  4 16:14 1 -> /dev/null
+l-wx------. 1 jnhu jnhu 64 Nov  4 16:14 2 -> /dev/null
+lrwx------. 1 jnhu jnhu 64 Nov  4 16:14 3 -> anon_inode:[io_uring]
+=== fdinfo of io_uring fd ===
+pos:	0
+flags:	02000002
+mnt_id:	19
+ino:	133938
+SqMask:	0x3
+SqHead:	1
+SqTail:	1
+CachedSqHead:	1
+CqMask:	0x7
+CqHead:	1
+CqTail:	1
+CachedCqTail:	1
+SQEs:	0
+CQEs:	0
+SqThread:	-1
+SqThreadCpu:	-1
+SqTotalTime:	0
+SqWorkTime:	0
+UserFiles:	0
+UserBufs:	0
+PollList:
+CqOverflowList:
+NAPI:	disabled

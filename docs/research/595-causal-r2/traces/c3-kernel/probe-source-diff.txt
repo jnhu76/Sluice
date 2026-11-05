@@ -1,0 +1,138 @@
+== git HEAD ==
+271b81bfc9d64eecc0266fe7066b9040525dd710
+
+== git diff stat (research probes, C3 lines) ==
+ bench/bench_common.hpp                          |  8 ++
+ bench/bench_w02_pipeline.cpp                    | 98 ++++++++++++++++++++++++-
+ include/sluice/async/detail/progress_source.hpp | 69 +++++++++++++++++
+ include/sluice/async/detail/uring_backend.hpp   | 50 ++++++++++++-
+ src/async/async_io_context.cpp                  |  7 ++
+ src/async/uring_backend.cpp                     | 17 ++++-
+ src/async/uring_completion.cpp                  |  7 +-
+ src/async/uring_transport.cpp                   | 86 +++++++++++++++++++---
+ xmake.lua                                       | 14 ++++
+ xmake/bench.lua                                 |  5 ++
+ xmake/tests.lua                                 | 22 ++++++
+ 11 files changed, 367 insertions(+), 16 deletions(-)
+
+== C3 probe diff ==
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..3a779259 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -15,6 +15,15 @@
+ #include <sys/eventfd.h>
+ #include <unistd.h>
+ 
++#if defined(SLUICE_595_COUNTERS)
++#include <sluice/async/detail/research_595_counters.hpp>
++#else
++#define SLUICE595_BUMP(counter) ((void)0)
++#endif
++
++#include <sluice/async/detail/research_595_c1.hpp>
++#include <sluice/async/detail/research_595_c3.hpp>
++
+ namespace sluice::async {
+ class AsyncBackend;
+ class AsyncIoContext;
+@@ -162,6 +171,7 @@ class ProgressSource {
+                 if (expired) {
+                     return WakeReason::deadline;
+                 }
++                SLUICE595_C3_COUNT(drain_park);
+                 drain_notification_nolock_();
+             }
+ 
+@@ -200,7 +210,26 @@ class ProgressSource {
+             pfds[0].events = POLLIN;
+             pfds[0].revents = 0;
+ 
++#if defined(SLUICE_595_C3_COUNTERS)
++            const bool c3_poll_on = SLUICE595_C3_ENABLED();
++            const std::uint64_t c3_poll_t0 =
++                c3_poll_on ? SLUICE595_C3_TSC_BEGIN() : 0;
++#endif
+             const int rc = ::poll(pfds, 1, timeout_ms);
++#if defined(SLUICE_595_C3_COUNTERS)
++            if (c3_poll_on) {
++                SLUICE595_C3_TSC_RECORD(park_poll, c3_poll_t0);
++                if (rc > 0 && (pfds[0].revents & POLLIN) != 0) {
++                    SLUICE595_C3_COUNT(poll_wake_pollin);
++                } else if (rc == 0) {
++                    SLUICE595_C3_COUNT(poll_timeout);
++                } else if (rc < 0 && errno == EINTR) {
++                    SLUICE595_C3_COUNT(poll_eintr);
++                } else {
++                    SLUICE595_C3_COUNT(poll_other);
++                }
++            }
++#endif
+             {
+                 std::lock_guard<std::mutex> lk(mtx_);
+                 if (rc < 0) {
+@@ -250,6 +279,7 @@ class ProgressSource {
+     }
+ 
+     void signal() noexcept {
++        SLUICE595_C1_COUNT(signal_entry);
+         std::lock_guard<std::mutex> lk(mtx_);
+         // Saturation, not wrap: an active token must never alias a later
+         // epoch. Once frozen, the exhaustion sequence carries freshness;
+@@ -273,6 +303,7 @@ class ProgressSource {
+     // drain authority.
+     void acknowledge_notification() noexcept {
+         std::lock_guard<std::mutex> lk(mtx_);
++        SLUICE595_C3_COUNT(drain_ack);
+         drain_notification_nolock_();
+     }
+ 
+@@ -401,7 +432,22 @@ class ProgressSource {
+         std::uint64_t value = 0;
+         for (;;) {
+             errno = 0;
++#if defined(SLUICE_595_C3_COUNTERS)
++            const bool c3_read_on = SLUICE595_C3_ENABLED();
++            const std::uint64_t c3_read_t0 =
++                c3_read_on ? SLUICE595_C3_TSC_BEGIN() : 0;
++#endif
+             const ssize_t n = ::read(notification_fd_, &value, sizeof(value));
++#if defined(SLUICE_595_C3_COUNTERS)
++            if (c3_read_on) {
++                if (n == static_cast<ssize_t>(sizeof(value))) {
++                    SLUICE595_C3_TSC_RECORD(read_ok, c3_read_t0);
++                    research595::c3::g_read_value_sum += value;
++                } else {
++                    SLUICE595_C3_TSC_RECORD(read_eagain, c3_read_t0);
++                }
++            }
++#endif
+             if (n == static_cast<ssize_t>(sizeof(value))) {
+                 continue;
+             }
+@@ -425,12 +471,35 @@ class ProgressSource {
+     // the EAGAIN above, where the counter is provably zero.
+     void wake_notification_nolock_() noexcept {
+         if (notification_fd_ < 0 || notification_pending_) {
++            SLUICE595_BUMP(wakeup_coalesced);
++            SLUICE595_C1_COUNT(signal_coalesced);
+             return;
+         }
+         const std::uint64_t one = 1;
+         for (;;) {
+             errno = 0;
++            SLUICE595_BUMP(wakeup_writes);
++#if defined(SLUICE_595_C3_COUNTERS)
++            const bool c3_write_on = SLUICE595_C3_ENABLED();
++            const std::uint64_t c3_write_t0 =
++                c3_write_on ? SLUICE595_C3_TSC_BEGIN() : 0;
++#endif
++#if defined(SLUICE_595_C1_COUNTERS)
++            const bool c1_write_on = SLUICE595_C1_ENABLED();
++            const std::uint64_t c1_write_t0 =
++                c1_write_on ? SLUICE595_C1_TSC_BEGIN() : 0;
++#endif
+             const ssize_t n = ::write(notification_fd_, &one, sizeof(one));
++#if defined(SLUICE_595_C3_COUNTERS)
++            if (c3_write_on) {
++                SLUICE595_C3_TSC_RECORD(write_fd, c3_write_t0);

@@ -1,0 +1,52 @@
+{
+ "frozen|syscw/op": {
+  "A_mean": 0.0007033333333333333,
+  "B_mean": 0.864145,
+  "B_minus_A_mean": 0.8634416666666667
+ },
+ "sigdrop|syscw/op": {
+  "A_mean": 0.0007033333333333333,
+  "B_mean": 0.0007066666666666666,
+  "B_minus_A_mean": 3.3333333333333422e-06
+ },
+ "frozen|syscr/op": {
+  "A_mean": 1.7433083333333332,
+  "B_mean": 1.727195,
+  "B_minus_A_mean": -0.016113333333333313
+ },
+ "sigdrop|syscr/op": {
+  "A_mean": 1.7355749999999999,
+  "B_mean": 1.7537066666666667,
+  "B_minus_A_mean": 0.018131666666666695
+ },
+ "frozen|bench_kernel_s/op": {
+  "A_mean": 7.3e-06,
+  "B_mean": 7.450000000000001e-06,
+  "B_minus_A_mean": 1.4999999999999997e-07
+ },
+ "sigdrop|bench_kernel_s/op": {
+  "A_mean": 7.316666666666667e-06,
+  "B_mean": 7.216666666666666e-06,
+  "B_minus_A_mean": -1.0000000000000031e-07
+ },
+ "frozen|bench_user_s/op": {
+  "A_mean": 5e-06,
+  "B_mean": 5.466666666666667e-06,
+  "B_minus_A_mean": 4.666666666666667e-07
+ },
+ "sigdrop|bench_user_s/op": {
+  "A_mean": 5.133333333333334e-06,
+  "B_mean": 5.133333333333334e-06,
+  "B_minus_A_mean": 0.0
+ },
+ "frozen|iowq_kernel_s/op": {
+  "A_mean": 6.15e-06,
+  "B_mean": 6.199999999999999e-06,
+  "B_minus_A_mean": 4.9999999999999945e-08
+ },
+ "sigdrop|iowq_kernel_s/op": {
+  "A_mean": 6.2499999999999995e-06,
+  "B_mean": 6.183333333333333e-06,
+  "B_minus_A_mean": -6.666666666666659e-08
+ }
+}

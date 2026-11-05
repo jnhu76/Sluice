@@ -1,0 +1,13 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=5 stats_wiring=on
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d2 rep=0 warmup] ops=20000 wall=0.0937s 213550 ops/s 834.2 MiB/s cpu=0.094s util=99.9% | lat p50=8060 p95=12449 p99=13666 max=104235 ns (n=20000)
+  [W02-uring-4k-d2 rep=0] ops=20000 wall=0.0945s 211735 ops/s 827.1 MiB/s cpu=0.094s util=99.9% | lat p50=7948 p95=12358 p99=12893 max=28744 ns (n=20000)
+  [W02-uring-4k-d2 rep=1] ops=20000 wall=0.0934s 214180 ops/s 836.6 MiB/s cpu=0.093s util=99.9% | lat p50=7981 p95=12114 p99=12819 max=37682 ns (n=20000)
+  [W02-uring-4k-d2 rep=2] ops=20000 wall=0.0911s 219433 ops/s 857.2 MiB/s cpu=0.091s util=99.9% | lat p50=7921 p95=12135 p99=12603 max=29253 ns (n=20000)
+  [W02-uring-4k-d2 rep=3] ops=20000 wall=0.0923s 216791 ops/s 846.8 MiB/s cpu=0.092s util=99.9% | lat p50=7993 p95=12355 p99=12845 max=35905 ns (n=20000)
+  [W02-uring-4k-d2 rep=4] ops=20000 wall=0.0938s 213168 ops/s 832.7 MiB/s cpu=0.094s util=99.9% | lat p50=8034 p95=12653 p99=13965 max=42168 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===

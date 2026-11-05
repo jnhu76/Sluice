@@ -1,0 +1,5 @@
+label=e2-armB-defer
+arm=B
+bench_pid=8230
+bench_rc=0
+extra_env=SLUICE_BENCH_595_DEPTHS=1 SLUICE_BENCH_CASE_FILTER=W02-uring-4k-d2 SLUICE_BENCH_595_OPS=2000

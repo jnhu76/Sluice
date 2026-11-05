@@ -1,0 +1,12 @@
+[frozen] arm=A idx=0 exit=0 reps=3 wakeups_rep0=0
+[frozen] arm=A idx=1 exit=0 reps=3 wakeups_rep0=0
+[frozen] arm=A idx=2 exit=0 reps=3 wakeups_rep0=0
+[frozen] arm=B idx=0 exit=0 reps=3 wakeups_rep0=10956
+[frozen] arm=B idx=1 exit=0 reps=3 wakeups_rep0=10894
+[frozen] arm=B idx=2 exit=0 reps=3 wakeups_rep0=10852
+[sigdrop] arm=A idx=0 exit=0 reps=3 wakeups_rep0=0
+[sigdrop] arm=A idx=1 exit=0 reps=3 wakeups_rep0=0
+[sigdrop] arm=A idx=2 exit=0 reps=3 wakeups_rep0=0
+[sigdrop] arm=B idx=0 exit=0 reps=3 wakeups_rep0=0
+[sigdrop] arm=B idx=1 exit=0 reps=3 wakeups_rep0=0
+[sigdrop] arm=B idx=2 exit=0 reps=3 wakeups_rep0=0

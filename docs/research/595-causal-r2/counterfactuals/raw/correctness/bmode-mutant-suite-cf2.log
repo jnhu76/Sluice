@@ -1,0 +1,14 @@
+CF-2 DEFEROFF B-mode lane (mutant-config builds, SLUICE_595_ARM=B, 2026-11-04T23:46:08+08:00)
+request_core_ownership_uring_test rc=0 :: 13 of 13 request core ownership tests passed, 0 skipped
+uring_595_bounded_progress_test rc=134 :: timeout: the monitored command dumped core
+uring_backend_smoke_test rc=0 :: all 8 uring backend smoke tests passed (real liburing path)
+uring_external_loop_test rc=0 :: all 9 uring external loop tests passed
+uring_flush_count_oracle_test rc=0 :: [uring_flush_count_oracle_test] all checks passed
+uring_owed_counter_parity_test rc=0 :: all 8 uring owed-count parity tests passed
+uring_owed_residue_test rc=0 :: all 3 uring owed-residue tests passed
+uring_pending_control_parity_test rc=0 :: all uring pending-control parity tests passed
+uring_progress_race_test rc=0 :: all 23 uring progress race tests passed
+uring_public_consumer_probe rc=0 :: uring public consumer probe passed: consumer TU selected io_uring through the public factory
+uring_registration_lifecycle_test rc=0 :: all 4 uring registration lifecycle tests passed
+uring_request_core_integration_test rc=0 :: 21 of 21 uring core integration tests passed, 0 not run
+uring_submit_boundary_test rc=0 :: all 2 io_uring submit boundary tests passed

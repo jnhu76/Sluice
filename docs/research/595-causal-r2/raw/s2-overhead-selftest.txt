@@ -1,0 +1,3 @@
+# bpftrace process self CPU, 3 probes (sched_switch/sys_enter_read/io_uring_submit_req), 2s window: U=0.14s S=0.05s
+# busy-loop trial A (session 1): baseline 4.61s vs with-bpftrace 4.65s
+# busy-loop trial B (session 2): baseline 4.53s vs with-bpftrace 4.47s -> direction flipped, noise level

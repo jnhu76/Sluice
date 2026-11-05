@@ -1,0 +1,108 @@
+#!/usr/bin/env bpftrace
+// #595 causal-r2 cross-layer kernel-side correlation probes.
+// Usage: sudo bpftrace /tmp/s595_kernel.bt <bench_pid>
+// Output lines: "S595K <nsecs> <event> key=value ..."
+// Ring ownership map: events are filtered to rings created by <bench_pid>,
+// so kernel-thread contexts (io-wq workers) are still attributed.
+
+BEGIN
+{
+    printf("S595K BEGIN target_pid=%lu\n", (uint64)TARGET_PID);
+}
+
+tracepoint:syscalls:sys_enter_io_uring_enter
+/pid == TARGET_PID/
+{
+    printf("S595K %llu enter cpu=%d tgid=%d tid=%d fd=%d to_submit=%u min_complete=%u flags=%x\n",
+           nsecs, cpu, pid, tid, args->fd, args->to_submit, args->min_complete, args->flags);
+}
+
+tracepoint:syscalls:sys_exit_io_uring_enter
+/pid == TARGET_PID/
+{
+    printf("S595K %llu enter_ret cpu=%d tgid=%d tid=%d ret=%d\n", nsecs, cpu, pid, tid, args->ret);
+}
+
+tracepoint:io_uring:io_uring_create
+/pid == TARGET_PID/
+{
+    @ring_owner[args->ctx] = pid;
+    printf("S595K %llu create cpu=%d tgid=%d tid=%d fd=%d ctx=%llx sq_entries=%u cq_entries=%u flags=%x\n",
+           nsecs, cpu, pid, tid, args->fd, args->ctx, args->sq_entries, args->cq_entries, args->flags);
+}
+
+tracepoint:io_uring:io_uring_submit_req
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu submit_req cpu=%d tgid=%d tid=%d ctx=%llx req=%llx user_data=%llu opcode=%u sq_thread=%u\n",
+           nsecs, cpu, pid, tid, args->ctx, args->req, args->user_data, args->opcode, args->sq_thread);
+}
+
+tracepoint:io_uring:io_uring_defer
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu defer cpu=%d tgid=%d tid=%d ctx=%llx req=%llx data=%llx opcode=%u\n",
+           nsecs, cpu, pid, tid, args->ctx, args->req, args->data, args->opcode);
+}
+
+tracepoint:io_uring:io_uring_queue_async_work
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu qasync cpu=%d tgid=%d tid=%d ctx=%llx req=%llx user_data=%llu opcode=%u work=%llx hashed=%u\n",
+           nsecs, cpu, pid, tid, args->ctx, args->req, args->user_data, args->opcode, args->work, args->hashed);
+}
+
+tracepoint:io_uring:io_uring_task_add
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu task_add cpu=%d tgid=%d tid=%d ctx=%llx req=%llx user_data=%llu opcode=%u mask=%x\n",
+           nsecs, cpu, pid, tid, args->ctx, args->req, args->user_data, args->opcode, args->mask);
+}
+
+tracepoint:io_uring:io_uring_task_work_run
+/pid == TARGET_PID/
+{
+    printf("S595K %llu task_work_run cpu=%d tgid=%d tid=%d tctx=%llx count=%u\n",
+           nsecs, cpu, pid, tid, args->tctx, args->count);
+}
+
+tracepoint:io_uring:io_uring_local_work_run
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu local_work_run cpu=%d tgid=%d tid=%d ctx=%llx count=%d loops=%u\n",
+           nsecs, cpu, pid, tid, args->ctx, args->count, args->loops);
+}
+
+tracepoint:io_uring:io_uring_complete
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu complete cpu=%d tgid=%d tid=%d ctx=%llx req=%llx user_data=%llu res=%d cflags=%x\n",
+           nsecs, cpu, pid, tid, args->ctx, args->req, args->user_data, args->res, args->cflags);
+}
+
+tracepoint:io_uring:io_uring_cqe_overflow
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu cqe_overflow cpu=%d tgid=%d tid=%d ctx=%llx user_data=%llu res=%d cflags=%x\n",
+           nsecs, cpu, pid, tid, args->ctx, args->user_data, args->res, args->cflags);
+}
+
+tracepoint:io_uring:io_uring_cqring_wait
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu cqring_wait cpu=%d tgid=%d tid=%d ctx=%llx min_events=%d\n",
+           nsecs, cpu, pid, tid, args->ctx, args->min_events);
+}
+
+tracepoint:io_uring:io_uring_req_failed
+/@ring_owner[args->ctx] == TARGET_PID/
+{
+    printf("S595K %llu req_failed cpu=%d tgid=%d tid=%d ctx=%llx user_data=%llu error=%d\n",
+           nsecs, cpu, pid, tid, args->ctx, args->user_data, args->error);
+}
+
+END
+{
+    clear(@ring_owner);
+    printf("S595K END\n");
+}

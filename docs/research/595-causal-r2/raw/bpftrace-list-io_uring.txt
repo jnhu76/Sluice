@@ -1,0 +1,17 @@
+[sudo] password for jnhu: tracepoint:io_uring:io_uring_complete
+tracepoint:io_uring:io_uring_cqe_overflow
+tracepoint:io_uring:io_uring_cqring_wait
+tracepoint:io_uring:io_uring_create
+tracepoint:io_uring:io_uring_defer
+tracepoint:io_uring:io_uring_fail_link
+tracepoint:io_uring:io_uring_file_get
+tracepoint:io_uring:io_uring_link
+tracepoint:io_uring:io_uring_local_work_run
+tracepoint:io_uring:io_uring_poll_arm
+tracepoint:io_uring:io_uring_queue_async_work
+tracepoint:io_uring:io_uring_register
+tracepoint:io_uring:io_uring_req_failed
+tracepoint:io_uring:io_uring_short_write
+tracepoint:io_uring:io_uring_submit_req
+tracepoint:io_uring:io_uring_task_add
+tracepoint:io_uring:io_uring_task_work_run

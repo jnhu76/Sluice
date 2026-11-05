@@ -1,0 +1,25 @@
+[sudo] password for jnhu: fentry:vmlinux:__ia32_sys_io_uring_enter
+fentry:vmlinux:__ia32_sys_io_uring_register
+fentry:vmlinux:__ia32_sys_io_uring_setup
+fentry:vmlinux:__io_uring_add_tctx_node
+fentry:vmlinux:__io_uring_add_tctx_node_from_submit
+fentry:vmlinux:__io_uring_cancel
+fentry:vmlinux:__io_uring_cmd_do_in_task
+fentry:vmlinux:__io_uring_cmd_done
+fentry:vmlinux:__io_uring_fork
+fentry:vmlinux:__io_uring_free
+fentry:vmlinux:__io_uring_register
+fentry:vmlinux:__io_uring_run_bpf_filters
+fentry:vmlinux:__io_uring_show_fdinfo
+fentry:vmlinux:__probestub_io_uring_complete
+fentry:vmlinux:__probestub_io_uring_cqe_overflow
+fentry:vmlinux:__probestub_io_uring_cqring_wait
+fentry:vmlinux:__probestub_io_uring_create
+fentry:vmlinux:__probestub_io_uring_defer
+fentry:vmlinux:__probestub_io_uring_fail_link
+fentry:vmlinux:__probestub_io_uring_file_get
+fentry:vmlinux:__probestub_io_uring_link
+fentry:vmlinux:__probestub_io_uring_local_work_run
+fentry:vmlinux:__probestub_io_uring_poll_arm
+fentry:vmlinux:__probestub_io_uring_queue_async_work
+fentry:vmlinux:__probestub_io_uring_register

@@ -1,0 +1,12 @@
+[sudo] password for jnhu: [ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.917 MB /tmp/perf-sched.data (1078 samples) ]
+
+ -------------------------------------------------------------------------------------------------------------------------------------------
+  Task                  |   Runtime ms  |  Count   | Avg delay ms    | Max delay ms    | Max delay start           | Max delay end          |
+ -------------------------------------------------------------------------------------------------------------------------------------------
+  sshd-session:2603     |      1.923 ms |       23 | avg:   0.034 ms | max:   0.064 ms | max start: 18241.458868 s | max end: 18241.458933 s
+  kworker/16:1-mm:41297 |      0.052 ms |        3 | avg:   0.042 ms | max:   0.064 ms | max start: 18241.454276 s | max end: 18241.454340 s
+  zcode-cli:(10)        |     28.096 ms |       31 | avg:   0.034 ms | max:   0.064 ms | max start: 18241.242499 s | max end: 18241.242563 s
+  kworker/u80:8-e:38953 |      0.299 ms |       13 | avg:   0.027 ms | max:   0.057 ms | max start: 18241.331501 s | max end: 18241.331558 s
+  node:(7)              |      8.606 ms |       31 | avg:   0.035 ms | max:   0.052 ms | max start: 18241.617157 s | max end: 18241.617210 s
+  perf:41342            |      2.899 ms |        2 | avg:   0.037 ms | max:   0.049 ms | max start: 18241.644314 s | max end: 18241.644364 s

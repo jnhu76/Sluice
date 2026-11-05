@@ -1,0 +1,118 @@
+{
+ "frozen1": [
+  {
+   "n_sub": 20000,
+   "n_gap": 10790,
+   "ret_non1": 0,
+   "sub_mean": 2466.170606035399,
+   "sub_p50": 3411.9766751787915,
+   "defer_frac_gapfast": 0.30755,
+   "n_gapfast": 6151
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 11501,
+   "ret_non1": 0,
+   "sub_mean": 2683.5129845307706,
+   "sub_p50": 3605.179163167542,
+   "defer_frac_gapfast": 0.3451,
+   "n_gapfast": 6902
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 10908,
+   "ret_non1": 0,
+   "sub_mean": 2412.025902554932,
+   "sub_p50": 3353.2209990462557,
+   "defer_frac_gapfast": 0.2986,
+   "n_gapfast": 5972
+  }
+ ],
+ "frozen2": [
+  {
+   "n_sub": 20000,
+   "n_gap": 10875,
+   "ret_non1": 0,
+   "sub_mean": 2294.3903636840037,
+   "sub_p50": 3102.6440063402615,
+   "defer_frac_gapfast": 0.29155,
+   "n_gapfast": 5831
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 11442,
+   "ret_non1": 0,
+   "sub_mean": 2678.06246782299,
+   "sub_p50": 3609.3250928162365,
+   "defer_frac_gapfast": 0.3427,
+   "n_gapfast": 6854
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 11048,
+   "ret_non1": 0,
+   "sub_mean": 2550.5697553353893,
+   "sub_p50": 3473.841473512974,
+   "defer_frac_gapfast": 0.3094,
+   "n_gapfast": 6188
+  }
+ ],
+ "deferoff1": [
+  {
+   "n_sub": 20000,
+   "n_gap": 10883,
+   "ret_non1": 0,
+   "sub_mean": 2365.996935867131,
+   "sub_p50": 3303.109152070207,
+   "defer_frac_gapfast": 0.07135,
+   "n_gapfast": 1427
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 11212,
+   "ret_non1": 0,
+   "sub_mean": 2515.513137648991,
+   "sub_p50": 3457.2565499799393,
+   "defer_frac_gapfast": 0.09465,
+   "n_gapfast": 1893
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 10939,
+   "ret_non1": 0,
+   "sub_mean": 2355.2115258454014,
+   "sub_p50": 3224.9985872101183,
+   "defer_frac_gapfast": 0.069,
+   "n_gapfast": 1380
+  }
+ ],
+ "deferoff2": [
+  {
+   "n_sub": 20000,
+   "n_gap": 10671,
+   "ret_non1": 0,
+   "sub_mean": 2281.3243322224007,
+   "sub_p50": 3177.6428297785287,
+   "defer_frac_gapfast": 0.0498,
+   "n_gapfast": 996
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 11025,
+   "ret_non1": 0,
+   "sub_mean": 2450.913184199396,
+   "sub_p50": 3351.1447550068106,
+   "defer_frac_gapfast": 0.07425,
+   "n_gapfast": 1485
+  },
+  {
+   "n_sub": 20000,
+   "n_gap": 10705,
+   "ret_non1": 0,
+   "sub_mean": 2299.102283027617,
+   "sub_p50": 3173.1497520335733,
+   "defer_frac_gapfast": 0.0521,
+   "n_gapfast": 1042
+  }
+ ]
+}

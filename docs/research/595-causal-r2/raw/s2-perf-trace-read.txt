@@ -1,0 +1,6 @@
+     0.000 dd/43815 syscalls:sys_enter_read(fd: 3, buf: 0x7ffce18fa2a8, count: 832)
+     0.425 dd/43815 syscalls:sys_enter_read(fd: 3, buf: 0x56203f39c6f0, count: 4096100+0 records in
+     0.455 dd/43815 syscalls:sys_enter_read(fd: 3, buf: 0x56203f39c6f0, count: 4096409600 bytes (410 kB, 400 KiB) copied, 0.000304874 s, 1.3 GB/s)
+     0.544 dd/43815 syscalls:sys_enter_read(buf: 0x56203f39f000, count: 4096)
+     0.551 dd/43815 syscalls:sys_enter_read(buf: 0x56203f39f000, count: 4096)
+     0.554 dd/43815 syscalls:sys_enter_read(buf: 0x56203f39f000, count: 4096)

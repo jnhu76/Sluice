@@ -1,0 +1,62 @@
+{
+ "frozen_A": {
+  "sqes_deferred": 0.0,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.7877388888888888,
+  "wakeups": 0.0,
+  "wakeup_writes": 0.0,
+  "wakeup_coalesced": 0.0,
+  "dispatch_passes": 1.0,
+  "poll_passes": 0.7877388888888889,
+  "wait_attempts": 0.5368111111111111,
+  "cqes_reaped": 1.0,
+  "sqe_preparations": 1.0,
+  "progress_handoffs": 0.0
+ },
+ "frozen_B": {
+  "sqes_deferred": 0.5462722222222223,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.2472833333333333,
+  "wakeups": 0.5462722222222223,
+  "wakeup_writes": 0.24720555555555557,
+  "wakeup_coalesced": 0.2990666666666667,
+  "dispatch_passes": 1.0,
+  "poll_passes": 0.7935555555555556,
+  "wait_attempts": 0.5463333333333333,
+  "cqes_reaped": 1.0,
+  "sqe_preparations": 1.0,
+  "progress_handoffs": 0.0
+ },
+ "sigdrop_A": {
+  "sqes_deferred": 0.0,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.7865499999999999,
+  "wakeups": 0.0,
+  "wakeup_writes": 0.0,
+  "wakeup_coalesced": 0.0,
+  "dispatch_passes": 1.0,
+  "poll_passes": 0.78655,
+  "wait_attempts": 0.5383,
+  "cqes_reaped": 1.0,
+  "sqe_preparations": 1.0,
+  "progress_handoffs": 0.0
+ },
+ "sigdrop_B": {
+  "sqes_deferred": 0.5447944444444445,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.2577500000000001,
+  "wakeups": 0.0,
+  "wakeup_writes": 0.0,
+  "wakeup_coalesced": 0.0,
+  "dispatch_passes": 1.0,
+  "poll_passes": 0.8025444444444445,
+  "wait_attempts": 0.5448833333333334,
+  "cqes_reaped": 1.0,
+  "sqe_preparations": 1.0,
+  "progress_handoffs": 0.0
+ }
+}

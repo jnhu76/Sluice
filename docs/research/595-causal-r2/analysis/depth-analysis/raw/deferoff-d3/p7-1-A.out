@@ -1,0 +1,28 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=20 stats_wiring=on
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d3 rep=0 warmup] ops=20000 wall=0.0849s 235605 ops/s 920.3 MiB/s cpu=0.085s util=99.9% | lat p50=10959 p95=17933 p99=18896 max=98880 ns (n=20000)
+  [W02-uring-4k-d3 rep=0] ops=20000 wall=0.0830s 240890 ops/s 941.0 MiB/s cpu=0.083s util=99.9% | lat p50=10968 p95=18024 p99=18731 max=38181 ns (n=20000)
+  [W02-uring-4k-d3 rep=1] ops=20000 wall=0.0827s 241846 ops/s 944.7 MiB/s cpu=0.083s util=99.9% | lat p50=10893 p95=17628 p99=18164 max=42444 ns (n=20000)
+  [W02-uring-4k-d3 rep=2] ops=20000 wall=0.0933s 214404 ops/s 837.5 MiB/s cpu=0.093s util=99.9% | lat p50=11005 p95=18776 p99=19499 max=41221 ns (n=20000)
+  [W02-uring-4k-d3 rep=3] ops=20000 wall=0.0862s 232112 ops/s 906.7 MiB/s cpu=0.086s util=99.9% | lat p50=10866 p95=17645 p99=18498 max=34186 ns (n=20000)
+  [W02-uring-4k-d3 rep=4] ops=20000 wall=0.0862s 231959 ops/s 906.1 MiB/s cpu=0.086s util=99.9% | lat p50=10902 p95=17615 p99=18126 max=57509 ns (n=20000)
+  [W02-uring-4k-d3 rep=5] ops=20000 wall=0.0842s 237487 ops/s 927.7 MiB/s cpu=0.084s util=99.9% | lat p50=11078 p95=18642 p99=20641 max=42897 ns (n=20000)
+  [W02-uring-4k-d3 rep=6] ops=20000 wall=0.0863s 231799 ops/s 905.5 MiB/s cpu=0.086s util=99.9% | lat p50=10852 p95=17640 p99=18827 max=41921 ns (n=20000)
+  [W02-uring-4k-d3 rep=7] ops=20000 wall=0.0866s 230899 ops/s 902.0 MiB/s cpu=0.087s util=99.9% | lat p50=10964 p95=18227 p99=18813 max=40754 ns (n=20000)
+  [W02-uring-4k-d3 rep=8] ops=20000 wall=0.0851s 235114 ops/s 918.4 MiB/s cpu=0.085s util=99.9% | lat p50=10942 p95=17709 p99=19293 max=36957 ns (n=20000)
+  [W02-uring-4k-d3 rep=9] ops=20000 wall=0.0845s 236557 ops/s 924.1 MiB/s cpu=0.084s util=99.9% | lat p50=11116 p95=18533 p99=19308 max=38863 ns (n=20000)
+  [W02-uring-4k-d3 rep=10] ops=20000 wall=0.0859s 232807 ops/s 909.4 MiB/s cpu=0.086s util=99.9% | lat p50=11039 p95=18418 p99=20369 max=41103 ns (n=20000)
+  [W02-uring-4k-d3 rep=11] ops=20000 wall=0.0840s 237984 ops/s 929.6 MiB/s cpu=0.084s util=99.9% | lat p50=11080 p95=18379 p99=18952 max=37154 ns (n=20000)
+  [W02-uring-4k-d3 rep=12] ops=20000 wall=0.0832s 240304 ops/s 938.7 MiB/s cpu=0.083s util=99.9% | lat p50=10902 p95=17694 p99=19254 max=40839 ns (n=20000)
+  [W02-uring-4k-d3 rep=13] ops=20000 wall=0.0831s 240557 ops/s 939.7 MiB/s cpu=0.083s util=99.9% | lat p50=11007 p95=18362 p99=18942 max=37711 ns (n=20000)
+  [W02-uring-4k-d3 rep=14] ops=20000 wall=0.0842s 237474 ops/s 927.6 MiB/s cpu=0.084s util=99.9% | lat p50=10961 p95=18039 p99=19112 max=42207 ns (n=20000)
+  [W02-uring-4k-d3 rep=15] ops=20000 wall=0.0832s 240499 ops/s 939.4 MiB/s cpu=0.083s util=99.9% | lat p50=11043 p95=18916 p99=21220 max=41667 ns (n=20000)
+  [W02-uring-4k-d3 rep=16] ops=20000 wall=0.0864s 231421 ops/s 904.0 MiB/s cpu=0.086s util=99.9% | lat p50=10903 p95=17765 p99=18457 max=50522 ns (n=20000)
+  [W02-uring-4k-d3 rep=17] ops=20000 wall=0.0883s 226495 ops/s 884.7 MiB/s cpu=0.088s util=99.9% | lat p50=10888 p95=17802 p99=18599 max=33821 ns (n=20000)
+  [W02-uring-4k-d3 rep=18] ops=20000 wall=0.0839s 238317 ops/s 930.9 MiB/s cpu=0.084s util=99.9% | lat p50=10926 p95=17734 p99=18676 max=37865 ns (n=20000)
+  [W02-uring-4k-d3 rep=19] ops=20000 wall=0.0853s 234446 ops/s 915.8 MiB/s cpu=0.085s util=99.9% | lat p50=10862 p95=17494 p99=17973 max=37120 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===

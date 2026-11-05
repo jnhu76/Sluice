@@ -1,0 +1,8 @@
+== 2026-11-04T18:11:38+08:00 host=7.2.11-200.fc44.x86_64 user=jnhu
+== cmd: bpftrace -lv 'tracepoint:syscalls:sys_enter_io_uring_enter'
+ERROR: bpftrace currently only supports running as the root user.
+rc=1
+
+== cmd: bpftrace -l 'tracepoint:io_uring:*'
+ERROR: bpftrace currently only supports running as the root user.
+rc=1

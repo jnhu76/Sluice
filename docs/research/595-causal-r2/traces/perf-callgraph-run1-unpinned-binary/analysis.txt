@@ -1,0 +1,67 @@
+perf-A-r1.data arm=A samples=18444 event=1203263133 lost=0 wall=2.305s rate=8000/s
+perf-A-r4.data arm=A samples=18354 event=1236425577 lost=0 wall=2.303s rate=7971/s
+perf-A-r5.data arm=A samples=18177 event=1208693948 lost=0 wall=2.271s rate=8003/s
+perf-B-r2.data arm=B samples=19138 event=1277740531 lost=0 wall=2.391s rate=8005/s
+perf-B-r3.data arm=B samples=19160 event=1276081106 lost=0 wall=2.396s rate=7995/s
+perf-B-r6.data arm=B samples=18814 event=1241102678 lost=0 wall=2.351s rate=8003/s
+
+symbol (self, cycles/op)                                           A mean     B mean        B-A
+sluice::async::UringAsyncBackend::dispatch_after_accept              98.9      123.4      +24.5
+    A runs: 92.8, 111.2, 92.8
+    B runs: 117.0, 135.9, 117.3
+sluice::async::UringAsyncBackend::defer_transport_flush_locked        0.0        0.0       +0.0
+    A runs: 0.0, 0.0, 0.0
+    B runs: 0.0, 0.0, 0.0
+sluice::async::UringAsyncBackend::poll                               85.3       87.6       +2.3
+    A runs: 84.3, 84.4, 87.1
+    B runs: 92.3, 86.2, 84.3
+sluice::async::UringAsyncBackend::dispatch_one_locked               194.2      202.3       +8.1
+    A runs: 191.1, 189.1, 202.3
+    B runs: 206.8, 199.8, 200.4
+sluice::async::UringAsyncBackend::submit_transport_locked             4.6       32.3      +27.8
+    A runs: 3.6, 6.9, 3.2
+    B runs: 30.4, 36.0, 30.7
+sluice::async::UringAsyncBackend::account_transport_result_loc       70.7       74.1       +3.4
+    A runs: 73.1, 70.4, 68.5
+    B runs: 63.9, 81.1, 77.2
+sluice::async::AsyncIoContext::wait_one                              87.1       93.4       +6.3
+    A runs: 85.8, 90.3, 85.1
+    B runs: 94.6, 94.7, 90.7
+sluice::async::AsyncIoContext::run_progress_pass_                    56.3       58.1       +1.8
+    A runs: 58.6, 51.2, 59.0
+    B runs: 59.8, 60.3, 54.3
+pthread_mutex_lock@@GLIBC_2.2.5                                     317.1      311.8       -5.3
+    A runs: 299.8, 313.4, 338.1
+    B runs: 313.3, 305.2, 316.8
+__GI___pthread_mutex_unlock_usercnt                                 249.9      249.8       -0.1
+    A runs: 245.3, 259.2, 245.2
+    B runs: 261.7, 242.9, 244.7
+__GI___libc_write                                                     0.0        6.4       +6.4
+    A runs: 0.0, 0.0, 0.0
+    B runs: 6.2, 4.7, 8.4
+io_uring_submit                                                      15.6       27.7      +12.1
+    A runs: 12.7, 16.0, 18.1
+    B runs: 29.9, 38.3, 14.8
+sluice::async::detail::RequestCore::outstanding_summary              11.7       12.8       +1.1
+    A runs: 11.3, 11.5, 12.5
+    B runs: 14.7, 12.2, 11.5
+
+first-level caller evidence (pct of all samples):
+  perf-A-r1.data:
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.19
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.17
+  perf-A-r4.data:
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.59
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.16
+  perf-A-r5.data:
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.35
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.22
+  perf-B-r2.data:
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.38
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.37
+  perf-B-r3.data:
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.3
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.29
+  perf-B-r6.data:
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.49
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.36

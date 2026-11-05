@@ -1,0 +1,16 @@
+[sudo] password for jnhu: 
+    33,030,598,776      cycles                                                                  (37.49%)
+    77,624,309,975      instructions                                                            (49.99%)
+    18,468,837,630      branches                                                                (50.00%)
+        61,663,039      branch-misses                                                           (50.01%)
+         2,585,941      cache-references                                                        (62.50%)
+            21,990      cache-misses                                                            (62.50%)
+    18,804,245,283      L1-dcache-loads                                                         (49.98%)
+    18,811,145,644      dTLB-loads                                                              (49.97%)
+
+       9.662515554 seconds time elapsed
+
+       9.602106000 seconds user
+       0.001963000 seconds sys
+
+

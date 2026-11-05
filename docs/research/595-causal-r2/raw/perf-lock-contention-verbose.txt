@@ -1,0 +1,3 @@
+[sudo] password for jnhu: incompatible file format
+incompatible file format (rerun with -v to learn more)
+Initializing perf session failed

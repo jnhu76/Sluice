@@ -1,0 +1,752 @@
+[
+ {
+  "label": "frozen",
+  "pair": 0,
+  "pos": 0,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8094677149983909,
+  "threads": {
+   "other": {
+    "user_s": 0.51,
+    "kernel_s": 0.68,
+    "threads": 1,
+    "rchar": 720540,
+    "wchar": 67115691,
+    "syscr": 177285,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 171,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 0,
+  "pos": 1,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8971939230013959,
+  "threads": {
+   "other": {
+    "user_s": 0.52,
+    "kernel_s": 0.73,
+    "threads": 1,
+    "rchar": 714699,
+    "wchar": 67818870,
+    "syscr": 175828,
+    "syscw": 87967
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.61,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 179,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 1,
+  "pos": 0,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8598875509997015,
+  "threads": {
+   "other": {
+    "user_s": 0.53,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 712108,
+    "wchar": 67816275,
+    "syscr": 175177,
+    "syscw": 87643
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 176,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 1,
+  "pos": 1,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8106817539992335,
+  "threads": {
+   "other": {
+    "user_s": 0.48,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 712972,
+    "wchar": 67115691,
+    "syscr": 175395,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 171,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 2,
+  "pos": 0,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8068325079984788,
+  "threads": {
+   "other": {
+    "user_s": 0.51,
+    "kernel_s": 0.67,
+    "threads": 1,
+    "rchar": 704764,
+    "wchar": 67115692,
+    "syscr": 173340,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 171,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 2,
+  "pos": 1,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.888643594000314,
+  "threads": {
+   "other": {
+    "user_s": 0.55,
+    "kernel_s": 0.71,
+    "threads": 1,
+    "rchar": 722628,
+    "wchar": 67829242,
+    "syscr": 177807,
+    "syscw": 88958
+   }
+  },
+  "samples": 179,
+  "errors": 1,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 3,
+  "pos": 0,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8930980839995755,
+  "threads": {
+   "other": {
+    "user_s": 0.54,
+    "kernel_s": 0.72,
+    "threads": 1,
+    "rchar": 715460,
+    "wchar": 67819636,
+    "syscr": 176017,
+    "syscw": 88063
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.61,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 179,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 3,
+  "pos": 1,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8262437200010027,
+  "threads": {
+   "other": {
+    "user_s": 0.49,
+    "kernel_s": 0.71,
+    "threads": 1,
+    "rchar": 705004,
+    "wchar": 67115692,
+    "syscr": 173402,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 173,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 4,
+  "pos": 0,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8261564360000193,
+  "threads": {
+   "other": {
+    "user_s": 0.49,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 711932,
+    "wchar": 67115691,
+    "syscr": 175129,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 173,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 4,
+  "pos": 1,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8571861239997816,
+  "threads": {
+   "other": {
+    "user_s": 0.48,
+    "kernel_s": 0.75,
+    "threads": 1,
+    "rchar": 712652,
+    "wchar": 67816838,
+    "syscr": 175311,
+    "syscw": 87713
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 176,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 5,
+  "pos": 0,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8802246230006858,
+  "threads": {
+   "other": {
+    "user_s": 0.56,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 712692,
+    "wchar": 67816852,
+    "syscr": 175325,
+    "syscw": 87715
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 178,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "frozen",
+  "pair": 5,
+  "pos": 1,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8607699059994047,
+  "threads": {
+   "other": {
+    "user_s": 0.52,
+    "kernel_s": 0.71,
+    "threads": 1,
+    "rchar": 714844,
+    "wchar": 67118155,
+    "syscr": 175859,
+    "syscw": 72
+   }
+  },
+  "samples": 177,
+  "errors": 1,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 0,
+  "pos": 0,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8260158080011024,
+  "threads": {
+   "other": {
+    "user_s": 0.49,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 716668,
+    "wchar": 67115690,
+    "syscr": 176316,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.61,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 173,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 0,
+  "pos": 1,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8113893949994235,
+  "threads": {
+   "other": {
+    "user_s": 0.5,
+    "kernel_s": 0.69,
+    "threads": 1,
+    "rchar": 715308,
+    "wchar": 67115691,
+    "syscr": 175978,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 171,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 1,
+  "pos": 0,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8157688480005163,
+  "threads": {
+   "other": {
+    "user_s": 0.47,
+    "kernel_s": 0.72,
+    "threads": 1,
+    "rchar": 726276,
+    "wchar": 67115691,
+    "syscr": 178721,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 172,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 1,
+  "pos": 1,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8073870949992852,
+  "threads": {
+   "other": {
+    "user_s": 0.5,
+    "kernel_s": 0.68,
+    "threads": 1,
+    "rchar": 729324,
+    "wchar": 67115694,
+    "syscr": 179484,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 172,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 2,
+  "pos": 0,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8227785150011186,
+  "threads": {
+   "other": {
+    "user_s": 0.46,
+    "kernel_s": 0.73,
+    "threads": 1,
+    "rchar": 718948,
+    "wchar": 67115693,
+    "syscr": 176888,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 172,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 2,
+  "pos": 1,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.788064262998887,
+  "threads": {
+   "other": {
+    "user_s": 0.49,
+    "kernel_s": 0.67,
+    "threads": 1,
+    "rchar": 722108,
+    "wchar": 67115691,
+    "syscr": 177679,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.59,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 169,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 3,
+  "pos": 0,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.7892957490003027,
+  "threads": {
+   "other": {
+    "user_s": 0.48,
+    "kernel_s": 0.68,
+    "threads": 1,
+    "rchar": 725460,
+    "wchar": 67115692,
+    "syscr": 178515,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 171,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 3,
+  "pos": 1,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.8031583890006004,
+  "threads": {
+   "other": {
+    "user_s": 0.49,
+    "kernel_s": 0.69,
+    "threads": 1,
+    "rchar": 723580,
+    "wchar": 67115692,
+    "syscr": 178045,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 170,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 4,
+  "pos": 0,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.7866848969988496,
+  "threads": {
+   "other": {
+    "user_s": 0.48,
+    "kernel_s": 0.68,
+    "threads": 1,
+    "rchar": 725468,
+    "wchar": 67115692,
+    "syscr": 178517,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 169,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 4,
+  "pos": 1,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.7854818830001022,
+  "threads": {
+   "other": {
+    "user_s": 0.48,
+    "kernel_s": 0.69,
+    "threads": 1,
+    "rchar": 730156,
+    "wchar": 67115691,
+    "syscr": 179691,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 169,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 5,
+  "pos": 0,
+  "arm": "B",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.7976710100010678,
+  "threads": {
+   "other": {
+    "user_s": 0.47,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 735364,
+    "wchar": 67115691,
+    "syscr": 180992,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 170,
+  "errors": 0,
+  "measured_records": 5
+ },
+ {
+  "label": "deferoff",
+  "pair": 5,
+  "pos": 1,
+  "arm": "A",
+  "case": "W02-uring-4k-d2",
+  "rc": 0,
+  "elapsed_s": 1.7992735799998627,
+  "threads": {
+   "other": {
+    "user_s": 0.47,
+    "kernel_s": 0.7,
+    "threads": 1,
+    "rchar": 727132,
+    "wchar": 67115693,
+    "syscr": 178932,
+    "syscw": 70
+   },
+   "iowq": {
+    "user_s": 0.0,
+    "kernel_s": 0.6,
+    "threads": 1,
+    "rchar": 0,
+    "wchar": 0,
+    "syscr": 0,
+    "syscw": 0
+   }
+  },
+  "samples": 170,
+  "errors": 0,
+  "measured_records": 5
+ }
+]

@@ -1,0 +1,1270 @@
+{
+ "final": {
+  "off_A": {
+   "cpu_ns_per_op": 5485.6868466666665,
+   "tput": 182085.66049978268,
+   "p95_ns": 14732.9,
+   "p99_ns": 19765.983333333334,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "off_B": {
+   "cpu_ns_per_op": 5717.3945925,
+   "tput": 174682.24919446305,
+   "p95_ns": 15411.333333333334,
+   "p99_ns": 21350.216666666667,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "on_A": {
+   "cpu_ns_per_op": 5652.327700833333,
+   "tput": 176780.97715009595,
+   "p95_ns": 14658.916666666666,
+   "p99_ns": 19978.016666666666,
+   "defer_clean_ns_per_call": 10.24408857948056,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": 702.2884978537695,
+   "poll_clean_ns_per_call": 366.84223413552314,
+   "defer_ns_per_op": 10.532857915411865,
+   "signal_ns_per_op": 0.0,
+   "write_ns_per_op": 0.0,
+   "signal_base_ns_per_op": 0.0,
+   "flush_ns_per_call": 2873.773190203623,
+   "signal_count/op": 0.0,
+   "write_count/op": 0.0,
+   "signal_coalesced/op": 0.0,
+   "defer_count/op": 1.0,
+   "defer_owner_pass/op": 0.0,
+   "defer_witness_pass/op": 0.0,
+   "poll_count/op": 0.7899808333333334,
+   "flush_count/op": 1.0,
+   "submit_count/op": 1.7899808333333334
+  },
+  "on_B": {
+   "cpu_ns_per_op": 5872.37076,
+   "tput": 170122.03342358864,
+   "p95_ns": 15590.916666666666,
+   "p99_ns": 21337.7,
+   "defer_clean_ns_per_call": 16.83669823354061,
+   "signal_clean_ns_per_call": 277.54672765546565,
+   "write_clean_ns_per_call": 592.53737559872,
+   "signal_base_clean_ns_per_call": 35.33673371242635,
+   "flush_clean_ns_per_call": 714.3766173437864,
+   "poll_clean_ns_per_call": 658.0296882710064,
+   "defer_ns_per_op": 17.25413084968245,
+   "signal_ns_per_op": 159.7367374089186,
+   "write_ns_per_op": 139.28424066183672,
+   "signal_base_ns_per_op": 20.45249674708187,
+   "flush_ns_per_call": 2980.8976807246404,
+   "signal_count/op": 0.5620825,
+   "write_count/op": 0.22997,
+   "signal_coalesced/op": 0.33211250000000003,
+   "defer_count/op": 1.0,
+   "defer_owner_pass/op": 0.9999,
+   "defer_witness_pass/op": 0.5620825,
+   "poll_count/op": 0.7921525,
+   "flush_count/op": 1.0,
+   "submit_count/op": 1.23007
+  },
+  "contrasts": {
+   "CPU/op OFF B vs A": {
+    "n": 12,
+    "mean": 0.04242763874651758,
+    "median": 0.04423752098781155,
+    "ci_lo": 0.03228195679937912,
+    "ci_hi": 0.05238009565077505,
+    "sd": 0.018588586687373475
+   },
+   "throughput OFF B vs A": {
+    "n": 12,
+    "mean": -0.04048408161023831,
+    "median": -0.04245341790776834,
+    "ci_lo": -0.049656162252946286,
+    "ci_hi": -0.031070764497020644,
+    "sd": 0.017176963553484373
+   },
+   "p95 OFF B vs A": {
+    "n": 12,
+    "mean": 0.04618016562260854,
+    "median": 0.048770404221214425,
+    "ci_lo": 0.03770786147800584,
+    "ci_hi": 0.05379965377968529,
+    "sd": 0.01463512899110889
+   },
+   "p99 OFF B vs A": {
+    "n": 12,
+    "mean": 0.0807567612634812,
+    "median": 0.07381044606036721,
+    "ci_lo": 0.06019754302887766,
+    "ci_hi": 0.10189302504639149,
+    "sd": 0.03815663856761416
+   },
+   "bench user OFF B vs A": {
+    "n": 12,
+    "mean": 0.07252416543604484,
+    "median": 0.07080200501253132,
+    "ci_lo": 0.036738343772658506,
+    "ci_hi": 0.11039584412076107,
+    "sd": 0.06858685641179903
+   },
+   "bench kernel OFF B vs A": {
+    "n": 12,
+    "mean": 0.041284234236155175,
+    "median": 0.06289556962025317,
+    "ci_lo": 0.013714725684754925,
+    "ci_hi": 0.06778531100534024,
+    "sd": 0.05023979648249055
+   },
+   "iowq kernel OFF B vs A": {
+    "n": 12,
+    "mean": 0.0025748207567690713,
+    "median": 0.0,
+    "ci_lo": -0.005986380059270085,
+    "ci_hi": 0.01110151501656254,
+    "sd": 0.016218557037799793
+   },
+   "CPU/op ON B vs A": {
+    "n": 12,
+    "mean": 0.03907077055374756,
+    "median": 0.03877580996704036,
+    "ci_lo": 0.03208726900266087,
+    "ci_hi": 0.04628325893742111,
+    "sd": 0.013189935988704797
+   },
+   "throughput ON B vs A": {
+    "n": 12,
+    "mean": -0.037534422519367235,
+    "median": -0.03730829819273643,
+    "ci_lo": -0.04423627018871493,
+    "ci_hi": -0.030951178245814132,
+    "sd": 0.012342804399565147
+   },
+   "p95 ON B vs A": {
+    "n": 12,
+    "mean": 0.06345844371673738,
+    "median": 0.056975942533009624,
+    "ci_lo": 0.05115288903873091,
+    "ci_hi": 0.08236055244140995,
+    "sd": 0.030397665921121347
+   },
+   "p99 ON B vs A": {
+    "n": 12,
+    "mean": 0.07117149555220159,
+    "median": 0.06408775715255778,
+    "ci_lo": 0.03926856120530358,
+    "ci_hi": 0.10246329899682309,
+    "sd": 0.058078861592791686
+   },
+   "defer ns/call ON B vs A": {
+    "n": 12,
+    "mean": 0.6383800802199723,
+    "median": 0.6393486238415043,
+    "ci_lo": 0.6257051120354808,
+    "ci_hi": 0.6506693500846098,
+    "sd": 0.023108121653698452
+   },
+   "poll ns/call ON B vs A": {
+    "n": 12,
+    "mean": 4.219246029226927,
+    "median": 4.227704995893488,
+    "ci_lo": 4.158210280589656,
+    "ci_hi": 4.283203505132288,
+    "sd": 0.1159024656823711
+   },
+   "flush submit ns/call ON B vs A": {
+    "n": 12,
+    "mean": 0.037521919709709334,
+    "median": 0.03403106347722415,
+    "ci_lo": 0.025932201979661115,
+    "ci_hi": 0.04917959286550769,
+    "sd": 0.02155803338706343
+   },
+   "empty submit ns/call ON B vs A": {
+    "n": 12,
+    "mean": 2.105704718901564,
+    "median": 2.098195360868197,
+    "ci_lo": 2.0594314719410742,
+    "ci_hi": 2.150576118133166,
+    "sd": 0.08332879155246672
+   },
+   "CPU/op probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.030499590329262954,
+    "median": 0.03556365363830678,
+    "ci_lo": 0.021250873234564576,
+    "ci_hi": 0.039278079149424557,
+    "sd": 0.016718860206189446
+   },
+   "CPU/op probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.027197414410773516,
+    "median": 0.029433863773815017,
+    "ci_lo": 0.020406729049971824,
+    "ci_hi": 0.033722864782213306,
+    "sd": 0.012200763216139096
+   },
+   "throughput probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.029017693688279406,
+    "median": -0.034198582659527396,
+    "ci_lo": -0.03728769079915841,
+    "ci_hi": -0.02025577448021471,
+    "sd": 0.015859432710197217
+   },
+   "throughput probe B: ON vs OFF": {
+    "n": 12,
+    "mean": -0.02601782183050766,
+    "median": -0.02820821307829529,
+    "ci_lo": -0.03224952478813892,
+    "ci_hi": -0.019478813055117294,
+    "sd": 0.01169452533489458
+   },
+   "p95 probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.0049110217551406815,
+    "median": -0.00199891195200354,
+    "ci_lo": -0.01302067890227422,
+    "ci_hi": 0.00272121134826653,
+    "sd": 0.014547136162934052
+   },
+   "p99 probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.01053465108329063,
+    "median": 0.004250680132525127,
+    "ci_lo": -0.018466777042428124,
+    "ci_hi": 0.04585005033140768,
+    "sd": 0.05918742352373695
+   },
+   "p95 probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.011780455351937828,
+    "median": 0.0026934584924513125,
+    "ci_lo": -0.0029415599301773894,
+    "ci_hi": 0.03551523972265305,
+    "sd": 0.038407910746985914
+   },
+   "p99 probe B: ON vs OFF": {
+    "n": 12,
+    "mean": -0.00028835269520225825,
+    "median": -0.007818595396123432,
+    "ci_lo": -0.016236706806862542,
+    "ci_hi": 0.017720003736176843,
+    "sd": 0.031131875188244357
+   },
+   "user probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.04093646630919449,
+    "median": 0.03508771929824561,
+    "ci_lo": 0.016011483830150056,
+    "ci_hi": 0.06579070128298804,
+    "sd": 0.04665969118838704
+   },
+   "kernel probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.00492332490259798,
+    "median": 0.013085870680807389,
+    "ci_lo": -0.016103283971233114,
+    "ci_hi": 0.025458143938879005,
+    "sd": 0.03883041822397423
+   },
+   "user probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.015349336925467133,
+    "median": -0.00819672131147541,
+    "ci_lo": -0.011053413230667329,
+    "ci_hi": 0.04366108663051071,
+    "sd": 0.05043704327783404
+   },
+   "kernel probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.03024383554430572,
+    "median": 0.024616079494128272,
+    "ci_lo": 0.01027521760655155,
+    "ci_hi": 0.050295693276151694,
+    "sd": 0.03715723240506314
+   }
+  },
+  "derived": {
+   "effect_off_ns_per_op": 231.70774583333332,
+   "signal_raw_ns_per_op": 159.7367374089186,
+   "signal_clean_ns_per_op": 156.00415854740328,
+   "base_clean_ns_per_op": 19.862159626914885,
+   "write_clean_ns_per_op": 136.26582026643766,
+   "defer_delta_clean": 6.59260965406005,
+   "flush_delta_clean_ns_per_call": 12.08811949001688,
+   "signal_true_ns_per_op": 148.20244142240327,
+   "added_true_ns_per_op": 154.79505107646332,
+   "ratio_true_vs_effect": 0.6680616158072115
+  }
+ },
+ "prev2": {
+  "off_A": {
+   "cpu_ns_per_op": 5182.811924166666,
+   "tput": 192690.781588887,
+   "p95_ns": 13809.5,
+   "p99_ns": 18273.566666666666,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "off_B": {
+   "cpu_ns_per_op": 5365.026688333333,
+   "tput": 186185.71570464718,
+   "p95_ns": 14502.133333333333,
+   "p99_ns": 19700.36666666667,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "on_A": {
+   "cpu_ns_per_op": 5216.278086666666,
+   "tput": 191563.8402143728,
+   "p95_ns": 13755.233333333334,
+   "p99_ns": 18137.366666666665,
+   "defer_clean_ns_per_call": 10.195293310308426,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": 288.88764257663536,
+   "defer_ns_per_op": 10.403311659865016,
+   "signal_ns_per_op": 0.0,
+   "write_ns_per_op": 0.0,
+   "signal_base_ns_per_op": 0.0,
+   "flush_ns_per_call": null,
+   "signal_count/op": 0.0,
+   "write_count/op": 0.0,
+   "signal_coalesced/op": 0.0,
+   "defer_count/op": 1.0,
+   "defer_owner_pass/op": 0.0,
+   "defer_witness_pass/op": 0.0,
+   "poll_count/op": 0.791425,
+   "flush_count/op": 0.0,
+   "submit_count/op": 0.0
+  },
+  "on_B": {
+   "cpu_ns_per_op": 5469.856668333334,
+   "tput": 182683.84176074405,
+   "p95_ns": 14575.9,
+   "p99_ns": 19099.55,
+   "defer_clean_ns_per_call": 16.241405215700148,
+   "signal_clean_ns_per_call": 275.9148634957913,
+   "write_clean_ns_per_call": 562.6268134724137,
+   "signal_base_clean_ns_per_call": 39.44604283893102,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": 643.0020474165856,
+   "defer_ns_per_op": 16.597331146343027,
+   "signal_ns_per_op": 156.9110053612633,
+   "write_ns_per_op": 134.2911519368988,
+   "signal_base_ns_per_op": 22.619853424364514,
+   "flush_ns_per_call": null,
+   "signal_count/op": 0.5583816666666667,
+   "write_count/op": 0.23482666666666668,
+   "signal_coalesced/op": 0.323555,
+   "defer_count/op": 1.0,
+   "defer_owner_pass/op": 0.9999,
+   "defer_witness_pass/op": 0.5583816666666667,
+   "poll_count/op": 0.7933083333333333,
+   "flush_count/op": 0.0,
+   "submit_count/op": 0.0
+  },
+  "contrasts": {
+   "CPU/op OFF B vs A": {
+    "n": 12,
+    "mean": 0.03517788968246826,
+    "median": 0.04065342493899446,
+    "ci_lo": 0.028639483482779223,
+    "ci_hi": 0.04113316046009326,
+    "sd": 0.011626893589606727
+   },
+   "throughput OFF B vs A": {
+    "n": 12,
+    "mean": -0.03373747955987446,
+    "median": -0.03886866090960565,
+    "ci_lo": -0.0393859372178447,
+    "ci_hi": -0.027495336020498248,
+    "sd": 0.011043975862284023
+   },
+   "p95 OFF B vs A": {
+    "n": 12,
+    "mean": 0.05016022669204182,
+    "median": 0.051492349812178304,
+    "ci_lo": 0.04357123806895582,
+    "ci_hi": 0.05727994053687241,
+    "sd": 0.012615117257704112
+   },
+   "p99 OFF B vs A": {
+    "n": 12,
+    "mean": 0.07840105841245247,
+    "median": 0.10732134057796823,
+    "ci_lo": 0.020191983164557444,
+    "ci_hi": 0.12338243507791881,
+    "sd": 0.09632028553241376
+   },
+   "bench user OFF B vs A": {
+    "n": 12,
+    "mean": 0.07325366715079204,
+    "median": 0.08716981132075471,
+    "ci_lo": 0.0430281039715002,
+    "ci_hi": 0.10175851327468578,
+    "sd": 0.05406070346939556
+   },
+   "bench kernel OFF B vs A": {
+    "n": 12,
+    "mean": 0.03606276079098992,
+    "median": 0.02666666666666667,
+    "ci_lo": 0.015350934874585774,
+    "ci_hi": 0.05671610717523032,
+    "sd": 0.0382261519522306
+   },
+   "iowq kernel OFF B vs A": {
+    "n": 12,
+    "mean": 0.0013221153846153845,
+    "median": 0.0,
+    "ci_lo": -0.005188301282051282,
+    "ci_hi": 0.0078125,
+    "sd": 0.012360326089585266
+   },
+   "CPU/op ON B vs A": {
+    "n": 12,
+    "mean": 0.04862938473433079,
+    "median": 0.051993461708581615,
+    "ci_lo": 0.040390474389481755,
+    "ci_hi": 0.05645205511893614,
+    "sd": 0.014775033241146731
+   },
+   "throughput ON B vs A": {
+    "n": 12,
+    "mean": -0.04634107594105824,
+    "median": -0.049479210069180324,
+    "ci_lo": -0.05344280371906093,
+    "ci_hi": -0.03876177007088771,
+    "sd": 0.013540615581957242
+   },
+   "p95 ON B vs A": {
+    "n": 12,
+    "mean": 0.05967543766349198,
+    "median": 0.06330017897836623,
+    "ci_lo": 0.05086592142523311,
+    "ci_hi": 0.06764576228909988,
+    "sd": 0.015570801619472443
+   },
+   "p99 ON B vs A": {
+    "n": 12,
+    "mean": 0.05482484563270738,
+    "median": 0.0791060156494719,
+    "ci_lo": -0.0020550282558750295,
+    "ci_hi": 0.10548265911626238,
+    "sd": 0.10051561726854288
+   },
+   "defer ns/call ON B vs A": {
+    "n": 12,
+    "mean": 0.5959700701355629,
+    "median": 0.5505103706528128,
+    "ci_lo": 0.5376955834532989,
+    "ci_hi": 0.6805309779549399,
+    "sd": 0.13569056082800163
+   },
+   "poll ns/call ON B vs A": {
+    "n": 12,
+    "mean": 5.069225917726054,
+    "median": 5.117659120759466,
+    "ci_lo": 4.955016642445207,
+    "ci_hi": 5.184695955568043,
+    "sd": 0.2124904757056861
+   },
+   "CPU/op probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.006480065001104773,
+    "median": 0.008713455635821285,
+    "ci_lo": 0.0006739266651660548,
+    "ci_hi": 0.012269981233283718,
+    "sd": 0.010620923555239331
+   },
+   "CPU/op probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.019590366153724007,
+    "median": 0.02163242847615445,
+    "ci_lo": 0.010411593837676652,
+    "ci_hi": 0.027839912917012946,
+    "sd": 0.016110272283710814
+   },
+   "throughput probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.00582244092472359,
+    "median": -0.008256306250241902,
+    "ci_lo": -0.0116514226269619,
+    "ci_hi": 9.226283129636302e-05,
+    "sd": 0.010749533389372021
+   },
+   "throughput probe B: ON vs OFF": {
+    "n": 12,
+    "mean": -0.01876014868703325,
+    "median": -0.02092108764780598,
+    "ci_lo": -0.026749931452542886,
+    "ci_hi": -0.009754200816440847,
+    "sd": 0.015718459094645382
+   },
+   "p95 probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.0038918925455506334,
+    "median": -0.008019991866890024,
+    "ci_lo": -0.01053619684745176,
+    "ci_hi": 0.0032688816880522033,
+    "sd": 0.012577638985249487
+   },
+   "p99 probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.0045608654219237085,
+    "median": 0.01065363495774041,
+    "ci_lo": -0.06694642505854197,
+    "ci_hi": 0.044004662420548256,
+    "sd": 0.1038171038199544
+   },
+   "p95 probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.005230974131880631,
+    "median": 0.00816998448758769,
+    "ci_lo": -0.007040269209951824,
+    "ci_hi": 0.015508523038222167,
+    "sd": 0.020996978397165533
+   },
+   "p99 probe B: ON vs OFF": {
+    "n": 12,
+    "mean": -0.016977722223364865,
+    "median": -0.02748978880169796,
+    "ci_lo": -0.11137880977671706,
+    "ci_hi": 0.08920578853578383,
+    "sd": 0.1856109327363193
+   },
+   "user probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.016815760277125957,
+    "median": 0.019230769230769232,
+    "ci_lo": -0.0025659839810783197,
+    "ci_hi": 0.03808084772370487,
+    "sd": 0.0372897161846316
+   },
+   "kernel probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.0005586521462124942,
+    "median": -0.006329113924050633,
+    "ci_lo": -0.019636297744225793,
+    "ci_hi": 0.01973232736971295,
+    "sd": 0.03605174991894462
+   },
+   "user probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.026569187136309236,
+    "median": 0.026803118908382065,
+    "ci_lo": 0.0038916677264335606,
+    "ci_hi": 0.04970133309259426,
+    "sd": 0.04253732321324602
+   },
+   "kernel probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.008763628957342407,
+    "median": 0.01258309591642925,
+    "ci_lo": -0.0021231874850295906,
+    "ci_hi": 0.01971849517536652,
+    "sd": 0.020322633508511552
+   }
+  },
+  "derived": {
+   "effect_off_ns_per_op": 182.214764166667,
+   "signal_raw_ns_per_op": 156.9110053612633,
+   "signal_clean_ns_per_op": 154.06580133688576,
+   "base_clean_ns_per_op": 22.025947143807034,
+   "write_clean_ns_per_op": 132.11977918501535,
+   "defer_delta_clean": 6.046111905391722,
+   "flush_delta_clean_ns_per_call": 0,
+   "signal_true_ns_per_op": 146.25269925355244,
+   "added_true_ns_per_op": 152.29881115894415,
+   "ratio_true_vs_effect": 0.8358203675506802
+  }
+ },
+ "prev": {
+  "off_A": {
+   "cpu_ns_per_op": 5104.8003383333335,
+   "tput": 195693.20654951263,
+   "p95_ns": 13467.733333333334,
+   "p99_ns": 17814.3,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "off_B": {
+   "cpu_ns_per_op": 5263.111723333333,
+   "tput": 189785.91356443745,
+   "p95_ns": 14167.15,
+   "p99_ns": 19067.11666666667,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "on_A": {
+   "cpu_ns_per_op": 5157.729130000001,
+   "tput": 193742.45828312845,
+   "p95_ns": 13485.6,
+   "p99_ns": 17992.216666666667,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": 10.43752216560367,
+   "signal_ns_per_op": 0.0,
+   "write_ns_per_op": 0.0,
+   "signal_base_ns_per_op": 0.0,
+   "flush_ns_per_call": null,
+   "signal_count/op": 0.0,
+   "write_count/op": 0.0,
+   "signal_coalesced/op": 0.0,
+   "defer_count/op": 1.0,
+   "defer_owner_pass/op": 0.0,
+   "defer_witness_pass/op": 0.0,
+   "poll_count/op": 0.7904241666666667,
+   "flush_count/op": 0.0,
+   "submit_count/op": 0.0
+  },
+  "on_B": {
+   "cpu_ns_per_op": 5345.979493333333,
+   "tput": 186907.32571289275,
+   "p95_ns": 14172.583333333334,
+   "p99_ns": 19002.516666666666,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": 18.0382726781639,
+   "signal_ns_per_op": 149.77334826417248,
+   "write_ns_per_op": 131.03907922203325,
+   "signal_base_ns_per_op": 18.734269042139235,
+   "flush_ns_per_call": null,
+   "signal_count/op": 0.5629875,
+   "write_count/op": 0.23308583333333333,
+   "signal_coalesced/op": 0.32990166666666665,
+   "defer_count/op": 1.0,
+   "defer_owner_pass/op": 0.9999,
+   "defer_witness_pass/op": 0.5629875,
+   "poll_count/op": 0.7961775,
+   "flush_count/op": 0.0,
+   "submit_count/op": 0.0
+  },
+  "contrasts": {
+   "CPU/op OFF B vs A": {
+    "n": 12,
+    "mean": 0.031039448860211594,
+    "median": 0.02799316684227559,
+    "ci_lo": 0.02534427631065614,
+    "ci_hi": 0.03736006489536628,
+    "sd": 0.011041084626069456
+   },
+   "throughput OFF B vs A": {
+    "n": 12,
+    "mean": -0.030161269898782175,
+    "median": -0.027453930616551436,
+    "ci_lo": -0.03605941195496247,
+    "ci_hi": -0.024828698674689273,
+    "sd": 0.010341659280772532
+   },
+   "p95 OFF B vs A": {
+    "n": 12,
+    "mean": 0.051992957915049674,
+    "median": 0.0525141217365618,
+    "ci_lo": 0.04423799548932222,
+    "ci_hi": 0.05915657336668362,
+    "sd": 0.013543740260039773
+   },
+   "p99 OFF B vs A": {
+    "n": 12,
+    "mean": 0.07442531980712486,
+    "median": 0.05152627397388858,
+    "ci_lo": 0.011225242314613573,
+    "ci_hi": 0.14332845888997717,
+    "sd": 0.12061988797651231
+   },
+   "bench user OFF B vs A": {
+    "n": 12,
+    "mean": 0.06971102102844864,
+    "median": 0.058823529411764705,
+    "ci_lo": 0.04287207350181115,
+    "ci_hi": 0.10306225614827759,
+    "sd": 0.05621063989554037
+   },
+   "bench kernel OFF B vs A": {
+    "n": 12,
+    "mean": 0.03618196223669287,
+    "median": 0.04757497223250648,
+    "ci_lo": 0.016980860438555307,
+    "ci_hi": 0.05192480151384261,
+    "sd": 0.03275806858789928
+   },
+   "iowq kernel OFF B vs A": {
+    "n": 12,
+    "mean": 0.004010923365762076,
+    "median": 0.0,
+    "ci_lo": -0.0026455026455026454,
+    "ci_hi": 0.01199010069977812,
+    "sd": 0.013840966256008475
+   },
+   "CPU/op ON B vs A": {
+    "n": 12,
+    "mean": 0.03665760841404049,
+    "median": 0.03938048496734434,
+    "ci_lo": 0.026367085089560705,
+    "ci_hi": 0.04647415244430287,
+    "sd": 0.018518530219516705
+   },
+   "throughput ON B vs A": {
+    "n": 12,
+    "mean": -0.03513134096126573,
+    "median": -0.037922413890871004,
+    "ci_lo": -0.044297354741460675,
+    "ci_hi": -0.025390438736218535,
+    "sd": 0.017396314483308497
+   },
+   "p95 ON B vs A": {
+    "n": 12,
+    "mean": 0.051073599501700116,
+    "median": 0.056123465323116996,
+    "ci_lo": 0.041700557718678664,
+    "ci_hi": 0.06005019311668541,
+    "sd": 0.016861829666400357
+   },
+   "p99 ON B vs A": {
+    "n": 12,
+    "mean": 0.05737019870172161,
+    "median": 0.10279651332932996,
+    "ci_lo": -0.004344912202551191,
+    "ci_hi": 0.1107271295355754,
+    "sd": 0.10584187494692683
+   },
+   "defer ns/call ON B vs A": {
+    "n": 12,
+    "mean": 0.7286762535182331,
+    "median": 0.7340880528010967,
+    "ci_lo": 0.7122255100079667,
+    "ci_hi": 0.7441662065589337,
+    "sd": 0.029132289213253594
+   },
+   "poll ns/call ON B vs A": {
+    "n": 12,
+    "mean": 5.5612868224372995,
+    "median": 5.538275735971354,
+    "ci_lo": 5.464574143171004,
+    "ci_hi": 5.659024337822795,
+    "sd": 0.17709059550365094
+   },
+   "CPU/op probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.010442263793096297,
+    "median": 0.011106249131431656,
+    "ci_lo": 0.0013735427438188229,
+    "ci_hi": 0.019239358729178556,
+    "sd": 0.01636684345311684
+   },
+   "CPU/op probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.015819694647600656,
+    "median": 0.013834277797116816,
+    "ci_lo": 0.008363657034833551,
+    "ci_hi": 0.02353952500900181,
+    "sd": 0.014137980174763986
+   },
+   "throughput probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.009895785666717262,
+    "median": -0.010885936776251314,
+    "ci_lo": -0.018506179327444063,
+    "ci_hi": -0.0009508192453779799,
+    "sd": 0.016066686094300925
+   },
+   "throughput probe B: ON vs OFF": {
+    "n": 12,
+    "mean": -0.015094677113451091,
+    "median": -0.013355827856724348,
+    "ci_lo": -0.022571868236934172,
+    "ci_hi": -0.00783680886087147,
+    "sd": 0.013752904449520882
+   },
+   "p95 probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.0014029664926221022,
+    "median": 0.002413774999753612,
+    "ci_lo": -0.007197951551028439,
+    "ci_hi": 0.009103816386558874,
+    "sd": 0.015006309795889265
+   },
+   "p99 probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.014217891093140193,
+    "median": 0.014335948376629524,
+    "ci_lo": -0.03556614166313885,
+    "ci_hi": 0.06174561096273653,
+    "sd": 0.08857440587485858
+   },
+   "p95 probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.0004893710668101609,
+    "median": 0.00074007621189615,
+    "ci_lo": -0.0077277356754660515,
+    "ci_hi": 0.008724168522151408,
+    "sd": 0.015308824569724528
+   },
+   "p99 probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.001265279663423436,
+    "median": 0.008380693989494214,
+    "ci_lo": -0.05814452519960999,
+    "ci_hi": 0.06785726890445236,
+    "sd": 0.11798204156441318
+   },
+   "user probe A: ON vs OFF": {
+    "n": 12,
+    "mean": -0.005043249332486807,
+    "median": -0.009615384615384616,
+    "ci_lo": -0.03482094918276938,
+    "ci_hi": 0.02246400756156254,
+    "sd": 0.05279689445557545
+   },
+   "kernel probe A: ON vs OFF": {
+    "n": 12,
+    "mean": 0.022873688506143585,
+    "median": 0.032994032994032994,
+    "ci_lo": 0.00202645683658342,
+    "ci_hi": 0.041395202354106465,
+    "sd": 0.03590950948919021
+   },
+   "user probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.012987305016020674,
+    "median": 0.028127183787561145,
+    "ci_lo": -0.01566930516367789,
+    "ci_hi": 0.03937872923721981,
+    "sd": 0.0508710168653902
+   },
+   "kernel probe B: ON vs OFF": {
+    "n": 12,
+    "mean": 0.012369720428930954,
+    "median": 0.00641025641025641,
+    "ci_lo": -0.006964125056230321,
+    "ci_hi": 0.03174809424809425,
+    "sd": 0.03562845433150805
+   }
+  },
+  "derived": {
+   "effect_off_ns_per_op": 158.31138499999997,
+   "signal_raw_ns_per_op": 149.77334826417248,
+   "signal_clean_ns_per_op": 0.0,
+   "base_clean_ns_per_op": 0.0,
+   "write_clean_ns_per_op": 0.0,
+   "defer_delta_clean": 0,
+   "flush_delta_clean_ns_per_call": 0,
+   "signal_true_ns_per_op": -7.841322333333332,
+   "added_true_ns_per_op": -7.841322333333332,
+   "ratio_true_vs_effect": -0.049531007092972715
+  }
+ },
+ "frozen-control": {
+  "off_A": {
+   "cpu_ns_per_op": 5154.651486666667,
+   "tput": 193805.21895952665,
+   "p95_ns": 13670.9,
+   "p99_ns": 18693.7,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "off_B": {
+   "cpu_ns_per_op": 5308.213218333333,
+   "tput": 188180.87922199073,
+   "p95_ns": 14268.766666666666,
+   "p99_ns": 20271.933333333334,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "on_A": {
+   "cpu_ns_per_op": 5179.494771666667,
+   "tput": 192876.61801729305,
+   "p95_ns": 13725.966666666667,
+   "p99_ns": 18549.866666666665,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "on_B": {
+   "cpu_ns_per_op": 5324.994148333333,
+   "tput": 187580.2239186557,
+   "p95_ns": 14332.933333333334,
+   "p99_ns": 19738.166666666668,
+   "defer_clean_ns_per_call": null,
+   "signal_clean_ns_per_call": null,
+   "write_clean_ns_per_call": null,
+   "signal_base_clean_ns_per_call": null,
+   "flush_clean_ns_per_call": null,
+   "poll_clean_ns_per_call": null,
+   "defer_ns_per_op": null,
+   "signal_ns_per_op": null,
+   "write_ns_per_op": null,
+   "signal_base_ns_per_op": null,
+   "flush_ns_per_call": null,
+   "signal_count/op": null,
+   "write_count/op": null,
+   "signal_coalesced/op": null,
+   "defer_count/op": null,
+   "defer_owner_pass/op": null,
+   "defer_witness_pass/op": null,
+   "poll_count/op": null,
+   "flush_count/op": null,
+   "submit_count/op": null
+  },
+  "contrasts": {
+   "CPU/op OFF B vs A": {
+    "n": 6,
+    "mean": 0.029937678676813895,
+    "median": 0.031329979674987525,
+    "ci_lo": 0.016265920296248047,
+    "ci_hi": 0.04326312412527016,
+    "sd": 0.01869648338286146
+   },
+   "throughput OFF B vs A": {
+    "n": 6,
+    "mean": -0.028880445402086716,
+    "median": -0.030318227251006157,
+    "ci_lo": -0.04158208506142226,
+    "ci_hi": -0.015718520616090165,
+    "sd": 0.017880835019067374
+   },
+   "p95 OFF B vs A": {
+    "n": 6,
+    "mean": 0.04387483624708105,
+    "median": 0.042477357027795704,
+    "ci_lo": 0.030857208455313548,
+    "ci_hi": 0.056838540765557354,
+    "sd": 0.01822740834089632
+   },
+   "p99 OFF B vs A": {
+    "n": 6,
+    "mean": 0.08511812260502284,
+    "median": 0.07824064283763686,
+    "ci_lo": 0.04776242935511815,
+    "ci_hi": 0.12422275567153136,
+    "sd": 0.053179374183822056
+   },
+   "bench user OFF B vs A": {
+    "n": 6,
+    "mean": 0.07048218147657924,
+    "median": 0.09068627450980392,
+    "ci_lo": 0.02138846991788168,
+    "ci_hi": 0.10944377751100441,
+    "sd": 0.06072119881698631
+   },
+   "bench kernel OFF B vs A": {
+    "n": 6,
+    "mean": 0.013865754345712153,
+    "median": 0.0001602564102564097,
+    "ci_lo": -0.02479421363915035,
+    "ci_hi": 0.05480689022355689,
+    "sd": 0.05465306034098522
+   },
+   "iowq kernel OFF B vs A": {
+    "n": 6,
+    "mean": 0.002884731009731009,
+    "median": 0.0,
+    "ci_lo": -0.01522921522921523,
+    "ci_hi": 0.02099867724867725,
+    "sd": 0.024857204306630905
+   },
+   "CPU/op ON B vs A": {
+    "n": 6,
+    "mean": 0.028237579674456188,
+    "median": 0.023708722130995688,
+    "ci_lo": 0.017259741863249006,
+    "ci_hi": 0.04272480118537806,
+    "sd": 0.017641999636635635
+   },
+   "throughput ON B vs A": {
+    "n": 6,
+    "mean": -0.02732116121984698,
+    "median": -0.023106095175938403,
+    "ci_lo": -0.04084051895832113,
+    "ci_hi": -0.01692921481283609,
+    "sd": 0.016525923861053737
+   },
+   "p95 ON B vs A": {
+    "n": 6,
+    "mean": 0.044343067797586046,
+    "median": 0.04188448777764288,
+    "ci_lo": 0.03232084657040372,
+    "ci_hi": 0.05685437614775593,
+    "sd": 0.016640105165213064
+   },
+   "p99 ON B vs A": {
+    "n": 6,
+    "mean": 0.06423643481933103,
+    "median": 0.05223916733357796,
+    "ci_lo": 0.042123387073321895,
+    "ci_hi": 0.09636529369854695,
+    "sd": 0.0388737920168503
+   },
+   "CPU/op probe A: ON vs OFF": {
+    "n": 6,
+    "mean": 0.004995945978645025,
+    "median": 0.011559074956014588,
+    "ci_lo": -0.010607418136211253,
+    "ci_hi": 0.020186429602233377,
+    "sd": 0.021515160706026232
+   },
+   "CPU/op probe B: ON vs OFF": {
+    "n": 6,
+    "mean": 0.003262003018691924,
+    "median": 0.0007583100217660058,
+    "ci_lo": -0.007939906017343644,
+    "ci_hi": 0.01464240797865334,
+    "sd": 0.01563765529828281
+   },
+   "throughput probe A: ON vs OFF": {
+    "n": 6,
+    "mean": -0.004614425511034681,
+    "median": -0.011541276862195315,
+    "ci_lo": -0.01983396100815846,
+    "ci_hi": 0.011200097363780559,
+    "sd": 0.0216169631801954
+   },
+   "throughput probe B: ON vs OFF": {
+    "n": 6,
+    "mean": -0.0030884075086513555,
+    "median": -0.0009465231748598791,
+    "ci_lo": -0.014419255025677891,
+    "ci_hi": 0.008299557011248114,
+    "sd": 0.01570368352249183
+   },
+   "p95 probe A: ON vs OFF": {
+    "n": 6,
+    "mean": 0.004211655570544034,
+    "median": 0.005706008077267125,
+    "ci_lo": -0.011825964729267372,
+    "ci_hi": 0.019694095432015255,
+    "sd": 0.021990956928389475
+   },
+   "p99 probe A: ON vs OFF": {
+    "n": 6,
+    "mean": -0.0068550150881893325,
+    "median": -0.014630247595019468,
+    "ci_lo": -0.039198124705062336,
+    "ci_hi": 0.02793308444404138,
+    "sd": 0.04478360755299038
+   },
+   "p95 probe B: ON vs OFF": {
+    "n": 6,
+    "mean": 0.0045235943878741275,
+    "median": 0.003888509882045643,
+    "ci_lo": -0.002249779267795547,
+    "ci_hi": 0.012391725581317079,
+    "sd": 0.0099491482351801
+   },
+   "p99 probe B: ON vs OFF": {
+    "n": 6,
+    "mean": -0.0252383765594164,
+    "median": -0.011414301647337137,
+    "ci_lo": -0.06306970546458865,
+    "ci_hi": 0.009181174570601204,
+    "sd": 0.050400546412707095
+   },
+   "user probe A: ON vs OFF": {
+    "n": 6,
+    "mean": 0.008958676063017802,
+    "median": 0.00980392156862745,
+    "ci_lo": -0.04756717501815541,
+    "ci_hi": 0.0699154661864746,
+    "sd": 0.08303577846218081
+   },
+   "kernel probe A: ON vs OFF": {
+    "n": 6,
+    "mean": 0.0013216992823181306,
+    "median": -0.00641025641025641,
+    "ci_lo": -0.03547529461734806,
+    "ci_hi": 0.04793330602050715,
+    "sd": 0.0583160738501446
+   },
+   "user probe B: ON vs OFF": {
+    "n": 6,
+    "mean": 0.010060878043334184,
+    "median": 0.01835016835016835,
+    "ci_lo": -0.011692109060530113,
+    "ci_hi": 0.031701631701631705,
+    "sd": 0.030358074825742494
+   },
+   "kernel probe B: ON vs OFF": {
+    "n": 6,
+    "mean": 0.005035439976960445,
+    "median": 0.00015627441787779365,
+    "ci_lo": -0.017095207153686686,
+    "ci_hi": 0.02830675930091135,
+    "sd": 0.03169794574641637
+   }
+  }
+ }
+}

@@ -1,0 +1,13 @@
+request_core_ownership_uring_test rc=0 :: 13 of 13 request core ownership tests passed, 0 skipped
+uring_595_bounded_progress_test rc=2 :: [uring_595_bounded_progress_test] SLUICE_595_ARM=B is required
+uring_backend_smoke_test rc=0 :: all 8 uring backend smoke tests passed (real liburing path)
+uring_external_loop_test rc=0 :: ok external_poll_loop_uring_w03
+uring_flush_count_oracle_test rc=0 :: [uring_flush_count_oracle_test] all checks passed
+uring_owed_counter_parity_test rc=0 :: ok counter_tracks_zero_op_reads
+uring_owed_residue_test rc=0 :: ok a_zero_op_after_sweep_is_immediate_residue
+uring_pending_control_parity_test rc=0 :: ok sticky_lifecycle_oracle
+uring_progress_race_test rc=0 :: ok k1_k2_cqe_before_drain_recovered_by_final_probe
+uring_public_consumer_probe rc=0 :: uring public consumer probe passed: consumer TU selected io_uring through the public factory
+uring_registration_lifecycle_test rc=0 :: ok standalone_backend_registers_nothing
+uring_request_core_integration_test rc=0 :: INFO [real_kernel_normal_completion_and_cancel] real-kernel cancel terminal: success (8 bytes)
+uring_submit_boundary_test rc=0 :: all 2 io_uring submit boundary tests passed
