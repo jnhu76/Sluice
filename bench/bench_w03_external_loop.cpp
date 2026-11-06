@@ -5,6 +5,7 @@
 #include "r3_ready_batch.hpp"
 
 #include <sluice/async/async_io_context.hpp>
+#include <sluice/async/detail/r5_tail_trace.hpp>
 #include <sluice/async/request.hpp>
 #include <sluice/async/threadpool_backend.hpp>
 #include <sluice/async/uring_backend.hpp>
@@ -210,6 +211,7 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
         if (ready > 0) {
             for (int i = 0; i < ready; ++i) {
                 if (events[i].data.fd == notification_fd) {
+                    sluice::async::detail::tailtrace::note_wake();
                     ctx.acknowledge_progress_notification();
                     std::lock_guard<std::mutex> lock(shared.mutex);
                     ++shared.notifications;
@@ -367,6 +369,7 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
         Request<std::size_t> request;
         std::size_t slot = 0;
         std::uint64_t offset = 0;
+        std::uint32_t sequence = 0;
         // Unified latency origin: the instant the ReadOp for this item is fully
         // built, before any arm-specific submission work. Both arms record it at
         // the same semantic point so latencies include prep, scan and submit.
@@ -392,6 +395,9 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
         accepted.reserve(params.depth);
     }
     const bench::TimePoint start = bench::now();
+    if (instrument) {
+        sluice::async::detail::tailtrace::begin_phase();
+    }
     while (settled < params.request_count && !failed) {
         while (window.size() < params.depth && submitted < params.request_count) {
             const std::size_t want = std::min(
@@ -410,7 +416,14 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                     op.len = params.block_size;
                     op.offset = static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
                     ready.push_back(op);
-                    ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
+                    const std::int64_t t0_ns =
+                        instrument ? sluice::async::detail::tailtrace::now_ns_i() : 0;
+                    ready_ns.push_back(instrument ? static_cast<double>(t0_ns) : 0.0);
+                    if (instrument) {
+                        sluice::async::detail::tailtrace::note_built(
+                            static_cast<std::uint32_t>(sequence),
+                            static_cast<std::uint32_t>(window.size()), t0_ns);
+                    }
                 }
                 bench::r3::DecisionFacts facts;
                 facts.caller_window = window.size();
@@ -463,7 +476,7 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                     window.push_back(
                         Inflight{std::move(accepted[k]), sequence % params.depth,
                                  static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
-                                 ready_ns[k]});
+                                 static_cast<std::uint32_t>(sequence), ready_ns[k]});
                 }
                 phase.submits += accepted_count;
                 submitted += accepted_count;
@@ -488,7 +501,15 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                     op.len = params.block_size;
                     op.offset =
                         static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
-                    const double op_ready_ns = instrument ? bench::now_ns() : 0.0;
+                    const std::int64_t op_ready_ns_i =
+                        instrument ? sluice::async::detail::tailtrace::now_ns_i() : 0;
+                    const double op_ready_ns =
+                        instrument ? static_cast<double>(op_ready_ns_i) : 0.0;
+                    if (instrument) {
+                        sluice::async::detail::tailtrace::note_built(
+                            static_cast<std::uint32_t>(sequence),
+                            static_cast<std::uint32_t>(window.size()), op_ready_ns_i);
+                    }
                     ++phase.submits;
                     auto result = ctx.submit_read(op);
                     if (!result.has_value()) {
@@ -499,7 +520,7 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                     window.push_back(
                         Inflight{std::move(result).value(), slot,
                                  static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
-                                 op_ready_ns});
+                                 static_cast<std::uint32_t>(sequence), op_ready_ns});
                     ++submitted;
                 }
                 if (failed) {
@@ -563,7 +584,9 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                 }
             }
             if (instrument) {
-                phase.latencies.push_back(bench::now_ns() - front.ready_ns);
+                const std::int64_t t5_ns = sluice::async::detail::tailtrace::now_ns_i();
+                phase.latencies.push_back(static_cast<double>(t5_ns) - front.ready_ns);
+                sluice::async::detail::tailtrace::note_taken(front.sequence, t5_ns);
             }
             phase.bytes += observed.result.value();
             ++phase.ops;
@@ -573,6 +596,9 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
     }
     const bench::TimePoint end = bench::now();
     phase.wall_s = bench::seconds_between(start, end);
+    if (instrument) {
+        sluice::async::detail::tailtrace::end_phase(diag_tag);
+    }
 
     if (failed) {
         phase.ok = false;

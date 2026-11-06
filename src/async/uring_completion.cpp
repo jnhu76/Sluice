@@ -6,6 +6,7 @@
 #include "uring_internal.hpp"
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/r5_tail_trace.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/error.hpp>
 
@@ -149,6 +150,7 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
     if (router_index == router_.size())
         return;
     RouterEntry& entry = router_[router_index];
+    detail::tailtrace::note_cqe(entry.handle.slot.value, entry.handle.generation.value);
 
     const PreparedUringOp& prep = prepared_ops_[entry.handle.slot.value];
     const bool is_byte_op =

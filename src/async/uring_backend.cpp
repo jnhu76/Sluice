@@ -1,6 +1,7 @@
 #include <sluice/async/detail/uring_backend.hpp>
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/r5_tail_trace.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/detail/uring_submit.hpp>
 #include <sluice/error.hpp>
@@ -438,6 +439,26 @@ constexpr bool batch_eligible_read(const ReadOp& op) noexcept {
     return op.len == 4096 && op.dst != nullptr;
 }
 
+constexpr std::uint32_t tail_trace_stop_code(UringAsyncBackend::ReadyBatchStop stop) noexcept {
+    switch (stop) {
+    case UringAsyncBackend::ReadyBatchStop::input_exhausted:
+        return 1;
+    case UringAsyncBackend::ReadyBatchStop::rejected:
+        return 2;
+    case UringAsyncBackend::ReadyBatchStop::cap:
+        return 3;
+    case UringAsyncBackend::ReadyBatchStop::sq_budget:
+        return 4;
+    case UringAsyncBackend::ReadyBatchStop::control:
+        return 5;
+    case UringAsyncBackend::ReadyBatchStop::recovery:
+        return 6;
+    case UringAsyncBackend::ReadyBatchStop::ineligible:
+        return 7;
+    }
+    return 0;
+}
+
 }
 
 UringAsyncBackend::ReadyReadBatchReport
@@ -465,6 +486,7 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
     };
 
     if (ready.size() == 1 || !batch_eligible_read(ready.front())) {
+        const std::uint32_t tail_presentation = detail::tailtrace::next_presentation();
         const auto admitted =
             admit_(ready.front(), detail::OperationKind::read, detail::RequestOp::read);
         if (!admitted.has_value()) {
@@ -476,6 +498,7 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
             return report;
         }
         const AdmittedOp& a = admitted.value();
+        detail::tailtrace::note_admitted(a.key.slot.value, a.key.generation.value, tail_presentation);
         if (a.zero_op) {
             publish_zero_op_inline(a.key, a.reservation);
         } else {
@@ -491,6 +514,7 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
         report.untouched = ready.size() - 1;
         report.stop = ready.size() == 1 ? ReadyBatchStop::input_exhausted
                                         : ReadyBatchStop::ineligible;
+        detail::tailtrace::note_stop_kind(report.keys.data(), 1, tail_trace_stop_code(report.stop));
         note_outcome(true, IoError{});
         note_outstanding();
         return report;
@@ -500,6 +524,7 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
     bool ineligible = false;
     bool advertise = false;
     std::optional<IoError> poison_error;
+    const std::uint32_t tail_presentation = detail::tailtrace::next_presentation();
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
         if (!have_ring_) {
@@ -547,6 +572,9 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
                 break;
             }
             report.keys[report.accepted] = admitted.value().key;
+            detail::tailtrace::note_admitted(report.keys[report.accepted].slot.value,
+                                     report.keys[report.accepted].generation.value,
+                                     tail_presentation);
             ++report.accepted;
             note_outcome(true, IoError{});
         }
@@ -577,6 +605,7 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
             if (!fatal_error_.has_value()) {
                 (void)submit_transport_locked();
                 service_pending_controls_locked_();
+                detail::tailtrace::note_enter_batch(report.keys.data(), report.accepted);
             }
             report.flush_attempts = static_cast<std::size_t>(
                 submit_flushes_.load(std::memory_order_relaxed) - flushes_before);
@@ -602,6 +631,10 @@ UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
         report.stop = ReadyBatchStop::cap;
     } else {
         report.stop = ReadyBatchStop::sq_budget;
+    }
+    if (report.accepted != 0) {
+        detail::tailtrace::note_stop_kind(report.keys.data(), report.accepted,
+                                  tail_trace_stop_code(report.stop));
     }
     report.untouched_begin = report.accepted + (rejected ? 1 : 0);
     report.untouched = ready.size() - report.untouched_begin;
@@ -740,6 +773,8 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
         return make_unexpected<detail::RequestKey>(admitted.error());
     }
     const AdmittedOp& a = admitted.value();
+    detail::tailtrace::note_admitted(a.key.slot.value, a.key.generation.value,
+                             detail::tailtrace::next_presentation());
     if (a.zero_op) {
         publish_zero_op_inline(a.key, a.reservation);
     } else {
@@ -821,6 +856,7 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
         detail::uring_core_handoff_fail_fast();
     }
+    detail::tailtrace::note_published(h.slot.value, h.generation.value);
 #if defined(SLUICE_URING_MUTANT_PUBLISH_DELIVERS_FOREIGN_KEY)
     deliver_event(detail::RequestKey{key.context, key.slot,
                                      detail::Generation{key.generation.value + 1}},

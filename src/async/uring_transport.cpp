@@ -7,6 +7,7 @@
 #include "uring_internal.hpp"
 
 #include <sluice/async/detail/fail_fast.hpp>
+#include <sluice/async/detail/r5_tail_trace.hpp>
 #include <sluice/detail/file_semantics.hpp>
 #include <sluice/error.hpp>
 #include <sluice/result.hpp>
@@ -91,6 +92,7 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
                 if (!fatal_error_.has_value()) {
                     (void)submit_transport_locked();
                     service_pending_controls_locked_();
+                    detail::tailtrace::note_enter_single(h.slot.value, h.generation.value);
                 }
                 newly_poisoned = !poisoned_before && fatal_error_.has_value();
             }
@@ -202,6 +204,7 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
     const std::uint32_t physical_position =
         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
+    detail::tailtrace::note_cookie(h.slot.value, h.generation.value, op_cookie);
 
     if (!dispatch_->remove_exact(h)) {
         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
