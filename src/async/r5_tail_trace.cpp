@@ -1,6 +1,32 @@
-// #595 R5 research diagnostic: preallocated arena backing for the per-op
-// tail trace declared in r5_tail_trace.hpp. Compiled in only with
-// SLUICE_595_R5_TAIL_TRACE; when that macro is absent this TU is empty.
+// #595 R5 research diagnostic (v2): per-writer preallocated event buffers
+// for the per-op tail trace declared in r5_tail_trace.hpp. Compiled in only
+// with SLUICE_595_R5_TAIL_TRACE; when that macro is absent this TU is empty.
+//
+// v2 replaces the v1 shared arena + online (slot -> latest record) index,
+// whose cross-thread accesses (plain g_cursor, plain record fields read by
+// the driver outside dispatch_mtx_, phase reset/export concurrent with
+// in-flight writers, 64->32-bit generation truncation) were data races.
+//
+// Concurrency protocol (all protocol operations seq_cst, so they are totally
+// ordered; S denotes that total order):
+// - Every hook-writing thread owns one WriterBuf, registered once via a
+//   seq_cst fetch_add on g_writer_count. The event cursor, drop counters and
+//   presentation counter live in that buffer and are touched only by the
+//   owning thread (relaxed atomics: single-writer, zero contention).
+// - Hook entry: in_hook.store(true, seq_cst), then g_active.load(seq_cst);
+//   exit stores in_hook false (seq_cst). A writer that observes active=true
+//   has its in_hook=true ordered before end/begin's active=false store in S,
+//   so the phase-transition scan (which reads every registered in_hook after
+//   its own active=false store) observes true and waits; the writer's
+//   release of in_hook is ordered before the concluding scan read, which
+//   makes the writer's event writes visible to the exporter. A writer whose
+//   entry is ordered after the concluding scan read necessarily observes
+//   active=false and writes nothing. No online cross-thread join exists:
+//   (slot, generation) joins happen offline in the analyzer.
+// - end_phase/begin_phase first clear g_active, then wait (bounded) until
+//   every registered writer has left its hook, then export or reset. A
+//   quiesce deadline breach is recorded in the dump header flags rather
+//   than hanging the benchmark.
 
 #if defined(SLUICE_595_R5_TAIL_TRACE)
 
@@ -11,51 +37,68 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <thread>
+
+#include <unistd.h>
 
 namespace sluice::async::detail::tailtrace {
 
 namespace {
 
-// Record layout is frozen for the offline analyzer; see the R5 protocol and
-// analysis notes for the field-by-field contract.
-struct Record {
+enum class Ev : std::uint8_t {
+    built = 1,
+    admitted = 2,
+    enter = 3,
+    cookie = 4,
+    cqe = 5,
+    published = 6,
+    taken = 7,
+    stop = 8,
+    wake = 9,
+};
+
+struct Event {
+    std::int64_t t;
+    std::uint64_t gen;
+    std::uint64_t cookie;
     std::uint32_t seq;
     std::uint32_t slot;
-    std::uint32_t generation;
-    std::uint32_t presentation;
-    std::uint64_t cookie;
-    std::uint32_t flags; // stop kind in bits 0..2, caller_window in bits 3..10
+    std::uint32_t aux;
+    std::uint8_t kind;
+    std::uint8_t pad0;
+    std::uint16_t pad1;
+};
+static_assert(sizeof(Event) == 40, "dump layout is frozen for the analyzer");
+
+#ifndef R5_TAIL_TRACE_EVENT_CAP
+#define R5_TAIL_TRACE_EVENT_CAP 262144
+#endif
+constexpr std::size_t kEventCap = R5_TAIL_TRACE_EVENT_CAP;
+constexpr unsigned kMaxWriters = 8;
+// Per phase: built/admitted/enter/cookie/taken/stop <= 6 events per op and
+// cqe/published/wake <= 3 per op on the driver side, with 20k ops per
+// instrumented phase; the cap leaves 4x headroom for deeper shapes.
+constexpr std::uint64_t kQuiesceBudgetMs = 2000;
+
+struct WriterBuf {
+    Event events[kEventCap];
+    std::atomic<std::uint64_t> count;
+    std::atomic<std::uint64_t> dropped_overflow;
+    std::atomic<std::uint64_t> presentations;
+    std::uint32_t tid;
     std::uint32_t pad;
-    std::int64_t t[7]; // T0, T1, T2, T_wake, T3, T4, T5
+    std::atomic<bool> in_hook;
 };
 
-constexpr std::size_t kArenaRecords = 400000; // 2 * bench kInstrumentedSampleCap
-constexpr std::size_t kSlotLatest = 64;
-constexpr std::uint32_t kEmpty = 0xffffffffu;
-constexpr std::uint64_t kMagic = 0x5441494c54524143ull; // "CARTLIAT"
-constexpr std::uint32_t kVersion = 1;
-constexpr std::size_t kCountsLen = 18;
-
-Record g_records[kArenaRecords];
-// Synchronization note: the per-slot latest-record index is written by the
-// submitter at admit time inside the dispatch mutex and read by the driver
-// only after a kernel completion of that same op, so relaxed atomics suffice;
-// plain record fields rely on the same publication happens-before chain.
-std::atomic<std::uint32_t> g_slot_latest[kSlotLatest];
-std::atomic<std::uint32_t> g_seq_map[kArenaRecords];
-std::size_t g_cursor = 0;
-std::size_t g_t1_cursor = 0;
-std::uint64_t g_presentation = 0;
-std::uint32_t g_dump_index = 0;
+WriterBuf g_writers[kMaxWriters];
+std::atomic<unsigned> g_writer_count{0};
 std::atomic<bool> g_active{false};
-std::atomic<std::int64_t> g_last_wake_ns{0};
+std::atomic<std::uint64_t> g_dropped_unregistered{0};
+std::atomic<std::uint64_t> g_quiesce_timeouts{0};
+std::uint64_t g_run_nonce = 0;
+std::uint32_t g_dump_index = 0;
 
-struct Counts {
-    std::uint64_t t0, t1, t2_keys, t2_single, cookie, cqe, published, taken, wake,
-        lost_overflow, join_fail_t1, join_fail_t2, join_fail_cookie, join_fail_cqe,
-        join_fail_published, join_fail_taken, seq_out_of_range, presentations;
-};
-Counts g_counts{};
+thread_local WriterBuf* t_buf = nullptr;
 
 std::int64_t steady_ns() noexcept {
     return std::chrono::steady_clock::now().time_since_epoch().count();
@@ -66,19 +109,89 @@ bool env_enabled() noexcept {
     return v != nullptr && v[0] != '\0' && v[0] != '0';
 }
 
-Record* latest_for(std::uint32_t slot, std::uint64_t generation) noexcept {
-    if (slot >= kSlotLatest) {
+WriterBuf* register_writer() noexcept {
+    const unsigned i = g_writer_count.fetch_add(1, std::memory_order_seq_cst);
+    if (i >= kMaxWriters) {
         return nullptr;
     }
-    const std::uint32_t idx = g_slot_latest[slot].load(std::memory_order_relaxed);
-    if (idx == kEmpty || idx >= g_cursor) {
+    WriterBuf* b = &g_writers[i];
+    b->tid = static_cast<std::uint32_t>(::gettid());
+    return b;
+}
+
+WriterBuf* hook_enter() noexcept {
+    WriterBuf* b = t_buf;
+    if (b == nullptr) {
+        b = register_writer();
+        if (b == nullptr) {
+            g_dropped_unregistered.fetch_add(1, std::memory_order_relaxed);
+            return nullptr;
+        }
+        t_buf = b;
+    }
+    b->in_hook.store(true, std::memory_order_seq_cst);
+    if (!g_active.load(std::memory_order_seq_cst)) {
+        b->in_hook.store(false, std::memory_order_seq_cst);
         return nullptr;
     }
-    Record& r = g_records[idx];
-    if (r.generation != static_cast<std::uint32_t>(generation) || r.t[1] == 0) {
-        return nullptr;
+    return b;
+}
+
+void hook_exit(WriterBuf* b) noexcept { b->in_hook.store(false, std::memory_order_seq_cst); }
+
+void push(WriterBuf* b, const Event& e) noexcept {
+    const std::uint64_t k = b->count.load(std::memory_order_relaxed);
+    if (k >= kEventCap) {
+        b->dropped_overflow.fetch_add(1, std::memory_order_relaxed);
+        return;
     }
-    return &r;
+    b->events[k] = e;
+    b->count.store(k + 1, std::memory_order_relaxed);
+}
+
+Event make_event(Ev kind, std::int64_t t) noexcept {
+    Event e{};
+    e.kind = static_cast<std::uint8_t>(kind);
+    e.t = t;
+    return e;
+}
+
+bool wait_quiesce() noexcept {
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(kQuiesceBudgetMs);
+    for (;;) {
+        const unsigned n =
+            g_writer_count.load(std::memory_order_seq_cst) < kMaxWriters
+                ? g_writer_count.load(std::memory_order_seq_cst)
+                : kMaxWriters;
+        bool busy = false;
+        for (unsigned i = 0; i < n; ++i) {
+            if (g_writers[i].in_hook.load(std::memory_order_seq_cst)) {
+                busy = true;
+                break;
+            }
+        }
+        if (!busy) {
+            return true;
+        }
+        if (std::chrono::steady_clock::now() > deadline) {
+            g_quiesce_timeouts.fetch_add(1, std::memory_order_relaxed);
+            return false;
+        }
+        std::this_thread::yield();
+    }
+}
+
+void reset_writers() noexcept {
+    const unsigned n = g_writer_count.load(std::memory_order_seq_cst) < kMaxWriters
+                           ? g_writer_count.load(std::memory_order_seq_cst)
+                           : kMaxWriters;
+    for (unsigned i = 0; i < n; ++i) {
+        WriterBuf& b = g_writers[i];
+        b.count.store(0, std::memory_order_relaxed);
+        b.dropped_overflow.store(0, std::memory_order_relaxed);
+        b.presentations.store(0, std::memory_order_relaxed);
+    }
 }
 
 } // namespace
@@ -91,36 +204,48 @@ bool enabled() noexcept {
 std::int64_t now_ns_i() noexcept { return steady_ns(); }
 
 std::uint32_t next_presentation() noexcept {
-    ++g_counts.presentations;
-    return static_cast<std::uint32_t>(++g_presentation);
+    WriterBuf* b = t_buf;
+    if (b == nullptr) {
+        // The submitter is the only caller, and it calls this before the
+        // phase's first note_admitted; register here so the presentation
+        // counter is per-thread monotonic from the first presentation on.
+        b = register_writer();
+        if (b == nullptr) {
+            return 0;
+        }
+        t_buf = b;
+    }
+    return static_cast<std::uint32_t>(
+               b->presentations.fetch_add(1, std::memory_order_relaxed)) +
+           1;
 }
 
 void begin_phase() noexcept {
     if (!enabled()) {
         return;
     }
-    g_cursor = 0;
-    g_t1_cursor = 0;
-    g_counts = Counts{};
-    g_last_wake_ns.store(0, std::memory_order_relaxed);
-    for (auto& s : g_slot_latest) {
-        s.store(kEmpty, std::memory_order_relaxed);
+    if (g_run_nonce == 0) {
+        g_run_nonce = static_cast<std::uint64_t>(::getpid()) << 32 |
+                      static_cast<std::uint64_t>(steady_ns() & 0xffffffffu);
     }
-    for (auto& s : g_seq_map) {
-        s.store(kEmpty, std::memory_order_relaxed);
-    }
-    g_active.store(true, std::memory_order_release);
+    g_active.store(false, std::memory_order_seq_cst);
+    (void)wait_quiesce();
+    reset_writers();
+    g_active.store(true, std::memory_order_seq_cst);
 }
 
 void end_phase(const char* tag) noexcept {
-    if (!g_active.exchange(false, std::memory_order_acq_rel)) {
+    if (!g_active.exchange(false, std::memory_order_seq_cst)) {
         return;
     }
+    const bool quiesced = wait_quiesce();
+
     const char* dir = std::getenv("SLUICE_595_R5_TAIL_TRACE_DUMP_DIR");
     if (dir == nullptr || *dir == '\0') {
         return;
     }
-    char safe_tag[128];
+
+    char safe_tag[64];
     std::size_t out = 0;
     for (std::size_t i = 0; tag != nullptr && tag[i] != '\0' && out + 1 < sizeof safe_tag; ++i) {
         const char c = tag[i];
@@ -132,6 +257,7 @@ void end_phase(const char* tag) noexcept {
 
     char path[512];
     std::snprintf(path, sizeof path, "%s/tail-%03u-%s.bin", dir, g_dump_index, safe_tag);
+    const std::uint64_t dump_idx64 = g_dump_index;
     ++g_dump_index;
 
     std::FILE* f = std::fopen(path, "wb");
@@ -139,181 +265,184 @@ void end_phase(const char* tag) noexcept {
         std::fprintf(stderr, "tailtrace: cannot open %s\n", path);
         return;
     }
-    const std::uint64_t counts[kCountsLen] = {
-        g_counts.t0,           g_counts.t1,           g_counts.t2_keys,
-        g_counts.t2_single,    g_counts.cookie,       g_counts.cqe,
-        g_counts.published,    g_counts.taken,        g_counts.wake,
-        g_counts.lost_overflow, g_counts.join_fail_t1, g_counts.join_fail_t2,
-        g_counts.join_fail_cookie, g_counts.join_fail_cqe, g_counts.join_fail_published,
-        g_counts.join_fail_taken, g_counts.seq_out_of_range, g_counts.presentations,
-    };
-    const std::uint32_t n_records = static_cast<std::uint32_t>(g_cursor);
-    std::fwrite(&kMagic, sizeof kMagic, 1, f);
-    std::fwrite(&kVersion, sizeof kVersion, 1, f);
-    const std::uint32_t record_bytes = sizeof(Record);
-    std::fwrite(&record_bytes, sizeof record_bytes, 1, f);
-    std::fwrite(&n_records, sizeof n_records, 1, f);
-    const std::uint32_t counts_len = kCountsLen;
-    std::fwrite(&counts_len, sizeof counts_len, 1, f);
-    std::fwrite(counts, sizeof counts, 1, f);
-    if (n_records != 0) {
-        std::fwrite(g_records, sizeof(Record), n_records, f);
+
+    const unsigned n_stored = g_writer_count.load(std::memory_order_seq_cst) < kMaxWriters
+                                  ? g_writer_count.load(std::memory_order_seq_cst)
+                                  : kMaxWriters;
+    const std::uint64_t magic = 0x32435254544c4941ull; // "AILTTRC2" marker
+    const std::uint32_t version = 2;
+    const std::uint32_t event_bytes = sizeof(Event);
+    const std::uint32_t n_writers = n_stored;
+    const std::uint32_t flags =
+        (quiesced ? 0u : 1u) |
+        (g_dropped_unregistered.load(std::memory_order_relaxed) != 0 ? 2u : 0u);
+    const std::uint32_t tag_len = static_cast<std::uint32_t>(out);
+    const std::uint64_t pid = static_cast<std::uint64_t>(::getpid());
+    const std::uint64_t quiesce_timeouts = g_quiesce_timeouts.load(std::memory_order_relaxed);
+
+    std::fwrite(&magic, sizeof magic, 1, f);
+    std::fwrite(&version, sizeof version, 1, f);
+    std::fwrite(&event_bytes, sizeof event_bytes, 1, f);
+    std::fwrite(&n_writers, sizeof n_writers, 1, f);
+    std::fwrite(&flags, sizeof flags, 1, f);
+    std::fwrite(&tag_len, sizeof tag_len, 1, f);
+    std::fwrite(safe_tag, 1, tag_len, f);
+    std::fwrite(&pid, sizeof pid, 1, f);
+    std::fwrite(&g_run_nonce, sizeof g_run_nonce, 1, f);
+    std::fwrite(&dump_idx64, sizeof dump_idx64, 1, f);
+    std::fwrite(&quiesce_timeouts, sizeof quiesce_timeouts, 1, f);
+
+    for (unsigned i = 0; i < n_stored; ++i) {
+        const WriterBuf& b = g_writers[i];
+        const std::uint64_t wtid = b.tid;
+        const std::uint64_t count = b.count.load(std::memory_order_relaxed);
+        const std::uint64_t dropped = b.dropped_overflow.load(std::memory_order_relaxed);
+        const std::uint64_t pres = b.presentations.load(std::memory_order_relaxed);
+        std::fwrite(&wtid, sizeof wtid, 1, f);
+        std::fwrite(&count, sizeof count, 1, f);
+        std::fwrite(&dropped, sizeof dropped, 1, f);
+        std::fwrite(&pres, sizeof pres, 1, f);
+        if (count > kEventCap) {
+            continue;
+        }
+        if (count != 0) {
+            std::fwrite(b.events, sizeof(Event), static_cast<std::size_t>(count), f);
+        }
     }
     std::fclose(f);
-    std::fprintf(stderr, "tailtrace: wrote %u records to %s\n", n_records, path);
+    std::fprintf(stderr, "tailtrace: wrote %u writers to %s (quiesced=%d)\n", n_stored, path,
+                 quiesced ? 1 : 0);
 }
 
 void note_built(std::uint32_t seq, std::uint32_t caller_window, std::int64_t t0_ns) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    if (seq >= kArenaRecords) {
-        ++g_counts.seq_out_of_range;
-        return;
-    }
-    const std::size_t idx = g_cursor;
-    if (idx >= kArenaRecords) {
-        ++g_counts.lost_overflow;
-        g_seq_map[seq].store(kEmpty, std::memory_order_relaxed);
-        return;
-    }
-    Record& r = g_records[idx];
-    r = Record{};
-    r.seq = seq;
-    r.flags = (caller_window & 0xffu) << 3;
-    r.t[0] = t0_ns;
-    g_seq_map[seq].store(static_cast<std::uint32_t>(idx), std::memory_order_relaxed);
-    g_cursor = idx + 1;
-    ++g_counts.t0;
+    Event e = make_event(Ev::built, t0_ns);
+    e.seq = seq;
+    e.aux = caller_window;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_admitted(std::uint32_t slot, std::uint64_t generation,
                    std::uint32_t presentation) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    if (g_t1_cursor >= g_cursor) {
-        ++g_counts.join_fail_t1;
-        return;
-    }
-    const std::size_t idx = g_t1_cursor;
-    ++g_t1_cursor;
-    Record& r = g_records[idx];
-    r.slot = slot;
-    r.generation = static_cast<std::uint32_t>(generation);
-    r.presentation = presentation;
-    r.t[1] = steady_ns();
-    if (slot < kSlotLatest) {
-        g_slot_latest[slot].store(static_cast<std::uint32_t>(idx), std::memory_order_relaxed);
-    }
-    ++g_counts.t1;
+    Event e = make_event(Ev::admitted, steady_ns());
+    e.slot = slot;
+    e.gen = generation;
+    e.aux = presentation;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_enter_batch(const RequestKey* keys, std::size_t count) noexcept {
-    if (!g_active.load(std::memory_order_relaxed) || keys == nullptr) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr || keys == nullptr) {
+        if (b != nullptr) {
+            hook_exit(b);
+        }
         return;
     }
     const std::int64_t t2 = steady_ns();
     for (std::size_t i = 0; i < count; ++i) {
-        Record* r = latest_for(keys[i].slot.value, keys[i].generation.value);
-        if (r == nullptr) {
-            ++g_counts.join_fail_t2;
-            continue;
-        }
-        r->t[2] = t2;
-        ++g_counts.t2_keys;
+        Event e = make_event(Ev::enter, t2);
+        e.slot = keys[i].slot.value;
+        e.gen = keys[i].generation.value;
+        push(b, e);
     }
+    hook_exit(b);
 }
 
 void note_enter_single(std::uint32_t slot, std::uint64_t generation) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    Record* r = latest_for(slot, generation);
-    if (r == nullptr) {
-        ++g_counts.join_fail_t2;
-        return;
-    }
-    r->t[2] = steady_ns();
-    ++g_counts.t2_single;
+    Event e = make_event(Ev::enter, steady_ns());
+    e.slot = slot;
+    e.gen = generation;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_cookie(std::uint32_t slot, std::uint64_t generation, std::uint64_t cookie) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    Record* r = latest_for(slot, generation);
-    if (r == nullptr) {
-        ++g_counts.join_fail_cookie;
-        return;
-    }
-    r->cookie = cookie;
-    ++g_counts.cookie;
+    Event e = make_event(Ev::cookie, steady_ns());
+    e.slot = slot;
+    e.gen = generation;
+    e.cookie = cookie;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_cqe(std::uint32_t slot, std::uint64_t generation) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    Record* r = latest_for(slot, generation);
-    if (r == nullptr) {
-        ++g_counts.join_fail_cqe;
-        return;
-    }
-    r->t[3] = g_last_wake_ns.load(std::memory_order_relaxed);
-    r->t[4] = steady_ns();
-    ++g_counts.cqe;
+    Event e = make_event(Ev::cqe, steady_ns());
+    e.slot = slot;
+    e.gen = generation;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_published(std::uint32_t slot, std::uint64_t generation) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    Record* r = latest_for(slot, generation);
-    if (r == nullptr) {
-        ++g_counts.join_fail_published;
-        return;
-    }
-    r->t[5] = steady_ns();
-    ++g_counts.published;
+    Event e = make_event(Ev::published, steady_ns());
+    e.slot = slot;
+    e.gen = generation;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_taken(std::uint32_t seq, std::int64_t t5_ns) noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    if (seq >= kArenaRecords) {
-        ++g_counts.seq_out_of_range;
-        return;
-    }
-    const std::uint32_t idx = g_seq_map[seq].load(std::memory_order_relaxed);
-    if (idx == kEmpty || idx >= g_cursor) {
-        ++g_counts.join_fail_taken;
-        return;
-    }
-    g_records[idx].t[6] = t5_ns;
-    ++g_counts.taken;
+    Event e = make_event(Ev::taken, t5_ns);
+    e.seq = seq;
+    push(b, e);
+    hook_exit(b);
 }
 
 void note_stop_kind(const RequestKey* keys, std::size_t count, std::uint32_t stop_kind) noexcept {
-    if (!g_active.load(std::memory_order_relaxed) || keys == nullptr) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr || keys == nullptr) {
+        if (b != nullptr) {
+            hook_exit(b);
+        }
         return;
     }
     for (std::size_t i = 0; i < count; ++i) {
-        Record* r = latest_for(keys[i].slot.value, keys[i].generation.value);
-        if (r == nullptr) {
-            continue;
-        }
-        r->flags = (r->flags & ~7u) | (stop_kind & 7u);
+        Event e = make_event(Ev::stop, 0);
+        e.slot = keys[i].slot.value;
+        e.gen = keys[i].generation.value;
+        e.aux = stop_kind;
+        push(b, e);
     }
+    hook_exit(b);
 }
 
 void note_wake() noexcept {
-    if (!g_active.load(std::memory_order_relaxed)) {
+    WriterBuf* b = hook_enter();
+    if (b == nullptr) {
         return;
     }
-    g_last_wake_ns.store(steady_ns(), std::memory_order_relaxed);
-    ++g_counts.wake;
+    push(b, make_event(Ev::wake, steady_ns()));
+    hook_exit(b);
 }
 
 } // namespace sluice::async::detail::tailtrace

@@ -5,11 +5,23 @@
 
 #include "sluice/async/detail/request_key.hpp"
 
-// #595 R5 research diagnostic: per-op pipeline timestamps for the W03 tail
-// decomposition protocol (r5/analysis/diagnostic-protocol.md). Compiled in
-// only with SLUICE_595_R5_TAIL_TRACE and activated per process by
+// #595 R5 research diagnostic (v2): per-op pipeline timestamps for the W03
+// tail-decomposition protocol. Compiled in only with
+// SLUICE_595_R5_TAIL_TRACE and activated per process by
 // SLUICE_595_R5_TAIL_TRACE=1; every hook is a no-op otherwise. Research
 // branch only; not part of any public or library contract.
+//
+// v2 concurrency contract (fixes the v1 races audited as F1):
+// - Each thread that ever calls a hook owns one preallocated event buffer;
+//   the buffer cursor is plain and single-writer. No online cross-thread
+//   index exists: (slot, generation) joins are made offline by the analyzer.
+// - A hook entry marks this writer active-in-hook, then re-checks the
+//   global phase flag under seq_cst; end_phase/begin_phase clear the flag
+//   under seq_cst and then wait (bounded) until every registered writer has
+//   left its hook before resetting or exporting buffers, so exported event
+//   ranges are complete per writer.
+// - Generation is carried at full 64 bits; run identity is pid plus a
+//   per-process nonce in the dump header.
 
 namespace sluice::async::detail::tailtrace {
 
@@ -54,4 +66,4 @@ inline void note_wake() noexcept {}
 
 #endif
 
-}
+} // namespace sluice::async::detail::tailtrace
