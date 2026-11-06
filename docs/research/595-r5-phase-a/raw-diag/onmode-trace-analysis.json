@@ -1,0 +1,3693 @@
+{
+ "files": {
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p00-0-A0/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 2212,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 143,
+     "p95": 168,
+     "p99": 192,
+     "max": 21572,
+     "mean": 146.8765,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 785,
+     "p95": 6439,
+     "p99": 7922,
+     "max": 23772,
+     "mean": 1281.81855,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 26727,
+     "p95": 33927,
+     "p99": 35767,
+     "max": 58949,
+     "mean": 25953.65875,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2079,
+     "p95": 2393,
+     "p99": 2472,
+     "max": 13822,
+     "mean": 2051.7445,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 7273,
+     "p95": 17617,
+     "p99": 33301,
+     "max": 205520,
+     "mean": 8111.91025,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 37204,
+     "p95": 45810,
+     "p99": 51077,
+     "max": 226177,
+     "mean": 37546.00855,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 22812,
+     "p95": 32242,
+     "p99": 33965,
+     "max": 56909,
+     "mean": 18212.30325,
+     "neg": 3967
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2888,
+     "p95": 36771,
+     "p99": 37823,
+     "max": 49079,
+     "mean": 7741.3555,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 101,
+      "1": 22,
+      "2": 22,
+      "3": 8,
+      "4": 7,
+      "5": 6,
+      "6": 4,
+      "7": 4,
+      "8": 4,
+      "9": 4,
+      "10": 4,
+      "11": 4,
+      "12": 3,
+      "13": 2,
+      "14": 2,
+      "15": 3
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 55298,
+     "kernel_T3_T2_p99_ns": 57447,
+     "observe_T5_T4_p99_ns": 179902,
+     "reap_T4_T3_p99_ns": 3403
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 1090,
+      "1": 1168,
+      "2": 1168,
+      "3": 1182,
+      "4": 1183,
+      "5": 1184,
+      "6": 1186,
+      "7": 1186,
+      "8": 1186,
+      "9": 1186,
+      "10": 1186,
+      "11": 1186,
+      "12": 1188,
+      "13": 1193,
+      "14": 1520,
+      "15": 1808
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 37130,
+     "kernel_T3_T2_p99_ns": 35418,
+     "observe_T5_T4_p99_ns": 33098,
+     "reap_T4_T3_p99_ns": 2465
+    },
+    "tail_threshold_ns": 51077
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p00-1-R/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19998,
+    "t2_single": 2,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1297,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 2503
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 1295,
+     "p95": 5360,
+     "p99": 25415,
+     "max": 36555,
+     "mean": 3632.15155,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 3322,
+     "p95": 6031,
+     "p99": 15997,
+     "max": 24385,
+     "mean": 3881.8946,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 24695,
+     "p95": 28462,
+     "p99": 31551,
+     "max": 61855,
+     "mean": 23724.5115,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2137,
+     "p95": 2456,
+     "p99": 2562,
+     "max": 6213,
+     "mean": 2160.65105,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 6129,
+     "p95": 7793,
+     "p99": 16430,
+     "max": 30046,
+     "mean": 6355.3242,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 39311,
+     "p95": 44129,
+     "p99": 64498,
+     "max": 78202,
+     "mean": 39754.5329,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 21928,
+     "p95": 26135,
+     "p99": 29231,
+     "max": 60114,
+     "mean": 20481.32415,
+     "neg": 976
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2679,
+     "p95": 4916,
+     "p99": 20448,
+     "max": 32521,
+     "mean": 3243.18735,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "8": 2498,
+    "1": 2,
+    "3": 1,
+    "6": 1,
+    "5": 1
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 2501,
+    "p50": 1032,
+    "p95": 1277,
+    "p99": 1341,
+    "max": 40663
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 192,
+      "cap": 8
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 65768,
+     "kernel_T3_T2_p99_ns": 58376,
+     "observe_T5_T4_p99_ns": 18174,
+     "reap_T4_T3_p99_ns": 5330
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 10136,
+      "cap": 9664
+     },
+     "caller_window_hist": {
+      "0": 19085,
+      "2": 14,
+      "5": 11,
+      "7": 18,
+      "8": 672
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 39271,
+     "kernel_T3_T2_p99_ns": 31064,
+     "observe_T5_T4_p99_ns": 16387,
+     "reap_T4_T3_p99_ns": 2561
+    },
+    "tail_threshold_ns": 64500
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p01-0-R/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19999,
+    "t2_single": 1,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1347,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 2505
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 1242,
+     "p95": 5256,
+     "p99": 25399,
+     "max": 45399,
+     "mean": 3418.22775,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 3266,
+     "p95": 4547,
+     "p99": 16116,
+     "max": 32838,
+     "mean": 3817.89805,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 23962,
+     "p95": 28612,
+     "p99": 35333,
+     "max": 59985,
+     "mean": 23290.1536,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2153,
+     "p95": 2453,
+     "p99": 2568,
+     "max": 13096,
+     "mean": 2131.46245,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 6285,
+     "p95": 13775,
+     "p99": 17747,
+     "max": 30875,
+     "mean": 6838.56425,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 38486,
+     "p95": 48053,
+     "p99": 64334,
+     "max": 88343,
+     "mean": 39496.3061,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 21419,
+     "p95": 26593,
+     "p99": 32995,
+     "max": 58579,
+     "mean": 20322.89945,
+     "neg": 696
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2590,
+     "p95": 3735,
+     "p99": 19777,
+     "max": 24592,
+     "mean": 2967.25415,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "8": 2495,
+    "3": 2,
+    "2": 1,
+    "5": 2,
+    "7": 1,
+    "1": 1,
+    "6": 1,
+    "4": 2
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 2504,
+    "p50": 1029,
+    "p95": 1249,
+    "p99": 1312,
+    "max": 40479
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 177,
+      "cap": 23
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 66615,
+     "kernel_T3_T2_p99_ns": 58862,
+     "observe_T5_T4_p99_ns": 30809,
+     "reap_T4_T3_p99_ns": 2589
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "cap": 9329,
+      "input_exhausted": 10471
+     },
+     "caller_window_hist": {
+      "0": 18452,
+      "1": 15,
+      "5": 11,
+      "6": 10,
+      "8": 1288,
+      "10": 6,
+      "11": 10,
+      "12": 4,
+      "13": 3,
+      "15": 1
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 38471,
+     "kernel_T3_T2_p99_ns": 34834,
+     "observe_T5_T4_p99_ns": 17034,
+     "reap_T4_T3_p99_ns": 2566
+    },
+    "tail_threshold_ns": 64348
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p01-1-A0/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1916,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 141,
+     "p95": 161,
+     "p99": 191,
+     "max": 11168,
+     "mean": 144.68325,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 768,
+     "p95": 5060,
+     "p99": 7843,
+     "max": 27079,
+     "mean": 1145.49775,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 27389,
+     "p95": 34446,
+     "p99": 38900,
+     "max": 60017,
+     "mean": 26894.1383,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2075,
+     "p95": 2389,
+     "p99": 2479,
+     "max": 14409,
+     "mean": 2070.7762,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 7330,
+     "p95": 8633,
+     "p99": 28224,
+     "max": 195388,
+     "mean": 7918.5168,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 37790,
+     "p95": 46348,
+     "p99": 55056,
+     "max": 217134,
+     "mean": 38173.6123,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 24075,
+     "p95": 32878,
+     "p99": 36051,
+     "max": 57569,
+     "mean": 20742.0453,
+     "neg": 2791
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2821,
+     "p95": 34702,
+     "p99": 37887,
+     "max": 51283,
+     "mean": 6152.093,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 60,
+      "1": 21,
+      "2": 23,
+      "3": 15,
+      "4": 14,
+      "5": 14,
+      "6": 12,
+      "7": 12,
+      "8": 8,
+      "9": 5,
+      "10": 3,
+      "11": 3,
+      "12": 2,
+      "13": 2,
+      "14": 2,
+      "15": 4
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 58721,
+     "kernel_T3_T2_p99_ns": 59174,
+     "observe_T5_T4_p99_ns": 169948,
+     "reap_T4_T3_p99_ns": 14290
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 1147,
+      "1": 1187,
+      "2": 1185,
+      "3": 1194,
+      "4": 1195,
+      "5": 1195,
+      "6": 1197,
+      "7": 1197,
+      "8": 1200,
+      "9": 1203,
+      "10": 1205,
+      "11": 1205,
+      "12": 1207,
+      "13": 1214,
+      "14": 1384,
+      "15": 1685
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 37721,
+     "kernel_T3_T2_p99_ns": 36917,
+     "observe_T5_T4_p99_ns": 24487,
+     "reap_T4_T3_p99_ns": 2467
+    },
+    "tail_threshold_ns": 55075
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p02-0-A0/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1979,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 142,
+     "p95": 167,
+     "p99": 185,
+     "max": 5963,
+     "mean": 144.9457,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 756,
+     "p95": 5595,
+     "p99": 8113,
+     "max": 15752,
+     "mean": 1164.4283,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 27016,
+     "p95": 33783,
+     "p99": 35784,
+     "max": 43582,
+     "mean": 26421.66605,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2098,
+     "p95": 2395,
+     "p99": 2459,
+     "max": 14925,
+     "mean": 2084.3135,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 7424,
+     "p95": 8701,
+     "p99": 28163,
+     "max": 201950,
+     "mean": 7979.1809,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 37493,
+     "p95": 45615,
+     "p99": 51096,
+     "max": 223606,
+     "mean": 37794.53445,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 23523,
+     "p95": 32167,
+     "p99": 34041,
+     "max": 40860,
+     "mean": 19698.984,
+     "neg": 3149
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2800,
+     "p95": 36367,
+     "p99": 37681,
+     "max": 41604,
+     "mean": 6722.68205,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 109,
+      "1": 45,
+      "2": 9,
+      "3": 5,
+      "4": 4,
+      "5": 3,
+      "6": 2,
+      "7": 3,
+      "8": 3,
+      "9": 3,
+      "10": 3,
+      "11": 3,
+      "12": 3,
+      "13": 2,
+      "14": 2,
+      "15": 1
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 53972,
+     "kernel_T3_T2_p99_ns": 42587,
+     "observe_T5_T4_p99_ns": 175456,
+     "reap_T4_T3_p99_ns": 14682
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 1098,
+      "1": 1162,
+      "2": 1198,
+      "3": 1202,
+      "4": 1203,
+      "5": 1204,
+      "6": 1205,
+      "7": 1204,
+      "8": 1204,
+      "9": 1203,
+      "10": 1203,
+      "11": 1203,
+      "12": 1203,
+      "13": 1211,
+      "14": 1391,
+      "15": 1706
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 37417,
+     "kernel_T3_T2_p99_ns": 35614,
+     "observe_T5_T4_p99_ns": 24533,
+     "reap_T4_T3_p99_ns": 2453
+    },
+    "tail_threshold_ns": 51100
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p02-1-R/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19998,
+    "t2_single": 2,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1299,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 2502
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 1282,
+     "p95": 5254,
+     "p99": 24758,
+     "max": 37537,
+     "mean": 3494.3386,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 3225,
+     "p95": 4129,
+     "p99": 15590,
+     "max": 39279,
+     "mean": 3749.8567,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 24621,
+     "p95": 28497,
+     "p99": 33645,
+     "max": 66858,
+     "mean": 23760.82375,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2124,
+     "p95": 2426,
+     "p99": 2522,
+     "max": 6718,
+     "mean": 2147.0669,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 6100,
+     "p95": 7664,
+     "p99": 15957,
+     "max": 28899,
+     "mean": 6383.25245,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 39088,
+     "p95": 45346,
+     "p99": 63258,
+     "max": 89059,
+     "mean": 39535.3384,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 21876,
+     "p95": 26139,
+     "p99": 31474,
+     "max": 63569,
+     "mean": 20600.4277,
+     "neg": 840
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2676,
+     "p95": 3824,
+     "p99": 19943,
+     "max": 57114,
+     "mean": 3160.39605,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "8": 2499,
+    "1": 2,
+    "6": 1
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 2500,
+    "p50": 1000,
+    "p95": 1256,
+    "p99": 1314,
+    "max": 40344
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 184,
+      "cap": 16
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 66218,
+     "kernel_T3_T2_p99_ns": 66513,
+     "observe_T5_T4_p99_ns": 15066,
+     "reap_T4_T3_p99_ns": 2704
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 10152,
+      "cap": 9648
+     },
+     "caller_window_hist": {
+      "0": 19094,
+      "7": 18,
+      "8": 688
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 39045,
+     "kernel_T3_T2_p99_ns": 33199,
+     "observe_T5_T4_p99_ns": 15973,
+     "reap_T4_T3_p99_ns": 2518
+    },
+    "tail_threshold_ns": 63270
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p03-0-R/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 20000,
+    "t2_single": 0,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1398,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 2503
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 1214,
+     "p95": 5206,
+     "p99": 25531,
+     "max": 37407,
+     "mean": 3298.00075,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 3240,
+     "p95": 4303,
+     "p99": 16043,
+     "max": 24985,
+     "mean": 3763.9866,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 24352,
+     "p95": 29286,
+     "p99": 34680,
+     "max": 83191,
+     "mean": 23805.8293,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2134,
+     "p95": 2461,
+     "p99": 2583,
+     "max": 13506,
+     "mean": 2087.9847,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 6262,
+     "p95": 14178,
+     "p99": 16646,
+     "max": 37173,
+     "mean": 7016.7431,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 39050,
+     "p95": 48612,
+     "p99": 64737,
+     "max": 95754,
+     "mean": 39972.54445,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 21632,
+     "p95": 27246,
+     "p99": 32906,
+     "max": 80980,
+     "mean": 20988.9661,
+     "neg": 504
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2559,
+     "p95": 3742,
+     "p99": 8749,
+     "max": 21651,
+     "mean": 2816.8632,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "8": 2497,
+    "2": 1,
+    "4": 3,
+    "3": 1,
+    "7": 1
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 2503,
+    "p50": 1040,
+    "p95": 1267,
+    "p99": 1324,
+    "max": 41167
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 183,
+      "8": 17
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 65773,
+     "kernel_T3_T2_p99_ns": 82892,
+     "observe_T5_T4_p99_ns": 14862,
+     "reap_T4_T3_p99_ns": 2637
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 10928,
+      "cap": 8872
+     },
+     "caller_window_hist": {
+      "0": 17496,
+      "4": 24,
+      "5": 11,
+      "6": 10,
+      "8": 2255,
+      "12": 4
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 39022,
+     "kernel_T3_T2_p99_ns": 34455,
+     "observe_T5_T4_p99_ns": 16658,
+     "reap_T4_T3_p99_ns": 2581
+    },
+    "tail_threshold_ns": 64747
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p03-1-A0/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 2005,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 142,
+     "p95": 168,
+     "p99": 189,
+     "max": 2891,
+     "mean": 145.1648,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 765,
+     "p95": 5108,
+     "p99": 7763,
+     "max": 16158,
+     "mean": 1161.3324,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 27197,
+     "p95": 34146,
+     "p99": 36236,
+     "max": 41407,
+     "mean": 26597.96135,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2166,
+     "p95": 2402,
+     "p99": 2507,
+     "max": 11267,
+     "mean": 2110.88005,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 7189,
+     "p95": 9901,
+     "p99": 28591,
+     "max": 184410,
+     "mean": 7842.6084,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 37596,
+     "p95": 45720,
+     "p99": 51100,
+     "max": 206638,
+     "mean": 37857.947,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 24075,
+     "p95": 32579,
+     "p99": 34606,
+     "max": 39856,
+     "mean": 21034.0263,
+     "neg": 2524
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2681,
+     "p95": 34550,
+     "p99": 37652,
+     "max": 39447,
+     "mean": 5563.93505,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 121,
+      "1": 29,
+      "2": 11,
+      "3": 4,
+      "4": 3,
+      "5": 2,
+      "6": 3,
+      "7": 3,
+      "8": 3,
+      "9": 3,
+      "10": 4,
+      "11": 4,
+      "12": 3,
+      "13": 2,
+      "14": 2,
+      "15": 3
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 55902,
+     "kernel_T3_T2_p99_ns": 40601,
+     "observe_T5_T4_p99_ns": 159113,
+     "reap_T4_T3_p99_ns": 11237
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 1083,
+      "1": 1176,
+      "2": 1194,
+      "3": 1201,
+      "4": 1202,
+      "5": 1204,
+      "6": 1203,
+      "7": 1203,
+      "8": 1203,
+      "9": 1202,
+      "10": 1201,
+      "11": 1201,
+      "12": 1202,
+      "13": 1209,
+      "14": 1411,
+      "15": 1705
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 37523,
+     "kernel_T3_T2_p99_ns": 36169,
+     "observe_T5_T4_p99_ns": 24286,
+     "reap_T4_T3_p99_ns": 2505
+    },
+    "tail_threshold_ns": 51119
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p04-0-A0/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 2061,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 144,
+     "p95": 175,
+     "p99": 198,
+     "max": 11857,
+     "mean": 147.7832,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 783,
+     "p95": 6558,
+     "p99": 8268,
+     "max": 36088,
+     "mean": 1237.71025,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 27334,
+     "p95": 34511,
+     "p99": 39320,
+     "max": 60581,
+     "mean": 26785.78745,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2120,
+     "p95": 2408,
+     "p99": 2563,
+     "max": 14322,
+     "mean": 2105.25585,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 7396,
+     "p95": 15770,
+     "p99": 30372,
+     "max": 189215,
+     "mean": 8128.48215,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 37936,
+     "p95": 47840,
+     "p99": 55699,
+     "max": 211386,
+     "mean": 38405.0189,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 23513,
+     "p95": 32891,
+     "p99": 36374,
+     "max": 58901,
+     "mean": 19084.6587,
+     "neg": 3723
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2859,
+     "p95": 37110,
+     "p99": 38946,
+     "max": 55303,
+     "mean": 7701.12875,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 83,
+      "1": 23,
+      "2": 26,
+      "3": 17,
+      "4": 12,
+      "5": 10,
+      "6": 8,
+      "7": 7,
+      "8": 5,
+      "9": 3,
+      "10": 1,
+      "11": 1,
+      "15": 4
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 58199,
+     "kernel_T3_T2_p99_ns": 52071,
+     "observe_T5_T4_p99_ns": 162932,
+     "reap_T4_T3_p99_ns": 14214
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 1115,
+      "1": 1180,
+      "2": 1177,
+      "3": 1186,
+      "4": 1191,
+      "5": 1193,
+      "6": 1195,
+      "7": 1196,
+      "8": 1198,
+      "9": 1200,
+      "10": 1202,
+      "11": 1202,
+      "12": 1204,
+      "13": 1218,
+      "14": 1395,
+      "15": 1748
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 37871,
+     "kernel_T3_T2_p99_ns": 37532,
+     "observe_T5_T4_p99_ns": 26006,
+     "reap_T4_T3_p99_ns": 2526
+    },
+    "tail_threshold_ns": 55782
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p04-1-R/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19998,
+    "t2_single": 2,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1305,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 2503
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 1274,
+     "p95": 5454,
+     "p99": 25523,
+     "max": 37643,
+     "mean": 3571.8019,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 3285,
+     "p95": 4979,
+     "p99": 16238,
+     "max": 25467,
+     "mean": 3842.91765,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 24878,
+     "p95": 29504,
+     "p99": 38987,
+     "max": 72529,
+     "mean": 24160.25245,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2171,
+     "p95": 2492,
+     "p99": 2634,
+     "max": 15260,
+     "mean": 2214.25015,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 6191,
+     "p95": 8140,
+     "p99": 16656,
+     "max": 29759,
+     "mean": 6523.3472,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 39652,
+     "p95": 50712,
+     "p99": 64998,
+     "max": 96674,
+     "mean": 40312.56935,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 22112,
+     "p95": 27277,
+     "p99": 35847,
+     "max": 70164,
+     "mean": 21036.69015,
+     "neg": 784
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2682,
+     "p95": 3913,
+     "p99": 20159,
+     "max": 27691,
+     "mean": 3123.5623,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "8": 2499,
+    "1": 2,
+    "3": 2
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 2501,
+    "p50": 1052,
+    "p95": 1300,
+    "p99": 1390,
+    "max": 50240
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 184,
+      "cap": 16
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 67207,
+     "kernel_T3_T2_p99_ns": 72237,
+     "observe_T5_T4_p99_ns": 15303,
+     "reap_T4_T3_p99_ns": 2720
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 10200,
+      "cap": 9600
+     },
+     "caller_window_hist": {
+      "0": 18979,
+      "5": 11,
+      "7": 18,
+      "8": 792
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 39596,
+     "kernel_T3_T2_p99_ns": 37770,
+     "observe_T5_T4_p99_ns": 16674,
+     "reap_T4_T3_p99_ns": 2632
+    },
+    "tail_threshold_ns": 65000
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p05-0-R/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19998,
+    "t2_single": 2,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1342,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 2503
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 1251,
+     "p95": 5261,
+     "p99": 25721,
+     "max": 62045,
+     "mean": 3437.9693,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 3279,
+     "p95": 4298,
+     "p99": 16401,
+     "max": 49089,
+     "mean": 3824.3264,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 24186,
+     "p95": 28780,
+     "p99": 35339,
+     "max": 55581,
+     "mean": 23664.5597,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2153,
+     "p95": 2467,
+     "p99": 2594,
+     "max": 13785,
+     "mean": 2156.78625,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 6234,
+     "p95": 13685,
+     "p99": 18054,
+     "max": 32193,
+     "mean": 6766.98295,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 38935,
+     "p95": 48297,
+     "p99": 65274,
+     "max": 94489,
+     "mean": 39850.6246,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 21591,
+     "p95": 26763,
+     "p99": 33039,
+     "max": 53387,
+     "mean": 20755.2895,
+     "neg": 568
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2605,
+     "p95": 3721,
+     "p99": 19440,
+     "max": 33942,
+     "mean": 2909.2702,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "8": 2497,
+    "2": 1,
+    "1": 2,
+    "7": 2,
+    "6": 1
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 2501,
+    "p50": 1022,
+    "p95": 1261,
+    "p99": 1313,
+    "max": 35223
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 175,
+      "cap": 25
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 70274,
+     "kernel_T3_T2_p99_ns": 55325,
+     "observe_T5_T4_p99_ns": 32106,
+     "reap_T4_T3_p99_ns": 13234
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 10465,
+      "cap": 9335
+     },
+     "caller_window_hist": {
+      "0": 18470,
+      "6": 10,
+      "7": 18,
+      "8": 1288,
+      "9": 14
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 38903,
+     "kernel_T3_T2_p99_ns": 34956,
+     "observe_T5_T4_p99_ns": 17602,
+     "reap_T4_T3_p99_ns": 2584
+    },
+    "tail_threshold_ns": 65288
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p05-1-A0/dump/tail-001-W03-uring-4k-d16_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 1960,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 142,
+     "p95": 181,
+     "p99": 217,
+     "max": 4308,
+     "mean": 147.61995,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 770,
+     "p95": 5203,
+     "p99": 7964,
+     "max": 33133,
+     "mean": 1181.1235,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 27519,
+     "p95": 34801,
+     "p99": 45827,
+     "max": 64134,
+     "mean": 27170.88685,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 2097,
+     "p95": 2419,
+     "p99": 3285,
+     "max": 14343,
+     "mean": 2114.46785,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 7353,
+     "p95": 16019,
+     "p99": 28235,
+     "max": 176457,
+     "mean": 8085.69545,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 38042,
+     "p95": 48041,
+     "p99": 62447,
+     "max": 198004,
+     "mean": 38699.7936,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 24328,
+     "p95": 33119,
+     "p99": 41871,
+     "max": 61369,
+     "mean": 21408.8483,
+     "neg": 2506
+    },
+    "reap_part_T3-Tw": {
+     "p50": 2775,
+     "p95": 34652,
+     "p99": 39672,
+     "max": 60984,
+     "mean": 5762.03855,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 30,
+      "1": 27,
+      "2": 22,
+      "3": 18,
+      "4": 18,
+      "5": 16,
+      "6": 14,
+      "7": 13,
+      "8": 11,
+      "9": 7,
+      "10": 5,
+      "11": 5,
+      "12": 4,
+      "13": 4,
+      "14": 4,
+      "15": 2
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 68183,
+     "kernel_T3_T2_p99_ns": 62941,
+     "observe_T5_T4_p99_ns": 149905,
+     "reap_T4_T3_p99_ns": 4254
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 1176,
+      "1": 1179,
+      "2": 1185,
+      "3": 1189,
+      "4": 1189,
+      "5": 1191,
+      "6": 1193,
+      "7": 1194,
+      "8": 1196,
+      "9": 1200,
+      "10": 1201,
+      "11": 1201,
+      "12": 1205,
+      "13": 1213,
+      "14": 1387,
+      "15": 1701
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 37971,
+     "kernel_T3_T2_p99_ns": 39575,
+     "observe_T5_T4_p99_ns": 27915,
+     "reap_T4_T3_p99_ns": 2616
+    },
+    "tail_threshold_ns": 62461
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p00-0-A0/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 6143,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 146,
+     "p95": 189,
+     "p99": 213,
+     "max": 11636,
+     "mean": 151.8983,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 789,
+     "p95": 7328,
+     "p99": 7914,
+     "max": 21773,
+     "mean": 1896.592,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 10056,
+     "p95": 13988,
+     "p99": 15731,
+     "max": 37030,
+     "mean": 10109.92405,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 656,
+     "p95": 737,
+     "p99": 763,
+     "max": 12284,
+     "mean": 632.68835,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4267,
+     "p95": 8605,
+     "p99": 12567,
+     "max": 65868,
+     "mean": 4912.11255,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 16640,
+     "p95": 26760,
+     "p99": 29472,
+     "max": 78781,
+     "mean": 17703.21525,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 8086,
+     "p95": 12616,
+     "p99": 13709,
+     "max": 35351,
+     "mean": 6067.4767,
+     "neg": 4854
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1563,
+     "p95": 13358,
+     "p99": 13789,
+     "max": 32008,
+     "mean": 4042.44735,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 103,
+      "1": 39,
+      "2": 22,
+      "3": 36
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 32138,
+     "kernel_T3_T2_p99_ns": 35219,
+     "observe_T5_T4_p99_ns": 42305,
+     "reap_T4_T3_p99_ns": 11716
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 4590,
+      "1": 4682,
+      "2": 4986,
+      "3": 5542
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 16594,
+     "kernel_T3_T2_p99_ns": 14721,
+     "observe_T5_T4_p99_ns": 12456,
+     "reap_T4_T3_p99_ns": 762
+    },
+    "tail_threshold_ns": 29486
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p00-1-R/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 20000,
+    "t2_single": 0,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5000,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 5000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 473,
+     "p95": 566,
+     "p99": 593,
+     "max": 3823,
+     "mean": 478.8545,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 9459,
+     "p95": 11078,
+     "p99": 12464,
+     "max": 26113,
+     "mean": 7773.2786,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 4259,
+     "p95": 10091,
+     "p99": 10888,
+     "max": 24515,
+     "mean": 5836.15135,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 586,
+     "p95": 633,
+     "p99": 660,
+     "max": 12598,
+     "mean": 592.79265,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4218,
+     "p95": 5254,
+     "p99": 5813,
+     "max": 35096,
+     "mean": 4503.18835,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 19480,
+     "p95": 21678,
+     "p99": 24055,
+     "max": 49861,
+     "mean": 19184.26545,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 2577,
+     "p95": 8506,
+     "p99": 9167,
+     "max": 22431,
+     "mean": 3368.1066,
+     "neg": 2852
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1598,
+     "p95": 8203,
+     "p99": 8550,
+     "max": 15777,
+     "mean": 2468.04475,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "4": 5000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 5000,
+    "p50": 408,
+    "p95": 438,
+    "p99": 458,
+    "max": 3975
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 26529,
+     "kernel_T3_T2_p99_ns": 24275,
+     "observe_T5_T4_p99_ns": 35059,
+     "reap_T4_T3_p99_ns": 12588
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 19800
+     },
+     "caller_window_hist": {
+      "0": 19800
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 19464,
+     "kernel_T3_T2_p99_ns": 10715,
+     "observe_T5_T4_p99_ns": 5615,
+     "reap_T4_T3_p99_ns": 655
+    },
+    "tail_threshold_ns": 24056
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p01-0-R/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19998,
+    "t2_single": 2,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5002,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 5002
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 434,
+     "p95": 525,
+     "p99": 616,
+     "max": 12673,
+     "mean": 442.1385,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 8990,
+     "p95": 11053,
+     "p99": 18201,
+     "max": 47399,
+     "mean": 8478.61745,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 3971,
+     "p95": 9535,
+     "p99": 12152,
+     "max": 33624,
+     "mean": 5051.53515,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 580,
+     "p95": 635,
+     "p99": 689,
+     "max": 12085,
+     "mean": 591.0662,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4876,
+     "p95": 5300,
+     "p99": 7256,
+     "max": 31883,
+     "mean": 4650.841,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 18752,
+     "p95": 22474,
+     "p99": 33991,
+     "max": 69950,
+     "mean": 19214.1983,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 2329,
+     "p95": 7973,
+     "p99": 9764,
+     "max": 25068,
+     "mean": 2443.2066,
+     "neg": 3156
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1577,
+     "p95": 8082,
+     "p99": 8948,
+     "max": 37765,
+     "mean": 2608.32855,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "4": 4999,
+    "1": 2,
+    "2": 1
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 5000,
+    "p50": 406,
+    "p95": 449,
+    "p99": 501,
+    "max": 18987
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 36814,
+     "kernel_T3_T2_p99_ns": 33249,
+     "observe_T5_T4_p99_ns": 27143,
+     "reap_T4_T3_p99_ns": 4177
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 19800
+     },
+     "caller_window_hist": {
+      "0": 19798,
+      "3": 2
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 18746,
+     "kernel_T3_T2_p99_ns": 11291,
+     "observe_T5_T4_p99_ns": 6140,
+     "reap_T4_T3_p99_ns": 674
+    },
+    "tail_threshold_ns": 34022
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p01-1-A0/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 6121,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 146,
+     "p95": 170,
+     "p99": 188,
+     "max": 12061,
+     "mean": 150.16595,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 788,
+     "p95": 7542,
+     "p99": 8088,
+     "max": 21451,
+     "mean": 1841.356,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 10337,
+     "p95": 14355,
+     "p99": 18563,
+     "max": 44327,
+     "mean": 10557.11115,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 562,
+     "p95": 613,
+     "p99": 641,
+     "max": 4847,
+     "mean": 539.23385,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4327,
+     "p95": 9001,
+     "p99": 12594,
+     "max": 48171,
+     "mean": 4958.5339,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 16945,
+     "p95": 27326,
+     "p99": 31399,
+     "max": 86059,
+     "mean": 18046.40085,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 8508,
+     "p95": 13041,
+     "p99": 16722,
+     "max": 42467,
+     "mean": 6311.5236,
+     "neg": 5069
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1554,
+     "p95": 13551,
+     "p99": 14220,
+     "max": 28384,
+     "mean": 4245.58755,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 75,
+      "1": 41,
+      "2": 27,
+      "3": 57
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 36034,
+     "kernel_T3_T2_p99_ns": 42928,
+     "observe_T5_T4_p99_ns": 42721,
+     "reap_T4_T3_p99_ns": 928
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 4735,
+      "1": 4813,
+      "2": 4924,
+      "3": 5328
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 16906,
+     "kernel_T3_T2_p99_ns": 15647,
+     "observe_T5_T4_p99_ns": 12500,
+     "reap_T4_T3_p99_ns": 638
+    },
+    "tail_threshold_ns": 31431
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p02-0-A0/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5916,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 149,
+     "p95": 189,
+     "p99": 215,
+     "max": 3116,
+     "mean": 153.77095,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 789,
+     "p95": 7346,
+     "p99": 7902,
+     "max": 23286,
+     "mean": 1753.04315,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 10267,
+     "p95": 14184,
+     "p99": 19602,
+     "max": 52972,
+     "mean": 10472.69995,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 575,
+     "p95": 627,
+     "p99": 665,
+     "max": 11687,
+     "mean": 556.79775,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4246,
+     "p95": 8467,
+     "p99": 12601,
+     "max": 49795,
+     "mean": 4881.00915,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 16726,
+     "p95": 26698,
+     "p99": 31724,
+     "max": 68622,
+     "mean": 17817.32095,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 8501,
+     "p95": 12842,
+     "p99": 16323,
+     "max": 51351,
+     "mean": 6727.38565,
+     "neg": 4141
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1539,
+     "p95": 13496,
+     "p99": 14299,
+     "max": 29977,
+     "mean": 3745.3143,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 99,
+      "1": 48,
+      "2": 25,
+      "3": 28
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 36395,
+     "kernel_T3_T2_p99_ns": 51324,
+     "observe_T5_T4_p99_ns": 43131,
+     "reap_T4_T3_p99_ns": 1205
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 4749,
+      "1": 4824,
+      "2": 4936,
+      "3": 5291
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 16681,
+     "kernel_T3_T2_p99_ns": 15915,
+     "observe_T5_T4_p99_ns": 12423,
+     "reap_T4_T3_p99_ns": 655
+    },
+    "tail_threshold_ns": 31750
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p02-1-R/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 19999,
+    "t2_single": 1,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5001,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 5001
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 438,
+     "p95": 529,
+     "p99": 565,
+     "max": 12837,
+     "mean": 440.2285,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 9349,
+     "p95": 11371,
+     "p99": 13075,
+     "max": 30669,
+     "mean": 9003.1382,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 3931,
+     "p95": 9429,
+     "p99": 10353,
+     "max": 22770,
+     "mean": 4699.8986,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 577,
+     "p95": 611,
+     "p99": 636,
+     "max": 13239,
+     "mean": 581.5899,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 5079,
+     "p95": 5317,
+     "p99": 5886,
+     "max": 17143,
+     "mean": 4777.28035,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 19286,
+     "p95": 21793,
+     "p99": 25935,
+     "max": 52558,
+     "mean": 19502.13555,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 2294,
+     "p95": 7889,
+     "p99": 8479,
+     "max": 21081,
+     "mean": 2128.6929,
+     "neg": 3159
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1592,
+     "p95": 8127,
+     "p99": 8564,
+     "max": 24128,
+     "mean": 2571.2057,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "4": 4999,
+    "1": 1,
+    "3": 1
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 5000,
+    "p50": 392,
+    "p95": 422,
+    "p99": 445,
+    "max": 17939
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 31571,
+     "kernel_T3_T2_p99_ns": 22463,
+     "observe_T5_T4_p99_ns": 17046,
+     "reap_T4_T3_p99_ns": 12045
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 19800
+     },
+     "caller_window_hist": {
+      "0": 19799,
+      "3": 1
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 19280,
+     "kernel_T3_T2_p99_ns": 10037,
+     "observe_T5_T4_p99_ns": 5786,
+     "reap_T4_T3_p99_ns": 631
+    },
+    "tail_threshold_ns": 25946
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p03-0-R/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 20000,
+    "t2_single": 0,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5000,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 5000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 444,
+     "p95": 534,
+     "p99": 570,
+     "max": 11353,
+     "mean": 447.2205,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 9433,
+     "p95": 11324,
+     "p99": 13441,
+     "max": 30599,
+     "mean": 8129.21595,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 4011,
+     "p95": 9790,
+     "p99": 11682,
+     "max": 28072,
+     "mean": 5534.8235,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 574,
+     "p95": 624,
+     "p99": 657,
+     "max": 5881,
+     "mean": 581.4328,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4422,
+     "p95": 5359,
+     "p99": 6048,
+     "max": 37278,
+     "mean": 4608.5147,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 19400,
+     "p95": 22411,
+     "p99": 30680,
+     "max": 51446,
+     "mean": 19301.20745,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 2350,
+     "p95": 8276,
+     "p99": 9718,
+     "max": 25831,
+     "mean": 2912.7284,
+     "neg": 3332
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1546,
+     "p95": 8258,
+     "p99": 8956,
+     "max": 21901,
+     "mean": 2622.0951,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "4": 5000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 5000,
+    "p50": 400,
+    "p95": 437,
+    "p99": 463,
+    "max": 5649
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 33005,
+     "kernel_T3_T2_p99_ns": 27813,
+     "observe_T5_T4_p99_ns": 37229,
+     "reap_T4_T3_p99_ns": 3847
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 19800
+     },
+     "caller_window_hist": {
+      "0": 19800
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 19393,
+     "kernel_T3_T2_p99_ns": 10813,
+     "observe_T5_T4_p99_ns": 5861,
+     "reap_T4_T3_p99_ns": 651
+    },
+    "tail_threshold_ns": 30714
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p03-1-A0/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 6056,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 145,
+     "p95": 172,
+     "p99": 191,
+     "max": 12201,
+     "mean": 148.4886,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 778,
+     "p95": 7184,
+     "p99": 7629,
+     "max": 41051,
+     "mean": 1731.13935,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 10291,
+     "p95": 14065,
+     "p99": 17707,
+     "max": 56895,
+     "mean": 10462.36905,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 573,
+     "p95": 620,
+     "p99": 649,
+     "max": 11858,
+     "mean": 548.9047,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4179,
+     "p95": 8335,
+     "p99": 12215,
+     "max": 45219,
+     "mean": 4757.82825,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 16706,
+     "p95": 26707,
+     "p99": 29146,
+     "max": 66763,
+     "mean": 17648.72995,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 8541,
+     "p95": 12825,
+     "p99": 16186,
+     "max": 55512,
+     "mean": 6446.6907,
+     "neg": 4732
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1526,
+     "p95": 13353,
+     "p99": 13737,
+     "max": 42187,
+     "mean": 4015.67835,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 82,
+      "1": 35,
+      "2": 20,
+      "3": 63
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 31724,
+     "kernel_T3_T2_p99_ns": 55188,
+     "observe_T5_T4_p99_ns": 42857,
+     "reap_T4_T3_p99_ns": 1095
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 4761,
+      "1": 4858,
+      "2": 4944,
+      "3": 5237
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 16670,
+     "kernel_T3_T2_p99_ns": 15192,
+     "observe_T5_T4_p99_ns": 12158,
+     "reap_T4_T3_p99_ns": 645
+    },
+    "tail_threshold_ns": 29215
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p04-0-A0/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 6080,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 146,
+     "p95": 180,
+     "p99": 201,
+     "max": 12328,
+     "mean": 149.9954,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 780,
+     "p95": 7192,
+     "p99": 7572,
+     "max": 28134,
+     "mean": 1723.00625,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 10158,
+     "p95": 13844,
+     "p99": 14432,
+     "max": 32860,
+     "mean": 10200.6601,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 573,
+     "p95": 617,
+     "p99": 638,
+     "max": 3882,
+     "mean": 547.1373,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4108,
+     "p95": 8202,
+     "p99": 12206,
+     "max": 50996,
+     "mean": 4697.6917,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 16472,
+     "p95": 24236,
+     "p99": 28043,
+     "max": 64235,
+     "mean": 17318.49075,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 8434,
+     "p95": 12571,
+     "p99": 13137,
+     "max": 25068,
+     "mean": 6413.5593,
+     "neg": 4463
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1506,
+     "p95": 13250,
+     "p99": 13577,
+     "max": 35322,
+     "mean": 3787.1008,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 136,
+      "1": 24,
+      "2": 14,
+      "3": 26
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 29427,
+     "kernel_T3_T2_p99_ns": 30093,
+     "observe_T5_T4_p99_ns": 42666,
+     "reap_T4_T3_p99_ns": 704
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 4691,
+      "1": 4820,
+      "2": 4940,
+      "3": 5349
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 16433,
+     "kernel_T3_T2_p99_ns": 14351,
+     "observe_T5_T4_p99_ns": 12126,
+     "reap_T4_T3_p99_ns": 637
+    },
+    "tail_threshold_ns": 28044
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p04-1-R/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 20000,
+    "t2_single": 0,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5000,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 5000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 429,
+     "p95": 518,
+     "p99": 548,
+     "max": 3601,
+     "mean": 428.0053,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 9076,
+     "p95": 10827,
+     "p99": 11926,
+     "max": 26188,
+     "mean": 8295.41045,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 3910,
+     "p95": 9336,
+     "p99": 9717,
+     "max": 13351,
+     "mean": 4842.2137,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 569,
+     "p95": 601,
+     "p99": 617,
+     "max": 4875,
+     "mean": 573.1955,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4888,
+     "p95": 5094,
+     "p99": 5614,
+     "max": 36033,
+     "mean": 4537.17755,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 18763,
+     "p95": 21107,
+     "p99": 22693,
+     "max": 50101,
+     "mean": 18676.0025,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 2295,
+     "p95": 7880,
+     "p99": 8153,
+     "max": 11544,
+     "mean": 2427.8174,
+     "neg": 2912
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1556,
+     "p95": 7943,
+     "p99": 8211,
+     "max": 15395,
+     "mean": 2414.3963,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "4": 5000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 5000,
+    "p50": 391,
+    "p95": 412,
+    "p99": 425,
+    "max": 4620
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 23649,
+     "kernel_T3_T2_p99_ns": 10499,
+     "observe_T5_T4_p99_ns": 36014,
+     "reap_T4_T3_p99_ns": 4871
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 19800
+     },
+     "caller_window_hist": {
+      "0": 19800
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 18757,
+     "kernel_T3_T2_p99_ns": 9716,
+     "observe_T5_T4_p99_ns": 5534,
+     "reap_T4_T3_p99_ns": 615
+    },
+    "tail_threshold_ns": 22703
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p05-0-R/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 20000,
+    "t2_single": 0,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 5000,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 5000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 430,
+     "p95": 520,
+     "p99": 548,
+     "max": 3461,
+     "mean": 429.77775,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 8956,
+     "p95": 10798,
+     "p99": 12185,
+     "max": 42617,
+     "mean": 8536.81785,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 3931,
+     "p95": 9303,
+     "p99": 9871,
+     "max": 26181,
+     "mean": 4719.67705,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 574,
+     "p95": 622,
+     "p99": 645,
+     "max": 12693,
+     "mean": 580.9625,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4946,
+     "p95": 5115,
+     "p99": 5711,
+     "max": 36452,
+     "mean": 4638.4321,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 18764,
+     "p95": 21304,
+     "p99": 23375,
+     "max": 56166,
+     "mean": 18905.66725,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 2332,
+     "p95": 7782,
+     "p99": 8288,
+     "max": 24159,
+     "mean": 2226.5366,
+     "neg": 3064
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1559,
+     "p95": 8091,
+     "p99": 8487,
+     "max": 19496,
+     "mean": 2493.14045,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "4": 5000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 5000,
+    "p50": 409,
+    "p95": 441,
+    "p99": 458,
+    "max": 12456
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "input_exhausted": 200
+     },
+     "caller_window_hist": {
+      "0": 200
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 28226,
+     "kernel_T3_T2_p99_ns": 25932,
+     "observe_T5_T4_p99_ns": 36416,
+     "reap_T4_T3_p99_ns": 999
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "input_exhausted": 19800
+     },
+     "caller_window_hist": {
+      "0": 19800
+     },
+     "frac_in_kernel_presentation": 1.0,
+     "total_p50_ns": 18761,
+     "kernel_T3_T2_p99_ns": 9838,
+     "observe_T5_T4_p99_ns": 5630,
+     "reap_T4_T3_p99_ns": 642
+    },
+    "tail_threshold_ns": 23381
+   }
+  },
+  "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p05-1-A0/dump/tail-001-W03-uring-4k-d4_rep0_instrumented.bin": {
+   "counts": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2_keys": 0,
+    "t2_single": 20000,
+    "cookie": 20000,
+    "cqe": 20000,
+    "published": 20000,
+    "taken": 20000,
+    "wake": 6136,
+    "lost_overflow": 0,
+    "join_fail_t1": 0,
+    "join_fail_t2": 0,
+    "join_fail_cookie": 0,
+    "join_fail_cqe": 0,
+    "join_fail_published": 0,
+    "join_fail_taken": 0,
+    "seq_out_of_range": 0,
+    "presentations": 20000
+   },
+   "coverage": {
+    "t0": 20000,
+    "t1": 20000,
+    "t2": 20000,
+    "t3": 20000,
+    "t4": 20000,
+    "t5": 20000,
+    "twake_set": 20000,
+    "cookie_set": 20000
+   },
+   "join_fail_total": 0,
+   "percentiles": {
+    "prep_T1-T0": {
+     "p50": 146,
+     "p95": 169,
+     "p99": 186,
+     "max": 3132,
+     "mean": 147.9187,
+     "neg": 0
+    },
+    "submit_T2-T1": {
+     "p50": 774,
+     "p95": 7117,
+     "p99": 7434,
+     "max": 22241,
+     "mean": 1742.6785,
+     "neg": 0
+    },
+    "kernel_wake_T3-T2": {
+     "p50": 10276,
+     "p95": 14013,
+     "p99": 15202,
+     "max": 37629,
+     "mean": 10335.6572,
+     "neg": 0
+    },
+    "reap_pub_T4-T3": {
+     "p50": 564,
+     "p95": 601,
+     "p99": 621,
+     "max": 12709,
+     "mean": 539.45225,
+     "neg": 0
+    },
+    "observe_T5-T4": {
+     "p50": 4089,
+     "p95": 8269,
+     "p99": 12231,
+     "max": 50994,
+     "mean": 4705.3984,
+     "neg": 0
+    },
+    "total_T5-T0": {
+     "p50": 16662,
+     "p95": 25699,
+     "p99": 27894,
+     "max": 63508,
+     "mean": 17471.10505,
+     "neg": 0
+    },
+    "wake_part_Tw-T2": {
+     "p50": 8478,
+     "p95": 12764,
+     "p99": 13590,
+     "max": 36037,
+     "mean": 6300.43785,
+     "neg": 4907
+    },
+    "reap_part_T3-Tw": {
+     "p50": 1513,
+     "p95": 13252,
+     "p99": 13547,
+     "max": 25418,
+     "mean": 4035.21935,
+     "neg": 0
+    }
+   },
+   "n_full": 20000,
+   "n_total": 20000,
+   "presentation_size_hist": {
+    "1": 20000
+   },
+   "burst_spread_ns": {
+    "n_presentations_ge2": 0,
+    "p50": null,
+    "p95": null,
+    "p99": null,
+    "max": null
+   },
+   "tail_membership": {
+    "tail": {
+     "n": 200,
+     "stop_hist": {
+      "plain_single": 200
+     },
+     "caller_window_hist": {
+      "0": 123,
+      "1": 22,
+      "2": 15,
+      "3": 40
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 29705,
+     "kernel_T3_T2_p99_ns": 35902,
+     "observe_T5_T4_p99_ns": 41116,
+     "reap_T4_T3_p99_ns": 12703
+    },
+    "body": {
+     "n": 19800,
+     "stop_hist": {
+      "plain_single": 19800
+     },
+     "caller_window_hist": {
+      "0": 4697,
+      "1": 4830,
+      "2": 4947,
+      "3": 5326
+     },
+     "frac_in_kernel_presentation": 0.0,
+     "total_p50_ns": 16622,
+     "kernel_T3_T2_p99_ns": 14603,
+     "observe_T5_T4_p99_ns": 12155,
+     "reap_T4_T3_p99_ns": 620
+    },
+    "tail_threshold_ns": 27896
+   }
+  }
+ }
+}

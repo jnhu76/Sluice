@@ -1,0 +1,126 @@
+From c55165a219a67058c97941c60ae520d1b1b45996 Mon Sep 17 00:00:00 2001
+From: jnhu <me@hoooo.org>
+Date: Fri, 6 Nov 2026 23:52:38 +0800
+Subject: [PATCH] research(595-r5): bound the adapter's policy-side
+ eligible-prefix scan
+
+R5 R4_CLEANUP item C1. The adapter recomputed the full-span eligible
+prefix on every while-loop re-entry before any budget decision (R4
+finding C1); with an all-eligible span of N and quantum q the source
+loop inspected N + (N-q) + ... members per group.
+
+- budget::Input::eligible_prefix -> eligible_prefix_bounded, fed by
+  batch_shaped_prefix_bounded, which inspects at most
+  budget::kEligiblePrefixScanBound (= UringAsyncBackend::ready_batch_cap)
+  leading members and equals min(full_prefix, bound). Every quantum the
+  table can emit (base 8, clamp 2, pinned 2/8) is <= that bound, so
+  min(quantum, bounded) == min(quantum, full) and the front_ineligible
+  zero test is unchanged: decisions are identical.
+- DecisionRecord.eligible_prefix keeps its full-prefix meaning and is
+  filled only when a trace sink is attached, so diagnostic lines stay
+  byte-identical; non-budgeted arms (R) no longer scan without a trace
+  sink.
+- No eligibility caching across re-entries or NativeFileRef/borrow
+  lifetimes: the bounded prefix is recomputed from the live span each
+  iteration and reads only ops[0..min(prefix,bound)-1], a subset of the
+  members the full scan read; op.file is never touched.
+- Quantum, suffix singles, refill and completion order are untouched.
+
+Equivalence evidence (native E5, this session):
+- 18-scenario deterministic ready-reuse oracle (R4 archived source,
+  sha256 5c10be9e...), run per scenario: 18/18 rc=0 before and after,
+  full outputs byte-identical.
+- r4_arm_smoke and the in-repo 26-scenario
+  uring_ready_batch_deterministic_test: rc=0, outputs byte-identical.
+- W03 r3d16cap real-kernel runs stay rc=0 for all arms; their
+  presentation/pressure counters are scheduling-nondeterministic
+  (A/B repeat study: same-binary S arm spans 20..28 presentations over
+  5 reps), so they are informational, not an equivalence oracle.
+---
+ bench/r3_ready_batch.hpp | 33 +++++++++++++++++++++++++++------
+ 1 file changed, 27 insertions(+), 6 deletions(-)
+
+diff --git a/bench/r3_ready_batch.hpp b/bench/r3_ready_batch.hpp
+index 0284d098..2e7ab640 100644
+--- a/bench/r3_ready_batch.hpp
++++ b/bench/r3_ready_batch.hpp
+@@ -200,9 +200,15 @@ namespace budget {
+ enum class Action : std::uint8_t { batch, immediate, authority };
+ enum class QuantumEffect : std::uint8_t { none, base, clamp2 };
+ 
++// Every quantum the table can emit (base 8, clamp 2, pinned 2 or 8) is
++// <= ready_batch_cap, so an eligible prefix bounded to this value decides
++// identically to the full-span scan. Raise it before pinning a larger
++// quantum.
++constexpr std::size_t kEligiblePrefixScanBound = UringAsyncBackend::ready_batch_cap;
++
+ struct Input {
+     std::size_t remaining = 0;
+-    std::size_t eligible_prefix = 0;
++    std::size_t eligible_prefix_bounded = 0;
+     std::size_t active_data = 0;
+     bool inflight_hint_active = false;
+     bool pressure_hint_active = false;
+@@ -224,8 +230,8 @@ constexpr std::array<Row, 6> kTable{{
+      [](const Input& in) noexcept { return in.remaining == 1; }, Action::immediate,
+      QuantumEffect::none},
+     {"front_ineligible",
+-     [](const Input& in) noexcept { return in.eligible_prefix == 0; }, Action::immediate,
+-     QuantumEffect::none},
++     [](const Input& in) noexcept { return in.eligible_prefix_bounded == 0; },
++     Action::immediate, QuantumEffect::none},
+     {"authority_signal",
+      [](const Input& in) noexcept {
+          return in.prior_stop_control_or_recovery || in.residue_advertised;
+@@ -290,6 +296,18 @@ inline Decision evaluate(const Input& in) noexcept {
+ 
+ } // namespace budget
+ 
++// Equals min(batch_shaped_prefix(ops), budget::kEligiblePrefixScanBound): a
++// stop before the bound is exactly where the full scan stops.
++inline std::size_t batch_shaped_prefix_bounded(std::span<const ReadOp> ops) noexcept {
++    const std::size_t limit = std::min(ops.size(), budget::kEligiblePrefixScanBound);
++    std::size_t count = 0;
++    while (count < limit && ops[count].len == kBatchShapeReadLen &&
++           ops[count].dst != nullptr) {
++        ++count;
++    }
++    return count;
++}
++
+ struct DecisionRecord {
+     std::size_t remaining = 0;
+     std::size_t eligible_prefix = 0;
+@@ -445,7 +463,9 @@ class Adapter {
+             bool authority_exit = false;
+             DecisionRecord record;
+             record.remaining = rest.size();
+-            record.eligible_prefix = batch_shaped_prefix(rest);
++            if (trace_ != nullptr) {
++                record.eligible_prefix = batch_shaped_prefix(rest);
++            }
+             record.pressure_known = facts.pressure_known;
+             record.last_pass_completed = facts.last_pass_completed;
+             record.last_pass_immediate_work = facts.last_pass_immediate_work;
+@@ -455,7 +475,7 @@ class Adapter {
+             if (policy.budgeted) {
+                 budget::Input input;
+                 input.remaining = rest.size();
+-                input.eligible_prefix = record.eligible_prefix;
++                input.eligible_prefix_bounded = batch_shaped_prefix_bounded(rest);
+                 input.prior_stop_control_or_recovery = prior_control_or_recovery;
+                 input.residue_advertised = prior_residue;
+                 input.pinned_quantum = variant.pinned_quantum;
+@@ -494,7 +514,8 @@ class Adapter {
+                         ++out.counters.r4_authority_exits;
+                         break;
+                     case budget::Action::batch:
+-                        present_len = std::min(decision.quantum, input.eligible_prefix);
++                        present_len =
++                            std::min(decision.quantum, input.eligible_prefix_bounded);
+                         if (present_len == 0)
+                             present_len = 1;
+                         break;
+-- 
+2.56.0
+
