@@ -72,6 +72,18 @@ option("sanitizers")
     set_description("Enable sanitizer sets: asan, asan+ubsan or tsan (comma-separated keywords).")
 option_end()
 
+-- #595 R5 research diagnostic only (never in a release or gate build): compile
+-- the per-op tail-trace instrument. Runtime activation still requires
+-- SLUICE_595_R5_TAIL_TRACE=1 in the environment.
+option("r5_tail_trace")
+    set_default(false)
+    set_description("Compile the #595 R5 per-op tail trace instrument (research branches only).")
+option_end()
+
+if has_config("r5_tail_trace") then
+    add_defines("SLUICE_595_R5_TAIL_TRACE")
+end
+
 if has_config("sanitizers") then
     local sets = get_config("sanitizers")
     if sets:find("asan") then
