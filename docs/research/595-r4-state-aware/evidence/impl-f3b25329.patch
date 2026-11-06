@@ -1,0 +1,1359 @@
+diff --git a/bench/bench_common.hpp b/bench/bench_common.hpp
+index 93115e61..16588098 100644
+--- a/bench/bench_common.hpp
++++ b/bench/bench_common.hpp
+@@ -317,6 +317,20 @@ struct Record {
+     std::uint64_t r3_ineligible_fallbacks = 0;
+     std::uint64_t r3_gate_stops = 0;
+     std::uint64_t r3_untouched = 0;
++
++    std::uint64_t r4_batch_presentations = 0;
++    std::uint64_t r4_cap_reentries = 0;
++    std::uint64_t r4_chunk_reentries = 0;
++    std::uint64_t r4_immediate_decisions = 0;
++    std::uint64_t r4_authority_exits = 0;
++    std::uint64_t r4_quantum1 = 0;
++    std::uint64_t r4_quantum2 = 0;
++    std::uint64_t r4_quantum8 = 0;
++    std::uint64_t r4_active_zero_decisions = 0;
++    std::uint64_t r4_pressure_decisions = 0;
++    std::uint64_t r4_shadow_decisions = 0;
++    std::uint64_t r4_shadow_outstanding_sum = 0;
++    std::uint64_t r4_shadow_window_sum = 0;
+ };
+ 
+ inline std::string json_escape(const std::string& in) {
+@@ -386,6 +400,12 @@ inline void emit_record(const Record& r) {
+         "\"r3_suffix_single_calls\":%llu,\"r3_flush_attempts\":%llu,"
+         "\"r3_ineligible_fallbacks\":%llu,\"r3_gate_stops\":%llu,"
+         "\"r3_untouched\":%llu,"
++        "\"r4_batch_presentations\":%llu,\"r4_cap_reentries\":%llu,"
++        "\"r4_chunk_reentries\":%llu,\"r4_immediate_decisions\":%llu,"
++        "\"r4_authority_exits\":%llu,\"r4_quantum1\":%llu,\"r4_quantum2\":%llu,"
++        "\"r4_quantum8\":%llu,\"r4_active_zero_decisions\":%llu,"
++        "\"r4_pressure_decisions\":%llu,\"r4_shadow_decisions\":%llu,"
++        "\"r4_shadow_outstanding_sum\":%llu,\"r4_shadow_window_sum\":%llu,"
+         "\"stats_submit_calls\":%llu,\"stats_submitted_ops\":%llu,\"stats_poll_calls\":%llu,"
+         "\"stats_wait_calls\":%llu,\"stats_completed_ops\":%llu,\"stats_canceled_ops\":%llu,"
+         "\"stats_completion_errors\":%llu,\"stats_short_completions\":%llu,"
+@@ -417,6 +437,19 @@ inline void emit_record(const Record& r) {
+         static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
+         static_cast<unsigned long long>(r.r3_gate_stops),
+         static_cast<unsigned long long>(r.r3_untouched),
++        static_cast<unsigned long long>(r.r4_batch_presentations),
++        static_cast<unsigned long long>(r.r4_cap_reentries),
++        static_cast<unsigned long long>(r.r4_chunk_reentries),
++        static_cast<unsigned long long>(r.r4_immediate_decisions),
++        static_cast<unsigned long long>(r.r4_authority_exits),
++        static_cast<unsigned long long>(r.r4_quantum1),
++        static_cast<unsigned long long>(r.r4_quantum2),
++        static_cast<unsigned long long>(r.r4_quantum8),
++        static_cast<unsigned long long>(r.r4_active_zero_decisions),
++        static_cast<unsigned long long>(r.r4_pressure_decisions),
++        static_cast<unsigned long long>(r.r4_shadow_decisions),
++        static_cast<unsigned long long>(r.r4_shadow_outstanding_sum),
++        static_cast<unsigned long long>(r.r4_shadow_window_sum),
+         static_cast<unsigned long long>(r.stats_submit_calls),
+         static_cast<unsigned long long>(r.stats_submitted_ops),
+         static_cast<unsigned long long>(r.stats_poll_calls),
+@@ -458,6 +491,25 @@ inline void print_record(const Record& r) {
+                     static_cast<unsigned long long>(r.r3_gate_stops),
+                     static_cast<unsigned long long>(r.r3_untouched));
+     }
++    if (r.r4_batch_presentations != 0 || r.r4_shadow_decisions != 0) {
++        std::printf("      r4 presentations=%llu cap_reentries=%llu chunk_reentries=%llu "
++                    "immediate=%llu authority=%llu q1=%llu q2=%llu q8=%llu "
++                    "active_zero=%llu pressure=%llu shadow_decisions=%llu "
++                    "shadow_outstanding_sum=%llu shadow_window_sum=%llu\n",
++                    static_cast<unsigned long long>(r.r4_batch_presentations),
++                    static_cast<unsigned long long>(r.r4_cap_reentries),
++                    static_cast<unsigned long long>(r.r4_chunk_reentries),
++                    static_cast<unsigned long long>(r.r4_immediate_decisions),
++                    static_cast<unsigned long long>(r.r4_authority_exits),
++                    static_cast<unsigned long long>(r.r4_quantum1),
++                    static_cast<unsigned long long>(r.r4_quantum2),
++                    static_cast<unsigned long long>(r.r4_quantum8),
++                    static_cast<unsigned long long>(r.r4_active_zero_decisions),
++                    static_cast<unsigned long long>(r.r4_pressure_decisions),
++                    static_cast<unsigned long long>(r.r4_shadow_decisions),
++                    static_cast<unsigned long long>(r.r4_shadow_outstanding_sum),
++                    static_cast<unsigned long long>(r.r4_shadow_window_sum));
++    }
+ }
+ 
+ // One timestamp pair; the throughput phase must not call the clock inside its
+diff --git a/bench/bench_w03_external_loop.cpp b/bench/bench_w03_external_loop.cpp
+index 43623787..8a01af62 100644
+--- a/bench/bench_w03_external_loop.cpp
++++ b/bench/bench_w03_external_loop.cpp
+@@ -151,6 +151,11 @@ struct SharedLoop {
+     std::uint64_t empty_wakes = 0;
+     std::uint64_t passes = 0;
+     std::uint64_t retry_scheduled = 0;
++    // Facts of the most recent owner pass, published for the state-aware
++    // arms; zero new polls are issued for them.
++    std::uint64_t last_pass_completed = 0;
++    bool last_pass_immediate_work = false;
++    bool pressure_seen = false;
+     bool driver_attached = false;
+     bool stop = false;
+     bool driver_failed = false;
+@@ -218,6 +223,9 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+         std::size_t batch_completions = 0;
+         bool retry_remains = false;
+         bool pass_failed = false;
++        std::size_t last_pass_completed = 0;
++        bool last_pass_immediate_work = false;
++        bool saw_pass = false;
+         // A pass that owes another transport attempt is handled by the next
+         // epoll_wait timeout, so a retry never spins and never strands it.
+         for (std::size_t guard = 0; guard < 1000000; ++guard) {
+@@ -228,6 +236,9 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+             }
+             batch_completions += pass.value().completed;
+             retry_remains = pass.value().dispatch_retry_remains;
++            last_pass_completed = pass.value().completed;
++            last_pass_immediate_work = pass.value().immediate_work_remains;
++            saw_pass = true;
+             if (!pass.value().immediate_work_remains) {
+                 break;
+             }
+@@ -240,6 +251,11 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+             if (retry_remains) {
+                 ++shared.retry_scheduled;
+             }
++            if (saw_pass) {
++                shared.last_pass_completed = last_pass_completed;
++                shared.last_pass_immediate_work = last_pass_immediate_work;
++                shared.pressure_seen = true;
++            }
+             if (pass_failed) {
+                 shared.driver_failed = true;
+                 shared.driver_failure = "poll_progress failed";
+@@ -264,7 +280,7 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+ 
+ PhaseResult run_external_phase(const LoopParams& params, const std::string& path,
+                                bool instrument, bool verify, bool stats_enabled,
+-                               bench::r3::Arm arm) {
++                               bench::r3::Arm arm, const char* diag_tag = nullptr) {
+     PhaseResult phase;
+ 
+     auto opened = File::open(path, rw_open_existing());
+@@ -322,6 +338,24 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+     if (arm != bench::r3::Arm::a0)
+         adapter.emplace(ctx, arm);
+ 
++    // Diagnostic runs only: SLUICE_595_R4_DIAG_LINES=<path> appends one
++    // structured line per budget decision. Never set during timed runs.
++    static std::FILE* diag_stream = [] {
++        const char* path = std::getenv("SLUICE_595_R4_DIAG_LINES");
++        if (path == nullptr || *path == '\0') {
++            return static_cast<std::FILE*>(nullptr);
++        }
++        return std::fopen(path, "a");
++    }();
++    bench::r3::Adapter::TraceSink trace_sink;
++    if (diag_stream != nullptr && adapter.has_value()) {
++        if (diag_tag != nullptr) {
++            std::fprintf(diag_stream, "# phase %s arm=%s\n", diag_tag,
++                         bench::r3::arm_name(arm));
++        }
++        adapter->set_trace_sink(&trace_sink);
++    }
++
+     const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
+     std::vector<std::vector<std::byte>> buffers(
+         params.depth, std::vector<std::byte>(params.block_size));
+@@ -378,8 +412,16 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+                     ready.push_back(op);
+                     ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
+                 }
++                bench::r3::DecisionFacts facts;
++                facts.caller_window = window.size();
++                if (adapter->reads_pressure_facts()) {
++                    std::lock_guard<std::mutex> lock(shared.mutex);
++                    facts.last_pass_completed = shared.last_pass_completed;
++                    facts.last_pass_immediate_work = shared.last_pass_immediate_work;
++                    facts.pressure_known = shared.pressure_seen;
++                }
+                 auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
+-                                               accepted);
++                                               accepted, facts);
+                 phase.r3.entry_calls += outcome.counters.entry_calls;
+                 phase.r3.group_calls += outcome.counters.group_calls;
+                 phase.r3.single_calls += outcome.counters.single_calls;
+@@ -392,6 +434,29 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+                 phase.r3.gate_stops += outcome.counters.gate_stops;
+                 phase.r3.rejected_calls += outcome.counters.rejected_calls;
+                 phase.r3.untouched += outcome.counters.untouched;
++                phase.r3.r4_batch_presentations += outcome.counters.r4_batch_presentations;
++                phase.r3.r4_cap_reentries += outcome.counters.r4_cap_reentries;
++                phase.r3.r4_chunk_reentries += outcome.counters.r4_chunk_reentries;
++                phase.r3.r4_immediate_decisions += outcome.counters.r4_immediate_decisions;
++                phase.r3.r4_authority_exits += outcome.counters.r4_authority_exits;
++                phase.r3.r4_quantum1 += outcome.counters.r4_quantum1;
++                phase.r3.r4_quantum2 += outcome.counters.r4_quantum2;
++                phase.r3.r4_quantum8 += outcome.counters.r4_quantum8;
++                phase.r3.r4_active_zero_decisions += outcome.counters.r4_active_zero_decisions;
++                phase.r3.r4_pressure_decisions += outcome.counters.r4_pressure_decisions;
++                phase.r3.r4_shadow_decisions += outcome.counters.r4_shadow_decisions;
++                phase.r3.r4_shadow_outstanding_sum +=
++                    outcome.counters.r4_shadow_outstanding_sum;
++                phase.r3.r4_shadow_window_sum += outcome.counters.r4_shadow_window_sum;
++                if (!trace_sink.records.empty()) {
++                    std::string line;
++                    for (const bench::r3::DecisionRecord& record : trace_sink.records) {
++                        bench::r3::format_decision_record(record, line);
++                        std::fprintf(diag_stream, "%s\n", line.c_str());
++                    }
++                    std::fflush(diag_stream);
++                    trace_sink.records.clear();
++                }
+                 const std::size_t accepted_count = accepted.size();
+                 for (std::size_t k = 0; k < accepted_count; ++k) {
+                     const std::size_t sequence = base + k;
+@@ -612,8 +677,11 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     }
+ 
+     const double cpu_before = bench::process_cpu_seconds();
+-    const PhaseResult phase =
+-        run_external_phase(params, path, false, false, cfg.stats_enabled, arm);
++    const PhaseResult phase = run_external_phase(
++        params, path, false, false, cfg.stats_enabled, arm,
++        (meta.case_id + "/rep" + std::to_string(rep) +
++         (measured ? "/measured" : "/warmup"))
++            .c_str());
+     const double cpu_after = bench::process_cpu_seconds();
+ 
+     if (!phase.ok) {
+@@ -648,6 +716,19 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
+     record.r3_gate_stops = phase.r3.gate_stops;
+     record.r3_untouched = phase.r3.untouched;
++    record.r4_batch_presentations = phase.r3.r4_batch_presentations;
++    record.r4_cap_reentries = phase.r3.r4_cap_reentries;
++    record.r4_chunk_reentries = phase.r3.r4_chunk_reentries;
++    record.r4_immediate_decisions = phase.r3.r4_immediate_decisions;
++    record.r4_authority_exits = phase.r3.r4_authority_exits;
++    record.r4_quantum1 = phase.r3.r4_quantum1;
++    record.r4_quantum2 = phase.r3.r4_quantum2;
++    record.r4_quantum8 = phase.r3.r4_quantum8;
++    record.r4_active_zero_decisions = phase.r3.r4_active_zero_decisions;
++    record.r4_pressure_decisions = phase.r3.r4_pressure_decisions;
++    record.r4_shadow_decisions = phase.r3.r4_shadow_decisions;
++    record.r4_shadow_outstanding_sum = phase.r3.r4_shadow_outstanding_sum;
++    record.r4_shadow_window_sum = phase.r3.r4_shadow_window_sum;
+ 
+     std::optional<std::string> stats_failure =
+         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+@@ -686,16 +767,18 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+ 
+     int failed = 0;
+ 
+-    const PhaseResult oracle =
+-        run_external_phase(params, path, false, true, cfg.stats_enabled, arm);
++    const PhaseResult oracle = run_external_phase(
++        params, path, false, true, cfg.stats_enabled, arm,
++        (meta.case_id + "/rep" + std::to_string(rep) + "/oracle").c_str());
+     if (!oracle.ok) {
+         record.ok = false;
+         record.failure = "correctness oracle: " + oracle.failure;
+         failed = 1;
+     }
+ 
+-    const PhaseResult instrumented =
+-        run_external_phase(params, path, true, false, cfg.stats_enabled, arm);
++    const PhaseResult instrumented = run_external_phase(
++        params, path, true, false, cfg.stats_enabled, arm,
++        (meta.case_id + "/rep" + std::to_string(rep) + "/instrumented").c_str());
+     if (!instrumented.ok) {
+         record.ok = false;
+         record.failure = "latency pass: " + instrumented.failure;
+diff --git a/bench/r3_ready_batch.hpp b/bench/r3_ready_batch.hpp
+index 59cf0acb..0284d098 100644
+--- a/bench/r3_ready_batch.hpp
++++ b/bench/r3_ready_batch.hpp
+@@ -6,11 +6,15 @@
+ #include <sluice/async/request.hpp>
+ #include <sluice/error.hpp>
+ 
++#include <algorithm>
++#include <array>
+ #include <cstddef>
+ #include <cstdint>
++#include <cstdio>
+ #include <cstdlib>
+ #include <optional>
+ #include <span>
++#include <string>
+ #include <utility>
+ #include <vector>
+ 
+@@ -22,16 +26,50 @@ using sluice::async::Request;
+ using sluice::async::UringAsyncBackend;
+ using sluice::IoError;
+ 
+-enum class Arm : std::uint8_t { a0 = 0, a1 = 1, b = 2 };
++enum class Arm : std::uint8_t {
++    a0 = 0,
++    a1 = 1,
++    b = 2,
++    r = 3,
++    s = 4,
++    s_no_inflight = 5,
++    s_no_pressure = 6,
++    q2 = 7,
++    q8 = 8,
++    shadow = 9,
++};
+ 
+ inline Arm arm_from_env() {
+     const char* value = std::getenv("SLUICE_595_R3_ARM");
+     if (value == nullptr)
+         return Arm::a0;
+-    if ((value[0] == 'A' || value[0] == 'a') && value[1] == '1')
++    const auto is = [value](const char* token) {
++        for (std::size_t i = 0; token[i] != '\0'; ++i) {
++            if (value[i] != token[i])
++                return false;
++        }
++        return value[std::char_traits<char>::length(token)] == '\0';
++    };
++    if (is("A0") || is("a0"))
++        return Arm::a0;
++    if (is("A1") || is("a1"))
+         return Arm::a1;
+-    if (value[0] == 'B' || value[0] == 'b')
++    if (is("B") || is("b"))
+         return Arm::b;
++    if (is("R") || is("r"))
++        return Arm::r;
++    if (is("S") || is("s"))
++        return Arm::s;
++    if (is("SNI") || is("sni"))
++        return Arm::s_no_inflight;
++    if (is("SNP") || is("snp"))
++        return Arm::s_no_pressure;
++    if (is("Q2") || is("q2"))
++        return Arm::q2;
++    if (is("Q8") || is("q8"))
++        return Arm::q8;
++    if (is("SHADOW") || is("shadow"))
++        return Arm::shadow;
+     return Arm::a0;
+ }
+ 
+@@ -41,6 +79,20 @@ inline const char* arm_name(Arm arm) {
+         return "A1";
+     case Arm::b:
+         return "B";
++    case Arm::r:
++        return "R";
++    case Arm::s:
++        return "S";
++    case Arm::s_no_inflight:
++        return "SNI";
++    case Arm::s_no_pressure:
++        return "SNP";
++    case Arm::q2:
++        return "Q2";
++    case Arm::q8:
++        return "Q8";
++    case Arm::shadow:
++        return "SHADOW";
+     case Arm::a0:
+     default:
+         return "A0";
+@@ -64,8 +116,245 @@ struct Counters {
+     std::uint64_t gate_stops = 0;
+     std::uint64_t rejected_calls = 0;
+     std::uint64_t untouched = 0;
++
++    std::uint64_t r4_batch_presentations = 0;
++    std::uint64_t r4_cap_reentries = 0;
++    std::uint64_t r4_chunk_reentries = 0;
++    std::uint64_t r4_immediate_decisions = 0;
++    std::uint64_t r4_authority_exits = 0;
++    std::uint64_t r4_quantum1 = 0;
++    std::uint64_t r4_quantum2 = 0;
++    std::uint64_t r4_quantum8 = 0;
++    std::uint64_t r4_active_zero_decisions = 0;
++    std::uint64_t r4_pressure_decisions = 0;
++    std::uint64_t r4_shadow_decisions = 0;
++    std::uint64_t r4_shadow_outstanding_sum = 0;
++    std::uint64_t r4_shadow_window_sum = 0;
++};
++
++// Snapshot of the most recent owner progress pass, carried to the submit
++// thread by the harness (its existing shared-mutex channel); the adapter
++// itself never polls. pressure_known stays false until a pass has run.
++struct DecisionFacts {
++    std::uint64_t last_pass_completed = 0;
++    bool last_pass_immediate_work = false;
++    bool pressure_known = false;
++    // Caller-side unlocked mirror of accepted-but-uncollected requests;
++    // observation for the shadow arm only, never a decision authority.
++    std::size_t caller_window = 0;
++};
++
++struct BudgetVariant {
++    bool read_inflight = false;
++    bool read_pressure = false;
++    std::size_t pinned_quantum = 0;
++    bool shadow = false;
++};
++
++struct ArmPolicy {
++    bool reuse_on_cap = false;
++    bool budgeted = false;
++    BudgetVariant budget{};
++};
++
++inline ArmPolicy arm_policy(Arm arm) {
++    switch (arm) {
++    case Arm::r:
++        return {true, false, {}};
++    case Arm::shadow:
++        return {true, true, {false, false, 0, true}};
++    case Arm::s:
++        return {true, true, {true, true, 0, false}};
++    case Arm::s_no_inflight:
++        return {true, true, {false, true, 0, false}};
++    case Arm::s_no_pressure:
++        return {true, true, {true, false, 0, false}};
++    case Arm::q2:
++        return {true, true, {false, false, 2, false}};
++    case Arm::q8:
++        return {true, true, {false, false, 8, false}};
++    case Arm::b:
++    case Arm::a0:
++    case Arm::a1:
++    default:
++        return {false, false, {}};
++    }
++}
++
++// Mirror of the frozen batch shape (UringAsyncBackend::batch_eligible_read):
++// the adapter must know how far a span could batch so the budget can bound
++// the presented prefix; the entry re-derives it authoritatively.
++constexpr std::size_t kBatchShapeReadLen = 4096;
++
++inline std::size_t batch_shaped_prefix(std::span<const ReadOp> ops) noexcept {
++    std::size_t count = 0;
++    while (count < ops.size() && ops[count].len == kBatchShapeReadLen &&
++           ops[count].dst != nullptr) {
++        ++count;
++    }
++    return count;
++}
++
++namespace budget {
++
++enum class Action : std::uint8_t { batch, immediate, authority };
++enum class QuantumEffect : std::uint8_t { none, base, clamp2 };
++
++struct Input {
++    std::size_t remaining = 0;
++    std::size_t eligible_prefix = 0;
++    std::size_t active_data = 0;
++    bool inflight_hint_active = false;
++    bool pressure_hint_active = false;
++    bool pressure = false;
++    bool prior_stop_control_or_recovery = false;
++    bool residue_advertised = false;
++    std::size_t pinned_quantum = 0;
++};
++
++struct Row {
++    const char* name;
++    bool (*matches)(const Input&) noexcept;
++    Action action;
++    QuantumEffect quantum;
++};
++
++constexpr std::array<Row, 6> kTable{{
++    {"remaining_single",
++     [](const Input& in) noexcept { return in.remaining == 1; }, Action::immediate,
++     QuantumEffect::none},
++    {"front_ineligible",
++     [](const Input& in) noexcept { return in.eligible_prefix == 0; }, Action::immediate,
++     QuantumEffect::none},
++    {"authority_signal",
++     [](const Input& in) noexcept {
++         return in.prior_stop_control_or_recovery || in.residue_advertised;
++     },
++     Action::authority, QuantumEffect::none},
++    {"quantum_base", [](const Input&) noexcept { return true; }, Action::batch,
++     QuantumEffect::base},
++    {"inflight_zero",
++     [](const Input& in) noexcept {
++         return in.inflight_hint_active && in.active_data == 0;
++     },
++     Action::batch, QuantumEffect::clamp2},
++    {"completion_pressure",
++     [](const Input& in) noexcept { return in.pressure_hint_active && in.pressure; },
++     Action::batch, QuantumEffect::clamp2},
++}};
++
++struct Decision {
++    Action action = Action::batch;
++    std::size_t quantum = 8;
++    const char* row = "quantum_base";
+ };
+ 
++inline Decision evaluate(const Input& in) noexcept {
++    Decision decision;
++    const char* quantum_row = nullptr;
++    for (const Row& row : kTable) {
++        if (!row.matches(in)) {
++            continue;
++        }
++        if (decision.action == Action::batch && row.action != Action::batch) {
++            decision.action = row.action;
++            decision.row = row.name;
++        }
++        switch (row.quantum) {
++        case QuantumEffect::base:
++            decision.quantum = 8;
++            quantum_row = row.name;
++            break;
++        case QuantumEffect::clamp2:
++            decision.quantum = std::min<std::size_t>(decision.quantum, 2);
++            quantum_row = row.name;
++            break;
++        case QuantumEffect::none:
++            break;
++        }
++    }
++    if (decision.action == Action::batch) {
++        if (in.pinned_quantum != 0) {
++            decision.quantum = in.pinned_quantum;
++            decision.row = "quantum_pinned";
++        } else if (quantum_row != nullptr) {
++            decision.row = quantum_row;
++        }
++    } else if (decision.action == Action::immediate) {
++        decision.quantum = 1;
++    } else {
++        decision.quantum = 0;
++    }
++    return decision;
++}
++
++} // namespace budget
++
++struct DecisionRecord {
++    std::size_t remaining = 0;
++    std::size_t eligible_prefix = 0;
++    std::size_t present_len = 0;
++    std::size_t quantum = 0;
++    const char* action_row = "";
++    bool active_read = false;
++    std::size_t active_data = 0;
++    bool pressure_read = false;
++    bool pressure = false;
++    bool pressure_known = false;
++    std::uint64_t last_pass_completed = 0;
++    bool last_pass_immediate_work = false;
++    std::size_t caller_window = 0;
++    std::size_t accepted = 0;
++    std::size_t untouched_begin = 0;
++    std::size_t untouched = 0;
++    UringAsyncBackend::ReadyBatchStop stop = UringAsyncBackend::ReadyBatchStop::input_exhausted;
++    std::size_t flush_attempts = 0;
++    bool residue_advertised = false;
++    bool cap_cause = false;
++    bool chunk_cause = false;
++};
++
++inline const char* stop_name(UringAsyncBackend::ReadyBatchStop stop) noexcept {
++    switch (stop) {
++    case UringAsyncBackend::ReadyBatchStop::input_exhausted:
++        return "input_exhausted";
++    case UringAsyncBackend::ReadyBatchStop::rejected:
++        return "rejected";
++    case UringAsyncBackend::ReadyBatchStop::cap:
++        return "cap";
++    case UringAsyncBackend::ReadyBatchStop::sq_budget:
++        return "sq_budget";
++    case UringAsyncBackend::ReadyBatchStop::control:
++        return "control";
++    case UringAsyncBackend::ReadyBatchStop::recovery:
++        return "recovery";
++    case UringAsyncBackend::ReadyBatchStop::ineligible:
++        return "ineligible";
++    }
++    return "unknown";
++}
++
++inline void format_decision_record(const DecisionRecord& r, std::string& out) {
++    char buf[512];
++    std::snprintf(buf, sizeof buf,
++                  "ready=%zu eligible=%zu present=%zu quantum=%zu row=%s "
++                  "active_read=%d active=%zu pressure_read=%d pressure=%d "
++                  "pressure_known=%d pass_completed=%llu pass_immediate=%d "
++                  "caller_window=%zu accepted=%zu stop=%s untouched_begin=%zu "
++                  "untouched=%zu flush=%zu residue=%d sq_budget_bound=%d "
++                  "cause=%s",
++                  r.remaining, r.eligible_prefix, r.present_len, r.quantum, r.action_row,
++                  r.active_read ? 1 : 0, r.active_data, r.pressure_read ? 1 : 0,
++                  r.pressure ? 1 : 0, r.pressure_known ? 1 : 0,
++                  static_cast<unsigned long long>(r.last_pass_completed),
++                  r.last_pass_immediate_work ? 1 : 0, r.caller_window, r.accepted,
++                  stop_name(r.stop), r.untouched_begin, r.untouched, r.flush_attempts,
++                  r.residue_advertised ? 1 : 0,
++                  r.stop == UringAsyncBackend::ReadyBatchStop::sq_budget ? 1 : 0,
++                  r.cap_cause ? "cap_reentry" : (r.chunk_cause ? "chunk" : "first"));
++    out = buf;
++}
++
+ class Adapter {
+   public:
+     Adapter(AsyncIoContext& ctx, Arm arm) : ctx_(ctx), arm_(arm) {
+@@ -75,7 +364,35 @@ class Adapter {
+ 
+     Arm arm() const noexcept { return arm_; }
+ 
+-    bool batching() const noexcept { return arm_ == Arm::b && backend_ != nullptr; }
++    bool batching() const noexcept {
++        return arm_ != Arm::a0 && arm_ != Arm::a1 && backend_ != nullptr;
++    }
++
++    bool budgeted() const noexcept { return arm_policy(arm_).budgeted; }
++
++    // True when the arm consumes the pass-fact channel; the harness consults
++    // this so frozen arms never pay for the hint read.
++    bool reads_pressure_facts() const noexcept {
++        const BudgetVariant budget = arm_policy(arm_).budget;
++        return budget.read_pressure || budget.shadow;
++    }
++
++    struct TraceSink {
++        std::vector<DecisionRecord> records;
++
++        std::size_t size() const noexcept { return records.size(); }
++        const DecisionRecord& operator[](std::size_t index) const noexcept {
++            return records[index];
++        }
++        std::vector<DecisionRecord>::const_iterator begin() const noexcept {
++            return records.begin();
++        }
++        std::vector<DecisionRecord>::const_iterator end() const noexcept {
++            return records.end();
++        }
++    };
++
++    void set_trace_sink(TraceSink* sink) noexcept { trace_ = sink; }
+ 
+     struct Outcome {
+         std::optional<IoError> error;
+@@ -84,6 +401,11 @@ class Adapter {
+ 
+     Outcome submit(std::span<const ReadOp> ready,
+                    std::vector<Request<std::size_t>>& accepted) {
++        return submit(ready, accepted, DecisionFacts{});
++    }
++
++    Outcome submit(std::span<const ReadOp> ready, std::vector<Request<std::size_t>>& accepted,
++                   const DecisionFacts& facts) {
+         Outcome out;
+         accepted.clear();
+         if (arm_ == Arm::a0 || backend_ == nullptr) {
+@@ -107,19 +429,153 @@ class Adapter {
+             return out;
+         }
+ 
+-        auto batch = sluice::async::detail::TestAccess::context_submit_ready_reads(ctx_, ready);
+-        if (!batch.batch_backend) {
+-            submit_context_singles(ready, accepted, out);
+-            return out;
+-        }
+-        account(batch, ready.size(), out);
+-        append(batch, accepted);
+-        if (batch.stop == UringAsyncBackend::ReadyBatchStop::rejected) {
+-            out.error = batch.error;
+-            ++out.counters.rejected_calls;
+-            return out;
++        // The entry reports untouched members as a tail of the presented span,
++        // so the accepted prefix plus the skipped rejected member never
++        // overlaps the re-entry region.
++        const ArmPolicy policy = arm_policy(arm_);
++        const BudgetVariant variant = policy.budget;
++        std::size_t begin = 0;
++        bool prior_control_or_recovery = false;
++        bool prior_residue = false;
++        bool prior_cap_cause = false;
++        std::optional<DecisionRecord> pending_record;
++        while (begin < ready.size()) {
++            const std::span<const ReadOp> rest = ready.subspan(begin);
++            std::size_t present_len = rest.size();
++            bool authority_exit = false;
++            DecisionRecord record;
++            record.remaining = rest.size();
++            record.eligible_prefix = batch_shaped_prefix(rest);
++            record.pressure_known = facts.pressure_known;
++            record.last_pass_completed = facts.last_pass_completed;
++            record.last_pass_immediate_work = facts.last_pass_immediate_work;
++            record.caller_window = facts.caller_window;
++            record.cap_cause = prior_cap_cause;
++            record.chunk_cause = !prior_cap_cause && begin != 0;
++            if (policy.budgeted) {
++                budget::Input input;
++                input.remaining = rest.size();
++                input.eligible_prefix = record.eligible_prefix;
++                input.prior_stop_control_or_recovery = prior_control_or_recovery;
++                input.residue_advertised = prior_residue;
++                input.pinned_quantum = variant.pinned_quantum;
++                // Shadow evaluates the full state-aware table (its logged
++                // quantum is the counterfactual S decision) and then overrides
++                // only the presentation.
++                input.inflight_hint_active = variant.read_inflight || variant.shadow;
++                input.pressure_hint_active = variant.read_pressure || variant.shadow;
++                if (variant.read_inflight || variant.shadow) {
++                    record.active_read = true;
++                    record.active_data = ctx_.outstanding();
++                    input.active_data = record.active_data;
++                }
++                if (variant.read_pressure || variant.shadow) {
++                    record.pressure_read = true;
++                    record.pressure = facts.pressure_known &&
++                                      (facts.last_pass_completed > 0 ||
++                                       facts.last_pass_immediate_work);
++                    input.pressure = record.pressure;
++                }
++                const budget::Decision decision = budget::evaluate(input);
++                record.quantum = decision.quantum;
++                record.action_row = decision.row;
++                if (variant.shadow) {
++                    ++out.counters.r4_shadow_decisions;
++                    out.counters.r4_shadow_outstanding_sum += record.active_data;
++                    out.counters.r4_shadow_window_sum += facts.caller_window;
++                } else {
++                    switch (decision.action) {
++                    case budget::Action::immediate:
++                        present_len = 1;
++                        ++out.counters.r4_immediate_decisions;
++                        break;
++                    case budget::Action::authority:
++                        authority_exit = true;
++                        ++out.counters.r4_authority_exits;
++                        break;
++                    case budget::Action::batch:
++                        present_len = std::min(decision.quantum, input.eligible_prefix);
++                        if (present_len == 0)
++                            present_len = 1;
++                        break;
++                    }
++                }
++                if (record.active_read && record.active_data == 0) {
++                    ++out.counters.r4_active_zero_decisions;
++                }
++                if (record.pressure_read && record.pressure) {
++                    ++out.counters.r4_pressure_decisions;
++                }
++                if (decision.quantum == 1) {
++                    ++out.counters.r4_quantum1;
++                } else if (decision.quantum == 2) {
++                    ++out.counters.r4_quantum2;
++                } else {
++                    ++out.counters.r4_quantum8;
++                }
++                record.present_len = present_len;
++                pending_record = record;
++                if (authority_exit) {
++                    break;
++                }
++            } else {
++                record.action_row = "full_span";
++                record.present_len = present_len;
++                pending_record = record;
++            }
++
++            auto batch =
++                sluice::async::detail::TestAccess::context_submit_ready_reads(
++                    ctx_, rest.first(present_len));
++            if (!batch.batch_backend) {
++                submit_context_singles(rest, accepted, out);
++                return out;
++            }
++            account(batch, present_len, out);
++            append(batch, accepted);
++            ++out.counters.r4_batch_presentations;
++            if (trace_ != nullptr && pending_record.has_value()) {
++                pending_record->accepted = batch.accepted;
++                pending_record->untouched_begin = batch.untouched_begin;
++                pending_record->untouched = batch.untouched;
++                pending_record->stop = batch.stop;
++                pending_record->flush_attempts = batch.flush_attempts;
++                pending_record->residue_advertised = batch.residue_advertised;
++                trace_->records.push_back(*pending_record);
++            }
++            pending_record.reset();
++            if (batch.stop == UringAsyncBackend::ReadyBatchStop::rejected) {
++                out.error = batch.error;
++                ++out.counters.rejected_calls;
++                return out;
++            }
++            begin += batch.untouched_begin;
++            prior_control_or_recovery =
++                batch.stop == UringAsyncBackend::ReadyBatchStop::control ||
++                batch.stop == UringAsyncBackend::ReadyBatchStop::recovery;
++            prior_residue = batch.residue_advertised;
++            prior_cap_cause = batch.stop == UringAsyncBackend::ReadyBatchStop::cap &&
++                              batch.accepted != 0;
++            const bool progressed = batch.accepted != 0;
++            const bool more = begin < ready.size();
++            const bool cap_reuse =
++                policy.reuse_on_cap && progressed &&
++                batch.stop == UringAsyncBackend::ReadyBatchStop::cap && more;
++            const bool chunk_continue = policy.budgeted && !variant.shadow && progressed &&
++                                        batch.stop ==
++                                            UringAsyncBackend::ReadyBatchStop::input_exhausted &&
++                                        more;
++            if (cap_reuse) {
++                ++out.counters.r4_cap_reentries;
++            } else if (chunk_continue) {
++                ++out.counters.r4_chunk_reentries;
++            }
++            if (!cap_reuse && !chunk_continue) {
++                break;
++            }
+         }
+-        for (std::size_t index = batch.untouched_begin; index < ready.size(); ++index) {
++
++        for (std::size_t index = begin; index < ready.size(); ++index) {
+             const ReadOp& op = ready[index];
+             auto single = sluice::async::detail::TestAccess::context_submit_ready_reads(
+                 ctx_, std::span<const ReadOp>(&op, 1));
+@@ -178,6 +634,7 @@ class Adapter {
+     AsyncIoContext& ctx_;
+     Arm arm_ = Arm::a0;
+     UringAsyncBackend* backend_ = nullptr;
++    TraceSink* trace_ = nullptr;
+ };
+ 
+ }
+diff --git a/bench/r4_arm_smoke.cpp b/bench/r4_arm_smoke.cpp
+new file mode 100644
+index 00000000..b4494f83
+--- /dev/null
++++ b/bench/r4_arm_smoke.cpp
+@@ -0,0 +1,502 @@
++// Mechanism smoke for the #595 R4 arms: correctness across every arm, plus a
++// state-trajectory exposure check proving the state-aware budget changes its
++// quantum with pipeline state while A0/B/R presentations stay fixed. Not a
++// performance harness; it never times anything.
++
++#include "bench_common.hpp"
++#include "r3_ready_batch.hpp"
++
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/async/uring_backend.hpp>
++#include <sluice/blocking/file.hpp>
++#include <sluice/file_resource.hpp>
++
++#include <array>
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <optional>
++#include <span>
++#include <string>
++#include <utility>
++#include <vector>
++
++namespace {
++
++using sluice::File;
++using sluice::FileAccess;
++using sluice::FileExistence;
++using sluice::FileOpen;
++using sluice::IoError;
++using sluice::async::AsyncIoContext;
++using sluice::async::NativeFileRef;
++using sluice::async::ReadOp;
++using sluice::async::Request;
++using sluice::async::RequestReadiness;
++using sluice::async::ShutdownPolicy;
++
++constexpr std::size_t kBlock = 4096;
++constexpr std::size_t kDepth = 16;
++constexpr std::size_t kFixtureBlocks = 2048;
++
++int g_failed = 0;
++
++void check(bool condition, const std::string& what) {
++    if (condition) {
++        std::printf("  PASS %s\n", what.c_str());
++    } else {
++        ++g_failed;
++        std::printf("  FAIL %s\n", what.c_str());
++    }
++}
++
++std::string describe(const IoError& e) {
++    return std::string(sluice::to_string(e.code)) + "(errno=" + std::to_string(e.os_errno) +
++           ")";
++}
++
++FileOpen rw_open_existing() {
++    FileOpen mode;
++    mode.access = FileAccess::read_write;
++    mode.existence = FileExistence::open_existing;
++    return mode;
++}
++
++bool write_fixture(const std::string& path) {
++    FileOpen mode;
++    mode.access = FileAccess::read_write;
++    mode.existence = FileExistence::create_if_missing;
++    mode.contents = sluice::FileInitialContents::truncate;
++    auto opened = File::open(path, mode);
++    if (!opened.has_value()) {
++        return false;
++    }
++    File file = std::move(opened).value();
++    std::vector<std::byte> buffer(kFixtureBlocks * kBlock);
++    bench::fill_pattern(buffer.data(), buffer.size(), 0);
++    auto res = sluice::blocking::write_all_at(
++        file, 0, std::span<const std::byte>(buffer.data(), buffer.size()));
++    if (!res.has_value() || !res.value().complete()) {
++        return false;
++    }
++    return sluice::blocking::sync_data(file).has_value();
++}
++
++std::optional<AsyncIoContext> make_context() {
++    sluice::async::UringConfig config;
++    config.request_capacity = kDepth;
++    config.queue_depth = kDepth;
++    auto made = sluice::async::make_uring_context(config);
++    if (!made.has_value()) {
++        return std::nullopt;
++    }
++    return std::move(made).value();
++}
++
++struct Slots {
++    std::vector<std::vector<std::byte>> buffers;
++    std::vector<std::size_t> free_slots;
++
++    explicit Slots(std::size_t depth) : buffers(depth, std::vector<std::byte>(kBlock)) {
++        for (std::size_t i = 0; i < depth; ++i) {
++            free_slots.push_back(i);
++        }
++        for (std::size_t i = 0; i < depth; ++i) {
++            bench::fill_pattern(buffers[i].data(), kBlock, 0);
++        }
++    }
++};
++
++struct Batch {
++    std::vector<Request<std::size_t>> requests;
++    std::vector<std::size_t> slots;
++    std::vector<std::uint64_t> offsets;
++};
++
++std::vector<ReadOp> take_ops(File& file, Slots& slots, std::size_t base, std::size_t count,
++                             Batch& batch) {
++    std::vector<ReadOp> ops;
++    ops.reserve(count);
++    batch.slots.assign(slots.free_slots.end() - count, slots.free_slots.end());
++    slots.free_slots.resize(slots.free_slots.size() - count);
++    batch.offsets.clear();
++    for (std::size_t k = 0; k < count; ++k) {
++        const std::size_t sequence = base + k;
++        ReadOp op;
++        op.file = NativeFileRef(file);
++        op.dst = slots.buffers[batch.slots[k]].data();
++        op.len = kBlock;
++        op.offset = static_cast<std::uint64_t>(sequence % kFixtureBlocks) * kBlock;
++        batch.offsets.push_back(op.offset);
++        ops.push_back(op);
++    }
++    return ops;
++}
++
++// Drives passes until every request publishes, takes and verifies results,
++// and refreshes the local pass-fact snapshot exactly like the W03 driver.
++bool settle(AsyncIoContext& ctx, Slots& slots, Batch& batch, bench::r3::DecisionFacts& facts) {
++    for (std::size_t guard = 0; guard < 2000000; ++guard) {
++        bool all_ready = true;
++        for (const Request<std::size_t>& request : batch.requests) {
++            if (!request.ready()) {
++                all_ready = false;
++                break;
++            }
++        }
++        if (all_ready) {
++            break;
++        }
++        auto pass = ctx.poll_progress();
++        if (!pass.has_value()) {
++            std::printf("  FAIL poll_progress rejected: %s\n", describe(pass.error()).c_str());
++            return false;
++        }
++        facts.last_pass_completed = pass.value().completed;
++        facts.last_pass_immediate_work = pass.value().immediate_work_remains;
++        facts.pressure_known = true;
++    }
++    for (std::size_t i = 0; i < batch.requests.size(); ++i) {
++        const auto observed = batch.requests[i].take_result();
++        if (observed.readiness != RequestReadiness::ready || !observed.result.has_value() ||
++            observed.result.value() != kBlock) {
++            std::printf("  FAIL settled request %zu was not a successful full read\n", i);
++            return false;
++        }
++        const auto mismatch = bench::verify_pattern(slots.buffers[batch.slots[i]].data(), kBlock,
++                                                    batch.offsets[i]);
++        if (!mismatch.ok) {
++            std::printf("  FAIL byte mismatch on request %zu\n", i);
++            return false;
++        }
++        slots.free_slots.push_back(batch.slots[i]);
++    }
++    batch.requests.clear();
++    batch.slots.clear();
++    batch.offsets.clear();
++    return true;
++}
++
++bool submit_batch(bench::r3::Adapter& adapter, File& file, Slots& slots, std::size_t base,
++                  std::size_t count, Batch& batch, const bench::r3::DecisionFacts& facts,
++                  const char* label) {
++    const std::vector<ReadOp> ops = take_ops(file, slots, base, count, batch);
++    batch.requests.clear();
++    auto outcome =
++        adapter.submit(std::span<const ReadOp>(ops.data(), ops.size()), batch.requests, facts);
++    if (outcome.error.has_value() || batch.requests.size() != count) {
++        std::printf("  FAIL %s disposed %zu of %zu reads (%s)\n", label, batch.requests.size(),
++                    count, outcome.error.has_value() ? describe(*outcome.error).c_str() : "no error");
++        return false;
++    }
++    return true;
++}
++
++bool correctness_arm(bench::r3::Arm arm, File& file) {
++    auto context = make_context();
++    if (!context.has_value()) {
++        std::printf("  FAIL uring context unavailable\n");
++        return false;
++    }
++    AsyncIoContext ctx = std::move(*context);
++    auto owner = ctx.claim_progress_owner();
++    if (!owner.has_value()) {
++        std::printf("  FAIL claim_progress_owner rejected\n");
++        return false;
++    }
++    bench::r3::Adapter adapter(ctx, arm);
++    Slots slots(kDepth);
++    bench::r3::DecisionFacts facts;
++    bool ok = true;
++    for (std::size_t round = 0; round < 3 && ok; ++round) {
++        Batch batch;
++        if (!submit_batch(adapter, file, slots, round * kDepth, kDepth, batch, facts,
++                          (std::string("arm ") + bench::r3::arm_name(arm)).c_str())) {
++            ok = false;
++            break;
++        }
++        ok = settle(ctx, slots, batch, facts);
++    }
++    ctx.request_stop(ShutdownPolicy::drain);
++    ctx.detach_progress_host();
++    const auto shutdown = ctx.shutdown(ShutdownPolicy::drain);
++    if (!shutdown.has_value()) {
++        std::printf("  FAIL arm %s shutdown: %s\n", bench::r3::arm_name(arm),
++                    describe(shutdown.error()).c_str());
++        ok = false;
++    }
++    return ok;
++}
++
++} // namespace
++
++int main() {
++    const std::string dir = "/tmp/sluice-r4-arm-smoke";
++    const std::string path = dir + "/fixture.bin";
++    bench::ensure_dir(dir);
++    if (!write_fixture(path)) {
++        std::fprintf(stderr, "fixture creation failed\n");
++        return 1;
++    }
++    auto opened = File::open(path, rw_open_existing());
++    if (!opened.has_value()) {
++        std::fprintf(stderr, "fixture reopen failed\n");
++        return 1;
++    }
++    File file = std::move(opened).value();
++
++    std::printf("=== correctness smoke: 3x16 verified reads per arm ===\n");
++    const std::array<bench::r3::Arm, 9> arms = {
++        bench::r3::Arm::a0,     bench::r3::Arm::b,              bench::r3::Arm::r,
++        bench::r3::Arm::s,      bench::r3::Arm::s_no_inflight,  bench::r3::Arm::s_no_pressure,
++        bench::r3::Arm::q2,     bench::r3::Arm::q8,             bench::r3::Arm::shadow};
++    for (const bench::r3::Arm arm : arms) {
++        std::printf(" arm=%s\n", bench::r3::arm_name(arm));
++        check(correctness_arm(arm, file),
++              std::string("correctness ") + bench::r3::arm_name(arm));
++    }
++
++    std::printf("=== perception exposure: quantum must track pipeline state ===\n");
++    {
++        auto context = make_context();
++        if (!context.has_value()) {
++            std::printf("  FAIL uring context unavailable\n");
++            ++g_failed;
++        } else {
++            AsyncIoContext ctx = std::move(*context);
++            auto owner = ctx.claim_progress_owner();
++            check(owner.has_value(), "owner claim for perception run");
++            Slots slots(kDepth);
++            bench::r3::DecisionFacts facts;
++
++            bench::r3::Adapter s_adapter(ctx, bench::r3::Arm::s);
++            bench::r3::Adapter::TraceSink trace;
++            s_adapter.set_trace_sink(&trace);
++
++            Batch first;
++            check(submit_batch(s_adapter, file, slots, 0, kDepth, first, facts, "S first refill"),
++                  "S first refill accepts all 16 through the shared entry");
++            check(trace.size() == 3, "S first refill forms three state-tracked decisions");
++            if (trace.size() == 3) {
++                check(trace[0].quantum == 2 && trace[0].present_len == 2 &&
++                          trace[0].active_read && trace[0].active_data == 0 &&
++                          !trace[0].pressure && !trace[0].cap_cause && !trace[0].chunk_cause &&
++                          std::string(trace[0].action_row) == "inflight_zero",
++                      "empty pipeline decision: inflight_zero row, quantum 2, presents 2");
++                check(trace[1].quantum == 8 && trace[1].present_len == 8 &&
++                          trace[1].active_read && trace[1].active_data == 2 &&
++                          trace[1].chunk_cause &&
++                          std::string(trace[1].action_row) == "quantum_base",
++                      "same refill after progress: active data raises quantum to 8");
++                check(trace[2].quantum == 8 && trace[2].present_len == 6 &&
++                          trace[2].active_read && trace[2].active_data == 10 &&
++                          trace[2].chunk_cause,
++                      "tail decision keeps quantum 8 and presents the remainder");
++            }
++            check(settle(ctx, slots, first, facts), "first refill settles verified");
++            check(facts.pressure_known && facts.last_pass_completed > 0,
++                  "settle passes publish completion-pressure facts");
++
++            bench::r3::Adapter q8_adapter(ctx, bench::r3::Arm::q8);
++            Batch inflight;
++            check(submit_batch(q8_adapter, file, slots, 16, 2, inflight, facts,
++                               "hint-free outstanding probe"),
++                  "two reads left outstanding via the hint-free arm");
++            check(ctx.outstanding() == 2, "authority fact check: outstanding()==2");
++
++            trace.records.clear();
++            Batch pressured;
++            check(submit_batch(s_adapter, file, slots, 18, 4, pressured, facts,
++                               "S pressure probe"),
++                  "S accepts all 4 with a completion-backlog snapshot and 2 outstanding");
++            if (trace.size() == 2) {
++                check(trace[0].quantum == 2 && trace[0].present_len == 2 &&
++                          trace[0].active_read && trace[0].active_data == 2 &&
++                          trace[0].pressure && trace[0].pressure_known &&
++                          trace[0].last_pass_completed > 0 &&
++                          std::string(trace[0].action_row) == "completion_pressure",
++                      "completion backlog with active data: pressure clamps quantum to 2");
++            } else {
++                check(false, "S pressure probe forms two decisions");
++            }
++            bench::r3::Adapter snp_adapter(ctx, bench::r3::Arm::s_no_pressure);
++            bench::r3::Adapter::TraceSink snp_trace;
++            snp_adapter.set_trace_sink(&snp_trace);
++            Batch snp_batch;
++            check(submit_batch(snp_adapter, file, slots, 22, 4, snp_batch, facts, "SNP probe"),
++                  "SNP accepts all 4 with the same state");
++            if (snp_trace.size() == 1) {
++                check(snp_trace[0].quantum == 8 && snp_trace[0].present_len == 4 &&
++                          snp_trace[0].active_read && snp_trace[0].active_data == 6 &&
++                          !snp_trace[0].pressure_read &&
++                          std::string(snp_trace[0].action_row) == "quantum_base",
++                      "ablation SNP: pressure hint ignored, quantum stays 8 at the same state");
++            } else {
++                check(false, "SNP probe forms a single decision");
++            }
++            check(settle(ctx, slots, pressured, facts), "pressure probe settles verified");
++            check(settle(ctx, slots, snp_batch, facts), "SNP probe settles verified");
++            check(settle(ctx, slots, inflight, facts),
++                  "outstanding probe reads settle verified");
++
++            bench::r3::Adapter b_adapter(ctx, bench::r3::Arm::b);
++            bench::r3::Adapter::TraceSink b_trace;
++            b_adapter.set_trace_sink(&b_trace);
++            Batch b_pressured;
++            check(submit_batch(b_adapter, file, slots, 28, kDepth, b_pressured, facts,
++                               "B state probe"),
++                  "B accepts all 16 at the pressured state");
++            check(b_trace.size() == 1 &&
++                      b_trace[0].present_len == kDepth && !b_trace[0].active_read &&
++                      !b_trace[0].pressure_read,
++                  "B presentation ignores state entirely (one full-span decision, no hint reads)");
++            check(settle(ctx, slots, b_pressured, facts), "B state probe settles verified");
++
++            bench::r3::Adapter r_adapter(ctx, bench::r3::Arm::r);
++            bench::r3::Adapter::TraceSink r_trace;
++            r_adapter.set_trace_sink(&r_trace);
++            Batch r_pressured;
++            check(submit_batch(r_adapter, file, slots, 44, kDepth, r_pressured, facts,
++                               "R state probe"),
++                  "R accepts all 16 at the pressured state");
++            check(r_trace.size() == 2 && r_trace[0].present_len == kDepth &&
++                      r_trace[1].present_len == 8 && !r_trace[1].active_read &&
++                      r_trace[1].cap_cause,
++                  "R presentation ignores state: full span, cap stop, 8-op suffix reentry");
++            check(settle(ctx, slots, r_pressured, facts), "R state probe settles verified");
++
++            ctx.request_stop(ShutdownPolicy::drain);
++            ctx.detach_progress_host();
++            const auto shutdown = ctx.shutdown(ShutdownPolicy::drain);
++            check(shutdown.has_value(), "perception run shutdown");
++        }
++    }
++
++    std::printf("=== ablation and shadow exposure on a fresh pipeline ===\n");
++    {
++        auto context = make_context();
++        if (!context.has_value()) {
++            std::printf("  FAIL uring context unavailable\n");
++            ++g_failed;
++        } else {
++            AsyncIoContext ctx = std::move(*context);
++            auto owner = ctx.claim_progress_owner();
++            check(owner.has_value(), "owner claim for ablation run");
++            Slots slots(kDepth);
++            bench::r3::DecisionFacts facts;
++
++            bench::r3::Adapter sni_adapter(ctx, bench::r3::Arm::s_no_inflight);
++            bench::r3::Adapter::TraceSink sni_trace;
++            sni_adapter.set_trace_sink(&sni_trace);
++            Batch sni_batch;
++            check(submit_batch(sni_adapter, file, slots, 0, 8, sni_batch, facts, "SNI probe"),
++                  "SNI accepts all 8 on the empty pipeline");
++            if (sni_trace.size() == 1) {
++                check(sni_trace[0].quantum == 8 && sni_trace[0].present_len == 8 &&
++                          !sni_trace[0].active_read &&
++                          std::string(sni_trace[0].action_row) == "quantum_base",
++                      "ablation SNI: inflight hint ignored, empty pipeline stays quantum 8");
++            } else {
++                check(false, "SNI probe forms a single decision");
++            }
++            check(settle(ctx, slots, sni_batch, facts), "SNI probe settles verified");
++
++            bench::r3::Adapter q2_adapter(ctx, bench::r3::Arm::q2);
++            bench::r3::Adapter::TraceSink q2_trace;
++            q2_adapter.set_trace_sink(&q2_trace);
++            Batch q2_batch;
++            check(submit_batch(q2_adapter, file, slots, 8, 4, q2_batch, facts, "Q2 probe"),
++                  "Q2 accepts all 4");
++            bool q2_all_two = q2_trace.size() == 2;
++            for (const bench::r3::DecisionRecord& record : q2_trace) {
++                q2_all_two = q2_all_two && record.quantum == 2 && record.present_len == 2 &&
++                             !record.active_read && !record.pressure_read;
++            }
++            check(q2_all_two, "fixed Q2: pinned quantum 2 with no hint reads");
++            check(settle(ctx, slots, q2_batch, facts), "Q2 probe settles verified");
++
++            bench::r3::Adapter shadow_adapter(ctx, bench::r3::Arm::shadow);
++            bench::r3::Adapter::TraceSink shadow_trace;
++            shadow_adapter.set_trace_sink(&shadow_trace);
++            Batch shadow_batch;
++            bench::r3::DecisionFacts shadow_facts;
++            shadow_facts.caller_window = 5;
++            check(submit_batch(shadow_adapter, file, slots, 12, kDepth, shadow_batch,
++                               shadow_facts, "SHADOW probe"),
++                  "SHADOW accepts all 16 through the R-shaped path");
++            if (shadow_trace.size() == 2) {
++                check(shadow_trace[0].quantum == 2 && shadow_trace[0].present_len == kDepth &&
++                          shadow_trace[0].active_read && shadow_trace[0].active_data == 0 &&
++                          shadow_trace[0].pressure_read && shadow_trace[0].caller_window == 5,
++                      "shadow: hints read and logged, presentation stays the full span");
++                check(shadow_trace[1].cap_cause && shadow_trace[1].present_len == 8,
++                      "shadow: cap reentry follows the R action");
++            } else {
++                check(false, "SHADOW probe forms two decisions");
++            }
++            check(settle(ctx, slots, shadow_batch, facts), "SHADOW probe settles verified");
++
++            ctx.request_stop(ShutdownPolicy::drain);
++            ctx.detach_progress_host();
++            const auto shutdown = ctx.shutdown(ShutdownPolicy::drain);
++            check(shutdown.has_value(), "ablation run shutdown");
++        }
++    }
++
++    std::printf("=== mechanism counters on one 16-op refill (empty SQ, depth 16) ===\n");
++    {
++        auto context = make_context();
++        if (!context.has_value()) {
++            std::printf("  FAIL uring context unavailable\n");
++            ++g_failed;
++        } else {
++            AsyncIoContext ctx = std::move(*context);
++            auto owner = ctx.claim_progress_owner();
++            check(owner.has_value(), "owner claim for counter run");
++            const struct Expected {
++                bench::r3::Arm arm;
++                std::size_t presentations;
++                std::size_t suffix_singles;
++                std::size_t cap_reentries;
++                std::size_t chunk_reentries;
++            } expected[] = {
++                {bench::r3::Arm::a0, 0, 0, 0, 0},
++                {bench::r3::Arm::b, 1, 8, 0, 0},
++                {bench::r3::Arm::r, 2, 0, 1, 0},
++                {bench::r3::Arm::q8, 2, 0, 0, 1},
++                {bench::r3::Arm::q2, 8, 0, 0, 7},
++            };
++            for (const Expected& want : expected) {
++                Slots round_slots(kDepth);
++                bench::r3::Adapter adapter(ctx, want.arm);
++                Batch batch;
++                const std::vector<ReadOp> ops = take_ops(file, round_slots, 0, kDepth, batch);
++                std::vector<Request<std::size_t>> accepted;
++                auto outcome =
++                    adapter.submit(std::span<const ReadOp>(ops.data(), ops.size()), accepted);
++                const std::string name = bench::r3::arm_name(want.arm);
++                const bool all_accepted =
++                    accepted.size() == kDepth && outcome.error == std::nullopt;
++                const bool counters_match =
++                    outcome.counters.r4_batch_presentations == want.presentations &&
++                    outcome.counters.suffix_single_calls == want.suffix_singles &&
++                    outcome.counters.r4_cap_reentries == want.cap_reentries &&
++                    outcome.counters.r4_chunk_reentries == want.chunk_reentries;
++                check(all_accepted && counters_match,
++                      name + ": accept-all and presentation/singles/reentry counts match");
++                batch.requests = std::move(accepted);
++                bench::r3::DecisionFacts facts;
++                check(settle(ctx, round_slots, batch, facts),
++                      name + ": refill settles verified");
++            }
++            ctx.request_stop(ShutdownPolicy::drain);
++            ctx.detach_progress_host();
++            const auto shutdown = ctx.shutdown(ShutdownPolicy::drain);
++            check(shutdown.has_value(), "counter run shutdown");
++        }
++    }
++
++    std::printf("\n=== r4 arm smoke complete, failing checks=%d ===\n", g_failed);
++    return g_failed == 0 ? 0 : 1;
++}
+diff --git a/xmake/bench.lua b/xmake/bench.lua
+index a3a4a779..eef7a662 100644
+--- a/xmake/bench.lua
++++ b/xmake/bench.lua
+@@ -30,3 +30,11 @@ target("bench_w03_external_loop")
+     add_deps("sluice_core", "sluice_async")
+     add_includedirs(R .. "bench")
+     add_files(R .. "bench/bench_w03_external_loop.cpp")
++
++target("r4_arm_smoke")
++    set_kind("binary")
++    set_default(false)
++    set_group("bench")
++    add_deps("sluice_core", "sluice_async")
++    add_includedirs(R .. "bench")
++    add_files(R .. "bench/r4_arm_smoke.cpp")

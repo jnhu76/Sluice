@@ -1,0 +1,371 @@
+figure,panel,series,cell,arm,segment,metric,stat,value,n,unit,note
+F1,cpu,R-A0,MAIN-W03-D16,R,,cpu,mean,-0.19623881023349263,24,fraction,positive = worse
+F1,cpu,R-A0,MAIN-W03-D16,R,,cpu,upper95,-0.1911345632039104,24,fraction,one-sided 95% upper
+F1,cpu,R-A0,CORE-W03-D2SERIAL,R,,cpu,mean,0.06939553748027948,24,fraction,positive = worse
+F1,cpu,R-A0,CORE-W03-D2SERIAL,R,,cpu,upper95,0.07647643363146596,24,fraction,one-sided 95% upper
+F1,cpu,R-A0,CORE-W03-D4,R,,cpu,mean,-0.14211679735418306,24,fraction,positive = worse
+F1,cpu,R-A0,CORE-W03-D4,R,,cpu,upper95,-0.1352436432676001,24,fraction,one-sided 95% upper
+F1,cpu,R-A0,CORE-W03-D64,R,,cpu,mean,-0.21334156119298067,24,fraction,positive = worse
+F1,cpu,R-A0,CORE-W03-D64,R,,cpu,upper95,-0.20661719717978222,24,fraction,one-sided 95% upper
+F1,cpu,R-A0,CORE-W02-D1,R,,cpu,mean,0.02854589617142618,24,fraction,positive = worse
+F1,cpu,R-A0,CORE-W02-D1,R,,cpu,upper95,0.03490234268426128,24,fraction,one-sided 95% upper
+F1,cpu,R-A0,CORE-W02-D2,R,,cpu,mean,0.03359646754899263,24,fraction,positive = worse
+F1,cpu,R-A0,CORE-W02-D2,R,,cpu,upper95,0.03979149331877524,24,fraction,one-sided 95% upper
+F1,cpu,R-A0,CORE-W02-D16,R,,cpu,mean,0.022232160738736004,24,fraction,positive = worse
+F1,cpu,R-A0,CORE-W02-D16,R,,cpu,upper95,0.027951423187436365,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,MAIN-W03-D16,S,,cpu,mean,-0.1281269715890565,24,fraction,positive = worse
+F1,cpu,S-A0,MAIN-W03-D16,S,,cpu,upper95,-0.12387706501271857,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,CORE-W03-D2SERIAL,S,,cpu,mean,0.11570985962215279,24,fraction,positive = worse
+F1,cpu,S-A0,CORE-W03-D2SERIAL,S,,cpu,upper95,0.12090536641712991,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,CORE-W03-D4,S,,cpu,mean,-0.1600197326512359,24,fraction,positive = worse
+F1,cpu,S-A0,CORE-W03-D4,S,,cpu,upper95,-0.15373046822919398,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,CORE-W03-D64,S,,cpu,mean,-0.1169929166694043,24,fraction,positive = worse
+F1,cpu,S-A0,CORE-W03-D64,S,,cpu,upper95,-0.10870039842414153,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,CORE-W02-D1,S,,cpu,mean,0.04202555729283012,24,fraction,positive = worse
+F1,cpu,S-A0,CORE-W02-D1,S,,cpu,upper95,0.04746327060171351,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,CORE-W02-D2,S,,cpu,mean,0.049833070159146925,24,fraction,positive = worse
+F1,cpu,S-A0,CORE-W02-D2,S,,cpu,upper95,0.05504699210507724,24,fraction,one-sided 95% upper
+F1,cpu,S-A0,CORE-W02-D16,S,,cpu,mean,0.05948148982878121,24,fraction,positive = worse
+F1,cpu,S-A0,CORE-W02-D16,S,,cpu,upper95,0.06517386830803042,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,MAIN-W03-D16,Q8,,cpu,mean,-0.19232936767649697,24,fraction,positive = worse
+F1,cpu,Q8-A0,MAIN-W03-D16,Q8,,cpu,upper95,-0.18717033062793084,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,CORE-W03-D2SERIAL,Q8,,cpu,mean,0.0929192789306749,24,fraction,positive = worse
+F1,cpu,Q8-A0,CORE-W03-D2SERIAL,Q8,,cpu,upper95,0.09741682276509962,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,CORE-W03-D4,Q8,,cpu,mean,-0.13665534196891796,24,fraction,positive = worse
+F1,cpu,Q8-A0,CORE-W03-D4,Q8,,cpu,upper95,-0.12944544980617764,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,CORE-W03-D64,Q8,,cpu,mean,-0.21399463338423155,24,fraction,positive = worse
+F1,cpu,Q8-A0,CORE-W03-D64,Q8,,cpu,upper95,-0.207783844433065,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,CORE-W02-D1,Q8,,cpu,mean,0.03878582003469881,24,fraction,positive = worse
+F1,cpu,Q8-A0,CORE-W02-D1,Q8,,cpu,upper95,0.0457559299311578,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,CORE-W02-D2,Q8,,cpu,mean,0.03774715582002377,24,fraction,positive = worse
+F1,cpu,Q8-A0,CORE-W02-D2,Q8,,cpu,upper95,0.04205863815639015,24,fraction,one-sided 95% upper
+F1,cpu,Q8-A0,CORE-W02-D16,Q8,,cpu,mean,0.0523719118567768,24,fraction,positive = worse
+F1,cpu,Q8-A0,CORE-W02-D16,Q8,,cpu,upper95,0.059590030527336586,24,fraction,one-sided 95% upper
+F1,tput,R-A0,MAIN-W03-D16,R,,tput,mean,-0.24534338789343083,24,fraction,positive = worse
+F1,tput,R-A0,MAIN-W03-D16,R,,tput,upper95,-0.23737425152137082,24,fraction,one-sided 95% upper
+F1,tput,R-A0,CORE-W03-D2SERIAL,R,,tput,mean,0.06468174200480871,24,fraction,positive = worse
+F1,tput,R-A0,CORE-W03-D2SERIAL,R,,tput,upper95,0.07078844334449852,24,fraction,one-sided 95% upper
+F1,tput,R-A0,CORE-W03-D4,R,,tput,mean,-0.16652580066257588,24,fraction,positive = worse
+F1,tput,R-A0,CORE-W03-D4,R,,tput,upper95,-0.15712736335851918,24,fraction,one-sided 95% upper
+F1,tput,R-A0,CORE-W03-D64,R,,tput,mean,-0.27309333809576825,24,fraction,positive = worse
+F1,tput,R-A0,CORE-W03-D64,R,,tput,upper95,-0.2620520238562802,24,fraction,one-sided 95% upper
+F1,tput,R-A0,CORE-W02-D1,R,,tput,mean,0.027490926923346638,24,fraction,positive = worse
+F1,tput,R-A0,CORE-W02-D1,R,,tput,upper95,0.03350690256198129,24,fraction,one-sided 95% upper
+F1,tput,R-A0,CORE-W02-D2,R,,tput,mean,0.03211106622746721,24,fraction,positive = worse
+F1,tput,R-A0,CORE-W02-D2,R,,tput,upper95,0.037961284137054484,24,fraction,one-sided 95% upper
+F1,tput,R-A0,CORE-W02-D16,R,,tput,mean,0.02153795239028665,24,fraction,positive = worse
+F1,tput,R-A0,CORE-W02-D16,R,,tput,upper95,0.027129977452919618,24,fraction,one-sided 95% upper
+F1,tput,S-A0,MAIN-W03-D16,S,,tput,mean,-0.1475294782714197,24,fraction,positive = worse
+F1,tput,S-A0,MAIN-W03-D16,S,,tput,upper95,-0.14190127284581763,24,fraction,one-sided 95% upper
+F1,tput,S-A0,CORE-W03-D2SERIAL,S,,tput,mean,0.10360749326391093,24,fraction,positive = worse
+F1,tput,S-A0,CORE-W03-D2SERIAL,S,,tput,upper95,0.10784897039319874,24,fraction,one-sided 95% upper
+F1,tput,S-A0,CORE-W03-D4,S,,tput,mean,-0.19118422213463784,24,fraction,positive = worse
+F1,tput,S-A0,CORE-W03-D4,S,,tput,upper95,-0.18235824064520922,24,fraction,one-sided 95% upper
+F1,tput,S-A0,CORE-W03-D64,S,,tput,mean,-0.1341357104738365,24,fraction,positive = worse
+F1,tput,S-A0,CORE-W03-D64,S,,tput,upper95,-0.12353590876299508,24,fraction,one-sided 95% upper
+F1,tput,S-A0,CORE-W02-D1,S,,tput,mean,0.04022036196833601,24,fraction,positive = worse
+F1,tput,S-A0,CORE-W02-D1,S,,tput,upper95,0.045186872290260804,24,fraction,one-sided 95% upper
+F1,tput,S-A0,CORE-W02-D2,S,,tput,mean,0.047218457610297186,24,fraction,positive = worse
+F1,tput,S-A0,CORE-W02-D2,S,,tput,upper95,0.05202789306557306,24,fraction,one-sided 95% upper
+F1,tput,S-A0,CORE-W02-D16,S,,tput,mean,0.056061107849781654,24,fraction,positive = worse
+F1,tput,S-A0,CORE-W02-D16,S,,tput,upper95,0.0611145707419996,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,MAIN-W03-D16,Q8,,tput,mean,-0.2393587498576345,24,fraction,positive = worse
+F1,tput,Q8-A0,MAIN-W03-D16,Q8,,tput,upper95,-0.23142132282280767,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,CORE-W03-D2SERIAL,Q8,,tput,mean,0.08499555792287523,24,fraction,positive = worse
+F1,tput,Q8-A0,CORE-W03-D2SERIAL,Q8,,tput,upper95,0.0887746209507032,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,CORE-W03-D4,Q8,,tput,mean,-0.15921945529811518,24,fraction,positive = worse
+F1,tput,Q8-A0,CORE-W03-D4,Q8,,tput,upper95,-0.14970632316016502,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,CORE-W03-D64,Q8,,tput,mean,-0.27445451105147184,24,fraction,positive = worse
+F1,tput,Q8-A0,CORE-W03-D64,Q8,,tput,upper95,-0.2642074521841085,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,CORE-W02-D1,Q8,,tput,mean,0.03708197491686492,24,fraction,positive = worse
+F1,tput,Q8-A0,CORE-W02-D1,Q8,,tput,upper95,0.043484079422432265,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,CORE-W02-D2,Q8,,tput,mean,0.036164379494772976,24,fraction,positive = worse
+F1,tput,Q8-A0,CORE-W02-D2,Q8,,tput,upper95,0.0401823574752179,24,fraction,one-sided 95% upper
+F1,tput,Q8-A0,CORE-W02-D16,Q8,,tput,mean,0.04961854262793658,24,fraction,positive = worse
+F1,tput,Q8-A0,CORE-W02-D16,Q8,,tput,upper95,0.056117710009117645,24,fraction,one-sided 95% upper
+F1,p95,R-A0,MAIN-W03-D16,R,,p95,mean,0.027092281162149984,24,fraction,positive = worse
+F1,p95,R-A0,MAIN-W03-D16,R,,p95,upper95,0.04334504391531494,24,fraction,one-sided 95% upper
+F1,p95,R-A0,CORE-W03-D2SERIAL,R,,p95,mean,0.07612329849265302,24,fraction,positive = worse
+F1,p95,R-A0,CORE-W03-D2SERIAL,R,,p95,upper95,0.08734850734716552,24,fraction,one-sided 95% upper
+F1,p95,R-A0,CORE-W03-D4,R,,p95,mean,-0.20541551432081825,24,fraction,positive = worse
+F1,p95,R-A0,CORE-W03-D4,R,,p95,upper95,-0.19929572705545448,24,fraction,one-sided 95% upper
+F1,p95,R-A0,CORE-W03-D64,R,,p95,mean,0.00919577665085485,24,fraction,positive = worse
+F1,p95,R-A0,CORE-W03-D64,R,,p95,upper95,0.029031033896534206,24,fraction,one-sided 95% upper
+F1,p95,R-A0,CORE-W02-D1,R,,p95,mean,0.029659080350039054,24,fraction,positive = worse
+F1,p95,R-A0,CORE-W02-D1,R,,p95,upper95,0.03796549277279777,24,fraction,one-sided 95% upper
+F1,p95,R-A0,CORE-W02-D2,R,,p95,mean,0.027813890914125474,24,fraction,positive = worse
+F1,p95,R-A0,CORE-W02-D2,R,,p95,upper95,0.03335104709708527,24,fraction,one-sided 95% upper
+F1,p95,R-A0,CORE-W02-D16,R,,p95,mean,0.01750099594373057,24,fraction,positive = worse
+F1,p95,R-A0,CORE-W02-D16,R,,p95,upper95,0.025571250971777416,24,fraction,one-sided 95% upper
+F1,p95,S-A0,MAIN-W03-D16,S,,p95,mean,0.3368322885962392,24,fraction,positive = worse
+F1,p95,S-A0,MAIN-W03-D16,S,,p95,upper95,0.34664290900462436,24,fraction,one-sided 95% upper
+F1,p95,S-A0,CORE-W03-D2SERIAL,S,,p95,mean,0.1036993512878449,24,fraction,positive = worse
+F1,p95,S-A0,CORE-W03-D2SERIAL,S,,p95,upper95,0.12411339463021835,24,fraction,one-sided 95% upper
+F1,p95,S-A0,CORE-W03-D4,S,,p95,mean,-0.06084500905600609,24,fraction,positive = worse
+F1,p95,S-A0,CORE-W03-D4,S,,p95,upper95,-0.04677978758666751,24,fraction,one-sided 95% upper
+F1,p95,S-A0,CORE-W03-D64,S,,p95,mean,0.13782601704781655,24,fraction,positive = worse
+F1,p95,S-A0,CORE-W03-D64,S,,p95,upper95,0.14696295494447065,24,fraction,one-sided 95% upper
+F1,p95,S-A0,CORE-W02-D1,S,,p95,mean,0.03772003126689103,24,fraction,positive = worse
+F1,p95,S-A0,CORE-W02-D1,S,,p95,upper95,0.04242599082180531,24,fraction,one-sided 95% upper
+F1,p95,S-A0,CORE-W02-D2,S,,p95,mean,0.04093316741865496,24,fraction,positive = worse
+F1,p95,S-A0,CORE-W02-D2,S,,p95,upper95,0.04552547578875068,24,fraction,one-sided 95% upper
+F1,p95,S-A0,CORE-W02-D16,S,,p95,mean,0.06755034233877398,24,fraction,positive = worse
+F1,p95,S-A0,CORE-W02-D16,S,,p95,upper95,0.07928916954756436,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,MAIN-W03-D16,Q8,,p95,mean,0.040249796236899296,24,fraction,positive = worse
+F1,p95,Q8-A0,MAIN-W03-D16,Q8,,p95,upper95,0.059186409357757486,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,CORE-W03-D2SERIAL,Q8,,p95,mean,0.08883227891359151,24,fraction,positive = worse
+F1,p95,Q8-A0,CORE-W03-D2SERIAL,Q8,,p95,upper95,0.10132525024944122,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,CORE-W03-D4,Q8,,p95,mean,-0.2046014988124589,24,fraction,positive = worse
+F1,p95,Q8-A0,CORE-W03-D4,Q8,,p95,upper95,-0.19788065630324428,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,CORE-W03-D64,Q8,,p95,mean,8.369023302805851e-05,24,fraction,positive = worse
+F1,p95,Q8-A0,CORE-W03-D64,Q8,,p95,upper95,0.01622917788092009,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,CORE-W02-D1,Q8,,p95,mean,0.03472861063624647,24,fraction,positive = worse
+F1,p95,Q8-A0,CORE-W02-D1,Q8,,p95,upper95,0.040352583255126286,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,CORE-W02-D2,Q8,,p95,mean,0.034253269710107906,24,fraction,positive = worse
+F1,p95,Q8-A0,CORE-W02-D2,Q8,,p95,upper95,0.03957608086061171,24,fraction,one-sided 95% upper
+F1,p95,Q8-A0,CORE-W02-D16,Q8,,p95,mean,0.05371883226404319,24,fraction,positive = worse
+F1,p95,Q8-A0,CORE-W02-D16,Q8,,p95,upper95,0.0667571736687852,24,fraction,one-sided 95% upper
+F1,p99,R-A0,MAIN-W03-D16,R,,p99,mean,0.21851453888055708,24,fraction,positive = worse
+F1,p99,R-A0,MAIN-W03-D16,R,,p99,upper95,0.23577328527294447,24,fraction,one-sided 95% upper
+F1,p99,R-A0,CORE-W03-D2SERIAL,R,,p99,mean,0.07168790980095585,24,fraction,positive = worse
+F1,p99,R-A0,CORE-W03-D2SERIAL,R,,p99,upper95,0.10162998881569091,24,fraction,one-sided 95% upper
+F1,p99,R-A0,CORE-W03-D4,R,,p99,mean,-0.1291807321090425,24,fraction,positive = worse
+F1,p99,R-A0,CORE-W03-D4,R,,p99,upper95,-0.11344627786148058,24,fraction,one-sided 95% upper
+F1,p99,R-A0,CORE-W03-D64,R,,p99,mean,0.21173692435995084,24,fraction,positive = worse
+F1,p99,R-A0,CORE-W03-D64,R,,p99,upper95,0.25653989035036967,24,fraction,one-sided 95% upper
+F1,p99,R-A0,CORE-W02-D1,R,,p99,mean,0.05246740566742495,24,fraction,positive = worse
+F1,p99,R-A0,CORE-W02-D1,R,,p99,upper95,0.07831335278342705,24,fraction,one-sided 95% upper
+F1,p99,R-A0,CORE-W02-D2,R,,p99,mean,0.027991359662374773,24,fraction,positive = worse
+F1,p99,R-A0,CORE-W02-D2,R,,p99,upper95,0.04393273250199315,24,fraction,one-sided 95% upper
+F1,p99,R-A0,CORE-W02-D16,R,,p99,mean,0.01827340673067902,24,fraction,positive = worse
+F1,p99,R-A0,CORE-W02-D16,R,,p99,upper95,0.03158999938986295,24,fraction,one-sided 95% upper
+F1,p99,S-A0,MAIN-W03-D16,S,,p99,mean,0.34572612459614177,24,fraction,positive = worse
+F1,p99,S-A0,MAIN-W03-D16,S,,p99,upper95,0.3624660647619666,24,fraction,one-sided 95% upper
+F1,p99,S-A0,CORE-W03-D2SERIAL,S,,p99,mean,0.11614500216982739,24,fraction,positive = worse
+F1,p99,S-A0,CORE-W03-D2SERIAL,S,,p99,upper95,0.1409172167583412,24,fraction,one-sided 95% upper
+F1,p99,S-A0,CORE-W03-D4,S,,p99,mean,0.183938933017574,24,fraction,positive = worse
+F1,p99,S-A0,CORE-W03-D4,S,,p99,upper95,0.1944204178887381,24,fraction,one-sided 95% upper
+F1,p99,S-A0,CORE-W03-D64,S,,p99,mean,0.2506092317365696,24,fraction,positive = worse
+F1,p99,S-A0,CORE-W03-D64,S,,p99,upper95,0.32732666687436324,24,fraction,one-sided 95% upper
+F1,p99,S-A0,CORE-W02-D1,S,,p99,mean,0.05412247372201959,24,fraction,positive = worse
+F1,p99,S-A0,CORE-W02-D1,S,,p99,upper95,0.07531493752623614,24,fraction,one-sided 95% upper
+F1,p99,S-A0,CORE-W02-D2,S,,p99,mean,0.05797500357147794,24,fraction,positive = worse
+F1,p99,S-A0,CORE-W02-D2,S,,p99,upper95,0.07555503435298473,24,fraction,one-sided 95% upper
+F1,p99,S-A0,CORE-W02-D16,S,,p99,mean,0.06611770207934217,24,fraction,positive = worse
+F1,p99,S-A0,CORE-W02-D16,S,,p99,upper95,0.08190852476153503,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,MAIN-W03-D16,Q8,,p99,mean,0.2333354197053216,24,fraction,positive = worse
+F1,p99,Q8-A0,MAIN-W03-D16,Q8,,p99,upper95,0.25011812395094374,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,CORE-W03-D2SERIAL,Q8,,p99,mean,0.09677003676378937,24,fraction,positive = worse
+F1,p99,Q8-A0,CORE-W03-D2SERIAL,Q8,,p99,upper95,0.12067769077997577,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,CORE-W03-D4,Q8,,p99,mean,-0.14860767262560184,24,fraction,positive = worse
+F1,p99,Q8-A0,CORE-W03-D4,Q8,,p99,upper95,-0.1370496415991839,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,CORE-W03-D64,Q8,,p99,mean,0.20523069859432863,24,fraction,positive = worse
+F1,p99,Q8-A0,CORE-W03-D64,Q8,,p99,upper95,0.24922596257203933,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,CORE-W02-D1,Q8,,p99,mean,0.044244516144255536,24,fraction,positive = worse
+F1,p99,Q8-A0,CORE-W02-D1,Q8,,p99,upper95,0.06129845799025463,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,CORE-W02-D2,Q8,,p99,mean,0.05036852031173616,24,fraction,positive = worse
+F1,p99,Q8-A0,CORE-W02-D2,Q8,,p99,upper95,0.06978572110248482,24,fraction,one-sided 95% upper
+F1,p99,Q8-A0,CORE-W02-D16,Q8,,p99,mean,0.057887253778305225,24,fraction,positive = worse
+F1,p99,Q8-A0,CORE-W02-D16,Q8,,p99,upper95,0.07607815418388218,24,fraction,one-sided 95% upper
+F2,branch_share,remaining_single,,S,W03-D16,row_share,share,0.0002000133342222815,29998,fraction,decision-line row histogram
+F2,branch_share,remaining_single,,S,T1,row_share,share,1.0,60000,fraction,decision-line row histogram
+F2,branch_share,remaining_single,,S,T2,row_share,share,0.0,94,fraction,decision-line row histogram
+F2,branch_share,remaining_single,,S,T3,row_share,share,0.00013335555925987665,29995,fraction,decision-line row histogram
+F2,branch_share,front_ineligible,,S,W03-D16,row_share,share,0.0,29998,fraction,decision-line row histogram
+F2,branch_share,front_ineligible,,S,T1,row_share,share,0.0,60000,fraction,decision-line row histogram
+F2,branch_share,front_ineligible,,S,T2,row_share,share,0.0,94,fraction,decision-line row histogram
+F2,branch_share,front_ineligible,,S,T3,row_share,share,0.0,29995,fraction,decision-line row histogram
+F2,branch_share,authority_signal,,S,W03-D16,row_share,share,0.0,29998,fraction,decision-line row histogram
+F2,branch_share,authority_signal,,S,T1,row_share,share,0.0,60000,fraction,decision-line row histogram
+F2,branch_share,authority_signal,,S,T2,row_share,share,0.0,94,fraction,decision-line row histogram
+F2,branch_share,authority_signal,,S,T3,row_share,share,0.0,29995,fraction,decision-line row histogram
+F2,branch_share,quantum_base,,S,W03-D16,row_share,share,0.00010000666711114075,29998,fraction,decision-line row histogram
+F2,branch_share,quantum_base,,S,T1,row_share,share,0.0,60000,fraction,decision-line row histogram
+F2,branch_share,quantum_base,,S,T2,row_share,share,0.010638297872340425,94,fraction,decision-line row histogram
+F2,branch_share,quantum_base,,S,T3,row_share,share,0.00013335555925987665,29995,fraction,decision-line row histogram
+F2,branch_share,inflight_zero,,S,W03-D16,row_share,share,0.0005333688912594173,29998,fraction,decision-line row histogram
+F2,branch_share,inflight_zero,,S,T1,row_share,share,0.0,60000,fraction,decision-line row histogram
+F2,branch_share,inflight_zero,,S,T2,row_share,share,0.22340425531914893,94,fraction,decision-line row histogram
+F2,branch_share,inflight_zero,,S,T3,row_share,share,0.0004334055675945991,29995,fraction,decision-line row histogram
+F2,branch_share,completion_pressure,,S,W03-D16,row_share,share,0.9991666111074071,29998,fraction,decision-line row histogram
+F2,branch_share,completion_pressure,,S,T1,row_share,share,0.0,60000,fraction,decision-line row histogram
+F2,branch_share,completion_pressure,,S,T2,row_share,share,0.7659574468085106,94,fraction,decision-line row histogram
+F2,branch_share,completion_pressure,,S,T3,row_share,share,0.9992998833138856,29995,fraction,decision-line row histogram
+F2,quantum_share,S:q1,,S,W03-D16,quantum_share,share,0.0002000133342222815,29998,fraction,S actual
+F2,quantum_share,S:q1,,S,T1,quantum_share,share,1.0,60000,fraction,S actual
+F2,quantum_share,S:q1,,S,T2,quantum_share,share,0.0,94,fraction,S actual
+F2,quantum_share,S:q1,,S,T3,quantum_share,share,0.00013335555925987665,29995,fraction,S actual
+F2,quantum_share,SHADOW:q1,,SHADOW,W03-D16,quantum_share,share,0.0005330490405117271,7504,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q1,,SHADOW,T1,quantum_share,share,1.0,60000,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q1,,SHADOW,T2,quantum_share,share,0.0,24,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q1,,SHADOW,T3,quantum_share,share,0.00026652452025586353,7504,fraction,SHADOW counterfactual
+F2,quantum_share,S:q2,,S,W03-D16,quantum_share,share,0.9996999799986666,29998,fraction,S actual
+F2,quantum_share,S:q2,,S,T1,quantum_share,share,0.0,60000,fraction,S actual
+F2,quantum_share,S:q2,,S,T2,quantum_share,share,0.9893617021276596,94,fraction,S actual
+F2,quantum_share,S:q2,,S,T3,quantum_share,share,0.9997332888814803,29995,fraction,S actual
+F2,quantum_share,SHADOW:q2,,SHADOW,W03-D16,quantum_share,share,0.9994669509594882,7504,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q2,,SHADOW,T1,quantum_share,share,0.0,60000,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q2,,SHADOW,T2,quantum_share,share,1.0,24,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q2,,SHADOW,T3,quantum_share,share,0.9997334754797441,7504,fraction,SHADOW counterfactual
+F2,quantum_share,S:q8,,S,W03-D16,quantum_share,share,0.00010000666711114075,29998,fraction,S actual
+F2,quantum_share,S:q8,,S,T1,quantum_share,share,0.0,60000,fraction,S actual
+F2,quantum_share,S:q8,,S,T2,quantum_share,share,0.010638297872340425,94,fraction,S actual
+F2,quantum_share,S:q8,,S,T3,quantum_share,share,0.00013335555925987665,29995,fraction,S actual
+F2,quantum_share,SHADOW:q8,,SHADOW,W03-D16,quantum_share,share,0.0,7504,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q8,,SHADOW,T1,quantum_share,share,0.0,60000,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q8,,SHADOW,T2,quantum_share,share,0.0,24,fraction,SHADOW counterfactual
+F2,quantum_share,SHADOW:q8,,SHADOW,T3,quantum_share,share,0.0,7504,fraction,SHADOW counterfactual
+F2,changed_action,changed_rate,,SHADOW,W03-D16,changed_action_rate,rate,0.9994669509594882,7504,fraction,counterfactual S present size != actual R present size
+F2,present_size,actual_R_present,,SHADOW,W03-D16,mean_present,mean,11.644856076759062,7504,ops,
+F2,present_size,counterfactual_S_present,,S,W03-D16,mean_present,mean,1.9994669509594882,7504,ops,
+F2,changed_action,changed_rate,,SHADOW,T1,changed_action_rate,rate,0.0,60000,fraction,counterfactual S present size != actual R present size
+F2,present_size,actual_R_present,,SHADOW,T1,mean_present,mean,1.0,60000,ops,
+F2,present_size,counterfactual_S_present,,S,T1,mean_present,mean,1.0,60000,ops,
+F2,changed_action,changed_rate,,SHADOW,T2,changed_action_rate,rate,1.0,24,fraction,counterfactual S present size != actual R present size
+F2,present_size,actual_R_present,,SHADOW,T2,mean_present,mean,11.666666666666666,24,ops,
+F2,present_size,counterfactual_S_present,,S,T2,mean_present,mean,2.0,24,ops,
+F2,changed_action,changed_rate,,SHADOW,T3,changed_action_rate,rate,0.9997334754797441,7504,fraction,counterfactual S present size != actual R present size
+F2,present_size,actual_R_present,,SHADOW,T3,mean_present,mean,11.682569296375267,7504,ops,
+F2,present_size,counterfactual_S_present,,S,T3,mean_present,mean,1.9997334754797442,7504,ops,
+F3,cpu,SHADOW-R,W03-uring-4k-d16,SHADOW-R,,cpu,mean,0.010198862427808446,24,fraction,positive = first-named worse
+F3,cpu,SHADOW-R,W03-uring-4k-d16,SHADOW-R,,cpu,ci_lo,-0.0001803684952360192,24,fraction,two-sided 95%
+F3,cpu,SHADOW-R,W03-uring-4k-d16,SHADOW-R,,cpu,ci_hi,0.020984411740129882,24,fraction,two-sided 95%
+F3,cpu,S-Q2,W03-uring-4k-d16,S-Q2,,cpu,mean,0.008251009565931128,24,fraction,positive = first-named worse
+F3,cpu,S-Q2,W03-uring-4k-d16,S-Q2,,cpu,ci_lo,0.002226299866148081,24,fraction,two-sided 95%
+F3,cpu,S-Q2,W03-uring-4k-d16,S-Q2,,cpu,ci_hi,0.013828206335655504,24,fraction,two-sided 95%
+F3,cpu,S-SNI,W03-uring-4k-d16,S-SNI,,cpu,mean,0.012146405578913682,24,fraction,positive = first-named worse
+F3,cpu,S-SNI,W03-uring-4k-d16,S-SNI,,cpu,ci_lo,0.006220076378560924,24,fraction,two-sided 95%
+F3,cpu,S-SNI,W03-uring-4k-d16,S-SNI,,cpu,ci_hi,0.018122744750905032,24,fraction,two-sided 95%
+F3,cpu,S-SNP,W03-uring-4k-d16,S-SNP,,cpu,mean,0.038863519186138035,24,fraction,positive = first-named worse
+F3,cpu,S-SNP,W03-uring-4k-d16,S-SNP,,cpu,ci_lo,0.030714279375329584,24,fraction,two-sided 95%
+F3,cpu,S-SNP,W03-uring-4k-d16,S-SNP,,cpu,ci_hi,0.04632123150741894,24,fraction,two-sided 95%
+F3,cpu,S-Q8,W03-uring-4k-d16,S-Q8,,cpu,mean,0.0797868143228677,24,fraction,positive = first-named worse
+F3,cpu,S-Q8,W03-uring-4k-d16,S-Q8,,cpu,ci_lo,0.07132241221942566,24,fraction,two-sided 95%
+F3,cpu,S-Q8,W03-uring-4k-d16,S-Q8,,cpu,ci_hi,0.08833901286275354,24,fraction,two-sided 95%
+F3,cpu,S-R,W03-uring-4k-d16,S-R,,cpu,mean,0.08507887172161467,24,fraction,positive = first-named worse
+F3,cpu,S-R,W03-uring-4k-d16,S-R,,cpu,ci_lo,0.0760284634416835,24,fraction,two-sided 95%
+F3,cpu,S-R,W03-uring-4k-d16,S-R,,cpu,ci_hi,0.09478451945164974,24,fraction,two-sided 95%
+F3,cpu,R-B,W03-uring-4k-d16,R-B,,cpu,mean,0.09036320669910851,24,fraction,positive = first-named worse
+F3,cpu,R-B,W03-uring-4k-d16,R-B,,cpu,ci_lo,0.07539786671256762,24,fraction,two-sided 95%
+F3,cpu,R-B,W03-uring-4k-d16,R-B,,cpu,ci_hi,0.104897227254109,24,fraction,two-sided 95%
+F3,p99,SHADOW-R,W03-uring-4k-d16,SHADOW-R,,p99,mean,0.012170063272934488,24,fraction,positive = first-named worse
+F3,p99,SHADOW-R,W03-uring-4k-d16,SHADOW-R,,p99,ci_lo,2.3678597740346724e-05,24,fraction,two-sided 95%
+F3,p99,SHADOW-R,W03-uring-4k-d16,SHADOW-R,,p99,ci_hi,0.023628550228643977,24,fraction,two-sided 95%
+F3,p99,S-Q2,W03-uring-4k-d16,S-Q2,,p99,mean,-0.004425900251286426,24,fraction,positive = first-named worse
+F3,p99,S-Q2,W03-uring-4k-d16,S-Q2,,p99,ci_lo,-0.04179333583023623,24,fraction,two-sided 95%
+F3,p99,S-Q2,W03-uring-4k-d16,S-Q2,,p99,ci_hi,0.02831765031475095,24,fraction,two-sided 95%
+F3,p99,S-SNI,W03-uring-4k-d16,S-SNI,,p99,mean,0.006902441976624494,24,fraction,positive = first-named worse
+F3,p99,S-SNI,W03-uring-4k-d16,S-SNI,,p99,ci_lo,-0.01825090537516818,24,fraction,two-sided 95%
+F3,p99,S-SNI,W03-uring-4k-d16,S-SNI,,p99,ci_hi,0.02830630228852118,24,fraction,two-sided 95%
+F3,p99,S-SNP,W03-uring-4k-d16,S-SNP,,p99,mean,0.011672157075937953,24,fraction,positive = first-named worse
+F3,p99,S-SNP,W03-uring-4k-d16,S-SNP,,p99,ci_lo,-0.027784231324332425,24,fraction,two-sided 95%
+F3,p99,S-SNP,W03-uring-4k-d16,S-SNP,,p99,ci_hi,0.049803877512157535,24,fraction,two-sided 95%
+F3,p99,S-Q8,W03-uring-4k-d16,S-Q8,,p99,mean,0.09217641397281273,24,fraction,positive = first-named worse
+F3,p99,S-Q8,W03-uring-4k-d16,S-Q8,,p99,ci_lo,0.07537440863544263,24,fraction,two-sided 95%
+F3,p99,S-Q8,W03-uring-4k-d16,S-Q8,,p99,ci_hi,0.1079378800202813,24,fraction,two-sided 95%
+F3,p99,S-R,W03-uring-4k-d16,S-R,,p99,mean,0.10521448421596773,24,fraction,positive = first-named worse
+F3,p99,S-R,W03-uring-4k-d16,S-R,,p99,ci_lo,0.09189853268483324,24,fraction,two-sided 95%
+F3,p99,S-R,W03-uring-4k-d16,S-R,,p99,ci_hi,0.1184914700590451,24,fraction,two-sided 95%
+F3,p99,R-B,W03-uring-4k-d16,R-B,,p99,mean,0.14501727735969158,24,fraction,positive = first-named worse
+F3,p99,R-B,W03-uring-4k-d16,R-B,,p99,ci_lo,0.1229480763476702,24,fraction,two-sided 95%
+F3,p99,R-B,W03-uring-4k-d16,R-B,,p99,ci_hi,0.17169813559125338,24,fraction,two-sided 95%
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,A0,,cpu_ns_per_op,mean,3112.1303720833334,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,A0,,p99_ns,mean,51942.416666666664,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,Q2,,cpu_ns_per_op,mean,2691.2309633333334,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,Q2,,p99_ns,mean,70666.34166666666,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,Q8,,cpu_ns_per_op,mean,2513.2259495833337,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,Q8,,p99_ns,mean,63973.80833333333,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,R,,cpu_ns_per_op,mean,2501.0371204166663,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,R,,p99_ns,mean,63195.799999999996,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,S,,cpu_ns_per_op,mean,2713.1453879166666,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,S,,p99_ns,mean,69828.34999999999,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,SHADOW,,cpu_ns_per_op,mean,2525.9308683333334,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,SHADOW,,p99_ns,mean,63930.44166666667,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,SNI,,cpu_ns_per_op,mean,2680.78783875,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,SNI,,p99_ns,mean,69606.84166666666,24,ns,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,SNP,,cpu_ns_per_op,mean,2612.3141325,24,ns/op,
+F4,absolute,MAIN-W03-D16,MAIN-W03-D16,SNP,,p99_ns,mean,69703.78333333334,24,ns,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,A0,,cpu_ns_per_op,mean,12915.621315833334,24,ns/op,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,A0,,p99_ns,mean,18336.058333333334,24,ns,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,Q8,,cpu_ns_per_op,mean,14114.309731250001,24,ns/op,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,Q8,,p99_ns,mean,20041.774999999998,24,ns,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,R,,cpu_ns_per_op,mean,13810.091822083334,24,ns/op,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,R,,p99_ns,mean,19558.116666666665,24,ns,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,S,,cpu_ns_per_op,mean,14408.137449583332,24,ns/op,
+F4,absolute,CORE-W03-D2SERIAL,CORE-W03-D2SERIAL,S,,p99_ns,mean,20407.825,24,ns,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,A0,,cpu_ns_per_op,mean,5507.488555416666,24,ns/op,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,A0,,p99_ns,mean,31949.125,24,ns,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,Q8,,cpu_ns_per_op,mean,4752.615525833334,24,ns/op,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,Q8,,p99_ns,mean,27199.475000000002,24,ns,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,R,,cpu_ns_per_op,mean,4722.683010416667,24,ns/op,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,R,,p99_ns,mean,27810.191666666666,24,ns,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,S,,cpu_ns_per_op,mean,4624.4858300000005,24,ns/op,
+F4,absolute,CORE-W03-D4,CORE-W03-D4,S,,p99_ns,mean,37821.375,24,ns,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,A0,,cpu_ns_per_op,mean,2568.6430583333336,24,ns/op,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,A0,,p99_ns,mean,181463.13333333333,24,ns,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,Q8,,cpu_ns_per_op,mean,2018.0392295833335,24,ns/op,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,Q8,,p99_ns,mean,215324.775,24,ns,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,R,,cpu_ns_per_op,mean,2019.8434137499999,24,ns/op,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,R,,p99_ns,mean,216478.3583333333,24,ns,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,S,,cpu_ns_per_op,mean,2266.8297420833333,24,ns/op,
+F4,absolute,CORE-W03-D64,CORE-W03-D64,S,,p99_ns,mean,223579.99166666667,24,ns,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,A0,,cpu_ns_per_op,mean,5752.40299875,24,ns/op,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,A0,,p99_ns,mean,8249.550000000001,24,ns,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,Q8,,cpu_ns_per_op,mean,5974.811889583333,24,ns/op,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,Q8,,p99_ns,mean,8611.75,24,ns,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,R,,cpu_ns_per_op,mean,5915.877034166667,24,ns/op,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,R,,p99_ns,mean,8678.216666666667,24,ns,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,S,,cpu_ns_per_op,mean,5993.547808333333,24,ns/op,
+F4,absolute,CORE-W02-D1,CORE-W02-D1,S,,p99_ns,mean,8694.158333333333,24,ns,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,A0,,cpu_ns_per_op,mean,4757.144888333333,24,ns/op,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,A0,,p99_ns,mean,14637.416666666666,24,ns,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,Q8,,cpu_ns_per_op,mean,4936.255400416667,24,ns/op,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,Q8,,p99_ns,mean,15358.216666666667,24,ns,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,R,,cpu_ns_per_op,mean,4916.183727916667,24,ns/op,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,R,,p99_ns,mean,15029.508333333333,24,ns,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,S,,cpu_ns_per_op,mean,4993.649102083334,24,ns/op,
+F4,absolute,CORE-W02-D2,CORE-W02-D2,S,,p99_ns,mean,15474.85,24,ns,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,A0,,cpu_ns_per_op,mean,2926.35024125,24,ns/op,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,A0,,p99_ns,mean,75716.68333333333,24,ns,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,Q8,,cpu_ns_per_op,mean,3079.5692658333332,24,ns/op,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,Q8,,p99_ns,mean,80084.25833333333,24,ns,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,R,,cpu_ns_per_op,mean,2990.7876204166664,24,ns/op,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,R,,p99_ns,mean,77035.45,24,ns,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,S,,cpu_ns_per_op,mean,3099.879195833333,24,ns/op,
+F4,absolute,CORE-W02-D16,CORE-W02-D16,S,,p99_ns,mean,80695.7,24,ns,
+F5,state,mean_ready,,S,T1,mean_ready,mean,1.0,60000,ops,diag decision lines
+F5,state,mean_present,,S,T1,mean_present,mean,1.0,60000,ops,diag decision lines
+F5,state,quantum2_share,,S,T1,quantum2_share,share,0.0,60000,fraction,diag decision lines
+F5,state,mean_ready,,S,T2,mean_ready,mean,8.361702127659575,94,ops,diag decision lines
+F5,state,mean_present,,S,T2,mean_present,mean,2.0425531914893615,94,ops,diag decision lines
+F5,state,quantum2_share,,S,T2,quantum2_share,share,0.9893617021276596,94,fraction,diag decision lines
+F5,state,mean_ready,,S,T3,mean_ready,mean,7.923387231205201,29995,ops,diag decision lines
+F5,state,mean_present,,S,T3,mean_present,mean,2.0003333888981496,29995,ops,diag decision lines
+F5,state,quantum2_share,,S,T3,quantum2_share,share,0.9997332888814803,29995,fraction,diag decision lines
+F5,segment_cpu,R-A0,,R-A0,T1,cpu,mean,0.0748576001594519,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T1,cpu,ci_lo,0.06592375768881019,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T1,cpu,ci_hi,0.08342185062726219,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T2,cpu,mean,-0.2585805411036598,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T2,cpu,ci_lo,-0.2730772353004292,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T2,cpu,ci_hi,-0.2435340418517519,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T3,cpu,mean,-0.20300103736771957,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T3,cpu,ci_lo,-0.20716263590688544,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,R-A0,,R-A0,T3,cpu,ci_hi,-0.19881349148365138,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T1,cpu,mean,0.12130634653117184,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T1,cpu,ci_lo,0.11231683503683192,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T1,cpu,ci_hi,0.12975879954804662,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T2,cpu,mean,-0.08614047012811538,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T2,cpu,ci_lo,-0.1033779588234463,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T2,cpu,ci_hi,-0.06871395964584238,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T3,cpu,mean,-0.12461217524732705,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T3,cpu,ci_lo,-0.1290311504480126,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-A0,,S-A0,T3,cpu,ci_hi,-0.120163848331514,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T1,cpu,mean,0.043461878306463135,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T1,cpu,ci_lo,0.03462031021564198,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T1,cpu,ci_hi,0.052230276262849755,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T2,cpu,mean,0.23473973109134316,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T2,cpu,ci_lo,0.20676741263832274,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T2,cpu,ci_hi,0.2629375212341092,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T3,cpu,mean,0.09843050030507967,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T3,cpu,ci_lo,0.0936171573122022,24,fraction,INCOMPLETE descriptive
+F5,segment_cpu,S-R,,S-R,T3,cpu,ci_hi,0.1033244012079521,24,fraction,INCOMPLETE descriptive
