@@ -132,13 +132,17 @@ struct Counters {
     std::uint64_t r4_shadow_window_sum = 0;
 };
 
-// Snapshot of the most recent owner progress pass, carried to the submit
-// thread by the harness (its existing shared-mutex channel); the adapter
-// itself never polls. pressure_known stays false until a pass has run.
+// Snapshot of the most recently observed owner progress pass, carried to
+// the submit thread by the harness (its existing shared-mutex channel);
+// the adapter itself never polls. owner_pass_sampled is a monotonic
+// liveness witness (a pass was observed at least once), not freshness:
+// the values may lag the submitter by any number of driver cycles, and
+// last_pass_completed counts results the observed pass already published
+// (work done), not completions waiting to be processed.
 struct DecisionFacts {
     std::uint64_t last_pass_completed = 0;
     bool last_pass_immediate_work = false;
-    bool pressure_known = false;
+    bool owner_pass_sampled = false;
     // Caller-side unlocked mirror of accepted-but-uncollected requests;
     // observation for the shadow arm only, never a decision authority.
     std::size_t caller_window = 0;
@@ -146,7 +150,7 @@ struct DecisionFacts {
 
 struct BudgetVariant {
     bool read_inflight = false;
-    bool read_pressure = false;
+    bool read_owner_pass_activity = false;
     std::size_t pinned_quantum = 0;
     bool shadow = false;
 };
@@ -211,8 +215,8 @@ struct Input {
     std::size_t eligible_prefix_bounded = 0;
     std::size_t active_data = 0;
     bool inflight_hint_active = false;
-    bool pressure_hint_active = false;
-    bool pressure = false;
+    bool owner_pass_activity_hint_active = false;
+    bool owner_pass_had_activity = false;
     bool prior_stop_control_or_recovery = false;
     bool residue_advertised = false;
     std::size_t pinned_quantum = 0;
@@ -244,8 +248,10 @@ constexpr std::array<Row, 6> kTable{{
          return in.inflight_hint_active && in.active_data == 0;
      },
      Action::batch, QuantumEffect::clamp2},
-    {"completion_pressure",
-     [](const Input& in) noexcept { return in.pressure_hint_active && in.pressure; },
+    {"owner_pass_activity",
+     [](const Input& in) noexcept {
+         return in.owner_pass_activity_hint_active && in.owner_pass_had_activity;
+     },
      Action::batch, QuantumEffect::clamp2},
 }};
 
@@ -316,9 +322,9 @@ struct DecisionRecord {
     const char* action_row = "";
     bool active_read = false;
     std::size_t active_data = 0;
-    bool pressure_read = false;
-    bool pressure = false;
-    bool pressure_known = false;
+    bool owner_pass_activity_read = false;
+    bool owner_pass_had_activity = false;
+    bool owner_pass_sampled = false;
     std::uint64_t last_pass_completed = 0;
     bool last_pass_immediate_work = false;
     std::size_t caller_window = 0;
@@ -356,14 +362,16 @@ inline void format_decision_record(const DecisionRecord& r, std::string& out) {
     char buf[512];
     std::snprintf(buf, sizeof buf,
                   "ready=%zu eligible=%zu present=%zu quantum=%zu row=%s "
-                  "active_read=%d active=%zu pressure_read=%d pressure=%d "
-                  "pressure_known=%d pass_completed=%llu pass_immediate=%d "
+                  "active_read=%d active=%zu owner_pass_activity_read=%d "
+                  "owner_pass_had_activity=%d owner_pass_sampled=%d "
+                  "pass_completed=%llu pass_immediate=%d "
                   "caller_window=%zu accepted=%zu stop=%s untouched_begin=%zu "
                   "untouched=%zu flush=%zu residue=%d sq_budget_bound=%d "
                   "cause=%s",
                   r.remaining, r.eligible_prefix, r.present_len, r.quantum, r.action_row,
-                  r.active_read ? 1 : 0, r.active_data, r.pressure_read ? 1 : 0,
-                  r.pressure ? 1 : 0, r.pressure_known ? 1 : 0,
+                  r.active_read ? 1 : 0, r.active_data,
+                  r.owner_pass_activity_read ? 1 : 0,
+                  r.owner_pass_had_activity ? 1 : 0, r.owner_pass_sampled ? 1 : 0,
                   static_cast<unsigned long long>(r.last_pass_completed),
                   r.last_pass_immediate_work ? 1 : 0, r.caller_window, r.accepted,
                   stop_name(r.stop), r.untouched_begin, r.untouched, r.flush_attempts,
@@ -390,9 +398,9 @@ class Adapter {
 
     // True when the arm consumes the pass-fact channel; the harness consults
     // this so frozen arms never pay for the hint read.
-    bool reads_pressure_facts() const noexcept {
+    bool reads_owner_pass_facts() const noexcept {
         const BudgetVariant budget = arm_policy(arm_).budget;
-        return budget.read_pressure || budget.shadow;
+        return budget.read_owner_pass_activity || budget.shadow;
     }
 
     struct TraceSink {
@@ -466,7 +474,7 @@ class Adapter {
             if (trace_ != nullptr) {
                 record.eligible_prefix = batch_shaped_prefix(rest);
             }
-            record.pressure_known = facts.pressure_known;
+            record.owner_pass_sampled = facts.owner_pass_sampled;
             record.last_pass_completed = facts.last_pass_completed;
             record.last_pass_immediate_work = facts.last_pass_immediate_work;
             record.caller_window = facts.caller_window;
@@ -483,18 +491,20 @@ class Adapter {
                 // quantum is the counterfactual S decision) and then overrides
                 // only the presentation.
                 input.inflight_hint_active = variant.read_inflight || variant.shadow;
-                input.pressure_hint_active = variant.read_pressure || variant.shadow;
+                input.owner_pass_activity_hint_active =
+                    variant.read_owner_pass_activity || variant.shadow;
                 if (variant.read_inflight || variant.shadow) {
                     record.active_read = true;
                     record.active_data = ctx_.outstanding();
                     input.active_data = record.active_data;
                 }
-                if (variant.read_pressure || variant.shadow) {
-                    record.pressure_read = true;
-                    record.pressure = facts.pressure_known &&
-                                      (facts.last_pass_completed > 0 ||
-                                       facts.last_pass_immediate_work);
-                    input.pressure = record.pressure;
+                if (variant.read_owner_pass_activity || variant.shadow) {
+                    record.owner_pass_activity_read = true;
+                    record.owner_pass_had_activity =
+                        facts.owner_pass_sampled &&
+                        (facts.last_pass_completed > 0 ||
+                         facts.last_pass_immediate_work);
+                    input.owner_pass_had_activity = record.owner_pass_had_activity;
                 }
                 const budget::Decision decision = budget::evaluate(input);
                 record.quantum = decision.quantum;
@@ -524,7 +534,7 @@ class Adapter {
                 if (record.active_read && record.active_data == 0) {
                     ++out.counters.r4_active_zero_decisions;
                 }
-                if (record.pressure_read && record.pressure) {
+                if (record.owner_pass_activity_read && record.owner_pass_had_activity) {
                     ++out.counters.r4_pressure_decisions;
                 }
                 if (decision.quantum == 1) {

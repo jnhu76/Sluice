@@ -155,7 +155,7 @@ bool settle(AsyncIoContext& ctx, Slots& slots, Batch& batch, bench::r3::Decision
         }
         facts.last_pass_completed = pass.value().completed;
         facts.last_pass_immediate_work = pass.value().immediate_work_remains;
-        facts.pressure_known = true;
+        facts.owner_pass_sampled = true;
     }
     for (std::size_t i = 0; i < batch.requests.size(); ++i) {
         const auto observed = batch.requests[i].take_result();
@@ -281,7 +281,8 @@ int main() {
             if (trace.size() == 3) {
                 check(trace[0].quantum == 2 && trace[0].present_len == 2 &&
                           trace[0].active_read && trace[0].active_data == 0 &&
-                          !trace[0].pressure && !trace[0].cap_cause && !trace[0].chunk_cause &&
+                          !trace[0].owner_pass_had_activity && !trace[0].cap_cause &&
+                          !trace[0].chunk_cause &&
                           std::string(trace[0].action_row) == "inflight_zero",
                       "empty pipeline decision: inflight_zero row, quantum 2, presents 2");
                 check(trace[1].quantum == 8 && trace[1].present_len == 8 &&
@@ -295,8 +296,8 @@ int main() {
                       "tail decision keeps quantum 8 and presents the remainder");
             }
             check(settle(ctx, slots, first, facts), "first refill settles verified");
-            check(facts.pressure_known && facts.last_pass_completed > 0,
-                  "settle passes publish completion-pressure facts");
+            check(facts.owner_pass_sampled && facts.last_pass_completed > 0,
+                  "settle passes publish owner-pass facts");
 
             bench::r3::Adapter q8_adapter(ctx, bench::r3::Arm::q8);
             Batch inflight;
@@ -306,19 +307,20 @@ int main() {
             check(ctx.outstanding() == 2, "authority fact check: outstanding()==2");
 
             trace.records.clear();
-            Batch pressured;
-            check(submit_batch(s_adapter, file, slots, 18, 4, pressured, facts,
-                               "S pressure probe"),
-                  "S accepts all 4 with a completion-backlog snapshot and 2 outstanding");
+            Batch pass_probed;
+            check(submit_batch(s_adapter, file, slots, 18, 4, pass_probed, facts,
+                               "S owner-pass probe"),
+                  "S accepts all 4 with an owner-pass snapshot and 2 outstanding");
             if (trace.size() == 2) {
                 check(trace[0].quantum == 2 && trace[0].present_len == 2 &&
                           trace[0].active_read && trace[0].active_data == 2 &&
-                          trace[0].pressure && trace[0].pressure_known &&
+                          trace[0].owner_pass_had_activity && trace[0].owner_pass_sampled &&
                           trace[0].last_pass_completed > 0 &&
-                          std::string(trace[0].action_row) == "completion_pressure",
-                      "completion backlog with active data: pressure clamps quantum to 2");
+                          std::string(trace[0].action_row) == "owner_pass_activity",
+                      "owner pass already published completions: activity row clamps "
+                      "quantum to 2");
             } else {
-                check(false, "S pressure probe forms two decisions");
+                check(false, "S owner-pass probe forms two decisions");
             }
             bench::r3::Adapter snp_adapter(ctx, bench::r3::Arm::s_no_pressure);
             bench::r3::Adapter::TraceSink snp_trace;
@@ -329,13 +331,14 @@ int main() {
             if (snp_trace.size() == 1) {
                 check(snp_trace[0].quantum == 8 && snp_trace[0].present_len == 4 &&
                           snp_trace[0].active_read && snp_trace[0].active_data == 6 &&
-                          !snp_trace[0].pressure_read &&
+                          !snp_trace[0].owner_pass_activity_read &&
                           std::string(snp_trace[0].action_row) == "quantum_base",
-                      "ablation SNP: pressure hint ignored, quantum stays 8 at the same state");
+                      "ablation SNP: owner-pass hint ignored, quantum stays 8 at the same "
+                      "state");
             } else {
                 check(false, "SNP probe forms a single decision");
             }
-            check(settle(ctx, slots, pressured, facts), "pressure probe settles verified");
+            check(settle(ctx, slots, pass_probed, facts), "owner-pass probe settles verified");
             check(settle(ctx, slots, snp_batch, facts), "SNP probe settles verified");
             check(settle(ctx, slots, inflight, facts),
                   "outstanding probe reads settle verified");
@@ -343,28 +346,28 @@ int main() {
             bench::r3::Adapter b_adapter(ctx, bench::r3::Arm::b);
             bench::r3::Adapter::TraceSink b_trace;
             b_adapter.set_trace_sink(&b_trace);
-            Batch b_pressured;
-            check(submit_batch(b_adapter, file, slots, 28, kDepth, b_pressured, facts,
+            Batch b_probe;
+            check(submit_batch(b_adapter, file, slots, 28, kDepth, b_probe, facts,
                                "B state probe"),
-                  "B accepts all 16 at the pressured state");
+                  "B accepts all 16 at the owner-pass-observed state");
             check(b_trace.size() == 1 &&
                       b_trace[0].present_len == kDepth && !b_trace[0].active_read &&
-                      !b_trace[0].pressure_read,
+                      !b_trace[0].owner_pass_activity_read,
                   "B presentation ignores state entirely (one full-span decision, no hint reads)");
-            check(settle(ctx, slots, b_pressured, facts), "B state probe settles verified");
+            check(settle(ctx, slots, b_probe, facts), "B state probe settles verified");
 
             bench::r3::Adapter r_adapter(ctx, bench::r3::Arm::r);
             bench::r3::Adapter::TraceSink r_trace;
             r_adapter.set_trace_sink(&r_trace);
-            Batch r_pressured;
-            check(submit_batch(r_adapter, file, slots, 44, kDepth, r_pressured, facts,
+            Batch r_probe;
+            check(submit_batch(r_adapter, file, slots, 44, kDepth, r_probe, facts,
                                "R state probe"),
-                  "R accepts all 16 at the pressured state");
+                  "R accepts all 16 at the owner-pass-observed state");
             check(r_trace.size() == 2 && r_trace[0].present_len == kDepth &&
                       r_trace[1].present_len == 8 && !r_trace[1].active_read &&
                       r_trace[1].cap_cause,
                   "R presentation ignores state: full span, cap stop, 8-op suffix reentry");
-            check(settle(ctx, slots, r_pressured, facts), "R state probe settles verified");
+            check(settle(ctx, slots, r_probe, facts), "R state probe settles verified");
 
             ctx.request_stop(ShutdownPolicy::drain);
             ctx.detach_progress_host();
@@ -411,7 +414,7 @@ int main() {
             bool q2_all_two = q2_trace.size() == 2;
             for (const bench::r3::DecisionRecord& record : q2_trace) {
                 q2_all_two = q2_all_two && record.quantum == 2 && record.present_len == 2 &&
-                             !record.active_read && !record.pressure_read;
+                             !record.active_read && !record.owner_pass_activity_read;
             }
             check(q2_all_two, "fixed Q2: pinned quantum 2 with no hint reads");
             check(settle(ctx, slots, q2_batch, facts), "Q2 probe settles verified");
@@ -428,7 +431,8 @@ int main() {
             if (shadow_trace.size() == 2) {
                 check(shadow_trace[0].quantum == 2 && shadow_trace[0].present_len == kDepth &&
                           shadow_trace[0].active_read && shadow_trace[0].active_data == 0 &&
-                          shadow_trace[0].pressure_read && shadow_trace[0].caller_window == 5,
+                          shadow_trace[0].owner_pass_activity_read &&
+                          shadow_trace[0].caller_window == 5,
                       "shadow: hints read and logged, presentation stays the full span");
                 check(shadow_trace[1].cap_cause && shadow_trace[1].present_len == 8,
                       "shadow: cap reentry follows the R action");

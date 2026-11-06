@@ -151,11 +151,13 @@ struct SharedLoop {
     std::uint64_t empty_wakes = 0;
     std::uint64_t passes = 0;
     std::uint64_t retry_scheduled = 0;
-    // Facts of the most recent owner pass, published for the state-aware
-    // arms; zero new polls are issued for them.
+    // Facts of the owner's most recent drain loop (kept from its final
+    // pass), published for the state-aware arms; zero new polls are issued
+    // for them. owner_pass_sampled turns true once any pass has run and is
+    // never cleared: a liveness witness, not freshness.
     std::uint64_t last_pass_completed = 0;
     bool last_pass_immediate_work = false;
-    bool pressure_seen = false;
+    bool owner_pass_sampled = false;
     bool driver_attached = false;
     bool stop = false;
     bool driver_failed = false;
@@ -254,7 +256,7 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
             if (saw_pass) {
                 shared.last_pass_completed = last_pass_completed;
                 shared.last_pass_immediate_work = last_pass_immediate_work;
-                shared.pressure_seen = true;
+                shared.owner_pass_sampled = true;
             }
             if (pass_failed) {
                 shared.driver_failed = true;
@@ -414,11 +416,11 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
                 }
                 bench::r3::DecisionFacts facts;
                 facts.caller_window = window.size();
-                if (adapter->reads_pressure_facts()) {
+                if (adapter->reads_owner_pass_facts()) {
                     std::lock_guard<std::mutex> lock(shared.mutex);
                     facts.last_pass_completed = shared.last_pass_completed;
                     facts.last_pass_immediate_work = shared.last_pass_immediate_work;
-                    facts.pressure_known = shared.pressure_seen;
+                    facts.owner_pass_sampled = shared.owner_pass_sampled;
                 }
                 auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
                                                accepted, facts);
