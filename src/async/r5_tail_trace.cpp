@@ -120,6 +120,12 @@ WriterBuf* register_writer() noexcept {
 }
 
 WriterBuf* hook_enter() noexcept {
+    // Fast path for off-mode (env unset, g_active never true): one relaxed
+    // load, no registration, no in_hook traffic. A stale true observation is
+    // safe: the seq_cst active re-check inside the full protocol exits.
+    if (!g_active.load(std::memory_order_relaxed)) {
+        return nullptr;
+    }
     WriterBuf* b = t_buf;
     if (b == nullptr) {
         b = register_writer();
@@ -204,6 +210,9 @@ bool enabled() noexcept {
 std::int64_t now_ns_i() noexcept { return steady_ns(); }
 
 std::uint32_t next_presentation() noexcept {
+    if (!g_active.load(std::memory_order_relaxed)) {
+        return 0;
+    }
     WriterBuf* b = t_buf;
     if (b == nullptr) {
         // The submitter is the only caller, and it calls this before the
