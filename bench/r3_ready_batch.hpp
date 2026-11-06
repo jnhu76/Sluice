@@ -200,9 +200,15 @@ namespace budget {
 enum class Action : std::uint8_t { batch, immediate, authority };
 enum class QuantumEffect : std::uint8_t { none, base, clamp2 };
 
+// Every quantum the table can emit (base 8, clamp 2, pinned 2 or 8) is
+// <= ready_batch_cap, so an eligible prefix bounded to this value decides
+// identically to the full-span scan. Raise it before pinning a larger
+// quantum.
+constexpr std::size_t kEligiblePrefixScanBound = UringAsyncBackend::ready_batch_cap;
+
 struct Input {
     std::size_t remaining = 0;
-    std::size_t eligible_prefix = 0;
+    std::size_t eligible_prefix_bounded = 0;
     std::size_t active_data = 0;
     bool inflight_hint_active = false;
     bool pressure_hint_active = false;
@@ -224,8 +230,8 @@ constexpr std::array<Row, 6> kTable{{
      [](const Input& in) noexcept { return in.remaining == 1; }, Action::immediate,
      QuantumEffect::none},
     {"front_ineligible",
-     [](const Input& in) noexcept { return in.eligible_prefix == 0; }, Action::immediate,
-     QuantumEffect::none},
+     [](const Input& in) noexcept { return in.eligible_prefix_bounded == 0; },
+     Action::immediate, QuantumEffect::none},
     {"authority_signal",
      [](const Input& in) noexcept {
          return in.prior_stop_control_or_recovery || in.residue_advertised;
@@ -289,6 +295,18 @@ inline Decision evaluate(const Input& in) noexcept {
 }
 
 } // namespace budget
+
+// Equals min(batch_shaped_prefix(ops), budget::kEligiblePrefixScanBound): a
+// stop before the bound is exactly where the full scan stops.
+inline std::size_t batch_shaped_prefix_bounded(std::span<const ReadOp> ops) noexcept {
+    const std::size_t limit = std::min(ops.size(), budget::kEligiblePrefixScanBound);
+    std::size_t count = 0;
+    while (count < limit && ops[count].len == kBatchShapeReadLen &&
+           ops[count].dst != nullptr) {
+        ++count;
+    }
+    return count;
+}
 
 struct DecisionRecord {
     std::size_t remaining = 0;
@@ -445,7 +463,9 @@ class Adapter {
             bool authority_exit = false;
             DecisionRecord record;
             record.remaining = rest.size();
-            record.eligible_prefix = batch_shaped_prefix(rest);
+            if (trace_ != nullptr) {
+                record.eligible_prefix = batch_shaped_prefix(rest);
+            }
             record.pressure_known = facts.pressure_known;
             record.last_pass_completed = facts.last_pass_completed;
             record.last_pass_immediate_work = facts.last_pass_immediate_work;
@@ -455,7 +475,7 @@ class Adapter {
             if (policy.budgeted) {
                 budget::Input input;
                 input.remaining = rest.size();
-                input.eligible_prefix = record.eligible_prefix;
+                input.eligible_prefix_bounded = batch_shaped_prefix_bounded(rest);
                 input.prior_stop_control_or_recovery = prior_control_or_recovery;
                 input.residue_advertised = prior_residue;
                 input.pinned_quantum = variant.pinned_quantum;
@@ -494,7 +514,8 @@ class Adapter {
                         ++out.counters.r4_authority_exits;
                         break;
                     case budget::Action::batch:
-                        present_len = std::min(decision.quantum, input.eligible_prefix);
+                        present_len =
+                            std::min(decision.quantum, input.eligible_prefix_bounded);
                         if (present_len == 0)
                             present_len = 1;
                         break;
