@@ -130,7 +130,9 @@ off-mode pair), arms A0/R only, W03-d16 primary + W03-d4 control.
   tail ops sit in the **second (`input_exhausted`) presentation of restart
   refills**, whose T0 was stamped at refill-build time before the first
   presentation was admitted/entered.
-- **Hkernel-a refuted at T3:** intra-presentation completion spread within
+- **Hkernel-a refuted at T3 (user-observed reap spread only; kernel
+  completion instants before the reap are unobservable and NOT excluded —
+  corrected 2026-11-07, F4):** intra-presentation completion spread within
   R's 8-op presentations p50 1.03 µs / p99 1.34 µs (max 50.2 µs on ≤0.1%).
 - **d4 control:** on-mode R−A0 p99 −9.5%/−9.7% reproduces R4's sign flip
   (−12.92%); tail-band decomposition, all five intervals (from
@@ -249,7 +251,9 @@ above are the authoritative ones from the matrix file.
 
 **Measured against (lead level):**
 
-- Intra-batch completion straggle (Hkernel-a): T3 spread ≈1 µs.
+- Intra-batch completion straggle (Hkernel-a), **user-observed reap
+  spread only (T3 is the user-land reap instant, not kernel completion;
+  kernel-side tails are not excluded — F4):** T3 spread ≈1 µs.
 - Driver-wake latency: wake-part p99 R 32.9 µs < A0 35.4 µs.
 - Reap→publish deferral: Δp99 +59 ns.
 
@@ -276,11 +280,17 @@ above are the authoritative ones from the matrix file.
 REQUIRED_INFORMATION_GAP (formal): the decomposition
 `T5−T0 = (T1−T0)+(T2−T1)+(T3−T2)+(T4−T3)+(T5−T4)` is measured but not
 attributable — the on/off acceptance failed and the off-mode reference is a
-single pair. Minimum to close: (i) ≥3 off-mode pairs (or a lighter
-instrument with differential cost within the SHADOW−R +1.22% p99 precedent),
-re-run under the same lock discipline; (ii) then re-apply the frozen ≥50%
-attribution rule. Kernel-side instants stay unavailable by construction and
-must be reported as such.
+single pair. Minimum to close: (i) ≥3 off-mode pairs under the same lock
+discipline, or a lighter instrument whose differential perturbation passes a
+pre-registered equivalence window. **[Corrected 2026-11-07, r5-repair F2:]**
+The frozen "≥50% of the total-p99 gap" attribution rule is abolished as a
+method error — quantiles are not additive; per-request phase means sum
+within a request, but arm-level percentile differences and tail-set means do
+not decompose into removable stage costs. No percentile-contribution
+attribution is computed any more; causal claims come only from intervention
+contrasts (see the r5-repair CORRECTIONS.md and PREREGISTERED.md §7).
+Kernel-side instants stay unavailable by construction and must be reported
+as such.
 
 ---
 
@@ -290,7 +300,7 @@ must be reported as such.
 |---|---|---|
 | S, SNI, Q2 | **indiscriminate signal + stale snapshot + action not on target** (signal defect primary) | `owner_pass_activity` is flow-positivity firing 99.92% under saturation (`r4/RESULTS.md:199`); the fact is one owner-pass old with unbounded age and its `immediate_work` half is structurally false when published; quantum-2 slicing cannot interrupt submitted SQEs — it throttles pipeline refill, matching S's whole-distribution right shift (p50 +13.03, `r5/r4-archive/TAIL-LATENCY.md:24`; S−R CPU +8.51% / p99 +10.52%, `r4/RESULTS.md:187`) rather than targeted tail relief; S ≈ Q2 to +0.83% (`r4/RESULTS.md:186`, S−Q2 CPU) — the measured signature of a no-op condition |
 | SNP | **action not on target (wrong moment)** | its live `outstanding()==0` trigger fires exactly when no beneficiary exists — at drain/restart moments, which the diagnostic shows are precisely where R's tail ops live; 35% small presentations yet p99 +34.48 ≈ S level vs uniform Q8 +23.33 |
-| R, Q8 (p99-only regression) | **action does not act on the target object**; genuine tradeoff NOT excluded but NOT established | R/Q8 never delay pending work (presentation = min(cap, ready)) yet regress p99 24/24 blocks; own sign flips (d4 −12.9%, btrfs −30.4%) point at completion-side/speed interactions the batching action does not touch; the diagnostic lead localizes the added tail time to back-op queueing inside restart refills (submission side), not to kernel straggle/wake/reap-publish (all measured against); R's own action is cheap (SHADOW−R bound, COR-2) |
+| R, Q8 (p99-only regression) | **action does not act on the target object**; genuine tradeoff NOT excluded but NOT established | R/Q8 never delay pending work (presentation = min(cap, ready)) yet regress p99 24/24 blocks; own sign flips (d4 −12.9%, btrfs −30.4%) point at completion-side/speed interactions the batching action does not touch; the diagnostic lead localizes the added tail time to back-op queueing inside restart refills (submission side), not to kernel straggle/wake/reap-publish (**measured against at the user-observable boundaries only — T3 user-land reap, same-thread wake order, reap→publish; kernel-side completion instants are unobservable and NOT excluded — corrected 2026-11-07, F4**); R's own action is cheap (SHADOW−R bound, COR-2) |
 | literature alternatives (preemption, sampler, reservation) | **execution too expensive / structurally unavailable** — attaches to the alternatives, not to R | preemption needs a point that does not exist over submitted SQEs; Shenango's sampler needs a dedicated core; Perséphone's DARC reserves cores and needs a payload classifier uniform-4KiB ops do not expose; work stealing has no legal target |
 | unavoidable tradeoff | **only R/Q8 unexcluded, retained as a candidate — not a conclusion** | ZygOS §3.3 proves the tension exists in this regime; IX §5 and R4's own d4/btrfs sign flips show it is conditional, not a law, at d16 |
 

@@ -56,3 +56,26 @@ the per-run arena dump binaries (`raw-diag/matrix/**/dump/*.bin`, ~82 MB, and
 - `research/595-r5-phase-a` (this archive; docs only)
 - `research-595-r5` — R4_ORIGINAL `f3b25329` + R4_CLEANUP `c55165a2` (C1) + `b191bb89` (C2)
 - `research-595-r5-diag` — diagnostic instrumentation commit `21374a40` on `f3b25329` (diagnostic-only build, never mixed with formal timing)
+
+## Post-review update (r5-repair round, 2026-11-07)
+
+- **Backfill (F6):** `raw-diag/scripts/` (4 files) and `raw-diag/equiv/`
+  (64 files) are now present — the EVIDENCE-INDEX §4 listing was accurate
+  about the E5 originals but the reviewed head `828b10b4` did not carry
+  them. All 181 non-binary `raw-diag` files are now in-tree; the ~82 MB
+  `.bin` arena dumps remain E5-local as declared below.
+- **Corrections (F2/F4):** the frozen "≥50% of the p99 gap" attribution
+  rule is abolished (quantiles are not additive); the "driver cannot
+  publish mid-group", "truly parks", "sole inflight authority" and
+  "kernel straggle ruled out" wordings are corrected in
+  `TAIL_ANALYSIS.md`, `NEXT_EXPERIMENT.md` and `CALL_PATTERNS.md` with
+  dated markers. Full inventory: `../595-r5-repair-round/CORRECTIONS.md`.
+- **F1:** the v1 diagnostic instrument in commit `21374a40` had real
+  data races (plain `g_cursor`/record fields read by the driver outside
+  the dispatch lock, phase reset/export vs in-flight writers, 64→32-bit
+  generation truncation, positional built→admitted pairing misalignment
+  under front rejection). Fixed and validated in the repair round; v1
+  traces remain frozen evidence under the v1 analyzer.
+- The repair round's three-arm measurement (A0 / R_original / R_cleanup)
+  and verdicts: `../595-r5-repair-round/` (product gate still fails on
+  p99 only; cleanup never harmful after binary-layout calibration).

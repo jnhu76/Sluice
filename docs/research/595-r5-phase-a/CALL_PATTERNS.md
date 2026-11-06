@@ -229,8 +229,10 @@ Figure notes (verified unless marked):
    park exists on the submit path (C5 CONFIRMED,
    `findings-c5-c7.md` §C5.1-5.2). The cv-wake edge
    (`SF → OBS`) is drawn solid because the *mechanism* is source-verified
-   (`cv.notify_all` after each publication batch, `bench_w03:264`, ends the
-   `cv.wait_for` park at `:522-539`); only *when* the driver gets to publish
+   (`cv.notify_all` after each publication batch, `bench_w03:264`, ends a
+   `cv.wait_for` *wait attempt* at `:522-539` — a potential park: the
+   predicate may already hold, in which case no block occurs; corrected
+   2026-11-07, F4); only *when* the driver gets to publish
    relative to the submitter's presentations is scheduling-dependent (the
    remaining dashed edge `AD -.-> PP`).
 
@@ -290,7 +292,7 @@ sequenceDiagram
     D->>AC: publish_one - complete_publication outstanding-- + deliver_event uring_backend.cpp:801-837
     D-->>S: shared.cv.notify after publishing facts bench_w03:247-264
   and submitter continues
-    S->>S: park on shared.cv until completions greater than watermark bench_w03:522-539
+    S->>S: wait on shared.cv for completions greater than watermark bench_w03:522-539 (potential park; predicate may already hold - corrected 2026-11-07)
   end
   S->>AC: window front Request ready then take_result bench_w03:541-572
 ```
