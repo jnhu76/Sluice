@@ -1,0 +1,94 @@
+{
+ "phase": "SMOKE-W03",
+ "case": "W03-uring-4k-d16",
+ "pairs": 1,
+ "arms": "AA",
+ "arm_var": "SLUICE_595_R3_ARM",
+ "arm_a": "A0",
+ "arm_b": "A0",
+ "cpu_set": "2",
+ "cpus_monitored": [
+  "2",
+  "12"
+ ],
+ "binary": "/home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+ "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+ "expect_sha": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+ "env_overrides": [],
+ "warmup": 0,
+ "measured": 1,
+ "stats": 0,
+ "expected_ops": 20000,
+ "tmp_dir": "/tmp/sluice-595-r3c",
+ "order_rule": "AA: pair even m1,m2 / odd m2,m1",
+ "lock": {
+  "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+  "inode": 6941075,
+  "dev_major": 0,
+  "dev_minor": 53,
+  "holders": []
+ },
+ "started_utc": "2026-11-05T11:03:32Z",
+ "loadavg_start": [
+  0.09912109375,
+  0.14111328125,
+  0.166015625
+ ],
+ "tmp_start": {
+  "total_bytes": 33626267648,
+  "avail_bytes": 32798965760,
+  "used_pct": 2.46
+ },
+ "cpufreq_start": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 1200000
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 2300000
+  }
+ },
+ "binary_sha_ok_start": true,
+ "host_kernel": "7.2.11-200.fc44.x86_64",
+ "runner_argv": [
+  "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/harness/measure_pairs.py",
+  "--phase",
+  "SMOKE-W03",
+  "--phase-dir",
+  "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/smoke-w03",
+  "--case",
+  "W03-uring-4k-d16",
+  "--pairs",
+  "1",
+  "--binary",
+  "/home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+  "--expect-sha",
+  "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+  "--cpu",
+  "2",
+  "--cpus",
+  "2,12",
+  "--arms",
+  "AA",
+  "--arm-var",
+  "SLUICE_595_R3_ARM",
+  "--arm-a",
+  "A0",
+  "--arm-b",
+  "A0",
+  "--warmup",
+  "0",
+  "--measured",
+  "1",
+  "--stats",
+  "0",
+  "--expected-ops",
+  "20000",
+  "--tmp-dir",
+  "/tmp/sluice-595-r3c",
+  "--lock-file",
+  "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock"
+ ],
+ "runner_sha256": "9c669fb523af96201ff9e5b9aec7e7213a6160153cbd9819cb98fa823f4e9d66"
+}

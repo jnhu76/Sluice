@@ -1,0 +1,89 @@
+# RESOURCE static audit (2026-11-05T11:25:59Z)
+
+## R3 worktree provenance
+$ git -C /home/jnhu/sluice-595-e5/r3/worktree rev-parse HEAD
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+$ git -C ... status --porcelain | wc -l
+15
+$ git -C ... diff HEAD | sha256sum
+c1a31a30a9f02db99fac2ab2d0a8af028245a6fff0220314b8119c26e30d3003  -
+$ git -C ... diff HEAD --numstat
+44	0	bench/bench_common.hpp
+147	25	bench/bench_w03_external_loop.cpp
+9	0	include/sluice/async/detail/progress_source.hpp
+128	0	include/sluice/async/detail/test_access.hpp
+44	1	include/sluice/async/detail/uring_backend.hpp
+11	11	src/async/async_io_context.cpp
+253	27	src/async/uring_backend.cpp
+2	0	src/async/uring_test_seams.hpp
+5	0	src/async/uring_transport.cpp
+42	0	xmake/tests.lua
+
+## R2 clean tree provenance
+$ git -C /home/jnhu/sluice-595-e5/worktree rev-parse HEAD
+271b81bfc9d64eecc0266fe7066b9040525dd710
+$ git -C ... status --porcelain
+ M bench/bench_w02_pipeline.cpp
+ M include/sluice/async/detail/uring_backend.hpp
+ M src/async/uring_backend.cpp
+ M src/async/uring_transport.cpp
+ M xmake/tests.lua
+?? tests/uring_595_bounded_progress_test.cpp
+$ git -C ... diff HEAD | sha256sum
+b006dbbf751f5fb2bbe8fb9edb091ae66e57a181b8cf2470d880c9589e1f4072  -
+$ git apply --reverse --check patch.diff
+reverse_check_rc=0
+
+## Binary SHA
+0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop
+4e719b1e4dc2f0575812f4310b54e96c443f8ce8d1c6dd39c81bf5ec91351497  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w02_pipeline
+32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a  /home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline
+
+## Added lines in library sources matching allocation/thread/timer/queue creation
+$ git -C ... diff HEAD -- src include | grep "^+" | grep -Ei "make_unique|make_shared|new |malloc|calloc|realloc|std::thread|timer_create|timerfd|epoll_create|eventfd\(|queue<|std::deque"
+(no matches)
+
+## Pre-existing mechanisms at baseSha (git show HEAD)
+$ git show HEAD:src/async/uring_backend.cpp | grep -n "make_unique"
+147:    return detail::make_context(std::make_unique<UringAsyncBackend>(config), stats);
+165:      ring_state_(std::make_unique<UringRingState>()) {
+169:    dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+170:    publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+178:            std::make_unique<TransportLedger>(ring_state_->ring.sq.ring_entries);
+
+## Batch path storage (stack only)
+/home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/uring_backend.hpp:110:        std::array<detail::RequestKey, ready_batch_cap> keys{};
+/home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/test_access.hpp:42:        std::array<Request<std::size_t>, UringAsyncBackend::ready_batch_cap> requests{};
+/home/jnhu/sluice-595-e5/r3/worktree/src/async/uring_backend.cpp:556:                dispatch_->push_back(
+/home/jnhu/sluice-595-e5/r3/worktree/src/async/uring_backend.cpp:574:                dispatch_->push_back(emitted);
+
+## Bench-only adapter vector
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:86:                   std::vector<Request<std::size_t>>& accepted) {
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:140:                                std::vector<Request<std::size_t>>& accepted, Outcome& out) {
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:173:                       std::vector<Request<std::size_t>>& accepted) {
+/home/jnhu/sluice-595-e5/r3/worktree/bench/bench_w03_external_loop.cpp:352:        ready.reserve(params.depth);
+/home/jnhu/sluice-595-e5/r3/worktree/bench/bench_w03_external_loop.cpp:353:        accepted.reserve(params.depth);
+/home/jnhu/sluice-595-e5/r3/worktree/bench/bench_w03_external_loop.cpp:363:                ready.reserve(want);
+
+## ThreadPool fallback path (static)
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:72:        backend_ = dynamic_cast<UringAsyncBackend*>(
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:89:        if (arm_ == Arm::a0 || backend_ == nullptr) {
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:90:            submit_context_singles(ready, accepted, out);
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:112:            submit_context_singles(ready, accepted, out);
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:139:    void submit_context_singles(std::span<const ReadOp> ready,
+/home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp:142:            auto submitted = ctx_.submit_read(op);
+/home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/test_access.hpp:36:        bool batch_backend = false;
+/home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/test_access.hpp:70:        if (ctx.backend_ == nullptr) {
+/home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/test_access.hpp:77:        auto* backend = dynamic_cast<UringAsyncBackend*>(ctx.backend_.get());
+
+## 64 KiB ineligible predicate
+437:constexpr bool batch_eligible_read(const ReadOp& op) noexcept {
+467:    if (ready.size() == 1 || !batch_eligible_read(ready.front())) {
+537:            if (!batch_eligible_read(ready[i])) {
+constexpr bool batch_eligible_read(const ReadOp& op) noexcept {
+    return op.len == 4096 && op.dst != nullptr;
+}
+
+
+## New library files
+18 /home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/initiation_precheck.hpp

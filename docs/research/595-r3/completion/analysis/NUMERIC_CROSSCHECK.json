@@ -1,0 +1,40 @@
+{
+ "metric_agreement": [],
+ "notes": [
+  {
+   "block": "AA-W03-D16",
+   "diffs": [],
+   "max_metric_diff": 0.0,
+   "recorded_verdict": "PASS",
+   "self_verdict": "PASS"
+  },
+  {
+   "block": "AA-W02-D2",
+   "diffs": [],
+   "max_metric_diff": 0.0,
+   "recorded_verdict": "PASS",
+   "self_verdict": "PASS"
+  },
+  {
+   "block": "LEGACY-W02-D2 (R2-D2)",
+   "diffs": [],
+   "max_metric_diff": 0.0,
+   "recorded_verdict": "FAIL",
+   "self_verdict": "FAIL"
+  },
+  {
+   "block": "PROT-W02-D3 (R2)",
+   "diffs": [],
+   "max_metric_diff": 0.0,
+   "recorded_verdict": "PASS",
+   "self_verdict": "PASS"
+  },
+  {
+   "block": "PROT-W02-D16 (R2)",
+   "diffs": [],
+   "max_metric_diff": 0.0,
+   "recorded_verdict": "PASS",
+   "self_verdict": "PASS"
+  }
+ ]
+}

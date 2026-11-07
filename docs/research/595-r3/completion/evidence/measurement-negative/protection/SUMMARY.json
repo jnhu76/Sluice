@@ -1,0 +1,769 @@
+{
+ "aa_calibration": {
+  "aa_w02_d2": {
+   "half_width_pp": {
+    "cpu": 0.862,
+    "p99": 1.42,
+    "tput": 0.853
+   },
+   "path": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/measurement-legacy/aa-w02-d2/summary.json",
+   "sha256": "2412fff14ee2363b985e150c9827ff0cdc926c2a3feffa1db7406ce1d8d8cde9",
+   "verdict": "PASS"
+  },
+  "aa_w03_d16": {
+   "half_width_pp": {
+    "cpu": 0.797,
+    "p99": 2.039,
+    "tput": 0.821
+   },
+   "path": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/measurement-main/aa/aa-w03-d16/summary.json",
+   "sha256": "0370d3f11df393e5f2a88ebf099934ccc0b0bad982873106547752e62e8958de",
+   "verdict": "PASS"
+  },
+  "note": "executed in the prior calibration session (2026-11-05T11:03:31Z-11:08:21Z); verified here, not rerun by this protection subagent"
+ },
+ "blocked_blocks": [
+  "MAIN-W03-D16-A1/B",
+  "CROSS-W03-D4/D64-A1-B",
+  "MECH-POS-D2POS",
+  "MECH-NEG-D2SERIAL",
+  "MECH-ENTER-CQE",
+  "PROT-W03-D4/D16/D64-B",
+  "PROT-64K-D16-B",
+  "PROT-THREADPOOL-B",
+  "PROT-SMT-2-12-B",
+  "PROT-XPHYS-2-8-B",
+  "PROT-W02-D16-B (R3)",
+  "PROT-SATURATION-B",
+  "RESOURCE-B",
+  "PRODUCT-604"
+ ],
+ "blocks": {
+  "PROT-64K-D16": {
+   "a0_enters": {
+    "lines_with_enter": 6004,
+    "present": true,
+    "pure_submit": 6000,
+    "to_submit_hist": {
+     "1": 6004
+    },
+    "total": 6004
+   },
+   "a0_metrics": {
+    "cpu_ns_per_op": {
+     "mean": 12351.554766666668,
+     "n": 3
+    },
+    "extra_a": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "extra_b": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "ops_per_sec": {
+     "mean": 81802.8268574671,
+     "n": 3
+    },
+    "p50_ns": {
+     "mean": 184793.53333333333,
+     "n": 3
+    },
+    "p95_ns": {
+     "mean": 228429.53333333333,
+     "n": 3
+    },
+    "p99_ns": {
+     "mean": 265278.93333333335,
+     "n": 3
+    },
+    "peak_rss_kb": {
+     "mean": 5545.333333333333,
+     "n": 3
+    },
+    "stats_completed_ops": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_max_outstanding": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_queue_full_retries": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_submit_calls": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_submitted_ops": {
+     "mean": 0.0,
+     "n": 3
+    }
+   },
+   "a0_threads": 3,
+   "a0_time_v_max_rss_kb": [
+    5948,
+    5840,
+    5592
+   ],
+   "case_actual": "W03-uring-64k-d16-r3d16-64k",
+   "case_requested_by_prereg": "W03-uring-64k-d16",
+   "comparison": "B - A0 (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+   "kind": "B vs A0 blocked (semanticsReady=false); A0-only baseline + static ineligibility",
+   "phase": "PROT-64K-D16",
+   "static_ineligibility": "src/async/uring_backend.cpp:437-439 batch_eligible_read = (len==4096 && dst!=nullptr); 64 KiB -> immediate first member, stop=ineligible, suffix singles",
+   "verdict": "BLOCKED_SEMANTICS_NOT_READY",
+   "why_actual": "the frozen R3 binary only has the research 64 KiB case; label_suffix '-r3d16-64k'"
+  },
+  "PROT-PLACEMENT": {
+   "cases": {
+    "cpu2": {
+     "cpu_mask": "2",
+     "max_user_threads": 3,
+     "metrics": {
+      "cpu_ns_per_op": 3153.54213,
+      "ops_per_sec": 317334.6743918203,
+      "p95_ns": 47397.575,
+      "p99_ns": 57059.65
+     },
+     "records": 8,
+     "valid": 8
+    },
+    "cpu8": {
+     "cpu_mask": "8",
+     "delta_vs_cpu2_pct": {
+      "cpu": -0.10152738152890485,
+      "p95": -5.889225345389503,
+      "p99": -9.401521039824111,
+      "tput": 0.0946395759750599
+     },
+     "max_user_threads": 3,
+     "metrics": {
+      "cpu_ns_per_op": 3150.34042125,
+      "ops_per_sec": 317634.9985820866,
+      "p95_ns": 44606.225,
+      "p99_ns": 51695.175
+     },
+     "records": 8,
+     "valid": 8
+    },
+    "smt-2-12": {
+     "cpu_mask": "2,12",
+     "delta_vs_cpu2_pct": {
+      "cpu": 145.46789977402335,
+      "p95": 58.834286353257546,
+      "p99": 65.03904247572495,
+      "tput": -26.185264103994193
+     },
+     "max_user_threads": 3,
+     "metrics": {
+      "cpu_ns_per_op": 7740.933635,
+      "ops_per_sec": 234239.75180877215,
+      "p95_ns": 75283.6,
+      "p99_ns": 94170.7
+     },
+     "records": 8,
+     "valid": 8
+    },
+    "xphys-2-8": {
+     "cpu_mask": "2,8",
+     "delta_vs_cpu2_pct": {
+      "cpu": 166.56062654219247,
+      "p95": 72.48029039460354,
+      "p99": 75.76847211646059,
+      "tput": -31.23426332661249
+     },
+     "max_user_threads": 3,
+     "metrics": {
+      "cpu_ns_per_op": 8406.10166,
+      "ops_per_sec": 218217.52656563083,
+      "p95_ns": 81751.475,
+      "p99_ns": 100292.875
+     },
+     "records": 8,
+     "valid": 8
+    }
+   },
+   "comparison": "B - A0 under placement (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+   "kind": "A0-only representative placement (B blocked)",
+   "phase": "PROT-PLACEMENT",
+   "time_v_max_rss_kb": {
+    "cpu2": [
+     5352
+    ],
+    "cpu8": [
+     5308
+    ],
+    "smt": [
+     5324
+    ],
+    "xphys": [
+     5212
+    ]
+   },
+   "topology": {
+    "cpu2_core": 2,
+    "cpu2_siblings": "2,12",
+    "cpu8_core": 11,
+    "cpu8_siblings": "8,18",
+    "package": 0
+   },
+   "verdict": "NOT_ESTABLISHED"
+  },
+  "PROT-SAT": {
+   "a0_enters": {
+    "pure_submit": 9600,
+    "source": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/DIAG-SAT-A0/logs/sat.strace",
+    "to_submit_hist": {
+     "1": 9604
+    },
+    "total": 9604
+   },
+   "a0_metrics": {
+    "cpu_ns_per_op": {
+     "mean": 3338.312083333333,
+     "n": 3
+    },
+    "extra_a": {
+     "mean": 3200.0,
+     "n": 3
+    },
+    "extra_b": {
+     "mean": 200.0,
+     "n": 3
+    },
+    "ops_per_sec": {
+     "mean": 301509.1472880831,
+     "n": 3
+    },
+    "p50_ns": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "p95_ns": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "p99_ns": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "peak_rss_kb": {
+     "mean": 20620.0,
+     "n": 3
+    },
+    "stats_completed_ops": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_max_outstanding": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_queue_full_retries": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_submit_calls": {
+     "mean": 0.0,
+     "n": 3
+    },
+    "stats_submitted_ops": {
+     "mean": 0.0,
+     "n": 3
+    }
+   },
+   "a0_stats": {
+    "accepted_at_saturation": 3200,
+    "ops": 3200,
+    "rejected_at_saturation": 200,
+    "source": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/SAFE-A0-W02-SAT-d16-stats/run.jsonl (SLUICE_BENCH_STATS=1)",
+    "stats_completed_ops": 3200,
+    "stats_max_outstanding": 16,
+    "stats_poll_calls": 551,
+    "stats_queue_full_retries": 0,
+    "stats_submit_calls": 3200,
+    "stats_submitted_ops": 3200,
+    "stats_wait_calls": 364,
+    "submits": 3400,
+    "waits": 3200,
+    "would_block": 200
+   },
+   "a0_threads": 2,
+   "a0_time_v_max_rss_kb": [
+    5212
+   ],
+   "case": "W02-uring-4k-d16-saturate",
+   "comparison": "B_R2 - A_R2 / B - A0 (NOT RUN: NO_W02_R3_ARM; not in frozen enabledBlocks)",
+   "kind": "R3 B has no W-02 arm; A0-only descriptive saturation",
+   "phase": "PROT-SAT",
+   "verdict": "NOT_ESTABLISHED"
+  },
+  "PROT-THREADPOOL": {
+   "cases": {
+    "d16": {
+     "case": "W03-threadpool-4k-d16-w4",
+     "cpu_ns_per_op_mean": 68106.15798333334,
+     "enter": [
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      },
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      },
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      }
+     ],
+     "ops_mean": 12546.980042269497,
+     "records": 3,
+     "valid": 3
+    },
+    "d4": {
+     "case": "W03-threadpool-4k-d4-w4",
+     "cpu_ns_per_op_mean": 84777.86003333335,
+     "enter": [
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      },
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      },
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      }
+     ],
+     "ops_mean": 9825.891028697453,
+     "records": 3,
+     "valid": 3
+    },
+    "d64": {
+     "case": "W03-threadpool-4k-d64-w4",
+     "cpu_ns_per_op_mean": 33176.43365,
+     "enter": [
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      },
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      },
+      {
+       "lines_with_enter": 1,
+       "present": true,
+       "pure_submit": 0,
+       "to_submit_hist": {
+        "1": 1
+       },
+       "total": 1
+      }
+     ],
+     "ops_mean": 25299.121089490753,
+     "records": 3,
+     "valid": 3
+    }
+   },
+   "comparison": "B - A0 (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+   "d16_plain_threads": 6,
+   "d16_time_v_max_rss_kb": [
+    5352
+   ],
+   "kind": "B vs A0 functional blocked (semanticsReady=false); A0-only no-enter functional check",
+   "nocase_enter": {
+    "lines_with_enter": 1,
+    "present": true,
+    "pure_submit": 0,
+    "to_submit_hist": {
+     "1": 1
+    },
+    "total": 1
+   },
+   "phase": "PROT-THREADPOOL",
+   "static_batch_entry": "bench/r3_ready_batch.hpp:72 dynamic_cast; :89 arm_==a0 || backend_==nullptr -> submit_context_singles -> ctx.submit_read; :97/:110 only A1/B reach TestAccess batch entry",
+   "verdict": "BLOCKED_SEMANTICS_NOT_READY"
+  },
+  "PROT-W02-D16": {
+   "arms": {
+    "A": "A_R2 (immediate, 271b81bf+7be9d014)",
+    "B": "B_R2 (bounded progress, same SHA)"
+   },
+   "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+   "case": "W02-uring-4k-d16",
+   "comparison": "B_R2 - A_R2",
+   "ended_utc": "2026-11-05T11:24:32Z",
+   "enters": {
+    "A_R2": {
+     "lines_with_enter": 60004,
+     "present": true,
+     "pure_submit": 60000,
+     "to_submit_hist": {
+      "1": 60004
+     },
+     "total": 60004
+    },
+    "B_R2": {
+     "lines_with_enter": 11293,
+     "present": true,
+     "pure_submit": 11289,
+     "to_submit_hist": {
+      "1": 3799,
+      "7": 3747,
+      "8": 3747
+     },
+     "total": 11293
+    },
+    "lane": "diagnostic strace (WARMUP=0 MEASURED=1, 1 rep); not performance evidence"
+   },
+   "env_overrides": [
+    "SLUICE_BENCH_595_DEPTHS=1"
+   ],
+   "fixture_unchanged": true,
+   "kind": "R2 same-SHA legacy protection (R3 B structurally not executable)",
+   "metrics": {
+    "cpu": {
+     "ci_hi": -0.2752735584369938,
+     "ci_lo": -0.28701512332417745,
+     "ci_upper_one_sided_95": -0.276128299175188,
+     "holm_alpha": 0.0125,
+     "holm_reject": true,
+     "mean": -0.28111135756100564,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.05,
+     "upper_in_bound": true
+    },
+    "p95": {
+     "ci_hi": -0.31652263048738843,
+     "ci_lo": -0.33479208735050864,
+     "ci_upper_one_sided_95": -0.3181856316888489,
+     "holm_alpha": 0.016666666666666666,
+     "holm_reject": true,
+     "mean": -0.32589985444015473,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.05,
+     "upper_in_bound": true
+    },
+    "p99": {
+     "ci_hi": -0.3097145179435267,
+     "ci_lo": -0.33906796891835644,
+     "ci_upper_one_sided_95": -0.3117911948509065,
+     "holm_alpha": 0.025,
+     "holm_reject": true,
+     "mean": -0.32399684361967024,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.05,
+     "upper_in_bound": true
+    },
+    "tput": {
+     "ci_hi": -0.3809801100094348,
+     "ci_lo": -0.40395177212598726,
+     "ci_upper_one_sided_95": -0.38264193242366823,
+     "holm_alpha": 0.05,
+     "holm_reject": true,
+     "mean": -0.3924086138451706,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.03,
+     "upper_in_bound": true
+    }
+   },
+   "pairs_valid": 24,
+   "phase": "PROT-W02-D16",
+   "r3_b_part": "NOT_ESTABLISHED / NO_W02_R3_ARM (completion patch does not touch bench_w02_pipeline.cpp)",
+   "records_total": 48,
+   "records_valid": 48,
+   "started_utc": "2026-11-05T11:23:31Z",
+   "verdict": "PASS"
+  },
+  "PROT-W02-D3": {
+   "arms": {
+    "A": "A_R2 (immediate, 271b81bf+7be9d014)",
+    "B": "B_R2 (bounded progress, same SHA)"
+   },
+   "binary": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/header.json",
+   "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+   "case": "W02-uring-4k-d3",
+   "comparison": "B_R2 - A_R2",
+   "ended_utc": "2026-11-05T11:23:30Z",
+   "enters": {
+    "A_R2": {
+     "lines_with_enter": 60004,
+     "present": true,
+     "pure_submit": 60000,
+     "to_submit_hist": {
+      "1": 60004
+     },
+     "total": 60004
+    },
+    "B_R2": {
+     "lines_with_enter": 40009,
+     "present": true,
+     "pure_submit": 40005,
+     "to_submit_hist": {
+      "1": 20014,
+      "2": 19995
+     },
+     "total": 40009
+    },
+    "lane": "diagnostic strace (WARMUP=0 MEASURED=1, 1 rep); not performance evidence"
+   },
+   "env_overrides": [
+    "SLUICE_BENCH_595_DEPTHS=1"
+   ],
+   "fixture_unchanged": true,
+   "kind": "R2 same-SHA legacy protection (NOT R3 B)",
+   "metrics": {
+    "cpu": {
+     "ci_hi": -0.06541208988269673,
+     "ci_lo": -0.08103737108581215,
+     "ci_upper_one_sided_95": -0.06673449126367632,
+     "holm_alpha": 0.0125,
+     "holm_reject": true,
+     "mean": -0.07326892932458086,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.05,
+     "upper_in_bound": true
+    },
+    "p95": {
+     "ci_hi": -0.10359453062695877,
+     "ci_lo": -0.14725074710672595,
+     "ci_upper_one_sided_95": -0.10831712004118453,
+     "holm_alpha": 0.016666666666666666,
+     "holm_reject": true,
+     "mean": -0.12795443833872597,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.05,
+     "upper_in_bound": true
+    },
+    "p99": {
+     "ci_hi": -0.06390214157623386,
+     "ci_lo": -0.16212336632646016,
+     "ci_upper_one_sided_95": -0.07287567283362932,
+     "holm_alpha": 0.025,
+     "holm_reject": true,
+     "mean": -0.1151140683490197,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.05,
+     "upper_in_bound": true
+    },
+    "tput": {
+     "ci_hi": -0.07057741462149401,
+     "ci_lo": -0.08896945392036876,
+     "ci_upper_one_sided_95": -0.07206693373479152,
+     "holm_alpha": 0.05,
+     "holm_reject": true,
+     "mean": -0.07974980818867904,
+     "p": 9.999000099990002e-05,
+     "pass": true,
+     "point_in_bound": true,
+     "threshold": 0.03,
+     "upper_in_bound": true
+    }
+   },
+   "pairs_valid": 24,
+   "phase": "PROT-W02-D3",
+   "records_total": 48,
+   "records_valid": 48,
+   "started_utc": "2026-11-05T11:22:02Z",
+   "verdict": "PASS"
+  },
+  "RESOURCE": {
+   "a0_threads": {
+    "W02-sat-d16": 2,
+    "W03-4k-d16": 3,
+    "W03-64k-d16": 3,
+    "W03-threadpool-4k-d16": 6
+   },
+   "a0_time_v_max_rss_kb": {
+    "W02-sat-d16": [
+     5212
+    ],
+    "W03-4k-d16-cpu2": [
+     5352
+    ],
+    "W03-4k-d16-cpu8": [
+     5308
+    ],
+    "W03-4k-d16-smt": [
+     5324
+    ],
+    "W03-4k-d16-xphys": [
+     5212
+    ],
+    "W03-64k-d16": [
+     5948,
+     5840,
+     5592
+    ],
+    "W03-threadpool-4k-d16": [
+     5352
+    ]
+   },
+   "allocation_slope": "NOT_RUN: frozen bench has no 512/1024 request-count knob; B blocked",
+   "comparison": "B - A0 resource gate (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+   "kind": "resource gate needs B/A1; semanticsReady=false -> B blocked; A0 baseline + static audit",
+   "phase": "RESOURCE",
+   "static_audit": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/RESOURCE-STATIC-AUDIT/audit.txt",
+   "syscall_diag_a0_d16": {
+    "clone3": 4,
+    "epoll_create1": 3,
+    "eventfd2": 4,
+    "source": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/RESOURCE-SYSCALL-A0-D16/syscalls.txt",
+    "timer_create": 0
+   },
+   "verdict": "NOT_ESTABLISHED",
+   "wait4_crosscheck": "INVALID_METHOD: Python posix_spawn uses clone3(CLONE_VM|CLONE_VFORK); ru_maxrss contaminated (20,620 KB vs /usr/bin/time -v 5,352 KB; /bin/true control 9,860-10,116 vs 1,312-1,324 KB)"
+  }
+ },
+ "completion_root": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z",
+ "generated_utc": "2026-11-05T11:35:18Z",
+ "inputs": {
+  "context": {
+   "path": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/CONTEXT_COMPLETION.md",
+   "sha256": "d6e3ec29f31c0c5c476a00bfaedcedd57c833bd552635030374dbb41c5f1fea2"
+  },
+  "prereg": {
+   "path": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/PREREGISTERED_R3_COMPLETION.md",
+   "sha256": "1a9c1e12c33a2f50e3bfac957c2ab25592d77e3ffae808dd7f92f08e16af3ab4"
+  },
+  "ready_exposure": {
+   "path": "/home/jnhu/sluice-595-e5/r3/evidence/READY_EXPOSURE.md",
+   "sha256": "0d0365c203ef1f6f28828ff636a03cb1a5c4b243fb9a16c13828fb6e0e2b3d10"
+  }
+ },
+ "limitations": [
+  "semanticsReady=false: all new R3 B/A1 blocks remain blocked; no R3 B CPU/latency/resource claim is made.",
+  "PROT-W02-D3/D16 are R2 same-SHA legacy reproductions, not R3 B results; cross-SHA comparisons are prohibited.",
+  "The prereg case id W03-uring-64k-d16 is not present in the frozen binary; the actual research id is W03-uring-64k-d16-r3d16-64k.",
+  "The Python posix_spawn wait4 RSS cross-check is invalid (CLONE_VM|CLONE_VFORK); /usr/bin/time -v values are authoritative.",
+  "The allocation-slope sub-gate (valgrind 512/1024) was not run: the frozen bench has no request-count knob.",
+  "Threadpool process total is 1 io_uring_enter per invocation (statx availability probe); workload-phase enters are 0.",
+  "Placement is A0-only; {2,12} and {2,8} are much slower than {2} for A0, so no placement inference about R3 B is possible.",
+  "Frequency/governor drift (schedutil 1.2-3.5 GHz) is recorded but not controlled; cpu12 background was <=1.1% in the sampled before-windows."
+ ],
+ "mode": "SAFE_IMMEDIATE_AND_R2_ONLY",
+ "provenance": {
+  "binaries": {
+   "r2_bench_w02": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+   "r3_bench_w02": "4e719b1e4dc2f0575812f4310b54e96c443f8ce8d1c6dd39c81bf5ec91351497",
+   "r3_bench_w03": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1"
+  },
+  "harness_sha256": {
+   "analyze_pairs.py": "a91395d31e31cb4252f95d7725f54a06e11e5389cc00411f0b678fde239be7a3",
+   "build_summary.py": "482fe3fef1d842e317448abb67e691f2c7686a4d1926692de4c36702e839de7a",
+   "measure_pairs.py": "7ad405421046c9dbc63f5f46df7806a317eb9670827ca8420479ccbb32ca2dc1",
+   "run_safe_a0.py": "2144ce784bc4a2d67d2ec0b8c0d55aff746283711e1bbaa3dc9d49fc9b0550dd",
+   "selftest_analyze.py": "47c7bcf016c076e34adeeb816dedf292328e37ab30de23173ad81b32652de41a"
+  },
+  "lock": {
+   "exclusivity_probe": "second open description flock -n failed (rc=1) in every session",
+   "inode": 6941075,
+   "path": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+   "sessions": [
+    {
+     "acquired_utc": "2026-11-05T11:22:02Z",
+     "label": "PROT-W02-D3+D16",
+     "released_utc": "2026-11-05T11:24:33Z"
+    },
+    {
+     "acquired_utc": "2026-11-05T11:25:33Z",
+     "label": "SAFE-A0",
+     "released_utc": "2026-11-05T11:27:24Z"
+    },
+    {
+     "acquired_utc": "2026-11-05T11:29:47Z",
+     "label": "DIAG-enter",
+     "released_utc": "2026-11-05T11:29:54Z"
+    },
+    {
+     "acquired_utc": "2026-11-05T11:31:10Z",
+     "label": "SAFE-A0-W02-SAT-stats",
+     "released_utc": "2026-11-05T11:31:10Z"
+    },
+    {
+     "acquired_utc": "2026-11-05T11:32:04Z",
+     "label": "DIAG-SAT-A0",
+     "released_utc": "2026-11-05T11:32:04Z"
+    }
+   ]
+  },
+  "r2_tree": {
+   "diff_head_sha256": "b006dbbf751f5fb2bbe8fb9edb091ae66e57a181b8cf2470d880c9589e1f4072",
+   "head": "271b81bfc9d64eecc0266fe7066b9040525dd710",
+   "patch_sha256": "7be9d0145a8c268a62d9fa90338b7cda95cefc5f8ad2976e4706cb192fb1eaf0",
+   "path": "/home/jnhu/sluice-595-e5/worktree",
+   "reverse_check_rc": 0,
+   "status_lines": 6
+  },
+  "r3_worktree": {
+   "diff_head_sha256": "c1a31a30a9f02db99fac2ab2d0a8af028245a6fff0220314b8119c26e30d3003",
+   "head": "0a22a79195f1b913145fcd443496e7f70b08cdcf",
+   "path": "/home/jnhu/sluice-595-e5/r3/worktree",
+   "status_lines": 15
+  }
+ },
+ "role": "E5 protection and resource measurement",
+ "semanticsReady": false
+}

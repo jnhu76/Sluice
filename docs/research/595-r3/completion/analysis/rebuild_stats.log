@@ -1,0 +1,52 @@
+== paired blocks ==
+AA-W03-D16: n=24 verdict=PASS
+   cpu   est= -0.8155%  CI[ -1.6165, -0.0218] ub1= -0.1440 hw=0.7973pp
+   p50   est= -0.2174%  CI[ -0.6499, +0.2139] ub1= +0.1473 hw=0.4319pp
+   p95   est= -0.5041%  CI[ -1.6478, +0.4270] ub1= +0.3017 hw=1.0374pp
+   p99   est= +0.3129%  CI[ -1.7849, +2.2922] ub1= +2.0136 hw=2.0385pp
+   tput  est= -0.8697%  CI[ -1.6986, -0.0573] ub1= -0.1812 hw=0.8207pp
+AA-W02-D2: n=24 verdict=PASS
+   cpu   est= +0.5835%  CI[ -0.2696, +1.4538] ub1= +1.3140 hw=0.8617pp
+   p50   est= +0.0574%  CI[ -0.4211, +0.5593] ub1= +0.4752 hw=0.4902pp
+   p95   est= -0.0283%  CI[ -0.6494, +0.6194] ub1= +0.5045 hw=0.6344pp
+   p99   est= -0.4066%  CI[ -1.8629, +0.9777] ub1= +0.7609 hw=1.4203pp
+   tput  est= +0.5390%  CI[ -0.3096, +1.3973] ub1= +1.2632 hw=0.8534pp
+LEGACY-W02-D2 (R2-D2): n=24 verdict=FAIL
+   cpu   est= +3.4347%  CI[ +2.6732, +4.1601] ub1= +4.0646 hw=0.7435pp
+   p50   est= +2.2943%  CI[ +1.8071, +2.7857] ub1= +2.7059 hw=0.4893pp
+   p95   est= +5.2327%  CI[ +4.4331, +6.0302] ub1= +5.9060 hw=0.7985pp
+   p99   est= +7.0524%  CI[ +4.8436, +9.5139] ub1= +9.0667 hw=2.3352pp
+   tput  est= +3.2978%  CI[ +2.5739, +3.9759] ub1= +3.8894 hw=0.7010pp
+PROT-W02-D3 (R2): n=24 verdict=PASS
+   cpu   est= -7.3269%  CI[ -8.1037, -6.5412] ub1= -6.6734 hw=0.7813pp
+   p50   est= -3.5086%  CI[ -4.1491, -2.7895] ub1= -2.9165 hw=0.6798pp
+   p95   est=-12.7954%  CI[-14.7251,-10.3595] ub1=-10.8317 hw=2.1828pp
+   p99   est=-11.5114%  CI[-16.2123, -6.3902] ub1= -7.2876 hw=4.9111pp
+   tput  est= -7.9750%  CI[ -8.8969, -7.0577] ub1= -7.2067 hw=0.9196pp
+PROT-W02-D16 (R2): n=24 verdict=PASS
+   cpu   est=-28.1111%  CI[-28.7015,-27.5274] ub1=-27.6128 hw=0.5871pp
+   p50   est=-33.0564%  CI[-33.4909,-32.6806] ub1=-32.7326 hw=0.4052pp
+   p95   est=-32.5900%  CI[-33.4792,-31.6523] ub1=-31.8186 hw=0.9135pp
+   p99   est=-32.3997%  CI[-33.9068,-30.9715] ub1=-31.1791 hw=1.4677pp
+   tput  est=-39.2409%  CI[-40.3952,-38.0980] ub1=-38.2642 hw=1.1486pp
+== mismatches == 0
+== crosscheck vs summary.json ==
+  AA-W03-D16: recorded=PASS self=PASS diffs=0
+  AA-W02-D2: recorded=PASS self=PASS diffs=0
+  LEGACY-W02-D2 (R2-D2): recorded=FAIL self=FAIL diffs=0
+  PROT-W02-D3 (R2): recorded=PASS self=PASS diffs=0
+  PROT-W02-D16 (R2): recorded=PASS self=PASS diffs=0
+== mechanism enter ==
+  d16-A0: total=60004 pure=60000 ops=60000 hist={1: 60000}
+  d16-A1: total=60004 pure=60000 ops=60000 hist={1: 60000}
+  d16-B: total=29229 pure=29225 ops=60000 hist={1: 24826, 2: 1, 3: 2, 6: 1, 8: 4395}
+  d2pos-A0: total=10 pure=6 ops=6 hist={1: 6}
+  d2pos-A1: total=10 pure=6 ops=6 hist={1: 6}
+  d2pos-B: total=7 pure=3 ops=6 hist={2: 3}
+  d2serial-A0: total=60004 pure=60000 ops=60000 hist={1: 60000}
+  d2serial-A1: total=60004 pure=60000 ops=60000 hist={1: 60000}
+  d2serial-B: total=60004 pure=60000 ops=60000 hist={1: 60000}
+== pmu ==
+  d16-A0: cycles=854149299 instr=709777889 csw=20090
+  d16-A1: cycles=852427314 instr=745464639 csw=23125
+  d16-B: cycles=733912392 instr=651993702 csw=14830

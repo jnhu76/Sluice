@@ -1,0 +1,94 @@
+{
+ "phase": "AA-W03-D16",
+ "case": "W03-uring-4k-d16",
+ "pairs": 24,
+ "arms": "AA",
+ "arm_var": "SLUICE_595_R3_ARM",
+ "arm_a": "A0",
+ "arm_b": "A0",
+ "cpu_set": "2",
+ "cpus_monitored": [
+  "2",
+  "12"
+ ],
+ "binary": "/home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+ "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+ "expect_sha": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+ "env_overrides": [],
+ "warmup": 1,
+ "measured": 5,
+ "stats": 0,
+ "expected_ops": 20000,
+ "tmp_dir": "/tmp/sluice-595-r3c",
+ "order_rule": "AA: pair even m1,m2 / odd m2,m1",
+ "lock": {
+  "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+  "inode": 6941075,
+  "dev_major": 0,
+  "dev_minor": 53,
+  "holders": []
+ },
+ "started_utc": "2026-11-05T11:03:34Z",
+ "loadavg_start": [
+  0.09912109375,
+  0.14111328125,
+  0.166015625
+ ],
+ "tmp_start": {
+  "total_bytes": 33626267648,
+  "avail_bytes": 32731856896,
+  "used_pct": 2.66
+ },
+ "cpufreq_start": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 1200000
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 1200000
+  }
+ },
+ "binary_sha_ok_start": true,
+ "host_kernel": "7.2.11-200.fc44.x86_64",
+ "runner_argv": [
+  "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/harness/measure_pairs.py",
+  "--phase",
+  "AA-W03-D16",
+  "--phase-dir",
+  "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16",
+  "--lock-file",
+  "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+  "--cpu",
+  "2",
+  "--cpus",
+  "2,12",
+  "--warmup",
+  "1",
+  "--measured",
+  "5",
+  "--stats",
+  "0",
+  "--expected-ops",
+  "20000",
+  "--tmp-dir",
+  "/tmp/sluice-595-r3c",
+  "--case",
+  "W03-uring-4k-d16",
+  "--pairs",
+  "24",
+  "--binary",
+  "/home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+  "--expect-sha",
+  "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1",
+  "--arms",
+  "AA",
+  "--arm-var",
+  "SLUICE_595_R3_ARM",
+  "--arm-a",
+  "A0",
+  "--arm-b",
+  "A0"
+ ],
+ "runner_sha256": "9c669fb523af96201ff9e5b9aec7e7213a6160153cbd9819cb98fa823f4e9d66"
+}

@@ -1,0 +1,404 @@
+diff --git a/bench/bench_w02_pipeline.cpp b/bench/bench_w02_pipeline.cpp
+index 87dd02ac..95cc4b79 100644
+--- a/bench/bench_w02_pipeline.cpp
++++ b/bench/bench_w02_pipeline.cpp
+@@ -2,6 +2,7 @@
+ // in-flight request owns its own destination buffer.
+ 
+ #include "bench_common.hpp"
++#include "r3_ready_batch.hpp"
+ 
+ #include <sluice/async/async_io_context.hpp>
+ #include <sluice/async/request_scope.hpp>
+@@ -166,6 +167,7 @@ struct PhaseResult {
+     PipelineCounters counters;
+     std::vector<double> latencies;
+     AsyncStats stats_delta;
++    bench::r3::Counters r3;
+ };
+ 
+ AsyncStats stats_diff(const AsyncStats& after, const AsyncStats& before) {
+@@ -226,7 +228,9 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+         ScopeTicket<std::size_t> ticket;
+         std::size_t slot = 0;
+         std::uint64_t offset = 0;
+-        double submitted_ns = 0.0;
++        // Unified latency origin: after the ReadOp is fully built, before any
++        // submission work, identical in meaning across arms.
++        double ready_ns = 0.0;
+     };
+ 
+     PhaseResult result;
+@@ -344,6 +348,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+             op.dst = buffers[slot].data();
+             op.len = params.block_size;
+             op.offset = offset;
++            const double op_ready_ns = instrument ? bench::now_ns() : 0.0;
+             ++result.counters.submits;
+             auto ticket = scope.submit_read(op);
+             if (!ticket.has_value()) {
+@@ -355,9 +360,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+                 result.failure = "submit failed: " + describe(ticket.error());
+                 return result;
+             }
+-            window.push_back(
+-                Inflight{ticket.value(), slot, offset,
+-                         instrument ? bench::now_ns() : 0.0});
++            window.push_back(Inflight{ticket.value(), slot, offset, op_ready_ns});
+             ++submitted;
+         }
+         if (window.empty()) {
+@@ -417,7 +420,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+             return result;
+         }
+         if (instrument) {
+-            result.latencies.push_back(bench::now_ns() - entry.submitted_ns);
++            result.latencies.push_back(bench::now_ns() - entry.ready_ns);
+         }
+         if (verify) {
+             const auto mismatch = bench::verify_pattern(buffers[entry.slot].data(),
+@@ -457,6 +460,231 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+     return result;
+ }
+ 
++// R3 research arm (#595): the same bounded sliding-window caller shape with
++// the submission policy replaced by the ready-batch adapter. A0's per-item
++// scope path is untouched; here submissions bypass RequestScope (the batch
++// entry is context-level) and the oldest request is waited on with the same
++// ctx.wait_one primitive the scope itself parks in.
++PhaseResult run_pipeline_phase_r3(const PipelineParams& params, const std::string& path,
++                                  bool instrument, bool verify, bool stats_enabled,
++                                  bench::r3::Arm arm) {
++    using sluice::async::Request;
++    PhaseResult result;
++
++    auto opened = File::open(path, rw_open_existing());
++    if (!opened.has_value()) {
++        result.ok = false;
++        result.failure = "open failed: " + describe(opened.error());
++        return result;
++    }
++    File file = std::move(opened).value();
++
++    AsyncStats stats;
++    std::string backend_failure;
++    const std::size_t backend_capacity =
++        params.core_capacity != 0
++            ? params.core_capacity
++            : std::max(params.depth,
++                       params.scope_capacity != 0 ? params.scope_capacity : params.depth);
++    auto context = make_context(*params.backend, backend_capacity, params.workers,
++                                backend_failure, stats_enabled ? &stats : nullptr);
++    if (!context.has_value()) {
++        result.ok = false;
++        result.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
++        return result;
++    }
++    AsyncIoContext ctx = std::move(*context);
++
++    bench::r3::Adapter adapter(ctx, arm);
++
++    const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
++    std::vector<std::vector<std::byte>> buffers(
++        params.depth, std::vector<std::byte>(params.block_size));
++    for (std::size_t i = 0; i < params.depth; ++i) {
++        bench::fill_pattern(buffers[i].data(), params.block_size, 0);
++    }
++
++    struct R3Inflight {
++        Request<std::size_t> request;
++        std::size_t slot = 0;
++        std::uint64_t offset = 0;
++        double ready_ns = 0.0;
++    };
++
++    std::vector<ReadOp> ready;
++    std::vector<double> ready_ns;
++    std::vector<std::size_t> slots;
++    std::vector<Request<std::size_t>> accepted;
++    ready.reserve(params.depth);
++    ready_ns.reserve(params.depth);
++    slots.reserve(params.depth);
++    accepted.reserve(params.depth);
++
++    std::deque<R3Inflight> window;
++    std::size_t submitted = 0;
++    std::size_t completed = 0;
++    std::vector<std::size_t> free_slots(params.depth);
++    for (std::size_t i = 0; i < params.depth; ++i) {
++        free_slots[i] = i;
++    }
++
++    const auto fail = [&result](const std::string& what) {
++        result.ok = false;
++        result.failure = what;
++    };
++
++    AsyncStats before = stats;
++    const bench::TimePoint start = bench::now();
++    while (completed < params.request_count && result.ok) {
++        while (window.size() < params.depth && submitted < params.request_count) {
++            const std::size_t want =
++                std::min(params.depth - window.size(), params.request_count - submitted);
++            const std::size_t base = submitted;
++            ready.clear();
++            ready_ns.clear();
++            slots.clear();
++            for (std::size_t k = 0; k < want; ++k) {
++                const std::size_t sequence = base + k;
++                const std::size_t slot = free_slots.back();
++                free_slots.pop_back();
++                ReadOp op;
++                op.file = NativeFileRef(file);
++                op.dst = buffers[slot].data();
++                op.len = params.block_size;
++                op.offset =
++                    static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
++                ready.push_back(op);
++                ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
++                slots.push_back(slot);
++            }
++            auto outcome = adapter.submit(std::span<const ReadOp>(ready.data(), ready.size()),
++                                           accepted);
++            result.r3.entry_calls += outcome.counters.entry_calls;
++            result.r3.group_calls += outcome.counters.group_calls;
++            result.r3.single_calls += outcome.counters.single_calls;
++            result.r3.accepted += outcome.counters.accepted;
++            result.r3.prefix_max =
++                std::max(result.r3.prefix_max, outcome.counters.prefix_max);
++            result.r3.suffix_single_calls += outcome.counters.suffix_single_calls;
++            result.r3.flush_attempts += outcome.counters.flush_attempts;
++            result.r3.ineligible_fallbacks += outcome.counters.ineligible_fallbacks;
++            result.r3.gate_stops += outcome.counters.gate_stops;
++            result.r3.rejected_calls += outcome.counters.rejected_calls;
++            result.r3.untouched += outcome.counters.untouched;
++            if (outcome.error.has_value()) {
++                fail("r3 submit failed: " + describe(*outcome.error));
++                break;
++            }
++            if (accepted.size() != want) {
++                fail("r3 adapter disposed " + std::to_string(accepted.size()) + " of " +
++                     std::to_string(want) + " ready reads");
++                break;
++            }
++            for (std::size_t k = 0; k < want; ++k) {
++                window.push_back(
++                    R3Inflight{std::move(accepted[k]), slots[k],
++                               static_cast<std::uint64_t>((base + k) % blocks) *
++                                   params.block_size,
++                               ready_ns[k]});
++            }
++            result.counters.submits += want;
++            submitted += want;
++        }
++        if (!result.ok) {
++            break;
++        }
++        if (window.empty()) {
++            fail("pipeline stalled with an empty window at operation " +
++                 std::to_string(completed));
++            break;
++        }
++
++        R3Inflight& oldest = window.front();
++        ++result.counters.waits;
++        const auto deadline =
++            std::chrono::steady_clock::now() + kWaitDeadline;
++        for (;;) {
++            if (oldest.request.ready()) {
++                break;
++            }
++            const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
++                deadline - std::chrono::steady_clock::now());
++            if (remaining.count() <= 0) {
++                fail("wait deadline expired before the oldest request completed");
++                break;
++            }
++            auto woke = ctx.wait_one(remaining);
++            if (!woke.has_value()) {
++                fail("wait failed: " + describe(woke.error()));
++                break;
++            }
++            switch (woke.value().kind) {
++            case AsyncIoContext::ProgressWaitOutcome::Kind::progress:
++            case AsyncIoContext::ProgressWaitOutcome::Kind::deadline_expired:
++                break;
++            case AsyncIoContext::ProgressWaitOutcome::Kind::control_interrupted:
++                fail("progress wait interrupted by sticky control");
++                break;
++            case AsyncIoContext::ProgressWaitOutcome::Kind::health_failure:
++                fail("progress wait reported a health failure");
++                break;
++            }
++            if (!result.ok) {
++                break;
++            }
++        }
++        if (!result.ok) {
++            break;
++        }
++
++        const auto observed = oldest.request.take_result();
++        if (observed.readiness != RequestReadiness::ready) {
++            fail("take did not observe a ready result at operation " +
++                 std::to_string(completed));
++            break;
++        }
++        if (!observed.result.has_value()) {
++            fail("operation failed: " + describe(observed.result.error()));
++            break;
++        }
++        if (observed.result.value() != params.block_size) {
++            fail("short read: " + std::to_string(observed.result.value()) + " of " +
++                 std::to_string(params.block_size));
++            break;
++        }
++        if (instrument) {
++            result.latencies.push_back(bench::now_ns() - oldest.ready_ns);
++        }
++        if (verify) {
++            const auto mismatch = bench::verify_pattern(buffers[oldest.slot].data(),
++                                                        params.block_size, oldest.offset);
++            if (!mismatch.ok) {
++                fail("byte mismatch at absolute " +
++                     std::to_string(mismatch.first_bad_position) + " (operation " +
++                     std::to_string(completed) + ", buffer slot " +
++                     std::to_string(oldest.slot) + ", offset " +
++                     std::to_string(oldest.offset) + ")");
++                break;
++            }
++        }
++        result.bytes += observed.result.value();
++        ++result.ops;
++        ++completed;
++        free_slots.push_back(oldest.slot);
++        window.pop_front();
++    }
++    const bench::TimePoint end = bench::now();
++    result.wall_s = bench::seconds_between(start, end);
++
++    const auto outcome = ctx.shutdown(ShutdownPolicy::drain);
++    if (!outcome.has_value()) {
++        result.ok = false;
++        result.failure = "shutdown failed";
++    }
++    result.stats_delta = stats_diff(stats, before);
++    return result;
++}
++
+ bench::CaseMeta make_meta(const PipelineParams& params) {
+     bench::CaseMeta meta;
+     const std::string bound = std::to_string(params.depth);
+@@ -509,9 +737,13 @@ bool uring_constructible(const BackendChoice& choice, std::string& reason) {
+ 
+ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params,
+                        const std::string& path, std::size_t order_index, std::size_t rep,
+-                       bool measured) {
++                       bool measured, bench::r3::Arm arm) {
+     const bench::CaseMeta meta = make_meta(params);
+     bench::Record record = bench::make_record(meta, cfg, rep, measured, order_index);
++    record.r3_arm = static_cast<std::uint64_t>(arm);
++    if (arm != bench::r3::Arm::a0) {
++        record.notes += std::string("; r3_arm=") + bench::r3::arm_name(arm);
++    }
+ 
+     if (!params.backend->available) {
+         record.ok = false;
+@@ -521,9 +753,21 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+         return 1;
+     }
+ 
++    const bench::r3::Arm effective_arm =
++        (params.backend->name == "uring" && !params.saturating) ? arm : bench::r3::Arm::a0;
++    if (effective_arm != arm) {
++        record.ok = false;
++        record.failure = "NOT_RUN_WITH_REASON: r3 arm requires the uring sliding-window phase";
++        bench::emit_record(record);
++        bench::print_record(record);
++        return 1;
++    }
++
+     const double cpu_before = bench::process_cpu_seconds();
+     const PhaseResult phase =
+-        run_pipeline_phase(params, path, false, false, cfg.stats_enabled);
++        arm == bench::r3::Arm::a0
++            ? run_pipeline_phase(params, path, false, false, cfg.stats_enabled)
++            : run_pipeline_phase_r3(params, path, false, false, cfg.stats_enabled, arm);
+     const double cpu_after = bench::process_cpu_seconds();
+ 
+     int failed = 0;
+@@ -549,6 +793,16 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     record.waits = phase.counters.waits;
+     record.extra_a = phase.counters.accepted_at_saturation;
+     record.extra_b = phase.counters.rejected_at_saturation;
++    record.r3_entry_calls = phase.r3.entry_calls;
++    record.r3_group_calls = phase.r3.group_calls;
++    record.r3_single_calls = phase.r3.single_calls;
++    record.r3_accepted = phase.r3.accepted;
++    record.r3_prefix_max = phase.r3.prefix_max;
++    record.r3_suffix_single_calls = phase.r3.suffix_single_calls;
++    record.r3_flush_attempts = phase.r3.flush_attempts;
++    record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
++    record.r3_gate_stops = phase.r3.gate_stops;
++    record.r3_untouched = phase.r3.untouched;
+ 
+     std::optional<std::string> stats_failure =
+         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+@@ -578,7 +832,9 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     fill_stats(record, phase.stats_delta);
+ 
+     const PhaseResult oracle =
+-        run_pipeline_phase(params, path, false, true, cfg.stats_enabled);
++        arm == bench::r3::Arm::a0
++            ? run_pipeline_phase(params, path, false, true, cfg.stats_enabled)
++            : run_pipeline_phase_r3(params, path, false, true, cfg.stats_enabled, arm);
+     if (!oracle.ok) {
+         record.ok = false;
+         record.failure = "correctness oracle: " + oracle.failure;
+@@ -586,7 +842,9 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     }
+ 
+     const PhaseResult instrumented =
+-        run_pipeline_phase(params, path, true, false, cfg.stats_enabled);
++        arm == bench::r3::Arm::a0
++            ? run_pipeline_phase(params, path, true, false, cfg.stats_enabled)
++            : run_pipeline_phase_r3(params, path, true, false, cfg.stats_enabled, arm);
+     if (!instrumented.ok) {
+         record.ok = false;
+         record.failure = "latency pass: " + instrumented.failure;
+@@ -604,10 +862,12 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+ 
+ int main() {
+     const bench::EnvConfig cfg = bench::env_config();
++    const bench::r3::Arm arm = bench::r3::arm_from_env();
+     std::printf("========================================================\n");
+     std::printf("G0 W-02 bounded RequestScope pipeline benchmark\n");
+     std::printf("warmup=%zu measured_repetitions=%zu stats_wiring=%s\n", cfg.warmup,
+                 cfg.measured, cfg.stats_enabled ? "on" : "off");
++    std::printf("research arm=%s (SLUICE_595_R3_ARM)\n", bench::r3::arm_name(arm));
+     std::printf("========================================================\n");
+ 
+     bench::ensure_dir(cfg.tmp_dir);
+@@ -668,6 +928,13 @@ int main() {
+     add_tp(4096, 16, 16, 4, true);
+     add_uring(4096, 16, 16, true);
+ 
++    // Opt-in (#595 r3): shallow-depth control D2 absent from the frozen G0
++    // list; a default rebuild reproduces the frozen case list exactly.
++    if (std::getenv("SLUICE_BENCH_595_DEPTHS") != nullptr) {
++        add_tp(4096, 20000, 2, 2, false);
++        add_uring(4096, 20000, 2, false);
++    }
++
+     // Diagnostics vary one capacity at a time while the pipeline depth is fixed.
+     {
+         PipelineParams p;
+@@ -742,7 +1009,7 @@ int main() {
+                 continue;
+             }
+             failed += run_one_repetition(cfg, params, path, position,
+-                                        measured ? round - cfg.warmup : round, measured);
++                                        measured ? round - cfg.warmup : round, measured, arm);
+         }
+     }
+ 

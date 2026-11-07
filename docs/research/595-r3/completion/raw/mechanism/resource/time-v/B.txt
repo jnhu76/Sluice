@@ -1,0 +1,23 @@
+	Command being timed: "/usr/sbin/taskset -c 2 /usr/bin/env SLUICE_595_R3_ARM=B SLUICE_BENCH_CASE_FILTER==W03-uring-4k-d16 SLUICE_BENCH_JSONL=/dev/null SLUICE_BENCH_MEASURED=1 SLUICE_BENCH_STATS=1 SLUICE_BENCH_TMP_DIR=/tmp/sluice-595-r3c-mech SLUICE_BENCH_WARMUP=0 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop"
+	User time (seconds): 0.06
+	System time (seconds): 0.14
+	Percent of CPU this job got: 99%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.20
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 5252
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 0
+	Minor (reclaiming a frame) page faults: 946
+	Voluntary context switches: 9406
+	Involuntary context switches: 5218
+	Swaps: 0
+	File system inputs: 0
+	File system outputs: 0
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

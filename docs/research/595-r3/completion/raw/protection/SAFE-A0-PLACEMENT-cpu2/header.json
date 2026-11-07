@@ -1,0 +1,18 @@
+{
+ "job": {
+  "label": "SAFE-A0-PLACEMENT-cpu2",
+  "binary": "/home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+  "case": "W03-uring-4k-d16",
+  "env": {
+   "SLUICE_595_R3_ARM": "A0"
+  },
+  "cpu": "2",
+  "warmup": 1,
+  "measured": 5,
+  "expected_ops": 20000,
+  "reps": 8,
+  "sampler": true
+ },
+ "runner_sha256": "2144ce784bc4a2d67d2ec0b8c0d55aff746283711e1bbaa3dc9d49fc9b0550dd",
+ "started_utc": "2026-11-05T11:25:33Z"
+}

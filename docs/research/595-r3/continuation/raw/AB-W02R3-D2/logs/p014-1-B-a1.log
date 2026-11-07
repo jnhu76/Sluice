@@ -1,0 +1,20 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=1 measured_repetitions=5 stats_wiring=off
+research arm=B (SLUICE_595_R3_ARM)
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-uring-4k-d2 rep=0 warmup] ops=20000 wall=0.1020s 196133 ops/s 766.1 MiB/s cpu=0.102s util=99.8% | lat p50=9818 p95=13889 p99=14924 max=92611 ns (n=20000)
+      r3 arm=2 entries=19999 groups=1 singles=19998 accepted=20000 prefix_max=2 suffix_singles=0 flushes=19999 ineligible=0 gate_stops=0 untouched=0
+  [W02-uring-4k-d2 rep=0] ops=20000 wall=0.0979s 204329 ops/s 798.2 MiB/s cpu=0.098s util=99.9% | lat p50=9770 p95=13936 p99=18076 max=46465 ns (n=20000)
+      r3 arm=2 entries=19999 groups=1 singles=19998 accepted=20000 prefix_max=2 suffix_singles=0 flushes=19999 ineligible=0 gate_stops=0 untouched=0
+  [W02-uring-4k-d2 rep=1] ops=20000 wall=0.0992s 201624 ops/s 787.6 MiB/s cpu=0.099s util=99.9% | lat p50=9828 p95=13925 p99=15012 max=33565 ns (n=20000)
+      r3 arm=2 entries=19999 groups=1 singles=19998 accepted=20000 prefix_max=2 suffix_singles=0 flushes=19999 ineligible=0 gate_stops=0 untouched=0
+  [W02-uring-4k-d2 rep=2] ops=20000 wall=0.0983s 203392 ops/s 794.5 MiB/s cpu=0.098s util=99.9% | lat p50=9791 p95=13926 p99=17000 max=36527 ns (n=20000)
+      r3 arm=2 entries=19999 groups=1 singles=19998 accepted=20000 prefix_max=2 suffix_singles=0 flushes=19999 ineligible=0 gate_stops=0 untouched=0
+  [W02-uring-4k-d2 rep=3] ops=20000 wall=0.0977s 204768 ops/s 799.9 MiB/s cpu=0.098s util=99.9% | lat p50=9661 p95=13719 p99=14364 max=37948 ns (n=20000)
+      r3 arm=2 entries=19999 groups=1 singles=19998 accepted=20000 prefix_max=2 suffix_singles=0 flushes=19999 ineligible=0 gate_stops=0 untouched=0
+  [W02-uring-4k-d2 rep=4] ops=20000 wall=0.0997s 200673 ops/s 783.9 MiB/s cpu=0.100s util=99.8% | lat p50=9791 p95=13912 p99=15079 max=48032 ns (n=20000)
+      r3 arm=2 entries=19999 groups=1 singles=19998 accepted=20000 prefix_max=2 suffix_singles=0 flushes=19999 ineligible=0 gate_stops=0 untouched=0
+
+=== W-02 complete, failing repetitions=0 ===

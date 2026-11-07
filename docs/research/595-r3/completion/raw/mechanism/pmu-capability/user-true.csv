@@ -1,0 +1,8 @@
+# started on Thu Nov  5 19:53:16 2026
+
+218549,,cycles:u,833242,100.00,,
+147701,,instructions:u,833242,100.00,,
+4237,,cache-references:u,833242,100.00,,
+432,,cache-misses:u,833242,100.00,,
+2550,,branch-misses:u,833242,100.00,,
+0,,context-switches:u,833242,100.00,,

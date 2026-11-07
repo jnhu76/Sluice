@@ -1,0 +1,2 @@
+{"event": "acquired", "start_utc": "2026-11-05T11:03:31Z", "wait_s": 0, "acquired_utc": "2026-11-05T11:03:31Z", "meta": {"lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock", "inode": 6941075, "mtime": 1793876611.1476564, "size": 0}, "holders": [], "fuser": " 51956 51965"}
+{"event": "released", "utc": "2026-11-05T11:08:21Z", "meta": {"lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock", "inode": 6941075, "mtime": 1793876611.1476564}}

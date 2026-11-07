@@ -1,0 +1,7 @@
+{
+ "kind": "baseline-no-bench",
+ "seconds": 8,
+ "start_utc": "2026-11-05T11:58:05Z",
+ "end_utc": "2026-11-05T11:58:44Z",
+ "bpftrace_rc": 0
+}

@@ -1,0 +1,7 @@
+{
+ "phase": "PROT-THREADPOOL",
+ "verdict": "BLOCKED_SEMANTICS_NOT_READY",
+ "comparison": "B - A0 (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "semanticsReady": false,
+ "source": "SUMMARY.json"
+}

@@ -1,0 +1,6 @@
+metric,est_pct,ci95_lo_pct,ci95_hi_pct,threshold_pct,bound_check
+CPU / op,+3.435,+2.673,+4.160,5.0,pass
+throughput,-3.298,-3.976,-2.574,-3.0,FAIL
+p50,+2.294,+1.807,+2.786,5.0,pass
+p95,+5.233,+4.433,+6.030,5.0,FAIL
+p99,+7.052,+4.844,+9.514,5.0,FAIL

@@ -1,0 +1,20 @@
+{
+ "job": {
+  "label": "DIAG-R2-D3-A",
+  "binary": "/home/jnhu/sluice-595-e5/worktree/build/linux/x86_64/release/bench_w02_pipeline",
+  "case": "W02-uring-4k-d3",
+  "env": {
+   "SLUICE_BENCH_595_DEPTHS": "1",
+   "SLUICE_595_ARM": "A"
+  },
+  "cpu": "2",
+  "warmup": 0,
+  "measured": 1,
+  "expected_ops": 20000,
+  "reps": 1,
+  "strace_enter": true,
+  "sampler": false
+ },
+ "runner_sha256": "2144ce784bc4a2d67d2ec0b8c0d55aff746283711e1bbaa3dc9d49fc9b0550dd",
+ "started_utc": "2026-11-05T11:29:47Z"
+}

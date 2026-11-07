@@ -1,0 +1,86 @@
+{
+ "note": "positional strace parse: io_uring_enter(fd,to_submit,min_complete,flags,...); pure = to_submit>0 and min_complete==0; per run = 3 phases x 20000 = 60000 data SQE",
+ "arms": {
+  "A0": [
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   }
+  ],
+  "A1": [
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 60000,
+    "to_submit_hist": {
+     "1": 60000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   }
+  ],
+  "B": [
+   {
+    "pure_submit_enters": 33750,
+    "to_submit_hist": {
+     "8": 3750,
+     "1": 30000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 33750,
+    "to_submit_hist": {
+     "8": 3750,
+     "1": 30000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   },
+   {
+    "pure_submit_enters": 33750,
+    "to_submit_hist": {
+     "8": 3750,
+     "1": 30000
+    },
+    "wait_or_getevents_enters": 4,
+    "sum_to_submit": 60000
+   }
+  ]
+ }
+}

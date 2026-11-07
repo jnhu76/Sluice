@@ -1,0 +1,12 @@
+# worktree binaries 2026-11-05T08:39:05Z
+00a5ca6257e5592013ea47a464abb149003ede3f6f0452a34c7323eea450983f  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w02_pipeline
+af6e8afd22b4f5b2e797f5b5b1501b8efa02da5e4f70d2a3a702f524aacdda21  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop
+e16d1379fee2093cc06ff99de7e01cee4ca8fac98f1ed5bfc2284e0c9f762a54  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_research_test
+88c7418867d49ecbb54a1190d2dd89ac2e155ce85c31bbea485a139413a3b55c  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_fault_test
+0ecb27e2ca8b7a6cb0b2b1d76ca2035c7c5ea9f574d3e238660e2bbd60a0104e  /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_deterministic_test
+--- full listing of these names ---
+-rwxr-xr-x. 1 jnhu jnhu 229136 Nov  5 13:37 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w02_pipeline
+-rwxr-xr-x. 1 jnhu jnhu 216856 Nov  5 13:37 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop
+-rwxr-xr-x. 1 jnhu jnhu 187920 Nov  5 14:25 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_deterministic_test
+-rwxr-xr-x. 1 jnhu jnhu 114120 Nov  5 14:25 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_fault_test
+-rwxr-xr-x. 1 jnhu jnhu 122312 Nov  5 14:25 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/uring_ready_batch_research_test

@@ -1,0 +1,13 @@
+# measurement lock 2026-11-05T08:39:05Z
+exists=yes
+-rw-r--r--. 1 jnhu jnhu 0 Nov  5 11:49 /home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock
+inode=6941075 dev=35 size=0 mtime=2026-11-05 11:49:21.922024551 +0800
+--- pgrep bench/perf/bpftrace (comm) ---
+NO_BENCH_PERF_BPFTRACE_PROC
+--- /proc/locks entry for inode ---
+NO_FLOCK_HOLDER_FOR_INODE
+--- lslocks ---
+NO_LSLOCKS_MATCH
+--- nonblocking flock probe ---
+ACQUIRED_AND_RELEASED
+flock_probe_exit=0

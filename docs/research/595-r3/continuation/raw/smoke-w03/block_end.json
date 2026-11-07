@@ -1,0 +1,38 @@
+{
+ "phase": "SMOKE-W03",
+ "ended_utc": "2026-11-05T14:37:46Z",
+ "valid_pairs": 1,
+ "expected_pairs": 1,
+ "loadavg_end": [
+  0.283203125,
+  0.2021484375,
+  0.2197265625
+ ],
+ "tmp_end": {
+  "total_bytes": 33626267648,
+  "avail_bytes": 32387219456,
+  "used_pct": 3.68
+ },
+ "cpufreq_end": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 3500000
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 1200000
+  }
+ },
+ "binary_sha256_end": "bb142d69788a5931406190022d9774b3c99e1db8f74a523748730271522e73d3",
+ "fixture_path": "/tmp/sluice-595-r3flip-bench/external.bin",
+ "fixture_sha256_start": "1cdf83d6f6d97d740b0f6e0a10077f2ccde01172631885147705335f532744e6",
+ "fixture_sha256_end": "1cdf83d6f6d97d740b0f6e0a10077f2ccde01172631885147705335f532744e6",
+ "fixture_unchanged": true,
+ "lock_end": {
+  "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+  "inode": 6941075,
+  "dev_major": 0,
+  "dev_minor": 53,
+  "holders": []
+ }
+}

@@ -1,0 +1,247 @@
+=== session lock acquired 2026-11-05T14:37:45Z ===
+HEAD 0a22a79195f1b913145fcd443496e7f70b08cdcf
+STATUS_LINES 16
+DIFF_SHA 73fa116ff668ea58143ab6666d24684f0eea7f39fcb9e6c03572ae00a7df5560  -
+bb142d69788a5931406190022d9774b3c99e1db8f74a523748730271522e73d3  /tmp/r3c2-build/linux/x86_64/release/bench_w03_external_loop
+5104ce250e073f3403eaec3cab5d441d68965817fa802e37450d62cdcd3b12ab  /tmp/r3c2-build/linux/x86_64/release/bench_w02_pipeline
+[SMOKE-W03] pair=0 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3678.49005 p99=55735.0 tput=272331.5143812213
+[SMOKE-W03] pair=0 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3077.0088 p99=51756.0 tput=325431.90101533127
+[SMOKE-W03] done: valid pairs 1/1
+SMOKE-W03 rc=0
+[SMOKE-W02] pair=0 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4943.65165 p99=14151.0 tput=201964.33542095454
+[SMOKE-W02] pair=0 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4856.96065 p99=14451.0 tput=205694.46405541178
+[SMOKE-W02] done: valid pairs 1/1
+SMOKE-W02 rc=0
+=== block AA-W03-D16 start 2026-11-05T14:37:48Z ===
+[AA-W03-D16] pair=0 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3154.8318 p99=52339.6 tput=317255.7408869827
+[AA-W03-D16] pair=0 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3105.306 p99=50685.6 tput=322370.2434625184
+[AA-W03-D16] pair=1 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3196.25619 p99=52723.4 tput=313051.2950700419
+[AA-W03-D16] pair=1 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3145.5076800000006 p99=50899.2 tput=318175.3767213165
+[AA-W03-D16] pair=2 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3221.9462899999994 p99=53007.6 tput=310636.9857417126
+[AA-W03-D16] pair=2 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3195.54993 p99=56270.2 tput=313043.15040941705
+[AA-W03-D16] pair=3 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3219.6269899999993 p99=57092.4 tput=310768.9431788697
+[AA-W03-D16] pair=3 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3175.3694099999993 p99=58559.4 tput=315062.9018200009
+[AA-W03-D16] pair=4 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3331.7704200000007 p99=61267.4 tput=300177.21592314175
+[AA-W03-D16] pair=4 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3125.08108 p99=52717.8 tput=320295.5010419517
+[AA-W03-D16] pair=5 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3221.51363 p99=52177.8 tput=310637.0687277246
+[AA-W03-D16] pair=5 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3139.47675 p99=50107.2 tput=318775.34774055093
+[AA-W03-D16] pair=6 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3185.99732 p99=51866.8 tput=314143.18581696035
+[AA-W03-D16] pair=6 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3189.41528 p99=56082.4 tput=313668.9264630805
+[AA-W03-D16] pair=7 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3256.65952 p99=59176.6 tput=307186.94358172955
+[AA-W03-D16] pair=7 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3140.93575 p99=51384.4 tput=318688.48927738954
+[AA-W03-D16] pair=8 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3192.607 p99=51690.8 tput=313396.81141873065
+[AA-W03-D16] pair=8 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3137.20341 p99=49295.4 tput=319039.7597462156
+[AA-W03-D16] pair=9 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3437.00974 p99=53276.8 tput=291057.84157558694
+[AA-W03-D16] pair=9 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3130.8586 p99=50418.0 tput=319726.7446424564
+[AA-W03-D16] pair=10 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3148.69701 p99=51654.0 tput=317789.55349086836
+[AA-W03-D16] pair=10 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3156.66296 p99=49496.8 tput=317002.85516863584
+[AA-W03-D16] pair=11 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3155.2025 p99=53700.0 tput=317206.5441689431
+[AA-W03-D16] pair=11 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3170.58024 p99=52168.8 tput=315580.95473103866
+[AA-W03-D16] pair=12 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3302.36662 p99=59116.8 tput=302853.37150198413
+[AA-W03-D16] pair=12 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3224.53985 p99=51962.6 tput=310275.08138561924
+[AA-W03-D16] pair=13 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3196.14832 p99=55880.2 tput=313106.24609826563
+[AA-W03-D16] pair=13 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3128.6333499999996 p99=51357.2 tput=319904.8362448571
+[AA-W03-D16] pair=14 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3221.50251 p99=58737.2 tput=310721.18916230596
+[AA-W03-D16] pair=14 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3167.58527 p99=56079.6 tput=315990.59404702287
+[AA-W03-D16] pair=15 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3269.45721 p99=56380.4 tput=305983.54025801725
+[AA-W03-D16] pair=15 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3147.46281 p99=51799.0 tput=317935.95065181307
+[AA-W03-D16] pair=16 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3244.8627 p99=55374.4 tput=308363.44887865946
+[AA-W03-D16] pair=16 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3158.87444 p99=55379.0 tput=316816.39066071535
+[AA-W03-D16] pair=17 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3128.93356 p99=55637.8 tput=319855.6248474788
+[AA-W03-D16] pair=17 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3157.0445999999993 p99=57439.8 tput=317024.2058791714
+[AA-W03-D16] pair=18 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3237.55787 p99=56477.4 tput=309033.09388738446
+[AA-W03-D16] pair=18 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3151.54307 p99=53339.8 tput=317533.35013084754
+[AA-W03-D16] pair=19 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3227.17367 p99=54890.8 tput=310077.8866658999
+[AA-W03-D16] pair=19 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3206.583 p99=56369.6 tput=312099.78177078173
+[AA-W03-D16] pair=20 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3203.61297 p99=55225.8 tput=312382.78714488976
+[AA-W03-D16] pair=20 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3244.845 p99=56446.6 tput=308310.71447746153
+[AA-W03-D16] pair=21 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3325.34055 p99=55968.6 tput=300936.1684834715
+[AA-W03-D16] pair=21 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3154.90471 p99=55531.0 tput=317157.031769585
+[AA-W03-D16] pair=22 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=3193.94521 p99=56968.8 tput=313225.9785329135
+[AA-W03-D16] pair=22 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=3164.05596 p99=55101.0 tput=316296.5840066979
+[AA-W03-D16] pair=23 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=3189.23517 p99=54866.4 tput=313802.4882202625
+[AA-W03-D16] pair=23 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=3175.63389 p99=56327.6 tput=315212.72365489334
+[AA-W03-D16] done: valid pairs 24/24
+=== block AA-W03-D16 rc=0 end 2026-11-05T14:38:59Z ===
+AA-W03-D16 analysis rc=0
+=== block AA-W02-D2 start 2026-11-05T14:39:00Z ===
+[AA-W02-D2] pair=0 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4826.8593 p99=16498.6 tput=206963.0983533161
+[AA-W02-D2] pair=0 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4846.65421 p99=15786.4 tput=206123.6882540981
+[AA-W02-D2] pair=1 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4806.11405 p99=16457.6 tput=207895.0420757944
+[AA-W02-D2] pair=1 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4869.75632 p99=15978.8 tput=205165.2253518935
+[AA-W02-D2] pair=2 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4860.28109 p99=16889.2 tput=205555.47125497286
+[AA-W02-D2] pair=2 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4844.44562 p99=16989.2 tput=206201.9011769924
+[AA-W02-D2] pair=3 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4849.372190000001 p99=17033.0 tput=205995.48584376258
+[AA-W02-D2] pair=3 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4852.88527 p99=15583.6 tput=205837.10007850648
+[AA-W02-D2] pair=4 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4840.58642 p99=16733.0 tput=206366.1599516205
+[AA-W02-D2] pair=4 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4875.43346 p99=18094.4 tput=204924.28843673124
+[AA-W02-D2] pair=5 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4772.904699999999 p99=15218.6 tput=209314.02886420363
+[AA-W02-D2] pair=5 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=5110.94586 p99=19751.8 tput=195435.20544423384
+[AA-W02-D2] pair=6 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4836.00677 p99=16266.8 tput=206574.42697090586
+[AA-W02-D2] pair=6 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4866.26861 p99=16659.0 tput=205291.37745277287
+[AA-W02-D2] pair=7 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4873.00016 p99=16879.2 tput=205013.84441065128
+[AA-W02-D2] pair=7 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4885.50899 p99=16939.8 tput=204459.9983980559
+[AA-W02-D2] pair=8 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4835.63346 p99=16411.6 tput=206593.54453432708
+[AA-W02-D2] pair=8 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4957.65501 p99=18935.0 tput=201471.8233938613
+[AA-W02-D2] pair=9 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4735.37646 p99=15399.0 tput=210956.0786216682
+[AA-W02-D2] pair=9 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4822.73577 p99=15852.8 tput=207110.1678651314
+[AA-W02-D2] pair=10 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4829.72444 p99=16107.4 tput=206838.8536692882
+[AA-W02-D2] pair=10 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4902.12689 p99=16204.4 tput=203788.505761743
+[AA-W02-D2] pair=11 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4865.00457 p99=16454.2 tput=205328.82423569701
+[AA-W02-D2] pair=11 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4851.15605 p99=16332.8 tput=205927.83537423742
+[AA-W02-D2] pair=12 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4880.82111 p99=16603.6 tput=204672.6344922404
+[AA-W02-D2] pair=12 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4819.9977 p99=17459.2 tput=207211.92699087504
+[AA-W02-D2] pair=13 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4867.42322 p99=16206.0 tput=205243.18130584352
+[AA-W02-D2] pair=13 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4767.43928 p99=15172.2 tput=209549.13172028546
+[AA-W02-D2] pair=14 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4814.50745 p99=16306.6 tput=207510.51609342828
+[AA-W02-D2] pair=14 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4792.6093 p99=15052.6 tput=208430.98629002878
+[AA-W02-D2] pair=15 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4821.52778 p99=16988.0 tput=207165.31671911135
+[AA-W02-D2] pair=15 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4811.47585 p99=14638.0 tput=207604.76387745203
+[AA-W02-D2] pair=16 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4708.06023 p99=15756.4 tput=212169.34897451996
+[AA-W02-D2] pair=16 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4724.71203 p99=14779.4 tput=211424.7396269975
+[AA-W02-D2] pair=17 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4735.89986 p99=15536.6 tput=210942.79013205832
+[AA-W02-D2] pair=17 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4735.09642 p99=14596.6 tput=210982.29828346934
+[AA-W02-D2] pair=18 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4827.58209 p99=14810.4 tput=206927.8611939164
+[AA-W02-D2] pair=18 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4769.11296 p99=14556.6 tput=209464.25089758678
+[AA-W02-D2] pair=19 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4789.19745 p99=14994.0 tput=208605.89475324863
+[AA-W02-D2] pair=19 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4958.30937 p99=17298.0 tput=201433.6439334706
+[AA-W02-D2] pair=20 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4811.61695 p99=14346.4 tput=207646.41131850355
+[AA-W02-D2] pair=20 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4743.58254 p99=14687.8 tput=210614.84629906653
+[AA-W02-D2] pair=21 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4890.42896 p99=16454.2 tput=204289.44880482001
+[AA-W02-D2] pair=21 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4726.18903 p99=14483.8 tput=211386.94726102403
+[AA-W02-D2] pair=22 pos=0 m1='A0' attempt=1 exit=0 valid=True cpu/op=4777.09719 p99=16393.2 tput=209103.7027397821
+[AA-W02-D2] pair=22 pos=1 m2='A0' attempt=1 exit=0 valid=True cpu/op=4949.08165 p99=16461.2 tput=201795.2773350793
+[AA-W02-D2] pair=23 pos=0 m2='A0' attempt=1 exit=0 valid=True cpu/op=4811.7728 p99=15219.8 tput=207627.15703749633
+[AA-W02-D2] pair=23 pos=1 m1='A0' attempt=1 exit=0 valid=True cpu/op=4960.11127 p99=15525.4 tput=201392.76185351226
+[AA-W02-D2] done: valid pairs 24/24
+=== block AA-W02-D2 rc=0 end 2026-11-05T14:40:39Z ===
+AA-W02-D2 analysis rc=0
+=== block TRIPLET-W03-D16 start 2026-11-05T14:40:39Z ===
+[TRIPLET-W03-D16] pair=0 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2721.48234 p99=75025.2 tput=367977.5622001673
+[TRIPLET-W03-D16] pair=0 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3166.43206 p99=52329.6 tput=316056.48185968696
+[TRIPLET-W03-D16] pair=0 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3367.56841 p99=86626.4 tput=297067.07753816113
+[TRIPLET-W03-D16] pair=1 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3173.73522 p99=55829.8 tput=315321.4003081579
+[TRIPLET-W03-D16] pair=1 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2696.49449 p99=74132.8 tput=371227.3707544159
+[TRIPLET-W03-D16] pair=1 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3395.19449 p99=87114.4 tput=294773.80922324554
+[TRIPLET-W03-D16] pair=2 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3350.51755 p99=85206.0 tput=298662.2053701077
+[TRIPLET-W03-D16] pair=2 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3127.66241 p99=52514.8 tput=320042.5323723822
+[TRIPLET-W03-D16] pair=2 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2769.64021 p99=74972.0 tput=361445.9433880809
+[TRIPLET-W03-D16] pair=3 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3119.02913 p99=49885.8 tput=320937.47119084734
+[TRIPLET-W03-D16] pair=3 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3400.8523 p99=91743.6 tput=294229.74166734604
+[TRIPLET-W03-D16] pair=3 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2717.58086 p99=71672.4 tput=368261.74453911104
+[TRIPLET-W03-D16] pair=4 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3386.67234 p99=85169.6 tput=295424.257283993
+[TRIPLET-W03-D16] pair=4 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2734.59214 p99=74642.2 tput=366032.09025297174
+[TRIPLET-W03-D16] pair=4 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3208.0552900000007 p99=57332.0 tput=311892.83821185294
+[TRIPLET-W03-D16] pair=5 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2756.60344 p99=71734.4 tput=363132.9161613975
+[TRIPLET-W03-D16] pair=5 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3386.01323 p99=86438.0 tput=295487.74726370367
+[TRIPLET-W03-D16] pair=5 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3163.45932 p99=52370.8 tput=316286.02076325373
+[TRIPLET-W03-D16] pair=6 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2711.90038 p99=71850.2 tput=369204.04249333247
+[TRIPLET-W03-D16] pair=6 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3202.45422 p99=55629.4 tput=312441.42699623277
+[TRIPLET-W03-D16] pair=6 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3421.04833 p99=93356.8 tput=292471.7510967829
+[TRIPLET-W03-D16] pair=7 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3166.16103 p99=55172.0 tput=316101.9720938225
+[TRIPLET-W03-D16] pair=7 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2727.54888 p99=73668.0 tput=367068.72854653053
+[TRIPLET-W03-D16] pair=7 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3374.77195 p99=91976.6 tput=296460.0995048758
+[TRIPLET-W03-D16] pair=8 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3417.41784 p99=93383.2 tput=292778.73802860314
+[TRIPLET-W03-D16] pair=8 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3181.12484 p99=55502.0 tput=314528.8516482115
+[TRIPLET-W03-D16] pair=8 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2757.74275 p99=75562.6 tput=362924.8053446455
+[TRIPLET-W03-D16] pair=9 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3160.88144 p99=55971.2 tput=316580.7085144005
+[TRIPLET-W03-D16] pair=9 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3384.44329 p99=90265.4 tput=295648.2764460865
+[TRIPLET-W03-D16] pair=9 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2732.00241 p99=73239.0 tput=366415.4247702873
+[TRIPLET-W03-D16] pair=10 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3420.22298 p99=93154.0 tput=292473.258314508
+[TRIPLET-W03-D16] pair=10 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2732.60815 p99=73537.6 tput=366201.08824636554
+[TRIPLET-W03-D16] pair=10 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3198.3468400000006 p99=51906.6 tput=312860.3789821061
+[TRIPLET-W03-D16] pair=11 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2763.97528 p99=72267.6 tput=362235.04091535346
+[TRIPLET-W03-D16] pair=11 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3350.33191 p99=85510.6 tput=298704.6318182689
+[TRIPLET-W03-D16] pair=11 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3121.78663 p99=52446.6 tput=320627.3060417615
+[TRIPLET-W03-D16] pair=12 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2704.37165 p99=75364.6 tput=370126.6789649399
+[TRIPLET-W03-D16] pair=12 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3268.90811 p99=61808.0 tput=306013.66549313284
+[TRIPLET-W03-D16] pair=12 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3325.54895 p99=87316.4 tput=300961.59426386945
+[TRIPLET-W03-D16] pair=13 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3168.04296 p99=55034.0 tput=315888.27788479533
+[TRIPLET-W03-D16] pair=13 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2705.42691 p99=74470.6 tput=370032.79493351985
+[TRIPLET-W03-D16] pair=13 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3409.02653 p99=85155.2 tput=293544.3316682022
+[TRIPLET-W03-D16] pair=14 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3437.95864 p99=87498.2 tput=290944.89130767283
+[TRIPLET-W03-D16] pair=14 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3139.09262 p99=49669.8 tput=318797.9176183781
+[TRIPLET-W03-D16] pair=14 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2689.05359 p99=70769.0 tput=372306.03217791143
+[TRIPLET-W03-D16] pair=15 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3186.1693 p99=54581.4 tput=314060.5985201062
+[TRIPLET-W03-D16] pair=15 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3426.08227 p99=85593.0 tput=291971.76536094333
+[TRIPLET-W03-D16] pair=15 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2695.85968 p99=74666.0 tput=371300.2519710344
+[TRIPLET-W03-D16] pair=16 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3341.29769 p99=86271.8 tput=299468.6766844529
+[TRIPLET-W03-D16] pair=16 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2658.5368 p99=73732.2 tput=376533.3482822093
+[TRIPLET-W03-D16] pair=16 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3202.59977 p99=53988.2 tput=312462.42932220927
+[TRIPLET-W03-D16] pair=17 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2690.52717 p99=71507.0 tput=372137.8625795946
+[TRIPLET-W03-D16] pair=17 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3377.20723 p99=87270.4 tput=296302.201269943
+[TRIPLET-W03-D16] pair=17 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3129.41682 p99=51467.0 tput=319794.0066094066
+[TRIPLET-W03-D16] pair=18 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2725.58241 p99=73431.6 tput=367421.43369614397
+[TRIPLET-W03-D16] pair=18 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3137.97277 p99=50840.0 tput=318879.37318825495
+[TRIPLET-W03-D16] pair=18 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3383.27166 p99=90970.8 tput=295706.9956243763
+[TRIPLET-W03-D16] pair=19 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3148.78692 p99=50007.2 tput=317872.9932987859
+[TRIPLET-W03-D16] pair=19 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2738.2838600000005 p99=73967.6 tput=365589.9994873697
+[TRIPLET-W03-D16] pair=19 pos=2 A1='A1' attempt=1 exit=0 valid=True cpu/op=3362.25562 p99=87850.6 tput=297602.0798718926
+[TRIPLET-W03-D16] pair=20 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3352.79792 p99=85059.4 tput=298403.37246420095
+[TRIPLET-W03-D16] pair=20 pos=1 A0='A0' attempt=1 exit=0 valid=True cpu/op=3131.38546 p99=50573.0 tput=319600.3522877979
+[TRIPLET-W03-D16] pair=20 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2693.68879 p99=74850.6 tput=371678.93489008327
+[TRIPLET-W03-D16] pair=21 pos=0 A0='A0' attempt=1 exit=0 valid=True cpu/op=3148.3564 p99=53315.8 tput=317840.80115181184
+[TRIPLET-W03-D16] pair=21 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3350.21232 p99=85138.2 tput=298622.8728499254
+[TRIPLET-W03-D16] pair=21 pos=2 B='B' attempt=1 exit=0 valid=True cpu/op=2699.68341 p99=70430.2 tput=370877.65545387927
+[TRIPLET-W03-D16] pair=22 pos=0 A1='A1' attempt=1 exit=0 valid=True cpu/op=3405.63736 p99=85075.2 tput=293767.68766067165
+[TRIPLET-W03-D16] pair=22 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=2721.06909 p99=73789.0 tput=367900.9578246252
+[TRIPLET-W03-D16] pair=22 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3214.63736 p99=50674.6 tput=311280.44892044563
+[TRIPLET-W03-D16] pair=23 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=2767.16144 p99=72997.8 tput=361758.50810791255
+[TRIPLET-W03-D16] pair=23 pos=1 A1='A1' attempt=1 exit=0 valid=True cpu/op=3350.2366699999993 p99=84643.0 tput=298640.7054717711
+[TRIPLET-W03-D16] pair=23 pos=2 A0='A0' attempt=1 exit=0 valid=True cpu/op=3201.49398 p99=52357.0 tput=312568.12226869765
+[TRIPLET-W03-D16] done: valid triplets 24/24
+=== block TRIPLET-W03-D16 rc=0 end 2026-11-05T14:42:23Z ===
+TRIPLET analysis rc=0
+=== block AB-W02R3-D2 start 2026-11-05T14:42:24Z ===
+[AB-W02R3-D2] pair=0 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4792.902650000001 p99=14935.8 tput=208443.13770422363
+[AB-W02R3-D2] pair=0 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4873.512279999999 p99=15682.4 tput=204975.94857314153
+[AB-W02R3-D2] pair=1 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4882.80269 p99=15290.2 tput=204590.93924956644
+[AB-W02R3-D2] pair=1 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4842.55668 p99=14860.8 tput=206278.34037490576
+[AB-W02R3-D2] pair=2 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4773.97537 p99=14499.6 tput=209260.62427018658
+[AB-W02R3-D2] pair=2 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4939.47036 p99=14792.4 tput=202202.84470123524
+[AB-W02R3-D2] pair=3 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=5029.12312 p99=16446.2 tput=198626.71791304846
+[AB-W02R3-D2] pair=3 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4810.86746 p99=16364.8 tput=207643.15560245476
+[AB-W02R3-D2] pair=4 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4725.20687 p99=14865.0 tput=211418.66367345199
+[AB-W02R3-D2] pair=4 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4827.03599 p99=14535.4 tput=206932.91397578173
+[AB-W02R3-D2] pair=5 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4888.6149 p99=14756.0 tput=204342.6244743748
+[AB-W02R3-D2] pair=5 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4786.16522 p99=14781.6 tput=208724.06434694905
+[AB-W02R3-D2] pair=6 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4731.73182 p99=16059.2 tput=211124.49192336816
+[AB-W02R3-D2] pair=6 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=5001.24296 p99=15999.0 tput=199709.63736520344
+[AB-W02R3-D2] pair=7 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4916.40311 p99=15079.2 tput=203148.17549302118
+[AB-W02R3-D2] pair=7 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4810.80271 p99=15063.8 tput=207646.0814737317
+[AB-W02R3-D2] pair=8 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4832.64508 p99=14458.0 tput=206689.66135998955
+[AB-W02R3-D2] pair=8 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4897.0883 p99=16519.8 tput=203941.52773695634
+[AB-W02R3-D2] pair=9 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4851.07365 p99=15763.0 tput=205884.76215621975
+[AB-W02R3-D2] pair=9 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4856.25553 p99=15692.6 tput=205669.12124536108
+[AB-W02R3-D2] pair=10 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4866.80582 p99=15024.6 tput=205239.63404082076
+[AB-W02R3-D2] pair=10 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4866.88773 p99=14801.6 tput=205242.7840700928
+[AB-W02R3-D2] pair=11 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4942.80445 p99=14685.6 tput=202096.75790520164
+[AB-W02R3-D2] pair=11 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4899.48477 p99=15510.6 tput=203890.891891489
+[AB-W02R3-D2] pair=12 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4777.87478 p99=14833.0 tput=209088.88429316168
+[AB-W02R3-D2] pair=12 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=5040.292130000001 p99=15114.6 tput=198162.01677743866
+[AB-W02R3-D2] pair=13 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4945.8007800000005 p99=16220.0 tput=201940.57705464974
+[AB-W02R3-D2] pair=13 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4852.79436 p99=15912.2 tput=205832.10744704414
+[AB-W02R3-D2] pair=14 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4899.356019999999 p99=16633.8 tput=203865.22347756763
+[AB-W02R3-D2] pair=14 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4922.28125 p99=15906.2 tput=202944.99695193864
+[AB-W02R3-D2] pair=15 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4944.97554 p99=15479.2 tput=202011.12539507088
+[AB-W02R3-D2] pair=15 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4738.46966 p99=15233.8 tput=210816.70626011712
+[AB-W02R3-D2] pair=16 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4846.72178 p99=15474.0 tput=206103.36024158346
+[AB-W02R3-D2] pair=16 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4899.87192 p99=15948.4 tput=203848.7213443202
+[AB-W02R3-D2] pair=17 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4932.90059 p99=14758.8 tput=202497.54313780862
+[AB-W02R3-D2] pair=17 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4871.352260000001 p99=14826.0 tput=205062.88029705768
+[AB-W02R3-D2] pair=18 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4808.37683 p99=14635.2 tput=207747.2351024354
+[AB-W02R3-D2] pair=18 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4887.83874 p99=15072.0 tput=204367.67482643985
+[AB-W02R3-D2] pair=19 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4838.92131 p99=15715.6 tput=206437.15090200453
+[AB-W02R3-D2] pair=19 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4812.817279999999 p99=14554.8 tput=207589.24525291764
+[AB-W02R3-D2] pair=20 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4709.10108 p99=14415.0 tput=212143.6282455477
+[AB-W02R3-D2] pair=20 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4844.642879999999 p99=14636.0 tput=206192.67534336442
+[AB-W02R3-D2] pair=21 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4971.97164 p99=15190.2 tput=200869.14149179743
+[AB-W02R3-D2] pair=21 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4772.57045 p99=15201.0 tput=209326.97621819895
+[AB-W02R3-D2] pair=22 pos=0 A='A0' attempt=1 exit=0 valid=True cpu/op=4784.27875 p99=15482.4 tput=208756.95294518705
+[AB-W02R3-D2] pair=22 pos=1 B='B' attempt=1 exit=0 valid=True cpu/op=4873.136919999999 p99=15356.8 tput=204972.4160010946
+[AB-W02R3-D2] pair=23 pos=0 B='B' attempt=1 exit=0 valid=True cpu/op=4886.74394 p99=15329.6 tput=204403.81143774558
+[AB-W02R3-D2] pair=23 pos=1 A='A0' attempt=1 exit=0 valid=True cpu/op=4812.67996 p99=14616.0 tput=207564.88962594813
+[AB-W02R3-D2] done: valid pairs 24/24
+=== block AB-W02R3-D2 rc=0 end 2026-11-05T14:44:04Z ===
+AB-W02R3-D2 analysis rc=0
+=== session complete; releasing lock 2026-11-05T14:44:05Z ===

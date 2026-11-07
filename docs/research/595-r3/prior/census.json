@@ -1,0 +1,1561 @@
+{
+  "meta": {
+    "task": "#595 R3 readiness-group opportunity census (read-only, no timing claim)",
+    "date": "2026-11-05",
+    "base_sha": "0a22a79195f1b913145fcd443496e7f70b08cdcf",
+    "worktree": "/home/jnhu/sluice-595-e5/r3/worktree",
+    "host": "E5, Intel Xeon E5-2666 v3, Fedora 44, kernel 7.2.11-200.fc44.x86_64",
+    "diagnostic_build": {
+      "bench_w03_external_loop_sha256": "c451dba4eabf3ff305edbed01a84d8a340b973960f0c85ab5ba9a155971991d0",
+      "bench_w02_pipeline_sha256": "4a27ac5568c5d3a3d59798b98875fcb0f25cab788137d351d6c1459b64bc5a83",
+      "libsluice_async_sha256": "76e59bd6290dc0a99c656d984187816aef65a3a89589ae3ecdb596d81038e2a4",
+      "product_libraries_byte_identical_to_baseline": true,
+      "public_headers_touched": false,
+      "diagnostic_patch": "raw/census/diagnostic/bench-diagnostics.patch",
+      "preserved_diagnostic_binaries": {
+        "bench_w03_external_loop": "raw/census/bin/bench_w03_external_loop.diagnostic",
+        "bench_w02_pipeline": "raw/census/bin/bench_w02_pipeline.diagnostic"
+      },
+      "build_dir_restored_to_frozen_binaries": true,
+      "frozen_manifest_sha256_check_passes": true,
+      "worktree_after_census": "diagnostic bench sources reverted to baseSha; git status --porcelain empty; HEAD 0a22a791",
+      "diagnostic_sources_archived_at": "raw/census/diagnostic/"
+    },
+    "frozen_baseline": {
+      "bench_w03_external_loop_sha256": "929bc12fc093a137778657592e00f029636cabca70daddc286d019d6f1a99c09",
+      "bench_w02_pipeline_sha256": "78d0db9dc2f9653b71d3613e17b38fad319ef066902aecf308e9ce0369b1ccec",
+      "rebuilt_from_base_sources_and_matches_BASELINE_md": true
+    },
+    "run_manifest": "raw/census/canonical/run.log",
+    "all_17_canonical_runs_exit_zero": true,
+    "no_timing_or_ab_run": true
+  },
+  "ready_group_definition": "A set of independent reads whose file, offset, length, destination buffer and dependency conditions are all determined before the first baseline submit of the set; no added wait, no moved-up dependency work, no prefetch.",
+  "primary": {
+    "consumer": "W-03 external event loop (bench/bench_w03_external_loop.cpp)",
+    "task": "4 KiB positional reads on a 64 MiB warm-tmpfs fixture, uring backend, external progress driver thread + submitter thread",
+    "call_sites_baseline_0a22a791": {
+      "refill_loop": "bench/bench_w03_external_loop.cpp:339",
+      "submit_read": "bench/bench_w03_external_loop.cpp:349",
+      "consume_all_ready": "bench/bench_w03_external_loop.cpp:387",
+      "existing_completion_wait": "bench/bench_w03_external_loop.cpp:370"
+    },
+    "exposure_class": "REAL_EXPOSURE",
+    "why": "In steady state the consumer already consumes every front-ready completion and then refills the window in one burst. At the first submit of that burst every member's slot/offset/buffer is already fixed by the consumer's own state (window.size, submitted, depth, blocks); no member depends on another member's result and no wait occurs inside the group. 91-93% of 20k submits for d16 and 72-73% for d4 fall in multi-ready groups.",
+    "cases": {
+      "d16": {
+        "source_run": "w03-d16-verbose",
+        "phases": [
+          {
+            "phase": 1,
+            "depth": 16,
+            "request_count": 512,
+            "groups_including_zero": 33,
+            "zero_ready_groups": 0,
+            "feasible_groups": 33,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 1,
+              ">8": 32
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 1,
+              ">8": 31
+            },
+            "steady_multi_ready": 32,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 16,
+            "batched_enters_one_per_group": 33,
+            "enter_saving": 479,
+            "saving_fraction": 0.935547,
+            "inter_group_gap_ns_p50": 241638,
+            "intra_group_submit_gap_ns_p50": 92098,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 3400,
+                "min": 54,
+                "n": 33
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 2,
+            "depth": 16,
+            "request_count": 512,
+            "groups_including_zero": 33,
+            "zero_ready_groups": 0,
+            "feasible_groups": 33,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 0,
+              ">8": 33
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 0,
+              ">8": 32
+            },
+            "steady_multi_ready": 32,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 16,
+            "batched_enters_one_per_group": 33,
+            "enter_saving": 479,
+            "saving_fraction": 0.935547,
+            "inter_group_gap_ns_p50": 207860,
+            "intra_group_submit_gap_ns_p50": 95056,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 203,
+                "min": 80,
+                "n": 33
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 3,
+            "depth": 16,
+            "request_count": 512,
+            "groups_including_zero": 36,
+            "zero_ready_groups": 1,
+            "feasible_groups": 35,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 3,
+              ">8": 32
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 3,
+              ">8": 31
+            },
+            "steady_multi_ready": 34,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 16,
+            "batched_enters_one_per_group": 35,
+            "enter_saving": 477,
+            "saving_fraction": 0.931641,
+            "inter_group_gap_ns_p50": 172567,
+            "intra_group_submit_gap_ns_p50": 157412,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 180,
+                "min": 127,
+                "n": 35
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          }
+        ],
+        "enter_oracle": {
+          "total_enters": 1540,
+          "pure_submit_enters": 1536,
+          "probe_or_wait_enters": 4,
+          "coalesced_submit_enters": 0,
+          "coalesced_sqes": 0,
+          "max_sqes_per_enter": 1,
+          "enters_per_pid": {
+            "11987": 1540
+          },
+          "submit_arg_distribution": {
+            "to_submit=1,min_complete=0,flags=0": 1536,
+            "to_submit=1,min_complete=1,flags=IORING_ENTER_GETEVENTS": 4
+          }
+        }
+      },
+      "d16_full": {
+        "source_run": "w03-d16-full",
+        "phases": [
+          {
+            "phase": 1,
+            "depth": 16,
+            "request_count": 20000,
+            "groups_including_zero": 1778,
+            "zero_ready_groups": 80,
+            "feasible_groups": 1698,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 83,
+              "2": 116,
+              "3-8": 264,
+              ">8": 1235
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 83,
+              "2": 116,
+              "3-8": 264,
+              ">8": 1234
+            },
+            "steady_multi_ready": 1614,
+            "steady_single_ready": 83,
+            "steady_single_ratio": 0.04891,
+            "baseline_submit_enters": 20000,
+            "capacity": 16,
+            "batched_enters_one_per_group": 1698,
+            "enter_saving": 18302,
+            "saving_fraction": 0.9151,
+            "inter_group_gap_ns_p50": 201307,
+            "intra_group_submit_gap_ns_p50": 77241,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 2,
+            "depth": 16,
+            "request_count": 20000,
+            "groups_including_zero": 1538,
+            "zero_ready_groups": 27,
+            "feasible_groups": 1511,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 128,
+              "2": 54,
+              "3-8": 86,
+              ">8": 1243
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 128,
+              "2": 54,
+              "3-8": 86,
+              ">8": 1242
+            },
+            "steady_multi_ready": 1382,
+            "steady_single_ready": 128,
+            "steady_single_ratio": 0.084768,
+            "baseline_submit_enters": 20000,
+            "capacity": 16,
+            "batched_enters_one_per_group": 1511,
+            "enter_saving": 18489,
+            "saving_fraction": 0.92445,
+            "inter_group_gap_ns_p50": 225393,
+            "intra_group_submit_gap_ns_p50": 83790,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 3,
+            "depth": 16,
+            "request_count": 20000,
+            "groups_including_zero": 1332,
+            "zero_ready_groups": 1,
+            "feasible_groups": 1331,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 16,
+              "2": 5,
+              "3-8": 9,
+              ">8": 1301
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 16,
+              "2": 5,
+              "3-8": 9,
+              ">8": 1300
+            },
+            "steady_multi_ready": 1314,
+            "steady_single_ready": 16,
+            "steady_single_ratio": 0.01203,
+            "baseline_submit_enters": 20000,
+            "capacity": 16,
+            "batched_enters_one_per_group": 1331,
+            "enter_saving": 18669,
+            "saving_fraction": 0.93345,
+            "inter_group_gap_ns_p50": 110584,
+            "intra_group_submit_gap_ns_p50": 98384,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          }
+        ]
+      },
+      "d16_full_minimal": {
+        "source_run": "w03-d16-full-minimal",
+        "phases": [
+          {
+            "phase": 1,
+            "depth": 16,
+            "request_count": 20000,
+            "groups_including_zero": 1458,
+            "zero_ready_groups": 30,
+            "feasible_groups": 1428,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 41,
+              "2": 32,
+              "3-8": 115,
+              ">8": 1240
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 41,
+              "2": 32,
+              "3-8": 115,
+              ">8": 1239
+            },
+            "steady_multi_ready": 1386,
+            "steady_single_ready": 41,
+            "steady_single_ratio": 0.028732,
+            "baseline_submit_enters": 20000,
+            "capacity": 16,
+            "batched_enters_one_per_group": 1428,
+            "enter_saving": 18572,
+            "saving_fraction": 0.9286,
+            "inter_group_gap_ns_p50": null,
+            "intra_group_submit_gap_ns_p50": null,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 2,
+            "depth": 16,
+            "request_count": 20000,
+            "groups_including_zero": 1742,
+            "zero_ready_groups": 31,
+            "feasible_groups": 1711,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 78,
+              "2": 167,
+              "3-8": 209,
+              ">8": 1257
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 78,
+              "2": 167,
+              "3-8": 209,
+              ">8": 1256
+            },
+            "steady_multi_ready": 1632,
+            "steady_single_ready": 78,
+            "steady_single_ratio": 0.045614,
+            "baseline_submit_enters": 20000,
+            "capacity": 16,
+            "batched_enters_one_per_group": 1711,
+            "enter_saving": 18289,
+            "saving_fraction": 0.91445,
+            "inter_group_gap_ns_p50": null,
+            "intra_group_submit_gap_ns_p50": null,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 3,
+            "depth": 16,
+            "request_count": 20000,
+            "groups_including_zero": 1819,
+            "zero_ready_groups": 33,
+            "feasible_groups": 1786,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 81,
+              "2": 184,
+              "3-8": 285,
+              ">8": 1236
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 81,
+              "2": 184,
+              "3-8": 285,
+              ">8": 1235
+            },
+            "steady_multi_ready": 1704,
+            "steady_single_ready": 81,
+            "steady_single_ratio": 0.045378,
+            "baseline_submit_enters": 20000,
+            "capacity": 16,
+            "batched_enters_one_per_group": 1786,
+            "enter_saving": 18214,
+            "saving_fraction": 0.9107,
+            "inter_group_gap_ns_p50": null,
+            "intra_group_submit_gap_ns_p50": null,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          }
+        ]
+      },
+      "d4": {
+        "source_run": "w03-d4-verbose",
+        "phases": [
+          {
+            "phase": 1,
+            "depth": 4,
+            "request_count": 512,
+            "groups_including_zero": 128,
+            "zero_ready_groups": 0,
+            "feasible_groups": 128,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 128,
+              ">8": 0
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 127,
+              ">8": 0
+            },
+            "steady_multi_ready": 127,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 4,
+            "batched_enters_one_per_group": 128,
+            "enter_saving": 384,
+            "saving_fraction": 0.75,
+            "inter_group_gap_ns_p50": 251230,
+            "intra_group_submit_gap_ns_p50": 89835,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 4642,
+                "min": 44,
+                "n": 128
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 2,
+            "depth": 4,
+            "request_count": 512,
+            "groups_including_zero": 128,
+            "zero_ready_groups": 0,
+            "feasible_groups": 128,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 128,
+              ">8": 0
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 127,
+              ">8": 0
+            },
+            "steady_multi_ready": 127,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 4,
+            "batched_enters_one_per_group": 128,
+            "enter_saving": 384,
+            "saving_fraction": 0.75,
+            "inter_group_gap_ns_p50": 237873,
+            "intra_group_submit_gap_ns_p50": 85166,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 181,
+                "min": 44,
+                "n": 128
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 3,
+            "depth": 4,
+            "request_count": 512,
+            "groups_including_zero": 128,
+            "zero_ready_groups": 0,
+            "feasible_groups": 128,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 128,
+              ">8": 0
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 127,
+              ">8": 0
+            },
+            "steady_multi_ready": 127,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 4,
+            "batched_enters_one_per_group": 128,
+            "enter_saving": 384,
+            "saving_fraction": 0.75,
+            "inter_group_gap_ns_p50": 224770,
+            "intra_group_submit_gap_ns_p50": 82135,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 251,
+                "min": 43,
+                "n": 128
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          }
+        ],
+        "enter_oracle": {
+          "total_enters": 1540,
+          "pure_submit_enters": 1536,
+          "probe_or_wait_enters": 4,
+          "coalesced_submit_enters": 0,
+          "coalesced_sqes": 0,
+          "max_sqes_per_enter": 1,
+          "enters_per_pid": {
+            "11997": 1540
+          },
+          "submit_arg_distribution": {
+            "to_submit=1,min_complete=0,flags=0": 1536,
+            "to_submit=1,min_complete=1,flags=IORING_ENTER_GETEVENTS": 4
+          }
+        }
+      },
+      "d4_full": {
+        "source_run": "w03-d4-full",
+        "phases": [
+          {
+            "phase": 1,
+            "depth": 4,
+            "request_count": 20000,
+            "groups_including_zero": 5625,
+            "zero_ready_groups": 80,
+            "feasible_groups": 5545,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 256,
+              "2": 408,
+              "3-8": 4881,
+              ">8": 0
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 256,
+              "2": 408,
+              "3-8": 4880,
+              ">8": 0
+            },
+            "steady_multi_ready": 5288,
+            "steady_single_ready": 256,
+            "steady_single_ratio": 0.046176,
+            "baseline_submit_enters": 20000,
+            "capacity": 4,
+            "batched_enters_one_per_group": 5545,
+            "enter_saving": 14455,
+            "saving_fraction": 0.72275,
+            "inter_group_gap_ns_p50": 238645,
+            "intra_group_submit_gap_ns_p50": 85109,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 2,
+            "depth": 4,
+            "request_count": 20000,
+            "groups_including_zero": 5390,
+            "zero_ready_groups": 27,
+            "feasible_groups": 5363,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 167,
+              "2": 283,
+              "3-8": 4913,
+              ">8": 0
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 167,
+              "2": 283,
+              "3-8": 4912,
+              ">8": 0
+            },
+            "steady_multi_ready": 5195,
+            "steady_single_ready": 167,
+            "steady_single_ratio": 0.031145,
+            "baseline_submit_enters": 20000,
+            "capacity": 4,
+            "batched_enters_one_per_group": 5363,
+            "enter_saving": 14637,
+            "saving_fraction": 0.73185,
+            "inter_group_gap_ns_p50": 202794,
+            "intra_group_submit_gap_ns_p50": 78243,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 3,
+            "depth": 4,
+            "request_count": 20000,
+            "groups_including_zero": 5472,
+            "zero_ready_groups": 5,
+            "feasible_groups": 5467,
+            "submits": 20000,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 65,
+              "2": 96,
+              "3-8": 5306,
+              ">8": 0
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 65,
+              "2": 96,
+              "3-8": 5305,
+              ">8": 0
+            },
+            "steady_multi_ready": 5401,
+            "steady_single_ready": 65,
+            "steady_single_ratio": 0.011892,
+            "baseline_submit_enters": 20000,
+            "capacity": 4,
+            "batched_enters_one_per_group": 5467,
+            "enter_saving": 14533,
+            "saving_fraction": 0.72665,
+            "inter_group_gap_ns_p50": 135612,
+            "intra_group_submit_gap_ns_p50": 42367,
+            "checks": {
+              "member_identity_mismatches": null,
+              "group_ready_after_first_submit": null,
+              "last_member_ready_before_first_submit_violations": null,
+              "marker_delta_ns": null,
+              "completion_take_inside_group": null,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          }
+        ]
+      },
+      "d64": {
+        "source_run": "w03-d64-verbose",
+        "phases": [
+          {
+            "phase": 1,
+            "depth": 64,
+            "request_count": 512,
+            "groups_including_zero": 8,
+            "zero_ready_groups": 0,
+            "feasible_groups": 8,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 0,
+              ">8": 8
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 0,
+              ">8": 7
+            },
+            "steady_multi_ready": 7,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 64,
+            "batched_enters_one_per_group": 8,
+            "enter_saving": 504,
+            "saving_fraction": 0.984375,
+            "inter_group_gap_ns_p50": 160720,
+            "intra_group_submit_gap_ns_p50": 54396,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 169,
+                "min": 55,
+                "n": 8
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 2,
+            "depth": 64,
+            "request_count": 512,
+            "groups_including_zero": 11,
+            "zero_ready_groups": 1,
+            "feasible_groups": 10,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 0,
+              ">8": 10
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 0,
+              ">8": 9
+            },
+            "steady_multi_ready": 9,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 64,
+            "batched_enters_one_per_group": 10,
+            "enter_saving": 502,
+            "saving_fraction": 0.980469,
+            "inter_group_gap_ns_p50": 98437,
+            "intra_group_submit_gap_ns_p50": 58322,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 148,
+                "min": 64,
+                "n": 10
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          },
+          {
+            "phase": 3,
+            "depth": 64,
+            "request_count": 512,
+            "groups_including_zero": 10,
+            "zero_ready_groups": 1,
+            "feasible_groups": 9,
+            "submits": 512,
+            "ready_distribution_including_startup": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 1,
+              ">8": 8
+            },
+            "ready_distribution_steady": {
+              "0": 0,
+              "1": 0,
+              "2": 0,
+              "3-8": 1,
+              ">8": 7
+            },
+            "steady_multi_ready": 8,
+            "steady_single_ready": 0,
+            "steady_single_ratio": 0.0,
+            "baseline_submit_enters": 512,
+            "capacity": 64,
+            "batched_enters_one_per_group": 9,
+            "enter_saving": 503,
+            "saving_fraction": 0.982422,
+            "inter_group_gap_ns_p50": 153389,
+            "intra_group_submit_gap_ns_p50": 110334,
+            "checks": {
+              "member_identity_mismatches": 0,
+              "group_ready_after_first_submit": 0,
+              "last_member_ready_before_first_submit_violations": 0,
+              "marker_delta_ns": {
+                "max": 180,
+                "min": 133,
+                "n": 9
+              },
+              "completion_take_inside_group": 0,
+              "wait_inside_group": 0,
+              "member_alias_or_duplicate_groups": 0,
+              "member_bounds_violation_groups": 0,
+              "group_member_count_mismatch": 0
+            }
+          }
+        ],
+        "enter_oracle": {
+          "total_enters": 1540,
+          "pure_submit_enters": 1536,
+          "probe_or_wait_enters": 4,
+          "coalesced_submit_enters": 0,
+          "coalesced_sqes": 0,
+          "max_sqes_per_enter": 1,
+          "enters_per_pid": {
+            "12007": 1540
+          },
+          "submit_arg_distribution": {
+            "to_submit=1,min_complete=0,flags=0": 1536,
+            "to_submit=1,min_complete=1,flags=IORING_ENTER_GETEVENTS": 4
+          }
+        },
+        "note": "512-request diagnostic window; group size 64 fits one enter at queue_depth=64"
+      }
+    },
+    "split_point": {
+      "location": "bench/bench_w03_external_loop.cpp:339 (refill burst), submit at :349",
+      "visible_state": "window.size()=w<depth, submitted=s, r=min(depth-w, request_count-s); for member j: slot=(s+j)%depth, offset=((s+j)%blocks)*4096, dst=buffers[slot], len=4096; source file fd already open; no completion take and no wait between group-ready and the r submits.",
+      "real_enter_difference": "Baseline: r pure submit enters (each io_uring_enter to_submit=1, min_complete=0; measured 60,000 such enters per invocation = 3 phases x 20,000, i.e. 20,000 per 20k-op phase). Capacity-capped split: ceil(r/queue_depth)=1 enter because r<=depth=queue_depth; saving r-1 per group. d16: 18,202-18,669 enters saved per 20k (91.0-93.3%); d4: 14,455-14,637 (72.3-73.2%); d64 512-window: 502-504 (98.0-98.4%).",
+      "concrete_example": "w03-d16-verbose phase 1 group 2: group_ready ts=5079642908035 with ready=16, window=0, submitted=16; first submit at group_ready+934 ns; members (slot,offset,len)=(0,65536,4096)..(15,126976,4096) with 16 distinct buffers; all 16 submits succeeded; group_done=16. Baseline cost 16 enters, batched 1, difference 15.",
+      "scope": "Only the W-03 external-loop refill bursts under the consume-all-ready policy. Does not apply to W-02 default steady state (one ordered wait per iteration) or to sluice-copy steady state (next read depends on that slot's write completion). The batching prototype must not extend the existing completion wait to grow a batch."
+    },
+    "shadow_screening": {
+      "multi_ready_group_second_member": "Already ready before the first submit; intra-group submit gaps are the existing per-submit call cost (diagnostic p50 77-92 us for d16, include verbose logging; not a wait).",
+      "single_ready_group_second_arrival": "Arrives only in the next refill after the existing completion wait; inter-group gap p50 201-225 us for d16 full phase 1-2, 111 us phase 3; d4 p50 136-239 us. The next read is not data-dependent on the previous result, but issuing it in the same batch would require moving or adding a wait, which is forbidden.",
+      "no_show_samples": {
+        "d16_full_phase1": {
+          "single_ready_steady": 83,
+          "zero_ready_groups": 80
+        },
+        "d16_full_phase2": {
+          "single_ready_steady": 128,
+          "zero_ready_groups": 27
+        },
+        "d16_full_phase3": {
+          "single_ready_steady": 16,
+          "zero_ready_groups": 1
+        },
+        "d4_full_phase1": {
+          "single_ready_steady": 256,
+          "zero_ready_groups": 80
+        }
+      },
+      "use_limit": "Shadow data only filters hypotheses; it does not show that waiting would be faster and no cross-call wait was added."
+    }
+  },
+  "screened_out": {
+    "w02_pipeline": {
+      "consumer": "W-02 bounded RequestScope pipeline (bench/bench_w02_pipeline.cpp)",
+      "call_sites_baseline_0a22a791": {
+        "refill_loop": "bench/bench_w02_pipeline.cpp:337",
+        "submit_read": "bench/bench_w02_pipeline.cpp:348",
+        "ordered_wait": "bench/bench_w02_pipeline.cpp:384"
+      },
+      "classification": "STARTUP_ONLY",
+      "measured": {
+        "d2_verbose_512": {
+          "source_run": "w02-d2-verbose",
+          "phases": [
+            {
+              "phase": 1,
+              "depth": 2,
+              "request_count": 512,
+              "groups_including_zero": 512,
+              "zero_ready_groups": 1,
+              "feasible_groups": 511,
+              "submits": 512,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 510,
+                "2": 1,
+                "3-8": 0,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 510,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 510,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 512,
+              "capacity": 2,
+              "batched_enters_one_per_group": 511,
+              "enter_saving": 1,
+              "saving_fraction": 0.001953,
+              "inter_group_gap_ns_p50": 64341,
+              "intra_group_submit_gap_ns_p50": 75340,
+              "checks": {
+                "member_identity_mismatches": 0,
+                "group_ready_after_first_submit": 0,
+                "last_member_ready_before_first_submit_violations": 0,
+                "marker_delta_ns": {
+                  "max": 86,
+                  "min": 35,
+                  "n": 511
+                },
+                "completion_take_inside_group": 0,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            },
+            {
+              "phase": 2,
+              "depth": 2,
+              "request_count": 512,
+              "groups_including_zero": 512,
+              "zero_ready_groups": 1,
+              "feasible_groups": 511,
+              "submits": 512,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 510,
+                "2": 1,
+                "3-8": 0,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 510,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 510,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 512,
+              "capacity": 2,
+              "batched_enters_one_per_group": 511,
+              "enter_saving": 1,
+              "saving_fraction": 0.001953,
+              "inter_group_gap_ns_p50": 78471,
+              "intra_group_submit_gap_ns_p50": 91157,
+              "checks": {
+                "member_identity_mismatches": 0,
+                "group_ready_after_first_submit": 0,
+                "last_member_ready_before_first_submit_violations": 0,
+                "marker_delta_ns": {
+                  "max": 277,
+                  "min": 80,
+                  "n": 511
+                },
+                "completion_take_inside_group": 0,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            },
+            {
+              "phase": 3,
+              "depth": 2,
+              "request_count": 512,
+              "groups_including_zero": 512,
+              "zero_ready_groups": 1,
+              "feasible_groups": 511,
+              "submits": 512,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 510,
+                "2": 1,
+                "3-8": 0,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 510,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 510,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 512,
+              "capacity": 2,
+              "batched_enters_one_per_group": 511,
+              "enter_saving": 1,
+              "saving_fraction": 0.001953,
+              "inter_group_gap_ns_p50": 77502,
+              "intra_group_submit_gap_ns_p50": 89803,
+              "checks": {
+                "member_identity_mismatches": 0,
+                "group_ready_after_first_submit": 0,
+                "last_member_ready_before_first_submit_violations": 0,
+                "marker_delta_ns": {
+                  "max": 224,
+                  "min": 77,
+                  "n": 511
+                },
+                "completion_take_inside_group": 0,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            }
+          ],
+          "enter_oracle": {
+            "total_enters": 1540,
+            "pure_submit_enters": 1536,
+            "probe_or_wait_enters": 4,
+            "coalesced_submit_enters": 0,
+            "coalesced_sqes": 0,
+            "max_sqes_per_enter": 1,
+            "enters_per_pid": {
+              "12017": 1540
+            },
+            "submit_arg_distribution": {
+              "to_submit=1,min_complete=0,flags=0": 1536,
+              "to_submit=1,min_complete=1,flags=IORING_ENTER_GETEVENTS": 4
+            }
+          }
+        },
+        "d2_full_20k": {
+          "source_run": "w02-d2-full",
+          "phases": [
+            {
+              "phase": 1,
+              "depth": 2,
+              "request_count": 20000,
+              "groups_including_zero": 20000,
+              "zero_ready_groups": 1,
+              "feasible_groups": 19999,
+              "submits": 20000,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 19998,
+                "2": 1,
+                "3-8": 0,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 19998,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 19998,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 20000,
+              "capacity": 2,
+              "batched_enters_one_per_group": 19999,
+              "enter_saving": 1,
+              "saving_fraction": 5e-05,
+              "inter_group_gap_ns_p50": 42708,
+              "intra_group_submit_gap_ns_p50": 41135,
+              "checks": {
+                "member_identity_mismatches": null,
+                "group_ready_after_first_submit": null,
+                "last_member_ready_before_first_submit_violations": null,
+                "marker_delta_ns": null,
+                "completion_take_inside_group": null,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            },
+            {
+              "phase": 2,
+              "depth": 2,
+              "request_count": 20000,
+              "groups_including_zero": 20000,
+              "zero_ready_groups": 1,
+              "feasible_groups": 19999,
+              "submits": 20000,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 19998,
+                "2": 1,
+                "3-8": 0,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 19998,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 19998,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 20000,
+              "capacity": 2,
+              "batched_enters_one_per_group": 19999,
+              "enter_saving": 1,
+              "saving_fraction": 5e-05,
+              "inter_group_gap_ns_p50": 45471,
+              "intra_group_submit_gap_ns_p50": 53917,
+              "checks": {
+                "member_identity_mismatches": null,
+                "group_ready_after_first_submit": null,
+                "last_member_ready_before_first_submit_violations": null,
+                "marker_delta_ns": null,
+                "completion_take_inside_group": null,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            },
+            {
+              "phase": 3,
+              "depth": 2,
+              "request_count": 20000,
+              "groups_including_zero": 20000,
+              "zero_ready_groups": 1,
+              "feasible_groups": 19999,
+              "submits": 20000,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 19998,
+                "2": 1,
+                "3-8": 0,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 19998,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 19998,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 20000,
+              "capacity": 2,
+              "batched_enters_one_per_group": 19999,
+              "enter_saving": 1,
+              "saving_fraction": 5e-05,
+              "inter_group_gap_ns_p50": 49103,
+              "intra_group_submit_gap_ns_p50": 51552,
+              "checks": {
+                "member_identity_mismatches": null,
+                "group_ready_after_first_submit": null,
+                "last_member_ready_before_first_submit_violations": null,
+                "marker_delta_ns": null,
+                "completion_take_inside_group": null,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            }
+          ]
+        },
+        "d4_verbose_512": {
+          "source_run": "w02-d4-verbose",
+          "phases": [
+            {
+              "phase": 1,
+              "depth": 4,
+              "request_count": 512,
+              "groups_including_zero": 512,
+              "zero_ready_groups": 3,
+              "feasible_groups": 509,
+              "submits": 512,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 508,
+                "2": 0,
+                "3-8": 1,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 508,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 508,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 512,
+              "capacity": 4,
+              "batched_enters_one_per_group": 509,
+              "enter_saving": 3,
+              "saving_fraction": 0.005859,
+              "inter_group_gap_ns_p50": 56906,
+              "intra_group_submit_gap_ns_p50": 65129,
+              "checks": {
+                "member_identity_mismatches": 0,
+                "group_ready_after_first_submit": 0,
+                "last_member_ready_before_first_submit_violations": 0,
+                "marker_delta_ns": {
+                  "max": 9771,
+                  "min": 32,
+                  "n": 509
+                },
+                "completion_take_inside_group": 0,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            },
+            {
+              "phase": 2,
+              "depth": 4,
+              "request_count": 512,
+              "groups_including_zero": 512,
+              "zero_ready_groups": 3,
+              "feasible_groups": 509,
+              "submits": 512,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 508,
+                "2": 0,
+                "3-8": 1,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 508,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 508,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 512,
+              "capacity": 4,
+              "batched_enters_one_per_group": 509,
+              "enter_saving": 3,
+              "saving_fraction": 0.005859,
+              "inter_group_gap_ns_p50": 63108,
+              "intra_group_submit_gap_ns_p50": 67737,
+              "checks": {
+                "member_identity_mismatches": 0,
+                "group_ready_after_first_submit": 0,
+                "last_member_ready_before_first_submit_violations": 0,
+                "marker_delta_ns": {
+                  "max": 108,
+                  "min": 54,
+                  "n": 509
+                },
+                "completion_take_inside_group": 0,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            },
+            {
+              "phase": 3,
+              "depth": 4,
+              "request_count": 512,
+              "groups_including_zero": 512,
+              "zero_ready_groups": 3,
+              "feasible_groups": 509,
+              "submits": 512,
+              "ready_distribution_including_startup": {
+                "0": 0,
+                "1": 508,
+                "2": 0,
+                "3-8": 1,
+                ">8": 0
+              },
+              "ready_distribution_steady": {
+                "0": 0,
+                "1": 508,
+                "2": 0,
+                "3-8": 0,
+                ">8": 0
+              },
+              "steady_multi_ready": 0,
+              "steady_single_ready": 508,
+              "steady_single_ratio": 1.0,
+              "baseline_submit_enters": 512,
+              "capacity": 4,
+              "batched_enters_one_per_group": 509,
+              "enter_saving": 3,
+              "saving_fraction": 0.005859,
+              "inter_group_gap_ns_p50": 65915,
+              "intra_group_submit_gap_ns_p50": 63835,
+              "checks": {
+                "member_identity_mismatches": 0,
+                "group_ready_after_first_submit": 0,
+                "last_member_ready_before_first_submit_violations": 0,
+                "marker_delta_ns": {
+                  "max": 124,
+                  "min": 54,
+                  "n": 509
+                },
+                "completion_take_inside_group": 0,
+                "wait_inside_group": 0,
+                "member_alias_or_duplicate_groups": 0,
+                "member_bounds_violation_groups": 0,
+                "group_member_count_mismatch": 0
+              }
+            }
+          ],
+          "enter_oracle": {
+            "total_enters": 1540,
+            "pure_submit_enters": 1536,
+            "probe_or_wait_enters": 4,
+            "coalesced_submit_enters": 0,
+            "coalesced_sqes": 0,
+            "max_sqes_per_enter": 1,
+            "enters_per_pid": {
+              "12024": 1540
+            },
+            "submit_arg_distribution": {
+              "to_submit=1,min_complete=0,flags=0": 1536,
+              "to_submit=1,min_complete=1,flags=IORING_ENTER_GETEVENTS": 4
+            }
+          }
+        }
+      },
+      "why": "The default consumer waits for the oldest ticket and settles exactly one request per outer iteration, so every steady-state refill has exactly one ready member (D2: 19,998/19,998 steady groups single). Only the initial window fill has depth members. Net saving is depth-1 enters once per phase: D2 1/20,000 = 0.005%; D4 3/20,000 = 0.015%."
+    },
+    "sluice_copy": {
+      "consumer": "sluice-copy pipelined copy (apps/sluice-copy/copy_task.cpp)",
+      "call_sites_baseline_0a22a791": {
+        "initial_prefill": "apps/sluice-copy/copy_task.cpp:165-174 (submit at :169)",
+        "next_read_after_write": "apps/sluice-copy/copy_task.cpp:228-233",
+        "default_pipeline_depth": "apps/sluice-copy/cli_parse.hpp:16 (pipeline_depth=1)"
+      },
+      "classification": "NO_REAL_BATCH_EXPOSURE at the default depth=1; STARTUP_ONLY when pipeline_depth>1",
+      "measured": null,
+      "instrumented": false,
+      "why": "At the default pipeline_depth=1 there is no group even at startup. For pipeline_depth>1 the prefill loop submits pipeline_depth independent reads before any wait (a startup group), but each steady-state next read depends on that slot's write completion (chunk_offset is advanced only after the write returns), so the next read is not ready at another read's first submit. Source-level conclusion; not run."
+    }
+  },
+  "enter_baseline": {
+    "frozen_binary_20k": {
+      "w03_d16": {
+        "source_run": "frozen-w03-d16",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      },
+      "w03_d4": {
+        "source_run": "frozen-w03-d4",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      },
+      "w03_d64": {
+        "source_run": "frozen-w03-d64",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      },
+      "w02_d4": {
+        "source_run": "frozen-w02-d4",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      }
+    },
+    "diagnostic_build_unmarked_20k": {
+      "w03_d16": {
+        "source_run": "w03-d16-unmarked",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      },
+      "w03_d4": {
+        "source_run": "w03-d4-unmarked",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      },
+      "w03_d64": {
+        "source_run": "w03-d64-unmarked",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      },
+      "w02_d2": {
+        "source_run": "w02-d2-unmarked",
+        "syscall_counts": [
+          {
+            "calls": 60004
+          }
+        ]
+      }
+    },
+    "interpretation": "Every invocation reports 60,004 io_uring_enter: 60,000 pure submit enters (to_submit=1, min_complete=0, one per submit_read across 3 phases x 20,000) + 4 context-probe enters (to_submit=1, min_complete=1, IORING_ENTER_GETEVENTS). No enter had to_submit>1: 0 coalesced SQEs, max 1 SQE/enter, and all enters were on the submitter thread (driver thread 0). Diagnostic-on and unmarked diagnostic-build runs have identical counts; 512-request verbose traces show 1,536 pure submits + 4 probes per invocation."
+  },
+  "manufactured_group": {
+    "none": true,
+    "checks": [
+      "No wait, sleep, retry inflation or parking was added; existing waits are unchanged (W03 cv wait at :370, W02 scope.wait_for at :384).",
+      "No dependency work was moved earlier: the diagnostic only predicts/logs slot/offset/dst from state that the product already holds; it does not construct ReadOps, submit, or consume on the product's behalf.",
+      "No prefetch: the same reads are submitted at the same points; no extra read.",
+      "Only bench TUs were modified (test-only diagnostics + a census-only W02 D2/D3 case switch); libsluice_async.a is byte-identical to the frozen baseline."
+    ]
+  },
+  "limitations": [
+    "No performance timing or formal A/B was run; all enter counts are syscall counts, not latency claims.",
+    "The r distribution comes from a diagnostic build. Minimal recording (one clock read + one vector push per group) reproduces the multi-ready dominance (91.1-92.9% enter saving for d16), and unmarked/frozen enter counts are identical, but the absolute r rates are workload/scheduling dependent and vary by phase.",
+    "The W03 batch opportunity is downstream of the consumer's existing completion wait; it must not be re-used to justify adding cross-call waits.",
+    "The R2 B-arm deferred-flush gate is owner-gated (submitter must be the recent progress driver); in W03 the submitter is not the driver, so the R2 prototype would not capture this group. Capturing it needs consumer-side SQE preparation batching, not a longer defer.",
+    "W02 D2/D3 cases exist only under the census-only SLUICE_CENSUS_D2 switch (the frozen baseline case list has no d2); sluice-copy was not instrumented.",
+    "The 4KiB warm-tmpfs shape and this host are the only measured scope."
+  ]
+}

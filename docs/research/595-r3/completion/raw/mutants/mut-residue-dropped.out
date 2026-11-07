@@ -1,0 +1,10 @@
+FAIL [uring_ready_batch_deterministic] only a transport left outside the kernel advertises residue
+FAIL [uring_ready_batch_deterministic] only a transport left outside the kernel advertises residue
+FAIL [uring_ready_batch_deterministic] only a transport left outside the kernel advertises residue
+FAIL [uring_ready_batch_deterministic] only a transport left outside the kernel advertises residue
+FAIL [uring_ready_batch_deterministic] the poisoned flush still advertises its residue
+FAIL [uring_ready_batch_deterministic] the first group leaves unproven transport
+FAIL [uring_ready_batch_deterministic] the held batch advertises its transport residue
+FAIL [uring_ready_batch_deterministic] partial kernel consumption advertises dispatch residue
+FAIL [uring_ready_batch_deterministic] the poisoned flush advertises its residue
+uring_ready_batch_deterministic: 9 failure(s)

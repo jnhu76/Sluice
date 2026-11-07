@@ -1,0 +1,7 @@
+{
+ "phase": "PROT-SAT",
+ "verdict": "NOT_ESTABLISHED",
+ "comparison": "B_R2 - A_R2 / B - A0 (NOT RUN: NO_W02_R3_ARM; not in frozen enabledBlocks)",
+ "semanticsReady": false,
+ "source": "SUMMARY.json"
+}

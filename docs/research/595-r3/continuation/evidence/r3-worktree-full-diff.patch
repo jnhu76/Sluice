@@ -1,0 +1,1626 @@
+diff --git a/bench/bench_common.hpp b/bench/bench_common.hpp
+index bccd2ae9..93115e61 100644
+--- a/bench/bench_common.hpp
++++ b/bench/bench_common.hpp
+@@ -305,6 +305,18 @@ struct Record {
+     std::uint64_t stats_max_outstanding = 0;
+     std::uint64_t stats_queue_full_retries = 0;
+     std::uint64_t stats_invalid_state = 0;
++
++    std::uint64_t r3_arm = 0;
++    std::uint64_t r3_entry_calls = 0;
++    std::uint64_t r3_group_calls = 0;
++    std::uint64_t r3_single_calls = 0;
++    std::uint64_t r3_accepted = 0;
++    std::uint64_t r3_prefix_max = 0;
++    std::uint64_t r3_suffix_single_calls = 0;
++    std::uint64_t r3_flush_attempts = 0;
++    std::uint64_t r3_ineligible_fallbacks = 0;
++    std::uint64_t r3_gate_stops = 0;
++    std::uint64_t r3_untouched = 0;
+ };
+ 
+ inline std::string json_escape(const std::string& in) {
+@@ -369,6 +381,11 @@ inline void emit_record(const Record& r) {
+         "\"lat_p99_ns\":%.1f,\"lat_max_ns\":%.1f,\"lat_mean_ns\":%.1f,\"lat_stddev_ns\":%.1f,"
+         "\"submits\":%llu,\"would_block\":%llu,\"notifications\":%llu,\"empty_wakes\":%llu,"
+         "\"passes\":%llu,\"waits\":%llu,\"extra_a\":%llu,\"extra_b\":%llu,"
++        "\"r3_arm\":%llu,\"r3_entry_calls\":%llu,\"r3_group_calls\":%llu,"
++        "\"r3_single_calls\":%llu,\"r3_accepted\":%llu,\"r3_prefix_max\":%llu,"
++        "\"r3_suffix_single_calls\":%llu,\"r3_flush_attempts\":%llu,"
++        "\"r3_ineligible_fallbacks\":%llu,\"r3_gate_stops\":%llu,"
++        "\"r3_untouched\":%llu,"
+         "\"stats_submit_calls\":%llu,\"stats_submitted_ops\":%llu,\"stats_poll_calls\":%llu,"
+         "\"stats_wait_calls\":%llu,\"stats_completed_ops\":%llu,\"stats_canceled_ops\":%llu,"
+         "\"stats_completion_errors\":%llu,\"stats_short_completions\":%llu,"
+@@ -389,6 +406,17 @@ inline void emit_record(const Record& r) {
+         static_cast<unsigned long long>(r.empty_wakes),
+         static_cast<unsigned long long>(r.passes), static_cast<unsigned long long>(r.waits),
+         static_cast<unsigned long long>(r.extra_a), static_cast<unsigned long long>(r.extra_b),
++        static_cast<unsigned long long>(r.r3_arm),
++        static_cast<unsigned long long>(r.r3_entry_calls),
++        static_cast<unsigned long long>(r.r3_group_calls),
++        static_cast<unsigned long long>(r.r3_single_calls),
++        static_cast<unsigned long long>(r.r3_accepted),
++        static_cast<unsigned long long>(r.r3_prefix_max),
++        static_cast<unsigned long long>(r.r3_suffix_single_calls),
++        static_cast<unsigned long long>(r.r3_flush_attempts),
++        static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
++        static_cast<unsigned long long>(r.r3_gate_stops),
++        static_cast<unsigned long long>(r.r3_untouched),
+         static_cast<unsigned long long>(r.stats_submit_calls),
+         static_cast<unsigned long long>(r.stats_submitted_ops),
+         static_cast<unsigned long long>(r.stats_poll_calls),
+@@ -414,6 +442,22 @@ inline void print_record(const Record& r) {
+         r.case_id.c_str(), r.rep, r.measured ? "" : " warmup", r.ops, r.wall_s, r.ops_per_sec,
+         r.mib_per_sec, r.cpu_s, r.cpu_util * 100.0, r.latency.p50_ns, r.latency.p95_ns,
+         r.latency.p99_ns, r.latency.max_ns, r.latency.n);
++    if (r.r3_arm != 0) {
++        std::printf("      r3 arm=%llu entries=%llu groups=%llu singles=%llu accepted=%llu "
++                    "prefix_max=%llu suffix_singles=%llu flushes=%llu ineligible=%llu "
++                    "gate_stops=%llu untouched=%llu\n",
++                    static_cast<unsigned long long>(r.r3_arm),
++                    static_cast<unsigned long long>(r.r3_entry_calls),
++                    static_cast<unsigned long long>(r.r3_group_calls),
++                    static_cast<unsigned long long>(r.r3_single_calls),
++                    static_cast<unsigned long long>(r.r3_accepted),
++                    static_cast<unsigned long long>(r.r3_prefix_max),
++                    static_cast<unsigned long long>(r.r3_suffix_single_calls),
++                    static_cast<unsigned long long>(r.r3_flush_attempts),
++                    static_cast<unsigned long long>(r.r3_ineligible_fallbacks),
++                    static_cast<unsigned long long>(r.r3_gate_stops),
++                    static_cast<unsigned long long>(r.r3_untouched));
++    }
+ }
+ 
+ // One timestamp pair; the throughput phase must not call the clock inside its
+diff --git a/bench/bench_w02_pipeline.cpp b/bench/bench_w02_pipeline.cpp
+index 87dd02ac..95cc4b79 100644
+--- a/bench/bench_w02_pipeline.cpp
++++ b/bench/bench_w02_pipeline.cpp
+@@ -2,6 +2,7 @@
+ // in-flight request owns its own destination buffer.
+ 
+ #include "bench_common.hpp"
++#include "r3_ready_batch.hpp"
+ 
+ #include <sluice/async/async_io_context.hpp>
+ #include <sluice/async/request_scope.hpp>
+@@ -166,6 +167,7 @@ struct PhaseResult {
+     PipelineCounters counters;
+     std::vector<double> latencies;
+     AsyncStats stats_delta;
++    bench::r3::Counters r3;
+ };
+ 
+ AsyncStats stats_diff(const AsyncStats& after, const AsyncStats& before) {
+@@ -226,7 +228,9 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+         ScopeTicket<std::size_t> ticket;
+         std::size_t slot = 0;
+         std::uint64_t offset = 0;
+-        double submitted_ns = 0.0;
++        // Unified latency origin: after the ReadOp is fully built, before any
++        // submission work, identical in meaning across arms.
++        double ready_ns = 0.0;
+     };
+ 
+     PhaseResult result;
+@@ -344,6 +348,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+             op.dst = buffers[slot].data();
+             op.len = params.block_size;
+             op.offset = offset;
++            const double op_ready_ns = instrument ? bench::now_ns() : 0.0;
+             ++result.counters.submits;
+             auto ticket = scope.submit_read(op);
+             if (!ticket.has_value()) {
+@@ -355,9 +360,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+                 result.failure = "submit failed: " + describe(ticket.error());
+                 return result;
+             }
+-            window.push_back(
+-                Inflight{ticket.value(), slot, offset,
+-                         instrument ? bench::now_ns() : 0.0});
++            window.push_back(Inflight{ticket.value(), slot, offset, op_ready_ns});
+             ++submitted;
+         }
+         if (window.empty()) {
+@@ -417,7 +420,7 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+             return result;
+         }
+         if (instrument) {
+-            result.latencies.push_back(bench::now_ns() - entry.submitted_ns);
++            result.latencies.push_back(bench::now_ns() - entry.ready_ns);
+         }
+         if (verify) {
+             const auto mismatch = bench::verify_pattern(buffers[entry.slot].data(),
+@@ -457,6 +460,231 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+     return result;
+ }
+ 
++// R3 research arm (#595): the same bounded sliding-window caller shape with
++// the submission policy replaced by the ready-batch adapter. A0's per-item
++// scope path is untouched; here submissions bypass RequestScope (the batch
++// entry is context-level) and the oldest request is waited on with the same
++// ctx.wait_one primitive the scope itself parks in.
++PhaseResult run_pipeline_phase_r3(const PipelineParams& params, const std::string& path,
++                                  bool instrument, bool verify, bool stats_enabled,
++                                  bench::r3::Arm arm) {
++    using sluice::async::Request;
++    PhaseResult result;
++
++    auto opened = File::open(path, rw_open_existing());
++    if (!opened.has_value()) {
++        result.ok = false;
++        result.failure = "open failed: " + describe(opened.error());
++        return result;
++    }
++    File file = std::move(opened).value();
++
++    AsyncStats stats;
++    std::string backend_failure;
++    const std::size_t backend_capacity =
++        params.core_capacity != 0
++            ? params.core_capacity
++            : std::max(params.depth,
++                       params.scope_capacity != 0 ? params.scope_capacity : params.depth);
++    auto context = make_context(*params.backend, backend_capacity, params.workers,
++                                backend_failure, stats_enabled ? &stats : nullptr);
++    if (!context.has_value()) {
++        result.ok = false;
++        result.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
++        return result;
++    }
++    AsyncIoContext ctx = std::move(*context);
++
++    bench::r3::Adapter adapter(ctx, arm);
++
++    const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
++    std::vector<std::vector<std::byte>> buffers(
++        params.depth, std::vector<std::byte>(params.block_size));
++    for (std::size_t i = 0; i < params.depth; ++i) {
++        bench::fill_pattern(buffers[i].data(), params.block_size, 0);
++    }
++
++    struct R3Inflight {
++        Request<std::size_t> request;
++        std::size_t slot = 0;
++        std::uint64_t offset = 0;
++        double ready_ns = 0.0;
++    };
++
++    std::vector<ReadOp> ready;
++    std::vector<double> ready_ns;
++    std::vector<std::size_t> slots;
++    std::vector<Request<std::size_t>> accepted;
++    ready.reserve(params.depth);
++    ready_ns.reserve(params.depth);
++    slots.reserve(params.depth);
++    accepted.reserve(params.depth);
++
++    std::deque<R3Inflight> window;
++    std::size_t submitted = 0;
++    std::size_t completed = 0;
++    std::vector<std::size_t> free_slots(params.depth);
++    for (std::size_t i = 0; i < params.depth; ++i) {
++        free_slots[i] = i;
++    }
++
++    const auto fail = [&result](const std::string& what) {
++        result.ok = false;
++        result.failure = what;
++    };
++
++    AsyncStats before = stats;
++    const bench::TimePoint start = bench::now();
++    while (completed < params.request_count && result.ok) {
++        while (window.size() < params.depth && submitted < params.request_count) {
++            const std::size_t want =
++                std::min(params.depth - window.size(), params.request_count - submitted);
++            const std::size_t base = submitted;
++            ready.clear();
++            ready_ns.clear();
++            slots.clear();
++            for (std::size_t k = 0; k < want; ++k) {
++                const std::size_t sequence = base + k;
++                const std::size_t slot = free_slots.back();
++                free_slots.pop_back();
++                ReadOp op;
++                op.file = NativeFileRef(file);
++                op.dst = buffers[slot].data();
++                op.len = params.block_size;
++                op.offset =
++                    static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
++                ready.push_back(op);
++                ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
++                slots.push_back(slot);
++            }
++            auto outcome = adapter.submit(std::span<const ReadOp>(ready.data(), ready.size()),
++                                           accepted);
++            result.r3.entry_calls += outcome.counters.entry_calls;
++            result.r3.group_calls += outcome.counters.group_calls;
++            result.r3.single_calls += outcome.counters.single_calls;
++            result.r3.accepted += outcome.counters.accepted;
++            result.r3.prefix_max =
++                std::max(result.r3.prefix_max, outcome.counters.prefix_max);
++            result.r3.suffix_single_calls += outcome.counters.suffix_single_calls;
++            result.r3.flush_attempts += outcome.counters.flush_attempts;
++            result.r3.ineligible_fallbacks += outcome.counters.ineligible_fallbacks;
++            result.r3.gate_stops += outcome.counters.gate_stops;
++            result.r3.rejected_calls += outcome.counters.rejected_calls;
++            result.r3.untouched += outcome.counters.untouched;
++            if (outcome.error.has_value()) {
++                fail("r3 submit failed: " + describe(*outcome.error));
++                break;
++            }
++            if (accepted.size() != want) {
++                fail("r3 adapter disposed " + std::to_string(accepted.size()) + " of " +
++                     std::to_string(want) + " ready reads");
++                break;
++            }
++            for (std::size_t k = 0; k < want; ++k) {
++                window.push_back(
++                    R3Inflight{std::move(accepted[k]), slots[k],
++                               static_cast<std::uint64_t>((base + k) % blocks) *
++                                   params.block_size,
++                               ready_ns[k]});
++            }
++            result.counters.submits += want;
++            submitted += want;
++        }
++        if (!result.ok) {
++            break;
++        }
++        if (window.empty()) {
++            fail("pipeline stalled with an empty window at operation " +
++                 std::to_string(completed));
++            break;
++        }
++
++        R3Inflight& oldest = window.front();
++        ++result.counters.waits;
++        const auto deadline =
++            std::chrono::steady_clock::now() + kWaitDeadline;
++        for (;;) {
++            if (oldest.request.ready()) {
++                break;
++            }
++            const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
++                deadline - std::chrono::steady_clock::now());
++            if (remaining.count() <= 0) {
++                fail("wait deadline expired before the oldest request completed");
++                break;
++            }
++            auto woke = ctx.wait_one(remaining);
++            if (!woke.has_value()) {
++                fail("wait failed: " + describe(woke.error()));
++                break;
++            }
++            switch (woke.value().kind) {
++            case AsyncIoContext::ProgressWaitOutcome::Kind::progress:
++            case AsyncIoContext::ProgressWaitOutcome::Kind::deadline_expired:
++                break;
++            case AsyncIoContext::ProgressWaitOutcome::Kind::control_interrupted:
++                fail("progress wait interrupted by sticky control");
++                break;
++            case AsyncIoContext::ProgressWaitOutcome::Kind::health_failure:
++                fail("progress wait reported a health failure");
++                break;
++            }
++            if (!result.ok) {
++                break;
++            }
++        }
++        if (!result.ok) {
++            break;
++        }
++
++        const auto observed = oldest.request.take_result();
++        if (observed.readiness != RequestReadiness::ready) {
++            fail("take did not observe a ready result at operation " +
++                 std::to_string(completed));
++            break;
++        }
++        if (!observed.result.has_value()) {
++            fail("operation failed: " + describe(observed.result.error()));
++            break;
++        }
++        if (observed.result.value() != params.block_size) {
++            fail("short read: " + std::to_string(observed.result.value()) + " of " +
++                 std::to_string(params.block_size));
++            break;
++        }
++        if (instrument) {
++            result.latencies.push_back(bench::now_ns() - oldest.ready_ns);
++        }
++        if (verify) {
++            const auto mismatch = bench::verify_pattern(buffers[oldest.slot].data(),
++                                                        params.block_size, oldest.offset);
++            if (!mismatch.ok) {
++                fail("byte mismatch at absolute " +
++                     std::to_string(mismatch.first_bad_position) + " (operation " +
++                     std::to_string(completed) + ", buffer slot " +
++                     std::to_string(oldest.slot) + ", offset " +
++                     std::to_string(oldest.offset) + ")");
++                break;
++            }
++        }
++        result.bytes += observed.result.value();
++        ++result.ops;
++        ++completed;
++        free_slots.push_back(oldest.slot);
++        window.pop_front();
++    }
++    const bench::TimePoint end = bench::now();
++    result.wall_s = bench::seconds_between(start, end);
++
++    const auto outcome = ctx.shutdown(ShutdownPolicy::drain);
++    if (!outcome.has_value()) {
++        result.ok = false;
++        result.failure = "shutdown failed";
++    }
++    result.stats_delta = stats_diff(stats, before);
++    return result;
++}
++
+ bench::CaseMeta make_meta(const PipelineParams& params) {
+     bench::CaseMeta meta;
+     const std::string bound = std::to_string(params.depth);
+@@ -509,9 +737,13 @@ bool uring_constructible(const BackendChoice& choice, std::string& reason) {
+ 
+ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params,
+                        const std::string& path, std::size_t order_index, std::size_t rep,
+-                       bool measured) {
++                       bool measured, bench::r3::Arm arm) {
+     const bench::CaseMeta meta = make_meta(params);
+     bench::Record record = bench::make_record(meta, cfg, rep, measured, order_index);
++    record.r3_arm = static_cast<std::uint64_t>(arm);
++    if (arm != bench::r3::Arm::a0) {
++        record.notes += std::string("; r3_arm=") + bench::r3::arm_name(arm);
++    }
+ 
+     if (!params.backend->available) {
+         record.ok = false;
+@@ -521,9 +753,21 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+         return 1;
+     }
+ 
++    const bench::r3::Arm effective_arm =
++        (params.backend->name == "uring" && !params.saturating) ? arm : bench::r3::Arm::a0;
++    if (effective_arm != arm) {
++        record.ok = false;
++        record.failure = "NOT_RUN_WITH_REASON: r3 arm requires the uring sliding-window phase";
++        bench::emit_record(record);
++        bench::print_record(record);
++        return 1;
++    }
++
+     const double cpu_before = bench::process_cpu_seconds();
+     const PhaseResult phase =
+-        run_pipeline_phase(params, path, false, false, cfg.stats_enabled);
++        arm == bench::r3::Arm::a0
++            ? run_pipeline_phase(params, path, false, false, cfg.stats_enabled)
++            : run_pipeline_phase_r3(params, path, false, false, cfg.stats_enabled, arm);
+     const double cpu_after = bench::process_cpu_seconds();
+ 
+     int failed = 0;
+@@ -549,6 +793,16 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     record.waits = phase.counters.waits;
+     record.extra_a = phase.counters.accepted_at_saturation;
+     record.extra_b = phase.counters.rejected_at_saturation;
++    record.r3_entry_calls = phase.r3.entry_calls;
++    record.r3_group_calls = phase.r3.group_calls;
++    record.r3_single_calls = phase.r3.single_calls;
++    record.r3_accepted = phase.r3.accepted;
++    record.r3_prefix_max = phase.r3.prefix_max;
++    record.r3_suffix_single_calls = phase.r3.suffix_single_calls;
++    record.r3_flush_attempts = phase.r3.flush_attempts;
++    record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
++    record.r3_gate_stops = phase.r3.gate_stops;
++    record.r3_untouched = phase.r3.untouched;
+ 
+     std::optional<std::string> stats_failure =
+         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+@@ -578,7 +832,9 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     fill_stats(record, phase.stats_delta);
+ 
+     const PhaseResult oracle =
+-        run_pipeline_phase(params, path, false, true, cfg.stats_enabled);
++        arm == bench::r3::Arm::a0
++            ? run_pipeline_phase(params, path, false, true, cfg.stats_enabled)
++            : run_pipeline_phase_r3(params, path, false, true, cfg.stats_enabled, arm);
+     if (!oracle.ok) {
+         record.ok = false;
+         record.failure = "correctness oracle: " + oracle.failure;
+@@ -586,7 +842,9 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     }
+ 
+     const PhaseResult instrumented =
+-        run_pipeline_phase(params, path, true, false, cfg.stats_enabled);
++        arm == bench::r3::Arm::a0
++            ? run_pipeline_phase(params, path, true, false, cfg.stats_enabled)
++            : run_pipeline_phase_r3(params, path, true, false, cfg.stats_enabled, arm);
+     if (!instrumented.ok) {
+         record.ok = false;
+         record.failure = "latency pass: " + instrumented.failure;
+@@ -604,10 +862,12 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+ 
+ int main() {
+     const bench::EnvConfig cfg = bench::env_config();
++    const bench::r3::Arm arm = bench::r3::arm_from_env();
+     std::printf("========================================================\n");
+     std::printf("G0 W-02 bounded RequestScope pipeline benchmark\n");
+     std::printf("warmup=%zu measured_repetitions=%zu stats_wiring=%s\n", cfg.warmup,
+                 cfg.measured, cfg.stats_enabled ? "on" : "off");
++    std::printf("research arm=%s (SLUICE_595_R3_ARM)\n", bench::r3::arm_name(arm));
+     std::printf("========================================================\n");
+ 
+     bench::ensure_dir(cfg.tmp_dir);
+@@ -668,6 +928,13 @@ int main() {
+     add_tp(4096, 16, 16, 4, true);
+     add_uring(4096, 16, 16, true);
+ 
++    // Opt-in (#595 r3): shallow-depth control D2 absent from the frozen G0
++    // list; a default rebuild reproduces the frozen case list exactly.
++    if (std::getenv("SLUICE_BENCH_595_DEPTHS") != nullptr) {
++        add_tp(4096, 20000, 2, 2, false);
++        add_uring(4096, 20000, 2, false);
++    }
++
+     // Diagnostics vary one capacity at a time while the pipeline depth is fixed.
+     {
+         PipelineParams p;
+@@ -742,7 +1009,7 @@ int main() {
+                 continue;
+             }
+             failed += run_one_repetition(cfg, params, path, position,
+-                                        measured ? round - cfg.warmup : round, measured);
++                                        measured ? round - cfg.warmup : round, measured, arm);
+         }
+     }
+ 
+diff --git a/bench/bench_w03_external_loop.cpp b/bench/bench_w03_external_loop.cpp
+index c94edd81..43623787 100644
+--- a/bench/bench_w03_external_loop.cpp
++++ b/bench/bench_w03_external_loop.cpp
+@@ -2,6 +2,7 @@
+ // submitter parks on its own condition variable; neither thread busy-polls.
+ 
+ #include "bench_common.hpp"
++#include "r3_ready_batch.hpp"
+ 
+ #include <sluice/async/async_io_context.hpp>
+ #include <sluice/async/request.hpp>
+@@ -133,6 +134,9 @@ struct LoopParams {
+     std::size_t request_count = 20000;
+     std::size_t depth = 16;
+     std::size_t workers = 4;
++    // 0 means "same as depth".
++    std::size_t max_refill = 0;
++    std::string label_suffix;
+ };
+ 
+ // Shared between the driver thread (progress owner) and the submitter. The
+@@ -165,6 +169,7 @@ struct PhaseResult {
+     std::uint64_t passes = 0;
+     std::uint64_t retry_scheduled = 0;
+     std::uint64_t submits = 0;
++    bench::r3::Counters r3;
+     std::vector<double> latencies;
+     AsyncStats stats_delta;
+ };
+@@ -258,7 +263,8 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+ }
+ 
+ PhaseResult run_external_phase(const LoopParams& params, const std::string& path,
+-                               bool instrument, bool verify, bool stats_enabled) {
++                               bool instrument, bool verify, bool stats_enabled,
++                               bench::r3::Arm arm) {
+     PhaseResult phase;
+ 
+     auto opened = File::open(path, rw_open_existing());
+@@ -312,6 +318,10 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+                            [&] { return shared.driver_attached || shared.driver_failed; });
+     }
+ 
++    std::optional<bench::r3::Adapter> adapter;
++    if (arm != bench::r3::Arm::a0)
++        adapter.emplace(ctx, arm);
++
+     const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
+     std::vector<std::vector<std::byte>> buffers(
+         params.depth, std::vector<std::byte>(params.block_size));
+@@ -323,7 +333,10 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+         Request<std::size_t> request;
+         std::size_t slot = 0;
+         std::uint64_t offset = 0;
+-        double submitted_ns = 0.0;
++        // Unified latency origin: the instant the ReadOp for this item is fully
++        // built, before any arm-specific submission work. Both arms record it at
++        // the same semantic point so latencies include prep, scan and submit.
++        double ready_ns = 0.0;
+     };
+ 
+     AsyncStats before = stats;
+@@ -334,27 +347,103 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+     bool failed = false;
+     std::string failure;
+ 
++    const std::size_t max_refill =
++        params.max_refill != 0 ? params.max_refill : params.depth;
++    std::vector<ReadOp> ready;
++    std::vector<double> ready_ns;
++    std::vector<Request<std::size_t>> accepted;
++    if (adapter.has_value()) {
++        ready.reserve(params.depth);
++        ready_ns.reserve(params.depth);
++        accepted.reserve(params.depth);
++    }
+     const bench::TimePoint start = bench::now();
+     while (settled < params.request_count && !failed) {
+         while (window.size() < params.depth && submitted < params.request_count) {
+-            const std::size_t slot = submitted % params.depth;
+-            const std::uint64_t offset =
+-                static_cast<std::uint64_t>(submitted % blocks) * params.block_size;
+-            ReadOp op;
+-            op.file = NativeFileRef(file);
+-            op.dst = buffers[slot].data();
+-            op.len = params.block_size;
+-            op.offset = offset;
+-            ++phase.submits;
+-            auto result = ctx.submit_read(op);
+-            if (!result.has_value()) {
+-                failure = "submit_read rejected: " + describe(result.error());
+-                failed = true;
++            const std::size_t want = std::min(
++                {params.depth - window.size(), params.request_count - submitted, max_refill});
++            const std::size_t base = submitted;
++            if (adapter.has_value()) {
++                ready.clear();
++                ready_ns.clear();
++                ready.reserve(want);
++                for (std::size_t k = 0; k < want; ++k) {
++                    const std::size_t sequence = base + k;
++                    const std::size_t slot = sequence % params.depth;
++                    ReadOp op;
++                    op.file = NativeFileRef(file);
++                    op.dst = buffers[slot].data();
++                    op.len = params.block_size;
++                    op.offset = static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
++                    ready.push_back(op);
++                    ready_ns.push_back(instrument ? bench::now_ns() : 0.0);
++                }
++                auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
++                                               accepted);
++                phase.r3.entry_calls += outcome.counters.entry_calls;
++                phase.r3.group_calls += outcome.counters.group_calls;
++                phase.r3.single_calls += outcome.counters.single_calls;
++                phase.r3.accepted += outcome.counters.accepted;
++                phase.r3.prefix_max =
++                    std::max(phase.r3.prefix_max, outcome.counters.prefix_max);
++                phase.r3.suffix_single_calls += outcome.counters.suffix_single_calls;
++                phase.r3.flush_attempts += outcome.counters.flush_attempts;
++                phase.r3.ineligible_fallbacks += outcome.counters.ineligible_fallbacks;
++                phase.r3.gate_stops += outcome.counters.gate_stops;
++                phase.r3.rejected_calls += outcome.counters.rejected_calls;
++                phase.r3.untouched += outcome.counters.untouched;
++                const std::size_t accepted_count = accepted.size();
++                for (std::size_t k = 0; k < accepted_count; ++k) {
++                    const std::size_t sequence = base + k;
++                    window.push_back(
++                        Inflight{std::move(accepted[k]), sequence % params.depth,
++                                 static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
++                                 ready_ns[k]});
++                }
++                phase.submits += accepted_count;
++                submitted += accepted_count;
++                if (outcome.error.has_value()) {
++                    failure = "submit_read rejected: " + describe(*outcome.error);
++                    failed = true;
++                    break;
++                }
++                if (accepted_count != want) {
++                    failure = "research adapter disposed " + std::to_string(accepted_count) +
++                              " of " + std::to_string(want) + " ready reads";
++                    failed = true;
++                    break;
++                }
++            } else {
++                for (std::size_t k = 0; k < want; ++k) {
++                    const std::size_t sequence = base + k;
++                    const std::size_t slot = sequence % params.depth;
++                    ReadOp op;
++                    op.file = NativeFileRef(file);
++                    op.dst = buffers[slot].data();
++                    op.len = params.block_size;
++                    op.offset =
++                        static_cast<std::uint64_t>(sequence % blocks) * params.block_size;
++                    const double op_ready_ns = instrument ? bench::now_ns() : 0.0;
++                    ++phase.submits;
++                    auto result = ctx.submit_read(op);
++                    if (!result.has_value()) {
++                        failure = "submit_read rejected: " + describe(result.error());
++                        failed = true;
++                        break;
++                    }
++                    window.push_back(
++                        Inflight{std::move(result).value(), slot,
++                                 static_cast<std::uint64_t>(sequence % blocks) * params.block_size,
++                                 op_ready_ns});
++                    ++submitted;
++                }
++                if (failed) {
++                    break;
++                }
++            }
++            if (params.max_refill != 0) {
+                 break;
+             }
+-            window.push_back(Inflight{std::move(result).value(), slot, offset,
+-                                      instrument ? bench::now_ns() : 0.0});
+-            ++submitted;
+         }
+         if (failed) {
+             break;
+@@ -409,7 +498,7 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+                 }
+             }
+             if (instrument) {
+-                phase.latencies.push_back(bench::now_ns() - front.submitted_ns);
++                phase.latencies.push_back(bench::now_ns() - front.ready_ns);
+             }
+             phase.bytes += observed.result.value();
+             ++phase.ops;
+@@ -470,12 +559,16 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+ 
+ bench::CaseMeta make_meta(const LoopParams& params) {
+     bench::CaseMeta meta;
+-    meta.case_id = "W03-" + params.backend->name + "-4k-d" + std::to_string(params.depth) +
++    meta.case_id = "W03-" + params.backend->name + "-" +
++                   (params.block_size == 4096 ? "4k" : "64k") + "-d" +
++                   std::to_string(params.depth) +
+                    (params.backend->name == "threadpool" ? "-w" + std::to_string(params.workers)
+-                                                         : "");
++                                                         : "") +
++                   params.label_suffix;
+     meta.workload = "W-03";
+     meta.backend = params.backend->name;
+-    meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, 4096B positional reads";
++    meta.dataset = std::to_string(kFixtureBytes >> 20) + "MiB file, " +
++                   std::to_string(params.block_size) + "B positional reads";
+     meta.cache_policy = "page_cache_resident";
+     meta.filesystem = "tmpfs";
+     meta.notes = "app-owned epoll loop on the borrowed progress notification fd; "
+@@ -504,9 +597,11 @@ void fill_stats(bench::Record& record, const AsyncStats& s) {
+ 
+ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+                        const std::string& path, std::size_t order_index, std::size_t rep,
+-                       bool measured) {
++                       bool measured, bench::r3::Arm arm) {
+     const bench::CaseMeta meta = make_meta(params);
+     bench::Record record = bench::make_record(meta, cfg, rep, measured, order_index);
++    record.r3_arm = static_cast<std::uint64_t>(arm);
++    record.notes += std::string("; r3_arm=") + bench::r3::arm_name(arm);
+ 
+     if (!params.backend->available) {
+         record.ok = false;
+@@ -518,7 +613,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+ 
+     const double cpu_before = bench::process_cpu_seconds();
+     const PhaseResult phase =
+-        run_external_phase(params, path, false, false, cfg.stats_enabled);
++        run_external_phase(params, path, false, false, cfg.stats_enabled, arm);
+     const double cpu_after = bench::process_cpu_seconds();
+ 
+     if (!phase.ok) {
+@@ -543,6 +638,16 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     record.empty_wakes = phase.empty_wakes;
+     record.passes = phase.passes;
+     record.extra_a = phase.retry_scheduled;
++    record.r3_entry_calls = phase.r3.entry_calls;
++    record.r3_group_calls = phase.r3.group_calls;
++    record.r3_single_calls = phase.r3.single_calls;
++    record.r3_accepted = phase.r3.accepted;
++    record.r3_prefix_max = phase.r3.prefix_max;
++    record.r3_suffix_single_calls = phase.r3.suffix_single_calls;
++    record.r3_flush_attempts = phase.r3.flush_attempts;
++    record.r3_ineligible_fallbacks = phase.r3.ineligible_fallbacks;
++    record.r3_gate_stops = phase.r3.gate_stops;
++    record.r3_untouched = phase.r3.untouched;
+ 
+     std::optional<std::string> stats_failure =
+         bench::stats_wiring_failure(phase.stats_delta, cfg.stats_enabled);
+@@ -582,7 +687,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     int failed = 0;
+ 
+     const PhaseResult oracle =
+-        run_external_phase(params, path, false, true, cfg.stats_enabled);
++        run_external_phase(params, path, false, true, cfg.stats_enabled, arm);
+     if (!oracle.ok) {
+         record.ok = false;
+         record.failure = "correctness oracle: " + oracle.failure;
+@@ -590,7 +695,7 @@ int run_one_repetition(const bench::EnvConfig& cfg, const LoopParams& params,
+     }
+ 
+     const PhaseResult instrumented =
+-        run_external_phase(params, path, true, false, cfg.stats_enabled);
++        run_external_phase(params, path, true, false, cfg.stats_enabled, arm);
+     if (!instrumented.ok) {
+         record.ok = false;
+         record.failure = "latency pass: " + instrumented.failure;
+@@ -651,6 +756,31 @@ int main() {
+     add(threadpool, 64, 4);
+     add(uring, 64, 0);
+ 
++    if (bench::r3::research_cases_enabled()) {
++        auto add_r3 = [&](std::size_t block_size, std::size_t request_count, std::size_t depth,
++                          std::size_t max_refill, const char* suffix) {
++            LoopParams p;
++            p.backend = &uring;
++            p.block_size = block_size;
++            p.request_count = request_count;
++            p.depth = depth;
++            p.workers = 0;
++            p.max_refill = max_refill;
++            p.label_suffix = suffix;
++            cases.push_back(p);
++        };
++        add_r3(4096, 2, 2, 2, "-r3d2pos");
++        add_r3(4096, 20000, 2, 1, "-r3d2serial");
++        add_r3(4096, 20000, 3, 3, "-r3d3");
++        add_r3(4096, 64, 16, 16, "-r3d16cap");
++        add_r3(65536, 2000, 16, 16, "-r3d16-64k");
++    }
++
++    const bench::r3::Arm arm = bench::r3::arm_from_env();
++    std::printf("research arm=%s (SLUICE_595_R3_ARM), research cases=%s\n",
++                bench::r3::arm_name(arm),
++                bench::r3::research_cases_enabled() ? "on" : "off");
++
+     int failed = bench::oracle_self_test_case(cfg);
+     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
+         const bool measured = round >= cfg.warmup;
+@@ -662,7 +792,7 @@ int main() {
+                 continue;
+             }
+             failed += run_one_repetition(cfg, params, path, position,
+-                                        measured ? round - cfg.warmup : round, measured);
++                                        measured ? round - cfg.warmup : round, measured, arm);
+         }
+     }
+ 
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..b83f41ab 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -311,6 +311,14 @@ class ProgressSource {
+         prepark_pause_gate_.store(gate, std::memory_order_release);
+     }
+ 
++    void set_settlement_start_pause_gate_for_test(PauseGate* gate) noexcept {
++        settlement_start_gate_.store(gate, std::memory_order_release);
++    }
++
++    void wait_at_settlement_start_for_test() noexcept {
++        pause_at_gate_(settlement_start_gate_);
++    }
++
+     void set_progress_epoch_for_test(std::uint64_t epoch) noexcept {
+         std::lock_guard<std::mutex> lk(mtx_);
+         progress_epoch_ = epoch;
+@@ -472,6 +480,7 @@ class ProgressSource {
+     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
+     std::atomic<PauseGate*> prerevalidate_pause_gate_{nullptr};
+     std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
++    std::atomic<PauseGate*> settlement_start_gate_{nullptr};
+ #endif
+ };
+ 
+diff --git a/include/sluice/async/detail/test_access.hpp b/include/sluice/async/detail/test_access.hpp
+index f93873b0..9b4b445d 100644
+--- a/include/sluice/async/detail/test_access.hpp
++++ b/include/sluice/async/detail/test_access.hpp
+@@ -2,12 +2,20 @@
+ 
+ #include <sluice/async/async_io_context.hpp>
+ #include <sluice/async/detail/async_backend.hpp>
++#include <sluice/async/detail/initiation_precheck.hpp>
+ #include <sluice/async/detail/progress_source.hpp>
+ #include <sluice/async/detail/request_core.hpp>
++#include <sluice/async/detail/uring_backend.hpp>
++#include <sluice/detail/file_semantics.hpp>
+ 
++#include <algorithm>
++#include <array>
+ #include <atomic>
++#include <cstddef>
+ #include <cstdint>
+ #include <mutex>
++#include <optional>
++#include <span>
+ 
+ namespace sluice::async::detail {
+ 
+@@ -17,6 +25,115 @@ namespace sluice::async::detail {
+ struct TestAccess {
+     static RequestCore* context_core(AsyncIoContext& ctx) noexcept { return ctx.core_.get(); }
+ 
++    static AsyncBackend* context_backend(AsyncIoContext& ctx) noexcept { return ctx.backend_.get(); }
++
++    template <class T>
++    static Request<T> make_request(AsyncIoContext& ctx, RequestKey key) noexcept {
++        return Request<T>{ctx.core_.get(), ctx.backend_.get(), request_id_of(key)};
++    }
++
++    struct ReadyReadsBatch {
++        bool batch_backend = false;
++        std::size_t accepted = 0;
++        std::size_t untouched_begin = 0;
++        std::size_t untouched = 0;
++        UringAsyncBackend::ReadyBatchStop stop = UringAsyncBackend::ReadyBatchStop::input_exhausted;
++        IoError error{};
++        std::array<Request<std::size_t>, UringAsyncBackend::ready_batch_cap> requests{};
++        std::size_t flush_attempts = 0;
++        bool residue_advertised = false;
++    };
++
++    // Lock order: access_mtx_ -> backend dispatch_mtx_ -> core mutex_.
++    // Never call submit_read here: it would reacquire access_mtx_.
++    static ReadyReadsBatch context_submit_ready_reads(AsyncIoContext& ctx,
++                                                      std::span<const ReadOp> ready) noexcept {
++        ReadyReadsBatch out;
++        if (ready.empty())
++            return out;
++
++        std::size_t precheck_prefix = 0;
++        std::optional<IoError> precheck_error;
++        const std::size_t precheck_limit =
++            std::min(ready.size(), UringAsyncBackend::ready_batch_cap);
++        for (; precheck_prefix < precheck_limit; ++precheck_prefix) {
++            if (auto rejection =
++                    initiation_rejection(ready[precheck_prefix].file,
++                                         sluice::detail::FileOperation::read);
++                rejection.has_value()) {
++                precheck_error = rejection;
++                break;
++            }
++        }
++
++        std::lock_guard<std::mutex> lk(ctx.access_mtx_);
++        if (ctx.backend_ == nullptr) {
++            out.stop = UringAsyncBackend::ReadyBatchStop::rejected;
++            out.error = IoError{IoError::Code::invalid_state};
++            out.untouched_begin = 1;
++            out.untouched = ready.size() - 1;
++            return out;
++        }
++        auto* backend = dynamic_cast<UringAsyncBackend*>(ctx.backend_.get());
++        if (backend == nullptr) {
++            out.stop = UringAsyncBackend::ReadyBatchStop::rejected;
++            out.error = IoError{IoError::Code::not_supported};
++            out.untouched_begin = 1;
++            out.untouched = ready.size() - 1;
++            return out;
++        }
++        out.batch_backend = true;
++
++        if (precheck_prefix == 0) {
++            out.stop = UringAsyncBackend::ReadyBatchStop::rejected;
++            out.error = *precheck_error;
++            out.untouched_begin = 1;
++            out.untouched = ready.size() - 1;
++            return out;
++        }
++        if (ctx.execution_closed_) {
++            out.stop = UringAsyncBackend::ReadyBatchStop::rejected;
++            out.error = IoError{IoError::Code::invalid_state};
++            out.untouched_begin = 1;
++            out.untouched = ready.size() - 1;
++            return out;
++        }
++
++        const std::span<const ReadOp> batch_span =
++            precheck_error.has_value() ? ready.first(precheck_prefix) : ready;
++        const UringAsyncBackend::ReadyReadBatchReport report =
++            backend->submit_ready_reads(batch_span);
++        out.accepted = report.accepted;
++        out.untouched_begin = report.untouched_begin;
++        out.untouched = report.untouched;
++        out.stop = report.stop;
++        out.error = report.error;
++        out.flush_attempts = report.flush_attempts;
++        out.residue_advertised = report.residue_advertised;
++        if (report.stop == UringAsyncBackend::ReadyBatchStop::recovery &&
++            report.accepted == 0 && report.error.code == IoError::Code::backend_error &&
++            !ctx.core_->health_failed() && !ctx.core_->admission_open()) {
++            out.stop = UringAsyncBackend::ReadyBatchStop::rejected;
++            out.error = IoError{IoError::Code::invalid_state};
++            out.untouched_begin = 1;
++            out.untouched = ready.size() - 1;
++            return out;
++        }
++        for (std::size_t i = 0; i < report.accepted; ++i) {
++            out.requests[i] = Request<std::size_t>{ctx.core_.get(), ctx.backend_.get(),
++                                                   request_id_of(report.keys[i])};
++        }
++        if (precheck_error.has_value()) {
++            if (report.accepted == precheck_prefix) {
++                out.stop = UringAsyncBackend::ReadyBatchStop::rejected;
++                out.error = *precheck_error;
++                out.untouched_begin = precheck_prefix + 1;
++            }
++            out.untouched = ready.size() - out.untouched_begin;
++        }
++        return out;
++    }
++
+     static ProgressSource* context_progress_source(AsyncIoContext& ctx) noexcept {
+         return ctx.progress_.get();
+     }
+@@ -36,6 +153,15 @@ struct TestAccess {
+         }
+     }
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++
++    static void context_set_settlement_start_pause_gate(
++        AsyncIoContext& ctx, ProgressSource::PauseGate* gate) noexcept {
++        if (ctx.progress_ != nullptr) {
++            ctx.progress_->set_settlement_start_pause_gate_for_test(gate);
++        }
++    }
++
+     static void context_set_progress_prepark_counter(AsyncIoContext& ctx,
+                                                      std::atomic<int>* counter) noexcept {
+         if (ctx.progress_ != nullptr) {
+@@ -88,6 +214,8 @@ struct TestAccess {
+         }
+     }
+ 
++#endif
++
+     static bool context_progress_exhausted(const AsyncIoContext& ctx) noexcept {
+         return ctx.progress_ != nullptr && ctx.progress_->exhausted();
+     }
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..c36758b6 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -7,6 +7,7 @@
+ #include <sluice/error.hpp>
+ #include <sluice/result.hpp>
+ 
++#include <array>
+ #include <atomic>
+ #include <cassert>
+ #include <cstddef>
+@@ -14,6 +15,7 @@
+ #include <memory>
+ #include <mutex>
+ #include <optional>
++#include <span>
+ #include <type_traits>
+ #include <vector>
+ 
+@@ -86,6 +88,32 @@ class UringAsyncBackend : public AsyncBackend {
+ 
+     void close_admission();
+ 
++  public:
++    static constexpr std::size_t ready_batch_cap = 8;
++
++    enum class ReadyBatchStop : std::uint8_t {
++        input_exhausted,
++        rejected,
++        cap,
++        sq_budget,
++        control,
++        recovery,
++        ineligible,
++    };
++
++    struct ReadyReadBatchReport {
++        std::size_t accepted = 0;
++        std::size_t untouched_begin = 0;
++        std::size_t untouched = 0;
++        ReadyBatchStop stop = ReadyBatchStop::input_exhausted;
++        IoError error{};
++        std::array<detail::RequestKey, ready_batch_cap> keys{};
++        std::size_t flush_attempts = 0;
++        bool residue_advertised = false;
++    };
++
++    ReadyReadBatchReport submit_ready_reads(std::span<const ReadOp> ready) noexcept;
++
+ #if defined(SLUICE_HAS_LIBURING)
+ 
+     std::size_t slot_capacity() const noexcept override { return capacity_; }
+@@ -114,6 +142,7 @@ class UringAsyncBackend : public AsyncBackend {
+     std::size_t dispatch_size_for_test() const noexcept;
+     std::size_t transport_ledger_size_for_test() const noexcept;
+     std::size_t sq_ready_for_test() const noexcept;
++    bool cq_overflow_for_test() const noexcept;
+     std::size_t live_control_sqes_for_test() const noexcept;
+     unsigned eventfd_registrations_for_test() const noexcept;
+     unsigned eventfd_unregistrations_for_test() const noexcept;
+@@ -225,6 +254,18 @@ class UringAsyncBackend : public AsyncBackend {
+         }
+     }
+ 
++    struct AdmittedOp {
++        detail::RequestKey key{};
++        detail::RequestReservation reservation{};
++        bool zero_op = false;
++    };
++
++    void reset_delivery_locked_(detail::SlotIndex slot, detail::OperationKind kind) noexcept;
++
++    template <class Op>
++    Result<AdmittedOp> admit_(Op op, detail::OperationKind kind, detail::RequestOp core_op,
++                              bool dispatch_locked = false);
++
+     template <class Op>
+     Result<detail::RequestKey> submit_request(Op op, detail::OperationKind kind,
+                                               detail::RequestOp core_op);
+@@ -313,7 +354,9 @@ class UringAsyncBackend : public AsyncBackend {
+     std::unique_ptr<UringRingState> ring_state_;
+     std::unique_ptr<TransportLedger> transport_ledger_;
+ 
+-    bool have_ring_ = false;
++    // Retirement writes it under dispatch_mtx_; submit may read it
++    // concurrently, so the witness itself is atomic.
++    std::atomic<bool> have_ring_{false};
+     bool eventfd_registered_ = false;
+     std::optional<IoError> fatal_error_;
+ 
+diff --git a/src/async/async_io_context.cpp b/src/async/async_io_context.cpp
+index 1ef19101..c5b06b97 100644
+--- a/src/async/async_io_context.cpp
++++ b/src/async/async_io_context.cpp
+@@ -3,11 +3,11 @@
+ #include <sluice/async/detail/async_backend.hpp>
+ #include <sluice/async/detail/context_identity.hpp>
+ #include <sluice/async/detail/fail_fast.hpp>
++#include <sluice/async/detail/initiation_precheck.hpp>
+ #include <sluice/async/detail/request_core.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ 
+ #include <algorithm>
+-#include <optional>
+ #include <utility>
+ #include <vector>
+ 
+@@ -21,10 +21,6 @@ namespace {
+ // EAGAIN/EBUSY cannot busy-spin the owner.
+ constexpr std::chrono::milliseconds kTransportRetryInterval{10};
+ 
+-std::optional<IoError> initiation_rejection(const NativeFileRef& file, sluice::detail::FileOperation op) {
+-    return sluice::detail::rejection_of(sluice::detail::precheck_state_op(file.fd < 0, file.access, op));
+-}
+-
+ }
+ 
+ AsyncIoContext::AsyncIoContext(std::unique_ptr<AsyncBackend> backend, AsyncStats* stats)
+@@ -247,7 +243,7 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
+ 
+ 
+ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
+-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
++    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::read);
+         rejection.has_value()) {
+         return make_unexpected<Request<std::size_t>>(*rejection);
+     }
+@@ -269,7 +265,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
+ }
+ 
+ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
+-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::write);
++    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::write);
+         rejection.has_value()) {
+         return make_unexpected<Request<std::size_t>>(*rejection);
+     }
+@@ -289,7 +285,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
+ }
+ 
+ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
+-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
++    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::sync_data);
+         rejection.has_value()) {
+         return make_unexpected<Request<void>>(*rejection);
+     }
+@@ -309,7 +305,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
+ }
+ 
+ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
+-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
++    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::sync_all);
+         rejection.has_value()) {
+         return make_unexpected<Request<void>>(*rejection);
+     }
+@@ -329,7 +325,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
+ }
+ 
+ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
+-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
++    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
+         rejection.has_value()) {
+         return make_unexpected<Request<FileInfo>>(*rejection);
+     }
+@@ -349,7 +345,7 @@ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
+ }
+ 
+ Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
+-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
++    if (auto rejection = detail::initiation_rejection(op.file, sluice::detail::FileOperation::file_info);
+         rejection.has_value()) {
+         return make_unexpected<Request<FileSize>>(*rejection);
+     }
+@@ -481,6 +477,10 @@ ShutdownOutcome AsyncIoContext::drive_settlement_() {
+         return settlement_outcome_;
+     }
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++    progress_->wait_at_settlement_start_for_test();
++#endif
++
+     (void)core_->close_admission();
+ 
+     bool cancellation_applied =
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..b78cc9ed 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -69,6 +69,14 @@ Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp) {
+ std::size_t UringAsyncBackend::poll() {
+     return 0;
+ }
++UringAsyncBackend::ReadyReadBatchReport
++UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
++    ReadyReadBatchReport report;
++    report.untouched = ready.size();
++    report.stop = ReadyBatchStop::recovery;
++    report.error = IoError{IoError::Code::backend_error};
++    return report;
++}
+ void UringAsyncBackend::close_admission() {}
+ std::size_t UringAsyncBackend::outstanding() const noexcept {
+     return 0;
+@@ -373,6 +381,10 @@ bool UringAsyncBackend::internal_work_retired() const noexcept {
+ }
+ 
+ void UringAsyncBackend::retire_execution_resources() noexcept {
++    if (!have_ring_) {
++        return;
++    }
++    std::lock_guard<std::mutex> lk(dispatch_mtx_);
+     if (!have_ring_) {
+         return;
+     }
+@@ -397,8 +409,8 @@ void UringAsyncBackend::retire_execution_resources() noexcept {
+         }
+         eventfd_registered_ = false;
+     }
+-    ::io_uring_queue_exit(&ring_state_->ring);
+     have_ring_ = false;
++    ::io_uring_queue_exit(&ring_state_->ring);
+ }
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -420,27 +432,234 @@ bool UringAsyncBackend::injected_opcode_probe_failure() noexcept {
+ 
+ #endif
+ 
++namespace {
++
++constexpr bool batch_eligible_read(const ReadOp& op) noexcept {
++    return op.len == 4096 && op.dst != nullptr;
++}
++
++}
++
++UringAsyncBackend::ReadyReadBatchReport
++UringAsyncBackend::submit_ready_reads(std::span<const ReadOp> ready) noexcept {
++    ReadyReadBatchReport report;
++    if (ready.empty())
++        return report;
++
++    const auto note_outcome = [this](bool accepted, const IoError& error) noexcept {
++        bump(stats_, &AsyncStats::submit_calls);
++        if (accepted) {
++            bump(stats_, &AsyncStats::submitted_ops);
++        } else if (error.code == IoError::Code::would_block) {
++            bump(stats_, &AsyncStats::queue_full_retries);
++        } else if (error.code == IoError::Code::invalid_state) {
++            bump(stats_, &AsyncStats::invalid_state_rejections);
++        }
++    };
++    const auto note_outstanding = [this]() noexcept {
++        if (stats_ == nullptr)
++            return;
++        const std::size_t current = outstanding();
++        if (current > stats_->max_outstanding)
++            stats_->max_outstanding = current;
++    };
++
++    if (ready.size() == 1 || !batch_eligible_read(ready.front())) {
++        const auto admitted =
++            admit_(ready.front(), detail::OperationKind::read, detail::RequestOp::read);
++        if (!admitted.has_value()) {
++            report.stop = ReadyBatchStop::rejected;
++            report.error = admitted.error();
++            report.untouched_begin = 1;
++            report.untouched = ready.size() - 1;
++            note_outcome(false, admitted.error());
++            return report;
++        }
++        const AdmittedOp& a = admitted.value();
++        if (a.zero_op) {
++            publish_zero_op_inline(a.key, a.reservation);
++        } else {
++            const std::uint64_t flushes_before =
++                submit_flushes_.load(std::memory_order_relaxed);
++            dispatch_after_accept(a.reservation);
++            report.flush_attempts = static_cast<std::size_t>(
++                submit_flushes_.load(std::memory_order_relaxed) - flushes_before);
++        }
++        report.keys[0] = a.key;
++        report.accepted = 1;
++        report.untouched_begin = 1;
++        report.untouched = ready.size() - 1;
++        report.stop = ready.size() == 1 ? ReadyBatchStop::input_exhausted
++                                        : ReadyBatchStop::ineligible;
++        note_outcome(true, IoError{});
++        note_outstanding();
++        return report;
++    }
++
++    bool rejected = false;
++    bool ineligible = false;
++    bool advertise = false;
++    std::optional<IoError> poison_error;
++    {
++        std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        if (!have_ring_) {
++            report.stop = ReadyBatchStop::recovery;
++            report.error = IoError{IoError::Code::backend_error};
++            report.untouched = ready.size();
++            return report;
++        }
++        if (fatal_error_.has_value()) {
++            report.stop = ReadyBatchStop::recovery;
++            report.error = *fatal_error_;
++            report.untouched = ready.size();
++            return report;
++        }
++        if (pending_control_count_ != 0) {
++            report.stop = ReadyBatchStop::control;
++            report.untouched = ready.size();
++            return report;
++        }
++#if !defined(SLUICE_READY_BATCH_MUTANT_INCLUDES_PENDING_TRANSPORT)
++        if (dispatch_retry_remains_locked_()) {
++            report.stop = ReadyBatchStop::recovery;
++            report.error = IoError{IoError::Code::would_block};
++            report.untouched = ready.size();
++            return report;
++        }
++        const std::size_t sq_budget =
++            static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
++        const std::size_t limit = std::min({ready.size(), ready_batch_cap, sq_budget});
++#else
++        const std::size_t limit = std::min(ready.size(), ready_batch_cap);
++#endif
++
++        for (std::size_t i = 0; i < limit; ++i) {
++            if (!batch_eligible_read(ready[i])) {
++                ineligible = true;
++                break;
++            }
++            const auto admitted = admit_(ready[i], detail::OperationKind::read,
++                                         detail::RequestOp::read, true);
++            if (!admitted.has_value()) {
++                rejected = true;
++                report.error = admitted.error();
++                note_outcome(false, admitted.error());
++                break;
++            }
++            report.keys[report.accepted] = admitted.value().key;
++            ++report.accepted;
++            note_outcome(true, IoError{});
++        }
++
++        if (report.accepted != 0) {
++            for (std::size_t i = 0; i < report.accepted; ++i) {
++                dispatch_->push_back(
++                    detail::RequestReservation{report.keys[i].slot, report.keys[i].generation});
++            }
++            // SQ space is read under the lock that serializes every user-space
++            // SQE allocation, so the dispatch loop never submits mid-batch to
++            // make room.
++            const std::uint64_t flushes_before =
++                submit_flushes_.load(std::memory_order_relaxed);
++            const std::size_t sq_free =
++                static_cast<std::size_t>(::io_uring_sq_space_left(&ring_state_->ring));
++            const std::size_t dispatchable = std::min(report.accepted, sq_free);
++            for (std::size_t i = 0; i < dispatchable; ++i) {
++                const detail::RequestReservation emitted{report.keys[i].slot,
++                                                         report.keys[i].generation};
++                if (!dispatch_one_locked(emitted)) {
++                    break;
++                }
++#if defined(SLUICE_READY_BATCH_MUTANT_REDISPATCHES_CONSUMED)
++                dispatch_->push_back(emitted);
++#endif
++            }
++            if (!fatal_error_.has_value()) {
++                (void)submit_transport_locked();
++                service_pending_controls_locked_();
++            }
++            report.flush_attempts = static_cast<std::size_t>(
++                submit_flushes_.load(std::memory_order_relaxed) - flushes_before);
++            if (fatal_error_.has_value()) {
++                poison_error = *fatal_error_;
++                advertise = true;
++            } else if (dispatch_retry_remains_locked_()) {
++                advertise = true;
++            }
++        }
++    }
++
++    if (poison_error.has_value()) {
++        report.stop = ReadyBatchStop::recovery;
++        report.error = *poison_error;
++    } else if (ineligible) {
++        report.stop = ReadyBatchStop::ineligible;
++    } else if (rejected) {
++        report.stop = ReadyBatchStop::rejected;
++    } else if (report.accepted == ready.size()) {
++        report.stop = ReadyBatchStop::input_exhausted;
++    } else if (report.accepted == ready_batch_cap) {
++        report.stop = ReadyBatchStop::cap;
++    } else {
++        report.stop = ReadyBatchStop::sq_budget;
++    }
++    report.untouched_begin = report.accepted + (rejected ? 1 : 0);
++    report.untouched = ready.size() - report.untouched_begin;
++
++    if (report.accepted != 0)
++        note_outstanding();
++#if defined(SLUICE_READY_BATCH_MUTANT_RESIDUE_UNADVERTISED)
++    advertise = false;
++#endif
++    if (advertise) {
++        report.residue_advertised = true;
++        signal_ready_progress();
++    }
++    return report;
++}
++
++
++void UringAsyncBackend::reset_delivery_locked_(detail::SlotIndex slot,
++                                               detail::OperationKind kind) noexcept {
++    DeliveryRecord& record = delivery_[slot.value];
++    if (record.event_owed) {
++        detail::uring_core_handoff_fail_fast();
++    }
++    record.kind = kind;
++    record.event_owed = false;
++    record.owed_key = {};
++}
++
+ template <class Op>
+-Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
+-                                                             detail::RequestOp core_op) {
++Result<UringAsyncBackend::AdmittedOp> UringAsyncBackend::admit_(Op op,
++                                                                detail::OperationKind kind,
++                                                                detail::RequestOp core_op,
++                                                                bool dispatch_locked) {
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     wait_submit_entry_pause_();
+ #endif
+     if (auto v = validate_op(op); !v.has_value()) {
+-        return make_unexpected<detail::RequestKey>(v.error());
++        return make_unexpected<AdmittedOp>(v.error());
+     }
+     if (!have_ring_) {
+-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
++        return make_unexpected<AdmittedOp>(IoError{IoError::Code::backend_error});
+     }
+-    if (fatal_error_.has_value()) {
+-        return make_unexpected<detail::RequestKey>(*fatal_error_);
++    if (dispatch_locked) {
++        if (fatal_error_.has_value()) {
++            return make_unexpected<AdmittedOp>(*fatal_error_);
++        }
++    } else {
++        std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        if (fatal_error_.has_value()) {
++            return make_unexpected<AdmittedOp>(*fatal_error_);
++        }
+     }
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     if (auto inj = injected_precommit_stage_failure_(SubmitStage::reserve); inj.has_value()) {
+-        return make_unexpected<detail::RequestKey>(*inj);
++        return make_unexpected<AdmittedOp>(*inj);
+     }
+ #endif
+ 
+@@ -453,7 +672,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+                                        ? IoError::Code::invalid_state
+                                        : IoError::Code::would_block;
+ #endif
+-        return make_unexpected<detail::RequestKey>(IoError{code});
++        return make_unexpected<AdmittedOp>(IoError{code});
+     }
+     const detail::RequestReservation h{reservation.reservation.slot, reservation.reservation.generation};
+ 
+@@ -461,7 +680,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+ 
+     if (auto inj = injected_precommit_stage_failure_(SubmitStage::prepare); inj.has_value()) {
+         (void)core_->rollback(reservation.reservation);
+-        return make_unexpected<detail::RequestKey>(*inj);
++        return make_unexpected<AdmittedOp>(*inj);
+     }
+ #endif
+ 
+@@ -485,25 +704,18 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+                             ? &statx_buffers_[h.slot.value]
+                             : nullptr};
+ 
+-    {
++    if (dispatch_locked) {
++        reset_delivery_locked_(h.slot, kind);
++    } else {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
+-        DeliveryRecord& record = delivery_[h.slot.value];
+-        // A reserved slot cannot carry an owed event: the owed control
+-        // reference pins the slot against reclaim until the delivery sweep
+-        // clears the flag.
+-        if (record.event_owed) {
+-            detail::uring_core_handoff_fail_fast();
+-        }
+-        record.kind = kind;
+-        record.event_owed = false;
+-        record.owed_key = {};
++        reset_delivery_locked_(h.slot, kind);
+     }
+ 
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     if (auto inj = injected_precommit_stage_failure_(SubmitStage::commit); inj.has_value()) {
+         (void)core_->rollback(reservation.reservation);
+-        return make_unexpected<detail::RequestKey>(*inj);
++        return make_unexpected<AdmittedOp>(*inj);
+     }
+ 
+     wait_pre_accept_commit_pause_();
+@@ -514,19 +726,30 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+     const auto accepted = core_->accept(reservation.reservation, descriptor, borrow);
+     if (!accepted.ok()) {
+         (void)core_->rollback(reservation.reservation);
+-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::invalid_state});
++        return make_unexpected<AdmittedOp>(IoError{IoError::Code::invalid_state});
+     }
+ 
+-    if (descriptor.zero_op) {
+-        publish_zero_op_inline(accepted.id, h);
++    return AdmittedOp{accepted.id, h, descriptor.zero_op};
++}
++
++template <class Op>
++Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::OperationKind kind,
++                                                             detail::RequestOp core_op) {
++    const auto admitted = admit_(op, kind, core_op);
++    if (!admitted.has_value()) {
++        return make_unexpected<detail::RequestKey>(admitted.error());
++    }
++    const AdmittedOp& a = admitted.value();
++    if (a.zero_op) {
++        publish_zero_op_inline(a.key, a.reservation);
+     } else {
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+         wait_accepted_pre_dispatch_pause_();
+ #endif
+-        dispatch_after_accept(h);
++        dispatch_after_accept(a.reservation);
+     }
+-    return accepted.id;
++    return a.key;
+ }
+ 
+ Result<detail::RequestKey> UringAsyncBackend::submit_read(ReadOp op) {
+@@ -733,6 +956,9 @@ void UringAsyncBackend::wait_pre_accept_commit_pause_() noexcept {
+     auto* g = pre_accept_commit_gate_.load(std::memory_order_acquire);
+     if (g == nullptr)
+         return;
++    const unsigned call = g->calls.fetch_add(1, std::memory_order_relaxed) + 1;
++    if (call != g->target.load(std::memory_order_acquire))
++        return;
+     g->exited.store(false, std::memory_order_release);
+     g->paused.store(true, std::memory_order_release);
+     g->paused.notify_all();
+diff --git a/src/async/uring_test_seams.hpp b/src/async/uring_test_seams.hpp
+index 9fd78da5..c445a9c8 100644
+--- a/src/async/uring_test_seams.hpp
++++ b/src/async/uring_test_seams.hpp
+@@ -38,6 +38,8 @@ struct UringAsyncBackend::PreAcceptCommitPauseGate {
+     std::atomic<bool> paused{false};
+     std::atomic<bool> resume{false};
+     std::atomic<bool> exited{true};
++    std::atomic<unsigned> calls{0};
++    std::atomic<unsigned> target{1};
+ };
+ 
+ struct UringAsyncBackend::AcceptedPreDispatchPauseGate {
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..4815c517 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -35,6 +35,11 @@ std::size_t UringAsyncBackend::sq_ready_for_test() const noexcept {
+     return have_ring_ ? static_cast<std::size_t>(::io_uring_sq_ready(&ring_state_->ring)) : 0;
+ }
+ 
++bool UringAsyncBackend::cq_overflow_for_test() const noexcept {
++    std::lock_guard<std::mutex> lk(dispatch_mtx_);
++    return have_ring_ && ::io_uring_cq_has_overflow(&ring_state_->ring);
++}
++
+ std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
+     return live_control_sqes_.load(std::memory_order_relaxed);
+ }
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index c55e97be..0751c49d 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -578,6 +578,48 @@ if has_config("liburing") then
+     uring_progress_target("uring_flush_count_oracle_test",
+                               R .. "tests/uring_flush_count_oracle_test.cpp")
+ 
++    -- Links the shipped archive rather than a private backend copy.
++    sluice_one_file_target("binary", "test", "uring_ready_batch_research_test", "tests",
++                           {"sluice_core", "sluice_async"})
++    uring_progress_target("uring_ready_batch_fault_test",
++                          R .. "tests/uring_ready_batch_fault_test.cpp")
++
++    -- #595 R3 deterministic ready-batch oracles. The mutant builds falsify one
++    -- readiness/accounting edge each and must be killed by the named assertion
++    -- of the base suite; they are executed and recorded manually.
++    local function r3_ready_batch_target(name, extra_define)
++        target(name)
++            set_kind("binary")
++            set_default(false)
++            set_group("test")
++            add_deps("sluice_core")
++            add_includedirs(R .. "include", R .. "src/async", R .. "bench")
++            add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_HAS_LIBURING")
++            if extra_define ~= nil then
++                add_defines(extra_define)
++            end
++            add_links("uring")
++            add_files(R .. "tests/uring_ready_batch_deterministic_test.cpp",
++                      R .. "src/async/async_io_context.cpp",
++                      R .. "src/async/uring_transport.cpp",
++                      R .. "src/async/uring_completion.cpp",
++                      R .. "src/async/uring_backend.cpp",
++                      R .. "src/async/fail_fast.cpp",
++                      R .. "src/async/detail/context_identity.cpp",
++                      R .. "src/async/detail/request_core.cpp")
++            if extra_define == nil then
++                add_tests(name, {run_timeout = 120000})
++            end
++    end
++
++    r3_ready_batch_target("uring_ready_batch_deterministic_test")
++    r3_ready_batch_target("uring_ready_batch_det_mut_includes_not_ready",
++                          "SLUICE_READY_BATCH_MUTANT_INCLUDES_PENDING_TRANSPORT")
++    r3_ready_batch_target("uring_ready_batch_det_mut_residue_dropped",
++                          "SLUICE_READY_BATCH_MUTANT_RESIDUE_UNADVERTISED")
++    r3_ready_batch_target("uring_ready_batch_det_mut_redispatch_consumed",
++                          "SLUICE_READY_BATCH_MUTANT_REDISPATCHES_CONSUMED")
++
+     -- Corrective-round mutation builds. Each restores one abandoned
+     -- advertisement/health mechanism and must be killed by the named test of
+     -- the race suite; they are executed and recorded manually, never run as

@@ -1,0 +1,42 @@
+#!/usr/bin/env bpftrace
+// #595 R3 continuation allocation tracer (diagnostic lane).
+// Counts libc allocation calls/bytes for the bench process only. reg() is used
+// because libc ships no debug info; x86-64 SysV: arg1=di, arg2=si.
+
+uprobe:/usr/lib64/libc.so.6:malloc
+/comm == "bench_w03_exter"/
+{
+  @malloc_calls = count();
+  @malloc_bytes = sum(reg("di"));
+}
+
+uprobe:/usr/lib64/libc.so.6:calloc
+/comm == "bench_w03_exter"/
+{
+  @calloc_calls = count();
+  @calloc_bytes = sum(reg("di") * reg("si"));
+}
+
+uprobe:/usr/lib64/libc.so.6:realloc
+/comm == "bench_w03_exter"/
+{
+  @realloc_calls = count();
+  @realloc_bytes = sum(reg("si"));
+}
+
+uprobe:/usr/lib64/libc.so.6:free
+/comm == "bench_w03_exter"/
+{
+  @free_calls = count();
+}
+
+uprobe:/usr/lib64/libc.so.6:posix_memalign
+/comm == "bench_w03_exter"/
+{
+  @memalign_calls = count();
+}
+
+END
+{
+  printf("MECH_ALLOC_TRACE_END\n");
+}

@@ -1,0 +1,27 @@
+block,member,role,case,tree,binary_sha256,n_invocations,cpu_ns_per_op,ops_per_sec,p50_ns,p95_ns,p99_ns,source
+AA-W03-D16,m1,base,W03-uring-4k-d16,R3 (0a22a791 + r3-completion.patch),0ebfb7f0c204,24,3154.7465,317258.8581,36199.5667,43650.3833,49334.3417,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W03-D16,m2,cand,W03-uring-4k-d16,R3 (0a22a791 + r3-completion.patch),0ebfb7f0c204,24,3128.3278,319945.4888,36117.5750,43403.4500,49377.3333,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W03-D16/jsonl
+AA-W02-D2,m1,base,W02-uring-4k-d2,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,4830.7118,206812.2377,8310.8500,12898.6667,13929.8250,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+AA-W02-D2,m2,cand,W02-uring-4k-d2,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,4858.2323,205668.7584,8315.3750,12894.2417,13860.1250,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/AA-W02-D2/jsonl
+LEGACY-W02-D2 (R2-D2),A,base,W02-uring-4k-d2,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,4850.4057,205994.4093,8313.6000,12895.9167,13860.7167,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+LEGACY-W02-D2 (R2-D2),B,cand,W02-uring-4k-d2,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,5015.8293,199154.4700,8503.9417,13568.9333,14825.6667,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/calibration/R2-D2/jsonl
+PROT-W02-D3 (R2),A,base,W02-uring-4k-d3,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,4355.5478,229371.7570,11293.6917,19151.2000,22949.2333,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D3 (R2),B,cand,W02-uring-4k-d3,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,4035.4544,247603.4663,10896.9500,16687.6833,20162.2333,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/jsonl
+PROT-W02-D16 (R2),A,base,W02-uring-4k-d16,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,2982.9165,335222.2194,50940.8333,66669.7667,81010.1417,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+PROT-W02-D16 (R2),B,cand,W02-uring-4k-d16,R2 (271b81bf + R2 patch 7be9d014),32beabcd8918,24,2143.5629,466584.6230,34094.3833,44949.0333,54609.9167,/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D16/jsonl
+"# diagnostic (instrumented, single-window; NOT gate-grade)"
+mech-enter/d16-A0,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=60000 pure_ops=60000 hist={1: 60000}
+mech-enter/d16-A1,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=60000 pure_ops=60000 hist={1: 60000}
+mech-enter/d16-B,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,"pure_submit_enters=29225 pure_ops=60000 hist={1: 24826, 2: 1, 3: 2, 6: 1, 8: 4395}"
+mech-enter/d2pos-A0,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=6 pure_ops=6 hist={1: 6}
+mech-enter/d2pos-A1,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=6 pure_ops=6 hist={1: 6}
+mech-enter/d2pos-B,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=3 pure_ops=6 hist={2: 3}
+mech-enter/d2serial-A0,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=60000 pure_ops=60000 hist={1: 60000}
+mech-enter/d2serial-A1,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=60000 pure_ops=60000 hist={1: 60000}
+mech-enter/d2serial-B,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,pure_submit_enters=60000 pure_ops=60000 hist={1: 60000}
+mech-pmu/d16-A0,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,cycles=854149299 instructions=709777889 csw=20090
+mech-pmu/d16-A1,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,cycles=852427314 instructions=745464639 csw=23125
+mech-pmu/d16-B,run,diag,W03,R3,0ebfb7f0c204,1,,,,,,cycles=733912392 instructions=651993702 csw=14830
+mech-bucket/d16-A0,runs,diag,W03,R3,0ebfb7f0c204,6,3497.6256,,,,,main_ticks=13.7 driver=0.8 io_wq=7.3 ru_total_s=0.275 unattr=5.7
+mech-bucket/d16-A1,runs,diag,W03,R3,0ebfb7f0c204,3,3261.0691,,,,,main_ticks=12.3 driver=0.3 io_wq=6.3 ru_total_s=0.257 unattr=6.7
+mech-bucket/d16-B,runs,diag,W03,R3,0ebfb7f0c204,3,2865.7440,,,,,main_ticks=11.0 driver=0.0 io_wq=6.0 ru_total_s=0.222 unattr=5.2

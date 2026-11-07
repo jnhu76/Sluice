@@ -1,0 +1,18 @@
+FAIL [uring_ready_batch_deterministic] a batch at transport residue accepts nothing
+FAIL [uring_ready_batch_deterministic] the transport-residue boundary is reported as recovery
+FAIL [uring_ready_batch_deterministic] a non-fatal transport residue reports the retryable error, not eof
+FAIL [uring_ready_batch_deterministic] the whole later group stays untouched
+FAIL [uring_ready_batch_deterministic] the stopped batch attempts no flush
+FAIL [uring_ready_batch_deterministic] the stopped batch adds no transport submit
+FAIL [uring_ready_batch_deterministic] the rejected batch leaves the transport ledger unchanged
+FAIL [uring_ready_batch_deterministic] a group larger than the SQ budget accepts only the dispatchable prefix
+FAIL [uring_ready_batch_deterministic] the SQ-budget stop is reported when the prefix is below the cap
+FAIL [uring_ready_batch_deterministic] the SQ-budget boundary returns the unaccepted suffix
+FAIL [uring_ready_batch_deterministic] a batch at SQ-full transport residue accepts nothing
+FAIL [uring_ready_batch_deterministic] the transport-residue boundary is reported as recovery
+FAIL [uring_ready_batch_deterministic] a non-fatal transport residue reports the retryable error, not eof
+FAIL [uring_ready_batch_deterministic] the whole group stays untouched at the transport-residue boundary
+FAIL [uring_ready_batch_deterministic] the rejected batch attempts no flush
+FAIL [uring_ready_batch_deterministic] the rejected batch adds no transport submit
+FAIL [uring_ready_batch_deterministic] the rejected batch leaves the dispatch queue empty
+uring_ready_batch_deterministic: 17 failure(s)

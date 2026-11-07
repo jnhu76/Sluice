@@ -1,0 +1,11 @@
+PASS direction cpu mean=+0.1000 ~= +0.10
+PASS AA zero-effect small-noise PASS
+PASS AA zero-effect CPU CI covers 0
+PASS AA wide-noise FAIL
+PASS fixed input -> byte-identical summary
+PASS bootstrap equals harness/analyze.py (mean/ci_lo/ci_hi/half_width)
+PASS negative control +6% CPU FAIL
+PASS negative control -10% CPU PASS
+
+self-test failures: 0
+rc=0

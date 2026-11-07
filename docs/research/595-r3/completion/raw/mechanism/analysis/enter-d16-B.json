@@ -1,0 +1,148 @@
+{
+ "bench_record": {
+  "case_id": "W03-uring-4k-d16",
+  "cpu_s": 0.08014893,
+  "empty_wakes": 0,
+  "failure": "",
+  "lat_p50_ns": 33310.0,
+  "lat_p95_ns": 42139.0,
+  "lat_p99_ns": 51963.0,
+  "notifications": 1434,
+  "ok": true,
+  "ops": 20000,
+  "ops_per_sec": 249784.221,
+  "passes": 1434,
+  "peak_rss_kb": 21544,
+  "r3_accepted": 20000,
+  "r3_entry_calls": 10515,
+  "r3_flush_attempts": 10515,
+  "r3_gate_stops": 0,
+  "r3_group_calls": 1355,
+  "r3_ineligible_fallbacks": 0,
+  "r3_prefix_max": 8,
+  "r3_single_calls": 9160,
+  "r3_suffix_single_calls": 9160,
+  "r3_untouched": 9160,
+  "request_count": 20000,
+  "stats_completed_ops": 20000,
+  "stats_invalid_state": 0,
+  "stats_poll_calls": 1435,
+  "stats_queue_full_retries": 0,
+  "stats_submit_calls": 20000,
+  "stats_submitted_ops": 20000,
+  "stats_wait_calls": 0,
+  "submits": 20000
+ },
+ "bucket_map": {
+  "1, 0, 0": 24826,
+  "1, 1, 1": 4,
+  "2, 0, 0": 1,
+  "3, 0, 0": 2,
+  "6, 0, 0": 1,
+  "8, 0, 0": 4395
+ },
+ "enter": {
+  "classes": {
+   "pure_submit": 29225,
+   "submit_with_flags": 4
+  },
+  "coverage": {
+   "delta_all": 4,
+   "expected_data_sqe": 60000,
+   "sum_to_submit_all": 60004,
+   "sum_to_submit_submit_classes": 60004
+  },
+  "driver_pure_submits": 0,
+  "exit_total": 29229,
+  "flags_hist": {
+   "0": 29225,
+   "1": 4
+  },
+  "main_tid": 61882,
+  "map_enter_bench": 29229,
+  "map_enter_global": 29229,
+  "max_to_submit": 8,
+  "min_complete_hist": {
+   "0": 29225,
+   "1": 4
+  },
+  "parsed_equals_map": true,
+  "pure_submit_by_tid": {
+   "61882": 29225
+  },
+  "pure_submit_to_submit_hist": {
+   "1": 24826,
+   "2": 1,
+   "3": 2,
+   "6": 1,
+   "8": 4395
+  },
+  "ret_hist": {
+   "1": 24830,
+   "2": 1,
+   "3": 2,
+   "6": 1,
+   "8": 4395
+  },
+  "submitter_pure_submits": 29225,
+  "sum_to_submit": 60004,
+  "to_submit_hist": {
+   "1": 24830,
+   "2": 1,
+   "3": 2,
+   "6": 1,
+   "8": 4395
+  },
+  "total_events_parsed": 29229
+ },
+ "global_kernel": {
+  "cqe_res": {
+   "0": 4,
+   "4096": 60000
+  },
+  "cqe_total": 60004,
+  "defer_opcode": {},
+  "defer_total": 0,
+  "eventfd2": 4,
+  "eventfd_write": 0,
+  "iouring_register": 12,
+  "iouring_setup": 4,
+  "queue_async_work": 60004,
+  "sqe_opcode": {
+   "21": 4,
+   "22": 60000
+  },
+  "sqe_total": 60004,
+  "timer_create": 0,
+  "timerfd_create": 102
+ },
+ "meta": {
+  "arm": "B",
+  "attached": false,
+  "bench": {
+   "exit": 0,
+   "ru_nivcsw": 9556,
+   "ru_nvcsw": 13206,
+   "ru_stime_s": 0.220516,
+   "ru_utime_s": 0.071237,
+   "wall_s": 0.2947986879989912
+  },
+  "bpftrace_rc": 0,
+  "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+  "case": "W03-uring-4k-d16",
+  "kind": "enter-trace",
+  "ts_utc": "2026-11-05T11:54:52Z"
+ },
+ "park_wake": {
+  "epoll_wait": 4862,
+  "futex_total": 14878,
+  "futex_wait": 0,
+  "futex_wake": 0
+ },
+ "trace_health": {
+  "attached_from_stderr": 21,
+  "attached_probes": null,
+  "lost_events": [],
+  "stderr_has_lost": false
+ }
+}

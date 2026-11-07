@@ -1,0 +1,4 @@
+5a02678c04687d97a1080156611021d84179905b9b9cbca3db57efe915aff360  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/MANIFEST.sha256
+# file_count=2451
+# generated_utc=2026-11-05T12:52:47Z
+# covers: analysis/ evidence/ harness/ raw/ under completionRoot (absolute paths; __pycache__ excluded)

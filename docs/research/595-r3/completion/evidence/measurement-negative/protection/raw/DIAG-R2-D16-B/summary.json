@@ -1,0 +1,99 @@
+{
+ "label": "DIAG-R2-D16-B",
+ "records": 1,
+ "valid": 1,
+ "metrics": {
+  "cpu_ns_per_op": {
+   "n": 1,
+   "mean": 3622.3917,
+   "min": 3622.3917,
+   "max": 3622.3917
+  },
+  "ops_per_sec": {
+   "n": 1,
+   "mean": 174486.40733002042,
+   "min": 174486.40733002042,
+   "max": 174486.40733002042
+  },
+  "p50_ns": {
+   "n": 1,
+   "mean": 80734.0,
+   "min": 80734.0,
+   "max": 80734.0
+  },
+  "p95_ns": {
+   "n": 1,
+   "mean": 95460.0,
+   "min": 95460.0,
+   "max": 95460.0
+  },
+  "p99_ns": {
+   "n": 1,
+   "mean": 104379.0,
+   "min": 104379.0,
+   "max": 104379.0
+  },
+  "peak_rss_kb": {
+   "n": 1,
+   "mean": 5340.0,
+   "min": 5340,
+   "max": 5340
+  },
+  "stats_submit_calls": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_submitted_ops": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_completed_ops": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_max_outstanding": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_queue_full_retries": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "extra_a": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "extra_b": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  }
+ },
+ "max_user_threads": 0,
+ "enter": [
+  {
+   "present": true,
+   "lines_with_enter": 11293,
+   "total": 11293,
+   "pure_submit": 11289,
+   "to_submit_hist": {
+    "1": 3799,
+    "8": 3747,
+    "7": 3747
+   }
+  }
+ ]
+}

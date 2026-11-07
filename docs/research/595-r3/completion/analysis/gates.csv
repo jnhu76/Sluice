@@ -1,0 +1,20 @@
+block,family,n_pairs,verdict,detail
+AA-W03-D16,AA,24,PASS,cpu: hw=0.797pp<= 5pp (PASS); tput: hw=0.821pp<= 3pp (PASS); p99: hw=2.039pp<= 3pp (PASS)
+AA-W02-D2,AA,24,PASS,cpu: hw=0.862pp<= 5pp (PASS); tput: hw=0.853pp<= 3pp (PASS); p99: hw=1.420pp<= 3pp (PASS)
+LEGACY-W02-D2 (R2-D2),NC-D2,24,FAIL,cpu: est=+3.435% ub1=+4.065% thr=5% p=0.0001 holm=True (PASS); p95: est=+5.233% ub1=+5.906% thr=5% p=0.7201 holm=False (FAIL); p99: est=+7.052% ub1=+9.067% thr=5% p=0.9647 holm=False (FAIL); tput: est=+3.298% ub1=+3.889% thr=3% p=0.8044 holm=False (FAIL)
+PROT-W02-D3 (R2),PROT,24,PASS,cpu: est=-7.327% ub1=-6.673% thr=5% p=0.0001 holm=True (PASS); p95: est=-12.795% ub1=-10.832% thr=5% p=0.0001 holm=True (PASS); p99: est=-11.511% ub1=-7.288% thr=5% p=0.0001 holm=True (PASS); tput: est=-7.975% ub1=-7.207% thr=3% p=0.0001 holm=True (PASS)
+PROT-W02-D16 (R2),PROT,24,PASS,cpu: est=-28.111% ub1=-27.613% thr=5% p=0.0001 holm=True (PASS); p95: est=-32.590% ub1=-31.819% thr=5% p=0.0001 holm=True (PASS); p99: est=-32.400% ub1=-31.179% thr=5% p=0.0001 holm=True (PASS); tput: est=-39.241% ub1=-38.264% thr=3% p=0.0001 holm=True (PASS)
+MAIN-W03-D16,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,CPU point<=-10% & CI95 upper<=-5%; tput drop<=3%; p95/p99<=5% | B-A0
+MAIN-W03-D16,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,mechanism effect (B-A1) | B-A1
+MAIN-W03-D16,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,adapter cost (A1-A0) | A1-A0
+CROSS-W03-D4,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 | B-A0
+CROSS-W03-D64,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 (CPU improvement not required) | B-A0
+PROT-W03-D16-B (R3),PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 | B-A0
+PROT-64K-D16-B,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 | B-A0
+PROT-THREADPOOL-B,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 | B-A0
+PROT-SMT-2-12-B,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 | B-A0
+PROT-XPHYS-2-8-B,PREREG_BLOCKED,0,BLOCKED_SEMANTICS_NOT_READY,protection bounds 5/5/5/3 | B-A0
+NEG-W02-D2-NEW-B,PREREG_BLOCKED,0,NOT_RUN_NO_W02_R3_ARM,non-inferiority 5/5/5/3 + enter=20000 | B-A0
+MECH-POS-D2POS,PREREG_BLOCKED,0,PARTIAL_DIAGNOSTIC_ONLY,3 independent invocations required (1 done) | B vs A0/A1
+RESOURCE-B,PREREG_BLOCKED,0,PARTIAL_DIAGNOSTIC_ONLY,peak RSS<=+2%; zero new queue/thread/timer/per-request alloc; valgrind slope | B vs A0
+PRODUCT-604,PREREG_BLOCKED,0,HOLD_NO_REAL_APPLICATION,product gate | real app

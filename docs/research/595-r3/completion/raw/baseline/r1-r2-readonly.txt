@@ -1,0 +1,15 @@
+# R1/R2 read-only check 2026-11-05T08:39:12Z
+--- R1 evidence file count ---
+1854
+--- R1 evidence mtime > 2026-11-05T00:00:00Z ---
+0
+--- R2 worktree file count ---
+5451
+--- R2 worktree mtime > 2026-11-05T11:00:00Z ---
+0
+--- R2 worktree excl .git counts ---
+5450
+0
+--- R2 worktree HEAD ---
+271b81bfc9d64eecc0266fe7066b9040525dd710
+6
