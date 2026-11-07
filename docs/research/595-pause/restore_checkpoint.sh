@@ -43,7 +43,11 @@ check_archive() {
   local got
   got=$(sha256sum "$BUNDLE" | awk '{print $1}')
   [ "$got" = "$BUNDLE_SHA_EXPECTED" ] || fail "bundle sha256 $got != expected"
-  git bundle verify "$BUNDLE" >/dev/null 2>&1 || fail "git bundle verify"
+  local tmprepo
+  tmprepo=$(mktemp -d)
+  git init -q "$tmprepo"
+  git -C "$tmprepo" bundle verify "$BUNDLE" >/dev/null 2>&1 || fail "git bundle verify"
+  rm -rf "$tmprepo"
   note "archive self-check done"
 }
 
