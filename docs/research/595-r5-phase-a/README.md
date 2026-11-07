@@ -78,4 +78,10 @@ the per-run arena dump binaries (`raw-diag/matrix/**/dump/*.bin`, ~82 MB, and
   traces remain frozen evidence under the v1 analyzer.
 - The repair round's three-arm measurement (A0 / R_original / R_cleanup)
   and verdicts: `../595-r5-repair-round/` (product gate still fails on
-  p99 only; cleanup never harmful after binary-layout calibration).
+  p99 only; the repair round's own post-review revision corrected five
+  analysis/reporting defects — protection-gate family and one-sided
+  bounds, F5 field semantics with true-position recovery, calibration
+  wording, instrument/analyzer failure paths; see that directory's
+  CORRECTIONS.md "Review corrections"). Candidate B carries a dated
+  execution warning in NEXT_EXPERIMENT.md (T0 re-stamping changes the
+  latency origin; not green-lit).

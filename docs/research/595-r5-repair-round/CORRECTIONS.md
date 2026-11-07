@@ -112,3 +112,133 @@ drop specific define arguments (observed on `-DSLICE_HAS_LIBURING`;
 `/usr/bin/g++` included). Worked around with `#define`-wrapper TUs; all
 round builds went through xmake (unaffected — the diag instrument
 activated, binary SHAs distinct and pinned). Recorded for reproducibility.
+
+## Review corrections (2026-11-07, external review of head 6d7e585e)
+
+An external review of the published round identified five defects in the
+analysis and reporting. All five were confirmed against source and data,
+corrected offline (no measurement rerun; the raw records and bootstrap
+CIs are untouched — the corrected `analyze_round.py` reproduces every CI
+bit-identically), and the affected documents were rewritten. The
+pre-correction analysis JSON is kept as `analysis/round-analysis.gatebug-archived.json`
+for audit.
+
+### R1 — `caller_window` is NOT member position; F5 interpretation withdrawn and recovered
+
+`bench_w03_external_loop.cpp` sets `facts.caller_window = window.size()`
+once per `submit()` group, so every member of a group records the SAME
+value: the in-flight window occupancy at group construction. The first
+published round labeled it "real in-window position" — wrong, and the
+"position 0 vs position 8 (back half of a 16-op refill)" framing is
+withdrawn. `make_figures.py` F5 additionally filtered only `arm == R`
+without a shape filter, mixing d16 and d4 rows (pos0 n=465,072 = both
+shapes), and the 55 µs position stats quoted in RESULTS came from an
+unarchived one-off command.
+
+Correction: true member order is recoverable offline because the bench
+builds groups of exactly `want = min(depth − window.size(), remaining,
+max_refill)` requests with consecutive seqs.
+`scripts/recover_f5_position.py` chunk-splits the joined ops (sorted by
+seq) into groups of `depth − caller_window`, validates seq contiguity,
+and drops (counts) anything damaged: over 480,000 R-mode measured rows —
+24 phases — 0 anomalous groups, 0 seq gaps, 7 terminal partial groups,
+0 unpositioned rows. Recovered result (d16, lead-level, instrument
+PERTURBED): within full refills (occupancy 0) tail(>55 µs) risk is
+≈1.2% for member positions 0–7 and ≈9.0–9.2% for positions 8–15 — a
+sharp step exactly at the presentation-quantum-8 boundary (front-chunk
+tails stop under `cap`, back-chunk tails under `input_exhausted`) — and
+refills built at occupancy 8 carry ≈26% risk at EVERY member position.
+The old "5.2% vs 26.3% ≈5×" compared a mixed front+back bucket against
+the occupancy-8 bucket and is replaced by the statements above. d4 shows
+no elevation (≈0.02% everywhere), consistent with single-chunk groups.
+F5 regenerated from `analysis/f5-position.json` (d16 only, corrected
+labels); CSV `figures/figure-data/f5-position.csv`.
+
+### R2 — protection cells were evaluated against the MAIN gate; one-sided/two-sided bounds conflated in prose
+
+`analyze_round.py` defined PROT_GATE but `analyze_cell()` applied
+MAIN_GATE to every cell, so protection cells were tested for "CPU
+reduction ≤ −10%" instead of "CPU regression ≤ +5%", and the RESULTS
+prose quoted two-sided ci95 uppers ("cpu upper +5.1 > +5% FAIL") where
+the frozen gate uses the ONE-SIDED 95% bound. Concrete effect:
+W03-d2serial C−A0 CPU point +3.90%, one-sided upper95 +4.90 ≤ +5 → the
+CPU item PASSES the frozen protection gate (it failed in the published
+table). Cell verdicts are unchanged — d2serial still FAILs (tput
+lower −4.6%, p95 upper +10.8%, p99 upper +14.0% over their bounds) —
+but per-item verdicts and the per-cell Holm family are recomputed in
+`analysis/round-analysis.json` (`gate` key, per-cell family per
+PREREGISTERED §5). Also fixed: the RESULTS absolute-mean table was
+hand-transcribed and wrong (A0 3196/51.6 µs vs actual 3208.6/53.92 µs);
+all numeric tables are now script-generated
+(`analysis/summary-tables.md`).
+
+### R3 — "calibrated" C−R claims exceeded what A0 calibration can identify
+
+The published wording ("calibrated residual ≈ −2% real savings",
+"never harmful after binary-layout calibration") treated A0c−A0o as a
+transferable correction. A0c−A0o runs the identical product path in two
+binaries; it demonstrates that build artifacts/runtime conditions shift
+results by a comparable order — it does NOT establish that the shift
+applies proportionally to the R path (different code, cache and branch
+behavior), and no joint uncertainty was modeled. Corrected wording:
+C−R effects are reported RAW alongside the calibration band as a
+confounding observation; the only claims kept are the frozen-rule ones
+(MAIN C−R p99 upper95 < 0 by the frozen criterion but within the
+calibration band → not attributed; MAIN C−R cpu CI crosses 0 → not
+established). The d4/d2serial raw CPU savings (−3.9/−4.4%) exceed the
+calibration point estimates (−1.5/−2.3%) — "consistent with small real
+savings; not formally established". Keeping C1 rests on its source-level
+justification (removes a duplicate scan, equivalence proven), not on a
+proven universal performance win. Similarly, "the p99 cost and the
+shallow-queue tax are properties of the batching policy itself" is
+downgraded: they are properties of the R-family adapter path as a whole
+(cleanup-invariant); a single-path cell with almost no batching
+(d2serial) still degrades, which indicates an adapter/call-path tax
+component — "batching-inherent" is NOT established by this round.
+
+### R4 — diagnostic instrument and analyzer failure paths hardened
+
+The v2 instrument's begin_phase ignored wait_quiesce() failure and reset
+buffers anyway, and end_phase exported events even on breach — the
+"timeout flag" did not remove the concurrent access. Fixed (commits
+`492086ac` on research-595-r5rm-diag, mirrored `3fd6476a` on
+research-595-r5rm-diag-cleanup): on breach, begin_phase does not reset
+and does not reactivate; end_phase writes a header-only failure dump
+(flag bit 4, n_writers 0, no per-writer data, no event bytes) and the
+instrument disables itself for the rest of the process. Compile-checked
+in a scratch worktree (round binaries untouched) and the 5-thread TSan
+harness re-run clean (7.08M ops, 0 reports). The breach path itself has
+no deterministic forcing test (hooks cannot be stalled from outside) —
+its dump format is covered by the analyzer abort case below; recorded as
+a limitation.
+
+The analyzer's FIFO pairing was unconditional and failure-blind: a
+"first build rejected, second accepted" phase misbound rows that still
+carried `join=ok`, and `main()` computed `bad` but returned 0. Fixed:
+pairing is a validated hypothesis — count mismatch ⇒ no pairing is
+fabricated, every row gets `join=fifo_count_mismatch` with slot/gen
+null, keyed joins are skipped, T5 (seq-keyed) survives, and the process
+exits 1 on any flag/counter/row anomaly. Deterministic counterexamples:
+`harness/test_tail_trace_analyzer.py` (good / reject / duplicate-key /
+header-only-abort, 4/4 PASS). Regression: the fixed analyzer on a real
+round dump exits 0 with all 20,000 rows field-identical to the archived
+join. DOCUMENTED BLIND SPOT (honest narrowing): an equal-count
+mispairing (rejection + rebuild rebalancing the counts) is not
+detectable from the recorded fields, because admitted events carry the
+adapter's (slot,gen), not the bench seq; the next instrument revision
+must record the bench seq or cookie on admitted events.
+
+### R5 — headline scope qualifiers (CPU coverage, candidate B status)
+
+"CPU −22%" is process-rusage CPU/op; kernel io-wq worker CPU is outside
+rusage (ticks recorded separately, R/C ≤ A0) — every headline now says
+"process-rusage CPU/op" and the coverage gap travels with it; it is not
+a whole-system CPU number. NEXT_EXPERIMENT.md's Candidate B design still
+re-stamps T0 at a later round's rebuild and thereby misses wait that
+already happened — same-origin comparison is not recoverable by "same
+gate thresholds" — and B's motivating lead now rests on the corrected
+R1 semantics (quantum-8 chunk step + occupancy-8 refills), which this
+round's PERTURBED diagnostic supports only at lead level. Candidate B is
+therefore NOT green-lit; NEXT_SINGLE_ACTION is downgraded to "select the
+next intervention after these corrections"; a dated warning is added to
+NEXT_EXPERIMENT.md.

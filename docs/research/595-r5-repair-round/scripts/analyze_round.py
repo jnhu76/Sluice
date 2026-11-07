@@ -17,10 +17,13 @@ Units and estimators (frozen before any formal timing; see PREREGISTERED.md):
   95th percentile as the gate direction requires.
 - A/A gate: half-width = (ci97.5 - ci2.5)/2 of the same paired effect;
   limits cpu 5pp, tput 3pp, p99 3pp.
-- Holm family: the five gate hypotheses of the main gate + protection gates
-  as listed in PREREGISTERED.md §7; p-values are computed by inverting the
-  bootstrap one-sided bound (fraction of resamples at/beyond the gate
-  threshold direction), min-pinned at 1/resamples.
+- Holm family (PREREGISTERED.md §5): the MAIN cell adjusts across its 4
+  main-gate hypotheses; each protection cell adjusts across its own 4
+  protection hypotheses. Gate decisions use the ONE-SIDED 95% bounds
+  (upper95 for cost/gate "le", lower95 for "ge"), never the two-sided
+  ci95 endpoints. p-values are computed by inverting the bootstrap
+  one-sided bound (fraction of resamples at/beyond the gate threshold
+  direction), min-pinned at 1/resamples.
 """
 import argparse
 import json
@@ -46,6 +49,14 @@ PROT_GATE = [
     ("ProtP95", "p95", "le", None, 0.05),
     ("ProtP99", "p99", "le", None, 0.05),
 ]
+
+
+def gate_set(cell_name):
+    """PREREGISTERED.md §6: the MAIN cell runs the main gate; every other
+    cell runs the protection gate (cpu upper<=+5%, tput lower>=-3%,
+    p95/p99 upper<=+5%). The first published analysis wrongly applied
+    MAIN_GATE to all cells; corrected per review (CORRECTIONS.md §R2)."""
+    return MAIN_GATE if cell_name == "MAIN-W03-D16" else PROT_GATE
 
 
 def load_seg(cell_dir, seg, arms):
@@ -160,24 +171,35 @@ def analyze_cell(cell_name):
         result["C_vs_A0"] = contrast("C", "A0", data)
         result["C_vs_R"] = contrast("C", "R", data)
         result["R_vs_A0"] = contrast("R", "A0", data)
-        # gate p-values (bootstrap under the null of the gate threshold)
+        # gate evaluation (bootstrap under the null of the gate threshold)
         gates = {}
-        for name, metric, direction, point_req, bound in MAIN_GATE:
+        for name, metric, direction, point_req, bound_req in gate_set(cell_name):
             eff = effect(data["C"][metric], data["A0"][metric], metric)
             means = paired_bootstrap_effects(eff)
+            cb = ci_and_bounds(means)
+            one_sided = cb["upper95"] if direction == "le" else cb["lower95"]
+            point = sum(eff) / len(eff)
+            ok_bound = one_sided <= bound_req if direction == "le" else one_sided >= bound_req
+            ok_point = point_req is None or (
+                point <= point_req if direction == "le" else point >= point_req)
             gates[name] = {
                 "metric": metric, "direction": direction,
-                "point_req": point_req, "bound_req": bound,
-                "point": sum(eff) / len(eff), "ci95": ci_and_bounds(means)["ci95"],
-                "p": p_value(means, bound, direction),
-                "bound": ci_and_bounds(means)["upper95"] if direction == "le"
-                         else ci_and_bounds(means)["lower95"],
+                "point_req": point_req, "bound_req": bound_req,
+                "point": point, "ci95": cb["ci95"],
+                "bound_used": "upper95" if direction == "le" else "lower95",
+                "one_sided_bound": one_sided,
+                "pass": bool(ok_bound and ok_point),
+                "p": p_value(means, bound_req, direction),
             }
-        result["main_gate"] = gates
         pvals = [g["p"] for g in gates.values()]
         adj = holm(pvals)
         for (name, _), a in zip(gates.items(), adj):
             gates[name]["p_holm"] = a
+        result["gate"] = gates
+        result["gate_family"] = "main" if cell_name == "MAIN-W03-D16" else "protection"
+        result["gate_pass"] = all(g["pass"] for g in gates.values())
+        if cell_name == "MAIN-W03-D16":
+            result["main_gate"] = gates
     aa_path = os.path.join(cell_dir, "aa", "results.jsonl")
     if os.path.exists(aa_path):
         result["aa"] = aa_halfwidths(cell_dir)
@@ -250,10 +272,89 @@ def calib_analysis(cell_dir):
     return out
 
 
+def _pct(x):
+    return f"{x * 100:+.2f}%"
+
+
+def _ic(b):
+    return f"[{b['ci95'][0] * 100:+.2f},{b['ci95'][1] * 100:+.2f}]"
+
+
+def _bound(b, direction):
+    return b["upper95"] if direction == "le" else b["lower95"]
+
+
+def write_tables(results, path):
+    """Generate every numeric table used by RESULTS.md from the analysis JSON,
+    so prose numbers cannot drift from the recomputed data (review R2)."""
+    L = []
+    main = next((r for r in results if r["cell"] == "MAIN-W03-D16"), None)
+    if main:
+        L.append("## MAIN-W03-D16 absolute means (per arm, mean over 24 blocks)\n")
+        L.append("| arm | cpu ns/op | p50 µs | p95 µs | p99 µs | ops/s |")
+        L.append("|---|---:|---:|---:|---:|---:|")
+        for arm in ("A0", "R", "C"):
+            a = main["abs"][arm]
+            L.append(f"| {arm} | {a['cpu'][0]:.1f} | {a['p50'][0] / 1000:.2f} | "
+                     f"{a['p95'][0] / 1000:.2f} | {a['p99'][0] / 1000:.2f} | "
+                     f"{a['tput'][0]:.0f} |")
+        L.append("\n## MAIN-W03-D16 contrasts (paired block effects, % of A0 or R)\n")
+        L.append("| contrast | cpu | throughput | p95 | p99 |")
+        L.append("|---|---|---|---|---|")
+        for label, key in (("C−A0", "C_vs_A0"), ("R−A0", "R_vs_A0"), ("C−R", "C_vs_R")):
+            c = main[key]
+            L.append(f"| {label} | {_pct(c['cpu']['point'])} {_ic(c['cpu'])} | "
+                     f"{_pct(c['tput']['point'])} {_ic(c['tput'])} | "
+                     f"{_pct(c['p95']['point'])} {_ic(c['p95'])} | "
+                     f"{_pct(c['p99']['point'])} {_ic(c['p99'])} |")
+        L.append("\n## Gate evaluation (frozen thresholds, one-sided 95% bounds)\n")
+        L.append("| cell | item | point | 1s-bound | threshold | pass | p | p_holm |")
+        L.append("|---|---|---:|---:|---|---|---:|---:|")
+        for r in results:
+            for name, g in r.get("gate", {}).items():
+                rel = "≤" if g["direction"] == "le" else "≥"
+                thr = (f"point{rel}{g['point_req'] * 100:+.0f}% & " if g["point_req"] is not None
+                       else "") + f"{g['bound_used']}{rel}{g['bound_req'] * 100:+.0f}%"
+                L.append(f"| {r['cell']} | {name} | {_pct(g['point'])} | "
+                         f"{_pct(g['one_sided_bound'])} ({g['bound_used']}) | {thr} | "
+                         f"{'PASS' if g['pass'] else 'FAIL'} | {g['p']:.4f} | "
+                         f"{g['p_holm']:.4f} |")
+            L.append(f"| {r['cell']} | **cell verdict** | | | | "
+                     f"{'**PASS**' if r.get('gate_pass') else '**FAIL**'} | | |")
+        L.append("\n## Cross-binary calibration A0c−A0o (same product path, two binaries)\n")
+        L.append("| cell | cpu | p99 |")
+        L.append("|---|---|---|")
+        for r in results:
+            cal = r.get("a0o_vs_a0c")
+            if not cal:
+                continue
+            L.append(f"| {r['cell']} | {_pct(cal['cpu']['point'])} {_ic(cal['cpu'])} | "
+                     f"{_pct(cal['p99']['point'])} {_ic(cal['p99'])} |")
+        L.append("\n## C−R raw effects vs calibration band (report only — the band is a")
+        L.append("same-path binary effect and need not transfer to the R path; no joint")
+        L.append("uncertainty model, so residuals are observations, not estimates)\n")
+        L.append("| cell | C−R cpu | calib cpu | C−R p99 | calib p99 |")
+        L.append("|---|---|---|---|---|")
+        for r in results:
+            cal = r.get("a0o_vs_a0c")
+            cr = r.get("C_vs_R")
+            if not cal or not cr:
+                continue
+            L.append(f"| {r['cell']} | {_pct(cr['cpu']['point'])} | "
+                     f"{_pct(cal['cpu']['point'])} | {_pct(cr['p99']['point'])} | "
+                     f"{_pct(cal['p99']['point'])} |")
+        L.append("")
+    with open(path, "w") as f:
+        f.write("\n".join(L))
+    print(f"tables written to {path}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cells", default="all")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--tables", default=None,
+                    help="also write the RESULTS.md numeric tables to this path")
     args = ap.parse_args()
     names = ["MAIN-W03-D16", "PROT-W03-D4", "PROT-W03-D2SERIAL", "PROT-W02-D1",
              "PROT-W02-D2"] if args.cells == "all" else args.cells.split(",")
@@ -262,7 +363,9 @@ def main():
     if args.out:
         with open(args.out, "w") as f:
             f.write(text)
-    print(text)
+        print(f"analysis written to {args.out}")
+    if args.tables:
+        write_tables(results, args.tables)
 
 
 if __name__ == "__main__":

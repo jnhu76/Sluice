@@ -16,21 +16,31 @@ byte-identical, 5,720-span bounded-scan check), and the formal
 three-arm matrix ran complete: 5 shapes × (24 matched blocks + 24 A/A
 pairs + calibration), 712/712 valid invocations under the dual
 measurement lock. **The product gate still fails on p99 only**: on
-W03-d16, R_cleanup gives CPU/op −22.09% [−22.75,−21.41] and throughput
-+28.49% (both PASS) with p95 +1.15% (PASS) but p99 +17.97%
-[+15.18,+20.82] (FAIL, Holm p=1.0); W03-d4 passes every protection
-bound, while W03-d2serial / W02-d1 / W02-d2 keep the shallow-queue
-adapter tax (FAIL). The cleanup itself is never harmful after
-binary-layout calibration and yields small real CPU savings at
-d4/d2serial (≈−2%); its apparent −1.8% p99 gain on the main shape is
-within the A0-original/A0-cleanup calibration band and is not claimed.
-The repaired instrument still fails the ±3pp on/off perturbation
-window, so tail attribution remains lead-level (back-of-refill
-conditional tail risk ≈5× confirmed under the fixed instrument, marked
-PERTURBED). Single recommended next step: stop cleanup-class work on
-this line; if it continues, run the pre-designed Candidate B
-(residue-aware submission budget) on top of R_cleanup under the same
-gate caliber.
+W03-d16, R_cleanup gives process-rusage CPU/op −22.09% [−22.75,−21.41]
+and throughput +28.49% (both PASS) with p95 +1.15% (PASS) but p99
++17.97% [+15.18,+20.82] (FAIL, Holm p=1.0); W03-d4 passes every
+protection bound, W03-d2serial fails on throughput/p95/p99 (its CPU
+item passes the frozen protection bound, upper95 +4.90 ≤ +5), and
+W02-d1 / W02-d2 keep the shallow-queue adapter tax (FAIL). The cleanup
+is not demonstrated harmful anywhere, but the first publication's
+"calibrated" C−R claims are withdrawn as exceeding what the A0
+cross-binary calibration can identify (CORRECTIONS R3). The repaired
+instrument still fails the ±3pp on/off perturbation window, so tail
+attribution remains lead-level; the corrected lead (true member
+positions recovered offline): within full d16 refills, conditional
+tail(>55 µs) risk steps from ≈1.2% (member positions 0–7) to ≈9.0%
+(positions 8–15) exactly at the presentation-quantum-8 boundary, and
+refills built at window occupancy 8 carry ≈26% at every position —
+marked PERTURBED. **No next intervention selected**: the current
+candidate is not deployable, A0 stays default, and Candidate B is not
+green-lit (its T0 re-stamping design flaw stands; CORRECTIONS R5).
+
+Post-review revision 2026-11-07: five analysis/reporting defects
+corrected offline (protection-gate family and one-sided bounds,
+script-generated tables, F5 field semantics + true-position recovery,
+calibration wording, instrument/analyzer failure paths). Raw records
+and bootstrap CIs are unchanged; per-cell verdicts are unchanged;
+details in `CORRECTIONS.md` "Review corrections".
 
 ## Files
 
@@ -40,9 +50,9 @@ gate caliber.
 | `CORRECTIONS.md` | F1–F6 verdicts with frozen-source evidence; PR-#630 wording corrections applied |
 | `PREREGISTERED.md` | frozen plan (sha256 `7a412133…`), statistics validated on known samples pre-freeze |
 | `RESULTS.md` | all contrasts, gates, A/A, calibration, resources, diagnostic round, verdicts |
-| `analysis/` | `round-analysis.json` (bootstrap CIs/bounds/gates), `diag-perturbation.json` |
-| `figures/` | F1–F5 (SVG+PNG) + `figure-data/*.csv` — every value data-derived |
-| `harness/`, `scripts/` | measurement machinery, stats (validated), figures, checker, TSan harness |
+| `analysis/` | `round-analysis.json` (bootstrap CIs/bounds/gates, post-review revision), `round-analysis.gatebug-archived.json` (pre-correction audit copy), `summary-tables.md` (script-generated numeric tables), `diag-perturbation.json`, `f5-position.json` (recovered true member positions) |
+| `figures/` | F1–F5 (SVG+PNG) + `figure-data/*.csv` (incl. `f5-position.csv`) — every value data-derived |
+| `harness/`, `scripts/` | measurement machinery, stats (validated), figures, checker, TSan harness, `recover_f5_position.py`, `test_tail_trace_analyzer.py` (deterministic analyzer counterexamples) |
 | `raw/<cell>/{aa,main,calib,rssupplement}/results.jsonl` | per-invocation records (reps embedded); checker recomputes contrasts from these |
 | `raw/equiv/` | this round's three-state oracle/suite outputs |
 | `raw/diag/` | diagnostic on/off invocation records |

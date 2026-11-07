@@ -223,36 +223,37 @@ def f5():
     if not all(r[5] for r in rows if r):
         title += " — PERTURBED (no formal attribution)"
     ax.set_title(title, color="darkred" if "PERTURBED" in title else "k")
-    # right: ready→observed distribution by real group position (from ops csv)
+    # right: conditional tail risk by TRUE member position (recovered offline
+    # by scripts/recover_f5_position.py — caller_window itself is a per-group
+    # constant, the window occupancy at construction, NOT member position).
     ax = axes[1]
-    import collections
-    by_pos = collections.defaultdict(list)
-    with open(ops_path) as f:
-        for row in csv.DictReader(f):
-            if row.get("t0") and row.get("t5") and row.get("arm") == "R":
-                try:
-                    pos = int(row.get("caller_window", -1))
-                except (ValueError, TypeError):
-                    continue
-                if pos < 0:
-                    continue
-                by_pos[pos].append((int(row["t5"]) - int(row["t0"])) / 1e3)
-    xs, med, p99 = [], [], []
-    for pos in sorted(by_pos):
-        vals = sorted(by_pos[pos])
-        if len(vals) < 20:
-            continue
-        xs.append(pos)
-        med.append(vals[len(vals) // 2])
-        p99.append(vals[int(0.99 * len(vals)) - 1])
-        rows.append([f"pos{pos}", len(vals), med[-1], p99[-1]])
-    if xs:
-        ax.plot(xs, med, "o-", label="median T0→T5 µs")
-        ax.plot(xs, p99, "s-", label="p99 T0→T5 µs")
-        ax.set_xlabel("caller window position at build (real in-window position)")
-        ax.set_ylabel("µs")
+    pos_path = os.path.join(ROOT, "analysis", "f5-position.json")
+    if os.path.exists(pos_path):
+        with open(pos_path) as f:
+            posdat = json.load(f)
+        series = [
+            ("full refill (occupancy 0 at build)", "W03-uring-4k-d16|cw0|pos%d", 16, "#4477aa", "o-"),
+            ("half-drain refill (occupancy 8)", "W03-uring-4k-d16|cw8|pos%d", 8, "#cc8800", "s--"),
+        ]
+        for label, keyf, width, color, style in series:
+            xs, ys = [], []
+            for p in range(width):
+                s = posdat["member_position"].get(keyf % p)
+                if s:
+                    xs.append(p)
+                    ys.append(s["tail_gt55_pct"])
+            if xs:
+                ax.plot(xs, ys, style, color=color, label=label, ms=4)
+                rows.append([f"tailrisk_{label}", len(xs), ys[0], ys[-1]])
+        ax.axvline(7.5, color="gray", ls=":", lw=1)
+        ax.text(7.5, ax.get_ylim()[1] * 0.95, " presentation quantum=8 boundary",
+                fontsize=7, color="gray", va="top")
+        ax.set_xlabel("true member position within the built group (recovered)")
+        ax.set_ylabel("conditional tail risk P(T0→T5 > 55 µs), %")
+        ax.set_ylim(bottom=0)
         ax.legend(fontsize=8)
-    ax.set_title("F5 diagnostic: tail risk by real group position (NOT a p99 decomposition)")
+    ax.set_title("F5 (corrected): tail risk by true member position, d16 R\n"
+                 "(lead-level: instrument PERTURBED; NOT a p99 decomposition)")
     csv_rows("f5-diagnostic", ["item", "n_or_arm", "value1", "value2"], rows)
     fig.tight_layout()
     savefig(fig, "f5-diagnostic")

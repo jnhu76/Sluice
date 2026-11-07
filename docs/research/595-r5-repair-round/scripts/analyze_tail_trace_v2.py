@@ -4,11 +4,21 @@
 Parses v2 per-writer event dumps (magic 0x32435254544c4941) and performs the
 offline join the instrument no longer does online:
 
-  submitter FIFO pairing: the i-th admitted event pairs with the i-th built
-  event of the phase (the adapter presents prefixes and the backend accepts
-  prefixes, so admissions are an in-order subsequence of builds; every built
-  op is eventually admitted exactly once in the W03/W02 loops - a mismatch is
-  reported, never silently repaired).
+  submitter FIFO pairing HYPOTHESIS, accepted only when the counts match:
+  the i-th admitted event pairs with the i-th built event of the phase.
+  Under rejection the admitted stream is a subsequence of the built stream
+  and FIFO MISBINDS; a count mismatch is detectable and NO pairing is then
+  fabricated — every op row keeps join=fifo_count_mismatch with slot/gen
+  left null, the (slot,gen)-keyed joins are skipped, and the process exits
+  nonzero (review R4: never mark a mispaired row join=ok). DOCUMENTED BLIND
+  SPOT: an equal-count mispairing (a rejected op rebuilt so that built and
+  admitted counts rebalance) is NOT detectable from the recorded fields —
+  admitted events carry the ADAPTER's (slot,gen), not the bench seq, and
+  the adapter slot space is independent of the bench window depth. The next
+  instrument revision must record the bench seq (or cookie) on admitted
+  events to close this; until then any count anomaly fails the whole phase.
+
+  taken (T5) joins by bench seq and stays valid even in degraded phases.
 
   (slot, gen64) joins: cqe/published/stop/cookie events attach to the op that
   admitted that (slot, gen); duplicates and misses are counted per class.
@@ -17,6 +27,12 @@ offline join the instrument no longer does online:
   writer buffer strictly before it (same thread = real order); cross-writer
   cqes get T_wake=0 and class no_wake_same_thread (per F4: record driver
   epoch, do not invent a wake cause).
+
+Dump header flags: bit0 = quiesce deadline breach, bit1 = dropped
+unregistered writer, bit3 (value 4) = instrument disabled after breach,
+header-only failure dump (n_writers 0, no event bytes). Any of these, any
+dropped_overflow, any join/classification counter, or any op row with
+join != ok makes the process exit 1.
 
 Output: JSON with per-phase per-op rows and counters. The v1 arena format is
 NOT parsed here; v1 traces stay frozen evidence under their own analyzer.
@@ -91,6 +107,7 @@ def join_phase(dump):
         "cookie": len(cookie), "cqe": len(cqe), "published": len(published),
         "taken": len(taken), "stop": len(stop), "wake": wake_n,
         "pair_built_admitted_mismatch": abs(len(built) - len(admitted)),
+        "fifo_count_mismatch": abs(len(built) - len(admitted)),
         "admit_key_duplicate": 0, "cqe_no_admit": 0, "published_no_admit": 0,
         "stop_no_admit": 0, "cookie_no_admit": 0, "cookie_duplicate_key": 0,
         "taken_seq_unknown": 0, "cqe_cross_writer_no_wake": 0,
@@ -111,28 +128,37 @@ def join_phase(dump):
             c["pair_built_admitted_mismatch"] += 1
         seq_to_idx[ev["seq"]] = i
 
+    # FIFO pairing hypothesis: validated only by count equality (and unique
+    # built seqs above). Equal-count mispairing is a documented blind spot.
+    counts_match = len(built) == len(admitted)
+    fifo_ok = counts_match
+    if not fifo_ok:
+        c["fifo_degraded"] = 1
+
     key_to_idx = {}
-    for i, ev in enumerate(admitted):
-        if i >= len(built):
-            c["pair_built_admitted_mismatch"] += 1
-            continue
-        key = (ev["slot"], ev["gen"])
-        if key in key_to_idx:
-            c["admit_key_duplicate"] += 1
-            continue
-        key_to_idx[key] = i
-        op = ops[i]
-        op.update({"slot": ev["slot"], "gen": ev["gen"],
-                   "presentation": ev["aux"], "t1": ev["t"]})
+    if fifo_ok:
+        for i, ev in enumerate(admitted):
+            if i >= len(built):
+                c["pair_built_admitted_mismatch"] += 1
+                continue
+            key = (ev["slot"], ev["gen"])
+            if key in key_to_idx:
+                c["admit_key_duplicate"] += 1
+                continue
+            key_to_idx[key] = i
+            op = ops[i]
+            op.update({"slot": ev["slot"], "gen": ev["gen"],
+                       "presentation": ev["aux"], "t1": ev["t"]})
 
-    for ev in enter:
-        key = (ev["slot"], ev["gen"])
-        i = key_to_idx.get(key)
-        if i is None:
-            continue
-        ops[i]["t2"] = ev["t"]
+    if fifo_ok:
+        for ev in enter:
+            key = (ev["slot"], ev["gen"])
+            i = key_to_idx.get(key)
+            if i is None:
+                continue
+            ops[i]["t2"] = ev["t"]
 
-    for ev in cookie:
+    for ev in (cookie if fifo_ok else []):
         key = (ev["slot"], ev["gen"])
         i = key_to_idx.get(key)
         if i is None:
@@ -148,7 +174,7 @@ def join_phase(dump):
     for w in writers:
         if role.get(w["tid"]) == "driver" or any(e["kind"] == "wake" for e in w["events"]):
             wake_by_writer[id(w)] = [e["t"] for e in w["events"] if e["kind"] == "wake"]
-    for w in writers:
+    for w in (writers if fifo_ok else []):
         wakes = wake_by_writer.get(id(w), [])
         wi = 0
         for ev in w["events"]:
@@ -169,7 +195,7 @@ def join_phase(dump):
                 ops[i]["t3"] = ev["t"]
                 ops[i]["cqe_tid"] = w["tid"]
 
-    for ev in published:
+    for ev in (published if fifo_ok else []):
         key = (ev["slot"], ev["gen"])
         i = key_to_idx.get(key)
         if i is None:
@@ -177,7 +203,7 @@ def join_phase(dump):
             continue
         ops[i]["t4"] = ev["t"]
 
-    for ev in stop:
+    for ev in (stop if fifo_ok else []):
         key = (ev["slot"], ev["gen"])
         i = key_to_idx.get(key)
         if i is None:
@@ -185,6 +211,7 @@ def join_phase(dump):
             continue
         ops[i]["stop_kind"] = ev["aux"]
 
+    # taken (T5) is keyed by bench seq and stays valid in degraded phases
     for ev in taken:
         i = seq_to_idx.get(ev["seq"])
         if i is None:
@@ -192,7 +219,11 @@ def join_phase(dump):
             continue
         ops[i]["t5"] = ev["t"]
 
+    degraded = None if fifo_ok else "fifo_count_mismatch"
     for i, op in ops.items():
+        if degraded:
+            op["join"] = degraded
+            continue
         if op["slot"] is None:
             op["join"] = "built_never_admitted"
             continue
@@ -237,10 +268,21 @@ def main():
     for ph in phases:
         for k, v in ph["counters"].items():
             totals[k] = totals.get(k, 0) + v
+        totals["dropped_overflow"] = totals.get("dropped_overflow", 0) + sum(
+            w["dropped_overflow"] for w in ph["writers"])
+        totals["header_flag_failures"] = totals.get("header_flag_failures", 0) + (
+            1 if ph["flags"] & 0b111 else 0)
+        totals["ops_not_ok"] = totals.get("ops_not_ok", 0) + sum(
+            1 for op in ph["ops"] if op["join"] != "ok")
     print(json.dumps({"n_phases": len(phases), "totals": totals}, indent=1))
-    bad = (totals.get("pair_built_admitted_mismatch", 0) or
-           totals.get("quiesce_timeouts", 0))
-    return 0
+    bad_keys = ("pair_built_admitted_mismatch", "fifo_count_mismatch",
+"admit_key_duplicate", "cqe_no_admit",
+                "published_no_admit", "stop_no_admit", "cookie_no_admit",
+                "cookie_duplicate_key", "taken_seq_unknown",
+                "admit_without_cookie_cqe_published", "quiesce_timeouts",
+                "dropped_overflow", "header_flag_failures", "ops_not_ok")
+    bad = sum(totals.get(k, 0) or 0 for k in bad_keys)
+    return 1 if bad else 0
 
 
 if __name__ == "__main__":

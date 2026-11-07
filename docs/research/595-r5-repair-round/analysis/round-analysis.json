@@ -286,7 +286,7 @@
     "n": 24
    }
   },
-  "main_gate": {
+  "gate": {
    "MAIN_CpuReduction": {
     "metric": "cpu",
     "direction": "le",
@@ -297,8 +297,10 @@
      -0.22749554365316013,
      -0.21407448130917464
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": -0.21508601099541783,
+    "pass": true,
     "p": 0.0001,
-    "bound": -0.21508601099541783,
     "p_holm": 0.0004
    },
    "MAIN_Throughput": {
@@ -311,8 +313,10 @@
      0.27349235607268735,
      0.2959404822049537
     ],
+    "bound_used": "lower95",
+    "one_sided_bound": 0.27530675999026866,
+    "pass": true,
     "p": 0.0001,
-    "bound": 0.27530675999026866,
     "p_holm": 0.0004
    },
    "MAIN_P95": {
@@ -325,8 +329,10 @@
      -0.017802914424120367,
      0.04100391994108183
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.03655898372413263,
+    "pass": true,
     "p": 0.0041,
-    "bound": 0.03655898372413263,
     "p_holm": 0.0082
    },
    "MAIN_P99": {
@@ -339,8 +345,78 @@
      0.1517527774807531,
      0.20821929593078545
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.20343769022716507,
+    "pass": false,
     "p": 1.0,
-    "bound": 0.20343769022716507,
+    "p_holm": 1.0
+   }
+  },
+  "gate_family": "main",
+  "gate_pass": false,
+  "main_gate": {
+   "MAIN_CpuReduction": {
+    "metric": "cpu",
+    "direction": "le",
+    "point_req": -0.1,
+    "bound_req": -0.05,
+    "point": -0.22087480746540086,
+    "ci95": [
+     -0.22749554365316013,
+     -0.21407448130917464
+    ],
+    "bound_used": "upper95",
+    "one_sided_bound": -0.21508601099541783,
+    "pass": true,
+    "p": 0.0001,
+    "p_holm": 0.0004
+   },
+   "MAIN_Throughput": {
+    "metric": "tput",
+    "direction": "ge",
+    "point_req": null,
+    "bound_req": -0.03,
+    "point": 0.28487848633294827,
+    "ci95": [
+     0.27349235607268735,
+     0.2959404822049537
+    ],
+    "bound_used": "lower95",
+    "one_sided_bound": 0.27530675999026866,
+    "pass": true,
+    "p": 0.0001,
+    "p_holm": 0.0004
+   },
+   "MAIN_P95": {
+    "metric": "p95",
+    "direction": "le",
+    "point_req": null,
+    "bound_req": 0.05,
+    "point": 0.01153254417901737,
+    "ci95": [
+     -0.017802914424120367,
+     0.04100391994108183
+    ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.03655898372413263,
+    "pass": true,
+    "p": 0.0041,
+    "p_holm": 0.0082
+   },
+   "MAIN_P99": {
+    "metric": "p99",
+    "direction": "le",
+    "point_req": null,
+    "bound_req": 0.05,
+    "point": 0.17972511723528206,
+    "ci95": [
+     0.1517527774807531,
+     0.20821929593078545
+    ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.20343769022716507,
+    "pass": false,
+    "p": 1.0,
     "p_holm": 1.0
    }
   },
@@ -724,22 +800,24 @@
     "n": 24
    }
   },
-  "main_gate": {
-   "MAIN_CpuReduction": {
+  "gate": {
+   "ProtCpu": {
     "metric": "cpu",
     "direction": "le",
-    "point_req": -0.1,
-    "bound_req": -0.05,
+    "point_req": null,
+    "bound_req": 0.05,
     "point": -0.1681080183155054,
     "ci95": [
      -0.17545809904968238,
      -0.16068067157827592
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": -0.1618409053323022,
+    "pass": true,
     "p": 0.0001,
-    "bound": -0.1618409053323022,
     "p_holm": 0.0004
    },
-   "MAIN_Throughput": {
+   "ProtTput": {
     "metric": "tput",
     "direction": "ge",
     "point_req": null,
@@ -749,11 +827,13 @@
      0.19227716184603846,
      0.21384364598684003
     ],
+    "bound_used": "lower95",
+    "one_sided_bound": 0.19395164765105952,
+    "pass": true,
     "p": 0.0001,
-    "bound": 0.19395164765105952,
     "p_holm": 0.0004
    },
-   "MAIN_P95": {
+   "ProtP95": {
     "metric": "p95",
     "direction": "le",
     "point_req": null,
@@ -763,11 +843,13 @@
      -0.2439126098418326,
      -0.2016849522644795
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": -0.20573760731891944,
+    "pass": true,
     "p": 0.0001,
-    "bound": -0.20573760731891944,
     "p_holm": 0.0004
    },
-   "MAIN_P99": {
+   "ProtP99": {
     "metric": "p99",
     "direction": "le",
     "point_req": null,
@@ -777,11 +859,15 @@
      -0.22613275434312707,
      -0.15255830607409024
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": -0.15914565745906747,
+    "pass": true,
     "p": 0.0001,
-    "bound": -0.15914565745906747,
     "p_holm": 0.0004
    }
   },
+  "gate_family": "protection",
+  "gate_pass": true,
   "aa": {
    "cpu": {
     "ci95": [
@@ -1162,22 +1248,24 @@
     "n": 24
    }
   },
-  "main_gate": {
-   "MAIN_CpuReduction": {
+  "gate": {
+   "ProtCpu": {
     "metric": "cpu",
     "direction": "le",
-    "point_req": -0.1,
-    "bound_req": -0.05,
+    "point_req": null,
+    "bound_req": 0.05,
     "point": 0.03896040447157716,
     "ci95": [
      0.026879459675800396,
      0.051200983756933834
     ],
-    "p": 1.0,
-    "bound": 0.04899119445716743,
-    "p_holm": 1.0
+    "bound_used": "upper95",
+    "one_sided_bound": 0.04899119445716743,
+    "pass": true,
+    "p": 0.0364,
+    "p_holm": 0.1456
    },
-   "MAIN_Throughput": {
+   "ProtTput": {
     "metric": "tput",
     "direction": "ge",
     "point_req": null,
@@ -1187,11 +1275,13 @@
      -0.0479213258538029,
      -0.02543241872921285
     ],
+    "bound_used": "lower95",
+    "one_sided_bound": -0.0459052922924588,
+    "pass": false,
     "p": 0.877,
-    "bound": -0.0459052922924588,
     "p_holm": 1.0
    },
-   "MAIN_P95": {
+   "ProtP95": {
     "metric": "p95",
     "direction": "le",
     "point_req": null,
@@ -1201,11 +1291,13 @@
      0.0711625075912717,
      0.11132464193607823
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.10832613419807358,
+    "pass": false,
     "p": 1.0,
-    "bound": 0.10832613419807358,
     "p_holm": 1.0
    },
-   "MAIN_P99": {
+   "ProtP99": {
     "metric": "p99",
     "direction": "le",
     "point_req": null,
@@ -1215,11 +1307,15 @@
      0.022669801693262465,
      0.1501152023046192
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.13974490455032362,
+    "pass": false,
     "p": 0.8598,
-    "bound": 0.13974490455032362,
     "p_holm": 1.0
    }
   },
+  "gate_family": "protection",
+  "gate_pass": false,
   "aa": {
    "cpu": {
     "ci95": [
@@ -1600,22 +1696,24 @@
     "n": 24
    }
   },
-  "main_gate": {
-   "MAIN_CpuReduction": {
+  "gate": {
+   "ProtCpu": {
     "metric": "cpu",
     "direction": "le",
-    "point_req": -0.1,
-    "bound_req": -0.05,
+    "point_req": null,
+    "bound_req": 0.05,
     "point": 0.053714113372229755,
     "ci95": [
      0.04716605143575622,
      0.06019504425326538
     ],
-    "p": 1.0,
-    "bound": 0.05916850993692529,
+    "bound_used": "upper95",
+    "one_sided_bound": 0.05916850993692529,
+    "pass": false,
+    "p": 0.8708,
     "p_holm": 1.0
    },
-   "MAIN_Throughput": {
+   "ProtTput": {
     "metric": "tput",
     "direction": "ge",
     "point_req": null,
@@ -1625,11 +1723,13 @@
      -0.05681122619114396,
      -0.04492580476505609
     ],
+    "bound_used": "lower95",
+    "one_sided_bound": -0.055865145926090855,
+    "pass": false,
     "p": 1.0,
-    "bound": -0.055865145926090855,
     "p_holm": 1.0
    },
-   "MAIN_P95": {
+   "ProtP95": {
     "metric": "p95",
     "direction": "le",
     "point_req": null,
@@ -1639,11 +1739,13 @@
      0.03587812547144285,
      0.05666872347132734
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.055486710970650784,
+    "pass": false,
     "p": 0.3271,
-    "bound": 0.055486710970650784,
     "p_holm": 0.9813000000000001
    },
-   "MAIN_P99": {
+   "ProtP99": {
     "metric": "p99",
     "direction": "le",
     "point_req": null,
@@ -1653,11 +1755,15 @@
      0.014407416846852551,
      0.0611576407104668
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.05812528701553137,
+    "pass": false,
     "p": 0.197,
-    "bound": 0.05812528701553137,
     "p_holm": 0.788
    }
   },
+  "gate_family": "protection",
+  "gate_pass": false,
   "aa": {
    "cpu": {
     "ci95": [
@@ -2038,22 +2144,24 @@
     "n": 24
    }
   },
-  "main_gate": {
-   "MAIN_CpuReduction": {
+  "gate": {
+   "ProtCpu": {
     "metric": "cpu",
     "direction": "le",
-    "point_req": -0.1,
-    "bound_req": -0.05,
+    "point_req": null,
+    "bound_req": 0.05,
     "point": 0.05777000729202771,
     "ci95": [
      0.052110209923052396,
      0.06356286644598468
     ],
-    "p": 1.0,
-    "bound": 0.06256922064927146,
+    "bound_used": "upper95",
+    "one_sided_bound": 0.06256922064927146,
+    "pass": false,
+    "p": 0.9958,
     "p_holm": 1.0
    },
-   "MAIN_Throughput": {
+   "ProtTput": {
     "metric": "tput",
     "direction": "ge",
     "point_req": null,
@@ -2063,11 +2171,13 @@
      -0.05977625942358813,
      -0.04951942730930511
     ],
+    "bound_used": "lower95",
+    "one_sided_bound": -0.05888767556688185,
+    "pass": false,
     "p": 1.0,
-    "bound": -0.05888767556688185,
     "p_holm": 1.0
    },
-   "MAIN_P95": {
+   "ProtP95": {
     "metric": "p95",
     "direction": "le",
     "point_req": null,
@@ -2077,11 +2187,13 @@
      0.03991283668471992,
      0.06041926215515708
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.05825339384571632,
+    "pass": false,
     "p": 0.403,
-    "bound": 0.05825339384571632,
     "p_holm": 1.0
    },
-   "MAIN_P99": {
+   "ProtP99": {
     "metric": "p99",
     "direction": "le",
     "point_req": null,
@@ -2091,11 +2203,15 @@
      0.020279849825824245,
      0.09882608739143607
     ],
+    "bound_used": "upper95",
+    "one_sided_bound": 0.091329386218119,
+    "pass": false,
     "p": 0.6159,
-    "bound": 0.091329386218119,
     "p_holm": 1.0
    }
   },
+  "gate_family": "protection",
+  "gate_pass": false,
   "aa": {
    "cpu": {
     "ci95": [

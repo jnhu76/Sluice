@@ -35,6 +35,22 @@ precondition, and rejects shrink-as-preemption (`r5/analysis/literature-matrix.m
 
 ## Candidate B — residue-aware continuous-submission budget with a genuine return to the progress/observer path
 
+> **[WARNING — added 2026-11-07, r5-repair review R5: this design is NOT
+> approved for execution as written.]** B splits a refill so back ops are
+> rebuilt (and T0-stamped) at their later submission time; the measured
+> latency then excludes the wait that already happened before that later
+> build. That is a latency-origin change of exactly the kind F3 forbids:
+> comparing the new origin against A0's per-item build origin is not a
+> same-origin comparison, and equal gate thresholds do not repair a moved
+> time origin. Any future run of B must keep A0's original T0 semantics for
+> the comparison (stamp at first build attempt, or preregister an explicit
+> arrival-origin metric applied to BOTH arms). Additionally, the r5-repair
+> round's corrected diagnostic (CORRECTIONS R1) supports B's motivating
+> lead — the quantum-8 chunk step and occupancy-8 refills — only at
+> PERTURBED lead level, so B's premise is not yet confirmed evidence. The
+> r5-repair round's verdict: Candidate B is not green-lit; no next
+> intervention selected.
+
 Naming note: "Candidate B" (this candidate) is unrelated to the R4
 **arm B** (R3_FIXED_PREFIX, the suffix-singles baseline arm — defined in
 CALL_PATTERNS.md §1.0 and CODE_FINDINGS_AND_FIXES.md C7.1); this candidate's

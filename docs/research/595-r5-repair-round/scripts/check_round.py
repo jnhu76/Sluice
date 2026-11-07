@@ -115,6 +115,60 @@ def main():
     else:
         check(False, "analysis/exists")
 
+    # post-review corrections (CORRECTIONS.md "Review corrections")
+    gatebug = os.path.join(ROOT, "analysis", "round-analysis.gatebug-archived.json")
+    check(os.path.exists(gatebug), "analysis/gatebug-archived")
+    tables = os.path.join(ROOT, "analysis", "summary-tables.md")
+    check(os.path.exists(tables), "analysis/summary-tables")
+    if os.path.exists(apath):
+        with open(apath) as f:
+            analysis = {r["cell"]: r for r in json.load(f)}
+        main = analysis["MAIN-W03-D16"]
+        check(main["gate_family"] == "main" and not main["gate_pass"]
+              and not main["gate"]["MAIN_P99"]["pass"]
+              and main["gate"]["MAIN_CpuReduction"]["pass"]
+              and main["gate"]["MAIN_Throughput"]["pass"]
+              and main["gate"]["MAIN_P95"]["pass"],
+              "gate/main-family-verdicts")
+        for cell, expect_pass in (("PROT-W03-D4", True), ("PROT-W03-D2SERIAL", False),
+                                  ("PROT-W02-D1", False), ("PROT-W02-D2", False)):
+            r = analysis[cell]
+            check(r["gate_family"] == "protection"
+                  and all(n.startswith("Prot") for n in r["gate"])
+                  and r["gate_pass"] == expect_pass
+                  and all(("pass" in g) for g in r["gate"].values()),
+                  f"gate/{cell}-protection-family", f"pass={r['gate_pass']}")
+        d2s = analysis["PROT-W03-D2SERIAL"]["gate"]
+        check(d2s["ProtCpu"]["pass"] and d2s["ProtCpu"]["one_sided_bound"] <= 0.05,
+              "gate/d2serial-cpu-item-passes",
+              f"u95={d2s['ProtCpu']['one_sided_bound']:.4f}")
+        if os.path.exists(tables):
+            t = open(tables).read()
+            check("3208.6" in t and "53.92" in t and "+4.90%" in t,
+                  "tables/generated-values-present")
+    f5pos = os.path.join(ROOT, "analysis", "f5-position.json")
+    check(os.path.exists(f5pos), "analysis/f5-position")
+    if os.path.exists(f5pos):
+        with open(f5pos) as f:
+            fp = json.load(f)
+        tot = fp["validation_totals"]
+        check(tot["tags"] == 24 and tot["rows"] == 480000
+              and tot["anomalous_groups"] == 0 and tot["unpositioned_rows"] == 0
+              and tot["tags_with_seq_gaps"] == 0,
+              "f5-position/validation-totals", json.dumps(tot))
+        check(os.path.exists(os.path.join(ROOT, "figures", "figure-data",
+                                          "f5-position.csv")),
+              "figures/f5-position.csv")
+    check(os.path.exists(os.path.join(ROOT, "scripts", "recover_f5_position.py")),
+          "scripts/recover_f5_position")
+    ttest = os.path.join(ROOT, "harness", "test_tail_trace_analyzer.py")
+    check(os.path.exists(ttest), "harness/test_tail_trace_analyzer")
+    if os.path.exists(ttest):
+        import subprocess
+        rr = subprocess.run([sys.executable, ttest], capture_output=True, text=True)
+        check(rr.returncode == 0, "harness/analyzer-counterexamples-pass",
+              rr.stdout.strip().splitlines()[-1] if rr.stdout.strip() else "")
+
     # figures data
     fdat = os.path.join(ROOT, "figures", "figure-data")
     if os.path.isdir(fdat):
