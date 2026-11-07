@@ -1,0 +1,962 @@
+{
+ "binary": "/tmp/r5-build-taildiag/linux/x86_64/release/bench_w03_external_loop",
+ "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+ "started_utc": "2026-11-06T16:04:26Z",
+ "note": "diagnostic-only runs; not timed gate evidence; never mixed with clean R4/R5 gate blocks (protocol section 2)",
+ "runs": [
+  {
+   "phase": "off-W03-uring-4k-d16",
+   "pair": 0,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "off",
+   "ts_utc": "2026-11-06T16:04:27Z",
+   "exit": 0,
+   "wall_s": 0.461,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/off-W03-uring-4k-d16/p00-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 36322.0,
+    "lat_p95_ns": 44744.0,
+    "lat_p99_ns": 52775.0,
+    "lat_max_ns": 110802.0,
+    "lat_mean_ns": 36690.2
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": []
+  },
+  {
+   "phase": "off-W03-uring-4k-d16",
+   "pair": 0,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "off",
+   "ts_utc": "2026-11-06T16:04:27Z",
+   "exit": 0,
+   "wall_s": 0.343,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/off-W03-uring-4k-d16/p00-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 37664.0,
+    "lat_p95_ns": 42537.0,
+    "lat_p99_ns": 60786.0,
+    "lat_max_ns": 81735.0,
+    "lat_mean_ns": 38218.3
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": []
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 0,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:27Z",
+   "exit": 0,
+   "wall_s": 0.458,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p00-0-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p00-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 37204.0,
+    "lat_p95_ns": 45810.0,
+    "lat_p99_ns": 51077.0,
+    "lat_max_ns": 226177.0,
+    "lat_mean_ns": 37546.0
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 0,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:28Z",
+   "exit": 0,
+   "wall_s": 0.352,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p00-1-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p00-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 39311.0,
+    "lat_p95_ns": 44129.0,
+    "lat_p99_ns": 64498.0,
+    "lat_max_ns": 78202.0,
+    "lat_mean_ns": 39754.5
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 1,
+   "pos": 0,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:28Z",
+   "exit": 0,
+   "wall_s": 0.352,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p01-0-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p01-0-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 38486.0,
+    "lat_p95_ns": 48053.0,
+    "lat_p99_ns": 64334.0,
+    "lat_max_ns": 88343.0,
+    "lat_mean_ns": 39496.3
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 1,
+   "pos": 1,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:29Z",
+   "exit": 0,
+   "wall_s": 0.455,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p01-1-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p01-1-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 37790.0,
+    "lat_p95_ns": 46348.0,
+    "lat_p99_ns": 55056.0,
+    "lat_max_ns": 217134.0,
+    "lat_mean_ns": 38173.6
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 2,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:29Z",
+   "exit": 0,
+   "wall_s": 0.455,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p02-0-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p02-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 37493.0,
+    "lat_p95_ns": 45615.0,
+    "lat_p99_ns": 51096.0,
+    "lat_max_ns": 223606.0,
+    "lat_mean_ns": 37794.5
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 2,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:29Z",
+   "exit": 0,
+   "wall_s": 0.349,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p02-1-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p02-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 39088.0,
+    "lat_p95_ns": 45346.0,
+    "lat_p99_ns": 63258.0,
+    "lat_max_ns": 89059.0,
+    "lat_mean_ns": 39535.3
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 3,
+   "pos": 0,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:30Z",
+   "exit": 0,
+   "wall_s": 0.351,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p03-0-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p03-0-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 39050.0,
+    "lat_p95_ns": 48612.0,
+    "lat_p99_ns": 64737.0,
+    "lat_max_ns": 95754.0,
+    "lat_mean_ns": 39972.5
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 3,
+   "pos": 1,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:30Z",
+   "exit": 0,
+   "wall_s": 0.453,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p03-1-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p03-1-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 37596.0,
+    "lat_p95_ns": 45720.0,
+    "lat_p99_ns": 51100.0,
+    "lat_max_ns": 206638.0,
+    "lat_mean_ns": 37857.9
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 4,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:31Z",
+   "exit": 0,
+   "wall_s": 0.456,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p04-0-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p04-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 37936.0,
+    "lat_p95_ns": 47840.0,
+    "lat_p99_ns": 55699.0,
+    "lat_max_ns": 211386.0,
+    "lat_mean_ns": 38405.0
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 4,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:31Z",
+   "exit": 0,
+   "wall_s": 0.356,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p04-1-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p04-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 39652.0,
+    "lat_p95_ns": 50712.0,
+    "lat_p99_ns": 64998.0,
+    "lat_max_ns": 96674.0,
+    "lat_mean_ns": 40312.6
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 5,
+   "pos": 0,
+   "arm": "R",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:31Z",
+   "exit": 0,
+   "wall_s": 0.353,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p05-0-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p05-0-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 38935.0,
+    "lat_p95_ns": 48297.0,
+    "lat_p99_ns": 65274.0,
+    "lat_max_ns": 94489.0,
+    "lat_mean_ns": 39850.6
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d16",
+   "pair": 5,
+   "pos": 1,
+   "arm": "A0",
+   "case": "W03-uring-4k-d16",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:32Z",
+   "exit": 0,
+   "wall_s": 0.456,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p05-1-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d16/p05-1-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 38042.0,
+    "lat_p95_ns": 48041.0,
+    "lat_p99_ns": 62447.0,
+    "lat_max_ns": 198004.0,
+    "lat_mean_ns": 38699.8
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d16_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d16_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 0,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:33Z",
+   "exit": 0,
+   "wall_s": 0.764,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p00-0-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p00-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 16640.0,
+    "lat_p95_ns": 26760.0,
+    "lat_p99_ns": 29472.0,
+    "lat_max_ns": 78781.0,
+    "lat_mean_ns": 17703.2
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 0,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:33Z",
+   "exit": 0,
+   "wall_s": 0.661,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p00-1-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p00-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 19480.0,
+    "lat_p95_ns": 21678.0,
+    "lat_p99_ns": 24055.0,
+    "lat_max_ns": 49861.0,
+    "lat_mean_ns": 19184.3
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 1,
+   "pos": 0,
+   "arm": "R",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:34Z",
+   "exit": 0,
+   "wall_s": 0.64,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p01-0-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p01-0-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 18752.0,
+    "lat_p95_ns": 22474.0,
+    "lat_p99_ns": 33991.0,
+    "lat_max_ns": 69950.0,
+    "lat_mean_ns": 19214.2
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 1,
+   "pos": 1,
+   "arm": "A0",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:35Z",
+   "exit": 0,
+   "wall_s": 0.746,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p01-1-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p01-1-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 16945.0,
+    "lat_p95_ns": 27326.0,
+    "lat_p99_ns": 31399.0,
+    "lat_max_ns": 86059.0,
+    "lat_mean_ns": 18046.4
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 2,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:35Z",
+   "exit": 0,
+   "wall_s": 0.742,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p02-0-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p02-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 16726.0,
+    "lat_p95_ns": 26698.0,
+    "lat_p99_ns": 31724.0,
+    "lat_max_ns": 68622.0,
+    "lat_mean_ns": 17817.3
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 2,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:36Z",
+   "exit": 0,
+   "wall_s": 0.653,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p02-1-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p02-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 19286.0,
+    "lat_p95_ns": 21793.0,
+    "lat_p99_ns": 25935.0,
+    "lat_max_ns": 52558.0,
+    "lat_mean_ns": 19502.1
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 3,
+   "pos": 0,
+   "arm": "R",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:37Z",
+   "exit": 0,
+   "wall_s": 0.646,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p03-0-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p03-0-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 19400.0,
+    "lat_p95_ns": 22411.0,
+    "lat_p99_ns": 30680.0,
+    "lat_max_ns": 51446.0,
+    "lat_mean_ns": 19301.2
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 3,
+   "pos": 1,
+   "arm": "A0",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:37Z",
+   "exit": 0,
+   "wall_s": 0.735,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p03-1-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p03-1-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 16706.0,
+    "lat_p95_ns": 26707.0,
+    "lat_p99_ns": 29146.0,
+    "lat_max_ns": 66763.0,
+    "lat_mean_ns": 17648.7
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 4,
+   "pos": 0,
+   "arm": "A0",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:38Z",
+   "exit": 0,
+   "wall_s": 0.734,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p04-0-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p04-0-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 16472.0,
+    "lat_p95_ns": 24236.0,
+    "lat_p99_ns": 28043.0,
+    "lat_max_ns": 64235.0,
+    "lat_mean_ns": 17318.5
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 4,
+   "pos": 1,
+   "arm": "R",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:39Z",
+   "exit": 0,
+   "wall_s": 0.634,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p04-1-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p04-1-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 18763.0,
+    "lat_p95_ns": 21107.0,
+    "lat_p99_ns": 22693.0,
+    "lat_max_ns": 50101.0,
+    "lat_mean_ns": 18676.0
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 5,
+   "pos": 0,
+   "arm": "R",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:39Z",
+   "exit": 0,
+   "wall_s": 0.639,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "R",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p05-0-R/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p05-0-R/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 18764.0,
+    "lat_p95_ns": 21304.0,
+    "lat_p99_ns": 23375.0,
+    "lat_max_ns": 56166.0,
+    "lat_mean_ns": 18905.7
+   },
+   "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  },
+  {
+   "phase": "on-W03-uring-4k-d4",
+   "pair": 5,
+   "pos": 1,
+   "arm": "A0",
+   "case": "W03-uring-4k-d4",
+   "mode": "on",
+   "ts_utc": "2026-11-06T16:04:40Z",
+   "exit": 0,
+   "wall_s": 0.734,
+   "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+   "env": {
+    "SLUICE_595_R3_ARM": "A0",
+    "SLUICE_595_R5_TAIL_TRACE": "1",
+    "SLUICE_595_R5_TAIL_TRACE_DUMP_DIR": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p05-1-A0/dump",
+    "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d4",
+    "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/on-W03-uring-4k-d4/p05-1-A0/bench.jsonl",
+    "SLUICE_BENCH_MEASURED": "1",
+    "SLUICE_BENCH_STATS": "0",
+    "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+    "SLUICE_BENCH_WARMUP": "1"
+   },
+   "measured_records": 1,
+   "lat": {
+    "lat_n": 20000,
+    "lat_p50_ns": 16662.0,
+    "lat_p95_ns": 25699.0,
+    "lat_p99_ns": 27894.0,
+    "lat_max_ns": 63508.0,
+    "lat_mean_ns": 17471.1
+   },
+   "readback": "research arm=A0 (SLUICE_595_R3_ARM), research cases=off",
+   "dumps": [
+    "tail-000-W03-uring-4k-d4_rep0_instrumented.bin",
+    "tail-001-W03-uring-4k-d4_rep0_instrumented.bin"
+   ]
+  }
+ ],
+ "ended_utc": "2026-11-06T16:04:40Z",
+ "failed_runs": 0
+}

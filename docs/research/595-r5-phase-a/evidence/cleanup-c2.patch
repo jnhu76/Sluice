@@ -1,0 +1,393 @@
+From b191bb893432c4df0551d24c85843d8513ed5a55 Mon Sep 17 00:00:00 2001
+From: jnhu <me@hoooo.org>
+Date: Fri, 6 Nov 2026 23:57:50 +0800
+Subject: [PATCH] research(595-r5): rename the pass-fact signal to owner-pass
+ activity
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+R5 R4_CLEANUP item C2 (naming/comments/wrong-assertion fixes only; the
+predicate and every runtime decision are unchanged). R4 finding C2: the
+signal named pressure is not pending completion pressure — its
+completed>0 disjunct counts work the observed owner pass already
+published, and pressure_known meant "a pass was ever sampled", not
+freshness. In the completion-driven W03 harness the predicate holds at
+~99.92% of S decisions, including fully drained instants.
+
+Renames (behavior identical, verified below):
+- DecisionFacts::pressure_known -> owner_pass_sampled (monotonic
+  liveness witness); its comment now states the lag and that
+  last_pass_completed counts published work, not pending completions.
+- BudgetVariant::read_pressure -> read_owner_pass_activity;
+  Adapter::reads_pressure_facts -> reads_owner_pass_facts.
+- budget::Input::{pressure_hint_active, pressure} ->
+  {owner_pass_activity_hint_active, owner_pass_had_activity}; row
+  "completion_pressure" -> "owner_pass_activity" (same predicate, same
+  clamp2 effect, same table position).
+- DecisionRecord::{pressure_read, pressure, pressure_known} ->
+  {owner_pass_activity_read, owner_pass_had_activity,
+  owner_pass_sampled}; the diag-line labels follow the field names.
+- bench_w03_external_loop: SharedLoop::pressure_seen ->
+  owner_pass_sampled; the publication-site comment now says the facts
+  come from the final pass of the owner's drain loop and the flag is
+  never cleared.
+- r4_arm_smoke: assertions and labels that read the signal as a
+  completion backlog ("completion backlog with active data",
+  "pressured state") are corrected; the conditions keep testing the
+  same values.
+
+Deliberately unchanged: arm tokens SNI/SNP (frozen arm identities and
+env interface), the r4_* record/counter schema including
+r4_pressure_decisions (frozen R4 evidence statistic name and join key
+to R4 RESULTS.md), and every predicate evaluation.
+
+Validation (native E5, this session): 18-scenario ready-reuse oracle
+(R4 archived source with only the renamed identifiers adapted; the
+adaptation is recorded in r5 evidence), 18/18 rc=0, outputs identical
+to baseline; r4_arm_smoke 57/57 checks PASS on both sides with only
+the corrected labels differing; ready-batch deterministic/research/
+fault oracles byte-identical; concurrency/cancel/shutdown suites rc=0;
+W03 r3d16cap rc=0 for all arms.
+---
+ bench/bench_w03_external_loop.cpp | 14 ++++---
+ bench/r3_ready_batch.hpp          | 64 ++++++++++++++++++-------------
+ bench/r4_arm_smoke.cpp            | 56 ++++++++++++++-------------
+ 3 files changed, 75 insertions(+), 59 deletions(-)
+
+diff --git a/bench/bench_w03_external_loop.cpp b/bench/bench_w03_external_loop.cpp
+index 8a01af62..9ded9f2c 100644
+--- a/bench/bench_w03_external_loop.cpp
++++ b/bench/bench_w03_external_loop.cpp
+@@ -151,11 +151,13 @@ struct SharedLoop {
+     std::uint64_t empty_wakes = 0;
+     std::uint64_t passes = 0;
+     std::uint64_t retry_scheduled = 0;
+-    // Facts of the most recent owner pass, published for the state-aware
+-    // arms; zero new polls are issued for them.
++    // Facts of the owner's most recent drain loop (kept from its final
++    // pass), published for the state-aware arms; zero new polls are issued
++    // for them. owner_pass_sampled turns true once any pass has run and is
++    // never cleared: a liveness witness, not freshness.
+     std::uint64_t last_pass_completed = 0;
+     bool last_pass_immediate_work = false;
+-    bool pressure_seen = false;
++    bool owner_pass_sampled = false;
+     bool driver_attached = false;
+     bool stop = false;
+     bool driver_failed = false;
+@@ -254,7 +256,7 @@ void driver_thread(AsyncIoContext& ctx, int epoll_fd, int notification_fd, Share
+             if (saw_pass) {
+                 shared.last_pass_completed = last_pass_completed;
+                 shared.last_pass_immediate_work = last_pass_immediate_work;
+-                shared.pressure_seen = true;
++                shared.owner_pass_sampled = true;
+             }
+             if (pass_failed) {
+                 shared.driver_failed = true;
+@@ -414,11 +416,11 @@ PhaseResult run_external_phase(const LoopParams& params, const std::string& path
+                 }
+                 bench::r3::DecisionFacts facts;
+                 facts.caller_window = window.size();
+-                if (adapter->reads_pressure_facts()) {
++                if (adapter->reads_owner_pass_facts()) {
+                     std::lock_guard<std::mutex> lock(shared.mutex);
+                     facts.last_pass_completed = shared.last_pass_completed;
+                     facts.last_pass_immediate_work = shared.last_pass_immediate_work;
+-                    facts.pressure_known = shared.pressure_seen;
++                    facts.owner_pass_sampled = shared.owner_pass_sampled;
+                 }
+                 auto outcome = adapter->submit(std::span<const ReadOp>(ready.data(), ready.size()),
+                                                accepted, facts);
+diff --git a/bench/r3_ready_batch.hpp b/bench/r3_ready_batch.hpp
+index 2e7ab640..bbd47639 100644
+--- a/bench/r3_ready_batch.hpp
++++ b/bench/r3_ready_batch.hpp
+@@ -132,13 +132,17 @@ struct Counters {
+     std::uint64_t r4_shadow_window_sum = 0;
+ };
+ 
+-// Snapshot of the most recent owner progress pass, carried to the submit
+-// thread by the harness (its existing shared-mutex channel); the adapter
+-// itself never polls. pressure_known stays false until a pass has run.
++// Snapshot of the most recently observed owner progress pass, carried to
++// the submit thread by the harness (its existing shared-mutex channel);
++// the adapter itself never polls. owner_pass_sampled is a monotonic
++// liveness witness (a pass was observed at least once), not freshness:
++// the values may lag the submitter by any number of driver cycles, and
++// last_pass_completed counts results the observed pass already published
++// (work done), not completions waiting to be processed.
+ struct DecisionFacts {
+     std::uint64_t last_pass_completed = 0;
+     bool last_pass_immediate_work = false;
+-    bool pressure_known = false;
++    bool owner_pass_sampled = false;
+     // Caller-side unlocked mirror of accepted-but-uncollected requests;
+     // observation for the shadow arm only, never a decision authority.
+     std::size_t caller_window = 0;
+@@ -146,7 +150,7 @@ struct DecisionFacts {
+ 
+ struct BudgetVariant {
+     bool read_inflight = false;
+-    bool read_pressure = false;
++    bool read_owner_pass_activity = false;
+     std::size_t pinned_quantum = 0;
+     bool shadow = false;
+ };
+@@ -211,8 +215,8 @@ struct Input {
+     std::size_t eligible_prefix_bounded = 0;
+     std::size_t active_data = 0;
+     bool inflight_hint_active = false;
+-    bool pressure_hint_active = false;
+-    bool pressure = false;
++    bool owner_pass_activity_hint_active = false;
++    bool owner_pass_had_activity = false;
+     bool prior_stop_control_or_recovery = false;
+     bool residue_advertised = false;
+     std::size_t pinned_quantum = 0;
+@@ -244,8 +248,10 @@ constexpr std::array<Row, 6> kTable{{
+          return in.inflight_hint_active && in.active_data == 0;
+      },
+      Action::batch, QuantumEffect::clamp2},
+-    {"completion_pressure",
+-     [](const Input& in) noexcept { return in.pressure_hint_active && in.pressure; },
++    {"owner_pass_activity",
++     [](const Input& in) noexcept {
++         return in.owner_pass_activity_hint_active && in.owner_pass_had_activity;
++     },
+      Action::batch, QuantumEffect::clamp2},
+ }};
+ 
+@@ -316,9 +322,9 @@ struct DecisionRecord {
+     const char* action_row = "";
+     bool active_read = false;
+     std::size_t active_data = 0;
+-    bool pressure_read = false;
+-    bool pressure = false;
+-    bool pressure_known = false;
++    bool owner_pass_activity_read = false;
++    bool owner_pass_had_activity = false;
++    bool owner_pass_sampled = false;
+     std::uint64_t last_pass_completed = 0;
+     bool last_pass_immediate_work = false;
+     std::size_t caller_window = 0;
+@@ -356,14 +362,16 @@ inline void format_decision_record(const DecisionRecord& r, std::string& out) {
+     char buf[512];
+     std::snprintf(buf, sizeof buf,
+                   "ready=%zu eligible=%zu present=%zu quantum=%zu row=%s "
+-                  "active_read=%d active=%zu pressure_read=%d pressure=%d "
+-                  "pressure_known=%d pass_completed=%llu pass_immediate=%d "
++                  "active_read=%d active=%zu owner_pass_activity_read=%d "
++                  "owner_pass_had_activity=%d owner_pass_sampled=%d "
++                  "pass_completed=%llu pass_immediate=%d "
+                   "caller_window=%zu accepted=%zu stop=%s untouched_begin=%zu "
+                   "untouched=%zu flush=%zu residue=%d sq_budget_bound=%d "
+                   "cause=%s",
+                   r.remaining, r.eligible_prefix, r.present_len, r.quantum, r.action_row,
+-                  r.active_read ? 1 : 0, r.active_data, r.pressure_read ? 1 : 0,
+-                  r.pressure ? 1 : 0, r.pressure_known ? 1 : 0,
++                  r.active_read ? 1 : 0, r.active_data,
++                  r.owner_pass_activity_read ? 1 : 0,
++                  r.owner_pass_had_activity ? 1 : 0, r.owner_pass_sampled ? 1 : 0,
+                   static_cast<unsigned long long>(r.last_pass_completed),
+                   r.last_pass_immediate_work ? 1 : 0, r.caller_window, r.accepted,
+                   stop_name(r.stop), r.untouched_begin, r.untouched, r.flush_attempts,
+@@ -390,9 +398,9 @@ class Adapter {
+ 
+     // True when the arm consumes the pass-fact channel; the harness consults
+     // this so frozen arms never pay for the hint read.
+-    bool reads_pressure_facts() const noexcept {
++    bool reads_owner_pass_facts() const noexcept {
+         const BudgetVariant budget = arm_policy(arm_).budget;
+-        return budget.read_pressure || budget.shadow;
++        return budget.read_owner_pass_activity || budget.shadow;
+     }
+ 
+     struct TraceSink {
+@@ -466,7 +474,7 @@ class Adapter {
+             if (trace_ != nullptr) {
+                 record.eligible_prefix = batch_shaped_prefix(rest);
+             }
+-            record.pressure_known = facts.pressure_known;
++            record.owner_pass_sampled = facts.owner_pass_sampled;
+             record.last_pass_completed = facts.last_pass_completed;
+             record.last_pass_immediate_work = facts.last_pass_immediate_work;
+             record.caller_window = facts.caller_window;
+@@ -483,18 +491,20 @@ class Adapter {
+                 // quantum is the counterfactual S decision) and then overrides
+                 // only the presentation.
+                 input.inflight_hint_active = variant.read_inflight || variant.shadow;
+-                input.pressure_hint_active = variant.read_pressure || variant.shadow;
++                input.owner_pass_activity_hint_active =
++                    variant.read_owner_pass_activity || variant.shadow;
+                 if (variant.read_inflight || variant.shadow) {
+                     record.active_read = true;
+                     record.active_data = ctx_.outstanding();
+                     input.active_data = record.active_data;
+                 }
+-                if (variant.read_pressure || variant.shadow) {
+-                    record.pressure_read = true;
+-                    record.pressure = facts.pressure_known &&
+-                                      (facts.last_pass_completed > 0 ||
+-                                       facts.last_pass_immediate_work);
+-                    input.pressure = record.pressure;
++                if (variant.read_owner_pass_activity || variant.shadow) {
++                    record.owner_pass_activity_read = true;
++                    record.owner_pass_had_activity =
++                        facts.owner_pass_sampled &&
++                        (facts.last_pass_completed > 0 ||
++                         facts.last_pass_immediate_work);
++                    input.owner_pass_had_activity = record.owner_pass_had_activity;
+                 }
+                 const budget::Decision decision = budget::evaluate(input);
+                 record.quantum = decision.quantum;
+@@ -524,7 +534,7 @@ class Adapter {
+                 if (record.active_read && record.active_data == 0) {
+                     ++out.counters.r4_active_zero_decisions;
+                 }
+-                if (record.pressure_read && record.pressure) {
++                if (record.owner_pass_activity_read && record.owner_pass_had_activity) {
+                     ++out.counters.r4_pressure_decisions;
+                 }
+                 if (decision.quantum == 1) {
+diff --git a/bench/r4_arm_smoke.cpp b/bench/r4_arm_smoke.cpp
+index b4494f83..be3404e4 100644
+--- a/bench/r4_arm_smoke.cpp
++++ b/bench/r4_arm_smoke.cpp
+@@ -155,7 +155,7 @@ bool settle(AsyncIoContext& ctx, Slots& slots, Batch& batch, bench::r3::Decision
+         }
+         facts.last_pass_completed = pass.value().completed;
+         facts.last_pass_immediate_work = pass.value().immediate_work_remains;
+-        facts.pressure_known = true;
++        facts.owner_pass_sampled = true;
+     }
+     for (std::size_t i = 0; i < batch.requests.size(); ++i) {
+         const auto observed = batch.requests[i].take_result();
+@@ -281,7 +281,8 @@ int main() {
+             if (trace.size() == 3) {
+                 check(trace[0].quantum == 2 && trace[0].present_len == 2 &&
+                           trace[0].active_read && trace[0].active_data == 0 &&
+-                          !trace[0].pressure && !trace[0].cap_cause && !trace[0].chunk_cause &&
++                          !trace[0].owner_pass_had_activity && !trace[0].cap_cause &&
++                          !trace[0].chunk_cause &&
+                           std::string(trace[0].action_row) == "inflight_zero",
+                       "empty pipeline decision: inflight_zero row, quantum 2, presents 2");
+                 check(trace[1].quantum == 8 && trace[1].present_len == 8 &&
+@@ -295,8 +296,8 @@ int main() {
+                       "tail decision keeps quantum 8 and presents the remainder");
+             }
+             check(settle(ctx, slots, first, facts), "first refill settles verified");
+-            check(facts.pressure_known && facts.last_pass_completed > 0,
+-                  "settle passes publish completion-pressure facts");
++            check(facts.owner_pass_sampled && facts.last_pass_completed > 0,
++                  "settle passes publish owner-pass facts");
+ 
+             bench::r3::Adapter q8_adapter(ctx, bench::r3::Arm::q8);
+             Batch inflight;
+@@ -306,19 +307,20 @@ int main() {
+             check(ctx.outstanding() == 2, "authority fact check: outstanding()==2");
+ 
+             trace.records.clear();
+-            Batch pressured;
+-            check(submit_batch(s_adapter, file, slots, 18, 4, pressured, facts,
+-                               "S pressure probe"),
+-                  "S accepts all 4 with a completion-backlog snapshot and 2 outstanding");
++            Batch pass_probed;
++            check(submit_batch(s_adapter, file, slots, 18, 4, pass_probed, facts,
++                               "S owner-pass probe"),
++                  "S accepts all 4 with an owner-pass snapshot and 2 outstanding");
+             if (trace.size() == 2) {
+                 check(trace[0].quantum == 2 && trace[0].present_len == 2 &&
+                           trace[0].active_read && trace[0].active_data == 2 &&
+-                          trace[0].pressure && trace[0].pressure_known &&
++                          trace[0].owner_pass_had_activity && trace[0].owner_pass_sampled &&
+                           trace[0].last_pass_completed > 0 &&
+-                          std::string(trace[0].action_row) == "completion_pressure",
+-                      "completion backlog with active data: pressure clamps quantum to 2");
++                          std::string(trace[0].action_row) == "owner_pass_activity",
++                      "owner pass already published completions: activity row clamps "
++                      "quantum to 2");
+             } else {
+-                check(false, "S pressure probe forms two decisions");
++                check(false, "S owner-pass probe forms two decisions");
+             }
+             bench::r3::Adapter snp_adapter(ctx, bench::r3::Arm::s_no_pressure);
+             bench::r3::Adapter::TraceSink snp_trace;
+@@ -329,13 +331,14 @@ int main() {
+             if (snp_trace.size() == 1) {
+                 check(snp_trace[0].quantum == 8 && snp_trace[0].present_len == 4 &&
+                           snp_trace[0].active_read && snp_trace[0].active_data == 6 &&
+-                          !snp_trace[0].pressure_read &&
++                          !snp_trace[0].owner_pass_activity_read &&
+                           std::string(snp_trace[0].action_row) == "quantum_base",
+-                      "ablation SNP: pressure hint ignored, quantum stays 8 at the same state");
++                      "ablation SNP: owner-pass hint ignored, quantum stays 8 at the same "
++                      "state");
+             } else {
+                 check(false, "SNP probe forms a single decision");
+             }
+-            check(settle(ctx, slots, pressured, facts), "pressure probe settles verified");
++            check(settle(ctx, slots, pass_probed, facts), "owner-pass probe settles verified");
+             check(settle(ctx, slots, snp_batch, facts), "SNP probe settles verified");
+             check(settle(ctx, slots, inflight, facts),
+                   "outstanding probe reads settle verified");
+@@ -343,28 +346,28 @@ int main() {
+             bench::r3::Adapter b_adapter(ctx, bench::r3::Arm::b);
+             bench::r3::Adapter::TraceSink b_trace;
+             b_adapter.set_trace_sink(&b_trace);
+-            Batch b_pressured;
+-            check(submit_batch(b_adapter, file, slots, 28, kDepth, b_pressured, facts,
++            Batch b_probe;
++            check(submit_batch(b_adapter, file, slots, 28, kDepth, b_probe, facts,
+                                "B state probe"),
+-                  "B accepts all 16 at the pressured state");
++                  "B accepts all 16 at the owner-pass-observed state");
+             check(b_trace.size() == 1 &&
+                       b_trace[0].present_len == kDepth && !b_trace[0].active_read &&
+-                      !b_trace[0].pressure_read,
++                      !b_trace[0].owner_pass_activity_read,
+                   "B presentation ignores state entirely (one full-span decision, no hint reads)");
+-            check(settle(ctx, slots, b_pressured, facts), "B state probe settles verified");
++            check(settle(ctx, slots, b_probe, facts), "B state probe settles verified");
+ 
+             bench::r3::Adapter r_adapter(ctx, bench::r3::Arm::r);
+             bench::r3::Adapter::TraceSink r_trace;
+             r_adapter.set_trace_sink(&r_trace);
+-            Batch r_pressured;
+-            check(submit_batch(r_adapter, file, slots, 44, kDepth, r_pressured, facts,
++            Batch r_probe;
++            check(submit_batch(r_adapter, file, slots, 44, kDepth, r_probe, facts,
+                                "R state probe"),
+-                  "R accepts all 16 at the pressured state");
++                  "R accepts all 16 at the owner-pass-observed state");
+             check(r_trace.size() == 2 && r_trace[0].present_len == kDepth &&
+                       r_trace[1].present_len == 8 && !r_trace[1].active_read &&
+                       r_trace[1].cap_cause,
+                   "R presentation ignores state: full span, cap stop, 8-op suffix reentry");
+-            check(settle(ctx, slots, r_pressured, facts), "R state probe settles verified");
++            check(settle(ctx, slots, r_probe, facts), "R state probe settles verified");
+ 
+             ctx.request_stop(ShutdownPolicy::drain);
+             ctx.detach_progress_host();
+@@ -411,7 +414,7 @@ int main() {
+             bool q2_all_two = q2_trace.size() == 2;
+             for (const bench::r3::DecisionRecord& record : q2_trace) {
+                 q2_all_two = q2_all_two && record.quantum == 2 && record.present_len == 2 &&
+-                             !record.active_read && !record.pressure_read;
++                             !record.active_read && !record.owner_pass_activity_read;
+             }
+             check(q2_all_two, "fixed Q2: pinned quantum 2 with no hint reads");
+             check(settle(ctx, slots, q2_batch, facts), "Q2 probe settles verified");
+@@ -428,7 +431,8 @@ int main() {
+             if (shadow_trace.size() == 2) {
+                 check(shadow_trace[0].quantum == 2 && shadow_trace[0].present_len == kDepth &&
+                           shadow_trace[0].active_read && shadow_trace[0].active_data == 0 &&
+-                          shadow_trace[0].pressure_read && shadow_trace[0].caller_window == 5,
++                          shadow_trace[0].owner_pass_activity_read &&
++                          shadow_trace[0].caller_window == 5,
+                       "shadow: hints read and logged, presentation stays the full span");
+                 check(shadow_trace[1].cap_cause && shadow_trace[1].present_len == 8,
+                       "shadow: cap reentry follows the R action");
+-- 
+2.56.0
+

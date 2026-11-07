@@ -1,0 +1,72 @@
+=== correctness smoke: 3x16 verified reads per arm ===
+ arm=A0
+  PASS correctness A0
+ arm=B
+  PASS correctness B
+ arm=R
+  PASS correctness R
+ arm=S
+  PASS correctness S
+ arm=SNI
+  PASS correctness SNI
+ arm=SNP
+  PASS correctness SNP
+ arm=Q2
+  PASS correctness Q2
+ arm=Q8
+  PASS correctness Q8
+ arm=SHADOW
+  PASS correctness SHADOW
+=== perception exposure: quantum must track pipeline state ===
+  PASS owner claim for perception run
+  PASS S first refill accepts all 16 through the shared entry
+  PASS S first refill forms three state-tracked decisions
+  PASS empty pipeline decision: inflight_zero row, quantum 2, presents 2
+  PASS same refill after progress: active data raises quantum to 8
+  PASS tail decision keeps quantum 8 and presents the remainder
+  PASS first refill settles verified
+  PASS settle passes publish completion-pressure facts
+  PASS two reads left outstanding via the hint-free arm
+  PASS authority fact check: outstanding()==2
+  PASS S accepts all 4 with a completion-backlog snapshot and 2 outstanding
+  PASS completion backlog with active data: pressure clamps quantum to 2
+  PASS SNP accepts all 4 with the same state
+  PASS ablation SNP: pressure hint ignored, quantum stays 8 at the same state
+  PASS pressure probe settles verified
+  PASS SNP probe settles verified
+  PASS outstanding probe reads settle verified
+  PASS B accepts all 16 at the pressured state
+  PASS B presentation ignores state entirely (one full-span decision, no hint reads)
+  PASS B state probe settles verified
+  PASS R accepts all 16 at the pressured state
+  PASS R presentation ignores state: full span, cap stop, 8-op suffix reentry
+  PASS R state probe settles verified
+  PASS perception run shutdown
+=== ablation and shadow exposure on a fresh pipeline ===
+  PASS owner claim for ablation run
+  PASS SNI accepts all 8 on the empty pipeline
+  PASS ablation SNI: inflight hint ignored, empty pipeline stays quantum 8
+  PASS SNI probe settles verified
+  PASS Q2 accepts all 4
+  PASS fixed Q2: pinned quantum 2 with no hint reads
+  PASS Q2 probe settles verified
+  PASS SHADOW accepts all 16 through the R-shaped path
+  PASS shadow: hints read and logged, presentation stays the full span
+  PASS shadow: cap reentry follows the R action
+  PASS SHADOW probe settles verified
+  PASS ablation run shutdown
+=== mechanism counters on one 16-op refill (empty SQ, depth 16) ===
+  PASS owner claim for counter run
+  PASS A0: accept-all and presentation/singles/reentry counts match
+  PASS A0: refill settles verified
+  PASS B: accept-all and presentation/singles/reentry counts match
+  PASS B: refill settles verified
+  PASS R: accept-all and presentation/singles/reentry counts match
+  PASS R: refill settles verified
+  PASS Q8: accept-all and presentation/singles/reentry counts match
+  PASS Q8: refill settles verified
+  PASS Q2: accept-all and presentation/singles/reentry counts match
+  PASS Q2: refill settles verified
+  PASS counter run shutdown
+
+=== r4 arm smoke complete, failing checks=0 ===

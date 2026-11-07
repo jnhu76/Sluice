@@ -1,0 +1,50 @@
+{
+ "W03-uring-4k-d16": {
+  "R": {
+   "n_blocks": 12,
+   "effect_on_pct": 18.94340073518279,
+   "effect_off_pct": 23.838001828763186,
+   "interaction_pp": -4.894601093580394,
+   "ci95_pp": [
+    -12.179169997183735,
+    2.2842605584349402
+   ],
+   "within_window": false
+  },
+  "C": {
+   "n_blocks": 12,
+   "effect_on_pct": 27.734487616930256,
+   "effect_off_pct": 22.317207826250897,
+   "interaction_pp": 5.417279790679355,
+   "ci95_pp": [
+    -8.09167710720325,
+    23.288185858238215
+   ],
+   "within_window": false
+  }
+ },
+ "W03-uring-4k-d4": {
+  "R": {
+   "n_blocks": 12,
+   "effect_on_pct": -3.4080405283430544,
+   "effect_off_pct": -8.507690444498506,
+   "interaction_pp": 5.09964991615545,
+   "ci95_pp": [
+    -4.6355514059396,
+    12.713271443186633
+   ],
+   "within_window": false
+  },
+  "C": {
+   "n_blocks": 12,
+   "effect_on_pct": -1.0869537405486855,
+   "effect_off_pct": -10.267471947819937,
+   "interaction_pp": 9.18051820727125,
+   "ci95_pp": [
+    -4.186691618701036,
+    23.108785201952646
+   ],
+   "within_window": false
+  }
+ }
+}

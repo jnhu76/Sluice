@@ -1,0 +1,30 @@
+1341c1341
+<     facts.pressure_known = true;
+---
+>     facts.owner_pass_sampled = true;
+1346c1346
+<         bool pressure_read;
+---
+>         bool owner_pass_activity_read;
+1351,1352c1351,1352
+<         {Arm::s, true, true, 2, "completion_pressure", 2 * kPage},
+<         {Arm::s_no_inflight, false, true, 2, "completion_pressure", 4 * kPage},
+---
+>         {Arm::s, true, true, 2, "owner_pass_activity", 2 * kPage},
+>         {Arm::s_no_inflight, false, true, 2, "owner_pass_activity", 4 * kPage},
+1374c1374
+<                         trace[0].pressure_read == variant.pressure_read,
+---
+>                         trace[0].owner_pass_activity_read == variant.owner_pass_activity_read,
+1379,1381c1379,1381
+<             if (variant.pressure_read)
+<                 t.check(trace[0].pressure && trace[0].last_pass_completed == 1,
+<                         "the pressure hint sees the completed pass");
+---
+>             if (variant.owner_pass_activity_read)
+>                 t.check(trace[0].owner_pass_had_activity && trace[0].last_pass_completed == 1,
+>                         "the owner-pass hint sees the completed pass");
+1461c1461
+<                 t.check(!trace[0].active_read && !trace[0].pressure_read,
+---
+>                 t.check(!trace[0].active_read && !trace[0].owner_pass_activity_read,

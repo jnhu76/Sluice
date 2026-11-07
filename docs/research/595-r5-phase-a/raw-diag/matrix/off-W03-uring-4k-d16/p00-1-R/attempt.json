@@ -1,0 +1,32 @@
+{
+ "phase": "off-W03-uring-4k-d16",
+ "pair": 0,
+ "pos": 1,
+ "arm": "R",
+ "case": "W03-uring-4k-d16",
+ "mode": "off",
+ "ts_utc": "2026-11-06T16:04:27Z",
+ "exit": 0,
+ "wall_s": 0.343,
+ "binary_sha256": "78a228f267005a8f9638f0249a1f0fc1ae01e599f4a029968c0a8d8fdba4a3ba",
+ "env": {
+  "SLUICE_595_R3_ARM": "R",
+  "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+  "SLUICE_BENCH_JSONL": "/home/jnhu/sluice-595-e5/r5/raw-diag/matrix/off-W03-uring-4k-d16/p00-1-R/bench.jsonl",
+  "SLUICE_BENCH_MEASURED": "1",
+  "SLUICE_BENCH_STATS": "0",
+  "SLUICE_BENCH_TMP_DIR": "/tmp/sluice-595-r5diag",
+  "SLUICE_BENCH_WARMUP": "1"
+ },
+ "measured_records": 1,
+ "lat": {
+  "lat_n": 20000,
+  "lat_p50_ns": 37664.0,
+  "lat_p95_ns": 42537.0,
+  "lat_p99_ns": 60786.0,
+  "lat_max_ns": 81735.0,
+  "lat_mean_ns": 38218.3
+ },
+ "readback": "research arm=R (SLUICE_595_R3_ARM), research cases=off",
+ "dumps": []
+}
