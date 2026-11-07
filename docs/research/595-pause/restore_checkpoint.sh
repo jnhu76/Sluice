@@ -15,7 +15,8 @@ fail() { printf 'FAIL: %s\n' "$*"; fails=$((fails+1)); }
 need_file() { [ -f "$1" ] || fail "missing file $1"; }
 
 # --- frozen identities (checkpoint pause-20261107) ---
-BUNDLE_SHA_EXPECTED=83e29705b6930ccdbda8545ec1e8c81f1e590b43705d09e9c6a49affd0eb54cf
+# Bundle sha256 is NOT pinned here (self-reference: the bundle contains this
+# script); it is checked against the external sidecar <bundle>.sha256.
 MASTER=271b81bfc9d64eecc0266fe7066b9040525dd710
 R2_BASE=271b81bfc9d64eecc0266fe7066b9040525dd710
 R3_BASE=0a22a79195f1b913145fcd443496e7f70b08cdcf
@@ -40,9 +41,11 @@ check_archive() {
     need_file "$WS/$s/tracked-modifications.patch" || true
     need_file "$WS/$s/status.porcelain" || true
   done
-  local got
+  local got want
+  need_file "$BUNDLE.sha256"
+  want=$(awk '{print $1}' "$BUNDLE.sha256")
   got=$(sha256sum "$BUNDLE" | awk '{print $1}')
-  [ "$got" = "$BUNDLE_SHA_EXPECTED" ] || fail "bundle sha256 $got != expected"
+  [ "$got" = "$want" ] || fail "bundle sha256 $got != sidecar $want"
   local tmprepo
   tmprepo=$(mktemp -d)
   git init -q "$tmprepo"
