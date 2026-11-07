@@ -1,0 +1,62 @@
+{
+ "deferoff_A": {
+  "dispatch_passes": 1.0,
+  "sqe_preparations": 1.0,
+  "cqes_reaped": 1.0,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.7885,
+  "wait_attempts": 0.5366,
+  "poll_passes": 0.7885,
+  "sqes_deferred": 0.0,
+  "wakeups": 0.0,
+  "wakeup_writes": 0.0,
+  "wakeup_coalesced": 0.0,
+  "progress_handoffs": 0.0
+ },
+ "deferoff_B": {
+  "dispatch_passes": 1.0,
+  "sqe_preparations": 1.0,
+  "cqes_reaped": 1.0,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.7901,
+  "wait_attempts": 0.5389,
+  "poll_passes": 0.7901,
+  "sqes_deferred": 0.0,
+  "wakeups": 0.0,
+  "wakeup_writes": 0.0,
+  "wakeup_coalesced": 0.0,
+  "progress_handoffs": 0.0
+ },
+ "frozen_A": {
+  "dispatch_passes": 1.0,
+  "sqe_preparations": 1.0,
+  "cqes_reaped": 1.0,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.7894,
+  "wait_attempts": 0.5409,
+  "poll_passes": 0.7894,
+  "sqes_deferred": 0.0,
+  "wakeups": 0.0,
+  "wakeup_writes": 0.0,
+  "wakeup_coalesced": 0.0,
+  "progress_handoffs": 0.0
+ },
+ "frozen_B": {
+  "dispatch_passes": 1.0,
+  "sqe_preparations": 1.0,
+  "cqes_reaped": 1.0,
+  "flushes": 1.0,
+  "actual_enters": 1.0,
+  "submit_attempts": 1.2537,
+  "wait_attempts": 0.5483,
+  "poll_passes": 0.8019,
+  "sqes_deferred": 0.5482,
+  "wakeups": 0.5482,
+  "wakeup_writes": 0.2535,
+  "wakeup_coalesced": 0.2947,
+  "progress_handoffs": 0.0
+ }
+}

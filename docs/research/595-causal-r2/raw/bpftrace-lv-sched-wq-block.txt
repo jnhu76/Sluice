@@ -1,0 +1,86 @@
+=====sched:sched_switch=====
+[sudo] password for jnhu: tracepoint:sched:sched_switch
+    char prev_comm[16]
+    pid_t prev_pid
+    int prev_prio
+    long prev_state
+    char next_comm[16]
+    pid_t next_pid
+    int next_prio
+=====sched:sched_wakeup=====
+tracepoint:sched:sched_wakeup
+    char comm[16]
+    pid_t pid
+    int prio
+    int target_cpu
+=====sched:sched_waking=====
+tracepoint:sched:sched_waking
+    char comm[16]
+    pid_t pid
+    int prio
+    int target_cpu
+=====sched:sched_stat_runtime=====
+tracepoint:sched:sched_stat_runtime
+    __data_loc char[] comm
+    pid_t pid
+    u64 runtime
+=====sched:sched_stat_iowait=====
+tracepoint:sched:sched_stat_iowait
+    __data_loc char[] comm
+    pid_t pid
+    u64 delay
+=====sched:sched_migrate_task=====
+tracepoint:sched:sched_migrate_task
+    __data_loc char[] comm
+    pid_t pid
+    int prio
+    int orig_cpu
+    int dest_cpu
+=====sched:sched_process_exit=====
+tracepoint:sched:sched_process_exit
+    char comm[16]
+    pid_t pid
+    int prio
+    bool group_dead
+=====sched:sched_kthread_work_execute_start=====
+tracepoint:sched:sched_kthread_work_execute_start
+    void * work
+    void * function
+=====workqueue:workqueue_queue_work=====
+tracepoint:workqueue:workqueue_queue_work
+    void * work
+    void * function
+    __data_loc char[] workqueue
+    int req_cpu
+    int cpu
+=====workqueue:workqueue_execute_start=====
+tracepoint:workqueue:workqueue_execute_start
+    void * work
+    void * function
+=====workqueue:workqueue_execute_end=====
+tracepoint:workqueue:workqueue_execute_end
+    void * work
+    void * function
+=====workqueue:workqueue_activate_work=====
+tracepoint:workqueue:workqueue_activate_work
+    void * work
+    void * function
+=====block:block_rq_issue=====
+tracepoint:block:block_rq_issue
+    dev_t dev
+    sector_t sector
+    unsigned int nr_sector
+    unsigned int bytes
+    unsigned short ioprio
+    char rwbs[10]
+    char comm[16]
+    __data_loc char[] cmd
+=====block:block_rq_complete=====
+tracepoint:block:block_rq_complete
+    dev_t dev
+    sector_t sector
+    unsigned int nr_sector
+    int error
+    unsigned short ioprio
+    char rwbs[10]
+    __data_loc char[] cmd

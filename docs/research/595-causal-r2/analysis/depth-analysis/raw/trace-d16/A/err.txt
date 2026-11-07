@@ -1,0 +1,1 @@
+S595_TRACE_DUMP path=raw/trace-d16/A/trace.bin sizeof_record=64 head=420000 kept=420000 dropped=0

@@ -1,0 +1,2 @@
+/proc/self/latency
+ls: cannot access '/proc/self/delay': No such file or directory

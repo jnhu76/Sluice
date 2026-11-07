@@ -1,0 +1,383 @@
+S595K BEGIN target_pid=8168
+S595K 4622403760532 create cpu=2 tgid=8168 tid=8168 fd=3 ctx=ffff8c2dd90ac000 sq_entries=8 cq_entries=16 flags=10000
+S595K 4622403793809 enter cpu=2 tgid=8168 tid=8168 fd=3 to_submit=1 min_complete=1 flags=1
+S595K 4622403800416 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2dd90ac000 req=ffff8c2d540c9a00 user_data=0 opcode=21 sq_thread=0
+S595K 4622403801622 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2dd90ac000 req=ffff8c2d540c9a00 user_data=0 opcode=21 work=ffff8c2d540c9ad8 hashed=0
+S595K 4622403825583 cqring_wait cpu=2 tgid=8168 tid=8168 ctx=ffff8c2dd90ac000 min_events=1
+S595K 4622403836434 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2dd90ac000 req=ffff8c2d540c9a00 user_data=0 res=0 cflags=0
+S595K 4622403843359 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622403844408 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622406620052 create cpu=2 tgid=8168 tid=8168 fd=4 ctx=ffff8c2b4e4f8800 sq_entries=4 cq_entries=8 flags=10000
+S595K 4622406643668 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=1 flags=1
+S595K 4622406647611 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=0 opcode=21 sq_thread=0
+S595K 4622406648304 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=0 opcode=21 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622406654881 cqring_wait cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 min_events=1
+S595K 4622406662490 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=0 res=0 cflags=0
+S595K 4622406669092 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622406669740 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622406708073 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622406709226 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=1 opcode=3 sq_thread=0
+S595K 4622406709757 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=1 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622406713069 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622407040647 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622407045104 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=2 opcode=3 sq_thread=0
+S595K 4622407045758 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=2 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622407064433 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622407075597 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622407076324 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=3 opcode=3 sq_thread=0
+S595K 4622407076696 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=3 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622407077129 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622407083479 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622407083852 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=4 opcode=3 sq_thread=0
+S595K 4622407084062 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=4 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622407084329 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622408653819 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=1 res=0 cflags=0
+S595K 4622408726542 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622408750006 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622408752333 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=5 opcode=3 sq_thread=0
+S595K 4622408752862 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=5 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622408755620 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622414068739 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=2 res=0 cflags=0
+S595K 4622414153066 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=4 res=0 cflags=0
+S595K 4622414159844 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=3 res=0 cflags=0
+S595K 4622414164679 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=3
+S595K 4622414188621 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622414190016 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=6 opcode=3 sq_thread=0
+S595K 4622414190667 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=6 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622414193700 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622414202830 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622414203333 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=7 opcode=3 sq_thread=0
+S595K 4622414203552 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=7 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622414203883 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622414210610 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622414211064 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=8 opcode=3 sq_thread=0
+S595K 4622414211274 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=8 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622414211542 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622416615561 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=5 res=0 cflags=0
+S595K 4622416773899 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622416831826 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622416837672 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=9 opcode=3 sq_thread=0
+S595K 4622416838939 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=9 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622416844989 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622419043765 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=6 res=0 cflags=0
+S595K 4622419051916 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=7 res=0 cflags=0
+S595K 4622419057747 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=8 res=0 cflags=0
+S595K 4622419062571 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=3
+S595K 4622419086658 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622419088032 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=10 opcode=3 sq_thread=0
+S595K 4622419088726 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=10 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622419091461 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622419099934 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622419100347 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=11 opcode=3 sq_thread=0
+S595K 4622419100581 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=11 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622419100903 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622419107250 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622419107593 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=12 opcode=3 sq_thread=0
+S595K 4622419107806 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=12 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622419108099 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622421418209 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=9 res=0 cflags=0
+S595K 4622421591691 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622421615840 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622421617415 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=13 opcode=3 sq_thread=0
+S595K 4622421618060 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=13 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622421621376 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622423318368 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=10 res=0 cflags=0
+S595K 4622423327222 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=11 res=0 cflags=0
+S595K 4622423332909 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=12 res=0 cflags=0
+S595K 4622423337565 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=3
+S595K 4622423362231 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622423363534 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=14 opcode=3 sq_thread=0
+S595K 4622423364187 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=14 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622423366993 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622423517231 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622423518891 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=15 opcode=3 sq_thread=0
+S595K 4622423519523 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=15 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622423521588 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622424625743 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622424630365 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=16 opcode=3 sq_thread=0
+S595K 4622424631099 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=16 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622424635083 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622425316437 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=13 res=0 cflags=0
+S595K 4622425327504 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622425349054 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622425350430 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=17 opcode=3 sq_thread=0
+S595K 4622425351100 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=17 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622425351762 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622427320071 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=14 res=0 cflags=0
+S595K 4622427395860 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=16 res=0 cflags=0
+S595K 4622427400479 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=15 res=0 cflags=0
+S595K 4622427405286 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=3
+S595K 4622427434714 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622427436286 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=18 opcode=3 sq_thread=0
+S595K 4622427436955 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=18 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622427440345 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622427449932 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622427450391 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=19 opcode=3 sq_thread=0
+S595K 4622427450683 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=19 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622427451011 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622427458072 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622427458403 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=20 opcode=3 sq_thread=0
+S595K 4622427458636 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=20 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622427458942 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622448151243 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=17 res=0 cflags=0
+S595K 4622448258460 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622448284958 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622448288878 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=21 opcode=3 sq_thread=0
+S595K 4622448289660 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=21 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622448293828 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622449974573 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=18 res=0 cflags=0
+S595K 4622449983562 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=19 res=0 cflags=0
+S595K 4622449989832 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622450021354 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622450022902 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=22 opcode=3 sq_thread=0
+S595K 4622450023610 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=22 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622450026629 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622450035971 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622450036492 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=23 opcode=3 sq_thread=0
+S595K 4622450036742 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=23 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622450037052 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622450157481 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=20 res=0 cflags=0
+S595K 4622450204864 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622450232067 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622450233807 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=24 opcode=3 sq_thread=0
+S595K 4622450234369 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=24 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622450236877 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622451775299 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=21 res=0 cflags=0
+S595K 4622451962135 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622452024107 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622452025942 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=25 opcode=3 sq_thread=0
+S595K 4622452026684 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=25 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622452029721 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622453650653 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=22 res=0 cflags=0
+S595K 4622453668928 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=23 res=0 cflags=0
+S595K 4622453689472 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622453714286 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622453715713 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=26 opcode=3 sq_thread=0
+S595K 4622453716409 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=26 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622453720839 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622453765206 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=24 res=0 cflags=0
+S595K 4622453847476 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622453906258 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622453907942 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=27 opcode=3 sq_thread=0
+S595K 4622453908592 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=27 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622453910929 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622454078166 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622454083607 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=28 opcode=3 sq_thread=0
+S595K 4622454084380 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=28 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622454089116 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622455496772 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=25 res=0 cflags=0
+S595K 4622455672083 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622455719091 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622455723972 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=29 opcode=3 sq_thread=0
+S595K 4622455725328 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=29 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622455731870 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622457380483 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=26 res=0 cflags=0
+S595K 4622457402012 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622457445542 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622457448125 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=30 opcode=3 sq_thread=0
+S595K 4622457449394 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=30 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622457450871 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622457664272 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=28 res=0 cflags=0
+S595K 4622457686637 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622457720560 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=27 res=0 cflags=0
+S595K 4622457724762 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622457885183 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622457889565 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=31 opcode=3 sq_thread=0
+S595K 4622457890224 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=31 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622457892546 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622458759422 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622458766942 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=32 opcode=3 sq_thread=0
+S595K 4622458768142 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=32 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622458772722 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622459149789 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=29 res=0 cflags=0
+S595K 4622459239052 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622459300616 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622459305373 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=33 opcode=3 sq_thread=0
+S595K 4622459306180 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=33 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622459309097 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622460745907 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=31 res=0 cflags=0
+S595K 4622460868469 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=30 res=0 cflags=0
+S595K 4622460883886 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622460905641 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622460907313 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=34 opcode=3 sq_thread=0
+S595K 4622460908106 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=34 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622460911650 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622460924198 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622460925441 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=35 opcode=3 sq_thread=0
+S595K 4622460925846 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=35 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622460926536 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622465743962 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=32 res=0 cflags=0
+S595K 4622465868851 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622465894702 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622465897297 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=36 opcode=3 sq_thread=0
+S595K 4622465898024 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=36 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622465901476 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622465915826 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=33 res=0 cflags=0
+S595K 4622465971376 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622466093335 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622466098419 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=37 opcode=3 sq_thread=0
+S595K 4622466099085 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=37 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622466101985 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622467613512 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=34 res=0 cflags=0
+S595K 4622467634120 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=35 res=0 cflags=0
+S595K 4622467804709 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622467859902 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622467863641 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=38 opcode=3 sq_thread=0
+S595K 4622467864447 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=38 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622467868208 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622467878195 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622467878764 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=39 opcode=3 sq_thread=0
+S595K 4622467879080 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=39 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622467879478 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622469376217 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=36 res=0 cflags=0
+S595K 4622469397720 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622469441490 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622469444126 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=40 opcode=3 sq_thread=0
+S595K 4622469445446 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=40 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622469446950 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622469596370 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=37 res=0 cflags=0
+S595K 4622469610051 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622469665988 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622469669258 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=41 opcode=3 sq_thread=0
+S595K 4622469669931 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=41 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622469673336 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622471346474 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=38 res=0 cflags=0
+S595K 4622471357737 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=39 res=0 cflags=0
+S595K 4622471364321 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622471389537 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622471391043 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=42 opcode=3 sq_thread=0
+S595K 4622471391734 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=42 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622471394903 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622471590788 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622471595834 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=43 opcode=3 sq_thread=0
+S595K 4622471596488 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=43 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622471599445 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622473124169 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=40 res=0 cflags=0
+S595K 4622473134722 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=41 res=0 cflags=0
+S595K 4622473141196 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622473166789 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622473168377 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=44 opcode=3 sq_thread=0
+S595K 4622473169100 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=44 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622473172367 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622473360413 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622473365285 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=45 opcode=3 sq_thread=0
+S595K 4622473365983 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=45 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622473368323 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622474797721 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=42 res=0 cflags=0
+S595K 4622474949267 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622475014031 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622475016375 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=46 opcode=3 sq_thread=0
+S595K 4622475017101 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=46 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622475017857 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622475032627 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=43 res=0 cflags=0
+S595K 4622475086641 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622475203173 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622475208042 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=47 opcode=3 sq_thread=0
+S595K 4622475208736 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=47 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622475212153 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622476580109 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=44 res=0 cflags=0
+S595K 4622476738784 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=45 res=0 cflags=0
+S595K 4622476754346 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622476801972 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622476807374 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=48 opcode=3 sq_thread=0
+S595K 4622476808454 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=48 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622476814738 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622476835797 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622476836902 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=49 opcode=3 sq_thread=0
+S595K 4622476837373 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=49 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622476838510 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622478539128 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=46 res=0 cflags=0
+S595K 4622478727229 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=47 res=0 cflags=0
+S595K 4622478736978 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622478762680 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622478764346 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=50 opcode=3 sq_thread=0
+S595K 4622478765145 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=50 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622478768702 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622478779000 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622478779527 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=51 opcode=3 sq_thread=0
+S595K 4622478779795 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=51 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622478780142 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622480352344 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=48 res=0 cflags=0
+S595K 4622480364102 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622480389114 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622480390709 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=52 opcode=3 sq_thread=0
+S595K 4622480391449 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=52 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622480392204 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622480405653 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=49 res=0 cflags=0
+S595K 4622480451130 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622480597446 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622480599327 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=53 opcode=3 sq_thread=0
+S595K 4622480600002 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=53 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622480602655 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622482155066 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=50 res=0 cflags=0
+S595K 4622482175523 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=51 res=0 cflags=0
+S595K 4622482188176 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622482249274 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622482250882 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=54 opcode=3 sq_thread=0
+S595K 4622482251655 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=54 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622482254663 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622482457638 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622482462937 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=55 opcode=3 sq_thread=0
+S595K 4622482463675 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=55 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622482467904 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622483989606 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=52 res=0 cflags=0
+S595K 4622484171626 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=53 res=0 cflags=0
+S595K 4622484180849 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622484206900 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622484208424 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=56 opcode=3 sq_thread=0
+S595K 4622484209238 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=56 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622484212886 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622484222976 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622484223671 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=57 opcode=3 sq_thread=0
+S595K 4622484223895 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=57 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622484224242 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622485776463 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=54 res=0 cflags=0
+S595K 4622485794793 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622485834230 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622485835792 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=58 opcode=3 sq_thread=0
+S595K 4622485836451 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=58 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622485837094 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622485951578 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=55 res=0 cflags=0
+S595K 4622485960902 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622486075447 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622486081257 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=59 opcode=3 sq_thread=0
+S595K 4622486082153 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=59 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622486085944 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622487659336 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=56 res=0 cflags=0
+S595K 4622487668871 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=57 res=0 cflags=0
+S595K 4622487674549 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622487697969 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622487699509 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=60 opcode=3 sq_thread=0
+S595K 4622487700180 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=60 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622487703210 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622487887333 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622487891548 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=61 opcode=3 sq_thread=0
+S595K 4622487892406 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=61 opcode=3 work=ffff8c2c8ce2fed8 hashed=0
+S595K 4622487896216 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622489566642 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=59 res=0 cflags=0
+S595K 4622489583578 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=58 res=0 cflags=0
+S595K 4622489594239 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622489635150 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622489637713 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=62 opcode=3 sq_thread=0
+S595K 4622489638798 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=62 opcode=3 work=ffff8c2c8ce2e1d8 hashed=0
+S595K 4622489643346 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622489662917 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622489663906 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=63 opcode=3 sq_thread=0
+S595K 4622489664500 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=63 opcode=3 work=ffff8c2c8ce2fbd8 hashed=0
+S595K 4622489665199 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622491556387 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=60 res=0 cflags=0
+S595K 4622491568255 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622491600665 enter cpu=2 tgid=8168 tid=8168 fd=4 to_submit=1 min_complete=0 flags=0
+S595K 4622491602466 submit_req cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=64 opcode=3 sq_thread=0
+S595K 4622491603209 qasync cpu=2 tgid=8168 tid=8168 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=64 opcode=3 work=ffff8c2c8ce2fad8 hashed=0
+S595K 4622491604038 enter_ret cpu=2 tgid=8168 tid=8168 ret=1
+S595K 4622491750215 complete cpu=2 tgid=8168 tid=8194 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fe00 user_data=61 res=0 cflags=0
+S595K 4622491802619 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K 4622493430741 complete cpu=2 tgid=8168 tid=8196 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2e100 user_data=62 res=0 cflags=0
+S595K 4622493442720 complete cpu=2 tgid=8168 tid=8195 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fb00 user_data=63 res=0 cflags=0
+S595K 4622493449406 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=2
+S595K 4622494784793 complete cpu=2 tgid=8168 tid=8192 ctx=ffff8c2b4e4f8800 req=ffff8c2c8ce2fa00 user_data=64 res=0 cflags=0
+S595K 4622494803769 task_work_run cpu=2 tgid=8168 tid=8168 tctx=ffff8c2cf6045200 count=1
+S595K END
+
+

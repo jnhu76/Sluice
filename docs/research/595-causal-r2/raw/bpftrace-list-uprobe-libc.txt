@@ -1,0 +1,10 @@
+[sudo] password for jnhu: uprobe:/usr/lib64/libc.so.6:_IO_fdopen
+uprobe:/usr/lib64/libc.so.6:_IO_fdopen@@GLIBC_2.2.5
+uprobe:/usr/lib64/libc.so.6:_IO_file_fopen
+uprobe:/usr/lib64/libc.so.6:_IO_file_fopen@@GLIBC_2.2.5
+uprobe:/usr/lib64/libc.so.6:_IO_file_open
+uprobe:/usr/lib64/libc.so.6:_IO_fopen
+uprobe:/usr/lib64/libc.so.6:_IO_fopen64
+uprobe:/usr/lib64/libc.so.6:_IO_fopen@@GLIBC_2.2.5
+uprobe:/usr/lib64/libc.so.6:_IO_fopencookie
+uprobe:/usr/lib64/libc.so.6:_IO_new_fdopen

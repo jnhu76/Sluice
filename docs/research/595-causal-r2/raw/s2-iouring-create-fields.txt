@@ -1,0 +1,6 @@
+tracepoint:io_uring:io_uring_create
+    int fd
+    void * ctx
+    u32 sq_entries
+    u32 cq_entries
+    u32 flags

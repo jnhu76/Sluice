@@ -1,0 +1,43 @@
+--- src/async/uring_backend.cpp	2026-11-04 22:57:30.166450735 +0800
++++ /home/jnhu/sluice-595-e5/causal-r2/worktree-timing/src/async/uring_backend.cpp	2026-11-04 22:57:10.755068507 +0800
+@@ -169,6 +169,9 @@
+     }
+     if (const char* arm = std::getenv("SLUICE_595_ARM"); arm != nullptr && arm[0] == 'B') {
+         bounded_progress_ = true;
++    } else if (arm != nullptr && arm[0] == 'C') {
++        bounded_progress_ = true;
++        gate_only_immediate_ = true;
+     }
+     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+--- src/async/uring_transport.cpp	2026-11-04 22:57:30.166563162 +0800
++++ /home/jnhu/sluice-595-e5/causal-r2/worktree-timing/src/async/uring_transport.cpp	2026-11-04 22:56:46.016328000 +0800
+@@ -259,6 +259,11 @@
+     if (transport_ledger_->size() >= kDeferCap)
+ #endif
+         return false;
++    // #595 causal-r2 counterfactual arm C (GATE_ONLY_IMMEDIATE): the full
++    // admission chain above ran exactly as in arm B; only the deferral
++    // action is suppressed so the commit stays on arm A's immediate path.
++    if (gate_only_immediate_)
++        return false;
+     return true;
+ }
+ 
+--- include/sluice/async/detail/uring_backend.hpp	2026-11-04 22:57:30.166450735 +0800
++++ /home/jnhu/sluice-595-e5/causal-r2/worktree-timing/include/sluice/async/detail/uring_backend.hpp	2026-11-04 22:57:03.861140821 +0800
+@@ -352,9 +352,12 @@
+ 
+     // #595 research arm selector (read once at construction from
+     // SLUICE_595_ARM; anything other than "B" keeps the frozen immediate
+-    // path). Research evidence instrumentation only: it is not a public knob
+-    // and ships nowhere.
++    // path; "C" runs the full admission chain then keeps the immediate
++    // path — causal-r2 counterfactual GATE_ONLY_IMMEDIATE). Research
++    // evidence instrumentation only: it is not a public knob and ships
++    // nowhere.
+     bool bounded_progress_ = false;
++    bool gate_only_immediate_ = false;
+     bool progress_driver_seen_ = false;
+     std::thread::id progress_driver_recent_{};
+ 

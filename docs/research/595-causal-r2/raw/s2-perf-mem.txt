@@ -1,0 +1,10 @@
+Warning:
+Processed 68 samples and lost 5.88%!
+
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 4
+#
+# Samples: 17  of event 'cpu/mem-loads,ldlat=30/P'
+# Total weight : 1205

@@ -1,0 +1,29 @@
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<bench_w02_pipeline>[0m cache compiling.release bench/bench_w02_pipeline.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.release src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/request_scope.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<sluice_async>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<bench_w03_external_loop>[0m cache compiling.release bench/bench_w03_external_loop.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release tests/uring_595_bounded_progress_test.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/uring_completion.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/uring_backend.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/uring_transport.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m cache compiling.release src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 29%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.release libsluice_core.a[0m
+[0m[38;5;2;1m[ 65%]:[0m [38;5;5;1m<sluice_async>[0m [38;5;5;1marchiving.release libsluice_async.a[0m
+[0m[38;5;2;1m[ 73%]:[0m [38;5;5;1m<uring_595_bounded_progress_test>[0m [38;5;5;1mlinking.release uring_595_bounded_progress_test[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<bench_w02_pipeline>[0m [38;5;5;1mlinking.release bench_w02_pipeline[0m
+[0m[38;5;2;1m[ 89%]:[0m [38;5;5;1m<bench_w03_external_loop>[0m [38;5;5;1mlinking.release bench_w03_external_loop[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 7.842s[0m

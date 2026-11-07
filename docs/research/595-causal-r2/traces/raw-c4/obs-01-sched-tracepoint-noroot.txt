@@ -1,0 +1,34 @@
+== date: 2026-11-04T13:34:05Z; host E5; session: C4 deep-dive ==
+== cmd: cat /proc/sys/kernel/perf_event_paranoid ==
+2
+== cmd: cat /proc/sys/kernel/unprivileged_bpf_disabled ==
+2
+== cmd: sudo -n true ==
+sudo: a password is required
+rc=1
+== cmd: ls /sys/kernel/tracing/events/sched ==
+ls: cannot access '/sys/kernel/tracing/events/sched/': Permission denied
+rc=0
+== cmd: perf stat -e sched:sched_switch -a -- sleep 0.1 ==
+
+ Usage: perf stat [<options>] [<command>]
+
+    -e, --event <event>   event selector. use 'perf list' to list available events
+rc=0
+== cmd: perf sched record -- sleep 0.2 ==
+    or: perf record [<options>] -- <command> [<options>]
+
+    -e, --event <event>   event selector. use 'perf list' to list available events
+rc=0
+== cmd: bpftrace -l 'tracepoint:sched:*' ==
+ERROR: bpftrace currently only supports running as the root user.
+rc=0
+== cmd: perf stat -e cycles:k -- sleep 0.1 (kernel PMU) ==
+Error:
+rc=0
+== capability that DOES work (no root): /proc schedstat fields ==
+== cmd: cat /proc/self/schedstat ==
+344033 0 1
+== cmd: grep nr_migrations /proc/self/sched ==
+se.nr_migrations                             :                    0
+nr_switches                                  :                    0

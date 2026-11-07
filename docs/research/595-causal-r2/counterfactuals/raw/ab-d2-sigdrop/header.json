@@ -1,0 +1,20 @@
+{
+ "phase": "ab-d2-sigdrop",
+ "case": "W02-uring-4k-d2",
+ "pairs": 12,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_timing_sigdrop",
+ "binary_sha256": "4de2329923b6f889dd269edfb3657ff7d7f54b6553c1226f7b778b8051b778e8",
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T23:27:41+0800",
+ "loadavg_start": [
+  0.6416015625,
+  0.86474609375,
+  0.7998046875
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

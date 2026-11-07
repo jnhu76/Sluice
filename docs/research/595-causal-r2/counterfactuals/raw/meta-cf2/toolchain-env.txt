@@ -1,0 +1,10 @@
+TOOLCHAIN/ENV 2026-11-04T23:57:41+08:00
+kernel: 7.2.11-200.fc44.x86_64
+gcc: g++ (GCC) 16.2.1 20260819 (Red Hat 16.2.1-2)
+xmake: [0m[1mxmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua[0m[0m
+python: Python 3.14.8
+liburing: liburing-devel-2.13-2.fc44.x86_64
+governor: schedutil
+cpu2 freq now: cpu MHz		: 1200.000
+perf_event_paranoid: 2
+loadavg now: 0.56 0.76 0.70 2/1464 21573

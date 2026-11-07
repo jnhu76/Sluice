@@ -1,0 +1,13 @@
+[cnt-d16] trio=0 pos=0 arm=A exit=0 wall=1.211s cpu/op=2977.00031 p99=74638.0 tput=336105.90116154606
+[cnt-d16] trio=0 pos=1 arm=B exit=0 wall=0.879s cpu/op=2189.22257 p99=53233.4 tput=457528.82322923245
+[cnt-d16] trio=0 pos=2 arm=C exit=0 wall=1.200s cpu/op=3012.38628 p99=74350.8 tput=332128.4124155938
+[cnt-d16] trio=1 pos=0 arm=B exit=0 wall=0.884s cpu/op=2219.4911 p99=53998.4 tput=451018.5875945208
+[cnt-d16] trio=1 pos=1 arm=C exit=0 wall=1.199s cpu/op=2971.23763 p99=75231.2 tput=336760.4989067727
+[cnt-d16] trio=1 pos=2 arm=A exit=0 wall=1.207s cpu/op=2983.19796 p99=74865.2 tput=335411.55788046157
+[cnt-d16] trio=2 pos=0 arm=C exit=0 wall=1.203s cpu/op=2986.92075 p99=74329.4 tput=335022.15657306724
+[cnt-d16] trio=2 pos=1 arm=A exit=0 wall=1.202s cpu/op=2957.53372 p99=74739.8 tput=338361.2106145901
+[cnt-d16] trio=2 pos=2 arm=B exit=0 wall=0.876s cpu/op=2188.47137 p99=50862.6 tput=457639.25818470196
+[cnt-d16] trio=3 pos=0 arm=A exit=0 wall=1.204s cpu/op=2980.71155 p99=74947.4 tput=335659.1288635943
+[cnt-d16] trio=3 pos=1 arm=B exit=0 wall=0.876s cpu/op=2174.2161 p99=53762.8 tput=460727.15645649214
+[cnt-d16] trio=3 pos=2 arm=C exit=0 wall=1.200s cpu/op=2987.70947 p99=74079.4 tput=334906.271992039
+[cnt-d16] done: 4 trios -> evidence/three_arm/raw/cnt-d16

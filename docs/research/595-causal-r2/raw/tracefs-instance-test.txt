@@ -1,0 +1,15 @@
+[sudo] password for jnhu: # tracer: nop
+#
+# entries-in-buffer/entries-written: 337/337   #P:20
+#
+...
+359
+entries: 29
+overrun: 0
+commit overrun: 0
+bytes: 1972
+oldest event ts: 18392.146989
+now ts: 18392.538242
+dropped events: 0
+read events: 0
+CLEANUP_DONE

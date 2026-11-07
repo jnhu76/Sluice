@@ -1,0 +1,6 @@
+tracepoint:syscalls:sys_enter_io_uring_enter
+tracepoint:syscalls:sys_enter_io_uring_register
+tracepoint:syscalls:sys_enter_io_uring_setup
+tracepoint:syscalls:sys_exit_io_uring_enter
+tracepoint:syscalls:sys_exit_io_uring_register
+tracepoint:syscalls:sys_exit_io_uring_setup

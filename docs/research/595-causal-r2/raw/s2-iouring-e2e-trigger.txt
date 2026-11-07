@@ -1,0 +1,6 @@
+Attached 2 probes
+submit_req ctx=0xffff8c9a4c245800 req=0xffff8c9a213d4500 user_data=1429 opcode=0
+complete ctx=0xffff8c9a4c245800 user_data=1429 res=0 cflags=0
+done
+
+

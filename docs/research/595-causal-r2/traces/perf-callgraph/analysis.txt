@@ -1,0 +1,67 @@
+perf-A-r1.data arm=A samples=17948 event=1175799877 lost=0 wall=2.243s rate=8001/s
+perf-A-r4.data arm=A samples=17977 event=1178804905 lost=0 wall=2.250s rate=7990/s
+perf-A-r5.data arm=A samples=17891 event=1197352509 lost=0 wall=2.236s rate=8001/s
+perf-B-r2.data arm=B samples=18595 event=1229357138 lost=0 wall=2.327s rate=7992/s
+perf-B-r3.data arm=B samples=18633 event=1231165193 lost=0 wall=2.332s rate=7990/s
+perf-B-r6.data arm=B samples=18696 event=1239505316 lost=0 wall=2.337s rate=7998/s
+
+symbol (self, cycles/op)                                           A mean     B mean        B-A
+sluice::async::UringAsyncBackend::dispatch_after_accept             100.6      131.4      +30.8
+    A runs: 109.7, 91.3, 100.7
+    B runs: 128.9, 129.5, 135.7
+sluice::async::UringAsyncBackend::defer_transport_flush_locked        0.0        0.0       +0.0
+    A runs: 0.0, 0.0, 0.0
+    B runs: 0.0, 0.0, 0.0
+sluice::async::UringAsyncBackend::poll                               99.6      104.4       +4.9
+    A runs: 100.4, 94.9, 103.4
+    B runs: 105.1, 102.3, 105.9
+sluice::async::UringAsyncBackend::dispatch_one_locked               178.3      198.5      +20.2
+    A runs: 186.1, 174.1, 174.7
+    B runs: 205.9, 189.5, 200.1
+sluice::async::UringAsyncBackend::submit_transport_locked             4.0       32.4      +28.4
+    A runs: 3.4, 3.4, 5.2
+    B runs: 34.9, 31.4, 31.0
+sluice::async::UringAsyncBackend::account_transport_result_loc       66.8       74.0       +7.3
+    A runs: 71.6, 67.0, 61.7
+    B runs: 73.1, 73.5, 75.6
+sluice::async::AsyncIoContext::wait_one                             104.4      104.5       +0.1
+    A runs: 91.2, 107.2, 114.8
+    B runs: 96.5, 109.8, 107.1
+sluice::async::AsyncIoContext::run_progress_pass_                    62.1       61.2       -0.9
+    A runs: 59.9, 64.1, 62.2
+    B runs: 64.8, 61.8, 57.0
+pthread_mutex_lock@@GLIBC_2.2.5                                     299.1      296.4       -2.8
+    A runs: 284.5, 308.0, 304.8
+    B runs: 299.3, 287.9, 301.8
+__GI___pthread_mutex_unlock_usercnt                                 240.3      243.1       +2.8
+    A runs: 226.7, 242.3, 251.8
+    B runs: 253.0, 234.7, 241.5
+__GI___libc_write                                                     0.0        8.5       +8.5
+    A runs: 0.0, 0.0, 0.0
+    B runs: 10.2, 8.9, 6.3
+io_uring_submit                                                      15.1       17.1       +2.0
+    A runs: 16.5, 13.4, 15.4
+    B runs: 13.7, 18.7, 19.1
+sluice::async::detail::RequestCore::outstanding_summary              19.4       18.7       -0.7
+    A runs: 21.5, 22.5, 14.2
+    B runs: 17.2, 15.7, 23.2
+
+first-level caller evidence (pct of all samples):
+  perf-A-r1.data:
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.23
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.14
+  perf-A-r4.data:
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.27
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.25
+  perf-A-r5.data:
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.24
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.18
+  perf-B-r2.data:
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.3
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.23
+  perf-B-r3.data:
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.35
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.15
+  perf-B-r6.data:
+    pthread_mutex_lock             <- sluice::async::UringAsyncBackend::dispatch_after_accept(slui 0.39
+    pthread_mutex_lock             <- std::mutex::lock()                                           0.37

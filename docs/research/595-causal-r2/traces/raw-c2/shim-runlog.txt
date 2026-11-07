@@ -1,0 +1,9 @@
+tag=c2shim-shim-A-1 rc=0 loadavg='0.29 0.37 0.42 1/1461 57213' elapsed_s=0.451
+tag=c2shim-shim-B-1 rc=0 loadavg='0.35 0.38 0.43 1/1461 57224' elapsed_s=0.454
+tag=c2shim-noshim-A-1 rc=0 loadavg='0.35 0.38 0.43 2/1461 57235' elapsed_s=0.421
+tag=c2shim-noshim-B-1 rc=0 loadavg='0.35 0.38 0.43 1/1461 57246' elapsed_s=0.438
+tag=c2shim-shim-B-2 rc=0 loadavg='0.35 0.38 0.43 1/1461 57257' elapsed_s=0.451
+tag=c2shim-shim-A-2 rc=0 loadavg='0.35 0.38 0.43 1/1461 57268' elapsed_s=0.427
+tag=c2shim-noshim-B-2 rc=0 loadavg='0.35 0.38 0.43 1/1461 57279' elapsed_s=0.451
+tag=c2shim-noshim-A-2 rc=0 loadavg='0.35 0.38 0.43 1/1461 57290' elapsed_s=0.425
+SHIM BLOCK DONE 2026-11-04T18:31:49+08:00

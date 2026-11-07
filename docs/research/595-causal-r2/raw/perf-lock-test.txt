@@ -1,0 +1,18 @@
+[sudo] password for jnhu: [ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.036 MB /tmp/perf-lock.data ]
+---report---
+                Name   acquired  contended     avg wait   total wait     max wait     min wait 
+
+                          kallsyms pathname
+        --output <file>   output file name
+        --vmlinux <file>  vmlinux pathname
+
+---report---
+
+ Usage: perf lock [<options>] {record|report|script|info|contention}
+
+    -D, --dump-raw-trace  dump raw trace in ASCII
+    -f, --force           don't complain, do it
+    -i, --input <file>    input file name
+    -q, --quiet           Do not show any warnings or messages
+    -v, --verbose         be more verbose (show symbol address, etc)

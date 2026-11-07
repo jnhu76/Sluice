@@ -1,0 +1,43 @@
+--- /tmp/cf0-prec/src/async/uring_backend.cpp	2026-11-04 22:58:07.684109513 +0800
++++ src/async/uring_backend.cpp	2026-11-04 22:55:52.466889697 +0800
+@@ -172,6 +172,9 @@
+     }
+     if (const char* arm = std::getenv("SLUICE_595_ARM"); arm != nullptr && arm[0] == 'B') {
+         bounded_progress_ = true;
++    } else if (arm != nullptr && arm[0] == 'C') {
++        bounded_progress_ = true;
++        gate_only_immediate_ = true;
+     }
+ #if defined(SLUICE_595_COUNTERS)
+     detail::research595::enable_from_env();
+--- /tmp/cf0-prec/src/async/uring_transport.cpp	2026-11-04 22:58:07.684379278 +0800
++++ src/async/uring_transport.cpp	2026-11-04 22:55:28.182144428 +0800
+@@ -278,6 +278,11 @@
+     if (transport_ledger_->size() >= kDeferCap)
+ #endif
+         return false;
++    // #595 causal-r2 counterfactual arm C (GATE_ONLY_IMMEDIATE): the full
++    // admission chain above ran exactly as in arm B; only the deferral
++    // action is suppressed so the commit stays on arm A's immediate path.
++    if (gate_only_immediate_)
++        return false;
+     SLUICE595_BUMP(sqes_deferred);
+     return true;
+ }
+--- /tmp/cf0-prec/include/sluice/async/detail/uring_backend.hpp	2026-11-04 22:58:07.684667416 +0800
++++ include/sluice/async/detail/uring_backend.hpp	2026-11-04 22:55:38.285038455 +0800
+@@ -363,9 +363,12 @@
+ 
+     // #595 research arm selector (read once at construction from
+     // SLUICE_595_ARM; anything other than "B" keeps the frozen immediate
+-    // path). Research evidence instrumentation only: it is not a public knob
+-    // and ships nowhere.
++    // path; "C" runs the full admission chain then keeps the immediate
++    // path — causal-r2 counterfactual GATE_ONLY_IMMEDIATE). Research
++    // evidence instrumentation only: it is not a public knob and ships
++    // nowhere.
+     bool bounded_progress_ = false;
++    bool gate_only_immediate_ = false;
+     bool progress_driver_seen_ = false;
+     std::thread::id progress_driver_recent_{};
+ 

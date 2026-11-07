@@ -1,0 +1,10 @@
+label=frozen arm=B idx=1 rc=0 loadavg='0.67 0.70 0.62 2/1488 21144'
+label=deferoff arm=B idx=1 rc=0 loadavg='0.78 0.72 0.63 1/1488 21152'
+label=deferoff arm=B idx=2 rc=0 loadavg='0.78 0.72 0.63 1/1488 21160'
+label=frozen arm=B idx=2 rc=0 loadavg='0.78 0.72 0.63 1/1488 21168'
+SHIM CF2 DONE 2026-11-04T23:50:18+08:00
+label=frozen arm=A idx=1 rc=0 loadavg='0.62 0.69 0.62 1/1484 21190'
+label=deferoff arm=A idx=1 rc=0 loadavg='0.62 0.69 0.62 1/1484 21196'
+label=deferoff arm=A idx=2 rc=0 loadavg='0.62 0.69 0.62 1/1484 21202'
+label=frozen arm=A idx=2 rc=0 loadavg='0.65 0.69 0.63 1/1484 21208'
+SHIM CF2 ARMS DONE 2026-11-04T23:50:40+08:00

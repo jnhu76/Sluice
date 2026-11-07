@@ -1,0 +1,211 @@
+invocations=48 with_metrics=48 rc_nonzero=0
+
+[cell off A]
+  cpu_ns_per_op                5104.800
+  tput                         195693.207
+  p95_ns                       13467.733
+  p99_ns                       17814.300
+  bench_utime_ns_per_op        5025.000
+  bench_stime_ns_per_op        7475.000
+  iowq_stime_ns_per_op         6300.000
+  defer_count/op               n/a
+  signal_count/op              n/a
+  write_count/op               n/a
+  signal_coalesced/op          n/a
+  defer_owner_pass/op          n/a
+  defer_witness_pass/op        n/a
+  poll_count/op                n/a
+  flush_count/op               n/a
+  submit_count/op              n/a
+  defer_ns_per_op              n/a
+  signal_ns_per_op             n/a
+  write_ns_per_op              n/a
+  poll_ns_per_op               n/a
+  defer_ns_per_call            n/a
+  signal_ns_per_call           n/a
+  write_ns_per_call            n/a
+  signal_base_ns_per_call      n/a
+  signal_base_ns_per_op        n/a
+  defer_clean_ns_per_call      n/a
+  signal_clean_ns_per_call     n/a
+  write_clean_ns_per_call      n/a
+  poll_clean_ns_per_call       n/a
+  defer_clean_fraction         n/a
+  signal_clean_fraction        n/a
+  write_clean_fraction         n/a
+  poll_clean_fraction          n/a
+  signal_base_clean_ns_per_call n/a
+  submit_ns_per_call           n/a
+  flush_ns_per_call            n/a
+  submit_clean_ns_per_call     n/a
+  flush_clean_ns_per_call      n/a
+  submit_empty_ns_per_call     n/a
+  submit_empty_clean_ns_per_call n/a
+  submit_clean_fraction        n/a
+  flush_clean_fraction         n/a
+
+[cell off B]
+  cpu_ns_per_op                5263.112
+  tput                         189785.914
+  p95_ns                       14167.150
+  p99_ns                       19067.117
+  bench_utime_ns_per_op        5366.667
+  bench_stime_ns_per_op        7741.667
+  iowq_stime_ns_per_op         6325.000
+  defer_count/op               n/a
+  signal_count/op              n/a
+  write_count/op               n/a
+  signal_coalesced/op          n/a
+  defer_owner_pass/op          n/a
+  defer_witness_pass/op        n/a
+  poll_count/op                n/a
+  flush_count/op               n/a
+  submit_count/op              n/a
+  defer_ns_per_op              n/a
+  signal_ns_per_op             n/a
+  write_ns_per_op              n/a
+  poll_ns_per_op               n/a
+  defer_ns_per_call            n/a
+  signal_ns_per_call           n/a
+  write_ns_per_call            n/a
+  signal_base_ns_per_call      n/a
+  signal_base_ns_per_op        n/a
+  defer_clean_ns_per_call      n/a
+  signal_clean_ns_per_call     n/a
+  write_clean_ns_per_call      n/a
+  poll_clean_ns_per_call       n/a
+  defer_clean_fraction         n/a
+  signal_clean_fraction        n/a
+  write_clean_fraction         n/a
+  poll_clean_fraction          n/a
+  signal_base_clean_ns_per_call n/a
+  submit_ns_per_call           n/a
+  flush_ns_per_call            n/a
+  submit_clean_ns_per_call     n/a
+  flush_clean_ns_per_call      n/a
+  submit_empty_ns_per_call     n/a
+  submit_empty_clean_ns_per_call n/a
+  submit_clean_fraction        n/a
+  flush_clean_fraction         n/a
+
+[cell on A]
+  cpu_ns_per_op                5157.729
+  tput                         193742.458
+  p95_ns                       13485.600
+  p99_ns                       17992.217
+  bench_utime_ns_per_op        4991.667
+  bench_stime_ns_per_op        7641.667
+  iowq_stime_ns_per_op         6308.333
+  defer_count/op               1.00000
+  signal_count/op              0.00000
+  write_count/op               0.00000
+  signal_coalesced/op          0.000
+  defer_owner_pass/op          0.000
+  defer_witness_pass/op        0.000
+  poll_count/op                0.79042
+  flush_count/op               0.00000
+  submit_count/op              0.00000
+  defer_ns_per_op              10.438
+  signal_ns_per_op             0.000
+  write_ns_per_op              0.000
+  poll_ns_per_op               207.618
+  defer_ns_per_call            10.438
+  signal_ns_per_call           n/a
+  write_ns_per_call            n/a
+  signal_base_ns_per_call      n/a
+  signal_base_ns_per_op        0.000
+  defer_clean_ns_per_call      n/a
+  signal_clean_ns_per_call     n/a
+  write_clean_ns_per_call      n/a
+  poll_clean_ns_per_call       n/a
+  defer_clean_fraction         0.000
+  signal_clean_fraction        n/a
+  write_clean_fraction         n/a
+  poll_clean_fraction          0.000
+  signal_base_clean_ns_per_call n/a
+  submit_ns_per_call           n/a
+  flush_ns_per_call            n/a
+  submit_clean_ns_per_call     n/a
+  flush_clean_ns_per_call      n/a
+  submit_empty_ns_per_call     n/a
+  submit_empty_clean_ns_per_call n/a
+  submit_clean_fraction        n/a
+  flush_clean_fraction         n/a
+
+[cell on B]
+  cpu_ns_per_op                5345.979
+  tput                         186907.326
+  p95_ns                       14172.583
+  p99_ns                       19002.517
+  bench_utime_ns_per_op        5433.333
+  bench_stime_ns_per_op        7833.333
+  iowq_stime_ns_per_op         6316.667
+  defer_count/op               1.00000
+  signal_count/op              0.56299
+  write_count/op               0.23309
+  signal_coalesced/op          0.330
+  defer_owner_pass/op          1.000
+  defer_witness_pass/op        0.563
+  poll_count/op                0.79618
+  flush_count/op               0.00000
+  submit_count/op              0.00000
+  defer_ns_per_op              18.038
+  signal_ns_per_op             149.773
+  write_ns_per_op              131.039
+  poll_ns_per_op               1371.714
+  defer_ns_per_call            18.038
+  signal_ns_per_call           266.045
+  write_ns_per_call            562.276
+  signal_base_ns_per_call      33.276
+  signal_base_ns_per_op        18.734
+  defer_clean_ns_per_call      n/a
+  signal_clean_ns_per_call     n/a
+  write_clean_ns_per_call      n/a
+  poll_clean_ns_per_call       n/a
+  defer_clean_fraction         0.000
+  signal_clean_fraction        0.000
+  write_clean_fraction         0.000
+  poll_clean_fraction          0.000
+  signal_base_clean_ns_per_call n/a
+  submit_ns_per_call           n/a
+  flush_ns_per_call            n/a
+  submit_clean_ns_per_call     n/a
+  flush_clean_ns_per_call      n/a
+  submit_empty_ns_per_call     n/a
+  submit_empty_clean_ns_per_call n/a
+  submit_clean_fraction        n/a
+  flush_clean_fraction         n/a
+
+[contrasts] (relative, positive = second cell larger)
+  CPU/op OFF B vs A                      +3.104% [+2.534,+3.736] n=12
+  throughput OFF B vs A                  -3.016% [-3.606,-2.483] n=12
+  p95 OFF B vs A                         +5.199% [+4.424,+5.916] n=12
+  p99 OFF B vs A                         +7.443% [+1.123,+14.333] n=12
+  bench user OFF B vs A                  +6.971% [+4.287,+10.306] n=12
+  bench kernel OFF B vs A                +3.618% [+1.698,+5.192] n=12
+  iowq kernel OFF B vs A                 +0.401% [-0.265,+1.199] n=12
+  CPU/op ON B vs A                       +3.666% [+2.637,+4.647] n=12
+  throughput ON B vs A                   -3.513% [-4.430,-2.539] n=12
+  p95 ON B vs A                          +5.107% [+4.170,+6.005] n=12
+  p99 ON B vs A                          +5.737% [-0.434,+11.073] n=12
+  defer ns/call ON B vs A                +72.868% [+71.223,+74.417] n=12
+  poll ns/call ON B vs A                 +556.129% [+546.457,+565.902] n=12
+  flush submit ns/call ON B vs A         n/a
+  empty submit ns/call ON B vs A         n/a
+  CPU/op probe A: ON vs OFF              +1.044% [+0.137,+1.924] n=12
+  CPU/op probe B: ON vs OFF              +1.582% [+0.836,+2.354] n=12
+  throughput probe A: ON vs OFF          -0.990% [-1.851,-0.095] n=12
+  throughput probe B: ON vs OFF          -1.509% [-2.257,-0.784] n=12
+  p95 probe A: ON vs OFF                 +0.140% [-0.720,+0.910] n=12
+  p99 probe A: ON vs OFF                 +1.422% [-3.557,+6.175] n=12
+  p95 probe B: ON vs OFF                 +0.049% [-0.773,+0.872] n=12
+  p99 probe B: ON vs OFF                 +0.127% [-5.814,+6.786] n=12
+  user probe A: ON vs OFF                -0.504% [-3.482,+2.246] n=12
+  kernel probe A: ON vs OFF              +2.287% [+0.203,+4.140] n=12
+  user probe B: ON vs OFF                +1.299% [-1.567,+3.938] n=12
+  kernel probe B: ON vs OFF              +1.237% [-0.696,+3.175] n=12
+  corrected effect cpu_ns_per_op         raw +3.666% [+2.637,+4.647] n=12; corrected +3.117%
+  corrected effect tput                  raw -3.513% [-4.430,-2.539] n=12; corrected -3.004%
+  corrected effect p95_ns                raw +5.107% [+4.170,+6.005] n=12; corrected +5.203%
+
+wrote raw/c1-interleaved-d2-prev/analysis.json

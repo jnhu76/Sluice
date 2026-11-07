@@ -1,0 +1,7 @@
+[c1-d2] trio=0 pos=0 arm=A exit=0 wall=1.818s cpu/op=4805.25002 p99=13050.0 tput=207999.78271510697
+[c1-d2] trio=0 pos=1 arm=B exit=0 wall=1.927s cpu/op=5083.906430000001 p99=14147.0 tput=196594.99590321587
+[c1-d2] trio=0 pos=2 arm=C exit=0 wall=1.825s cpu/op=4877.38289 p99=13612.4 tput=204930.25637275103
+[c1-d2] trio=1 pos=0 arm=B exit=0 wall=1.931s cpu/op=5161.85134 p99=14605.4 tput=193607.67588763172
+[c1-d2] trio=1 pos=1 arm=C exit=0 wall=1.836s cpu/op=4870.96157 p99=13350.2 tput=205201.7949115914
+[c1-d2] trio=1 pos=2 arm=A exit=0 wall=1.841s cpu/op=4951.94392 p99=13247.4 tput=201843.05191716354
+[c1-d2] done: 2 trios -> evidence/three_arm/raw/c1-d2

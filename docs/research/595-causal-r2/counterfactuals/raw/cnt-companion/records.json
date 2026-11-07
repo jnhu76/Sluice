@@ -1,0 +1,842 @@
+[
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_frozen",
+  "arm": "A",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15883,
+     "empty_polls": 5041,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35883,
+     "actual_enters": 20000,
+     "wait_attempts": 10842,
+     "cqe_reap_attempts": 15883,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15874,
+     "empty_polls": 5045,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35874,
+     "actual_enters": 20000,
+     "wait_attempts": 10829,
+     "cqe_reap_attempts": 15874,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15619,
+     "empty_polls": 4926,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35619,
+     "actual_enters": 20000,
+     "wait_attempts": 10693,
+     "cqe_reap_attempts": 15619,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_frozen",
+  "arm": "A",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15681,
+     "empty_polls": 5081,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35681,
+     "actual_enters": 20000,
+     "wait_attempts": 10600,
+     "cqe_reap_attempts": 15681,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15525,
+     "empty_polls": 4881,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35525,
+     "actual_enters": 20000,
+     "wait_attempts": 10644,
+     "cqe_reap_attempts": 15525,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15808,
+     "empty_polls": 5051,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35808,
+     "actual_enters": 20000,
+     "wait_attempts": 10757,
+     "cqe_reap_attempts": 15808,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_frozen",
+  "arm": "A",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15680,
+     "empty_polls": 5014,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35680,
+     "actual_enters": 20000,
+     "wait_attempts": 10666,
+     "cqe_reap_attempts": 15680,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15832,
+     "empty_polls": 5069,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35832,
+     "actual_enters": 20000,
+     "wait_attempts": 10763,
+     "cqe_reap_attempts": 15832,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15891,
+     "empty_polls": 5059,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35891,
+     "actual_enters": 20000,
+     "wait_attempts": 10832,
+     "cqe_reap_attempts": 15891,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_frozen",
+  "arm": "B",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15989,
+     "empty_polls": 5032,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10956,
+     "flushes": 20000,
+     "submit_attempts": 25033,
+     "actual_enters": 20000,
+     "wait_attempts": 10957,
+     "cqe_reap_attempts": 15989,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10956,
+     "wakeup_writes": 5031,
+     "wakeup_coalesced": 5925
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15540,
+     "empty_polls": 4715,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10824,
+     "flushes": 20000,
+     "submit_attempts": 24716,
+     "actual_enters": 20000,
+     "wait_attempts": 10825,
+     "cqe_reap_attempts": 15540,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10824,
+     "wakeup_writes": 4715,
+     "wakeup_coalesced": 6109
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16103,
+     "empty_polls": 5136,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10965,
+     "flushes": 20000,
+     "submit_attempts": 25138,
+     "actual_enters": 20000,
+     "wait_attempts": 10967,
+     "cqe_reap_attempts": 16103,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10965,
+     "wakeup_writes": 5135,
+     "wakeup_coalesced": 5830
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_frozen",
+  "arm": "B",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15882,
+     "empty_polls": 4987,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10894,
+     "flushes": 20000,
+     "submit_attempts": 24988,
+     "actual_enters": 20000,
+     "wait_attempts": 10895,
+     "cqe_reap_attempts": 15882,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10894,
+     "wakeup_writes": 4987,
+     "wakeup_coalesced": 5907
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16174,
+     "empty_polls": 5132,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11040,
+     "flushes": 20000,
+     "submit_attempts": 25134,
+     "actual_enters": 20000,
+     "wait_attempts": 11042,
+     "cqe_reap_attempts": 16174,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 11040,
+     "wakeup_writes": 5131,
+     "wakeup_coalesced": 5909
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15788,
+     "empty_polls": 4806,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10981,
+     "flushes": 20000,
+     "submit_attempts": 24807,
+     "actual_enters": 20000,
+     "wait_attempts": 10982,
+     "cqe_reap_attempts": 15788,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10981,
+     "wakeup_writes": 4806,
+     "wakeup_coalesced": 6175
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_frozen",
+  "arm": "B",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15721,
+     "empty_polls": 4868,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10852,
+     "flushes": 20000,
+     "submit_attempts": 24869,
+     "actual_enters": 20000,
+     "wait_attempts": 10853,
+     "cqe_reap_attempts": 15721,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10852,
+     "wakeup_writes": 4869,
+     "wakeup_coalesced": 5983
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15615,
+     "empty_polls": 4754,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10860,
+     "flushes": 20000,
+     "submit_attempts": 24755,
+     "actual_enters": 20000,
+     "wait_attempts": 10861,
+     "cqe_reap_attempts": 15615,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10860,
+     "wakeup_writes": 4754,
+     "wakeup_coalesced": 6106
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16028,
+     "empty_polls": 5070,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10957,
+     "flushes": 20000,
+     "submit_attempts": 25071,
+     "actual_enters": 20000,
+     "wait_attempts": 10958,
+     "cqe_reap_attempts": 16028,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10957,
+     "wakeup_writes": 5069,
+     "wakeup_coalesced": 5888
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_sigdrop",
+  "arm": "A",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15741,
+     "empty_polls": 5020,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35741,
+     "actual_enters": 20000,
+     "wait_attempts": 10721,
+     "cqe_reap_attempts": 15741,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15801,
+     "empty_polls": 5023,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35801,
+     "actual_enters": 20000,
+     "wait_attempts": 10778,
+     "cqe_reap_attempts": 15801,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15808,
+     "empty_polls": 5005,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35808,
+     "actual_enters": 20000,
+     "wait_attempts": 10803,
+     "cqe_reap_attempts": 15808,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "sigdrop"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_sigdrop",
+  "arm": "A",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15443,
+     "empty_polls": 4740,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35443,
+     "actual_enters": 20000,
+     "wait_attempts": 10703,
+     "cqe_reap_attempts": 15443,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15934,
+     "empty_polls": 5011,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35934,
+     "actual_enters": 20000,
+     "wait_attempts": 10923,
+     "cqe_reap_attempts": 15934,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15527,
+     "empty_polls": 4789,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35527,
+     "actual_enters": 20000,
+     "wait_attempts": 10738,
+     "cqe_reap_attempts": 15527,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "sigdrop"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_sigdrop",
+  "arm": "A",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15856,
+     "empty_polls": 5020,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35856,
+     "actual_enters": 20000,
+     "wait_attempts": 10836,
+     "cqe_reap_attempts": 15856,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15670,
+     "empty_polls": 5070,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35670,
+     "actual_enters": 20000,
+     "wait_attempts": 10600,
+     "cqe_reap_attempts": 15670,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15799,
+     "empty_polls": 5007,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35799,
+     "actual_enters": 20000,
+     "wait_attempts": 10792,
+     "cqe_reap_attempts": 15799,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "sigdrop"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_sigdrop",
+  "arm": "B",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16375,
+     "empty_polls": 5266,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11107,
+     "flushes": 20000,
+     "submit_attempts": 25268,
+     "actual_enters": 20000,
+     "wait_attempts": 11109,
+     "cqe_reap_attempts": 16375,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15929,
+     "empty_polls": 4968,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10959,
+     "flushes": 20000,
+     "submit_attempts": 24970,
+     "actual_enters": 20000,
+     "wait_attempts": 10961,
+     "cqe_reap_attempts": 15929,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16365,
+     "empty_polls": 5304,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11060,
+     "flushes": 20000,
+     "submit_attempts": 25305,
+     "actual_enters": 20000,
+     "wait_attempts": 11061,
+     "cqe_reap_attempts": 16365,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "sigdrop"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_sigdrop",
+  "arm": "B",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15978,
+     "empty_polls": 5142,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10835,
+     "flushes": 20000,
+     "submit_attempts": 25143,
+     "actual_enters": 20000,
+     "wait_attempts": 10836,
+     "cqe_reap_attempts": 15978,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15858,
+     "empty_polls": 5097,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10759,
+     "flushes": 20000,
+     "submit_attempts": 25099,
+     "actual_enters": 20000,
+     "wait_attempts": 10761,
+     "cqe_reap_attempts": 15858,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15931,
+     "empty_polls": 5146,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10783,
+     "flushes": 20000,
+     "submit_attempts": 25148,
+     "actual_enters": 20000,
+     "wait_attempts": 10785,
+     "cqe_reap_attempts": 15931,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "sigdrop"
+ },
+ {
+  "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/bin/bin_counters_sigdrop",
+  "arm": "B",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15953,
+     "empty_polls": 5184,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10767,
+     "flushes": 20000,
+     "submit_attempts": 25186,
+     "actual_enters": 20000,
+     "wait_attempts": 10769,
+     "cqe_reap_attempts": 15953,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15906,
+     "empty_polls": 5140,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10764,
+     "flushes": 20000,
+     "submit_attempts": 25142,
+     "actual_enters": 20000,
+     "wait_attempts": 10766,
+     "cqe_reap_attempts": 15906,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16163,
+     "empty_polls": 5132,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11029,
+     "flushes": 20000,
+     "submit_attempts": 25134,
+     "actual_enters": 20000,
+     "wait_attempts": 11031,
+     "cqe_reap_attempts": 16163,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "sigdrop"
+ }
+]

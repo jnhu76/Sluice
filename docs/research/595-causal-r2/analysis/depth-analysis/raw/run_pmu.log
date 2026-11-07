@@ -1,0 +1,35 @@
+pmu-d3-ab pair=0 pos=0 arm=A rc=0 elapsed=0.301s
+pmu-d3-ab pair=0 pos=1 arm=B rc=0 elapsed=0.265s
+pmu-d3-ab pair=1 pos=0 arm=B rc=0 elapsed=0.228s
+pmu-d3-ab pair=1 pos=1 arm=A rc=0 elapsed=0.244s
+pmu-d3-ab pair=2 pos=0 arm=A rc=0 elapsed=0.246s
+pmu-d3-ab pair=2 pos=1 arm=B rc=0 elapsed=0.231s
+pmu-d3-ab pair=3 pos=0 arm=B rc=0 elapsed=0.226s
+pmu-d3-ab pair=3 pos=1 arm=A rc=0 elapsed=0.237s
+pmu-d3-ab pair=4 pos=0 arm=A rc=0 elapsed=0.238s
+pmu-d3-ab pair=4 pos=1 arm=B rc=0 elapsed=0.272s
+pmu-d3-ab pair=5 pos=0 arm=B rc=0 elapsed=0.231s
+pmu-d3-ab pair=5 pos=1 arm=A rc=0 elapsed=0.249s
+pmu-d3-ab pair=6 pos=0 arm=A rc=0 elapsed=0.239s
+pmu-d3-ab pair=6 pos=1 arm=B rc=0 elapsed=0.230s
+pmu-d3-ab pair=7 pos=0 arm=B rc=0 elapsed=0.226s
+pmu-d3-ab pair=7 pos=1 arm=A rc=0 elapsed=0.240s
+done pmu-d3-ab -> /home/jnhu/sluice-595-e5/causal-r2/evidence/depth-analysis/raw/pmu-d3-ab/results.jsonl
+pmu-d16-ab pair=0 pos=0 arm=A rc=0 elapsed=0.189s
+pmu-d16-ab pair=0 pos=1 arm=B rc=0 elapsed=0.136s
+pmu-d16-ab pair=1 pos=0 arm=B rc=0 elapsed=0.138s
+pmu-d16-ab pair=1 pos=1 arm=A rc=0 elapsed=0.183s
+pmu-d16-ab pair=2 pos=0 arm=A rc=0 elapsed=0.164s
+pmu-d16-ab pair=2 pos=1 arm=B rc=0 elapsed=0.130s
+pmu-d16-ab pair=3 pos=0 arm=B rc=0 elapsed=0.127s
+pmu-d16-ab pair=3 pos=1 arm=A rc=0 elapsed=0.175s
+pmu-d16-ab pair=4 pos=0 arm=A rc=0 elapsed=0.170s
+pmu-d16-ab pair=4 pos=1 arm=B rc=0 elapsed=0.135s
+pmu-d16-ab pair=5 pos=0 arm=B rc=0 elapsed=0.125s
+pmu-d16-ab pair=5 pos=1 arm=A rc=0 elapsed=0.166s
+pmu-d16-ab pair=6 pos=0 arm=A rc=0 elapsed=0.169s
+pmu-d16-ab pair=6 pos=1 arm=B rc=0 elapsed=0.141s
+pmu-d16-ab pair=7 pos=0 arm=B rc=0 elapsed=0.132s
+pmu-d16-ab pair=7 pos=1 arm=A rc=0 elapsed=0.176s
+done pmu-d16-ab -> /home/jnhu/sluice-595-e5/causal-r2/evidence/depth-analysis/raw/pmu-d16-ab/results.jsonl
+PMU_DONE

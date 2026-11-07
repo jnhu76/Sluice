@@ -1,0 +1,842 @@
+[
+ {
+  "binary": "bin/bin_counters_frozen",
+  "arm": "A",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15727,
+     "empty_polls": 4999,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35727,
+     "actual_enters": 20000,
+     "wait_attempts": 10728,
+     "cqe_reap_attempts": 15727,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15926,
+     "empty_polls": 5009,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35926,
+     "actual_enters": 20000,
+     "wait_attempts": 10917,
+     "cqe_reap_attempts": 15926,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15615,
+     "empty_polls": 4804,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35615,
+     "actual_enters": 20000,
+     "wait_attempts": 10811,
+     "cqe_reap_attempts": 15615,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "bin/bin_counters_frozen",
+  "arm": "A",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15528,
+     "empty_polls": 4765,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35528,
+     "actual_enters": 20000,
+     "wait_attempts": 10763,
+     "cqe_reap_attempts": 15528,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15957,
+     "empty_polls": 5024,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35957,
+     "actual_enters": 20000,
+     "wait_attempts": 10933,
+     "cqe_reap_attempts": 15957,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15862,
+     "empty_polls": 4998,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35862,
+     "actual_enters": 20000,
+     "wait_attempts": 10864,
+     "cqe_reap_attempts": 15862,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "bin/bin_counters_frozen",
+  "arm": "A",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15700,
+     "empty_polls": 5016,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35700,
+     "actual_enters": 20000,
+     "wait_attempts": 10684,
+     "cqe_reap_attempts": 15700,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15962,
+     "empty_polls": 5063,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35962,
+     "actual_enters": 20000,
+     "wait_attempts": 10899,
+     "cqe_reap_attempts": 15962,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15814,
+     "empty_polls": 5057,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35814,
+     "actual_enters": 20000,
+     "wait_attempts": 10757,
+     "cqe_reap_attempts": 15814,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "bin/bin_counters_frozen",
+  "arm": "B",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15876,
+     "empty_polls": 4950,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10924,
+     "flushes": 20000,
+     "submit_attempts": 24952,
+     "actual_enters": 20000,
+     "wait_attempts": 10926,
+     "cqe_reap_attempts": 15876,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10924,
+     "wakeup_writes": 4949,
+     "wakeup_coalesced": 5975
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16210,
+     "empty_polls": 5179,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11030,
+     "flushes": 20000,
+     "submit_attempts": 25180,
+     "actual_enters": 20000,
+     "wait_attempts": 11031,
+     "cqe_reap_attempts": 16210,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 11030,
+     "wakeup_writes": 5178,
+     "wakeup_coalesced": 5852
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15915,
+     "empty_polls": 4963,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10950,
+     "flushes": 20000,
+     "submit_attempts": 24965,
+     "actual_enters": 20000,
+     "wait_attempts": 10952,
+     "cqe_reap_attempts": 15915,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10950,
+     "wakeup_writes": 4962,
+     "wakeup_coalesced": 5988
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "bin/bin_counters_frozen",
+  "arm": "B",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16239,
+     "empty_polls": 5163,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11075,
+     "flushes": 20000,
+     "submit_attempts": 25164,
+     "actual_enters": 20000,
+     "wait_attempts": 11076,
+     "cqe_reap_attempts": 16239,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 11075,
+     "wakeup_writes": 5163,
+     "wakeup_coalesced": 5912
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15917,
+     "empty_polls": 5017,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10899,
+     "flushes": 20000,
+     "submit_attempts": 25018,
+     "actual_enters": 20000,
+     "wait_attempts": 10900,
+     "cqe_reap_attempts": 15917,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10899,
+     "wakeup_writes": 5016,
+     "wakeup_coalesced": 5883
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15968,
+     "empty_polls": 5016,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10950,
+     "flushes": 20000,
+     "submit_attempts": 25018,
+     "actual_enters": 20000,
+     "wait_attempts": 10952,
+     "cqe_reap_attempts": 15968,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10950,
+     "wakeup_writes": 5015,
+     "wakeup_coalesced": 5935
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "bin/bin_counters_frozen",
+  "arm": "B",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16090,
+     "empty_polls": 5179,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10910,
+     "flushes": 20000,
+     "submit_attempts": 25180,
+     "actual_enters": 20000,
+     "wait_attempts": 10911,
+     "cqe_reap_attempts": 16090,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10910,
+     "wakeup_writes": 5178,
+     "wakeup_coalesced": 5732
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16190,
+     "empty_polls": 5174,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 11014,
+     "flushes": 20000,
+     "submit_attempts": 25176,
+     "actual_enters": 20000,
+     "wait_attempts": 11016,
+     "cqe_reap_attempts": 16190,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 11014,
+     "wakeup_writes": 5173,
+     "wakeup_coalesced": 5841
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15936,
+     "empty_polls": 5004,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 10930,
+     "flushes": 20000,
+     "submit_attempts": 25006,
+     "actual_enters": 20000,
+     "wait_attempts": 10932,
+     "cqe_reap_attempts": 15936,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 10930,
+     "wakeup_writes": 5003,
+     "wakeup_coalesced": 5927
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "frozen"
+ },
+ {
+  "binary": "bin/bin_counters_deferoff",
+  "arm": "A",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15472,
+     "empty_polls": 4796,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35472,
+     "actual_enters": 20000,
+     "wait_attempts": 10676,
+     "cqe_reap_attempts": 15472,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15910,
+     "empty_polls": 5108,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35910,
+     "actual_enters": 20000,
+     "wait_attempts": 10802,
+     "cqe_reap_attempts": 15910,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15725,
+     "empty_polls": 5089,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35725,
+     "actual_enters": 20000,
+     "wait_attempts": 10636,
+     "cqe_reap_attempts": 15725,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "deferoff"
+ },
+ {
+  "binary": "bin/bin_counters_deferoff",
+  "arm": "A",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16002,
+     "empty_polls": 5134,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 36002,
+     "actual_enters": 20000,
+     "wait_attempts": 10868,
+     "cqe_reap_attempts": 16002,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15561,
+     "empty_polls": 4911,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35561,
+     "actual_enters": 20000,
+     "wait_attempts": 10650,
+     "cqe_reap_attempts": 15561,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 16019,
+     "empty_polls": 5163,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 36019,
+     "actual_enters": 20000,
+     "wait_attempts": 10856,
+     "cqe_reap_attempts": 16019,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "deferoff"
+ },
+ {
+  "binary": "bin/bin_counters_deferoff",
+  "arm": "A",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15765,
+     "empty_polls": 4995,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35765,
+     "actual_enters": 20000,
+     "wait_attempts": 10770,
+     "cqe_reap_attempts": 15765,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15756,
+     "empty_polls": 5112,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35756,
+     "actual_enters": 20000,
+     "wait_attempts": 10644,
+     "cqe_reap_attempts": 15756,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15713,
+     "empty_polls": 5026,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35713,
+     "actual_enters": 20000,
+     "wait_attempts": 10687,
+     "cqe_reap_attempts": 15713,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "deferoff"
+ },
+ {
+  "binary": "bin/bin_counters_deferoff",
+  "arm": "B",
+  "idx": 0,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15799,
+     "empty_polls": 5014,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35799,
+     "actual_enters": 20000,
+     "wait_attempts": 10785,
+     "cqe_reap_attempts": 15799,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15915,
+     "empty_polls": 5025,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35915,
+     "actual_enters": 20000,
+     "wait_attempts": 10890,
+     "cqe_reap_attempts": 15915,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15927,
+     "empty_polls": 4996,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35927,
+     "actual_enters": 20000,
+     "wait_attempts": 10931,
+     "cqe_reap_attempts": 15927,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "deferoff"
+ },
+ {
+  "binary": "bin/bin_counters_deferoff",
+  "arm": "B",
+  "idx": 1,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15987,
+     "empty_polls": 5097,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35987,
+     "actual_enters": 20000,
+     "wait_attempts": 10890,
+     "cqe_reap_attempts": 15987,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15832,
+     "empty_polls": 5078,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35832,
+     "actual_enters": 20000,
+     "wait_attempts": 10754,
+     "cqe_reap_attempts": 15832,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15803,
+     "empty_polls": 5054,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35803,
+     "actual_enters": 20000,
+     "wait_attempts": 10749,
+     "cqe_reap_attempts": 15803,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "deferoff"
+ },
+ {
+  "binary": "bin/bin_counters_deferoff",
+  "arm": "B",
+  "idx": 2,
+  "exit": 0,
+  "reps": [
+   {
+    "rep": 0,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15435,
+     "empty_polls": 4830,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35435,
+     "actual_enters": 20000,
+     "wait_attempts": 10605,
+     "cqe_reap_attempts": 15435,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 1,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15818,
+     "empty_polls": 5083,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35818,
+     "actual_enters": 20000,
+     "wait_attempts": 10735,
+     "cqe_reap_attempts": 15818,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   },
+   {
+    "rep": 2,
+    "counters": {
+     "dispatch_passes": 20000,
+     "poll_passes": 15709,
+     "empty_polls": 5051,
+     "sqe_preparations": 20000,
+     "sqes_deferred": 0,
+     "flushes": 20000,
+     "submit_attempts": 35709,
+     "actual_enters": 20000,
+     "wait_attempts": 10658,
+     "cqe_reap_attempts": 15709,
+     "cqes_reaped": 20000,
+     "progress_handoffs": 0,
+     "wakeups": 0,
+     "wakeup_writes": 0,
+     "wakeup_coalesced": 0
+    }
+   }
+  ],
+  "ops_per_rep": 20000,
+  "build": "deferoff"
+ }
+]

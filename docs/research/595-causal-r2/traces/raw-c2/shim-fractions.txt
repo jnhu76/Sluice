@@ -1,0 +1,12 @@
+A-1: submean=2612 p50=1221 gapfast=0/20000 (0.00%) ret_non1=0 | submean=2532 p50=1194 gapfast=0/20000 (0.00%) ret_non1=0 | submean=2486 p50=1206 gapfast=0/20000 (0.00%) ret_non1=0
+A-2: submean=2525 p50=3278 gapfast=0/20000 (0.00%) ret_non1=0 | submean=2447 p50=3304 gapfast=0/20000 (0.00%) ret_non1=0 | submean=2470 p50=1239 gapfast=0/20000 (0.00%) ret_non1=0
+B-1: submean=2552 p50=1218 gapfast=6077/20000 (30.39%) ret_non1=0 | submean=2476 p50=1202 gapfast=5989/20000 (29.95%) ret_non1=0 | submean=2534 p50=1225 gapfast=5993/20000 (29.97%) ret_non1=0
+B-2: submean=2627 p50=2234 gapfast=5944/20000 (29.72%) ret_non1=0 | submean=2651 p50=3407 gapfast=5959/20000 (29.79%) ret_non1=0 | submean=2458 p50=1199 gapfast=5959/20000 (29.79%) ret_non1=0
+submit dur B-A = +37.9 ns  bootstrap95 [-33.7, +110.4]
+fast-follow fraction A: mean=0.00% (segs: 0.00,0.00,0.00,0.00,0.00,0.00)
+fast-follow fraction B: mean=29.93% (segs: 30.39,29.95,29.97,29.72,29.79,29.79)
+=== overhead (measured reps):
+shim-A: n=6 cpu_ns/op mean=5201.5 tput mean=192,060
+shim-B: n=6 cpu_ns/op mean=5487.8 tput mean=181,963
+noshim-A: n=6 cpu_ns/op mean=5085.1 tput mean=196,498
+noshim-B: n=6 cpu_ns/op mean=5401.0 tput mean=184,997

@@ -1,0 +1,11 @@
+# started on Thu Nov  5 00:09:15 2026
+
+89562769,,cycles:u,104575545,100.00,,
+154081520,,instructions:u,104575545,100.00,,
+808631,,cache-references:u,104575545,100.00,,
+13014,,cache-misses:u,104575545,100.00,,
+307527,,branch-misses:u,104575545,100.00,,
+104.58,msec,task-clock:u,104575545,100.00,,
+476,,page-faults:u,104575545,100.00,,
+476,,minor-faults:u,104575545,100.00,,
+0,,major-faults:u,104575545,100.00,,

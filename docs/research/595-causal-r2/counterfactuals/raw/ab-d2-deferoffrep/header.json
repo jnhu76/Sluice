@@ -1,0 +1,20 @@
+{
+ "phase": "ab-d2-deferoffrep",
+ "case": "W02-uring-4k-d2",
+ "pairs": 12,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/raw/sysio-cf2/bench_w02_pipeline_deferoff",
+ "binary_sha256": "64189aa8765ca03b5c5649f95a24708ace8326bf2b7b25a6f365c0605de8d72f",
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T23:54:15+0800",
+ "loadavg_start": [
+  0.91943359375,
+  0.7646484375,
+  0.6650390625
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

@@ -1,0 +1,20 @@
+{
+ "phase": "ab-d2-base-cf2",
+ "case": "W02-uring-4k-d2",
+ "pairs": 12,
+ "arms": "AB",
+ "cpu": "2",
+ "binary": "/home/jnhu/sluice-595-e5/causal-r2/evidence/counterfactual/raw/sysio-cf2/bench_w02_pipeline_frozen",
+ "binary_sha256": "0091d2592242f605b5c64b11f22faa8e8b9e9b729146f93f263ba1288118f81c",
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "measured_per_invocation": 5,
+ "started": "2026-11-04T23:51:08+0800",
+ "loadavg_start": [
+  0.48974609375,
+  0.65234375,
+  0.61572265625
+ ],
+ "host_kernel": "7.2.11-200.fc44.x86_64"
+}

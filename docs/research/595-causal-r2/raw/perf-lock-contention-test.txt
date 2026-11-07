@@ -1,0 +1,5 @@
+[sudo] password for jnhu: [ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.036 MB /tmp/perf-lock2.data ]
+---contention-report---
+ contended   total wait     max wait     avg wait         type   caller
+
