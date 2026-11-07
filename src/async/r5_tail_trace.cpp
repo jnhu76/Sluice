@@ -25,8 +25,11 @@
 //   (slot, generation) joins happen offline in the analyzer.
 // - end_phase/begin_phase first clear g_active, then wait (bounded) until
 //   every registered writer has left its hook, then export or reset. A
-//   quiesce deadline breach is recorded in the dump header flags rather
-//   than hanging the benchmark.
+//   quiesce deadline breach disables the instrument for the rest of the
+//   process: begin_phase leaves the buffers untouched (no reset) and does
+//   not reactivate, and end_phase writes a header-only failure dump
+//   (flag bit 4, n_writers 0, no per-writer data, no event bytes) instead
+//   of reading buffers a writer may still be mutating.
 
 #if defined(SLUICE_595_R5_TAIL_TRACE)
 
@@ -93,6 +96,7 @@ struct WriterBuf {
 WriterBuf g_writers[kMaxWriters];
 std::atomic<unsigned> g_writer_count{0};
 std::atomic<bool> g_active{false};
+std::atomic<bool> g_disabled{false};
 std::atomic<std::uint64_t> g_dropped_unregistered{0};
 std::atomic<std::uint64_t> g_quiesce_timeouts{0};
 std::uint64_t g_run_nonce = 0;
@@ -230,7 +234,7 @@ std::uint32_t next_presentation() noexcept {
 }
 
 void begin_phase() noexcept {
-    if (!enabled()) {
+    if (!enabled() || g_disabled.load(std::memory_order_relaxed)) {
         return;
     }
     if (g_run_nonce == 0) {
@@ -238,16 +242,30 @@ void begin_phase() noexcept {
                       static_cast<std::uint64_t>(steady_ns() & 0xffffffffu);
     }
     g_active.store(false, std::memory_order_seq_cst);
-    (void)wait_quiesce();
+    if (!wait_quiesce()) {
+        // A writer may still be inside its hook: resetting here would race
+        // with it. Disable tracing for the rest of the process and leave the
+        // buffers untouched; end_phase writes the failure marker.
+        g_disabled.store(true, std::memory_order_seq_cst);
+        return;
+    }
     reset_writers();
     g_active.store(true, std::memory_order_seq_cst);
 }
 
 void end_phase(const char* tag) noexcept {
-    if (!g_active.exchange(false, std::memory_order_seq_cst)) {
+    const bool was_active = g_active.exchange(false, std::memory_order_seq_cst);
+    const bool failed_earlier = g_disabled.load(std::memory_order_seq_cst);
+    if (!was_active && !failed_earlier) {
         return;
     }
-    const bool quiesced = wait_quiesce();
+    // was_active=false here means begin_phase aborted after a quiesce breach:
+    // a writer may still be inside its hook, so skip the wait and export the
+    // header-only failure marker below.
+    const bool quiesced = was_active ? wait_quiesce() : false;
+    if (was_active && !quiesced) {
+        g_disabled.store(true, std::memory_order_seq_cst);
+    }
 
     const char* dir = std::getenv("SLUICE_595_R5_TAIL_TRACE_DUMP_DIR");
     if (dir == nullptr || *dir == '\0') {
@@ -281,10 +299,14 @@ void end_phase(const char* tag) noexcept {
     const std::uint64_t magic = 0x32435254544c4941ull; // "AILTTRC2" marker
     const std::uint32_t version = 2;
     const std::uint32_t event_bytes = sizeof(Event);
-    const std::uint32_t n_writers = n_stored;
+    // On a quiesce breach a writer may still be mutating its buffer, so the
+    // failure dump carries the header only: no per-writer section, no event
+    // bytes, flag bit 4 set. The analyzer must treat it as a failed dump.
+    const std::uint32_t n_writers = quiesced ? n_stored : 0u;
     const std::uint32_t flags =
         (quiesced ? 0u : 1u) |
-        (g_dropped_unregistered.load(std::memory_order_relaxed) != 0 ? 2u : 0u);
+        (g_dropped_unregistered.load(std::memory_order_relaxed) != 0 ? 2u : 0u) |
+        (quiesced ? 0u : 4u);
     const std::uint32_t tag_len = static_cast<std::uint32_t>(out);
     const std::uint64_t pid = static_cast<std::uint64_t>(::getpid());
     const std::uint64_t quiesce_timeouts = g_quiesce_timeouts.load(std::memory_order_relaxed);
@@ -301,7 +323,7 @@ void end_phase(const char* tag) noexcept {
     std::fwrite(&dump_idx64, sizeof dump_idx64, 1, f);
     std::fwrite(&quiesce_timeouts, sizeof quiesce_timeouts, 1, f);
 
-    for (unsigned i = 0; i < n_stored; ++i) {
+    for (unsigned i = 0; i < n_writers; ++i) {
         const WriterBuf& b = g_writers[i];
         const std::uint64_t wtid = b.tid;
         const std::uint64_t count = b.count.load(std::memory_order_relaxed);
