@@ -1,91 +1,96 @@
-# #595 Flow Audit — 唯一下一项实验协议：C-A（产品 transport 层 enter 摊销）
+# #595 Flow Audit — 下一步实验状态（C-A 撤回为 HOLD_DESIGN_CONFOUNDED）
 
-DESIGN ONLY — 本轮未执行。基线冻结：PRODUCT master `271b81bf`。
-实现落位：独立研究分支（自 master 切出），**不进 master、不改公开
-API/请求契约；默认产品行为不变**（研究分支上以环境变量臂化）。
+**状态（2026-11-07 复核后）：C-A 未实施；本轮未获执行授权；其协议原稿存在
+识别混杂，在解决下列问题前不得称为可执行协议。** 默认产品策略维持 A0；
+原候选 B 维持不放行。本文件取代 v1 版"唯一下一项 = C-A"的表述。
 
-## 1. 研究问题与干预
+## 1. 复核发现的识别问题（R1）
 
-- 可被推翻的问题：**产品 transport 层自行摊销 `io_uring_submit`
-  （Q=8 延迟 flush）能否在 warm-buffered W03-d16 上复现 R 族的
-  CPU/吞吐收益，而 p99 不超保护门——即 d16 p99 差与浅队列税是否
-  主要属于研究呈现层而非摊销本身？**
-- 唯一干预：`UringAsyncBackend` 提交路径改为——`dispatch_one_locked`
-  照常准备 SQE/ledger；`submit_transport_locked` 不再在每个
-  `dispatch_after_accept` 内调用，改为满足任一条件时执行：
-  (a) 本 burst 内已准备 SQE 数 ≥ Q=8；(b) `dispatch_retry_remains`
-  residue 广告（现有 `signal_ready_progress` 路径不变）；
-  (c) 任何 `poll()` pass 开头的既有 residue flush（现有
-  `M:uring_backend.cpp:620-634`，不变）。A0 臂 = 同分支、
-  `SLUICE_URING_FLUSH_Q=1`（等价现行为，逐语句可证）。
-- 对照变量：同 bench、同 fixture、同线程拓扑、同锁；唯一自由度 =
-  flush 触发。无 adapter、无 seam、无决策表参与任何臂。
+v1 协议声称 C-A（产品 transport 层 Q=8 延迟 flush，对 A0 产品臂 A/B）检验
+"去除研究呈现层的效果"。该主张不成立：C-A 与 A0 之差同时包含多项变化——
 
-## 2. 形状与对照
+- ready 构造（研究臂按组构建/呈现 vs 产品逐 op 内联构建）；
+- 入口与锁路径（研究 seam+整批临界区 vs 产品逐 op 两级锁）；
+- 跨调用持有 SQE（C-A 将已接受工作的 enter 推迟到量子满/residue/下一
+  pass，改变了"accept 后何时到达内核"这一自由度本身）；
+- flush 时机（1 enter/op → 1 enter/≤8 op）；
+- residue/driver 依赖（浅队列下每 op 依赖 signal→wake→pass 才进内核）。
 
-- 主形状 W03-uring-4k-d16（R 族唯一 FAIL 项所在）。
-- 必要对照（不机械补全矩阵）：W03-d4（R 曾全面变好，摊销不得倒退）、
-  W03-d2serial + W02-d1 + W02-d2（浅队列：直接测"研究层移除后税是否
-  消失"与"residue 信号跳的代价"——C-A 在深度 1 时每 op 依赖
-  signal→epoll→pass 才进内核，这是本设计最大自损风险，必须放保护格）。
-- 连续性参考臂：R_cleanup（`b191bb89` 二进制）仅在 MAIN 的 6/24 块
-  并跑作锚，不进门。
+因此 C-A 的任一结果都不能单独识别"研究呈现层"的因果贡献：C-A p99 良好
+不能证明 p99 差来自呈现层（其余协变因素同样不同）；C-A p99 失败也不能
+证明"batching 内在代价"（见 §5）。同理，浅队列格上 C-A 的表现只能约束
+"无研究层时该 flush 设计的行为"，不能把 d2serial 税归因到某一层。
 
-## 3. Useful task 与端点
+## 2. 与历史 defer 设计的对照（归档：595-r5-phase-a NEXT_EXPERIMENT.md）
 
-- 同一 useful task：20000×4KiB warm tmpfs 读、逐块 pattern 校验
-  （oracle 相位）、顺序应用端点（front-only take）不变。
-- **延迟起点（两臂统一，预注册）**：T0 = ReadOp 构建完成、submit
-  调用之前（产品 bench 现为 submit 返回后；本次实验两臂同步前移，
-  与研究 A0 语义一致——含自身提交成本与 flush 等待，不隐藏任何
-  pre-kernel 等待；不允许丢弃/重建已 ready 请求或重置 T0）。
-- 终点 = take_result 返回。错误/取消/借出/唯一 terminal/publication/
-  shutdown 语义全部走现有套件；内存预算沿用 RSS +2% 门。
+| 维度 | 原候选 B（residue 感知预算） | C-variant1（流式准备） | C-A（本撤回稿） |
+|---|---|---|---|
+| 延迟什么 | adapter 层延迟**接受/呈现**（预算耗尽即返回，后缀留给下一轮重建） | 延迟**构建**（ReadOp/T0 后移） | transport 层延迟**enter**（SQE 照常准备） |
+| 依赖的残余机制 | 进度路径最终驱动（cv wait + driver poll） | 无（只是换测量起点，被归档判为"改指标不改管线"） | PROG-01 residue + pass 开头 flush |
+| T0/测量起点 | **致命缺陷**：后缀 T0 后移 = 改测量起点（F3 禁止；归档已加 WARNING） | 同类缺陷（明示不推荐） | 每 op 构建时照常打点，起点不动（这是其相对 B 的真实差异） |
+| 服务机会 | 创造真 park/发布机会（其机制主张） | 无 | 不创造 park；只改 enter 粒度 |
+| 新状态 | adapter 预算计数器 | 无 | backend flush 量子（SQ 占用的派生摘要） |
 
-## 4. 正确性 oracle 与负控（先于计时）
+相同点：三者都以"让后到达的工作更晚进内核"换取提交侧经济性，都依赖
+进度路径兜底，都在后位成员上有尾延迟风险——这是整个 defer 家族的共性，
+**"移到 transport 层"本身不构成新的实验价值**。不同点主要是测量起点
+是否被移动与是否创造服务机会。相对 B/C-variant1 的唯一新增证据是
+"起点不动的 defer 在产品路径上尚未测过"——一个未测事实，不是一个
+已识别的因果问题。也不能仅因与 B 相似就断言 C-A 必然失败：B 的致命
+缺陷（T0 后移）C-A 并不共享。
 
-- 既有套件全绿（async/uring 全量 + fault 注入 + shutdown 生命周期 +
-  submit concurrency）。
-- 18 场景确定性 transport oracle 改造版：逐请求结果字节不变；flush
-  计数按 Q 断言（`enters=ceil(n/Q)+residue 次数`，在受控 seam 下
-  精确断言）。
-- **杀死性负控**：mutant 删除 residue 广播（(b) 通道）→ oracle 必须
-  挂起/失败，证明 undispatched 工作依赖该信号才能最终进内核（PROG-01
-  residue 义务的真实性检查，而非只数完成数）。
-- 新增确定性回归：SQ 持有 <Q 未 flush 工作时，progress pass 触发
-  flush 并发布（无第二次 submit）。
+## 3. 原协议条件 (b) 的歧义（未解决前协议不可执行）
 
-## 5. 统计与噪声（先冻结）
+原稿写"residue 广告（现有 `signal_ready_progress` 路径不变）"。冻结源码
+（M:uring_backend.hpp:297 `progress_port_.signal()`；M:uring_backend.cpp:620-634
+pass 开头的 residue flush）表明该信号**只唤醒等待者，不自行 flush**；真正
+的 flush 发生在下一次 progress pass。但 C-A 新增的"量子满即 flush"通道
+与 residue/pass 通道**在浅队列下产生的 batching 与等待行为不同**（前者
+可能在 accept 线程内联 enter，后者必须等 wake→pass）。协议必须预注册
+(b) 究竟指"立即内联 flush"还是"仅唤醒、由 pass flush"，两者是不同的
+实验。原稿未区分——此为协议级缺陷，不是实现细节。
 
-- 24 配对块/格，AB/BA 交错，块为独立单元；逐块 p99 → 配对 bootstrap
-  单侧 95%；MAIN 四假设 Holm。复用 r5-repair 的
-  `analyze_round.py`/`run_round.py` 家族（复用协议，不保证所有形状
-  功效充分；A/A 半宽并列报告，精度不足记 NOT_ESTABLISHED，不补样）。
-- 双锁、LOCK_RECEIPT、无并行构建；诊断与干净计时隔离。
+## 4. 撤回通用 enter 计数断言
 
-## 6. 性能端点与口径
+删除 v1 §4 的 `enters=ceil(n/Q)+residue 次数` 断言。提前 flush、partial
+submit、retry/control、等待型 enter 都会改变计数；通知次数也不等于实际
+flush 次数。若未来协议需要计数示例，只能对**明确定义的确定性事件序列**
+按实际提交调用逐次记账。任何未来机制测量的 kernel entries 必须独立统计
+真实进入（并区分 submit、wait、control、probe enter），不得由 Q 推导。
 
-- MAIN（C-A−A0）：CPU 点 ≤−10% 且单侧上界 ≤−5%；吞吐下界 ≥−3%；
-  p95/p99 单侧上界 ≤+5%（R4 全口径）。保护格：CPU 上界 ≤+5%、
-  吞吐下界 ≥−3%、p95/p99 上界 ≤+5%。
-- CPU 主口径 = CLOCK_PROCESS_CPUTIME_ID（沿用）；附 rusage utime/stime
-  与线程 tick 桶；io-wq ticks 单列不并入。PMU 不可用（paranoid=2）
-  → 不做用户/内核 PMU 拆分，登记；不得宣称全系统 CPU。
-- kernel entries：由 Q 与 submitted 推导 + oracle 精确断言（见 §4）。
+## 5. 撤回强因果失败解释与杀死性负控的过强表述
 
-## 7. 三种结论与停止规则
+- 失败解释撤回：新策略 p99 FAIL 只证明**该实现、该形状、该门限下失败**，
+  不能自动推出"batching 内在代价"或"浅队列退化全部来自某一层"。
+- 负控修正：v1 写"mutant 删除 residue 广播后 oracle 必须挂起"。该断言
+  只有当测试确实构造了"driver 已睡眠、无后续 submit、无主动 poll、无
+  其他唤醒、且该通知是唯一推进来源"时才成立。普通测试中 mutant 未挂起
+  不能自动判 oracle 无效。
 
-- 成功：MAIN 全过且保护格全过 → 下一轮才讨论产品化（默认值/配置
-  面、机制正当化审计：flush 触发=SQ 占用的派生摘要，非新权威）。
-- 失败（任一门 FAIL）：停止 C-A，**不做 Q 搜索、不自动转入 cap/阈值
-  调参**；结论二选一并写明：p99 FAIL → "摊销时机本身在后位成员上
-  有不可接受代价"（此时若 d2serial/W02 同时变好，则浅队列税确证
-  属研究层）；浅队列 FAIL → "residue 信号跳在稀到达下不可接受，
-  摊销需要到达密度前提"。
-- 精度不足：A/A 不达的格按 NOT_ESTABLISHED 记录，不重跑到过。
-- 候选 B（残差感知预算）维持不放行；本实验不依赖逐请求归因仪器。
+## 6. 当前唯一下一项
 
-## 8. 预算
+**完成本轮离线修正（CORRECTIONS.md R1-R6）本身。** 不以任何未经识别的
+新候选替换 C-A。后续任何性能候选的前置条件：先给出一个**可删除的单一
+干预步骤**与**语义等价证据**（oracle 逐字节等价 + 计数器冻结点决策），
+再谈 A/B。
 
-约 5 格 × 24 块 × 2 臂 + A/A + oracle/负控构建：一个测量日以内；
-无新线程/定时器/每请求分配（静态审计 + RSS 门沿用）。
+## 7. 尚未批准的研究问题（非施工授权）
+
+保持相同 ready 集合、逐请求 T0（R 臂现为组构建循环内逐成员打点，
+C:bench_w03:413）、呈现分组与顺序、flush 规则、完成与观察路径，仅删除
+一个**已证明冗余**的研究入口步骤，观察净效应。
+
+当前状态：**NO_COUNTERFACTUAL_SELECTED**。理由：r5-repair 已执行的
+C1/C2（有界 eligible-prefix 扫描、pass-fact 信号改名）是仅有的两个带
+等价证据的删除；研究路径剩余步骤中——seam precheck（phase-a Candidate A
+明确拒绝：对 ineligible span 不可证 transport 等价）、DecisionRecord/
+计数器（冻结 R4 join keys）、整批 dispatch 临界区（承载锁序与 residue
+规则）——没有任何一个已具备语义等价证据。不为交付候选而改预算表或 cap。
+
+## 8. 保留有效的部分
+
+基线冻结对象、双锁纪律、A/A 半宽报告、NOT_ESTABLISHED 不补样、
+"失败即停不做量子/阈值搜索"、RSS 门与无新线程/定时器约束——这些与
+具体候选无关，任何未来协议可继承。C-A 原稿的形状选择（MAIN d16 +
+保护格 d4/d2serial/W02-d1/d2）作为形状先例可引用，但门限与口径需随
+§3/§4 的修正重写后方可使用。

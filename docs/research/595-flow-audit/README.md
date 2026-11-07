@@ -2,39 +2,54 @@
 
 Round `flow-audit`, 2026-11-07, native E5. 隔离 worktree
 `/home/jnhu/sluice-595-e5/flow-audit/worktree`（分支
-`research-595-flow-audit` @ `271b81bf`；审计阶段全离线、无计时运行，
-本 PR 为审计结束后经明确授权的归档提交）。核心问题：完整执行流程
-的问题是否被过早压缩为"感知调度"问题；应先改调用者/adapter/提交/
-完成处理/结果观察哪一环。
+`research-595-flow-audit`）。审计阶段全离线、无计时运行；归档提交与
+本复核修订均经 round owner 分别授权。审阅锚点 `9d1bf648`；本修订处置
+外审发现 R1–R6（见 CORRECTIONS.md）。核心问题：完整执行流程的问题
+是否被过早压缩为"感知调度"问题；应先改调用者/adapter/提交/完成处理/
+结果观察哪一环。
 
 ## 文件
 
 - `BASELINE.md` — 三对象（PRODUCT/RESEARCH/BENCH）→ SHA/patch →
-  二进制 → 数据集 → 适用结论；环境与 CPU 口径。
-- `FLOW_AUDIT.md` — 主要结论、五组 Mermaid（对照流程 / W02 vs W03 /
-  Request 生命周期 / refill 顺序 / 反馈回路）、源码对应表、三对象差异。
+  二进制 → 数据集 → 适用结论；三窗口 CPU 口径（R4 修订）。
+- `FLOW_AUDIT.md` — 主要结论、六组 Mermaid 块（对照流程 / W02 vs W03 /
+  Request 生命周期主图+合法分支 / refill 顺序 / 反馈回路）、R3 信息
+  来源表、源码对应表、三对象差异。
 - `WORK_AND_WAIT_LEDGER.csv` — 机器工作账本（21 项）+ 等待账本
-  （11 项），含执行者/锁/频率/证据等级/分类/删除条件/正确性义务。
-- `HYPOTHESES.md` — H1-H5 + H6/H7 增补的竞争解释表与组合判断。
-- `DECISION.md` — ≤500 字路线裁决：候选排序与唯一下一项。
-- `NEXT_EXPERIMENT.md` — C-A（产品 transport 层 enter 摊销）完整协议。
-- `scripts/cpu_scope_recalc.py` — CPU 口径复算（io-wq 份额，
-  invocation-scope ticks，带告警）。
-- `scripts/verify_inherited_evidence.py` — 继承证据核验：主指标 9 格
-  逐位复现 + F5 修正后位置尾风险 4 项（13/13 PASS，exit 0）。
+  （11 项）；由 `scripts/ledger_csv.py build` 确定性生成并校验。
+- `HYPOTHESES.md` — H1-H5 + H6/H7 增补的竞争解释表（R2 修订：撤回
+  CPU→耗时换算、H3 反证、8×1 vs 2×8 示例）。
+- `DECISION.md` — ≤500 字路线裁决（R1/R2 修订版）。
+- `NEXT_EXPERIMENT.md` — C-A 状态 = **HOLD_DESIGN_CONFOUNDED**；
+  历史 defer 设计对照、协议缺陷清单、NO_COUNTERFACTUAL_SELECTED。
+- `CORRECTIONS.md` — R1–R6 逐项处置（原主张/核验/改动/验证/边界）。
+- `scripts/cpu_scope_recalc.py` — CPU 三窗口复算（measured 主口径 /
+  wait4 整次子进程 rusage 秒 / invocation ticks 采样归类下界；
+  io-wq rusage 归属 UNRESOLVED；支持 --root；缺字段显式失败）。
+- `scripts/verify_inherited_evidence.py` — 准入驱动核验：5 格 × 3 臂 ×
+  5 指标复算与冻结分析值**原始浮点精度一致**（60/60 PASS）；F5 完整性
+  （精确位置集/整数尾数/480,000 对账）+ 冻结恢复脚本离线重跑逐位复现；
+  CIs/Holm/门限不复算。
+- `scripts/ledger_csv.py` — 账本确定性生成+校验（13 列对齐、受控词表、
+  非零退出反例）。
+- `scripts/test_offline_checks.py` — 确定性测试 30/30：准入负例（重复/
+  失败尝试/缺块/ops 不符/空输入）、F5 负例（双位置/缺位/外来桶/总数
+  不闭合/尾百分比不一致）、CPU 合成窗口、CSV 截短/多列、mermaid 结构。
 
-## 一句话结论
+## 一句话结论（R2 修订）
 
-批量入口与感知策略整体是 research-only 代码层；产品唯一提交路径的
-唯一稳健可摊销工作是每 op 一次 `io_uring_submit`（两轮矩阵 −22% CPU/
-+28% 吞吐复现）。p99 +18% 与浅队列税的证据结构与"研究呈现路径
-成本 × 后块位置/调用税"一致，"batching 必然付 p99"未确立；感知
-决策的输入全是 harness 状态，无产品落点。唯一下一项 = C-A：在
-transport 层（已拥有该义务的层）做 Q=8 延迟 flush 摊销的产品路径
-A/B，正式门 = R4 全口径，保护格含 d4/d2serial/W02-d1/d2；失败即停，
-不做量子搜索。默认 A0 不变；候选 B 不放行。
+研究路径确有额外入口/锁/记账工作（结构已证）；其对 singleton 税与
+d16 p99 差（运行级均值差 C−A0 9.52µs / R−A0 10.71µs）的贡献**尚未由
+单因素反事实独立识别**——现有证据既不能证明产品整体架构有问题，也
+不能排除产品共享路径、完成服务或调用者反馈的作用。净效应已知：
+R5 指定形状上过程 CPU −22%/吞吐 +28%/p99 +18% FAIL/浅队列 FAIL
+（过程 CPU 口径，非全系统）。感知输入多数有产品权威来源（R3 表），
+但策略接入产品的净收益未证明。**下一步未定**：在找到语义等价、
+可识别的单一干预前不启动新性能矩阵；默认 A0 不变；C-A =
+HOLD_DESIGN_CONFOUNDED；候选 B 不放行。
 
 ## 证据引用
 
 历史 raw/分析全部按路径+SHA 引用（见 BASELINE.md），未复制归档；
-无新计时数据，故无新性能图；F5 相关引用均标 PERTURBED。
+无新计时数据，故无新性能图；F5 相关引用均标 PERTURBED（instrument-on
+R 相，24 tag × 20000 = 480,000 行，对账见 verify 脚本）。

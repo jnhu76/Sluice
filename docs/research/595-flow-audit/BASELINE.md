@@ -1,7 +1,9 @@
 # #595 Flow Audit — BASELINE (objects, binaries, datasets)
 
-Round: `flow-audit` (this round), 2026-11-07, native E5 host, read-only on
-GitHub (PR #630 inspected via `gh pr view` only; no commit/push/comment).
+Round: `flow-audit` (this round), 2026-11-07, native E5 host. Review anchor
+`9d1bf648`; this revision fixes review findings R1–R6 (see CORRECTIONS.md).
+The audit phase itself ran offline; the archival PR and this repair were
+each separately authorized by the round owner.
 
 ## Host (verified this session; deltas vs r5-repair BASELINE only)
 
@@ -31,22 +33,42 @@ R0-R5 frozen environment records apply (host, kernel, governor, tmpfs). This
 round verified only: CPU model/topology, kernel release, governor value,
 toolchain versions, lock freedom, process table. No drift found.
 
-## CPU/metric caliber (verified this round)
+## CPU/metric caliber (verified this round; rewritten per CORRECTIONS R4)
 
-- Primary CPU/op = `CLOCK_PROCESS_CPUTIME_ID` delta around the measured
-  phase (`bench/bench_common.hpp:45-47`, W03 `bench_w03:519-522`),
-  normalized per op. Recomputed from raw per-rep records
-  (scripts/cpu_scope_recalc.py + inline check): A0 3208.6 / R 2519.1 /
-  C 2499.4 ns/op and p99 53.92/64.63/63.44 µs (MAIN) — **bit-identical to
-  RESULTS.md**.
-- Process-CPU covers submitter+driver threads; it does NOT cover io-wq
-  kernel workers (`iou-wrk-<pid>` kthreads). Whole-invocation /proc tick
-  buckets (10 ms granularity, invocation-scoped — indicative only,
-  RECALCULATED): io-wq share of (app+io-wq) ticks ≈ 40% (A0) vs ≈ 48%
-  (R/C) on MAIN; io-wq ticks R/C ≤ A0 in every cell. "CPU −22%" is
-  process-rusage scope, never whole-system.
-- `ru_utime/ru_stime` in round summaries are invocation-cumulative
-  (getrusage at end, harness/measure3.py:161) — not the primary metric.
+Three windows, never interconverted (scripts/cpu_scope_recalc.py v2):
+
+- **Primary = measured phase, process scope**: per invocation
+  `cpu_ns_per_op = 1e9*sum(cpu_s)/sum(ops)` over the 5 case-matched
+  measured reps (each rep's `cpu_s` is the bench's
+  `CLOCK_PROCESS_CPUTIME_ID` delta around that measured phase); arm value =
+  mean over 24 invocations (frozen harness/analyze_round definition).
+  Recomputed A0 3208.6 / R 2519.1 / C 2499.4 ns/op (MAIN) reproduce
+  analysis/round-analysis.json at raw float precision (max rel diff 0.0,
+  scripts/verify_inherited_evidence.py). Scope = the bench child's threads
+  (submitter+driver); NOT a whole-system number.
+- **Invocation window**: `ru_utime/ru_stime` are the parent's **wait4**
+  rusage of the whole child (harness/measure3.py:144,161) — covers warmup,
+  oracle self-test, measured, instrumented phases and setup/teardown.
+  Reported in seconds only; the v1 claim that dividing them by rep-op
+  counts yields ns/op is withdrawn.
+- **Tick window (invocation, 10 ms, first-to-last per task)**: app/driver/
+  io-wq buckets from the frozen R4 sampler (measure_pairs.py). io-wq
+  workers are scanned every 0.5 s → ticks_lower_bound; shares are
+  **sampled-and-classified only** (MAIN: io-wq ≈40% of such ticks A0 vs
+  ≈48% R/C; io-wq lower bound R/C ≤ A0). Whether io-wq worker CPU is
+  inside the child's rusage/PROCESS_CPUTIME is **UNRESOLVED**: workers are
+  observed as tasks under the child's `/proc/<tgid>/task` (1 per
+  invocation, structural procfs evidence, not comm-only), while the
+  sampler's own residual estimate exceeds its bound in 72/72 invocations
+  (mean ≈26 vs ≈11 ticks), dominated by window mismatch — the records
+  cannot adjudicate inclusion in either direction. The r5-repair round's
+  "io-wq outside rusage" caveat is therefore treated as unverified on this
+  host, not repeated as fact.
+- p99 calibers are distinct and not interchangeable (machine-generated in
+  verify output): MAIN run-level mean diff C−A0 **9.52 µs** / R−A0
+  **10.71 µs**; per-block paired relative-effect means +17.97%/+20.14%
+  (= frozen contrasts); pooled per-request p99 UNAVAILABLE (main runs
+  store per-rep percentiles only).
 
 ## Where this round's outputs live
 
