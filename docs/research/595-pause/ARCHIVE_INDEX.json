@@ -1,0 +1,43 @@
+{
+  "checkpoint_id": "pause-20261107",
+  "created_utc": "2026-11-07",
+  "scope": "research process + algorithm designs; raw measurement data NOT archived (user decision 2026-11-07; rerun per RESUME.md section 3)",
+  "product_state": {"master": "271b81bfc9d64eecc0266fe7066b9040525dd710", "default_policy": "A0_IMMEDIATE", "research_merged": false},
+  "issue_595": "OPEN (research paused)",
+  "prs": {
+    "625": {"title": "causal-r2 adaptive cross-layer attribution archive", "branch": "research/595-causal-r2", "head": "0a22a79195f1b913145fcd443496e7f70b08cdcf", "base": "master", "docs_in_branch": "docs/research/595-causal-r2/"},
+    "626": {"title": "R3 completion + paper-analysis archive", "branch": "research/595-r3-archive", "head": "772a4329497eefdbccde6f28412a330f3c8e95eb", "base": "research/595-causal-r2", "docs_in_branch": "docs/research/595-r3/completion/"},
+    "627": {"title": "R3 continuation flip receipts + main gate", "branch": "research/595-r3-continuation", "head": "0ac2b582c36f0a9013cfc1b3d024fd3bf258d837", "base": "research/595-r3-archive", "docs_in_branch": "docs/research/595-r3/continuation/ (incl. r3-worktree-full-diff.patch, delta_w02.patch, delta_w03.patch)"},
+    "628": {"title": "scheduling-information supply and gap audit", "branch": "research/595-information-audit", "head": "d4eddc4b599299e7818004dec3ec8a2b48527f3c", "base": "master", "docs_in_branch": "research/595-information-audit/"},
+    "629": {"title": "R4 state-aware E5 experiment (negative result)", "branch": "research/595-r4-state-aware", "head": "ec8c8feab20007b0156650e579434bdaee2bb17d", "base": "master", "docs_in_branch": "docs/research/595-r4-state-aware/ (incl. impl-f3b25329.patch)"},
+    "630": {"title": "R5 phase-A + repair round", "branch": "research/595-r5-phase-a", "head": "e265aa7c23f989854e0df0ac1cd071f13cbf0dd1", "base": "master", "docs_in_branch": "docs/research/595-r5-phase-a/ + docs/research/595-r5-repair-round/"},
+    "631": {"title": "flow audit R1-R6 + R7-R10 repaired", "branch": "research-595-flow-audit", "head": "6d29acddc8a931cc93f10ee94aacae75a5537c62", "base": "master", "docs_in_branch": "docs/research/595-flow-audit/"}
+  },
+  "prototype_refs_in_bundle": {
+    "r1_e5_submission_merged_in_master": "3492dd3d1d1ae6e47d50b86311699f3c39e8b402",
+    "r2_r3_shared_base": "0a22a79195f1b913145fcd443496e7f70b08cdcf (research-595-r3)",
+    "r4_original_prototype": "f3b25329bc8a64a201961c426a58adacfb8fdf08 (research-595-r4 = research-595-r5rm-original)",
+    "r5_cleanup_c1c2": "b191bb893432c4df0551d24c85843d8513ed5a55 (research-595-r5 = research-595-r5rm-cleanup; c1=c55165a2)",
+    "r5_diag_instrument_phase_a": "21374a4066713bf2b2c1bb19f9744818c02ab2a7 (research-595-r5-diag)",
+    "r5rm_diag_v2_fixed": "492086ac24421678e5a7ab1d3b5c8f81ac9314bb (research-595-r5rm-diag; chain c0cdc3ea+61bf73d6+492086ac)",
+    "r5rm_diag_cleanup_mirror": "3fd6476aa964d02a7d74b772955fbf3a8a04d7d8 (research-595-r5rm-diag-cleanup; mirror fdf5092a+3fd6476a)"
+  },
+  "uncommitted_algorithm_states": {
+    "note": "not in any git branch before this checkpoint; committed verbatim under docs/research/595-pause/worktree-state/",
+    "causal-r2_worktree": {"base": "271b81bf", "content": "R2 defer-attribution prototype (research_595_c1/c3/counters/trace headers + bench/tests mods)"},
+    "causal-r2_worktree-timing": {"base": "271b81bf", "content": "R2 timing variant"},
+    "causal-r2_worktree-trace": {"base": "271b81bf", "content": "R2 trace variant"},
+    "bounded-progress_worktree": {"base": "271b81bf", "content": "bounded-progress prototype (tests/uring_595_bounded_progress_test.cpp + backend mods)"}
+  },
+  "local_archive": {
+    "root": "/home/jnhu/sluice-research-archive/595/pause-20261107/",
+    "source_bundle": "source/sluice-595-research.bundle (self-contained, complete history, 21 refs)",
+    "bundle_sha256_sidecar": "source/sluice-595-research.bundle.sha256",
+    "worktree_state": "source/worktree-state/ (all 5 dirty worktrees incl. r3)",
+    "refs_snapshots": ["source/refs-local.txt", "source/pr-refs-remote.txt", "source/worktree-heads.txt", "source/head-master.txt"],
+    "environment": ["environment/env.txt", "environment/pip-user-freeze.txt", "environment/archive-mount.txt", "environment/archive-df.txt"],
+    "e5_live_tree_not_a_restore_dependency": "/home/jnhu/sluice-595-e5/ (still present at pause time; raw data lives only there and is intentionally not archived)"
+  },
+  "restore_receipt": "RESTORE_RECEIPT.json (same directory)",
+  "reading_list_ref": "RESUME.md section 5 (all citations sourced from docs/research/595-r5-phase-a/analysis/literature-matrix.md)"
+}

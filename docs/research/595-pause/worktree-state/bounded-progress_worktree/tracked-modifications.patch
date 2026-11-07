@@ -1,0 +1,233 @@
+diff --git a/bench/bench_w02_pipeline.cpp b/bench/bench_w02_pipeline.cpp
+index 87dd02ac..bf832d99 100644
+--- a/bench/bench_w02_pipeline.cpp
++++ b/bench/bench_w02_pipeline.cpp
+@@ -693,6 +693,16 @@ int main() {
+         p.label_suffix = "-scope64";
+         cases.push_back(p);
+     }
++    // Opt-in (#595): shallow-depth negative controls D2/D3 absent from the
++    // frozen G0 list; a default rebuild reproduces the frozen case list
++    // exactly.
++    if (std::getenv("SLUICE_BENCH_595_DEPTHS") != nullptr) {
++        add_tp(4096, 20000, 2, 2, false);
++        add_uring(4096, 20000, 2, false);
++        add_tp(4096, 20000, 3, 3, false);
++        add_uring(4096, 20000, 3, false);
++    }
++
+     // Opt-in: a default rebuild reproduces the frozen case list exactly.
+     if (std::getenv("SLUICE_BENCH_DIAGNOSTICS") != nullptr) {
+         PipelineParams p;
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..ab390e7b 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -15,6 +15,7 @@
+ #include <mutex>
+ #include <optional>
+ #include <type_traits>
++#include <thread>
+ #include <vector>
+ 
+ #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
+@@ -111,6 +112,8 @@ class UringAsyncBackend : public AsyncBackend {
+ 
+     PendingControlSnapshot pending_control_snapshot_for_test() const noexcept;
+ 
++    static constexpr std::size_t defer_cap_for_test() noexcept { return kDeferCap; }
++
+     std::size_t dispatch_size_for_test() const noexcept;
+     std::size_t transport_ledger_size_for_test() const noexcept;
+     std::size_t sq_ready_for_test() const noexcept;
+@@ -281,6 +284,32 @@ class UringAsyncBackend : public AsyncBackend {
+     void issue_running_cancel_locked_(detail::RequestReservation h) noexcept;
+     void service_pending_controls_locked_() noexcept;
+ 
++    // #595 research arm B (BOUNDED_PROGRESS): hold the kernel flush of an
++    // eligible dispatched batch for a later progress boundary. Derived from
++    // already-authoritative facts only: the submitting thread is the most
++    // recent progress driver, a kernel-visible un-retired dispatched request
++    // exists (live router entries minus unconsumed ledger entries), the
++    // reservation is a regular 4 KiB read, and fewer than kDeferCap SQEs are
++    // held. Control urgency keeps the existing ordering: a control SQE rides
++    // the next flush boundary, bounded by the 10 ms retry cadence. Both
++    // flush choices are semantically complete; a stale summary only changes
++    // timing.
++    static constexpr std::size_t kDeferCap = 8;
++
++    bool defer_transport_flush_locked_(detail::RequestReservation h) const noexcept;
++
++    void note_progress_driver_locked_() noexcept {
++        const std::thread::id self = std::this_thread::get_id();
++        if (!progress_driver_seen_) {
++            progress_driver_seen_ = true;
++            progress_driver_recent_ = self;
++            return;
++        }
++        if (self == progress_driver_recent_)
++            return;
++        progress_driver_recent_ = self;
++    }
++
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     void wait_submit_entry_pause_() noexcept;
+@@ -321,6 +350,14 @@ class UringAsyncBackend : public AsyncBackend {
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
+ 
++    // #595 research arm selector (read once at construction from
++    // SLUICE_595_ARM; anything other than "B" keeps the frozen immediate
++    // path). Research evidence instrumentation only: it is not a public knob
++    // and ships nowhere.
++    bool bounded_progress_ = false;
++    bool progress_driver_seen_ = false;
++    std::thread::id progress_driver_recent_{};
++
+     std::atomic<std::uint64_t> submit_flushes_{0};
+     std::atomic<std::size_t> live_cookies_{0};
+     std::atomic<std::size_t> live_control_sqes_{0};
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..f52b221a 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -10,6 +10,7 @@
+ #include "uring_internal.hpp"
+ 
+ #include <cstdio>
++#include <cstdlib>
+ #include <limits>
+ #include <stdexcept>
+ #include <utility>
+@@ -166,6 +167,9 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
+         cookie_free_list_[i] = detail::SlotIndex{i};
+     }
++    if (const char* arm = std::getenv("SLUICE_595_ARM"); arm != nullptr && arm[0] == 'B') {
++        bounded_progress_ = true;
++    }
+     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) != 0) {
+@@ -619,6 +623,7 @@ std::size_t UringAsyncBackend::poll() {
+ 
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        note_progress_driver_locked_();
+         if (!fatal_error_.has_value()) {
+             while (!dispatch_->empty()) {
+                 detail::RequestReservation h = dispatch_->front();
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..dcd8c507 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -84,8 +84,12 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+                         break;
+                 }
+                 if (!fatal_error_.has_value()) {
+-                    (void)submit_transport_locked();
+-                    service_pending_controls_locked_();
++                    if (defer_transport_flush_locked_(h)) {
++                        service_pending_controls_locked_();
++                    } else {
++                        (void)submit_transport_locked();
++                        service_pending_controls_locked_();
++                    }
+                 }
+                 newly_poisoned = !poisoned_before && fatal_error_.has_value();
+             }
+@@ -95,8 +99,15 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+             !fatal_error_.has_value() && dispatch_retry_remains_locked_();
+ #endif
+     }
+-    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch ||
+-        post_poison_push_retired) {
++#if defined(SLUICE_595_MUTANT_DEFER_RESIDUE_SIGNAL_DROPPED)
++    (void)unsubmitted_after_dispatch;
++    const bool advertise_residue =
++        injected_dispatch_failure || newly_poisoned || post_poison_push_retired;
++#else
++    const bool advertise_residue = injected_dispatch_failure || newly_poisoned ||
++                                   unsubmitted_after_dispatch || post_poison_push_retired;
++#endif
++    if (advertise_residue) {
+         signal_ready_progress();
+     }
+ }
+@@ -215,6 +226,42 @@ bool UringAsyncBackend::dispatch_retry_remains_locked_() const noexcept {
+            !transport_ledger_->all_class_a_recovery_retired();
+ }
+ 
++bool UringAsyncBackend::defer_transport_flush_locked_(
++    detail::RequestReservation h) const noexcept {
++    if (!bounded_progress_) {
++        return false;
++    }
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_OWNER)
++    if (false)
++#else
++    if (!progress_driver_seen_ || std::this_thread::get_id() != progress_driver_recent_)
++#endif
++        return false;
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_PAYLOAD)
++    if (false)
++#else
++    const PreparedUringOp& prep = prepared_ops_[h.slot.value];
++    if (prep.kind != detail::OperationKind::read || prep.native_length != 4096)
++#endif
++        return false;
++    // Kernel-visible un-retired witness: router entries alive beyond the
++    // unconsumed ledger tail. Held-only batches and blocked transports have
++    // no witness and keep the immediate path.
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_WITNESS)
++    if (false)
++#else
++    if (live_cookies_.load(std::memory_order_relaxed) <= transport_ledger_->size())
++#endif
++        return false;
++#if defined(SLUICE_595_MUTANT_DEFER_NO_CAP)
++    if (false)
++#else
++    if (transport_ledger_->size() >= kDeferCap)
++#endif
++        return false;
++    return true;
++}
++
+ int UringAsyncBackend::submit_transport_locked() noexcept {
+     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index c55e97be..a88afefc 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -656,6 +656,28 @@ if has_config("liburing") then
+     uring_progress_target("uring_pending_control_mut_retire_stale_count",
+                               R .. "tests/uring_pending_control_parity_test.cpp",
+                               "SLUICE_URING_MUTANT_PENDING_CONTROL_RETIRE_STALE_COUNT")
++
++    -- #595 arm-B (BOUNDED_PROGRESS) deferral oracles: held-batch progress
++    -- without a second submit, the cap bound, deferred partial-submit and
++    -- prefetch-then-EAGAIN reconciliation, cancel servicing, and the owner /
++    -- witness / payload gates, plus prepark residue handoff and poison and
++    -- shutdown settlement of held batches. The mutant builds falsify one
++    -- eligibility gate each and must be killed by the named assertion of
++    -- this suite; they are executed and recorded manually.
++    uring_progress_target("uring_595_bounded_progress_test",
++                              R .. "tests/uring_595_bounded_progress_test.cpp")
++    uring_progress_target("uring_595_mut_defer_no_cap",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_NO_CAP")
++    uring_progress_target("uring_595_mut_defer_ignores_witness",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_WITNESS")
++    uring_progress_target("uring_595_mut_defer_ignores_owner",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_OWNER")
++    uring_progress_target("uring_595_mut_defer_ignores_payload",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_PAYLOAD")
+ end
+ 
+ -- Public Request<T> evidence. Same self-contained seam-build shape as
