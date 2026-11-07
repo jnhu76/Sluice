@@ -55,7 +55,7 @@ run_drill() {
   local R="$T/repo"
   git clone -q "$BUNDLE" "$R" || fail "clone from bundle"
   for ref in "${REFS[@]}"; do
-    git -C "$R" rev-parse --verify --quiet "refs/heads/$ref" >/dev/null \
+    git -C "$R" rev-parse --verify --quiet "refs/remotes/origin/$ref" >/dev/null \
       || fail "ref missing after clone: $ref"
   done
   local m
@@ -70,12 +70,12 @@ run_drill() {
   git -C "$R" checkout -q "$R3_BASE" 2>/dev/null \
     || git -C "$R" checkout -q research-595-r3 || fail "checkout R3 base $R3_BASE"
   # R3 patch chain from PR627 branch (completion patch on 0a22a791)
-  git -C "$R" show 'refs/heads/research/595-r3-archive:docs/research/595-r3/completion/evidence/r3-completion.patch' > "$T/r3-completion.patch" 2>/dev/null \
+  git -C "$R" show 'refs/remotes/origin/research/595-r3-archive:docs/research/595-r3/completion/evidence/r3-completion.patch' > "$T/r3-completion.patch" 2>/dev/null \
     || fail "extract r3-completion.patch from branch"
   git -C "$R" apply --check "$T/r3-completion.patch" \
     || fail "r3-completion.patch does not apply on $R3_BASE"
   # R3 full worktree diff (PR627) must equal the frozen local capture
-  git -C "$R" show 'refs/heads/research/595-r3-continuation:docs/research/595-r3/continuation/evidence/r3-worktree-full-diff.patch' > "$T/r3-full.patch" 2>/dev/null \
+  git -C "$R" show 'refs/remotes/origin/research/595-r3-continuation:docs/research/595-r3/continuation/evidence/r3-worktree-full-diff.patch' > "$T/r3-full.patch" 2>/dev/null \
     || fail "extract r3-worktree-full-diff.patch"
   # uncommitted prototype patches replay on their bases
   git -C "$R" checkout -q "$R2_BASE" || fail "checkout R2 base"
@@ -87,9 +87,9 @@ run_drill() {
     [ "$u" = "$c" ] || fail "$s untracked count mismatch (status=$u copied=$c)"
   done
   # repair-round analyzer + runner present in branch (rerun capability)
-  git -C "$R" cat-file -e 'refs/heads/research/595-r5-phase-a:docs/research/595-r5-repair-round/scripts/run_round.py' 2>/dev/null \
+  git -C "$R" cat-file -e 'refs/remotes/origin/research/595-r5-phase-a:docs/research/595-r5-repair-round/scripts/run_round.py' 2>/dev/null \
     || fail "595-r5-repair-round rerun scripts missing in branch"
-  git -C "$R" cat-file -e 'refs/heads/research-595-flow-audit:docs/research/595-flow-audit/scripts/verify_inherited_evidence.py' 2>/dev/null \
+  git -C "$R" cat-file -e 'refs/remotes/origin/research-595-flow-audit:docs/research/595-flow-audit/scripts/verify_inherited_evidence.py' 2>/dev/null \
     || fail "flow-audit offline verifier missing in branch"
   note "drill complete: $T"
 }
