@@ -2,10 +2,12 @@
 """Deterministic tests for the offline verification tools (no server, no timing).
 
 Covers the review-mandated counterexamples (R4 synthetic CPU window test,
-R6 admission negatives, R6 F5 completeness negatives, R6 CSV negatives) plus
-a structural check of the five mermaid diagrams in FLOW_AUDIT.md. Every
-negative case must FAIL the checked component (nonzero/failed report);
-every positive case must reproduce a hand-computed value.
+R6 admission negatives, R6 F5 completeness negatives, R6 CSV negatives,
+second-round R10 negatives: empty round-analysis.json, non-closing F5 bucket
+denominators, sub-MIN_N bucket, groupless tag) plus a structural check of
+the five mermaid diagrams in FLOW_AUDIT.md. Every negative case must FAIL
+the checked component (nonzero/failed report); every positive case must
+reproduce a hand-computed value.
 
 Run: python3 -I test_offline_checks.py   (exit 0 = all tests pass)
 """
@@ -214,34 +216,42 @@ def test_admission_negatives():
              rep.fails > 0 and per_cell.get("MINI") is None)
 
 
-def make_f5(tail_pct=1.2, n=1000, rows=480000, d16_positions=None,
+def make_f5(tail_pct=1.2, rows=480000, d16_positions=None,
+            d16_cw0_n=14000, d16_cw8_n=2000, d4_n=60000,
             extra_bucket=None, tag_rows=None):
     """Well-formed derived summary: d16 cw0 0..15, d16 cw8 0..7, d4 cw0 0..3,
-    24 tags split over the two cases, totals closing."""
+    24 tags split over the two cases, totals closing AND position-bucket
+    denominators closing against the recovery totals (16*14000 + 8*2000 =
+    240000 per d16 case, 4*60000 = 240000 at d4), tag group arithmetic
+    consistent. The second-round defaults exist because the previous fixture
+    (bucket sums 216800 vs 480000) passed the checker — that gap is now a
+    negative case below."""
     d16_positions = list(range(16)) if d16_positions is None else d16_positions
     mp = {}
     for p in d16_positions:
         mp[f"W03-uring-4k-d16|cw0|pos{p}"] = {
-            "n": n, "median_us": 40.0, "p99_us": 60.0,
+            "n": d16_cw0_n, "median_us": 40.0, "p99_us": 60.0,
             "tail_gt55_pct": tail_pct, "tail_stop_kinds": {}}
     for p in range(8):
         mp[f"W03-uring-4k-d16|cw8|pos{p}"] = {
-            "n": 100, "median_us": 40.0, "p99_us": 60.0,
+            "n": d16_cw8_n, "median_us": 40.0, "p99_us": 60.0,
             "tail_gt55_pct": 25.0, "tail_stop_kinds": {}}
     for p in range(4):
         mp[f"W03-uring-4k-d4|cw0|pos{p}"] = {
-            "n": 50000, "median_us": 15.0, "p99_us": 20.0,
+            "n": d4_n, "median_us": 15.0, "p99_us": 20.0,
             "tail_gt55_pct": 0.02, "tail_stop_kinds": {}}
     if extra_bucket:
         mp[extra_bucket[0]] = extra_bucket[1]
     tags = {}
     for i in range(12):
         tags[f"W03-uring-4k-d16-b{i:02d}-p{i % 6}-R-on-a1"] = {
-            "rows": 20000, "groups": 0, "normal_groups": 0, "terminal_groups": 0,
-            "anomalous_groups": 0, "unpositioned_rows": 0, "seq_gaps": 0}
+            "rows": 20000, "groups": 1370, "normal_groups": 1369,
+            "terminal_groups": 1, "anomalous_groups": 0,
+            "unpositioned_rows": 0, "seq_gaps": 0}
         tags[f"W03-uring-4k-d4-b{i:02d}-p{i % 6}-R-on-a1"] = {
-            "rows": 20000, "groups": 0, "normal_groups": 0, "terminal_groups": 0,
-            "anomalous_groups": 0, "unpositioned_rows": 0, "seq_gaps": 0}
+            "rows": 20000, "groups": 5001, "normal_groups": 5000,
+            "terminal_groups": 1, "anomalous_groups": 0,
+            "unpositioned_rows": 0, "seq_gaps": 0}
     if tag_rows:
         k, v = tag_rows
         tags[k]["rows"] = v
@@ -254,7 +264,7 @@ def make_f5(tail_pct=1.2, n=1000, rows=480000, d16_positions=None,
         "window_occupancy": {},
         "validation_totals": {"tags": len(tags), "rows": rows if rows is not None
                               else total, "anomalous_groups": 0,
-                              "terminal_groups": 0, "unpositioned_rows": 0,
+                              "terminal_groups": 24, "unpositioned_rows": 0,
                               "tags_with_seq_gaps": 0},
     }
 
@@ -291,11 +301,97 @@ def test_f5_negatives():
     f5["member_position"][k0]["tail_gt55_pct"] = 1.234567
     verify.f5_summary_checks(f5, rep)
     case("F5: inconsistent tail percentage rejected", rep.fails > 0)
-    # positive: all three families complete, integer-consistent tails
+    # N2e (second round): the previous positive fixture itself — bucket
+    # denominators sum to 216800 while validation totals say 480000 with
+    # clean counters and no unpositioned/terminal-only explanation; the
+    # residual (223200 at d16) exceeds any legitimate sub-MIN_N drop
+    rep = verify.Report()
+    verify.f5_summary_checks(
+        make_f5(d16_cw0_n=1000, d16_cw8_n=100, d4_n=50000), rep)
+    fails = [l for l in rep.lines if l.startswith("FAIL")]
+    case("F5: bucket denominators not closing against totals rejected",
+         rep.fails > 0 and any("close against recovery totals" in l for l in fails),
+         fails[0] if fails else "")
+    # N2f (second round): a written bucket below MIN_N (closure kept intact
+    # by enlarging a sibling bucket, and both tails re-derived so only the
+    # MIN_N rule fires)
+    rep = verify.Report()
+    f5 = make_f5()
+    f5["member_position"]["W03-uring-4k-d4|cw0|pos0"]["n"] = 19
+    f5["member_position"]["W03-uring-4k-d4|cw0|pos0"]["tail_gt55_pct"] = 0.0
+    big = 2 * 60000 - 19
+    f5["member_position"]["W03-uring-4k-d4|cw0|pos1"]["n"] = big
+    f5["member_position"]["W03-uring-4k-d4|cw0|pos1"]["tail_gt55_pct"] = \
+        100.0 * round(0.02 * big / 100.0) / big
+    verify.f5_summary_checks(f5, rep)
+    fails = [l for l in rep.lines if l.startswith("FAIL")]
+    case("F5: written bucket below MIN_N rejected",
+         rep.fails > 0 and any("MIN_N" in l for l in fails),
+         fails[0] if fails else "")
+    # N2g (second round): tag with rows but zero groups (all rows vanished
+    # from both the buckets and the unpositioned counter)
+    rep = verify.Report()
+    f5 = make_f5()
+    f5["validation"]["W03-uring-4k-d16-b00-p0-R-on-a1"]["groups"] = 0
+    f5["validation"]["W03-uring-4k-d16-b00-p0-R-on-a1"]["normal_groups"] = 0
+    f5["validation"]["W03-uring-4k-d16-b00-p0-R-on-a1"]["terminal_groups"] = 0
+    verify.f5_summary_checks(f5, rep)
+    case("F5: tag rows without any group rejected", rep.fails > 0)
+    # positive: all three families complete, integer-consistent tails,
+    # bucket denominators closing against the recovery totals
     rep = verify.Report()
     verify.f5_summary_checks(make_f5(), rep)
     case("F5: complete well-formed summary passes", rep.ok,
          [l for l in rep.lines if l.startswith("FAIL")][:2])
+
+
+def test_compare_frozen_coverage():
+    """Second-round counterexample: an empty round-analysis.json used to
+    produce an unconditional success line claiming 75 compared values while
+    zero comparisons were performed."""
+    with tempfile.TemporaryDirectory() as td:
+        cdir, case_id = build_mini_root(td)
+        rep, per_cell = run_verify_mini(td, cdir, case_id)
+        case("frozen compare: mini round verifies first", rep.ok,
+             f"{rep.fails} fails")
+        ra_dir = os.path.join(td, "analysis")
+        os.makedirs(ra_dir, exist_ok=True)
+        ra_path = os.path.join(ra_dir, "round-analysis.json")
+        means = per_cell["MINI"]["arm_means"]
+
+        def entry():
+            return {"cell": "MINI", "abs": {
+                a: {m: [means[a][m], means[a][m] - 1.0, means[a][m] + 1.0]
+                    for m in ("cpu", "tput", "p50", "p95", "p99")}
+                for a in ("A0", "R", "C")}}
+
+        # N5a: frozen analysis replaced by [] -> coverage failure, no success
+        open(ra_path, "w").write("[]")
+        rep2 = verify.Report()
+        verify.compare_frozen(td, per_cell, rep2)
+        fails = [l for l in rep2.lines if l.startswith("FAIL")]
+        case("frozen compare: empty round-analysis.json rejected",
+             rep2.fails > 0 and any("coverage" in l or "not a non-empty" in l
+                                    for l in fails),
+             fails[0] if fails else "")
+        # N5b: one (arm, metric) missing from the frozen entry -> coverage
+        ent = entry()
+        del ent["abs"]["R"]["p99"]
+        json.dump([ent], open(ra_path, "w"))
+        rep3 = verify.Report()
+        verify.compare_frozen(td, per_cell, rep3)
+        fails = [l for l in rep3.lines if l.startswith("FAIL")]
+        case("frozen compare: missing (arm,metric) comparison rejected",
+             rep3.fails > 0 and any("coverage" in l for l in fails),
+             fails[0] if fails else "")
+        # positive: complete file -> pass, and the success line reports the
+        # number of comparisons actually performed (3 arms x 5 metrics = 15)
+        json.dump([entry()], open(ra_path, "w"))
+        rep4 = verify.Report()
+        verify.compare_frozen(td, per_cell, rep4)
+        line = next((l for l in rep4.lines if l.startswith("PASS")), "")
+        case("frozen compare: complete file passes with actual count",
+             rep4.ok and "15/15" in line, line)
 
 
 def test_cpu_windows():
@@ -427,6 +523,7 @@ def main():
     test_admission_positives()
     test_admission_negatives()
     test_f5_negatives()
+    test_compare_frozen_coverage()
     test_cpu_windows()
     test_csv_negatives()
     test_mermaid_structure()

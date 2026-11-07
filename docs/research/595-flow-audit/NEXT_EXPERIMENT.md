@@ -1,43 +1,62 @@
 # #595 Flow Audit — 下一步实验状态（C-A 撤回为 HOLD_DESIGN_CONFOUNDED）
 
-**状态（2026-11-07 复核后）：C-A 未实施；本轮未获执行授权；其协议原稿存在
-识别混杂，在解决下列问题前不得称为可执行协议。** 默认产品策略维持 A0；
-原候选 B 维持不放行。本文件取代 v1 版"唯一下一项 = C-A"的表述。
+**状态（2026-11-07 复核二后）：C-A 未实施；本轮未获执行授权。** 状态令牌
+HOLD_DESIGN_CONFOUNDED 沿用，含义按复核二精确化：混杂指其**归因主张**的
+对照（§1），不是判其净效应不可测。默认产品策略维持 A0；原候选 B 维持
+不放行。本文件取代 v1 版"唯一下一项 = C-A"的表述。
 
-## 1. 复核发现的识别问题（R1）
+## 1. C-A 的比较对象与它能回答的问题（R7 二轮修正）
 
-v1 协议声称 C-A（产品 transport 层 Q=8 延迟 flush，对 A0 产品臂 A/B）检验
-"去除研究呈现层的效果"。该主张不成立：C-A 与 A0 之差同时包含多项变化——
+C-A 草案（9d1bf648 §1）自身的 A/B 对比是：同分支、同 bench/fixture/线程
+拓扑/同锁；A0 臂 = `SLUICE_URING_FLUSH_Q=1`（逐语句等价现行为）；两臂统一
+T0 = submit 前；"无 adapter、无 seam、无决策表参与任何臂"，唯一自由度 =
+flush 触发。因此：
 
-- ready 构造（研究臂按组构建/呈现 vs 产品逐 op 内联构建）；
-- 入口与锁路径（研究 seam+整批临界区 vs 产品逐 op 两级锁）；
-- 跨调用持有 SQE（C-A 将已接受工作的 enter 推迟到量子满/residue/下一
-  pass，改变了"accept 后何时到达内核"这一自由度本身）；
-- flush 时机（1 enter/op → 1 enter/≤8 op）；
-- residue/driver 依赖（浅队列下每 op 依赖 signal→wake→pass 才进内核）。
+- **C-A vs A0 是一个可测净效应的实验**：它回答"这套延迟 flush 策略（量子
+  满内联 flush + residue 唤醒 + pass 头 flush）在预注册形状/门限下的净
+  效果"。上一轮把该对比写成"同时改变 ready 构造、入口/锁路径……多项
+  条件"是**错误的**：ready 构造与入口/锁路径在两臂中相同；跨调用持有
+  SQE 与浅队列下的 residue/driver 依赖是干预本身的机制内容，不是混杂
+  变量。此处按复核二修正（reviewer 亦更正其上轮表述）。
+- **C-A 不能单独回答本档案的核心归因问题**——"R_cleanup 的退化是否来自
+  研究层"。该归因需要的对照是 **C-A vs R_cleanup**，而这一对比同时改变
+  多项条件：bench/呈现（产品逐 op vs 研究组呈现+adapter 循环）、入口/锁
+  （逐 op 两级锁 vs seam+整批临界区+DecisionRecord/计数器）、T0 语义、
+  flush 实现与触发。多项条件一次变化，识别不成立。草案 §7 的二选一结论
+  （"p99 FAIL 且浅队列同时变好 ⇒ 浅队列税确证属研究层"）据此撤回：C-A
+  结果只能约束"无研究层时该 flush 设计的行为"，不能把 R_cleanup 的退化
+  归因到某一层。
 
-因此 C-A 的任一结果都不能单独识别"研究呈现层"的因果贡献：C-A p99 良好
-不能证明 p99 差来自呈现层（其余协变因素同样不同）；C-A p99 失败也不能
-证明"batching 内在代价"（见 §5）。同理，浅队列格上 C-A 的表现只能约束
-"无研究层时该 flush 设计的行为"，不能把 d2serial 税归因到某一层。
+HOLD 维持；理由 = 本节识别边界 + §2 与 #625 的重叠 + §3-§5 的协议缺陷。
 
-## 2. 与历史 defer 设计的对照（归档：595-r5-phase-a NEXT_EXPERIMENT.md）
+## 2. 与历史 defer 设计的对照（R8：指认确认为 PR #625 causal-r2）
 
-| 维度 | 原候选 B（residue 感知预算） | C-variant1（流式准备） | C-A（本撤回稿） |
-|---|---|---|---|
-| 延迟什么 | adapter 层延迟**接受/呈现**（预算耗尽即返回，后缀留给下一轮重建） | 延迟**构建**（ReadOp/T0 后移） | transport 层延迟**enter**（SQE 照常准备） |
-| 依赖的残余机制 | 进度路径最终驱动（cv wait + driver poll） | 无（只是换测量起点，被归档判为"改指标不改管线"） | PROG-01 residue + pass 开头 flush |
-| T0/测量起点 | **致命缺陷**：后缀 T0 后移 = 改测量起点（F3 禁止；归档已加 WARNING） | 同类缺陷（明示不推荐） | 每 op 构建时照常打点，起点不动（这是其相对 B 的真实差异） |
-| 服务机会 | 创造真 park/发布机会（其机制主张） | 无 | 不创造 park；只改 enter 粒度 |
-| 新状态 | adapter 预算计数器 | 无 | backend flush 量子（SQ 占用的派生摘要） |
+复核二澄清："R2 的历史 defer 设计"指 **PR #625 `causal-r2`**
+（`docs/research/595-causal-r2/ROOT_CAUSE.md`，提交 `0a22a791`，已在
+master；A·IMMEDIATE vs B·BOUNDED_PROGRESS），非 r5-phase-a 的候选
+B/C-variant1——后者的对照表保留于 `461cb267`，其 T0 起点缺陷等结论不受
+本轮指认修正影响。
 
-相同点：三者都以"让后到达的工作更晚进内核"换取提交侧经济性，都依赖
-进度路径兜底，都在后位成员上有尾延迟风险——这是整个 defer 家族的共性，
-**"移到 transport 层"本身不构成新的实验价值**。不同点主要是测量起点
-是否被移动与是否创造服务机会。相对 B/C-variant1 的唯一新增证据是
-"起点不动的 defer 在产品路径上尚未测过"——一个未测事实，不是一个
-已识别的因果问题。也不能仅因与 B 相似就断言 C-A 必然失败：B 的致命
-缺陷（T0 后移）C-A 并不共享。
+| 维度 | #625 B·BOUNDED_PROGRESS（已执行） | C-A 草案（未执行） |
+|---|---|---|
+| 基线/路径 | 产品 master `271b81bf` + 隔离 worktree 补丁 | 同（自 master 切研究分支） |
+| 延迟什么 | 五门准入（`defer_transport_flush_locked_`）通过后不 submit，SQE 留 `transport_ledger_` | 无条件：`submit_transport_locked` 不在每次 `dispatch_after_accept` 内调用 |
+| flush 通道 | 下一次 `poll()` 无条件 flush（`uring_backend.cpp:652`）+ ledger **cap=8** 强制 immediate（D16 6.4% dispatch，一次 flush 8 SQE） | (a) burst ≥Q=8 内联 flush；(b) residue 广告唤醒；(c) pass 头 residue flush |
+| residue 通知 | dispatch 尾 `unsubmitted_after_dispatch` → `signal_ready_progress()`（eventfd write） | 同一路径（草案 (b)"现有路径不变"） |
+| 已裁决代价（W02-D2） | CPU +3.70%/+189.15 ns 由**通知**承担（CF-1 sigdrop 消除、消失 ≥95.2%、restore 复现）；p50/p95/p99 +6.91/+4.96/+7.07% 由 **defer 时序**承担（CF-2 deferoff 归零）；门链本身 ≈0（CF-0 CI 含 0；in-situ +6.6 ns/call） | 未测；通道 (b) 即 #625 已定位的 CPU 源 |
+| 已裁决收益（W02） | D16 CPU −26.36%/p99 −28.68%、D3 −6.69%；deferoff 使之归零（+0.26%/+1.07%，CI 含 0）⇒ 改善在 defer 链内；无 restore 块；机制分解 PARTIAL（io-wq/用户分量未闭合） | 未测 |
+| 形状/口径 | W02 D1/D2/D3/D16；直接测量（计数器/TSC/syscall/PMU）+ 单因素反事实 | W03-d16 主 + 保护格；R5 门限与 A/A 纪律 |
+
+C-A 的机制空间几乎全部落在 #625 已测范围内：cap-8 量子内联 flush、residue
+通知、pass 头 flush、深队列摊销收益、浅队列 defer 代价均已直接测量或反事实
+分离。上一轮"起点不动的 defer 在产品路径上尚未测过"的说法**错误，撤回**。
+C-A 的真实增量收窄为两点：(i) **去掉五门准入的无条件 defer**——门链 CPU
+≈0（CF-0），但门决定浅深度下何时 defer（D2 上 witness 门使 defer 不减少
+enter；无条件 defer 将把深度 2 的全部 flush 推到 pass 头，#625 的 L1 裁决
+已给出其延迟代价的方向）；(ii) W03-d16 形状与 R5 门限。C-A 若申请授权，
+必须先把这两点写成相对 #625 的**增量假设**并修复 §3-§5 的协议缺陷；在
+此之前其新增研究价值未获证明——这是 HOLD 的对照依据，不是判其净效应
+不可测。
 
 ## 3. 原协议条件 (b) 的歧义（未解决前协议不可执行）
 
@@ -92,5 +111,5 @@ C1/C2（有界 eligible-prefix 扫描、pass-fact 信号改名）是仅有的两
 基线冻结对象、双锁纪律、A/A 半宽报告、NOT_ESTABLISHED 不补样、
 "失败即停不做量子/阈值搜索"、RSS 门与无新线程/定时器约束——这些与
 具体候选无关，任何未来协议可继承。C-A 原稿的形状选择（MAIN d16 +
-保护格 d4/d2serial/W02-d1/d2）作为形状先例可引用，但门限与口径需随
-§3/§4 的修正重写后方可使用。
+保护格 d4/d2serial/W02-d1/d2）作为形状先例可引用，但增量假设（§2）
+与门限/口径（§3/§4）须先重写后方可使用。

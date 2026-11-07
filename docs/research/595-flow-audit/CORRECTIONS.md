@@ -11,7 +11,7 @@
 
 | 发现 | 核验结果 | 改动文件 | 验证 |
 |---|---|---|---|
-| R1 实验识别 | 属实：C-A 同时改变 5 项，不能识别研究层贡献 | NEXT_EXPERIMENT.md 重写；DECISION.md；README.md；PR 正文 | 结构论证 + 冻结源码引用 |
+| R1 实验识别 | 属实（复核二 R7 精确化：混杂在 C-A vs R_cleanup 归因对照；C-A vs A0 可测净效应） | NEXT_EXPERIMENT.md 重写；DECISION.md；README.md；PR 正文 | 结构论证 + 冻结源码引用 |
 | R2 过强归因/数值 | 属实：CPU→耗时换算无效；≈20µs 错误；H3 反证无效；多处以结构为根因 | BASELINE/FLOW_AUDIT/HYPOTHESES/DECISION/README/账本 | 机器复算 9.52/10.71µs（原始精度） |
 | R3 信息来源 | 属实：策略实现位置≠输入来源 | FLOW_AUDIT §1 新表 | 逐项冻结源码行号核验 |
 | R4 CPU 口径 | 属实：v1 脚本伪造 ns/op；rusage 是 wait4 整次子进程；ticks 是 invocation 窗口 | cpu_scope_recalc.py 重写 + BASELINE.md | 合成测试 + 实数据 exit 0 |
@@ -32,9 +32,9 @@
   `progress_port_.signal()` **只唤醒不 flush**（`M:uring_backend.hpp:297`），
   flush 在下一 pass（`M:uring_backend.cpp:620-634`）——"内联 flush"与
   "唤醒后 pass flush"是不同实验，未预注册不得称可执行。
-- "R2 的历史 defer 设计"按归档理解为 595-r5-phase-a NEXT_EXPERIMENT.md
-  的 defer 家族（原候选 B 与 C-variant1）；对照表已列出相同点/不同点/
-  新增证据，未把"移到 transport 层"当新价值，也未因与 B 相似判其必败。
+- "R2 的历史 defer 设计"当轮按 r5-phase-a 归档 defer 家族（原候选 B 与
+  C-variant1）理解并注明可重指；复核二已确认为 PR #625 causal-r2，对照
+  表按其重写（见 R8）。
 - 改动：NEXT_EXPERIMENT.md 全文重写（HOLD_DESIGN_CONFOUNDED、协议
   缺陷清单、对照表、尚未批准的研究问题、**NO_COUNTERFACTUAL_SELECTED**
   ——C1/C2 之后研究路径剩余步骤无语义等价证据，seam 移除曾被 phase-A
@@ -161,20 +161,104 @@
   （明确口径：仅 instrument-on R 相，12×d16+12×d4）、冻结恢复脚本
   离线重跑（输出重定向到临时目录）逐位复现派生摘要——标注为"派生
   摘要完整性"，非逐请求身份独立重建；PERTURBED 状态保留。
-- 反例测试（test_offline_checks.py，30/30）：双位置/缺位/外来桶/总数
+- 反例测试（test_offline_checks.py，当轮 30/30）：双位置/缺位/外来桶/总数
   不闭合/尾百分比不一致各自 FAIL；失败尝试后有效样本均值不变、重复
   invocation FAIL、缺块/rep 数/ops 不符/空输入 FAIL；合法微型样本手算
   聚合一致；CPU 三窗口合成；CSV 截短/多列；mermaid 结构。
 - 旧缺陷暴露：v1 glob 逻辑对重复 invocation 双算（演示：3000 vs 真值
   1000 ns/op）、v1 F5 检查接受 {0,8} 两位置摘要——两个反例均在 v2 下
-  FAIL。不再保留"13/13"旧计数；现报告 60/60（校验）+30/30（测试）。
+  FAIL。不再保留"13/13"旧计数；当前计数见 R10（复核二后 162 项校验
+  全过 + 37/37 测试）。
+
+## 二轮窄修（R7–R10，2026-11-07 复核二）
+
+审阅锚点 `461cb267`（复核一修订头）。复核二确认 test_offline_checks.py
+30/30 于其侧复跑通过；E5 原始数据的 60/60 与 75 值复算仍属 Flash 回执。
+四项窄修，无新实验、无扩大审计。
+
+| 发现 | 核验结果 | 改动文件 | 验证 |
+|---|---|---|---|
+| R7 C-A 比较对象 | 属实（reviewer 并自正其上轮表述）：C-A vs A0 为同分支产品路径、唯一自由度 flush 触发；混杂对照是 C-A vs R_cleanup | NEXT_EXPERIMENT §1/§8、DECISION | 9d1bf648 草案原文核验（"唯一自由度=flush 触发；无 adapter/seam/决策表"） |
+| R8 "历史 R2"指认 | 确认为 PR #625 causal-r2（0a22a791，已在 master），非 r5-phase-a | NEXT_EXPERIMENT §2（对照表重写） | ROOT_CAUSE.md 冻结文本逐项引用 |
+| R9 CPU 脚本自相矛盾 | 属实：primary_scope 仍写"io-wq not covered" | cpu_scope_recalc.py | 实数据重跑 exit 0；notes 全部 UNRESOLVED 口径一致 |
+| R10 校验器假通过 | 属实：两条路径均在本地复现后才修 | verify_inherited_evidence.py + test_offline_checks.py | 两反例现在 FAIL；162 项校验全过 + 37/37 测试 |
+
+### R7 — C-A 比较对象与可测净效应
+
+- 原主张（本文件 R1 + NEXT_EXPERIMENT v2 §1）："C-A 与 A0 之差同时包含
+  ready 构造、入口/锁路径、跨调用 SQE 持有、flush 时机、residue/driver
+  依赖多项变化，任一结果都不能单独识别研究呈现层贡献。"
+- 核验：对 **C-A vs A0** 不成立——草案（9d1bf648 §1）明确两臂同分支、同
+  bench/fixture/线程拓扑/同锁、统一 T0、FLUSH_Q=1 逐语句等价现行为，
+  "唯一自由度 = flush 触发；无 adapter、无 seam、无决策表参与任何臂"；
+  ready 构造与入口/锁路径两臂相同，跨调用 SQE 持有与浅队列 residue 依赖
+  是干预机制本身。reviewer 亦更正其复核一的对应表述。
+- 修正后的准确边界：C-A vs A0 **可测该延迟 flush 策略的净效应**（有效实
+  验）；不能回答的是"R_cleanup 退化是否来自研究层"——那需要 C-A vs
+  R_cleanup，而该对比同时改变 bench/呈现、入口/锁+DecisionRecord、T0
+  语义、flush 实现多项条件（识别混杂在此）。草案 §7 二选一结论撤回。
+  HOLD 令牌沿用，语义在 NEXT_EXPERIMENT 头部精确化。
+- 改动：NEXT_EXPERIMENT §1/§8、DECISION 裁决 1。
+
+### R8 — "历史 R2" = PR #625 causal-r2
+
+- 原主张（本文件 R1 末条）：按 r5-phase-a 归档 defer 家族理解，"若指其他
+  文档请指出"。
+- 核验：复核二指认为 **PR #625 `causal-r2`**（`docs/research/595-causal-r2/
+  ROOT_CAUSE.md`，`0a22a791`，基线同为 `271b81bf`，A·IMMEDIATE vs
+  B·BOUNDED_PROGRESS）。该轮已在产品路径上研究：五门准入 defer + SQE 留
+  `transport_ledger_`；residue `signal_ready_progress()` → eventfd；flush
+  从 dispatch 后移到下一次 poll（cap=8 量子 immediate 通道并存）；CF-1
+  去通知（CPU 增量消失）与 CF-2 去 defer（延迟归零）效果分离；D16 改善
+  −26.36% CPU 在 defer 链内。
+- 修正：NEXT_EXPERIMENT §2 对照表按 #625 重写；撤回"起点不动的 defer 在
+  产品路径上尚未测过"；C-A 增量收窄为"无门无条件 defer + W03 形状"，
+  须先写成相对 #625 的增量假设。r5-phase-a 家族对照保留于 `461cb267`，
+  其结论不受影响。
+- 边界：不重做 R2；本轮只补对照文本。
+
+### R9 — cpu_scope_recalc 机器输出自相矛盾
+
+- 原主张（v2 脚本 notes.primary_scope）："io-wq kthreads not covered by
+  this metric"——与正文/`io_wq_rusage_inclusion: UNRESOLVED` 矛盾（R4
+  已将该排除结论降级为未核实）。
+- 修复：primary_scope 改为"是否计入在本内核 UNRESOLVED（见
+  io_wq_rusage_inclusion）"；机器输出不再保留已撤回的排除结论。实数据
+  5 格重跑 exit 0，主口径点估计不变。
+
+### R10 — 校验器两条假通过路径
+
+- 复核二反例（修复前均于本地复现）：
+  1. 冻结 `round-analysis.json` 置为 `[]` → 仍输出"75 个值一致"PASS 行、
+     `Report.ok=True`（实际比较 0 个值）。根因：`compare_frozen()` 末尾
+     无条件记成功，成功行中的"75"是硬编码描述而非实测计数。
+  2. 仓库测试自己的 F5 正例（make_f5）：位置桶样本合计 216,800，恢复
+     总量 480,000，无 unpositioned/terminal 解释，仍通过。根因：
+     `f5_summary_checks()` 验证位置集合与整数尾数，未对账桶分母与总量。
+- 修复：
+  - `compare_frozen()`：期望比较集合 = 已核验 cell × 3 臂 × 5 指标，逐项
+    记账；空/截断/缺项 → coverage FAIL；成功行报告实测计数（实数据
+    75/75）。
+  - `f5_summary_checks()`：按冻结恢复脚本的纳入/排除规则闭合（规则读自
+    其**代码**：contiguous terminal 组的行**有**定位，仅 non-contiguous
+    terminal 与 anomalous 组计入 unpositioned_rows——该脚本自身的
+    semantics 字符串"terminal/anomalous groups excluded"不准确，冻结
+    脚本不改，差异在此登记）：positioned = rows − unpositioned；已写桶
+    n ≥ MIN_N=20；逐 case 残差 = positioned − Σ桶 n ∈ [0, 19·d(d+1)/2]
+    （残差只能来自 sub-MIN_N 桶丢弃，桶键数上界 d(d+1)/2）；另加逐 tag
+    groups 算术与 rows>0 ⇔ groups>0。实数据：d16 残差 17/界 2584、d4
+    残差 7/界 190，通过。
+  - 测试：两反例 + sub-MIN_N 桶 + 无组 tag 入负例（37/37）；make_f5 正例
+    闭合化（旧 216,800 形状转为负例）。
+- 边界：这证明校验能力此前有缺口，不证明真实数据错误——冻结恢复脚本
+  离线重跑逐位复现仍是独立证据；CIs/Holm/门限仍不复算。
 
 ## 仍未核实项（诚实登记）
 
 - io-wq worker CPU 是否计入子进程 rusage / PROCESS_CPUTIME（本内核
-  UNRESOLVED，见 R4）。
+  UNRESOLVED，见 R4/R9）。
 - 研究 enter/CQE 集中性、锁持有/等待时长、呈现间发布频率、观察顺序
   对 p99 差的作用（UNMEASURED/PERTURBED）。
 - mermaid 渲染（无离线渲染器；结构检查通过）。
-- "R2 的历史 defer 设计"指认按归档 defer 家族理解（R1 节）；若指其他
-  文档请指出，对照框架已就位。
+- C-A 相对 #625 causal-r2 的增量假设（无门无条件 defer + W03 形状）尚未
+  成文，未申请授权（NEXT_EXPERIMENT §2/§6）。

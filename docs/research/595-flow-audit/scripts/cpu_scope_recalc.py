@@ -157,8 +157,10 @@ def main(argv=None):
 
     out = {"root": args.root, "cells": {}, "notes": {
         "primary_scope": "CLOCK_PROCESS_CPUTIME_ID, measured phase only, "
-                         "bench child threads (submitter+driver); io-wq kthreads "
-                         "not covered by this metric",
+                         "bench child threads (submitter+driver); whether "
+                         "io-wq kthreads are included in this metric is "
+                         "UNRESOLVED on this kernel (see "
+                         "io_wq_rusage_inclusion note)",
         "invocation_window": "parent wait4 rusage of the whole child: warmup + "
                              "oracle self-test + measured + instrumented phases "
                              "+ setup/teardown; seconds only, no ns/op derived",

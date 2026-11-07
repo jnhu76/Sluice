@@ -27,6 +27,14 @@ checker (withdrawn, see CORRECTIONS.md R6):
   (24 instrument-on R tags x 20000 rows = 480000), then re-run the frozen
   recovery script offline against raw/diag-ops.csv and require the derived
   summary to be reproduced exactly.
+- Second-round repairs: the frozen comparison derives its expected
+  (cell, arm, metric) set from the verified cells and fails if any expected
+  comparison was not performed (an empty round-analysis.json no longer
+  passes); F5 bucket denominators must close against the recovery totals
+  under the recovery script's inclusion/exclusion rules (positioned = rows -
+  unpositioned; written buckets n >= 20; per-case residual bounded by the
+  sub-MIN_N drop), so a summary with clean validation counters but
+  non-closing position buckets is rejected.
 
 Exit 0 = every check passes; each failure prints a receipt line and the
 exit code is nonzero.
@@ -85,6 +93,10 @@ F5_EXPECT_SETS = {
     "W03-uring-4k-d16|cw8|": set(range(8)),
     "W03-uring-4k-d4|cw0|": set(range(4)),
 }
+# recover_f5_position.py writes a bucket only when its sample count reaches
+# MIN_N; the verifier re-asserts this on written buckets and uses it to bound
+# the rows a summary may legitimately leave out of the position buckets.
+F5_MIN_N = 20
 
 
 class Report:
@@ -315,30 +327,68 @@ def verify_cells(root, rep, bins):
 
 
 def compare_frozen(root, per_cell, rep):
+    """Compare recomputed arm means against the frozen analysis values.
+
+    The expected comparison set is derived from the cells that were actually
+    verified: every (cell, arm, metric) must be compared exactly once. A
+    frozen file that is empty, truncated, or missing entries therefore FAILS
+    coverage instead of passing vacuously (second-round review counterexample:
+    round-analysis.json = [] used to print a unconditional success line).
+    """
     ra_path = os.path.join(root, "analysis", "round-analysis.json")
     if not os.path.exists(ra_path):
         rep.check(False, "round-analysis.json", f"missing {ra_path}")
         return
     ra = json.load(open(ra_path))
     key_map = {"cpu": "cpu", "tput": "tput", "p50": "p50", "p95": "p95", "p99": "p99"}
+    verified = {c for c, v in per_cell.items() if v is not None}
+    expected = {(cell, arm, metric) for cell in verified
+                for arm in ARMS for metric in key_map}
+    compared = set()
     worst = 0.0
+    if not isinstance(ra, list) or not ra:
+        rep.check(False, "round-analysis.json",
+                  f"not a non-empty list (type {type(ra).__name__}, "
+                  f"len {len(ra) if isinstance(ra, list) else 'n/a'})")
+        ra = []
     for entry in ra:
+        if (not isinstance(entry, dict) or "cell" not in entry
+                or not isinstance(entry.get("abs"), dict)):
+            rep.check(False, "round-analysis.json entry",
+                      f"malformed entry: {json.dumps(entry)[:160]}")
+            continue
         cell = entry["cell"]
         if cell not in per_cell or per_cell[cell] is None:
             rep.check(False, f"{cell} frozen compare", "no recomputed values")
             continue
         for arm in ARMS:
             for metric, fk in key_map.items():
-                frozen = entry["abs"][arm][fk][0]
+                try:
+                    frozen = entry["abs"][arm][fk][0]
+                except (KeyError, TypeError):
+                    rep.check(False, f"{cell} {arm} {metric}",
+                              "missing in frozen abs")
+                    continue
                 got = per_cell[cell]["arm_means"][arm][metric]
+                compared.add((cell, arm, metric))
                 rel = abs(got - frozen) / max(abs(frozen), 1e-12)
                 worst = max(worst, rel)
                 if rel > 1e-9:
                     rep.check(False, f"{cell} {arm} {metric}",
                               f"recompute {got} vs frozen {frozen} (rel {rel:.2e})")
-    rep.check(True, "frozen arm means match at raw precision",
-              f"achieved max relative difference {worst:.2e} over 5 cells x 3 arms "
-              f"x 5 metrics (75 values); CIs/Holm/gates NOT recomputed")
+    missing = expected - compared
+    if missing:
+        shown = ", ".join("/".join(m) for m in sorted(missing)[:6])
+        rep.check(False, "frozen compare coverage",
+                  f"{len(missing)} of {len(expected)} expected "
+                  f"(cell,arm,metric) comparisons not performed"
+                  f"{'; e.g. ' + shown if shown else ''}")
+    else:
+        rep.check(True, "frozen arm means match at raw precision",
+                  f"{len(compared)}/{len(expected)} expected comparisons "
+                  f"performed over cells {sorted(verified)}; achieved max "
+                  f"relative difference {worst:.2e}; CIs/Holm/gates NOT "
+                  f"recomputed")
 
 
 def p99_diff_table(per_cell, rep):
@@ -406,6 +456,52 @@ def f5_summary_checks(f5, rep):
     rep.check(vt.get("anomalous_groups") == 0 and vt.get("unpositioned_rows") == 0
               and vt.get("tags_with_seq_gaps") == 0,
               "F5 recovery validation clean (kept PERTURBED status)")
+
+    # Closure under the frozen recovery script's inclusion/exclusion rules
+    # (recover_f5_position.py, read from its code — note its own
+    # "terminal/anomalous groups excluded" semantics string is imprecise:
+    # CONTIGUOUS terminal groups are positioned, only non-contiguous terminal
+    # and anomalous groups become unpositioned_rows). Consequences:
+    #   positioned rows = rows - unpositioned_rows  (exactly, per tag)
+    #   buckets are written only when n >= MIN_N (= 20)
+    # so per case:  sum(bucket n) = positioned - rows_dropped_by_min_n
+    # with 0 <= rows_dropped_by_min_n <= 19 * depth*(depth+1)/2 possible
+    # (case, cw, pos) keys. A summary whose bucket denominators do not close
+    # against the recovery totals within that bound is rejected (second-round
+    # review counterexample: sums 216800 vs 480000 with clean validation
+    # counters used to pass).
+    for k, v in mp.items():
+        rep.check(v["n"] >= F5_MIN_N, f"F5 {k} bucket n >= MIN_N",
+                  f"n={v['n']} MIN_N={F5_MIN_N}")
+    for t, v in tags.items():
+        rep.check(v["groups"] == v["normal_groups"] + v["terminal_groups"]
+                  + v["anomalous_groups"],
+                  f"F5 {t} group arithmetic",
+                  f"groups={v['groups']} vs {v['normal_groups']}+"
+                  f"{v['terminal_groups']}+{v['anomalous_groups']}")
+        rep.check((v["rows"] > 0) == (v["groups"] > 0),
+                  f"F5 {t} rows/groups consistency",
+                  f"rows={v['rows']} groups={v['groups']}")
+        rep.check(0 <= v["unpositioned_rows"] <= v["rows"],
+                  f"F5 {t} unpositioned bound",
+                  f"unpositioned={v['unpositioned_rows']} rows={v['rows']}")
+    positioned = defaultdict(int)
+    for t, v in tags.items():
+        positioned[t.rsplit("-b", 1)[0]] += v["rows"] - v["unpositioned_rows"]
+    for case, pos_rows in sorted(positioned.items()):
+        suffix = case.rsplit("-d", 1)[-1]
+        depth = int(suffix) if suffix.isdigit() else None
+        bucket_sum = sum(v["n"] for k, v in mp.items()
+                         if k.split("|")[0] == case)
+        residual = pos_rows - bucket_sum
+        if depth is None:
+            rep.check(False, f"F5 {case} closure", f"unparseable depth {case!r}")
+            continue
+        bound = (F5_MIN_N - 1) * depth * (depth + 1) // 2
+        rep.check(0 <= residual <= bound,
+                  f"F5 {case} bucket denominators close against recovery totals",
+                  f"positioned={pos_rows} bucket_sum={bucket_sum} residual="
+                  f"{residual} (sub-MIN_N drop bound {bound})")
 
 
 def f5_checks(root, rep):

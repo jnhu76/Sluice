@@ -30,3 +30,23 @@ Machine summaries: verifier `cells` map above; MAIN p99 run-level
 mean diffs C-A0 = 9.524 us, R-A0 = 10.707 us; per-block relative
 effect means +17.97%/+20.14% (frozen contrasts reproduced); pooled
 per-request p99 UNAVAILABLE (per-rep percentiles only).
+
+## Second-round reruns (review round 2, R7-R10, 2026-11-07)
+
+Inputs identical to the table above (frozen evidence untouched).
+
+Pre-fix reproduction of the two reviewer counterexamples (inline
+`python3 -I` heredocs against 461cb267, both exits 0):
+
+- `round-analysis.json` replaced by `[]` -> `compare_frozen` printed its
+  unconditional success line ("... over 5 cells x 3 arms x 5 metrics
+  (75 values)") with `Report.ok = True` while 0 values were compared.
+- `f5_summary_checks(make_f5())` -> `Report.ok = True` with position-bucket
+  sums 16800 (d16) / 200000 (d4) = 216800 total vs validation totals
+  480000 and clean counters.
+
+| command | exit | result |
+|---|---|---|
+| `python3 -I scripts/verify_inherited_evidence.py --json ...` | 0 | 162 checks PASS / 0 FAIL (60 prior + 102 new closure/coverage checks); frozen compare now reports 75/75 comparisons actually performed; F5 closure d16 residual 17 (bound 2584), d4 residual 7 (bound 190) |
+| `python3 -I scripts/cpu_scope_recalc.py --json ...` | 0 | 0 problems; `notes.primary_scope` now states io-wq inclusion UNRESOLVED (R9), no retracted exclusion claim left in machine output |
+| `python3 -I scripts/test_offline_checks.py` | 0 | 37/37 tests (30 prior + second-round negatives: empty round-analysis.json, missing (arm,metric) coverage, non-closing bucket denominators, sub-MIN_N bucket, groupless tag) |
