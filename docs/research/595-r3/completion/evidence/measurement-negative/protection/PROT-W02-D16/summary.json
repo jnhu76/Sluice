@@ -1,0 +1,99 @@
+{
+ "arms": {
+  "A": "A_R2 (immediate, 271b81bf+7be9d014)",
+  "B": "B_R2 (bounded progress, same SHA)"
+ },
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "case": "W02-uring-4k-d16",
+ "comparison": "B_R2 - A_R2",
+ "ended_utc": "2026-11-05T11:24:32Z",
+ "enters": {
+  "A_R2": {
+   "lines_with_enter": 60004,
+   "present": true,
+   "pure_submit": 60000,
+   "to_submit_hist": {
+    "1": 60004
+   },
+   "total": 60004
+  },
+  "B_R2": {
+   "lines_with_enter": 11293,
+   "present": true,
+   "pure_submit": 11289,
+   "to_submit_hist": {
+    "1": 3799,
+    "7": 3747,
+    "8": 3747
+   },
+   "total": 11293
+  },
+  "lane": "diagnostic strace (WARMUP=0 MEASURED=1, 1 rep); not performance evidence"
+ },
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "fixture_unchanged": true,
+ "kind": "R2 same-SHA legacy protection (R3 B structurally not executable)",
+ "metrics": {
+  "cpu": {
+   "ci_hi": -0.2752735584369938,
+   "ci_lo": -0.28701512332417745,
+   "ci_upper_one_sided_95": -0.276128299175188,
+   "holm_alpha": 0.0125,
+   "holm_reject": true,
+   "mean": -0.28111135756100564,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.05,
+   "upper_in_bound": true
+  },
+  "p95": {
+   "ci_hi": -0.31652263048738843,
+   "ci_lo": -0.33479208735050864,
+   "ci_upper_one_sided_95": -0.3181856316888489,
+   "holm_alpha": 0.016666666666666666,
+   "holm_reject": true,
+   "mean": -0.32589985444015473,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.05,
+   "upper_in_bound": true
+  },
+  "p99": {
+   "ci_hi": -0.3097145179435267,
+   "ci_lo": -0.33906796891835644,
+   "ci_upper_one_sided_95": -0.3117911948509065,
+   "holm_alpha": 0.025,
+   "holm_reject": true,
+   "mean": -0.32399684361967024,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.05,
+   "upper_in_bound": true
+  },
+  "tput": {
+   "ci_hi": -0.3809801100094348,
+   "ci_lo": -0.40395177212598726,
+   "ci_upper_one_sided_95": -0.38264193242366823,
+   "holm_alpha": 0.05,
+   "holm_reject": true,
+   "mean": -0.3924086138451706,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.03,
+   "upper_in_bound": true
+  }
+ },
+ "pairs_valid": 24,
+ "phase": "PROT-W02-D16",
+ "r3_b_part": "NOT_ESTABLISHED / NO_W02_R3_ARM (completion patch does not touch bench_w02_pipeline.cpp)",
+ "records_total": 48,
+ "records_valid": 48,
+ "started_utc": "2026-11-05T11:23:31Z",
+ "verdict": "PASS"
+}

@@ -1,0 +1,130 @@
+{
+ "cases": {
+  "d16": {
+   "case": "W03-threadpool-4k-d16-w4",
+   "cpu_ns_per_op_mean": 68106.15798333334,
+   "enter": [
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    },
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    },
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    }
+   ],
+   "ops_mean": 12546.980042269497,
+   "records": 3,
+   "valid": 3
+  },
+  "d4": {
+   "case": "W03-threadpool-4k-d4-w4",
+   "cpu_ns_per_op_mean": 84777.86003333335,
+   "enter": [
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    },
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    },
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    }
+   ],
+   "ops_mean": 9825.891028697453,
+   "records": 3,
+   "valid": 3
+  },
+  "d64": {
+   "case": "W03-threadpool-4k-d64-w4",
+   "cpu_ns_per_op_mean": 33176.43365,
+   "enter": [
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    },
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    },
+    {
+     "lines_with_enter": 1,
+     "present": true,
+     "pure_submit": 0,
+     "to_submit_hist": {
+      "1": 1
+     },
+     "total": 1
+    }
+   ],
+   "ops_mean": 25299.121089490753,
+   "records": 3,
+   "valid": 3
+  }
+ },
+ "comparison": "B - A0 (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "d16_plain_threads": 6,
+ "d16_time_v_max_rss_kb": [
+  5352
+ ],
+ "kind": "B vs A0 functional blocked (semanticsReady=false); A0-only no-enter functional check",
+ "nocase_enter": {
+  "lines_with_enter": 1,
+  "present": true,
+  "pure_submit": 0,
+  "to_submit_hist": {
+   "1": 1
+  },
+  "total": 1
+ },
+ "phase": "PROT-THREADPOOL",
+ "static_batch_entry": "bench/r3_ready_batch.hpp:72 dynamic_cast; :89 arm_==a0 || backend_==nullptr -> submit_context_singles -> ctx.submit_read; :97/:110 only A1/B reach TestAccess batch entry",
+ "verdict": "BLOCKED_SEMANTICS_NOT_READY"
+}

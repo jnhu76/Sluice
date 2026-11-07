@@ -1,0 +1,7 @@
+{
+ "phase": "PROT-PLACEMENT",
+ "verdict": "NOT_ESTABLISHED",
+ "comparison": "B - A0 under placement (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "semanticsReady": false,
+ "source": "SUMMARY.json"
+}

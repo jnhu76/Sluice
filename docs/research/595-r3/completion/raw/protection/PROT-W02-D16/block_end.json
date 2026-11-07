@@ -1,0 +1,38 @@
+{
+ "phase": "PROT-W02-D16",
+ "ended_utc": "2026-11-05T11:24:32Z",
+ "valid_pairs": 24,
+ "expected_pairs": 24,
+ "loadavg_end": [
+  1.69921875,
+  0.873046875,
+  0.53955078125
+ ],
+ "tmp_end": {
+  "total_bytes": 33626267648,
+  "avail_bytes": 32664666112,
+  "used_pct": 2.86
+ },
+ "cpufreq_end": {
+  "2": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 3500000
+  },
+  "12": {
+   "governor": "schedutil",
+   "scaling_cur_freq": 1200000
+  }
+ },
+ "binary_sha256_end": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "fixture_path": "/tmp/sluice-595-r3c/pipeline.bin",
+ "fixture_sha256_start": "1cdf83d6f6d97d740b0f6e0a10077f2ccde01172631885147705335f532744e6",
+ "fixture_sha256_end": "1cdf83d6f6d97d740b0f6e0a10077f2ccde01172631885147705335f532744e6",
+ "fixture_unchanged": true,
+ "lock_end": {
+  "lock_file": "/home/jnhu/sluice-595-e5/r3/MEASUREMENT.lock",
+  "inode": 6941075,
+  "dev_major": 0,
+  "dev_minor": 53,
+  "holders": []
+ }
+}

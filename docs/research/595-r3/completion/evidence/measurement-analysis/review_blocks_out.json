@@ -1,0 +1,883 @@
+{
+ "diag": [
+  {
+   "block": "DIAG-R2-D3-A",
+   "case": "W02-uring-4k-d3",
+   "claimed": {
+    "lines_with_enter": 60004,
+    "present": true,
+    "pure_submit": 60000,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total": 60004
+   },
+   "exit": 0,
+   "mine": {
+    "getevents_lines": 4,
+    "pure_submit": 60000,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total": 60004
+   },
+   "ops": 20000,
+   "strace_match": true
+  },
+  {
+   "block": "DIAG-R2-D3-B",
+   "case": "W02-uring-4k-d3",
+   "claimed": {
+    "lines_with_enter": 40009,
+    "present": true,
+    "pure_submit": 40005,
+    "to_submit_hist": {
+     "1": 20014,
+     "2": 19995
+    },
+    "total": 40009
+   },
+   "exit": 0,
+   "mine": {
+    "getevents_lines": 4,
+    "pure_submit": 40005,
+    "to_submit_hist": {
+     "1": 20014,
+     "2": 19995
+    },
+    "total": 40009
+   },
+   "ops": 20000,
+   "strace_match": true
+  },
+  {
+   "block": "DIAG-R2-D16-A",
+   "case": "W02-uring-4k-d16",
+   "claimed": {
+    "lines_with_enter": 60004,
+    "present": true,
+    "pure_submit": 60000,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total": 60004
+   },
+   "exit": 0,
+   "mine": {
+    "getevents_lines": 4,
+    "pure_submit": 60000,
+    "to_submit_hist": {
+     "1": 60004
+    },
+    "total": 60004
+   },
+   "ops": 20000,
+   "strace_match": true
+  },
+  {
+   "block": "DIAG-R2-D16-B",
+   "case": "W02-uring-4k-d16",
+   "claimed": {
+    "lines_with_enter": 11293,
+    "present": true,
+    "pure_submit": 11289,
+    "to_submit_hist": {
+     "1": 3799,
+     "7": 3747,
+     "8": 3747
+    },
+    "total": 11293
+   },
+   "exit": 0,
+   "mine": {
+    "getevents_lines": 4,
+    "pure_submit": 11289,
+    "to_submit_hist": {
+     "1": 3799,
+     "7": 3747,
+     "8": 3747
+    },
+    "total": 11293
+   },
+   "ops": 20000,
+   "strace_match": true
+  },
+  {
+   "block": "DIAG-64K-A0",
+   "case": "W03-uring-64k-d16-r3d16-64k",
+   "claimed": {
+    "lines_with_enter": 6004,
+    "present": true,
+    "pure_submit": 6000,
+    "to_submit_hist": {
+     "1": 6004
+    },
+    "total": 6004
+   },
+   "exit": 0,
+   "mine": {
+    "getevents_lines": 4,
+    "pure_submit": 6000,
+    "to_submit_hist": {
+     "1": 6004
+    },
+    "total": 6004
+   },
+   "ops": 2000,
+   "strace_match": true
+  },
+  {
+   "block": "DIAG-THREADPOOL-NOCASE",
+   "case": "NO-SUCH-CASE",
+   "claimed": {
+    "lines_with_enter": 1,
+    "present": true,
+    "pure_submit": 0,
+    "to_submit_hist": {
+     "1": 1
+    },
+    "total": 1
+   },
+   "exit": 0,
+   "mine": {
+    "getevents_lines": 1,
+    "pure_submit": 0,
+    "to_submit_hist": {
+     "1": 1
+    },
+    "total": 1
+   },
+   "ops": null,
+   "strace_match": true
+  }
+ ],
+ "misc": {
+  "64k_threads": [
+   {
+    "app_ticks": 11,
+    "available": true,
+    "driver_ticks": 0,
+    "in_thread_kernel_stime_ticks": 37,
+    "io_wq": {},
+    "io_wq_in_process": {
+     "55820": {
+      "comm": "iou-wrk-55817",
+      "ticks": 30
+     }
+    },
+    "io_wq_ticks": 30,
+    "io_wq_ticks_lower_bound": 30,
+    "max_user_threads": 3,
+    "residual_bound_ticks": 6.0,
+    "residual_ticks_est": 10.364,
+    "ru_total_ticks_est": 51.364,
+    "samples": 10,
+    "threads": {
+     "55817": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 10,
+      "stime_ticks": 7,
+      "ticks": 11,
+      "utime_ticks": 4
+     },
+     "55820": {
+      "comm": "iou-wrk-55817",
+      "processor_last": 2,
+      "samples": 9,
+      "stime_ticks": 30,
+      "ticks": 30,
+      "utime_ticks": 0
+     },
+     "55822": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55825": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55827": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55829": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55831": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55833": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55835": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55837": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     }
+    },
+    "tick_hz": 100
+   },
+   {
+    "app_ticks": 10,
+    "available": true,
+    "driver_ticks": 0,
+    "in_thread_kernel_stime_ticks": 36,
+    "io_wq": {},
+    "io_wq_in_process": {
+     "55842": {
+      "comm": "iou-wrk-55839",
+      "ticks": 30
+     }
+    },
+    "io_wq_ticks": 30,
+    "io_wq_ticks_lower_bound": 30,
+    "max_user_threads": 3,
+    "residual_bound_ticks": 6.5,
+    "residual_ticks_est": 11.308,
+    "ru_total_ticks_est": 51.308,
+    "samples": 10,
+    "threads": {
+     "55839": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 10,
+      "stime_ticks": 6,
+      "ticks": 10,
+      "utime_ticks": 4
+     },
+     "55842": {
+      "comm": "iou-wrk-55839",
+      "processor_last": 2,
+      "samples": 9,
+      "stime_ticks": 30,
+      "ticks": 30,
+      "utime_ticks": 0
+     },
+     "55844": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55846": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55847": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55849": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55851": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55853": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55855": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55857": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     },
+     "55859": {
+      "comm": "bench_w03_exter",
+      "processor_last": 2,
+      "samples": 1,
+      "stime_ticks": 0,
+      "ticks": 0,
+      "utime_ticks": 0
+     }
+    },
+    "tick_hz": 100
+   }
+  ],
+  "diag_sat_run": [
+   {
+    "backend": "n/a",
+    "block_size": 0,
+    "bytes": 0,
+    "cache_policy": "n/a",
+    "case_id": "CAL-oracle-self-test",
+    "concurrency": 0,
+    "cpu_s": 0.0,
+    "cpu_util": 0.0,
+    "dataset": "pattern table + verify_pattern discrimination",
+    "empty_wakes": 0,
+    "extra_a": 0,
+    "extra_b": 0,
+    "failure": "",
+    "filesystem": "n/a",
+    "lat_max_ns": 0.0,
+    "lat_mean_ns": 0.0,
+    "lat_min_ns": 0.0,
+    "lat_n": 0,
+    "lat_p50_ns": 0.0,
+    "lat_p95_ns": 0.0,
+    "lat_p99_ns": 0.0,
+    "lat_stddev_ns": 0.0,
+    "measured": false,
+    "mib_per_sec": 0.0,
+    "notes": "must pass before any case; a degenerate pattern or a non-biting comparison fails here",
+    "notifications": 0,
+    "ok": true,
+    "ops": 0,
+    "ops_per_sec": 0.0,
+    "order_index": 0,
+    "passes": 0,
+    "peak_rss_kb": 0,
+    "queue_depth": 0,
+    "r3_accepted": 0,
+    "r3_arm": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "rep": 0,
+    "request_count": 0,
+    "rss_kb": 0,
+    "stats_canceled_ops": 0,
+    "stats_completed_ops": 0,
+    "stats_completion_errors": 0,
+    "stats_invalid_state": 0,
+    "stats_max_outstanding": 0,
+    "stats_poll_calls": 0,
+    "stats_queue_full_retries": 0,
+    "stats_short_completions": 0,
+    "stats_submit_calls": 0,
+    "stats_submitted_ops": 0,
+    "stats_wait_calls": 0,
+    "submits": 0,
+    "waits": 0,
+    "wall_s": 0.0,
+    "warmup": 0,
+    "worker_count": 0,
+    "workload": "calibration",
+    "would_block": 0
+   },
+   {
+    "backend": "uring",
+    "block_size": 4096,
+    "bytes": 13107200,
+    "cache_policy": "page_cache_resident",
+    "case_id": "W02-uring-4k-d16-saturate",
+    "concurrency": 16,
+    "cpu_s": 0.032394957,
+    "cpu_util": 0.258981,
+    "dataset": "64MiB file, 4096B positional reads",
+    "empty_wakes": 0,
+    "extra_a": 3200,
+    "extra_b": 200,
+    "failure": "",
+    "filesystem": "tmpfs",
+    "lat_max_ns": 0.0,
+    "lat_mean_ns": 0.0,
+    "lat_min_ns": 0.0,
+    "lat_n": 0,
+    "lat_p50_ns": 0.0,
+    "lat_p95_ns": 0.0,
+    "lat_p99_ns": 0.0,
+    "lat_stddev_ns": 0.0,
+    "measured": true,
+    "mib_per_sec": 99.931,
+    "notes": "submit until admission refuses, then settle; backpressure counted",
+    "notifications": 0,
+    "ok": true,
+    "ops": 3200,
+    "ops_per_sec": 25582.4,
+    "order_index": 13,
+    "passes": 0,
+    "peak_rss_kb": 5292,
+    "queue_depth": 16,
+    "r3_accepted": 0,
+    "r3_arm": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "rep": 0,
+    "request_count": 3200,
+    "rss_kb": 4564,
+    "stats_canceled_ops": 0,
+    "stats_completed_ops": 0,
+    "stats_completion_errors": 0,
+    "stats_invalid_state": 0,
+    "stats_max_outstanding": 0,
+    "stats_poll_calls": 0,
+    "stats_queue_full_retries": 0,
+    "stats_short_completions": 0,
+    "stats_submit_calls": 0,
+    "stats_submitted_ops": 0,
+    "stats_wait_calls": 0,
+    "submits": 3400,
+    "waits": 3200,
+    "wall_s": 0.125085995,
+    "warmup": 0,
+    "worker_count": 0,
+    "workload": "W-02",
+    "would_block": 200
+   }
+  ],
+  "resource_syscall_a0": [
+   {
+    "backend": "n/a",
+    "block_size": 0,
+    "bytes": 0,
+    "cache_policy": "n/a",
+    "case_id": "CAL-oracle-self-test",
+    "concurrency": 0,
+    "cpu_s": 0.0,
+    "cpu_util": 0.0,
+    "dataset": "pattern table + verify_pattern discrimination",
+    "empty_wakes": 0,
+    "extra_a": 0,
+    "extra_b": 0,
+    "failure": "",
+    "filesystem": "n/a",
+    "lat_max_ns": 0.0,
+    "lat_mean_ns": 0.0,
+    "lat_min_ns": 0.0,
+    "lat_n": 0,
+    "lat_p50_ns": 0.0,
+    "lat_p95_ns": 0.0,
+    "lat_p99_ns": 0.0,
+    "lat_stddev_ns": 0.0,
+    "measured": false,
+    "mib_per_sec": 0.0,
+    "notes": "must pass before any case; a degenerate pattern or a non-biting comparison fails here",
+    "notifications": 0,
+    "ok": true,
+    "ops": 0,
+    "ops_per_sec": 0.0,
+    "order_index": 0,
+    "passes": 0,
+    "peak_rss_kb": 0,
+    "queue_depth": 0,
+    "r3_accepted": 0,
+    "r3_arm": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "rep": 0,
+    "request_count": 0,
+    "rss_kb": 0,
+    "stats_canceled_ops": 0,
+    "stats_completed_ops": 0,
+    "stats_completion_errors": 0,
+    "stats_invalid_state": 0,
+    "stats_max_outstanding": 0,
+    "stats_poll_calls": 0,
+    "stats_queue_full_retries": 0,
+    "stats_short_completions": 0,
+    "stats_submit_calls": 0,
+    "stats_submitted_ops": 0,
+    "stats_wait_calls": 0,
+    "submits": 0,
+    "waits": 0,
+    "wall_s": 0.0,
+    "warmup": 0,
+    "worker_count": 0,
+    "workload": "calibration",
+    "would_block": 0
+   },
+   {
+    "backend": "uring",
+    "block_size": 4096,
+    "bytes": 81920000,
+    "cache_policy": "page_cache_resident",
+    "case_id": "W03-uring-4k-d16",
+    "concurrency": 16,
+    "cpu_s": 0.66369575,
+    "cpu_util": 0.660684,
+    "dataset": "64MiB file, 4096B positional reads",
+    "empty_wakes": 0,
+    "extra_a": 0,
+    "extra_b": 0,
+    "failure": "",
+    "filesystem": "tmpfs",
+    "lat_max_ns": 765467.0,
+    "lat_mean_ns": 376517.6,
+    "lat_min_ns": 56556.0,
+    "lat_n": 20000,
+    "lat_p50_ns": 382705.0,
+    "lat_p95_ns": 662308.0,
+    "lat_p99_ns": 687997.0,
+    "lat_stddev_ns": 180236.0,
+    "measured": true,
+    "mib_per_sec": 77.77,
+    "notes": "app-owned epoll loop on the borrowed progress notification fd; driver parks in epoll_wait, submitter parks on its own condition variable; r3_arm=A0",
+    "notifications": 1251,
+    "ok": true,
+    "ops": 20000,
+    "ops_per_sec": 19909.233,
+    "order_index": 3,
+    "passes": 1251,
+    "peak_rss_kb": 5232,
+    "queue_depth": 16,
+    "r3_accepted": 0,
+    "r3_arm": 0,
+    "r3_entry_calls": 0,
+    "r3_flush_attempts": 0,
+    "r3_gate_stops": 0,
+    "r3_group_calls": 0,
+    "r3_ineligible_fallbacks": 0,
+    "r3_prefix_max": 0,
+    "r3_single_calls": 0,
+    "r3_suffix_single_calls": 0,
+    "r3_untouched": 0,
+    "rep": 0,
+    "request_count": 20000,
+    "rss_kb": 4640,
+    "stats_canceled_ops": 0,
+    "stats_completed_ops": 0,
+    "stats_completion_errors": 0,
+    "stats_invalid_state": 0,
+    "stats_max_outstanding": 0,
+    "stats_poll_calls": 0,
+    "stats_queue_full_retries": 0,
+    "stats_short_completions": 0,
+    "stats_submit_calls": 0,
+    "stats_submitted_ops": 0,
+    "stats_wait_calls": 0,
+    "submits": 20000,
+    "waits": 0,
+    "wall_s": 1.004559017,
+    "warmup": 0,
+    "worker_count": 0,
+    "workload": "W-03",
+    "would_block": 0
+   }
+  ],
+  "selftest": {
+   "fail_lines": 0,
+   "failures_line": [
+    "self-test failures: 0"
+   ],
+   "pass_lines": 8
+  },
+  "threadpool_strace": {
+   "d16": {
+    "ge": [
+     1
+    ],
+    "pure": [
+     0
+    ],
+    "straces": 3,
+    "totals": [
+     1
+    ]
+   },
+   "d4": {
+    "ge": [
+     1
+    ],
+    "pure": [
+     0
+    ],
+    "straces": 3,
+    "totals": [
+     1
+    ]
+   },
+   "d64": {
+    "ge": [
+     1
+    ],
+    "pure": [
+     0
+    ],
+    "straces": 3,
+    "totals": [
+     1
+    ]
+   }
+  }
+ },
+ "safe": [
+  {
+   "block": "SAFE-A0-W03-64K-D16",
+   "case": "W03-uring-64k-d16-r3d16-64k",
+   "exits": [
+    0
+   ],
+   "n": 3,
+   "n_ok": true,
+   "ops": [
+    10000
+   ],
+   "ops_ok": false,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-W03-64K-D16-threads",
+   "case": "W03-uring-64k-d16-r3d16-64k",
+   "exits": [
+    0
+   ],
+   "n": 2,
+   "n_ok": false,
+   "ops": [
+    10000
+   ],
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-W03-THREADPOOL-d4",
+   "case": "W03-threadpool-4k-d4-w4",
+   "enter_pure_submit": [
+    0
+   ],
+   "enter_totals": [
+    1
+   ],
+   "exits": [
+    0
+   ],
+   "n": 3,
+   "n_ok": true,
+   "ops": [
+    20000
+   ],
+   "ops_ok": true,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-W03-THREADPOOL-d16",
+   "case": "W03-threadpool-4k-d16-w4",
+   "enter_pure_submit": [
+    0
+   ],
+   "enter_totals": [
+    1
+   ],
+   "exits": [
+    0
+   ],
+   "n": 3,
+   "n_ok": true,
+   "ops": [
+    20000
+   ],
+   "ops_ok": true,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-W03-THREADPOOL-d64",
+   "case": "W03-threadpool-4k-d64-w4",
+   "enter_pure_submit": [
+    0
+   ],
+   "enter_totals": [
+    1
+   ],
+   "exits": [
+    0
+   ],
+   "n": 3,
+   "n_ok": true,
+   "ops": [
+    20000
+   ],
+   "ops_ok": true,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-PLACEMENT-cpu2",
+   "case": "W03-uring-4k-d16",
+   "cpu_mask": [
+    "2"
+   ],
+   "cpu_ok": true,
+   "exits": [
+    0
+   ],
+   "n": 8,
+   "n_ok": true,
+   "ops": [
+    100000
+   ],
+   "ops_ok": false,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-PLACEMENT-cpu8",
+   "case": "W03-uring-4k-d16",
+   "cpu_mask": [
+    "8"
+   ],
+   "cpu_ok": true,
+   "exits": [
+    0
+   ],
+   "n": 8,
+   "n_ok": true,
+   "ops": [
+    100000
+   ],
+   "ops_ok": false,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-PLACEMENT-smt-2-12",
+   "case": "W03-uring-4k-d16",
+   "cpu_mask": [
+    "2,12"
+   ],
+   "cpu_ok": true,
+   "exits": [
+    0
+   ],
+   "n": 8,
+   "n_ok": true,
+   "ops": [
+    100000
+   ],
+   "ops_ok": false,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-PLACEMENT-xphys-2-8",
+   "case": "W03-uring-4k-d16",
+   "cpu_mask": [
+    "2,8"
+   ],
+   "cpu_ok": true,
+   "exits": [
+    0
+   ],
+   "n": 8,
+   "n_ok": true,
+   "ops": [
+    100000
+   ],
+   "ops_ok": false,
+   "oracle_ok": true,
+   "sha_ok": true,
+   "valid": true
+  },
+  {
+   "block": "SAFE-A0-W02-SAT-d16",
+   "case": "W02-uring-4k-d16-saturate",
+   "exits": [
+    0
+   ],
+   "n": 3,
+   "n_ok": true,
+   "ops": [
+    3200
+   ],
+   "oracle_ok": true,
+   "sha_ok": false,
+   "valid": true
+  }
+ ]
+}

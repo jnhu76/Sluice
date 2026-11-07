@@ -1,0 +1,47 @@
+# R3 worktree 2026-11-05T08:38:42Z
+--- rev-parse HEAD ---
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+--- branch ---
+research-595-r3
+--- status --porcelain ---
+ M bench/bench_common.hpp
+ M bench/bench_w03_external_loop.cpp
+ M include/sluice/async/detail/test_access.hpp
+ M include/sluice/async/detail/uring_backend.hpp
+ M src/async/uring_backend.cpp
+ M xmake/tests.lua
+?? bench/r3_ready_batch.hpp
+?? tests/uring_ready_batch_deterministic_test.cpp
+?? tests/uring_ready_batch_fault_test.cpp
+?? tests/uring_ready_batch_research_test.cpp
+--- end status ---
+--- diff --stat vs base ---
+ bench/bench_common.hpp                        |  40 ++++
+ bench/bench_w03_external_loop.cpp             | 161 ++++++++++++---
+ include/sluice/async/detail/test_access.hpp   |  11 ++
+ include/sluice/async/detail/uring_backend.hpp |  40 ++++
+ src/async/uring_backend.cpp                   | 271 +++++++++++++++++++++++---
+ xmake/tests.lua                               |  42 ++++
+ 6 files changed, 514 insertions(+), 51 deletions(-)
+--- diff --stat include/ public async ---
+ include/sluice/async/detail/test_access.hpp   | 11 ++++++++
+ include/sluice/async/detail/uring_backend.hpp | 40 +++++++++++++++++++++++++++
+ 2 files changed, 51 insertions(+)
+--- diff --stat v2-r1 docs ---
+--- untracked ---
+bench/r3_ready_batch.hpp
+tests/uring_ready_batch_deterministic_test.cpp
+tests/uring_ready_batch_fault_test.cpp
+tests/uring_ready_batch_research_test.cpp
+--- top-level dirs ---
+total 0
+drwxr-xr-x. 1 jnhu jnhu  160 Nov  5 16:38 .
+drwx------. 1 jnhu jnhu 2516 Nov  4 10:52 ..
+drwxr-xr-x. 1 jnhu jnhu  370 Nov  4 14:24 archive-wt
+drwxr-xr-x. 1 jnhu jnhu  144 Nov  4 14:37 backup
+drwxr-xr-x. 1 jnhu jnhu   90 Nov  5 00:08 causal-r2
+drwxr-xr-x. 1 jnhu jnhu  218 Nov  4 12:29 evidence
+drwxr-xr-x. 1 jnhu jnhu   70 Nov  4 12:25 harness
+drwxr-xr-x. 1 jnhu jnhu   92 Nov  5 11:49 r3
+drwxr-xr-x. 1 jnhu jnhu   60 Nov  5 16:38 r3-completion-20261105T083818Z
+drwxr-xr-x. 1 jnhu jnhu  434 Nov  4 11:51 worktree

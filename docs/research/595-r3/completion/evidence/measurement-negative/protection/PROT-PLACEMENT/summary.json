@@ -1,0 +1,95 @@
+{
+ "cases": {
+  "cpu2": {
+   "cpu_mask": "2",
+   "max_user_threads": 3,
+   "metrics": {
+    "cpu_ns_per_op": 3153.54213,
+    "ops_per_sec": 317334.6743918203,
+    "p95_ns": 47397.575,
+    "p99_ns": 57059.65
+   },
+   "records": 8,
+   "valid": 8
+  },
+  "cpu8": {
+   "cpu_mask": "8",
+   "delta_vs_cpu2_pct": {
+    "cpu": -0.10152738152890485,
+    "p95": -5.889225345389503,
+    "p99": -9.401521039824111,
+    "tput": 0.0946395759750599
+   },
+   "max_user_threads": 3,
+   "metrics": {
+    "cpu_ns_per_op": 3150.34042125,
+    "ops_per_sec": 317634.9985820866,
+    "p95_ns": 44606.225,
+    "p99_ns": 51695.175
+   },
+   "records": 8,
+   "valid": 8
+  },
+  "smt-2-12": {
+   "cpu_mask": "2,12",
+   "delta_vs_cpu2_pct": {
+    "cpu": 145.46789977402335,
+    "p95": 58.834286353257546,
+    "p99": 65.03904247572495,
+    "tput": -26.185264103994193
+   },
+   "max_user_threads": 3,
+   "metrics": {
+    "cpu_ns_per_op": 7740.933635,
+    "ops_per_sec": 234239.75180877215,
+    "p95_ns": 75283.6,
+    "p99_ns": 94170.7
+   },
+   "records": 8,
+   "valid": 8
+  },
+  "xphys-2-8": {
+   "cpu_mask": "2,8",
+   "delta_vs_cpu2_pct": {
+    "cpu": 166.56062654219247,
+    "p95": 72.48029039460354,
+    "p99": 75.76847211646059,
+    "tput": -31.23426332661249
+   },
+   "max_user_threads": 3,
+   "metrics": {
+    "cpu_ns_per_op": 8406.10166,
+    "ops_per_sec": 218217.52656563083,
+    "p95_ns": 81751.475,
+    "p99_ns": 100292.875
+   },
+   "records": 8,
+   "valid": 8
+  }
+ },
+ "comparison": "B - A0 under placement (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "kind": "A0-only representative placement (B blocked)",
+ "phase": "PROT-PLACEMENT",
+ "time_v_max_rss_kb": {
+  "cpu2": [
+   5352
+  ],
+  "cpu8": [
+   5308
+  ],
+  "smt": [
+   5324
+  ],
+  "xphys": [
+   5212
+  ]
+ },
+ "topology": {
+  "cpu2_core": 2,
+  "cpu2_siblings": "2,12",
+  "cpu8_core": 11,
+  "cpu8_siblings": "8,18",
+  "package": 0
+ },
+ "verdict": "NOT_ESTABLISHED"
+}

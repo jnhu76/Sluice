@@ -1,0 +1,30 @@
+== mutation switches in src/async/uring_backend.cpp
+525:#if !defined(SLUICE_R3_MUTANT_BATCH_INCLUDES_NOT_READY_TRANSPORT)
+583:#if defined(SLUICE_R3_MUTANT_BATCH_REDISPATCHES_CONSUMED)
+614:#if defined(SLUICE_R3_MUTANT_BATCH_RESIDUE_NOT_ADVERTISED)
+
+== xmake targets
+590:    local function r3_ready_batch_target(name, extra_define)
+602:            add_files(R .. "tests/uring_ready_batch_deterministic_test.cpp",
+615:    r3_ready_batch_target("uring_ready_batch_deterministic_test")
+616:    r3_ready_batch_target("uring_ready_batch_det_mut_includes_not_ready",
+618:    r3_ready_batch_target("uring_ready_batch_det_mut_residue_dropped",
+620:    r3_ready_batch_target("uring_ready_batch_det_mut_redispatch_consumed",
+
+== test scenarios
+453:void d2_positive_two_ready_reads_one_enter(Tracker& t) {
+543:    t.check(!report.residue_advertised, "a fully consumed group advertises no residue");
+555:void d2_negative_single_refill_while_in_flight(Tracker& t) {
+644:void d1_dependent_second_never_enters_ready_group(Tracker& t) {
+732:void d3_d16_budget_prefix_and_suffix_accounting(Tracker& t) {
+882:void sq_full_transport_residue_rejects_batch(Tracker& t) {
+912:            "a batch at SQ-full transport residue accepts nothing");
+948:void partial_submit_advertises_and_retries_residue(Tracker& t) {
+965:            "partial kernel consumption advertises dispatch residue");
+998:void cancel_and_cqe_ordering(Tracker& t) {
+1079:void prepark_batch_completion_is_not_lost(Tracker& t) {
+1133:void overflow_flush_keeps_every_batch_completion(Tracker& t) {
+1164:void poison_after_partial_batch_never_fabricates_success(Tracker& t) {
+1208:void shutdown_drain_settles_batch(Tracker& t) {
+1255:void borrow_and_last_member_are_independent(Tracker& t) {
+1309:void stale_generation_after_consumed_batch(Tracker& t) {

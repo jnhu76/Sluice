@@ -1,0 +1,111 @@
+[2026-11-05T11:52:01Z] MECH_SESSION_BEGIN
+[2026-11-05T11:52:01Z] LOCK_ACQUIRED 2026-11-05T11:52:01Z waited=0.0s inode=6941075 fuser_rc=0 fuser='61633'
+[2026-11-05T11:52:01Z] PRE_STATE {"ts_utc": "2026-11-05T11:52:01Z", "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1", "loadavg": "0.16 0.29 0.45 2/1989 61634", "cpuinfo_cpu2": "1200000", "governor_cpu2": "schedutil", "perf_event_paranoid": "2", "unprivileged_bpf_disabled": "2", "kernel": "7.2.11-200.fc44.x86_64"}
+[2026-11-05T11:52:01Z] SUDO_VALIDATE rc=0
+[2026-11-05T11:52:01Z] LOCK_RELEASED 2026-11-05T11:52:01Z
+Traceback (most recent call last):
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 477, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 412, in main
+    sudo([PERF, "stat", "-e", "cycles:u,cycles:k,instructions:u,instructions:k",
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          "-o", os.path.join(cap, "root-uk-true.txt"), "--", "/bin/true"], check=False)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: sudo() got an unexpected keyword argument 'check'
+[2026-11-05T11:53:16Z] MECH_SESSION_BEGIN
+[2026-11-05T11:53:16Z] LOCK_ACQUIRED 2026-11-05T11:53:16Z waited=0.0s inode=6941075 fuser_rc=0 fuser='61676'
+[2026-11-05T11:53:16Z] PRE_STATE {"ts_utc": "2026-11-05T11:53:16Z", "binary_sha256": "0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1", "loadavg": "0.04 0.22 0.41 1/1991 61677", "cpuinfo_cpu2": "1200000", "governor_cpu2": "schedutil", "perf_event_paranoid": "2", "unprivileged_bpf_disabled": "2", "kernel": "7.2.11-200.fc44.x86_64"}
+[2026-11-05T11:53:16Z] SUDO_VALIDATE rc=0
+[2026-11-05T11:53:16Z] PMU_CAPABILITY_RECORDED
+[2026-11-05T11:53:16Z] COMM_PROBE unique=['bench_w03_exter'] exit=None
+[2026-11-05T11:53:16Z] BPFTRACE_SCRIPTS_WRITTEN comm=bench_w03_exter
+[2026-11-05T11:53:17Z] WARMUP_RUN exit=0 wall=0.26s
+[2026-11-05T11:53:47Z] ENTER_TRACE_ATTACH_FAILED d16-A0 rc=None
+[2026-11-05T11:53:49Z] ENTER_RUN d16-A0 bench_exit=0 wall=0.39s bt_rc=0
+[2026-11-05T11:54:19Z] ENTER_TRACE_ATTACH_FAILED d16-A1 rc=None
+[2026-11-05T11:54:20Z] ENTER_RUN d16-A1 bench_exit=0 wall=0.42s bt_rc=0
+[2026-11-05T11:54:50Z] ENTER_TRACE_ATTACH_FAILED d16-B rc=None
+[2026-11-05T11:54:52Z] ENTER_RUN d16-B bench_exit=0 wall=0.29s bt_rc=0
+[2026-11-05T11:55:22Z] ENTER_TRACE_ATTACH_FAILED d2pos-A0 rc=None
+[2026-11-05T11:55:24Z] ENTER_RUN d2pos-A0 bench_exit=0 wall=0.05s bt_rc=0
+[2026-11-05T11:55:54Z] ENTER_TRACE_ATTACH_FAILED d2pos-A1 rc=None
+[2026-11-05T11:55:55Z] ENTER_RUN d2pos-A1 bench_exit=0 wall=0.05s bt_rc=0
+[2026-11-05T11:56:25Z] ENTER_TRACE_ATTACH_FAILED d2pos-B rc=None
+[2026-11-05T11:56:27Z] ENTER_RUN d2pos-B bench_exit=0 wall=0.05s bt_rc=0
+[2026-11-05T11:56:57Z] ENTER_TRACE_ATTACH_FAILED d2serial-A0 rc=None
+[2026-11-05T11:56:59Z] ENTER_RUN d2serial-A0 bench_exit=0 wall=1.25s bt_rc=0
+[2026-11-05T11:57:29Z] ENTER_TRACE_ATTACH_FAILED d2serial-A1 rc=None
+[2026-11-05T11:57:32Z] ENTER_RUN d2serial-A1 bench_exit=0 wall=1.22s bt_rc=0
+[2026-11-05T11:58:02Z] ENTER_TRACE_ATTACH_FAILED d2serial-B rc=None
+[2026-11-05T11:58:05Z] ENTER_RUN d2serial-B bench_exit=0 wall=1.30s bt_rc=0
+[2026-11-05T11:58:44Z] BASELINE_RUN rc=0
+[2026-11-05T11:58:45Z] PMU_RUN d16-A0 csv_rc=0 txt_rc=0
+[2026-11-05T11:58:45Z] PMU_RUN d16-A1 csv_rc=0 txt_rc=0
+[2026-11-05T11:58:46Z] PMU_RUN d16-B csv_rc=0 txt_rc=0
+[2026-11-05T11:59:18Z] ALLOC_RUN d16-A0 bench_exit=0 wall=0.35s bt_rc=0
+[2026-11-05T11:59:50Z] ALLOC_RUN d16-A1 bench_exit=0 wall=0.37s bt_rc=0
+[2026-11-05T12:00:21Z] ALLOC_RUN d16-B bench_exit=0 wall=0.31s bt_rc=0
+[2026-11-05T12:00:21Z] LOCK_RELEASED 2026-11-05T12:00:21Z
+Traceback (most recent call last):
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 479, in <module>
+    sys.exit(main())
+             ~~~~^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 456, in main
+    bucket_runs(raw)
+    ~~~~~~~~~~~^^^^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 284, in bucket_runs
+    rc, out, err = run(["/usr/sbin/taskset", "-c", "0", sys.executable, "-I",
+                   ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        BUCKET_PROBE,
+                        ^^^^^^^^^^^^^
+    ...<4 lines>...
+                        "--label", f"R3-W03-D16-{arm}"],
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                       timeout=600, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 64, in run
+    out_f = open(stdout, "wb") if stdout else subprocess.PIPE
+            ~~~~^^^^^^^^^^^^^^
+ValueError: negative file descriptor
+[2026-11-05T12:01:08Z] MECH_PHASE2_BEGIN
+[2026-11-05T12:01:08Z] LOCK_ACQUIRED 2026-11-05T12:01:08Z waited=0.0s inode=6941075 fuser_rc=0 fuser='62553'
+[2026-11-05T12:01:09Z] SUDO_VALIDATE rc=0
+[2026-11-05T12:01:10Z] LOCK_RELEASED 2026-11-05T12:01:10Z
+Traceback (most recent call last):
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_phase2.py", line 48, in <module>
+    ms.bucket_runs(RAW)
+    ~~~~~~~~~~~~~~^^^^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 286, in bucket_runs
+    rc, out, err = run(["/usr/sbin/taskset", "-c", "0", sys.executable, "-I",
+                   ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        BUCKET_PROBE,
+                        ^^^^^^^^^^^^^
+    ...<4 lines>...
+                        "--label", f"R3-W03-D16-{arm}"],
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                       timeout=600, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 78, in run
+    out_f.close()
+    ^^^^^^^^^^^
+AttributeError: 'int' object has no attribute 'close'
+[2026-11-05T12:01:27Z] MECH_PHASE2_BEGIN
+[2026-11-05T12:01:27Z] LOCK_ACQUIRED 2026-11-05T12:01:27Z waited=0.0s inode=6941075 fuser_rc=0 fuser='62595'
+[2026-11-05T12:01:27Z] SUDO_VALIDATE rc=0
+[2026-11-05T12:01:28Z] BUCKET_RUN A0 rc=0
+[2026-11-05T12:01:29Z] BUCKET_RUN A1 rc=0
+[2026-11-05T12:01:29Z] BUCKET_RUN B rc=0
+[2026-11-05T12:01:32Z] RESOURCE_RUN A0 time_rc=0 strace_rc=0
+[2026-11-05T12:01:36Z] RESOURCE_RUN A1 time_rc=0 strace_rc=0
+[2026-11-05T12:01:38Z] RESOURCE_RUN B time_rc=0 strace_rc=0
+[2026-11-05T12:01:38Z] LOCK_RELEASED 2026-11-05T12:01:38Z
+[2026-11-05T12:01:38Z] MECH_PHASE2_END
+Traceback (most recent call last):
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_phase2.py", line 59, in <module>
+    ms.say("MECH_PHASE2_END")
+    ~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/mech_session.py", line 50, in say
+    _log.write(line + "\n")
+    ~~~~~~~~~~^^^^^^^^^^^^^
+ValueError: I/O operation on closed file.

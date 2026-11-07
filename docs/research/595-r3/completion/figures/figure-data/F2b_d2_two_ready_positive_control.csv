@@ -1,0 +1,4 @@
+arm,pure_submit_enters,data_ops,ops_per_enter
+A0,6,6,1.0
+A1,6,6,1.0
+B,3,6,2.0

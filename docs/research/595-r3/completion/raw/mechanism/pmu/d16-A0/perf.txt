@@ -1,0 +1,18 @@
+# started on Thu Nov  5 19:58:44 2026
+
+
+ Performance counter stats for '/usr/sbin/taskset -c 2 /usr/bin/env SLUICE_595_R3_ARM=A0 SLUICE_BENCH_CASE_FILTER==W03-uring-4k-d16 SLUICE_BENCH_JSONL=/dev/null SLUICE_BENCH_MEASURED=1 SLUICE_BENCH_STATS=1 SLUICE_BENCH_TMP_DIR=/tmp/sluice-595-r3c-mech SLUICE_BENCH_WARMUP=0 /home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop':
+
+       812,125,800      cycles                                                                
+       702,767,768      instructions                                                          
+        11,560,227      cache-references                                                      
+         1,577,695      cache-misses                                                          
+         1,565,450      branch-misses                                                         
+            20,042      context-switches                                                      
+
+       0.241187670 seconds time elapsed
+
+       0.065962000 seconds user
+       0.174467000 seconds sys
+
+

@@ -1,0 +1,3 @@
+acquired_utc=2026-11-05T11:32:04Z
+bench_rc=0
+released_utc=2026-11-05T11:32:04Z

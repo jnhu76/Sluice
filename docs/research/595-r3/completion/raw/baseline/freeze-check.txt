@@ -1,0 +1,35 @@
+# freeze re-check 2026-11-05T08:39:36Z
+--- main HEAD ---
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+--- main status lines ---
+0
+--- r3 HEAD ---
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+--- r3 branch ---
+research-595-r3
+--- r3 status ---
+ M bench/bench_common.hpp
+ M bench/bench_w03_external_loop.cpp
+ M include/sluice/async/detail/test_access.hpp
+ M include/sluice/async/detail/uring_backend.hpp
+ M src/async/uring_backend.cpp
+ M xmake/tests.lua
+?? bench/r3_ready_batch.hpp
+?? tests/uring_ready_batch_deterministic_test.cpp
+?? tests/uring_ready_batch_fault_test.cpp
+?? tests/uring_ready_batch_research_test.cpp
+--- r3 source file mtimes ---
+2026-11-05 13:28:54.053337469 +0800 /home/jnhu/sluice-595-e5/r3/worktree/bench/bench_common.hpp
+2026-11-05 13:28:54.054065659 +0800 /home/jnhu/sluice-595-e5/r3/worktree/bench/bench_w03_external_loop.cpp
+2026-11-05 12:59:00.963468942 +0800 /home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/test_access.hpp
+2026-11-05 13:32:56.217265370 +0800 /home/jnhu/sluice-595-e5/r3/worktree/include/sluice/async/detail/uring_backend.hpp
+2026-11-05 14:25:06.547936296 +0800 /home/jnhu/sluice-595-e5/r3/worktree/src/async/uring_backend.cpp
+2026-11-05 14:13:17.121095033 +0800 /home/jnhu/sluice-595-e5/r3/worktree/xmake/tests.lua
+2026-11-05 13:28:54.052952005 +0800 /home/jnhu/sluice-595-e5/r3/worktree/bench/r3_ready_batch.hpp
+2026-11-05 14:24:23.504369781 +0800 /home/jnhu/sluice-595-e5/r3/worktree/tests/uring_ready_batch_deterministic_test.cpp
+2026-11-05 13:32:17.854845455 +0800 /home/jnhu/sluice-595-e5/r3/worktree/tests/uring_ready_batch_fault_test.cpp
+2026-11-05 13:29:42.688286276 +0800 /home/jnhu/sluice-595-e5/r3/worktree/tests/uring_ready_batch_research_test.cpp
+--- only r3 worktree entries ---
+/home/jnhu/sluice-595-e5/r3/worktree
+--- r3 worktree count under r3 ---
+1

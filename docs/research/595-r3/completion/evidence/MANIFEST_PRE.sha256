@@ -1,0 +1,12 @@
+652e50065c7913b3342b36853c4680b85d0d345927051f4000eecc118a06d994  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/BASELINE_COMPLETION.md
+ada5b6c33ec20b48d9096150fc1133ad08bfd8b1262013bb629575ef88924303  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/evidence/CONTEXT_COMPLETION.md
+45b863f83d4bfd06ef4ce1e5728f70bb96fcfd61de4e90f031b9b6631dd8bbde  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/binaries.txt
+27f1aa6268078ca9b882c233a799e23bbc3ed5192c19193fd81af0400c6d68c0  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/freeze-check.txt
+47dd5e827835f409a8a43919875726ef4245687d10f94e4b9cb32372f3bea06f  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/gh-readonly.txt
+ef3821f59e5ac9e9ea69bd048cccf6a751a4c954eb2a15e02ba1f2d345332836  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/lock.txt
+318ce284c60327643563916708f90afd442326689d3ff66941d88edc1a566037  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/main-tree.txt
+d8b7db784835d06764c0257eb5037ec230dba5c4fa2af8eee95935da27abf87d  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/platform.txt
+445f2acc35528a41ab63c69919e83898c6bb20724d148edc5b688331bb18818f  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/prior-evidence-check.txt
+173c1a785d7c32b0bb2d07aa36c140f0040825273296cc12da535e2f1c502942  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/product-diff.txt
+a7efbc43095bd483d8e3ab5764ea31444ba26254e22fdbc37420fe9e76f53c34  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/r1-r2-readonly.txt
+e91342dfe56dba4319b1e72bc8268490674acd2e3e928625a31c42f064ef7afb  /home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/baseline/r3-worktree.txt

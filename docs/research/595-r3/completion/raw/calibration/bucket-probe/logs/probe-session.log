@@ -1,0 +1,28 @@
+=== probe start 2026-11-05T11:12:45Z ===
+=== probe lock acquired 2026-11-05T11:12:45Z ===
+EXCLUSIVITY_CHECK: blocked as expected
+[bucket-probe] R3-W03-D16-A0-r1 exit=0 cpu_s=0.074562103 main=16 driver=1 iowq=8 ru=0.319s
+[bucket-probe] R3-W03-D16-A0-r2 exit=0 cpu_s=0.073593398 main=13 driver=1 iowq=7 ru=0.271s
+[bucket-probe] R3-W03-D16-A0-r3 exit=0 cpu_s=0.06173125 main=11 driver=1 iowq=6 ru=0.234s
+[bucket-probe] R2-W02-D2-A-r1 exit=0 cpu_s=0.105172344 main=24 driver=0 iowq=10 ru=0.377s
+[bucket-probe] R2-W02-D2-A-r2 exit=0 cpu_s=0.102706975 main=21 driver=0 iowq=10 ru=0.346s
+[bucket-probe] R2-W02-D2-A-r3 exit=0 cpu_s=0.097976037 main=21 driver=0 iowq=10 ru=0.334s
+[bucket-probe] R2-W02-D2-B-r1 exit=0 cpu_s=0.104484061 main=25 driver=0 iowq=10 ru=0.375s
+[bucket-probe] R2-W02-D2-B-r2 exit=0 cpu_s=0.102131397 main=22 driver=0 iowq=10 ru=0.346s
+[bucket-probe] R2-W02-D2-B-r3 exit=0 cpu_s=0.104038487 main=22 driver=0 iowq=10 ru=0.347s
+=== probe lock release 2026-11-05T11:12:49Z ===
+=== probe end 2026-11-05T11:12:49Z ===
+=== probe start 2026-11-05T11:15:13Z ===
+=== probe lock acquired 2026-11-05T11:15:13Z ===
+EXCLUSIVITY_CHECK: blocked as expected
+[bucket-probe] R3-W03-D16-A0-r1 exit=0 cpu_s=0.075197862 main=16 driver=1 iowq=8 ru=0.317s
+[bucket-probe] R3-W03-D16-A0-r2 exit=0 cpu_s=0.073226034 main=13 driver=1 iowq=8 ru=0.273s
+[bucket-probe] R3-W03-D16-A0-r3 exit=0 cpu_s=0.061830161 main=11 driver=0 iowq=6 ru=0.238s
+[bucket-probe] R2-W02-D2-A-r1 exit=0 cpu_s=0.102682067 main=25 driver=0 iowq=10 ru=0.373s
+[bucket-probe] R2-W02-D2-A-r2 exit=0 cpu_s=0.098777467 main=21 driver=0 iowq=10 ru=0.332s
+[bucket-probe] R2-W02-D2-A-r3 exit=0 cpu_s=0.100148078 main=21 driver=0 iowq=10 ru=0.335s
+[bucket-probe] R2-W02-D2-B-r1 exit=0 cpu_s=0.106259626 main=25 driver=0 iowq=10 ru=0.385s
+[bucket-probe] R2-W02-D2-B-r2 exit=0 cpu_s=0.102399492 main=21 driver=0 iowq=10 ru=0.345s
+[bucket-probe] R2-W02-D2-B-r3 exit=0 cpu_s=0.103191015 main=22 driver=0 iowq=10 ru=0.345s
+=== probe lock release 2026-11-05T11:15:17Z ===
+=== probe end 2026-11-05T11:15:17Z ===

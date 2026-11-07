@@ -1,0 +1,14 @@
+unit,cpu,tput,p95,p99,mechanism_or_resources
+W-03 d16 (4 KiB) main gate   B-A0,N/R,N/R,N/R,N/R,DIAG
+W-03 d4 / d64  B-A0,N/R,N/R,N/R,N/R,N/R
+W-03 64 KiB d16  B-A0,N/R,N/R,N/R,N/R,N/R
+W-03 threadpool d4/d16/d64  B-A0,N/R,N/R,N/R,N/R,N/R
+"W-03 placement (SMT 2,12 / xphys 2,8)",N/R,N/R,N/R,N/R,N/R
+W-02 D2 single refill  old $B_{R2}$,PASS,REGR,REGR,REGR,
+W-02 D3  old $B_{R2}$,PASS,PASS,PASS,PASS,
+W-02 D16  old $B_{R2}$,PASS,PASS,PASS,PASS,
+W-02 D2 single refill  new B,N/R,N/R,N/R,N/R,
+D2 two-ready positive (mech),,,,,DIAG
+D2 serial negative (mech),,,,,DIAG
+W-02 saturation  B,N/R,N/R,N/R,N/R,N/R
+resource budget  B vs A0,,,,,INCON

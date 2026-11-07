@@ -1,0 +1,98 @@
+{
+ "arms": {
+  "A": "A_R2 (immediate, 271b81bf+7be9d014)",
+  "B": "B_R2 (bounded progress, same SHA)"
+ },
+ "binary": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/protection/PROT-W02-D3/header.json",
+ "binary_sha256": "32beabcd891801eb65dab1d6e2df72aa0b89a98a2c16a114d398527cb821589a",
+ "case": "W02-uring-4k-d3",
+ "comparison": "B_R2 - A_R2",
+ "ended_utc": "2026-11-05T11:23:30Z",
+ "enters": {
+  "A_R2": {
+   "lines_with_enter": 60004,
+   "present": true,
+   "pure_submit": 60000,
+   "to_submit_hist": {
+    "1": 60004
+   },
+   "total": 60004
+  },
+  "B_R2": {
+   "lines_with_enter": 40009,
+   "present": true,
+   "pure_submit": 40005,
+   "to_submit_hist": {
+    "1": 20014,
+    "2": 19995
+   },
+   "total": 40009
+  },
+  "lane": "diagnostic strace (WARMUP=0 MEASURED=1, 1 rep); not performance evidence"
+ },
+ "env_overrides": [
+  "SLUICE_BENCH_595_DEPTHS=1"
+ ],
+ "fixture_unchanged": true,
+ "kind": "R2 same-SHA legacy protection (NOT R3 B)",
+ "metrics": {
+  "cpu": {
+   "ci_hi": -0.06541208988269673,
+   "ci_lo": -0.08103737108581215,
+   "ci_upper_one_sided_95": -0.06673449126367632,
+   "holm_alpha": 0.0125,
+   "holm_reject": true,
+   "mean": -0.07326892932458086,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.05,
+   "upper_in_bound": true
+  },
+  "p95": {
+   "ci_hi": -0.10359453062695877,
+   "ci_lo": -0.14725074710672595,
+   "ci_upper_one_sided_95": -0.10831712004118453,
+   "holm_alpha": 0.016666666666666666,
+   "holm_reject": true,
+   "mean": -0.12795443833872597,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.05,
+   "upper_in_bound": true
+  },
+  "p99": {
+   "ci_hi": -0.06390214157623386,
+   "ci_lo": -0.16212336632646016,
+   "ci_upper_one_sided_95": -0.07287567283362932,
+   "holm_alpha": 0.025,
+   "holm_reject": true,
+   "mean": -0.1151140683490197,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.05,
+   "upper_in_bound": true
+  },
+  "tput": {
+   "ci_hi": -0.07057741462149401,
+   "ci_lo": -0.08896945392036876,
+   "ci_upper_one_sided_95": -0.07206693373479152,
+   "holm_alpha": 0.05,
+   "holm_reject": true,
+   "mean": -0.07974980818867904,
+   "p": 9.999000099990002e-05,
+   "pass": true,
+   "point_in_bound": true,
+   "threshold": 0.03,
+   "upper_in_bound": true
+  }
+ },
+ "pairs_valid": 24,
+ "phase": "PROT-W02-D3",
+ "records_total": 48,
+ "records_valid": 48,
+ "started_utc": "2026-11-05T11:22:02Z",
+ "verdict": "PASS"
+}

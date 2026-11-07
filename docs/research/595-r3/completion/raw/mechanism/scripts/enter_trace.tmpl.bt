@@ -1,0 +1,94 @@
+#!/usr/bin/env bpftrace
+// #595 R3 continuation mechanism enter tracer (diagnostic lane, not a timed block).
+// COMM is substituted by the orchestrator with the bench comm verified from /proc.
+// syscalls filtered by bench comm; io_uring:* tracepoints are global (no pid field)
+// and are baseline-subtracted by the analyzer.
+
+BEGIN
+{
+  printf("MECH_ENTER_TRACE_BEGIN\n");
+}
+
+tracepoint:syscalls:sys_enter_io_uring_enter
+{
+  @enter_global = count();
+}
+
+tracepoint:syscalls:sys_enter_io_uring_enter
+/comm == "__COMM__"/
+{
+  @enter_bench = count();
+  @enter_by_tid[tid] = count();
+  @ts_hist[args->to_submit] = count();
+  @mc_hist[args->min_complete] = count();
+  @flags_hist[args->flags] = count();
+  @bucket[args->to_submit, args->min_complete, args->flags] = count();
+  printf("E %u %u %d %u %u %u\n", pid, tid, args->fd, args->to_submit,
+         args->min_complete, args->flags);
+}
+
+tracepoint:syscalls:sys_exit_io_uring_enter
+/comm == "__COMM__"/
+{
+  @exit_total = count();
+  @ret_hist[args->ret] = count();
+}
+
+tracepoint:syscalls:sys_enter_futex
+/comm == "__COMM__"/
+{
+  @futex_total = count();
+}
+tracepoint:syscalls:sys_enter_futex_wait
+/comm == "__COMM__"/
+{
+  @futex_wait = count();
+}
+tracepoint:syscalls:sys_enter_futex_wake
+/comm == "__COMM__"/
+{
+  @futex_wake = count();
+}
+
+tracepoint:syscalls:sys_enter_epoll_wait,
+tracepoint:syscalls:sys_enter_epoll_pwait,
+tracepoint:syscalls:sys_enter_epoll_pwait2
+/comm == "__COMM__"/
+{
+  @epoll_wait = count();
+}
+
+tracepoint:syscalls:sys_enter_eventfd2 { @eventfd2 = count(); }
+tracepoint:syscalls:sys_enter_io_uring_setup { @iouring_setup = count(); }
+tracepoint:syscalls:sys_enter_io_uring_register { @iouring_register = count(); }
+tracepoint:syscalls:sys_enter_timer_create { @timer_create = count(); }
+tracepoint:syscalls:sys_enter_timerfd_create { @timerfd_create = count(); }
+tracepoint:syscalls:sys_enter_eventfd { @eventfd_write = count(); }
+
+tracepoint:io_uring:io_uring_submit_req
+{
+  @sqe_total = count();
+  @sqe_opcode[args->opcode] = count();
+}
+
+tracepoint:io_uring:io_uring_complete
+{
+  @cqe_total = count();
+  @cqe_res[args->res] = count();
+}
+
+tracepoint:io_uring:io_uring_defer
+{
+  @defer_total = count();
+  @defer_opcode[args->opcode] = count();
+}
+
+tracepoint:io_uring:io_uring_queue_async_work
+{
+  @queue_async_work = count();
+}
+
+END
+{
+  printf("MECH_ENTER_TRACE_END\n");
+}

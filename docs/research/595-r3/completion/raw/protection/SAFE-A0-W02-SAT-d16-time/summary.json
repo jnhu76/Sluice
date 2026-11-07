@@ -1,0 +1,89 @@
+{
+ "label": "SAFE-A0-W02-SAT-d16-time",
+ "records": 1,
+ "valid": 1,
+ "metrics": {
+  "cpu_ns_per_op": {
+   "n": 1,
+   "mean": 3133.7328125,
+   "min": 3133.7328125,
+   "max": 3133.7328125
+  },
+  "ops_per_sec": {
+   "n": 1,
+   "mean": 320720.7236100966,
+   "min": 320720.7236100966,
+   "max": 320720.7236100966
+  },
+  "p50_ns": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0
+  },
+  "p95_ns": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0
+  },
+  "p99_ns": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0.0,
+   "max": 0.0
+  },
+  "peak_rss_kb": {
+   "n": 1,
+   "mean": 5212.0,
+   "min": 5212,
+   "max": 5212
+  },
+  "stats_submit_calls": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_submitted_ops": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_completed_ops": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_max_outstanding": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "stats_queue_full_retries": {
+   "n": 1,
+   "mean": 0.0,
+   "min": 0,
+   "max": 0
+  },
+  "extra_a": {
+   "n": 1,
+   "mean": 3200.0,
+   "min": 3200,
+   "max": 3200
+  },
+  "extra_b": {
+   "n": 1,
+   "mean": 200.0,
+   "min": 200,
+   "max": 200
+  }
+ },
+ "max_user_threads": 0,
+ "time_v_max_rss_kb": [
+  5212
+ ]
+}

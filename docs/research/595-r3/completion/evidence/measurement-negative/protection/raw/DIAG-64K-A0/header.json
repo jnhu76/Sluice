@@ -1,0 +1,20 @@
+{
+ "job": {
+  "label": "DIAG-64K-A0",
+  "binary": "/home/jnhu/sluice-595-e5/r3/worktree/build/linux/x86_64/release/bench_w03_external_loop",
+  "case": "W03-uring-64k-d16-r3d16-64k",
+  "env": {
+   "SLUICE_595_R3_CASES": "1",
+   "SLUICE_595_R3_ARM": "A0"
+  },
+  "cpu": "2",
+  "warmup": 0,
+  "measured": 1,
+  "expected_ops": 2000,
+  "reps": 1,
+  "strace_enter": true,
+  "sampler": false
+ },
+ "runner_sha256": "2144ce784bc4a2d67d2ec0b8c0d55aff746283711e1bbaa3dc9d49fc9b0550dd",
+ "started_utc": "2026-11-05T11:29:47Z"
+}

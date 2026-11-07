@@ -1,0 +1,15 @@
+{
+ "kind": "alloc-trace",
+ "case": "W03-uring-4k-d16",
+ "arm": "A0",
+ "bpftrace_rc": 0,
+ "bench": {
+  "exit": 0,
+  "wall_s": 0.35292247899997164,
+  "ru_utime_s": 0.12073199999999999,
+  "ru_stime_s": 0.230481,
+  "ru_nvcsw": 25965,
+  "ru_nivcsw": 21148
+ },
+ "ts_utc": "2026-11-05T11:59:18Z"
+}

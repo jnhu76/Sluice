@@ -1,0 +1,10 @@
+{
+ "kind": "pmu",
+ "case": "W03-uring-4k-d16",
+ "arm": "B",
+ "events": "cycles,instructions,cache-references,cache-misses,branch-misses,context-switches",
+ "perf_rc_csv": 0,
+ "perf_rc_txt": 0,
+ "scope": "root; u+k; whole process lifetime; bench runs as root child",
+ "ts_utc": "2026-11-05T11:58:46Z"
+}

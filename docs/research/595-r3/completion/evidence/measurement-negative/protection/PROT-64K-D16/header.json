@@ -1,0 +1,7 @@
+{
+ "phase": "PROT-64K-D16",
+ "verdict": "BLOCKED_SEMANTICS_NOT_READY",
+ "comparison": "B - A0 (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "semanticsReady": false,
+ "source": "SUMMARY.json"
+}

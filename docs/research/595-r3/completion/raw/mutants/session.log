@@ -1,0 +1,48 @@
+=== PRE-STATE ===
+acquired_utc=2026-11-05T12:43:02Z
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+15
+c1a31a30a9f02db99fac2ab2d0a8af028245a6fff0220314b8119c26e30d3003  -
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  build/linux/x86_64/release/uring_ready_batch_deterministic_test
+2dc7b1233d4f602201f0510a4c8f64322409b55cfe4e301432fec781d057bef1  build/linux/x86_64/release/uring_ready_batch_det_mut_includes_not_ready
+4d5f4390890fa7a01ac85b1e52b3fa23ba51c67a799157e2e77c8113e29c00ad  build/linux/x86_64/release/uring_ready_batch_det_mut_redispatch_consumed
+a90b4916071ba745a8b16ca9795853fbb7b2b5e851ef3d2666809640186d7117  build/linux/x86_64/release/uring_ready_batch_det_mut_residue_dropped
+=== BASE GREEN (frozen binary) ===
+base rc=0
+=== MUTANT RED ===
+=== MUTANT RED (redo, no set -e) ===
+acquired_utc=2026-11-05T12:43:39Z
+mut_includes_not_ready rc=1
+mut_residue_dropped rc=1
+mut_redispatch_consumed rc=134
+uring_ready_batch_deterministic: 17 failure(s)
+uring_ready_batch_deterministic: 9 failure(s)
+sluice::async::UringAsyncBackend: router exhaustion (invariant violation)
+terminate called without an active exception
+released_utc=2026-11-05T12:43:39Z
+=== NOTE ===
+First mutant session (12:43:02Z) aborted after mut1 due to set -e on expected rc=1;
+base-green (rc=0) and mut1 output were captured; this redo session re-ran all three
+mutants without set -e. No source or frozen binary changed between sessions.
+=== FORCED REBUILD FROM SAME FINAL SOURCE (clean builddir) ===
+acquired_utc=2026-11-05T12:43:50Z
+checking for liburing capability ... ok (/usr/include/liburing.h + /usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so)
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m
+[0m[1;38;5;3;1mwarning: [38;5;3;1mAscend SDK not found[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 2.299s[0m
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  /tmp/r3c-mutant-rebuild/linux/x86_64/release/uring_ready_batch_deterministic_test
+uring_ready_batch_deterministic: all deterministic ready-batch oracles passed
+restored_green_rc=0
+=== RESTORE WORKTREE CONFIG ===
+=== POST-STATE ===
+0a22a79195f1b913145fcd443496e7f70b08cdcf
+15
+c1a31a30a9f02db99fac2ab2d0a8af028245a6fff0220314b8119c26e30d3003  -
+c54a9222ed7121935b264417e6b7a65c2df6c8a2f943e98f71c01a602d59e700  build/linux/x86_64/release/uring_ready_batch_deterministic_test
+0ebfb7f0c204579fe2cc9e8d7e88cee2de9112e25c0cfb11e8502e59fc4fe2d1  build/linux/x86_64/release/bench_w03_external_loop
+1372b3468b8489367bfe0944bf3f537775cb8d4de9391165ae03120485770a31  build/linux/x86_64/release/uring_ready_batch_research_test
+18395c0a570862147436ff11624eec7276ed1851546df8ebb4ad6590a4fe3bba  build/linux/x86_64/release/uring_ready_batch_fault_test
+4e719b1e4dc2f0575812f4310b54e96c443f8ce8d1c6dd39c81bf5ec91351497  build/linux/x86_64/release/bench_w02_pipeline
+released_utc=2026-11-05T12:43:56Z

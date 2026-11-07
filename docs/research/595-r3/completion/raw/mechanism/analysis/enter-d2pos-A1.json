@@ -1,0 +1,133 @@
+{
+ "bench_record": {
+  "case_id": "W03-uring-4k-d2-r3d2pos",
+  "cpu_s": 0.000405418,
+  "empty_wakes": 0,
+  "failure": "",
+  "lat_p50_ns": 1189.0,
+  "lat_p95_ns": 1189.0,
+  "lat_p99_ns": 1189.0,
+  "notifications": 3,
+  "ok": true,
+  "ops": 2,
+  "ops_per_sec": 22157.964,
+  "passes": 3,
+  "peak_rss_kb": 21544,
+  "r3_accepted": 2,
+  "r3_entry_calls": 2,
+  "r3_flush_attempts": 2,
+  "r3_gate_stops": 0,
+  "r3_group_calls": 0,
+  "r3_ineligible_fallbacks": 0,
+  "r3_prefix_max": 1,
+  "r3_single_calls": 2,
+  "r3_suffix_single_calls": 0,
+  "r3_untouched": 0,
+  "request_count": 2,
+  "stats_completed_ops": 2,
+  "stats_invalid_state": 0,
+  "stats_poll_calls": 4,
+  "stats_queue_full_retries": 0,
+  "stats_submit_calls": 2,
+  "stats_submitted_ops": 2,
+  "stats_wait_calls": 0,
+  "submits": 2
+ },
+ "bucket_map": {
+  "1, 0, 0": 6,
+  "1, 1, 1": 4
+ },
+ "enter": {
+  "classes": {
+   "pure_submit": 6,
+   "submit_with_flags": 4
+  },
+  "coverage": {
+   "delta_all": 4,
+   "expected_data_sqe": 6,
+   "sum_to_submit_all": 10,
+   "sum_to_submit_submit_classes": 10
+  },
+  "driver_pure_submits": 0,
+  "exit_total": 10,
+  "flags_hist": {
+   "0": 6,
+   "1": 4
+  },
+  "main_tid": 62068,
+  "map_enter_bench": 10,
+  "map_enter_global": 55,
+  "max_to_submit": 1,
+  "min_complete_hist": {
+   "0": 6,
+   "1": 4
+  },
+  "parsed_equals_map": true,
+  "pure_submit_by_tid": {
+   "62068": 6
+  },
+  "pure_submit_to_submit_hist": {
+   "1": 6
+  },
+  "ret_hist": {
+   "1": 10
+  },
+  "submitter_pure_submits": 6,
+  "sum_to_submit": 10,
+  "to_submit_hist": {
+   "1": 10
+  },
+  "total_events_parsed": 10
+ },
+ "global_kernel": {
+  "cqe_res": {
+   "0": 232,
+   "4096": 6
+  },
+  "cqe_total": 238,
+  "defer_opcode": {},
+  "defer_total": 0,
+  "eventfd2": 4,
+  "eventfd_write": 0,
+  "iouring_register": 12,
+  "iouring_setup": 4,
+  "queue_async_work": 10,
+  "sqe_opcode": {
+   "21": 4,
+   "22": 6,
+   "29": 228
+  },
+  "sqe_total": 238,
+  "timer_create": 0,
+  "timerfd_create": 102
+ },
+ "meta": {
+  "arm": "A1",
+  "attached": false,
+  "bench": {
+   "exit": 0,
+   "ru_nivcsw": 22,
+   "ru_nvcsw": 39,
+   "ru_stime_s": 0.041518,
+   "ru_utime_s": 0.010154999999999999,
+   "wall_s": 0.05252232299972093
+  },
+  "bpftrace_rc": 0,
+  "bt_script": "/home/jnhu/sluice-595-e5/r3-completion-20261105T083818Z/raw/mechanism/scripts/_session_enter_trace.bt",
+  "case": "W03-uring-4k-d2-r3d2pos",
+  "kind": "enter-trace",
+  "ts_utc": "2026-11-05T11:55:55Z"
+ },
+ "park_wake": {
+  "epoll_wait": 9,
+  "futex_total": 37,
+  "futex_wait": 0,
+  "futex_wake": 0
+ },
+ "trace_health": {
+  "attached_from_stderr": 21,
+  "attached_probes": null,
+  "lost_events": [],
+  "stderr_has_lost": false
+ }
+}

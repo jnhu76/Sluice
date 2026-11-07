@@ -1,0 +1,7 @@
+{
+ "phase": "RESOURCE",
+ "verdict": "NOT_ESTABLISHED",
+ "comparison": "B - A0 resource gate (NOT RUN: BLOCKED_SEMANTICS_NOT_READY)",
+ "semanticsReady": false,
+ "source": "SUMMARY.json"
+}

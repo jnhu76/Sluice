@@ -1,0 +1,21 @@
+{
+ "label": "DIAG-THREADPOOL-NOCASE",
+ "records": 1,
+ "valid": 0,
+ "metrics": {
+  "cpu_ns_per_op": null,
+  "ops_per_sec": null,
+  "p50_ns": null,
+  "p95_ns": null,
+  "p99_ns": null,
+  "peak_rss_kb": null,
+  "stats_submit_calls": null,
+  "stats_submitted_ops": null,
+  "stats_completed_ops": null,
+  "stats_max_outstanding": null,
+  "stats_queue_full_retries": null,
+  "extra_a": null,
+  "extra_b": null
+ },
+ "max_user_threads": 0
+}
