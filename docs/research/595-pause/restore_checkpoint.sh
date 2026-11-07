@@ -15,19 +15,31 @@ fail() { printf 'FAIL: %s\n' "$*"; fails=$((fails+1)); }
 need_file() { [ -f "$1" ] || fail "missing file $1"; }
 
 # --- frozen identities (checkpoint pause-20261107) ---
-# Bundle sha256 is NOT pinned here (self-reference: the bundle contains this
-# script); it is checked against the external sidecar <bundle>.sha256.
-MASTER=271b81bfc9d64eecc0266fe7066b9040525dd710
+# Exact SHAs of THIS script's own branch/tag/master are not pinned here
+# (self-reference); the bundle sha256 is checked against the external sidecar
+# <bundle>.sha256, and master is validated structurally: every frozen research
+# head below must be an ancestor of master (research records merged), and the
+# checkpoint tag/tree must exist.
 R2_BASE=271b81bfc9d64eecc0266fe7066b9040525dd710
 R3_BASE=0a22a79195f1b913145fcd443496e7f70b08cdcf
 declare -a REFS=(
   master research-595-flow-audit research-595-r3 research-595-r4
   research-595-r5 research-595-r5-diag research-595-r5rm-diag
-  research-595-r5rm-diag-cleanup
+  research-595-r5rm-diag-cleanup research/595-pause-20261107
   research/595-causal-r2 research/595-information-audit
   research/595-r3-archive research/595-r3-continuation
   research/595-r4-state-aware research/595-r5-phase-a
 )
+declare -a MERGED_HEADS=(
+  271b81bfc9d64eecc0266fe7066b9040525dd710 0a22a79195f1b913145fcd443496e7f70b08cdcf
+  f3b25329bc8a64a201961c426a58adacfb8fdf08 b191bb893432c4df0551d24c85843d8513ed5a55
+  21374a4066713bf2b2c1bb19f9744818c02ab2a7 492086ac24421678e5a7ab1d3b5c8f81ac9314bb
+  3fd6476aa964d02a7d74b772955fbf3a8a04d7d8 d4eddc4b599299e7818004dec3ec8a2b48527f3c
+  ec8c8feab20007b0156650e579434bdaee2bb17d e265aa7c23f989854e0df0ac1cd071f13cbf0dd1
+  6d29acddc8a931cc93f10ee94aacae75a5537c62 772a4329497eefdbccde6f28412a330f3c8e95eb
+  0ac2b582c36f0a9013cfc1b3d024fd3bf258d837 3492dd3d1d1ae6e47d50b86311699f3c39e8b402
+)
+TAG=archive/595-pause-20261107
 WS="$AR/source/worktree-state"
 BUNDLE="$AR/source/sluice-595-research.bundle"
 
@@ -65,9 +77,19 @@ run_drill() {
     git -C "$R" rev-parse --verify --quiet "refs/remotes/origin/$ref" >/dev/null \
       || fail "ref missing after clone: $ref"
   done
-  local m
-  m=$(git -C "$R" rev-parse refs/heads/master)
-  [ "$m" = "$MASTER" ] || fail "master is $m"
+  local m="refs/remotes/origin/master"
+  git -C "$R" rev-parse --verify --quiet "$m" >/dev/null || fail "master missing"
+  local sha
+  for sha in "${MERGED_HEADS[@]}"; do
+    git -C "$R" merge-base --is-ancestor "$sha" "$m" 2>/dev/null \
+      || fail "frozen head $sha is NOT an ancestor of master (research records not merged?)"
+  done
+  git -C "$R" rev-parse -q --verify "refs/tags/$TAG" >/dev/null \
+    || fail "checkpoint tag $TAG missing from bundle"
+  git -C "$R" merge-base --is-ancestor "refs/tags/$TAG" "$m" 2>/dev/null \
+    || fail "checkpoint tag $TAG not merged into master"
+  git -C "$R" cat-file -e "$m:docs/research/595-pause/RESTORE_RECEIPT.json" 2>/dev/null \
+    || fail "master tree lacks docs/research/595-pause/RESTORE_RECEIPT.json"
   # key research sources checkout + content spot-checks
   git -C "$R" checkout -q research-595-r5 \
     && grep -q "submit_ready_reads" "$R/bench/r3_ready_batch.hpp" 2>/dev/null \

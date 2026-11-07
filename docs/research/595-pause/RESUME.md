@@ -6,7 +6,7 @@
 
 | 对象 | 是什么 | 怎么检出 |
 |---|---|---|
-| 产品 | master @ `271b81bf`（A0/IMMEDIATE，无研究代码） | `git checkout master` |
+| 产品 | 产品代码 = `271b81bf` 时点（A0/IMMEDIATE；其后 master 仅并入研究记录 docs/research、bench/research、research/，产品代码零改动） | `git checkout master` |
 | 最佳研究基线（cleanup 后） | `research-595-r5` @ `b191bb89`（= f3b25329 + C1 `c55165a2` + C2 `b191bb89`，18 场景逐字节等价 PROVEN） | `git checkout research-595-r5` |
 | R4 原始原型 | `research-595-r4` @ `f3b25329`（等价于 `research-595-r4-state-aware` 内 `evidence/impl-f3b25329.patch`） | `git checkout research-595-r4` |
 | R3 原型（batch 语义） | 分支 `research-595-r3` @ `0a22a791` + patch 链：`r3-completion.patch` → `delta_w02.patch`/`delta_w03.patch`（全在 PR #626/#627 分支 `docs/research/595-r3/`） | 见 §4 命令 3 |
