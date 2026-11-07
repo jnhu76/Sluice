@@ -30,11 +30,13 @@ declare -a REFS=(
   research/595-r3-archive research/595-r3-continuation
   research/595-r4-state-aware research/595-r5-phase-a
 )
+# Doc-record heads that were merged into master. The five prototype/instrument
+# tips (f3b25329 R4, b191bb89 R5-cleanup, 21374a40/492086ac/3fd6476a diag
+# chains) are deliberately NOT master ancestors (research code, never merged);
+# they are asserted present as branch refs in REFS above.
 declare -a MERGED_HEADS=(
   271b81bfc9d64eecc0266fe7066b9040525dd710 0a22a79195f1b913145fcd443496e7f70b08cdcf
-  f3b25329bc8a64a201961c426a58adacfb8fdf08 b191bb893432c4df0551d24c85843d8513ed5a55
-  21374a4066713bf2b2c1bb19f9744818c02ab2a7 492086ac24421678e5a7ab1d3b5c8f81ac9314bb
-  3fd6476aa964d02a7d74b772955fbf3a8a04d7d8 d4eddc4b599299e7818004dec3ec8a2b48527f3c
+  d4eddc4b599299e7818004dec3ec8a2b48527f3c
   ec8c8feab20007b0156650e579434bdaee2bb17d e265aa7c23f989854e0df0ac1cd071f13cbf0dd1
   6d29acddc8a931cc93f10ee94aacae75a5537c62 772a4329497eefdbccde6f28412a330f3c8e95eb
   0ac2b582c36f0a9013cfc1b3d024fd3bf258d837 3492dd3d1d1ae6e47d50b86311699f3c39e8b402
