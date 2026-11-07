@@ -1,0 +1,42 @@
+{
+  "checkpoint_id": "pause-20261107",
+  "recorded_utc": "2026-11-07",
+  "scope_note": "raw measurement data intentionally NOT archived (user decision 2026-11-07); L2 offline recompute over frozen raw is therefore out of scope — rerun entry points are preserved instead",
+  "restore_drill": {
+    "command": "env -i PATH=/usr/bin:/bin:/usr/sbin HOME=$DRILL bash restore_checkpoint.sh drill <archive_root> <fresh_target>",
+    "environment": "clean env (env -i), fresh process, fresh directory; original worktrees/.git not on any dependency path",
+    "log": "/home/jnhu/sluice-research-archive/restore-drill-20261107/drill.log",
+    "exit_code": 0,
+    "checks_passed": [
+      "bundle sha256 == external sidecar",
+      "git bundle verify (complete history, no prerequisites)",
+      "clone from bundle into fresh dir",
+      "all 21 refs resolve after clone (refs/remotes/origin/*)",
+      "master == 271b81bfc9d64eecc0266fe7066b9040525dd710",
+      "checkout research-595-r5 (b191bb89) and content check bench/r3_ready_batch.hpp contains submit_ready_reads",
+      "checkout research-595-r5rm-diag (492086ac)",
+      "r3-completion.patch extracted from branch research/595-r3-archive applies (--check) on 0a22a791",
+      "r3-worktree-full-diff.patch extractable from research/595-r3-continuation",
+      "causal-r2_worktree / -timing / -trace / bounded-progress patches apply (--check) on 271b81bf",
+      "untracked-file counts match status.porcelain for all four captured worktree states",
+      "docs/research/595-r5-repair-round/scripts/run_round.py present in branch (rerun capability)",
+      "docs/research/595-flow-audit/scripts/verify_inherited_evidence.py present in branch"
+    ]
+  },
+  "failure_injection_on_copies": [
+    {"test": "T1 corrupt one byte of bundle copy", "expected": "reject", "observed": "exit 1, sha mismatch + bundle verify fail", "verdict": "PASS"},
+    {"test": "T2 delete required worktree patch", "expected": "reject", "observed": "exit 1, missing file reported", "verdict": "PASS"},
+    {"test": "T3 rebuilt bundle missing ref research-595-r5", "expected": "reject", "observed": "exit 1, 'ref missing after clone: research-595-r5'", "verdict": "PASS"},
+    {"test": "T4 drop one untracked prototype header from copy", "expected": "reject", "observed": "exit 1, untracked count mismatch", "verdict": "PASS"}
+  ],
+  "levels": {
+    "L1_evidence_source_restore": "VERIFIED for process docs + algorithm designs (bundle clone + patch replay). Raw data: NOT_ARCHIVED_BY_DECISION",
+    "L2_analysis_reproduction": "OUT_OF_SCOPE_BY_DECISION (no raw archived); rerun entry points verified present in branches",
+    "L3_research_environment": "VERIFIED as recipe (environment/env.txt: kernel/compiler/xmake/liburing/python+user-site versions; rebuild instructions in RESUME.md section 2). Performance-number reproduction NOT claimed"
+  },
+  "limitations": [
+    "single-host persistence (/home btrfs); no off-host copy authorized",
+    "git bundle sha pinned only by sidecar file next to it",
+    "checkpoint branch/tag remote verification recorded in finalization receipt"
+  ]
+}

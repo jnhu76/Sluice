@@ -1,0 +1,1098 @@
+diff --git a/bench/bench_common.hpp b/bench/bench_common.hpp
+index bccd2ae9..f20e0c69 100644
+--- a/bench/bench_common.hpp
++++ b/bench/bench_common.hpp
+@@ -440,6 +440,8 @@ struct EnvConfig {
+     // Default matches the pre-stats G0 benchmark: accounting is opt-in via
+     // SLUICE_BENCH_STATS=1 so default runs stay comparable with old data.
+     bool stats_enabled = false;
++    bool pmu_only = false;
++    bool reuse_fixture = false;
+ };
+ 
+ inline EnvConfig env_config() {
+@@ -465,6 +467,12 @@ inline EnvConfig env_config() {
+     if (const char* v = std::getenv("SLUICE_BENCH_STATS")) {
+         cfg.stats_enabled = v[0] != '0';
+     }
++    if (const char* v = std::getenv("SLUICE_BENCH_PMU_ONLY")) {
++        cfg.pmu_only = v[0] == '1';
++    }
++    if (const char* v = std::getenv("SLUICE_BENCH_REUSE_FIXTURE")) {
++        cfg.reuse_fixture = v[0] == '1';
++    }
+     cfg.include_disk = cfg.include_disk && !cfg.disk_dir.empty();
+     return cfg;
+ }
+diff --git a/bench/bench_w02_pipeline.cpp b/bench/bench_w02_pipeline.cpp
+index 87dd02ac..5a80d346 100644
+--- a/bench/bench_w02_pipeline.cpp
++++ b/bench/bench_w02_pipeline.cpp
+@@ -23,10 +23,24 @@
+ #include <string>
+ #include <vector>
+ 
++#include <sys/stat.h>
+ #include <unistd.h>
+ 
++#if defined(SLUICE_595_COUNTERS)
++#include <sluice/async/detail/research_595_counters.hpp>
++#endif
++#include <sluice/async/detail/research_595_c1.hpp>
++#include <sluice/async/detail/research_595_c3.hpp>
++#include <sluice/async/detail/research_595_trace.hpp>
++
+ namespace {
+ 
++std::size_t g_research_rep = 0;
++#if defined(SLUICE_595_COUNTERS) || defined(SLUICE_595_C1_COUNTERS) || \
++    defined(SLUICE_595_C3_COUNTERS)
++bool g_research_measured = false;
++#endif
++
+ using sluice::File;
+ using sluice::FileAccess;
+ using sluice::FileExistence;
+@@ -94,6 +108,11 @@ bool write_fixture(const std::string& path, std::string& failure) {
+     return true;
+ }
+ 
++bool fixture_ready(const std::string& path) {
++    struct stat st {};
++    return ::stat(path.c_str(), &st) == 0 && st.st_size == static_cast<off_t>(kFixtureBytes);
++}
++
+ struct BackendChoice {
+     std::string name; // "threadpool" | "uring"
+     bool available = true;
+@@ -146,6 +165,10 @@ struct PipelineParams {
+     std::size_t core_capacity = 0;
+     // Diagnostic: consume whichever request is ready first instead of the oldest.
+     bool any_ready_consume = false;
++    // Research-only (#595 causal-r2): dirty-write + async sync_data pipeline to
++    // exercise kernel-side io-wq/defer paths absent from the tmpfs read chain.
++    bool fsync_workload = false;
++    std::string dataset_path;
+     std::string label_suffix;
+ };
+ 
+@@ -189,6 +212,7 @@ AsyncStats stats_diff(const AsyncStats& after, const AsyncStats& before) {
+ // submit/settle timestamps and `verify` checks returned bytes against the oracle.
+ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string& path,
+                                bool instrument, bool verify, bool stats_enabled) {
++    sluice::async::detail::research595::trace::next_phase();
+     PhaseResult phase;
+ 
+     auto opened = File::open(path, rw_open_existing());
+@@ -332,6 +356,30 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+         free_slots[i] = i;
+     }
+ 
++#if defined(SLUICE_595_COUNTERS)
++    if (!instrument && !verify && g_research_measured) {
++        sluice::async::detail::research595::enable_from_env();
++        if (sluice::async::detail::research595::enabled()) {
++            sluice::async::detail::research595::reset();
++        }
++    }
++#endif
++#if defined(SLUICE_595_C1_COUNTERS)
++    if (!instrument && !verify && g_research_measured) {
++        sluice::async::detail::research595::c1::enable_from_env();
++        if (sluice::async::detail::research595::c1::g_enabled) {
++            sluice::async::detail::research595::c1::reset();
++        }
++    }
++#endif
++#if defined(SLUICE_595_C3_COUNTERS)
++    if (!instrument && !verify && g_research_measured) {
++        sluice::async::detail::research595::c3::enable_from_env();
++        if (sluice::async::detail::research595::c3::g_enabled) {
++            sluice::async::detail::research595::c3::reset();
++        }
++    }
++#endif
+     const bench::TimePoint start = bench::now();
+     while (completed < params.request_count) {
+         while (window.size() < params.depth && submitted < params.request_count) {
+@@ -440,6 +488,24 @@ PhaseResult run_pipeline_phase(const PipelineParams& params, const std::string&
+     }
+     const bench::TimePoint end = bench::now();
+     result.wall_s = bench::seconds_between(start, end);
++#if defined(SLUICE_595_COUNTERS)
++    if (!instrument && !verify && g_research_measured) {
++        sluice::async::detail::research595::dump("measured", g_research_rep);
++        sluice::async::detail::research595::disable();
++    }
++#endif
++#if defined(SLUICE_595_C1_COUNTERS)
++    if (!instrument && !verify && g_research_measured) {
++        sluice::async::detail::research595::c1::dump("measured", g_research_rep);
++        sluice::async::detail::research595::c1::disable();
++    }
++#endif
++#if defined(SLUICE_595_C3_COUNTERS)
++    if (!instrument && !verify && g_research_measured) {
++        sluice::async::detail::research595::c3::dump("measured", g_research_rep);
++        sluice::async::detail::research595::c3::disable();
++    }
++#endif
+ 
+     auto finished = scope.finish();
+     if (!finished.has_value()) {
+@@ -497,6 +563,109 @@ void fill_stats(bench::Record& record, const AsyncStats& s) {
+     record.stats_invalid_state = s.invalid_state_rejections;
+ }
+ 
++PhaseResult run_fsync_phase(const PipelineParams& params, const std::string& path) {
++    sluice::async::detail::research595::trace::next_phase();
++    PhaseResult result;
++    auto opened = File::open(path, rw_open_existing());
++    if (!opened.has_value()) {
++        result.ok = false;
++        result.failure = "open failed: " + describe(opened.error());
++        return result;
++    }
++    File file = std::move(opened).value();
++
++    AsyncStats stats;
++    std::string backend_failure;
++    auto context =
++        make_context(*params.backend, params.depth, params.workers, backend_failure, nullptr);
++    if (!context.has_value()) {
++        result.ok = false;
++        result.failure = "NOT_RUN_WITH_REASON: " + backend_failure;
++        return result;
++    }
++    AsyncIoContext ctx = std::move(*context);
++
++    const std::size_t blocks = (kFixtureBytes - params.block_size) / params.block_size;
++    std::vector<std::byte> dirty(params.block_size);
++    bench::fill_pattern(dirty.data(), params.block_size, 0);
++
++    RequestScope scope(ctx, params.depth, ScopeCleanupPolicy::drain);
++    std::deque<ScopeTicket<void>> window;
++    std::size_t submitted = 0;
++    std::size_t completed = 0;
++    const double start = bench::now_ns() * 1e-9;
++    while (completed < params.request_count) {
++        while (window.size() < params.depth && submitted < params.request_count) {
++            const std::uint64_t offset =
++                static_cast<std::uint64_t>(submitted % blocks) * params.block_size;
++            auto wrote = sluice::blocking::write_all_at(
++                file, offset, std::span<const std::byte>(dirty.data(), params.block_size));
++            if (!wrote.has_value() || !wrote.value().complete()) {
++                result.ok = false;
++                result.failure = "dirty write failed";
++                return result;
++            }
++            sluice::async::SyncDataOp op;
++            op.file = NativeFileRef(file);
++            ++result.counters.submits;
++            auto ticket = scope.submit_sync_data(op);
++            if (!ticket.has_value()) {
++                if (ticket.error().code == IoError::Code::would_block) {
++                    ++result.counters.would_block;
++                    break;
++                }
++                result.ok = false;
++                result.failure = "submit failed: " + describe(ticket.error());
++                return result;
++            }
++            window.push_back(ticket.value());
++            ++submitted;
++        }
++        if (window.empty()) {
++            result.ok = false;
++            result.failure = "fsync pipeline stalled with an empty window";
++            return result;
++        }
++        ++result.counters.waits;
++        auto waited = scope.wait_for(window.front(), kWaitDeadline);
++        if (!waited.has_value()) {
++            result.ok = false;
++            result.failure = "wait failed: " + describe(waited.error());
++            return result;
++        }
++        if (waited.value() != ScopeWaitStatus::ready) {
++            result.ok = false;
++            result.failure = "wait outcome was not ready";
++            return result;
++        }
++        RequestObservation<void> observed = scope.take(window.front());
++        window.pop_front();
++        if (observed.readiness != RequestReadiness::ready || !observed.result.has_value()) {
++            result.ok = false;
++            result.failure = "fsync result was not successful";
++            return result;
++        }
++        ++result.ops;
++        ++completed;
++    }
++    auto finished = scope.finish();
++    if (!finished.has_value()) {
++        result.ok = false;
++        result.failure = "scope finish failed";
++        return result;
++    }
++    const double end = bench::now_ns() * 1e-9;
++    result.wall_s = end - start;
++    auto shutdown = ctx.shutdown(ShutdownPolicy::drain);
++    if (!shutdown.has_value()) {
++        result.ok = false;
++        result.failure = "shutdown failed";
++        return result;
++    }
++    result.stats_delta = stats;
++    return result;
++}
++
+ bool uring_constructible(const BackendChoice& choice, std::string& reason) {
+     std::string failure;
+     auto context = make_context(choice, 8, 1, failure, nullptr);
+@@ -521,9 +690,18 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+         return 1;
+     }
+ 
++    g_research_rep = rep;
++#if defined(SLUICE_595_COUNTERS) || defined(SLUICE_595_C1_COUNTERS) || \
++    defined(SLUICE_595_C3_COUNTERS)
++    g_research_measured = measured;
++#endif
+     const double cpu_before = bench::process_cpu_seconds();
++    const std::string phase_path =
++        params.fsync_workload && !params.dataset_path.empty() ? params.dataset_path : path;
+     const PhaseResult phase =
+-        run_pipeline_phase(params, path, false, false, cfg.stats_enabled);
++        params.fsync_workload
++            ? run_fsync_phase(params, phase_path)
++            : run_pipeline_phase(params, phase_path, false, false, cfg.stats_enabled);
+     const double cpu_after = bench::process_cpu_seconds();
+ 
+     int failed = 0;
+@@ -577,6 +755,18 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+     }
+     fill_stats(record, phase.stats_delta);
+ 
++    if (cfg.pmu_only) {
++        bench::emit_record(record);
++        bench::print_record(record);
++        return failed;
++    }
++
++    if (params.fsync_workload) {
++        bench::emit_record(record);
++        bench::print_record(record);
++        return failed;
++    }
++
+     const PhaseResult oracle =
+         run_pipeline_phase(params, path, false, true, cfg.stats_enabled);
+     if (!oracle.ok) {
+@@ -604,18 +794,38 @@ int run_one_repetition(const bench::EnvConfig& cfg, const PipelineParams& params
+ 
+ int main() {
+     const bench::EnvConfig cfg = bench::env_config();
++    sluice::async::detail::research595::trace::init_from_env();
++    if (std::getenv("SLUICE_595_TRACE_HOLD") != nullptr) {
++        std::fprintf(stderr, "S595_TRACE_HOLD waiting for stdin\n");
++        std::fflush(stderr);
++        char held[16];
++        if (std::fgets(held, sizeof(held), stdin) == nullptr) {
++            std::fprintf(stderr, "S595_TRACE_HOLD stdin closed\n");
++        }
++    }
++#if defined(SLUICE_595_C1_COUNTERS)
++    sluice::async::detail::research595::c1::init_from_env();
++#endif
++#if defined(SLUICE_595_C3_COUNTERS)
++    sluice::async::detail::research595::c3::init_from_env();
++#endif
+     std::printf("========================================================\n");
+     std::printf("G0 W-02 bounded RequestScope pipeline benchmark\n");
+     std::printf("warmup=%zu measured_repetitions=%zu stats_wiring=%s\n", cfg.warmup,
+                 cfg.measured, cfg.stats_enabled ? "on" : "off");
+     std::printf("========================================================\n");
+ 
++#if defined(SLUICE_595_COUNTERS)
++    sluice::async::detail::research595::enable_from_env();
++#endif
+     bench::ensure_dir(cfg.tmp_dir);
+     const std::string path = cfg.tmp_dir + "/pipeline.bin";
+     std::string failure;
+-    if (!write_fixture(path, failure)) {
+-        std::fprintf(stderr, "fixture creation failed: %s\n", failure.c_str());
+-        return 1;
++    if (!cfg.reuse_fixture || !fixture_ready(path)) {
++        if (!write_fixture(path, failure)) {
++            std::fprintf(stderr, "fixture creation failed: %s\n", failure.c_str());
++            return 1;
++        }
+     }
+ 
+     const BackendChoice threadpool{"threadpool", true, {}};
+@@ -693,6 +903,44 @@ int main() {
+         p.label_suffix = "-scope64";
+         cases.push_back(p);
+     }
++    // Opt-in (#595): shallow-depth negative controls D2/D3 absent from the
++    // frozen G0 list; a default rebuild reproduces the frozen case list
++    // exactly.
++    if (std::getenv("SLUICE_BENCH_595_DEPTHS") != nullptr) {
++        add_tp(4096, 20000, 2, 2, false);
++        add_uring(4096, 20000, 2, false);
++        add_tp(4096, 20000, 3, 3, false);
++        add_uring(4096, 20000, 3, false);
++    }
++
++    // Opt-in (#595 causal-r2): dirty-write + async sync_data on the disk
++    // fixture, probing kernel io-wq/defer paths; reads stay on the tmpfs
++    // fixture.
++    if (std::getenv("SLUICE_BENCH_595_FSYNC") != nullptr) {
++        std::string disk_path;
++        if (!cfg.disk_dir.empty()) {
++            bench::ensure_dir(cfg.disk_dir);
++            disk_path = cfg.disk_dir + "/pipeline.bin";
++            if (!cfg.reuse_fixture || !fixture_ready(disk_path)) {
++                std::string fixture_failure;
++                if (!write_fixture(disk_path, fixture_failure)) {
++                    std::fprintf(stderr, "disk fixture creation failed: %s\n",
++                                 fixture_failure.c_str());
++                    return 1;
++                }
++            }
++        }
++        PipelineParams p;
++        p.backend = &uring;
++        p.block_size = 4096;
++        p.request_count = 64;
++        p.depth = 4;
++        p.fsync_workload = true;
++        p.label_suffix = "-fsync";
++        p.dataset_path = disk_path;
++        cases.push_back(p);
++    }
++
+     // Opt-in: a default rebuild reproduces the frozen case list exactly.
+     if (std::getenv("SLUICE_BENCH_DIAGNOSTICS") != nullptr) {
+         PipelineParams p;
+@@ -732,6 +980,12 @@ int main() {
+     }
+ 
+     int failed = bench::oracle_self_test_case(cfg);
++    if (const char* ops = std::getenv("SLUICE_BENCH_595_OPS")) {
++        const std::size_t count = static_cast<std::size_t>(std::strtoul(ops, nullptr, 10));
++        for (PipelineParams& p : cases) {
++            p.request_count = count;
++        }
++    }
+     for (std::size_t round = 0; round < cfg.warmup + cfg.measured; ++round) {
+         const bool measured = round >= cfg.warmup;
+         const std::vector<std::size_t> order = bench::rotation_order(cases.size(), round);
+@@ -747,5 +1001,9 @@ int main() {
+     }
+ 
+     std::printf("\n=== W-02 complete, failing repetitions=%d ===\n", failed);
++    sluice::async::detail::research595::trace::disable();
++    if (const char* out = std::getenv("SLUICE_595_TRACE_OUT")) {
++        sluice::async::detail::research595::trace::dump(out);
++    }
+     return failed == 0 ? 0 : 1;
+ }
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..3a779259 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -15,6 +15,15 @@
+ #include <sys/eventfd.h>
+ #include <unistd.h>
+ 
++#if defined(SLUICE_595_COUNTERS)
++#include <sluice/async/detail/research_595_counters.hpp>
++#else
++#define SLUICE595_BUMP(counter) ((void)0)
++#endif
++
++#include <sluice/async/detail/research_595_c1.hpp>
++#include <sluice/async/detail/research_595_c3.hpp>
++
+ namespace sluice::async {
+ class AsyncBackend;
+ class AsyncIoContext;
+@@ -162,6 +171,7 @@ class ProgressSource {
+                 if (expired) {
+                     return WakeReason::deadline;
+                 }
++                SLUICE595_C3_COUNT(drain_park);
+                 drain_notification_nolock_();
+             }
+ 
+@@ -200,7 +210,26 @@ class ProgressSource {
+             pfds[0].events = POLLIN;
+             pfds[0].revents = 0;
+ 
++#if defined(SLUICE_595_C3_COUNTERS)
++            const bool c3_poll_on = SLUICE595_C3_ENABLED();
++            const std::uint64_t c3_poll_t0 =
++                c3_poll_on ? SLUICE595_C3_TSC_BEGIN() : 0;
++#endif
+             const int rc = ::poll(pfds, 1, timeout_ms);
++#if defined(SLUICE_595_C3_COUNTERS)
++            if (c3_poll_on) {
++                SLUICE595_C3_TSC_RECORD(park_poll, c3_poll_t0);
++                if (rc > 0 && (pfds[0].revents & POLLIN) != 0) {
++                    SLUICE595_C3_COUNT(poll_wake_pollin);
++                } else if (rc == 0) {
++                    SLUICE595_C3_COUNT(poll_timeout);
++                } else if (rc < 0 && errno == EINTR) {
++                    SLUICE595_C3_COUNT(poll_eintr);
++                } else {
++                    SLUICE595_C3_COUNT(poll_other);
++                }
++            }
++#endif
+             {
+                 std::lock_guard<std::mutex> lk(mtx_);
+                 if (rc < 0) {
+@@ -250,6 +279,7 @@ class ProgressSource {
+     }
+ 
+     void signal() noexcept {
++        SLUICE595_C1_COUNT(signal_entry);
+         std::lock_guard<std::mutex> lk(mtx_);
+         // Saturation, not wrap: an active token must never alias a later
+         // epoch. Once frozen, the exhaustion sequence carries freshness;
+@@ -273,6 +303,7 @@ class ProgressSource {
+     // drain authority.
+     void acknowledge_notification() noexcept {
+         std::lock_guard<std::mutex> lk(mtx_);
++        SLUICE595_C3_COUNT(drain_ack);
+         drain_notification_nolock_();
+     }
+ 
+@@ -401,7 +432,22 @@ class ProgressSource {
+         std::uint64_t value = 0;
+         for (;;) {
+             errno = 0;
++#if defined(SLUICE_595_C3_COUNTERS)
++            const bool c3_read_on = SLUICE595_C3_ENABLED();
++            const std::uint64_t c3_read_t0 =
++                c3_read_on ? SLUICE595_C3_TSC_BEGIN() : 0;
++#endif
+             const ssize_t n = ::read(notification_fd_, &value, sizeof(value));
++#if defined(SLUICE_595_C3_COUNTERS)
++            if (c3_read_on) {
++                if (n == static_cast<ssize_t>(sizeof(value))) {
++                    SLUICE595_C3_TSC_RECORD(read_ok, c3_read_t0);
++                    research595::c3::g_read_value_sum += value;
++                } else {
++                    SLUICE595_C3_TSC_RECORD(read_eagain, c3_read_t0);
++                }
++            }
++#endif
+             if (n == static_cast<ssize_t>(sizeof(value))) {
+                 continue;
+             }
+@@ -425,12 +471,35 @@ class ProgressSource {
+     // the EAGAIN above, where the counter is provably zero.
+     void wake_notification_nolock_() noexcept {
+         if (notification_fd_ < 0 || notification_pending_) {
++            SLUICE595_BUMP(wakeup_coalesced);
++            SLUICE595_C1_COUNT(signal_coalesced);
+             return;
+         }
+         const std::uint64_t one = 1;
+         for (;;) {
+             errno = 0;
++            SLUICE595_BUMP(wakeup_writes);
++#if defined(SLUICE_595_C3_COUNTERS)
++            const bool c3_write_on = SLUICE595_C3_ENABLED();
++            const std::uint64_t c3_write_t0 =
++                c3_write_on ? SLUICE595_C3_TSC_BEGIN() : 0;
++#endif
++#if defined(SLUICE_595_C1_COUNTERS)
++            const bool c1_write_on = SLUICE595_C1_ENABLED();
++            const std::uint64_t c1_write_t0 =
++                c1_write_on ? SLUICE595_C1_TSC_BEGIN() : 0;
++#endif
+             const ssize_t n = ::write(notification_fd_, &one, sizeof(one));
++#if defined(SLUICE_595_C3_COUNTERS)
++            if (c3_write_on) {
++                SLUICE595_C3_TSC_RECORD(write_fd, c3_write_t0);
++            }
++#endif
++#if defined(SLUICE_595_C1_COUNTERS)
++            if (c1_write_on) {
++                SLUICE595_C1_TSC_RECORD(write, c1_write_t0);
++            }
++#endif
+             if (n == static_cast<ssize_t>(sizeof(one))) {
+                 notification_pending_ = true;
+                 return;
+diff --git a/include/sluice/async/detail/uring_backend.hpp b/include/sluice/async/detail/uring_backend.hpp
+index 5ec794b6..f8ba1c47 100644
+--- a/include/sluice/async/detail/uring_backend.hpp
++++ b/include/sluice/async/detail/uring_backend.hpp
+@@ -15,8 +15,17 @@
+ #include <mutex>
+ #include <optional>
+ #include <type_traits>
++#include <thread>
+ #include <vector>
+ 
++#if defined(SLUICE_595_COUNTERS)
++#include <sluice/async/detail/research_595_counters.hpp>
++#else
++#define SLUICE595_BUMP(counter) ((void)0)
++#endif
++
++#include <sluice/async/detail/research_595_c1.hpp>
++
+ #if defined(SLUICE_HAS_LIBURING) && defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ struct io_uring;
+ #endif
+@@ -111,6 +120,8 @@ class UringAsyncBackend : public AsyncBackend {
+ 
+     PendingControlSnapshot pending_control_snapshot_for_test() const noexcept;
+ 
++    static constexpr std::size_t defer_cap_for_test() noexcept { return kDeferCap; }
++
+     std::size_t dispatch_size_for_test() const noexcept;
+     std::size_t transport_ledger_size_for_test() const noexcept;
+     std::size_t sq_ready_for_test() const noexcept;
+@@ -254,7 +265,7 @@ class UringAsyncBackend : public AsyncBackend {
+ 
+     void poison_and_recover_locked(IoError error) noexcept;
+ 
+-    void reap_cqes() noexcept;
++    std::size_t reap_cqes() noexcept;
+ 
+     bool any_event_owed_locked_() const noexcept;
+ 
+@@ -281,6 +292,33 @@ class UringAsyncBackend : public AsyncBackend {
+     void issue_running_cancel_locked_(detail::RequestReservation h) noexcept;
+     void service_pending_controls_locked_() noexcept;
+ 
++    // #595 research arm B (BOUNDED_PROGRESS): hold the kernel flush of an
++    // eligible dispatched batch for a later progress boundary. Derived from
++    // already-authoritative facts only: the submitting thread is the most
++    // recent progress driver, a kernel-visible un-retired dispatched request
++    // exists (live router entries minus unconsumed ledger entries), the
++    // reservation is a regular 4 KiB read, and fewer than kDeferCap SQEs are
++    // held. Control urgency keeps the existing ordering: a control SQE rides
++    // the next flush boundary, bounded by the 10 ms retry cadence. Both
++    // flush choices are semantically complete; a stale summary only changes
++    // timing.
++    static constexpr std::size_t kDeferCap = 8;
++
++    bool defer_transport_flush_locked_(detail::RequestReservation h) const noexcept;
++
++    void note_progress_driver_locked_() noexcept {
++        const std::thread::id self = std::this_thread::get_id();
++        if (!progress_driver_seen_) {
++            progress_driver_seen_ = true;
++            progress_driver_recent_ = self;
++            return;
++        }
++        if (self == progress_driver_recent_)
++            return;
++        progress_driver_recent_ = self;
++        SLUICE595_BUMP(progress_handoffs);
++    }
++
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+     void wait_submit_entry_pause_() noexcept;
+@@ -295,6 +333,8 @@ class UringAsyncBackend : public AsyncBackend {
+ #endif
+ 
+     void signal_ready_progress() noexcept {
++        SLUICE595_BUMP(wakeups);
++        SLUICE595_C1_SCOPE(c1_signal_scope, signal);
+         progress_port_.signal();
+     }
+ 
+@@ -321,6 +361,17 @@ class UringAsyncBackend : public AsyncBackend {
+     std::unique_ptr<BoundedDispatchQueue> dispatch_;
+     std::unique_ptr<BoundedDispatchQueue> publication_pending_;
+ 
++    // #595 research arm selector (read once at construction from
++    // SLUICE_595_ARM; anything other than "B" keeps the frozen immediate
++    // path; "C" runs the full admission chain then keeps the immediate
++    // path — causal-r2 counterfactual GATE_ONLY_IMMEDIATE). Research
++    // evidence instrumentation only: it is not a public knob and ships
++    // nowhere.
++    bool bounded_progress_ = false;
++    bool gate_only_immediate_ = false;
++    bool progress_driver_seen_ = false;
++    std::thread::id progress_driver_recent_{};
++
+     std::atomic<std::uint64_t> submit_flushes_{0};
+     std::atomic<std::size_t> live_cookies_{0};
+     std::atomic<std::size_t> live_control_sqes_{0};
+diff --git a/src/async/async_io_context.cpp b/src/async/async_io_context.cpp
+index 1ef19101..efd14e0b 100644
+--- a/src/async/async_io_context.cpp
++++ b/src/async/async_io_context.cpp
+@@ -6,6 +6,12 @@
+ #include <sluice/async/detail/request_core.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ 
++#if defined(SLUICE_595_COUNTERS)
++#include <sluice/async/detail/research_595_counters.hpp>
++#else
++#define SLUICE595_BUMP(counter) ((void)0)
++#endif
++
+ #include <algorithm>
+ #include <optional>
+ #include <utility>
+@@ -591,6 +597,7 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
+         if (stats_)
+             ++stats_->wait_calls;
+     }
++    SLUICE595_BUMP(wait_attempts);
+ 
+     if (!drive_entry_admitted_()) {
+         return make_unexpected<ProgressWaitOutcome>(IoError{IoError::Code::invalid_state});
+diff --git a/src/async/detail/request_core.cpp b/src/async/detail/request_core.cpp
+index f9e56d17..97e84b4e 100644
+--- a/src/async/detail/request_core.cpp
++++ b/src/async/detail/request_core.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include <sluice/async/detail/async_backend.hpp>
+ #include <sluice/async/detail/fail_fast.hpp>
++#include <sluice/async/detail/research_595_trace.hpp>
+ #include <sluice/async/request.hpp>
+ 
+ #include <cstdio>
+@@ -736,11 +737,14 @@ RequestReadiness RequestBridge::consume(RequestCore* core, const RequestId& id,
+                                         RequestResultData* out) noexcept {
+     IoOutcome outcome;
+     sluice::FileInfo metadata;
++    const RequestKey take_key = RequestBridge::key_of(id);
+     const PublicConsumption consumed =
+-        core->consume_public_result(RequestBridge::key_of(id), &outcome, &metadata);
++        core->consume_public_result(take_key, &outcome, &metadata);
+     if (consumed == PublicConsumption::pending) {
+         return RequestReadiness::pending;
+     }
++    S595_TR(research595::trace::Evt::take, take_key.slot.value, take_key.generation.value, 0,
++            static_cast<std::uint64_t>(outcome.succeeded), -1, 0);
+     if (consumed == PublicConsumption::stale) {
+         request_binding_invariant_fail_fast();
+     }
+diff --git a/src/async/uring_backend.cpp b/src/async/uring_backend.cpp
+index 0a3481b0..ff46e461 100644
+--- a/src/async/uring_backend.cpp
++++ b/src/async/uring_backend.cpp
+@@ -1,6 +1,7 @@
+ #include <sluice/async/detail/uring_backend.hpp>
+ 
+ #include <sluice/async/detail/fail_fast.hpp>
++#include <sluice/async/detail/research_595_trace.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ #include <sluice/detail/uring_submit.hpp>
+ #include <sluice/error.hpp>
+@@ -10,10 +11,13 @@
+ #include "uring_internal.hpp"
+ 
+ #include <cstdio>
++#include <cstdlib>
+ #include <limits>
+ #include <stdexcept>
+ #include <utility>
+ 
++#include <sluice/async/detail/research_595_c1.hpp>
++
+ #if defined(SLUICE_HAS_LIBURING)
+ #include <liburing.h>
+ 
+@@ -166,6 +170,15 @@ UringAsyncBackend::UringAsyncBackend(UringConfig config, ValidatedConfigTag)
+     for (std::uint32_t i = 0; i < config.request_capacity; ++i) {
+         cookie_free_list_[i] = detail::SlotIndex{i};
+     }
++    if (const char* arm = std::getenv("SLUICE_595_ARM"); arm != nullptr && arm[0] == 'B') {
++        bounded_progress_ = true;
++    } else if (arm != nullptr && arm[0] == 'C') {
++        bounded_progress_ = true;
++        gate_only_immediate_ = true;
++    }
++#if defined(SLUICE_595_COUNTERS)
++    detail::research595::enable_from_env();
++#endif
+     dispatch_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     publication_pending_ = std::make_unique<BoundedDispatchQueue>(config.request_capacity);
+     if (::io_uring_queue_init(config.queue_depth, &ring_state_->ring, 0) != 0) {
+@@ -520,6 +533,8 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
+     if (descriptor.zero_op) {
+         publish_zero_op_inline(accepted.id, h);
+     } else {
++        S595_TR(detail::research595::trace::Evt::accept, h.slot.value, h.generation.value, 0, 0,
++                have_ring_ ? ring_state_->ring.ring_fd : -1, 0);
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+ 
+         wait_accepted_pre_dispatch_pause_();
+@@ -608,17 +623,23 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
+ }
+ 
+ void UringAsyncBackend::deliver_event(detail::RequestKey key, detail::OperationKind kind) {
++    S595_TR(detail::research595::trace::Evt::published, key.slot.value, key.generation.value, 0,
++            static_cast<std::uint64_t>(kind),
++            have_ring_ ? ring_state_->ring.ring_fd : -1, 0);
+     (void)core_->claim_observer_delivery(key);
+     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
+     (void)core_->retire_observer_delivery(key);
+ }
+ 
+ std::size_t UringAsyncBackend::poll() {
++    SLUICE595_BUMP(poll_passes);
++    SLUICE595_C1_SCOPE(c1_poll_scope, poll);
+     if (!have_ring_)
+         return 0;
+ 
+     {
+         std::lock_guard<std::mutex> lk(dispatch_mtx_);
++        note_progress_driver_locked_();
+         if (!fatal_error_.has_value()) {
+             while (!dispatch_->empty()) {
+                 detail::RequestReservation h = dispatch_->front();
+@@ -633,7 +654,7 @@ std::size_t UringAsyncBackend::poll() {
+         }
+     }
+ 
+-    reap_cqes();
++    const std::size_t reaped = reap_cqes();
+ 
+     std::size_t published = 0;
+     std::size_t pass_bound = 0;
+@@ -685,6 +706,9 @@ std::size_t UringAsyncBackend::poll() {
+         }
+     }
+ 
++    if (reaped == 0 && published == 0) {
++        SLUICE595_BUMP(empty_polls);
++    }
+     return published;
+ }
+ 
+diff --git a/src/async/uring_completion.cpp b/src/async/uring_completion.cpp
+index df5b1baf..b5d7092a 100644
+--- a/src/async/uring_completion.cpp
++++ b/src/async/uring_completion.cpp
+@@ -6,6 +6,7 @@
+ #include "uring_internal.hpp"
+ 
+ #include <sluice/async/detail/fail_fast.hpp>
++#include <sluice/async/detail/research_595_trace.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ #include <sluice/error.hpp>
+ 
+@@ -197,10 +198,12 @@ void UringAsyncBackend::handle_one_cqe(std::uint64_t user_data, int res) noexcep
+     finalize_operation_terminal_(entry, router_index, terminal, metadata_out);
+ }
+ 
+-void UringAsyncBackend::reap_cqes() noexcept {
++std::size_t UringAsyncBackend::reap_cqes() noexcept {
++    SLUICE595_BUMP(cqe_reap_attempts);
+     constexpr unsigned BATCH = 32;
+     io_uring_cqe* cqes[BATCH];
+     unsigned got = 0;
++    std::size_t total_reaped = 0;
+     // The pass boundary is the CQ state visible at entry: entries the kernel
+     // posts during the reap (or after an overflow flush) are the next pass's
+     // immediate work, reported through has_immediate_physical_work().
+@@ -217,14 +220,20 @@ void UringAsyncBackend::reap_cqes() noexcept {
+ 
+                 const std::uint64_t user_data = ::io_uring_cqe_get_data64(cqe);
+                 const int res = cqe->res;
++                S595_TR(detail::research595::trace::Evt::reap, 0, 0, user_data,
++                        static_cast<std::uint64_t>(static_cast<std::int64_t>(res)),
++                        ring_state_->ring.ring_fd,
++                        static_cast<std::uint16_t>(is_control_cookie(user_data) ? 1u : 0u));
+                 ::io_uring_cqe_seen(&ring_state_->ring, cqe);
+ 
+                 handle_one_cqe(user_data, res);
++                SLUICE595_BUMP(cqes_reaped);
+             }
+             reaped += take;
+             if (got < BATCH)
+                 break;
+         }
++        total_reaped += reaped;
+     };
+     reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
+ #if defined(SLUICE_URING_EXTERNAL_LOOP_MUTANT_POST_POISON_FLUSH_GATED)
+@@ -275,6 +284,7 @@ void UringAsyncBackend::reap_cqes() noexcept {
+ #endif
+         reap_visible_bounded(static_cast<std::size_t>(::io_uring_cq_ready(&ring_state_->ring)));
+     }
++    return total_reaped;
+ }
+ 
+ #endif
+diff --git a/src/async/uring_transport.cpp b/src/async/uring_transport.cpp
+index bdf1ca71..2cf2ed4e 100644
+--- a/src/async/uring_transport.cpp
++++ b/src/async/uring_transport.cpp
+@@ -7,6 +7,7 @@
+ #include "uring_internal.hpp"
+ 
+ #include <sluice/async/detail/fail_fast.hpp>
++#include <sluice/async/detail/research_595_trace.hpp>
+ #include <sluice/detail/file_semantics.hpp>
+ #include <sluice/error.hpp>
+ #include <sluice/result.hpp>
+@@ -14,6 +15,8 @@
+ #include <cstdint>
+ #include <cstdio>
+ 
++#include <sluice/async/detail/research_595_c1.hpp>
++
+ namespace sluice::async {
+ 
+ #if defined(SLUICE_HAS_LIBURING)
+@@ -41,6 +44,7 @@ std::size_t UringAsyncBackend::live_control_sqes_for_test() const noexcept {
+ #endif
+ 
+ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noexcept {
++    SLUICE595_BUMP(dispatch_passes);
+     bool injected_dispatch_failure = false;
+     bool newly_poisoned = false;
+     bool unsubmitted_after_dispatch = false;
+@@ -84,8 +88,21 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+                         break;
+                 }
+                 if (!fatal_error_.has_value()) {
+-                    (void)submit_transport_locked();
+-                    service_pending_controls_locked_();
++                    bool c1_deferred = false;
++                    {
++                        SLUICE595_C1_SCOPE(c1_defer_scope, defer);
++                        c1_deferred = defer_transport_flush_locked_(h);
++                    }
++                    S595_TR(c1_deferred ? detail::research595::trace::Evt::defer
++                                        : detail::research595::trace::Evt::immediate,
++                            h.slot.value, h.generation.value, 0, 0,
++                            ring_state_->ring.ring_fd, 0);
++                    if (c1_deferred) {
++                        service_pending_controls_locked_();
++                    } else {
++                        (void)submit_transport_locked();
++                        service_pending_controls_locked_();
++                    }
+                 }
+                 newly_poisoned = !poisoned_before && fatal_error_.has_value();
+             }
+@@ -95,8 +112,15 @@ void UringAsyncBackend::dispatch_after_accept(detail::RequestReservation h) noex
+             !fatal_error_.has_value() && dispatch_retry_remains_locked_();
+ #endif
+     }
+-    if (injected_dispatch_failure || newly_poisoned || unsubmitted_after_dispatch ||
+-        post_poison_push_retired) {
++#if defined(SLUICE_595_MUTANT_DEFER_RESIDUE_SIGNAL_DROPPED)
++    (void)unsubmitted_after_dispatch;
++    const bool advertise_residue =
++        injected_dispatch_failure || newly_poisoned || post_poison_push_retired;
++#else
++    const bool advertise_residue = injected_dispatch_failure || newly_poisoned ||
++                                   unsubmitted_after_dispatch || post_poison_push_retired;
++#endif
++    if (advertise_residue) {
+         signal_ready_progress();
+     }
+ }
+@@ -197,6 +221,10 @@ bool UringAsyncBackend::dispatch_one_locked(detail::RequestReservation h) noexce
+     const std::uint32_t physical_position =
+         static_cast<std::uint32_t>((sq.sqe_tail - 1u) & sq.ring_mask);
+     transport_ledger_->append(TransportLedger::Kind::operation, physical_position, op_cookie, h);
++    S595_TR(detail::research595::trace::Evt::sqe_prep, h.slot.value, h.generation.value,
++            op_cookie, static_cast<std::uint64_t>(physical_position), ring_state_->ring.ring_fd,
++            0);
++    SLUICE595_BUMP(sqe_preparations);
+ 
+     if (!dispatch_->remove_exact(h)) {
+         std::fprintf(stderr, "sluice::async::UringAsyncBackend: dispatch_one_locked "
+@@ -215,21 +243,80 @@ bool UringAsyncBackend::dispatch_retry_remains_locked_() const noexcept {
+            !transport_ledger_->all_class_a_recovery_retired();
+ }
+ 
++bool UringAsyncBackend::defer_transport_flush_locked_(
++    detail::RequestReservation h) const noexcept {
++#if defined(SLUICE_595_MUTANT_DEFER_DECISION_DROPPED)
++    // #595 causal-r2 CF-2 deferoff: entry return false — gate chain,
++    // deferral and the residue notification cause never trigger.
++    (void)h;
++    return false;
++#endif
++    if (!bounded_progress_) {
++        return false;
++    }
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_OWNER)
++    if (false)
++#else
++    if (!progress_driver_seen_ || std::this_thread::get_id() != progress_driver_recent_)
++#endif
++        return false;
++    SLUICE595_C1_COUNT(defer_owner_pass);
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_PAYLOAD)
++    if (false)
++#else
++    const PreparedUringOp& prep = prepared_ops_[h.slot.value];
++    if (prep.kind != detail::OperationKind::read || prep.native_length != 4096)
++#endif
++        return false;
++    // Kernel-visible un-retired witness: router entries alive beyond the
++    // unconsumed ledger tail. Held-only batches and blocked transports have
++    // no witness and keep the immediate path.
++#if defined(SLUICE_595_MUTANT_DEFER_IGNORES_WITNESS)
++    if (false)
++#else
++    if (live_cookies_.load(std::memory_order_relaxed) <= transport_ledger_->size())
++#endif
++        return false;
++    SLUICE595_C1_COUNT(defer_witness_pass);
++#if defined(SLUICE_595_MUTANT_DEFER_NO_CAP)
++    if (false)
++#else
++    if (transport_ledger_->size() >= kDeferCap)
++#endif
++        return false;
++    // #595 causal-r2 counterfactual arm C (GATE_ONLY_IMMEDIATE): the full
++    // admission chain above ran exactly as in arm B; only the deferral
++    // action is suppressed so the commit stays on arm A's immediate path.
++    if (gate_only_immediate_)
++        return false;
++    SLUICE595_BUMP(sqes_deferred);
++    return true;
++}
++
+ int UringAsyncBackend::submit_transport_locked() noexcept {
++    SLUICE595_BUMP(submit_attempts);
++    SLUICE595_C1_SCOPE(c1_submit_scope, submit);
+     if (fatal_error_.has_value() || transport_ledger_ == nullptr || transport_ledger_->empty())
+         return 0;
+ 
++    SLUICE595_BUMP(flushes);
+     submit_flushes_.fetch_add(1, std::memory_order_relaxed);
++    S595_TR(detail::research595::trace::Evt::flush, 0, 0, 0, transport_ledger_->size(),
++            ring_state_->ring.ring_fd, 0);
+     int rc = 0;
++    {
++        SLUICE595_C1_SCOPE(c1_flush_scope, flush);
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+-    if (ring_state_->test_hooks.submit != nullptr) {
+-        rc = ring_state_->test_hooks.submit(ring_state_->test_hooks.context, &ring_state_->ring);
+-    } else {
+-        rc = ::io_uring_submit(&ring_state_->ring);
+-    }
++        if (ring_state_->test_hooks.submit != nullptr) {
++            rc = ring_state_->test_hooks.submit(ring_state_->test_hooks.context, &ring_state_->ring);
++        } else {
++            rc = ::io_uring_submit(&ring_state_->ring);
++        }
+ #else
+-    rc = ::io_uring_submit(&ring_state_->ring);
++        SLUICE595_BUMP(actual_enters);
++        rc = ::io_uring_submit(&ring_state_->ring);
+ #endif
++    }
+     account_transport_result_locked(rc, true);
+     return rc;
+ }
+diff --git a/xmake.lua b/xmake.lua
+index e9df0c17..d19b4411 100644
+--- a/xmake.lua
++++ b/xmake.lua
+@@ -21,6 +21,35 @@ end
+ set_languages("c++20")
+ set_warnings("all", "error")
+ 
++if os.getenv("SLUICE_595_COUNTER_BUILD") == "1" then
++    add_defines("SLUICE_595_COUNTERS")
++end
++
++-- Research-only (#595 causal-r2 C1): TSC aggregation probes.
++if os.getenv("SLUICE_595_C1_BUILD") == "1" then
++    add_defines("SLUICE_595_C1_COUNTERS")
++end
++
++-- Research-only (#595 causal-r2 C3): kernel-path syscall-face TSC probes.
++if os.getenv("SLUICE_595_C3_BUILD") == "1" then
++    add_defines("SLUICE_595_C3_COUNTERS")
++end
++
++-- Research-only (#595 causal-r2 cross-layer): per-request event ring.
++if os.getenv("SLUICE_595_TRACE_BUILD") == "1" then
++    add_defines("SLUICE_595_TRACE_BUILD")
++end
++
++-- Research-only (#595 causal-r2 CF-1 sigdrop counterfactual arm).
++if os.getenv("SLUICE_595_MUTANT_SIGDROP_BUILD") == "1" then
++    add_defines("SLUICE_595_MUTANT_DEFER_RESIDUE_SIGNAL_DROPPED")
++end
++
++-- Research-only (#595 causal-r2 CF-2 deferoff counterfactual arm).
++if os.getenv("SLUICE_595_MUTANT_DEFEROFF_BUILD") == "1" then
++    add_defines("SLUICE_595_MUTANT_DEFER_DECISION_DROPPED")
++end
++
+ -- Root anchor so sub-file paths resolve from the project root, not the file.
+ SLUICE_ROOT = os.projectdir() .. "/"
+ 
+diff --git a/xmake/bench.lua b/xmake/bench.lua
+index a3a4a779..c63112b0 100644
+--- a/xmake/bench.lua
++++ b/xmake/bench.lua
+@@ -22,6 +22,11 @@ target("bench_w02_pipeline")
+     add_deps("sluice_core", "sluice_async")
+     add_includedirs(R .. "bench")
+     add_files(R .. "bench/bench_w02_pipeline.cpp")
++    -- Research-only (#595 causal-r2 C1): keep release optimization but retain
++    -- the symbol table for perf callgraph path discovery.
++    if os.getenv("SLUICE_595_STRIP_NONE") == "1" then
++        set_strip("none")
++    end
+ 
+ target("bench_w03_external_loop")
+     set_kind("binary")
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index c55e97be..0fd4c6b9 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -656,6 +656,34 @@ if has_config("liburing") then
+     uring_progress_target("uring_pending_control_mut_retire_stale_count",
+                               R .. "tests/uring_pending_control_parity_test.cpp",
+                               "SLUICE_URING_MUTANT_PENDING_CONTROL_RETIRE_STALE_COUNT")
++
++    -- #595 arm-B (BOUNDED_PROGRESS) deferral oracles: held-batch progress
++    -- without a second submit, the cap bound, deferred partial-submit and
++    -- prefetch-then-EAGAIN reconciliation, cancel servicing, and the owner /
++    -- witness / payload gates, plus prepark residue handoff and poison and
++    -- shutdown settlement of held batches. The mutant builds falsify one
++    -- eligibility gate each and must be killed by the named assertion of
++    -- this suite; they are executed and recorded manually.
++    uring_progress_target("uring_595_bounded_progress_test",
++                              R .. "tests/uring_595_bounded_progress_test.cpp")
++    uring_progress_target("uring_595_mut_defer_no_cap",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_NO_CAP")
++    uring_progress_target("uring_595_mut_defer_ignores_witness",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_WITNESS")
++    uring_progress_target("uring_595_mut_defer_ignores_owner",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_OWNER")
++    uring_progress_target("uring_595_mut_defer_ignores_payload",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_IGNORES_PAYLOAD")
++    uring_progress_target("uring_595_mut_defer_residue_signal_dropped",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_RESIDUE_SIGNAL_DROPPED")
++    uring_progress_target("uring_595_mut_defer_decision_dropped",
++                              R .. "tests/uring_595_bounded_progress_test.cpp",
++                              "SLUICE_595_MUTANT_DEFER_DECISION_DROPPED")
+ end
+ 
+ -- Public Request<T> evidence. Same self-contained seam-build shape as
