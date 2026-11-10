@@ -57,3 +57,31 @@ crash-*
 
 # tlc trace dumps (TLC writes counterexample dumps into the working directory)
 *_TTrace*.bin
+
+# Local configuration and credentials. Never commit live environments.
+.env
+.env.*
+!.env.example
+!.env.*.example
+.npmrc
+.pypirc
+.netrc
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+
+# Local coding-agent state. Preserve intentionally versioned Claude skills.
+# The rest of .claude/ can contain settings.local.json permission entries,
+# command history, workspace paths and other private runtime state.
+.claude/*
+!/.claude/skills/
+!/.claude/skills/**
+.opencode/
+.codex/
+.mimosa/
+.gemini/
+.cursor/
+.continue/
+.aider*
