@@ -25,7 +25,7 @@ accumulates under `[Unreleased]`).
   no runtime state or authority moves. On the real-consumer path
   (`sluice-copy`, oracle-verified 256 MiB copy, 4 KiB buffers, depth 4, one
   worker), one pre-registered controlled session (A/A 36 pairs, A/B 36 pairs,
-  AB/BA interleaved) measured −5.0180% user-space instructions, −5.1111%
+  AB/BA interleaved) measured −5.0180% instructions, −5.1111%
   cycles, −5.4653% task-clock and −5.3199% CPU per task; the conservative
   claim is the minimum absolute effect, 5.018%. The A/A gate passed (width
   2.41 pp against a 3.0 pp budget) and the p99 CPU budget was not breached.
@@ -33,8 +33,9 @@ accumulates under `[Unreleased]`).
   cell (one notification is still consumed per request). Scope: ThreadPool,
   non-semaphore eventfd, production userspace writers holding `mtx_`, warm cache, one
   worker; io_uring end-to-end, wall, energy, multi-worker and cold cache are
-  not established. Evidence: PR #636 (archival snapshot, not merged; the
-  product change and tests are in this PR).
+  not established. Evidence: [PR #636](https://github.com/jnhu76/Sluice/pull/636)
+  at `0e50612c8ad7f5112a97fa959ff71f5b3eee4d5f` (archival snapshot, not merged;
+  the product change and tests are in this PR).
 - **ThreadPool: empty owed-event sweeps skipped (#621).** The per-progress-
   pass owed-event collection sweep and the hot-path immediate-work verdict
   in `ThreadPoolBackend` no longer scan the full delivery-record table when
