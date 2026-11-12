@@ -538,15 +538,10 @@ do
                               "SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS")
 end
 
--- ProgressSource drain evidence. The semantic target asserts the observable
--- wake and acknowledgement contract without counting reads; it uses only seams
--- that predate the one-read drain and must pass against both the base header
--- and this change. The mechanism target counts drain read(2) calls through the
--- test-only observation seam and is expected to fail against the base header,
--- where a non-empty drain issues two reads. The mutation build keeps the
--- suppression bit set after a successful read and must be killed by the
--- semantic target; it is executed and recorded manually, never run as a
--- regular test.
+-- ProgressSource drain evidence: the semantic target asserts the wake and
+-- acknowledgement contract; the mechanism target counts reads through a
+-- test-only observation seam and cannot build against the pure base header,
+-- which lacks it. Mutation builds run manually, never as regular tests.
 do
     local function drain_semantic_target(name, extra_define)
         target(name)
