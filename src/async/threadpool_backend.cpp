@@ -346,6 +346,9 @@ void ThreadPoolBackend::publish_zero_op_inline(detail::RequestKey id, detail::Re
         DeliveryRecord& record = delivery_[h.slot.value];
         record.event_owed = true;
         record.owed_key = id;
+#if !defined(SLUICE_THREADPOOL_MUTANT_OWED_COUNT_MISSING_INCREMENT)
+        ++owed_count_;
+#endif
     }
     signal_ready_progress();
 }
@@ -564,14 +567,19 @@ ProgressPass ThreadPoolBackend::poll_progress() {
             publish_batch_.push_back(h);
         }
         owed_bound = 0;
-        for (std::uint32_t i = 0; i < capacity_; ++i) {
-            DeliveryRecord& record = delivery_[i];
-            if (!record.event_owed)
-                continue;
-            record.event_owed = false;
-            owed_batch_[owed_bound] = OwedEvent{record.owed_key, record.kind};
-            record.owed_key = {};
-            ++owed_bound;
+        if (owed_count_ != 0) {
+            for (std::uint32_t i = 0; i < capacity_; ++i) {
+                DeliveryRecord& record = delivery_[i];
+                if (!record.event_owed)
+                    continue;
+                record.event_owed = false;
+#if !defined(SLUICE_THREADPOOL_MUTANT_OWED_COUNT_MISSING_DECREMENT)
+                --owed_count_;
+#endif
+                owed_batch_[owed_bound] = OwedEvent{record.owed_key, record.kind};
+                record.owed_key = {};
+                ++owed_bound;
+            }
         }
     }
     for (;;) {
@@ -589,12 +597,15 @@ ProgressPass ThreadPoolBackend::poll_progress() {
         ++published;
     }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    wait_owed_sweep_epilogue_pause_();
+#endif
+
     ProgressPass pass;
     pass.completed = published;
     {
         std::lock_guard<std::mutex> lk(work_mtx_);
-        pass.immediate_work_remains =
-            !publication_pending_.empty() || any_event_owed_locked_();
+        pass.immediate_work_remains = !publication_pending_.empty() || owed_visible_locked_();
     }
     pass.accepted_work_remains = core_ != nullptr && core_->outstanding_summary() != 0;
     return pass;
@@ -716,6 +727,18 @@ void ThreadPoolBackend::wait_publication_epilogue_pause_() noexcept {
 
 void ThreadPoolBackend::wait_delivery_claimed_pause_() noexcept {
     auto* g = delivery_claimed_gate_.load(std::memory_order_acquire);
+    if (g == nullptr)
+        return;
+    g->exited.store(false, std::memory_order_release);
+    g->paused.store(true, std::memory_order_release);
+    g->paused.notify_all();
+    g->resume.wait(false, std::memory_order_acquire);
+    g->exited.store(true, std::memory_order_release);
+    g->exited.notify_all();
+}
+
+void ThreadPoolBackend::wait_owed_sweep_epilogue_pause_() noexcept {
+    auto* g = owed_sweep_epilogue_gate_.load(std::memory_order_acquire);
     if (g == nullptr)
         return;
     g->exited.store(false, std::memory_order_release);

@@ -1,0 +1,101 @@
+# ThreadPool owed-count mutant receipts
+
+## Final-repair re-verification (exact-count oracle, 2026-11-12)
+
+Re-run after the P1 repair (oracle now asserts
+`owed_count_for_test() == owed_scan_count_for_test() == expected`
+plus the boolean existence scan), release/liburing=n, direct binary
+execution, working tree at the final-repair head of
+`product/621-threadpool-owed-count-gate`.
+
+## threadpool_owed_mut_missing_increment (exit=142, SIGALRM)
+(no stdout, no stderr)
+
+## threadpool_owed_mut_missing_decrement (exit=1)
+FAIL: counter_tracks_zero_op_reads
+
+## threadpool_owed_mut_empty_verdict_always (exit=1)
+ok counter_tracks_zero_op_reads
+ok counter_ignores_data_ops
+ok zero_length_write_is_owed
+ok full_capacity_sweeps_exactly_once
+ok slot_reuse_before_delivery_keeps_parity
+ok cancel_leaves_owed_delivery_intact
+FAIL: owed_during_pass_is_counted_and_reported
+
+## threadpool_owed_mut_reclaim_ignoring_control_refs (exit=134, SIGABRT)
+ok counter_tracks_zero_op_reads
+ok counter_ignores_data_ops
+ok zero_length_write_is_owed
+ok full_capacity_sweeps_exactly_once
+terminate called without an active exception
+
+## Notes (final-repair re-verification)
+
+- missing_increment: exit 142 = the suite's internal `::alarm(120)`
+  watchdog; the parity oracle (counter 0 != expected 1 at the first
+  inline submit) already fails inside counter_tracks_zero_op_reads, and
+  the case's Fixture teardown then deadlocks in
+  AsyncIoContext::drive_settlement_ because the gated sweep can no longer
+  see the owed events, so the FAIL line is never reached. Independently
+  confirmed by gdb attach during the hang: main parked in poll() under
+  ProgressSource::wait_if_unchanged/drive_settlement_, worker parked in
+  work_cv_ (pthread_cond_wait) — same shape as the round's original gdb
+  evidence. Contract: increment pairing + settlement liveness.
+- missing_decrement: exit 1 at the first case's post-delivery quiescent
+  check (counter 3 vs exact scan 0 vs expected 0). Contract: decrement
+  pairing with each collected event.
+- empty_verdict_always: the six counter-parity cases stay green (the
+  mutant only affects the verdict), then exit 1 at
+  owed_during_pass_is_counted_and_reported because an owed event produced
+  between sweep and verdict must set immediate_work_remains. Contract:
+  PROG-01 honest residue verdict.
+- reclaim_ignoring_control_refs: exit 134 via the fail-fast inside
+  slot_reuse_before_delivery_keeps_parity (slot freed while the owed
+  control reference still pins it). Contract:
+  event_owed => control_refs >= 1 => !reclaimable_.
+- All four kills are runtime oracle kills (no compile-failure
+  substitutions). Normal build restored and green (8/8) after the runs.
+
+## Original round receipts (superseded by the re-verification above; kept
+## as the record at PR head b0dc4dc0, release/liburing=y, boolean-scan
+## oracle)
+
+## threadpool_owed_mut_missing_increment (exit=137)
+(no stderr)
+
+## threadpool_owed_mut_missing_decrement (exit=255)
+FAIL: counter_tracks_zero_op_reads
+
+## threadpool_owed_mut_empty_verdict_always (exit=255)
+FAIL: owed_during_pass_is_counted_and_reported
+
+## threadpool_owed_mut_reclaim_ignoring_control_refs (exit=255)
+terminate called without an active exception
+
+## Notes (original round)
+
+- missing_increment: the parity assertion (counter_matches_authority) is
+  violated at submit time inside counter_tracks_zero_op_reads; the case's
+  Fixture teardown then deadlocks in AsyncIoContext::drive_settlement_
+  because the gated sweep can no longer see the owed events (settlement
+  non-convergence), so the FAIL line is never reached before the watchdog
+  kills the process. Verified by attach-gdb backtrace during the round
+  (main parked in ProgressSource::wait_if_unchanged under
+  drive_settlement_; worker parked in work_cv_). Non-green exit in all
+  3 observed executions. Identical exposure shape to the uring
+  missing-increment mutant (H2b).
+- missing_decrement: killed by the post-delivery parity check in
+  counter_tracks_zero_op_reads (quiescent_and_settled requires
+  counter == 0 == scan verdict).
+- empty_verdict_always: killed deterministically by
+  owed_during_pass_is_counted_and_reported — an owed event produced while
+  the pass sits between sweep and residue verdict must set
+  immediate_work_remains.
+- reclaim_ignoring_control_refs (shared RequestCore mutant): the
+  control-ref slot pinning that keeps the counter and delivery records in
+  lockstep is load-bearing; violation terminates via fail-fast inside
+  slot_reuse_before_delivery_keeps_parity.
+- Receipts regenerated at PR head b0dc4dc0 (tree-identical to the
+  measured arm de9b452a; release sluice-copy binary sha256
+  fb5123a1161a8293... reproduced from both).

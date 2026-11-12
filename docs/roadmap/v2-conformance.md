@@ -68,7 +68,7 @@ Evidence (SHA/config) · Missing proof or gap · Next owner.
 |---|---|---|---|---|---|---|---|
 | OBS-01..03 (attach/deliver/retire) | core observer phases, `detail/observer_protocol.hpp` | Generation-armed at-most-once delivery; bounded nonthrowing hooks; retirement owned by the delivery owner after its hook returns (PR B review fix, below) | Root §10 | VERIFIED (carried) | C1-A..C1-H records; `ObserverCore.tla` safety floor + conditional liveness, five C++ mutation seams killed; PR B re-base: driver-owned post-hook retirement + public retirement query (`delivery_retired`), deterministic interleaving oracle `retirement_waits_for_the_delivery_hook_to_return` (RED at `e34965a5`, GREEN at `b3de9262`) | Publication happens-before visibility argued by core-mutex serialization, not formal proof (C1-B) | — |
 | PROG-02 no-lost-wake (ThreadPool) | `detail/progress_source.hpp`, `threadpool_backend.cpp` | Epoch/token park-wake handshake; suppression bit only while pending wake stands; 14-row settlement-notification matrix complete after #480/#481/#484 | Root §11 PROG-02 | VERIFIED (carried) | C2 campaign records; #481 (merge `31dc948e`), #484 (merge `51eaa8b7`) with named oracles and killed mutants; TP evidence does not extend to other backends | io_uring notification oracle: see G6 | — |
-| PROG-01 pass bound + honest residue (V28/V29) | `threadpool_backend.cpp`, `uring_backend.cpp` | TP entry-snapshot bounded pass; uring bounded phases + owed-delivery residue report (PR #543) | Root §11 PROG-01 | VERIFIED (live 2026-10-16) | `xmake run threadpool_progress_pass_bound_test` PASS (exit 0); `xmake run uring_owed_residue_test` 3/3 PASS — this host, xmake debug, Linux 7.2.9 fc44, liburing present, tree `c001bb1e`; merged oracles at `dd83595d`/`b870a7c0` | — | — |
+| PROG-01 pass bound + honest residue (V28/V29) | `threadpool_backend.cpp`, `uring_backend.cpp` | TP entry-snapshot bounded pass; uring bounded phases + owed-delivery residue report (PR #543). 2026-11-12 (#621): TP empty owed sweeps and hot-path residue verdict gated by derived `owed_count_` mirroring the production uring counter; TP settlement keeps the authoritative scan | Root §11 PROG-01 | VERIFIED (live 2026-10-16; TP owed-count evidence 2026-11-12) | `xmake run threadpool_progress_pass_bound_test` PASS (exit 0); `xmake run uring_owed_residue_test` 3/3 PASS — this host, xmake debug, Linux 7.2.9 fc44, liburing present, tree `c001bb1e`; merged oracles at `dd83595d`/`b870a7c0`; TP: `threadpool_owed_counter_parity_test` 8/8 + four killed `threadpool_owed_mut_*` builds, matrix 80/80 & 59/59 × {release,debug} × {liburing y,n}, tsan/asan clean, real-consumer A/B in `docs/evidence/621-threadpool-owed-count-20261112/` | — | — |
 
 ### G5 ThreadPool execution
 
@@ -450,3 +450,77 @@ evidence. DP-1/DP-3A evidence remains in their dated evidence directories
 (`docs/evidence/dp1-publication-payload-elimination/`,
 `docs/evidence/dp3a-reserve-reinit/`); their compiler proofs apply to this
 candidate because the production tree is identical to master `5a75e303`.
+
+## Dated 621 ThreadPool owed-count productization (2026-11-12)
+
+Evidence directory: `docs/evidence/621-threadpool-owed-count-20261112/`
+(execution round under umbrella #621; application-path authority #604).
+Production change: derived `owed_count_` + zero-count gate on the per-pass
+owed-event collection sweep and the hot-path `immediate_work_remains`
+verdict in `ThreadPoolBackend`, on branch
+`product/621-threadpool-owed-count-gate` (base `f2c42535`). The mechanism
+mirrors the production io_uring `owed_count_` (G6 H2b row, #564); the G4
+row above carries the obligation mapping; this section records the
+mechanism justification and the authority-contraction audit per AGENTS.md.
+
+### Mechanism Justification Gate — `ThreadPoolBackend::owed_count_`
+
+1. **Fact represented**: the number of `delivery_` records with
+   `event_owed` set — a derived summary of `#{record | record.event_owed}`,
+   every producer/consumer transition under `work_mtx_`.
+2. **Semantic authority**: the `delivery_` records themselves, each owed
+   flag paired with one core control reference on `owed_key` (acquired
+   before the flag is set, released after delivery). The counter owns no
+   fact; it cannot admit, settle, publish or retire anything.
+3. **Why not derivable on demand**: it is derived on demand today — by the
+   two O(request_capacity) sweeps per progress pass (collection sweep and
+   the `any_event_owed_locked_` scan behind `immediate_work_remains`).
+   On the real-consumer path (`sluice-copy`, capacity 64) those sweeps
+   touched 128 records per completion while owed events are produced only
+   by zero-length requests — never on that path; the measured family was
+   ~6–8% of samples at 4 KiB buffers (~3% at 64 KiB).
+4. **Why not a linear scan kept**: measured on the equivalent application
+   task (oracle-verified 256 MiB copy, 24 interleaved AB/BA pairs): CPU per
+   task −5.58% [−6.45, −4.71]% against an A/A band of ±1.2%, wall −6.53%
+   [−7.55, −5.53]%, user-space instructions −22.1%; the scan symbol family
+   disappears from the candidate's profile. Negative control (64 KiB,
+   depth 1): +0.10% [−1.56, +1.77]% — no statistically resolved regression
+   in the measured negative-control cell; no non-inferiority margin was
+   pre-registered, and the +1.77% CI upper bound cannot exclude a CPU
+   regression that small.
+5. **Classification**: derived summary (BACKEND-04/TERM-01), materialized
+   because the query frequency (every progress pass on the driver thread)
+   is far above the update frequency (one edge per zero-length request).
+6. **Replaces**: nothing; no existing mechanism is removed. The
+   unconditional collection sweep remains in force whenever the count is
+   nonzero, and the authoritative `any_event_owed_locked_` scan remains
+   the settlement verdict (`internal_work_retired()`,
+   `retire_execution_resources()`), exactly as on io_uring.
+7. **Migration/removal conditions**: not applicable (no replacement).
+8. **Load-bearing parity**: drift below actual would skip a needed sweep
+   and park settlement (liveness, as the uring counter); drift above only
+   wastes a sweep. Pinned by `tests/threadpool_owed_counter_parity_test.cpp`
+   (counter↔exact-count-scan↔existence-scan↔sink parity at quiescent
+   checkpoints, slot-reuse-before-delivery under the control-ref pin,
+   owed-during-pass counting and residue verdict, concurrent-producer
+   exactly-once) and four registered mutant builds
+   (`threadpool_owed_mut_*`), all killed with named failure sites.
+
+### Authority-contraction audit
+
+- No authority moves: no admission, settlement, publication, retirement or
+  wake decision reads the counter; settlement paths still consult the
+  authoritative scan. The slot-reuse hazard that would let a submit
+  re-initialize a record with a pending owed event is unreachable because
+  `reclaimable_` requires `control_refs == 0` and an owed event pins its
+  control reference — the same invariant the uring counter relies on,
+  pinned here by the shared `SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS`
+  kill.
+- No legacy mechanism became removable by this slice: `delivery_` records
+  and their control references remain the authority (needed whenever the
+  count is nonzero and by the parity oracle); the per-pass collection
+  sweep, the `immediate_work_remains` fact and the settlement scans all
+  stay.
+- The io_uring backend already carries the identical mechanism in
+  production (H2b); this slice removes the cross-backend asymmetry, not a
+  backend-general abstraction.

@@ -1,0 +1,22 @@
+# perf stat mechanism metrics (2026-11-12, CELL-MAIN shape: 256 MiB, 4 KiB, depth 4, w1)
+# 3 reps per arm, taskset -c 2,3, governor performance, btrfs warm cache.
+# Commands: perf stat -e instructions,task-clock,context-switches -x, -- <sluice-copy ...>
+# Raw outputs preserved off-repo: /home/jnhu/sluice-621-round/ (see REPORT.md §1)
+
+arm A (f2c42535, sha256 7df5c8571310a...):
+  instructions:u  901951970 / 883843540 / 909780701   (mean ~898.5 M)
+  task-clock:u   1626.05 / 1756.87 / 1812.64 msec
+  context-switches:u  0 / 0 / 0
+
+arm B (de9b452a == PR head tree, sha256 fb5123a1161a...):
+  instructions:u  700880468 / 694136437 / 705120742   (mean ~700.0 M)
+  task-clock:u   1550.57 / 1614.19 / 1642.02 msec
+  context-switches:u  0 / 0 / 0
+
+user-space instructions per task: -22.1% (approx 6854 -> 5341 per request,
+131076 requests/task); task-clock -7.5%; zero context switches in both
+arms (no thread-topology change). Clean-profile verification: the
+delivery-scan symbol family (DeliveryRecord vector operator[]/size(),
+any_event_owed_locked_) measured 5.8% of A's samples and falls below the
+0.7% reporting threshold in B's profile (perf data off-repo:
+results/perf_4k_sym.data, results/perf_B_4k.data).

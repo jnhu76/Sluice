@@ -485,7 +485,7 @@ end
 -- backend only; shared ProgressSource changes must still compile in the
 -- liburing-enabled progress/integration targets.
 do
-    local function threadpool_progress_target(name, test_source)
+    local function threadpool_progress_target(name, test_source, extra_define)
         target(name)
             set_kind("binary")
             set_default(false)
@@ -493,13 +493,18 @@ do
             add_deps("sluice_core")
             add_includedirs(R .. "include", R .. "src/async")
             add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
             add_files(test_source,
                       R .. "src/async/async_io_context.cpp",
                       R .. "src/async/threadpool_backend.cpp",
                       R .. "src/async/fail_fast.cpp",
                       R .. "src/async/detail/context_identity.cpp",
                       R .. "src/async/detail/request_core.cpp")
-            add_tests(name, {run_timeout = 120000})
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
     end
 
     threadpool_progress_target("threadpool_progress_race_test",
@@ -510,6 +515,27 @@ do
                         R .. "tests/threadpool_progress_pass_bound_test.cpp")
     threadpool_progress_target("threadpool_external_loop_test",
                         R .. "tests/threadpool_external_loop_test.cpp")
+    threadpool_progress_target("threadpool_owed_counter_parity_test",
+                        R .. "tests/threadpool_owed_counter_parity_test.cpp")
+
+    -- Owed-count mutation builds for the ThreadPool delivery summary. Each
+    -- breaks one edge of the derived owed_count_ or its supporting invariant
+    -- and must be killed by the named oracle: the parity suite grounds the
+    -- counter in the authoritative delivery-record scan and external
+    -- deliveries, and the same suite's during-pass case owns the residue
+    -- verdict. Executed and recorded manually, never run as regular tests.
+    threadpool_progress_target("threadpool_owed_mut_missing_increment",
+                              R .. "tests/threadpool_owed_counter_parity_test.cpp",
+                              "SLUICE_THREADPOOL_MUTANT_OWED_COUNT_MISSING_INCREMENT")
+    threadpool_progress_target("threadpool_owed_mut_missing_decrement",
+                              R .. "tests/threadpool_owed_counter_parity_test.cpp",
+                              "SLUICE_THREADPOOL_MUTANT_OWED_COUNT_MISSING_DECREMENT")
+    threadpool_progress_target("threadpool_owed_mut_empty_verdict_always",
+                              R .. "tests/threadpool_owed_counter_parity_test.cpp",
+                              "SLUICE_THREADPOOL_MUTANT_OWED_EMPTY_VERDICT_ALWAYS")
+    threadpool_progress_target("threadpool_owed_mut_reclaim_ignoring_control_refs",
+                              R .. "tests/threadpool_owed_counter_parity_test.cpp",
+                              "SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS")
 end
 
 -- W-03 stop-order protocol: the external driver re-checks the shared stop

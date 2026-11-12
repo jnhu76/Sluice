@@ -1,0 +1,15 @@
+== results/aa_4k_d4.tsv (24 valid pairs) ==
+cpu(user+sys)   meanX=  1.471 meanY=  1.462 reldiff= -0.584%  CI95=[ -1.177%,  +0.026%]
+wall            meanX=  1.058 meanY=  1.054 reldiff= -0.327%  CI95=[ -1.281%,  +0.635%]
+user            meanX=  0.649 meanY=  0.648 reldiff= +0.102%  CI95=[ -2.089%,  +2.314%]
+sys             meanX=  0.822 meanY=  0.814 reldiff= -0.959%  CI95=[ -2.412%,  +0.483%]
+== results/ab_4k_d4.tsv (24 valid pairs) ==
+cpu(user+sys)   meanX=  1.467 meanY=  1.385 reldiff= -5.577%  CI95=[ -6.446%,  -4.711%]
+wall            meanX=  1.053 meanY=  0.984 reldiff= -6.532%  CI95=[ -7.551%,  -5.525%]
+user            meanX=  0.653 meanY=  0.611 reldiff= -6.334%  CI95=[ -7.730%,  -4.937%]
+sys             meanX=  0.814 meanY=  0.773 reldiff= -4.897%  CI95=[ -6.468%,  -3.333%]
+== results/ab_64k_d1.tsv (24 valid pairs) ==
+cpu(user+sys)   meanX=  0.173 meanY=  0.173 reldiff= +0.097%  CI95=[ -1.564%,  +1.774%]
+wall            meanX=  0.162 meanY=  0.161 reldiff= -0.687%  CI95=[ -1.961%,  +0.602%]
+user            meanX=  0.037 meanY=  0.037 reldiff= +3.056%  CI95=[ -6.181%, +13.194%]
+sys             meanX=  0.135 meanY=  0.135 reldiff= +0.168%  CI95=[ -2.259%,  +2.694%]
