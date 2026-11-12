@@ -1,0 +1,4908 @@
+{
+  "name": "aa-4k-d4",
+  "started": "2026-11-12T20:17:24.739+08:00",
+  "protocol": {
+    "pairs": 36,
+    "buffer_size": 4096,
+    "pipeline_depth": 4,
+    "workers": 1,
+    "sync": "none",
+    "atomic": false,
+    "binary_a": "/home/jnhu/sluice-621-r2/bin/sluice-copy.A",
+    "binary_b": "/home/jnhu/sluice-621-r2/bin/sluice-copy.A",
+    "dst_a": "/home/jnhu/sluice-621-r2/data/session-aa-dst-A.bin",
+    "dst_b": "/home/jnhu/sluice-621-r2/data/session-aa-dst-B.bin",
+    "frozen_read_ops": 65540,
+    "frozen_write_ops": 65536,
+    "perf_command": "sudo perf stat -e task-clock,cycles,instructions -- taskset -c 2,3 <bin> --buffer-size 4096 --pipeline-depth 4 --workers 1 --sync none --no-atomic <src> <dst>"
+  },
+  "warmups": [
+    {
+      "position": 1,
+      "wall_s": 1.1847435999952722,
+      "perf_elapsed_s": 1.113762531,
+      "task_clock_ms": 1499.85,
+      "cycles": 4222602862,
+      "instructions": 2809614895,
+      "perf_user_s": 0.569531,
+      "perf_sys_s": 0.93838,
+      "perf_cpu_s": 1.507911,
+      "cpu_us_children": 1550312,
+      "cpu_total_s_children": 1.550312,
+      "rc": 0,
+      "oracle_ok": true,
+      "oracle_detail": "ok",
+      "read_ops": 65540,
+      "write_ops": 65536,
+      "short_writes": 0,
+      "freq_pre_khz": {
+        "2": 3193761,
+        "3": 3286407
+      },
+      "freq": {
+        "2": {
+          "min": 3188164,
+          "max": 3492003,
+          "last": 3437895,
+          "n": 59
+        },
+        "3": {
+          "min": 3192643,
+          "max": 3491979,
+          "last": 3435517,
+          "n": 59
+        }
+      },
+      "freq_eq_all": false,
+      "wb_peak_kb": 464,
+      "dirty_peak_kb": 263464,
+      "pre": {
+        "sync_s": 0.11146484599885298,
+        "poll_s": 0.25051897700177506,
+        "timeout": false,
+        "polls": 2,
+        "wb_peak_kb": 400,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "samples": 59,
+      "arm": "A"
+    },
+    {
+      "position": 2,
+      "wall_s": 1.1977705729950685,
+      "perf_elapsed_s": 1.13469442,
+      "task_clock_ms": 1517.35,
+      "cycles": 4183627453,
+      "instructions": 2824948500,
+      "perf_user_s": 0.580871,
+      "perf_sys_s": 0.949548,
+      "perf_cpu_s": 1.530419,
+      "cpu_us_children": 1570803,
+      "cpu_total_s_children": 1.570803,
+      "rc": 0,
+      "oracle_ok": true,
+      "oracle_detail": "ok",
+      "read_ops": 65540,
+      "write_ops": 65536,
+      "short_writes": 0,
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "freq": {
+        "2": {
+          "min": 2487999,
+          "max": 3500000,
+          "last": 3194409,
+          "n": 60
+        },
+        "3": {
+          "min": 2051748,
+          "max": 3500000,
+          "last": 3193408,
+          "n": 60
+        }
+      },
+      "freq_eq_all": false,
+      "wb_peak_kb": 48,
+      "dirty_peak_kb": 264584,
+      "pre": {
+        "sync_s": 0.6340117549989372,
+        "poll_s": 0.5011294719952275,
+        "timeout": false,
+        "polls": 3,
+        "wb_peak_kb": 760,
+        "dirty_peak_kb": 168,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 4
+      },
+      "samples": 60,
+      "arm": "B"
+    }
+  ],
+  "pairs": [
+    {
+      "pair": 1,
+      "order": "BA",
+      "started": "2026-11-12T20:17:37.196+08:00",
+      "pre": {
+        "sync_s": 0.694773877003172,
+        "poll_s": 0.5008163180027623,
+        "timeout": false,
+        "polls": 3,
+        "wb_peak_kb": 1068,
+        "dirty_peak_kb": 444,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.6552734375,
+        0.21728515625,
+        0.11279296875
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.7795761630040943,
+          "perf_elapsed_s": 1.715383308,
+          "task_clock_ms": 1626.61,
+          "cycles": 4657170917,
+          "instructions": 3396438397,
+          "perf_user_s": 0.550617,
+          "perf_sys_s": 1.090577,
+          "perf_cpu_s": 1.641194,
+          "cpu_us_children": 1683951,
+          "cpu_total_s_children": 1.683951,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2641780,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            },
+            "3": {
+              "min": 1731733,
+              "max": 3500000,
+              "last": 2769514,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8536,
+          "dirty_peak_kb": 264376,
+          "pre": {
+            "sync_s": 0.694773877003172,
+            "poll_s": 0.5008163180027623,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 1068,
+            "dirty_peak_kb": 444,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 88
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.9238601629986078,
+          "perf_elapsed_s": 1.863831375,
+          "task_clock_ms": 1732.45,
+          "cycles": 4826638404,
+          "instructions": 3496101918,
+          "perf_user_s": 0.597309,
+          "perf_sys_s": 1.151734,
+          "perf_cpu_s": 1.749043,
+          "cpu_us_children": 1790748,
+          "cpu_total_s_children": 1.790748,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1621515,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 95
+            },
+            "3": {
+              "min": 1395797,
+              "max": 3500000,
+              "last": 3125084,
+              "n": 95
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8540,
+          "dirty_peak_kb": 263016,
+          "pre": {
+            "sync_s": 0.694773877003172,
+            "poll_s": 0.5008163180027623,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 1068,
+            "dirty_peak_kb": 444,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 95
+        }
+      },
+      "finished": "2026-11-12T20:17:42.241+08:00"
+    },
+    {
+      "pair": 2,
+      "order": "AB",
+      "started": "2026-11-12T20:17:45.051+08:00",
+      "pre": {
+        "sync_s": 0.04700883899931796,
+        "poll_s": 0.7510231429987471,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 632,
+        "dirty_peak_kb": 2044,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 1628
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.6279296875,
+        0.2265625,
+        0.11669921875
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.982639089001168,
+          "perf_elapsed_s": 1.920263951,
+          "task_clock_ms": 1666.73,
+          "cycles": 4711247746,
+          "instructions": 3419103055,
+          "perf_user_s": 0.621059,
+          "perf_sys_s": 1.055626,
+          "perf_cpu_s": 1.676685,
+          "cpu_us_children": 1719958,
+          "cpu_total_s_children": 1.719958,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197261,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 98
+            },
+            "3": {
+              "min": 1547077,
+              "max": 3500000,
+              "last": 3476620,
+              "n": 98
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 262864,
+          "pre": {
+            "sync_s": 0.04700883899931796,
+            "poll_s": 0.7510231429987471,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 632,
+            "dirty_peak_kb": 2044,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 1628
+          },
+          "samples": 98
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8598166770025273,
+          "perf_elapsed_s": 1.803435138,
+          "task_clock_ms": 1692.8,
+          "cycles": 4764656692,
+          "instructions": 3477027252,
+          "perf_user_s": 0.593304,
+          "perf_sys_s": 1.113019,
+          "perf_cpu_s": 1.706323,
+          "cpu_us_children": 1747598,
+          "cpu_total_s_children": 1.747598,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197318,
+              "max": 3500000,
+              "last": 3387989,
+              "n": 92
+            },
+            "3": {
+              "min": 1198108,
+              "max": 3500000,
+              "last": 3338965,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8592,
+          "dirty_peak_kb": 264600,
+          "pre": {
+            "sync_s": 0.04700883899931796,
+            "poll_s": 0.7510231429987471,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 632,
+            "dirty_peak_kb": 2044,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 1628
+          },
+          "samples": 92
+        }
+      },
+      "finished": "2026-11-12T20:17:50.252+08:00"
+    },
+    {
+      "pair": 3,
+      "order": "BA",
+      "started": "2026-11-12T20:17:53.330+08:00",
+      "pre": {
+        "sync_s": 0.06491486399318092,
+        "poll_s": 1.0010132389943465,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 772,
+        "dirty_peak_kb": 632,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3093386,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.60546875,
+        0.2353515625,
+        0.12060546875
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.9325830140005564,
+          "perf_elapsed_s": 1.867716013,
+          "task_clock_ms": 1659.95,
+          "cycles": 4656335347,
+          "instructions": 3408221242,
+          "perf_user_s": 0.559671,
+          "perf_sys_s": 1.114659,
+          "perf_cpu_s": 1.67433,
+          "cpu_us_children": 1715544,
+          "cpu_total_s_children": 1.715544,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1484988,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 96
+            },
+            "3": {
+              "min": 1578318,
+              "max": 3500000,
+              "last": 3403900,
+              "n": 96
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 264024,
+          "pre": {
+            "sync_s": 0.06491486399318092,
+            "poll_s": 1.0010132389943465,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 772,
+            "dirty_peak_kb": 632,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 96
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.887075160004315,
+          "perf_elapsed_s": 1.822178542,
+          "task_clock_ms": 1713.4,
+          "cycles": 4824759614,
+          "instructions": 3556644205,
+          "perf_user_s": 0.591071,
+          "perf_sys_s": 1.140871,
+          "perf_cpu_s": 1.731942,
+          "cpu_us_children": 1773719,
+          "cpu_total_s_children": 1.773719,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2033853,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 94
+            },
+            "3": {
+              "min": 1197303,
+              "max": 3500000,
+              "last": 3413563,
+              "n": 94
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 263172,
+          "pre": {
+            "sync_s": 0.06491486399318092,
+            "poll_s": 1.0010132389943465,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 772,
+            "dirty_peak_kb": 632,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 94
+        }
+      },
+      "finished": "2026-11-12T20:17:58.483+08:00"
+    },
+    {
+      "pair": 4,
+      "order": "AB",
+      "started": "2026-11-12T20:18:01.030+08:00",
+      "pre": {
+        "sync_s": 0.033719792001647875,
+        "poll_s": 0.5006787230013288,
+        "timeout": false,
+        "polls": 3,
+        "wb_peak_kb": 372,
+        "dirty_peak_kb": 168,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.79736328125,
+        0.28125,
+        0.13623046875
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.760430392998387,
+          "perf_elapsed_s": 1.695197516,
+          "task_clock_ms": 1592.91,
+          "cycles": 4526062924,
+          "instructions": 3288505341,
+          "perf_user_s": 0.569873,
+          "perf_sys_s": 1.033197,
+          "perf_cpu_s": 1.6030699999999998,
+          "cpu_us_children": 1645606,
+          "cpu_total_s_children": 1.645606,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2313063,
+              "max": 3500000,
+              "last": 3389769,
+              "n": 87
+            },
+            "3": {
+              "min": 2182223,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 87
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8220,
+          "dirty_peak_kb": 262396,
+          "pre": {
+            "sync_s": 0.033719792001647875,
+            "poll_s": 0.5006787230013288,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 372,
+            "dirty_peak_kb": 168,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 87
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8317843869954231,
+          "perf_elapsed_s": 1.772326116,
+          "task_clock_ms": 1656.54,
+          "cycles": 4613819164,
+          "instructions": 3367734022,
+          "perf_user_s": 0.588304,
+          "perf_sys_s": 1.08133,
+          "perf_cpu_s": 1.6696339999999998,
+          "cpu_us_children": 1711405,
+          "cpu_total_s_children": 1.711405,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1589728,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1197419,
+              "max": 3500000,
+              "last": 3372221,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 264408,
+          "pre": {
+            "sync_s": 0.033719792001647875,
+            "poll_s": 0.5006787230013288,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 372,
+            "dirty_peak_kb": 168,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:18:05.955+08:00"
+    },
+    {
+      "pair": 5,
+      "order": "BA",
+      "started": "2026-11-12T20:18:09.021+08:00",
+      "pre": {
+        "sync_s": 0.05131574700499186,
+        "poll_s": 1.0014277869995567,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 296,
+        "dirty_peak_kb": 848,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.74853515625,
+        0.28857421875,
+        0.14013671875
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8377146100028767,
+          "perf_elapsed_s": 1.771977775,
+          "task_clock_ms": 1589.01,
+          "cycles": 4474413547,
+          "instructions": 3312254174,
+          "perf_user_s": 0.551402,
+          "perf_sys_s": 1.050709,
+          "perf_cpu_s": 1.6021109999999998,
+          "cpu_us_children": 1642902,
+          "cpu_total_s_children": 1.642902,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197316,
+              "max": 3500000,
+              "last": 2728814,
+              "n": 91
+            },
+            "3": {
+              "min": 1198304,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8584,
+          "dirty_peak_kb": 261456,
+          "pre": {
+            "sync_s": 0.05131574700499186,
+            "poll_s": 1.0014277869995567,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 296,
+            "dirty_peak_kb": 848,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.9316860289982287,
+          "perf_elapsed_s": 1.876254461,
+          "task_clock_ms": 1741.63,
+          "cycles": 4832965602,
+          "instructions": 3567171978,
+          "perf_user_s": 0.564011,
+          "perf_sys_s": 1.19149,
+          "perf_cpu_s": 1.755501,
+          "cpu_us_children": 1794685,
+          "cpu_total_s_children": 1.794685,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2743120,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 96
+            },
+            "3": {
+              "min": 2316900,
+              "max": 3500000,
+              "last": 3008029,
+              "n": 96
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 264488,
+          "pre": {
+            "sync_s": 0.05131574700499186,
+            "poll_s": 1.0014277869995567,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 296,
+            "dirty_peak_kb": 848,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 96
+        }
+      },
+      "finished": "2026-11-12T20:18:14.124+08:00"
+    },
+    {
+      "pair": 6,
+      "order": "AB",
+      "started": "2026-11-12T20:18:17.200+08:00",
+      "pre": {
+        "sync_s": 0.06279701500170631,
+        "poll_s": 1.0014325490046758,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 432,
+        "dirty_peak_kb": 636,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.76904296875,
+        0.30078125,
+        0.14501953125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8408606950033573,
+          "perf_elapsed_s": 1.77891672,
+          "task_clock_ms": 1601.0,
+          "cycles": 4526297225,
+          "instructions": 3289795247,
+          "perf_user_s": 0.567258,
+          "perf_sys_s": 1.042936,
+          "perf_cpu_s": 1.6101940000000001,
+          "cpu_us_children": 1649402,
+          "cpu_total_s_children": 1.649402,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 3191159,
+              "max": 3500000,
+              "last": 3210890,
+              "n": 91
+            },
+            "3": {
+              "min": 3192087,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12712,
+          "dirty_peak_kb": 262880,
+          "pre": {
+            "sync_s": 0.06279701500170631,
+            "poll_s": 1.0014325490046758,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 432,
+            "dirty_peak_kb": 636,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.791388547004317,
+          "perf_elapsed_s": 1.737367881,
+          "task_clock_ms": 1649.06,
+          "cycles": 4703391163,
+          "instructions": 3424880937,
+          "perf_user_s": 0.56292,
+          "perf_sys_s": 1.096452,
+          "perf_cpu_s": 1.6593719999999998,
+          "cpu_us_children": 1699201,
+          "cpu_total_s_children": 1.699201,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1794215,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            },
+            "3": {
+              "min": 1692099,
+              "max": 3500000,
+              "last": 3059067,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8624,
+          "dirty_peak_kb": 263936,
+          "pre": {
+            "sync_s": 0.06279701500170631,
+            "poll_s": 1.0014325490046758,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 432,
+            "dirty_peak_kb": 636,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 89
+        }
+      },
+      "finished": "2026-11-12T20:18:22.178+08:00"
+    },
+    {
+      "pair": 7,
+      "order": "BA",
+      "started": "2026-11-12T20:18:24.228+08:00",
+      "pre": {
+        "sync_s": 0.03674508100084495,
+        "poll_s": 0.00013806099741486832,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 672,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 672
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.72412109375,
+        0.30712890625,
+        0.14892578125
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8536595469995518,
+          "perf_elapsed_s": 1.792328675,
+          "task_clock_ms": 1631.79,
+          "cycles": 4593313648,
+          "instructions": 3343827472,
+          "perf_user_s": 0.606114,
+          "perf_sys_s": 1.041057,
+          "perf_cpu_s": 1.647171,
+          "cpu_us_children": 1686509,
+          "cpu_total_s_children": 1.686509,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1409812,
+              "max": 3500000,
+              "last": 3454370,
+              "n": 92
+            },
+            "3": {
+              "min": 1197637,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 263464,
+          "pre": {
+            "sync_s": 0.03674508100084495,
+            "poll_s": 0.00013806099741486832,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 672,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 672
+          },
+          "samples": 92
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.7924233019948588,
+          "perf_elapsed_s": 1.737716183,
+          "task_clock_ms": 1610.05,
+          "cycles": 4545377947,
+          "instructions": 3337708175,
+          "perf_user_s": 0.565352,
+          "perf_sys_s": 1.054594,
+          "perf_cpu_s": 1.619946,
+          "cpu_us_children": 1659725,
+          "cpu_total_s_children": 1.659725,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197490,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            },
+            "3": {
+              "min": 1350067,
+              "max": 3500000,
+              "last": 3418479,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8816,
+          "dirty_peak_kb": 264212,
+          "pre": {
+            "sync_s": 0.03674508100084495,
+            "poll_s": 0.00013806099741486832,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 672,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 672
+          },
+          "samples": 89
+        }
+      },
+      "finished": "2026-11-12T20:18:29.228+08:00"
+    },
+    {
+      "pair": 8,
+      "order": "AB",
+      "started": "2026-11-12T20:18:32.267+08:00",
+      "pre": {
+        "sync_s": 0.025451490000705235,
+        "poll_s": 1.0014001449962961,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 304,
+        "dirty_peak_kb": 356,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.82666015625,
+        0.33544921875,
+        0.1591796875
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.7868264399949112,
+          "perf_elapsed_s": 1.723480852,
+          "task_clock_ms": 1610.63,
+          "cycles": 4573544840,
+          "instructions": 3308875636,
+          "perf_user_s": 0.567535,
+          "perf_sys_s": 1.055344,
+          "perf_cpu_s": 1.6228790000000002,
+          "cpu_us_children": 1664013,
+          "cpu_total_s_children": 1.664013,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1414526,
+              "max": 3500000,
+              "last": 3223517,
+              "n": 89
+            },
+            "3": {
+              "min": 1516741,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8536,
+          "dirty_peak_kb": 263116,
+          "pre": {
+            "sync_s": 0.025451490000705235,
+            "poll_s": 1.0014001449962961,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 304,
+            "dirty_peak_kb": 356,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 89
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8370665309994365,
+          "perf_elapsed_s": 1.783018129,
+          "task_clock_ms": 1659.76,
+          "cycles": 4627547564,
+          "instructions": 3401221930,
+          "perf_user_s": 0.598222,
+          "perf_sys_s": 1.074245,
+          "perf_cpu_s": 1.672467,
+          "cpu_us_children": 1711456,
+          "cpu_total_s_children": 1.711456,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197624,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1286959,
+              "max": 3500000,
+              "last": 2786583,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8584,
+          "dirty_peak_kb": 264980,
+          "pre": {
+            "sync_s": 0.025451490000705235,
+            "poll_s": 1.0014001449962961,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 304,
+            "dirty_peak_kb": 356,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:18:37.226+08:00"
+    },
+    {
+      "pair": 9,
+      "order": "BA",
+      "started": "2026-11-12T20:18:40.043+08:00",
+      "pre": {
+        "sync_s": 0.05329724100010935,
+        "poll_s": 0.7509612289941288,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 348,
+        "dirty_peak_kb": 224,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.8466796875,
+        0.35693359375,
+        0.16845703125
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.7842838959986693,
+          "perf_elapsed_s": 1.71330135,
+          "task_clock_ms": 1620.82,
+          "cycles": 4512116605,
+          "instructions": 3283675787,
+          "perf_user_s": 0.569418,
+          "perf_sys_s": 1.061117,
+          "perf_cpu_s": 1.630535,
+          "cpu_us_children": 1671611,
+          "cpu_total_s_children": 1.671611,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1325510,
+              "max": 3500000,
+              "last": 3291448,
+              "n": 88
+            },
+            "3": {
+              "min": 1198195,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 263244,
+          "pre": {
+            "sync_s": 0.05329724100010935,
+            "poll_s": 0.7509612289941288,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 348,
+            "dirty_peak_kb": 224,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 88
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.8442750860049273,
+          "perf_elapsed_s": 1.792200893,
+          "task_clock_ms": 1671.39,
+          "cycles": 4681608138,
+          "instructions": 3430335867,
+          "perf_user_s": 0.56762,
+          "perf_sys_s": 1.119897,
+          "perf_cpu_s": 1.687517,
+          "cpu_us_children": 1726394,
+          "cpu_total_s_children": 1.726394,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2391237,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1204913,
+              "max": 3500000,
+              "last": 3192676,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8248,
+          "dirty_peak_kb": 264476,
+          "pre": {
+            "sync_s": 0.05329724100010935,
+            "poll_s": 0.7509612289941288,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 348,
+            "dirty_peak_kb": 224,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:18:45.002+08:00"
+    },
+    {
+      "pair": 10,
+      "order": "AB",
+      "started": "2026-11-12T20:18:48.081+08:00",
+      "pre": {
+        "sync_s": 0.06488015300419647,
+        "poll_s": 1.0012116740035708,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 308,
+        "dirty_peak_kb": 844,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 844
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.79052734375,
+        0.361328125,
+        0.17236328125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8762980549945496,
+          "perf_elapsed_s": 1.814965305,
+          "task_clock_ms": 1644.55,
+          "cycles": 4642990425,
+          "instructions": 3391613482,
+          "perf_user_s": 0.567825,
+          "perf_sys_s": 1.092807,
+          "perf_cpu_s": 1.660632,
+          "cpu_us_children": 1700578,
+          "cpu_total_s_children": 1.700578,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197254,
+              "max": 3500000,
+              "last": 2994696,
+              "n": 93
+            },
+            "3": {
+              "min": 1197481,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8548,
+          "dirty_peak_kb": 263232,
+          "pre": {
+            "sync_s": 0.06488015300419647,
+            "poll_s": 1.0012116740035708,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 308,
+            "dirty_peak_kb": 844,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 844
+          },
+          "samples": 93
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.9110539779940154,
+          "perf_elapsed_s": 1.856957583,
+          "task_clock_ms": 1722.41,
+          "cycles": 4814289988,
+          "instructions": 3522960821,
+          "perf_user_s": 0.591296,
+          "perf_sys_s": 1.14767,
+          "perf_cpu_s": 1.738966,
+          "cpu_us_children": 1777348,
+          "cpu_total_s_children": 1.777348,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1264241,
+              "max": 3500000,
+              "last": 3459369,
+              "n": 95
+            },
+            "3": {
+              "min": 2108609,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 95
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8856,
+          "dirty_peak_kb": 262508,
+          "pre": {
+            "sync_s": 0.06488015300419647,
+            "poll_s": 1.0012116740035708,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 308,
+            "dirty_peak_kb": 844,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 844
+          },
+          "samples": 95
+        }
+      },
+      "finished": "2026-11-12T20:18:53.208+08:00"
+    },
+    {
+      "pair": 11,
+      "order": "BA",
+      "started": "2026-11-12T20:18:56.513+08:00",
+      "pre": {
+        "sync_s": 0.04090752600313863,
+        "poll_s": 1.2515532530014752,
+        "timeout": false,
+        "polls": 6,
+        "wb_peak_kb": 492,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.8076171875,
+        0.3720703125,
+        0.17724609375
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8511975569999777,
+          "perf_elapsed_s": 1.794199769,
+          "task_clock_ms": 1606.59,
+          "cycles": 4536493771,
+          "instructions": 3316034345,
+          "perf_user_s": 0.578723,
+          "perf_sys_s": 1.039052,
+          "perf_cpu_s": 1.617775,
+          "cpu_us_children": 1656961,
+          "cpu_total_s_children": 1.656961,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2415371,
+              "max": 3500000,
+              "last": 3218089,
+              "n": 92
+            },
+            "3": {
+              "min": 1821510,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8252,
+          "dirty_peak_kb": 261036,
+          "pre": {
+            "sync_s": 0.04090752600313863,
+            "poll_s": 1.2515532530014752,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 492,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 92
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.8428226039977744,
+          "perf_elapsed_s": 1.787425678,
+          "task_clock_ms": 1665.06,
+          "cycles": 4686130957,
+          "instructions": 3445635903,
+          "perf_user_s": 0.601591,
+          "perf_sys_s": 1.076085,
+          "perf_cpu_s": 1.677676,
+          "cpu_us_children": 1716808,
+          "cpu_total_s_children": 1.716808,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1726865,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1542678,
+              "max": 3500000,
+              "last": 3472286,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8368,
+          "dirty_peak_kb": 265380,
+          "pre": {
+            "sync_s": 0.04090752600313863,
+            "poll_s": 1.2515532530014752,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 492,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:19:01.536+08:00"
+    },
+    {
+      "pair": 12,
+      "order": "AB",
+      "started": "2026-11-12T20:19:03.641+08:00",
+      "pre": {
+        "sync_s": 0.09291545399901224,
+        "poll_s": 0.00014547900354955345,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 416,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 416
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        0.904296875,
+        0.40869140625,
+        0.19140625
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.7796870409947587,
+          "perf_elapsed_s": 1.718202985,
+          "task_clock_ms": 1618.0,
+          "cycles": 4589238193,
+          "instructions": 3340570462,
+          "perf_user_s": 0.55212,
+          "perf_sys_s": 1.082295,
+          "perf_cpu_s": 1.6344150000000002,
+          "cpu_us_children": 1675937,
+          "cpu_total_s_children": 1.675937,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2137185,
+              "max": 3500000,
+              "last": 3255737,
+              "n": 88
+            },
+            "3": {
+              "min": 1197189,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8576,
+          "dirty_peak_kb": 262812,
+          "pre": {
+            "sync_s": 0.09291545399901224,
+            "poll_s": 0.00014547900354955345,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 416,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 416
+          },
+          "samples": 88
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.9502092159964377,
+          "perf_elapsed_s": 1.895532963,
+          "task_clock_ms": 1766.83,
+          "cycles": 4895334849,
+          "instructions": 3565100929,
+          "perf_user_s": 0.588576,
+          "perf_sys_s": 1.1965,
+          "perf_cpu_s": 1.7850759999999999,
+          "cpu_us_children": 1824610,
+          "cpu_total_s_children": 1.82461,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1596236,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 97
+            },
+            "3": {
+              "min": 2168003,
+              "max": 3500000,
+              "last": 3288447,
+              "n": 97
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8344,
+          "dirty_peak_kb": 263840,
+          "pre": {
+            "sync_s": 0.09291545399901224,
+            "poll_s": 0.00014547900354955345,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 416,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 416
+          },
+          "samples": 97
+        }
+      },
+      "finished": "2026-11-12T20:19:08.830+08:00"
+    },
+    {
+      "pair": 13,
+      "order": "BA",
+      "started": "2026-11-12T20:19:10.963+08:00",
+      "pre": {
+        "sync_s": 0.12009885199950077,
+        "poll_s": 0.00011331800487823784,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.072265625,
+        0.4521484375,
+        0.20654296875
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 33.189609875000315,
+          "perf_elapsed_s": 33.123386969,
+          "task_clock_ms": 1612.7,
+          "cycles": 4575747541,
+          "instructions": 3295685115,
+          "perf_user_s": 0.547188,
+          "perf_sys_s": 1.075399,
+          "perf_cpu_s": 1.622587,
+          "cpu_us_children": 1663362,
+          "cpu_total_s_children": 1.663362,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1196867,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 1627
+            },
+            "3": {
+              "min": 1197252,
+              "max": 3500000,
+              "last": 3205966,
+              "n": 1627
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 20492,
+          "dirty_peak_kb": 262880,
+          "pre": {
+            "sync_s": 0.12009885199950077,
+            "poll_s": 0.00011331800487823784,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 1627
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 15.935620363998169,
+          "perf_elapsed_s": 15.871967215,
+          "task_clock_ms": 1640.7,
+          "cycles": 4661331094,
+          "instructions": 3421965568,
+          "perf_user_s": 0.571544,
+          "perf_sys_s": 1.083048,
+          "perf_cpu_s": 1.654592,
+          "cpu_us_children": 1696592,
+          "cpu_total_s_children": 1.696592,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197354,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 781
+            },
+            "3": {
+              "min": 1196432,
+              "max": 3500000,
+              "last": 3237507,
+              "n": 781
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12288,
+          "dirty_peak_kb": 264352,
+          "pre": {
+            "sync_s": 0.12009885199950077,
+            "poll_s": 0.00011331800487823784,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 781
+        }
+      },
+      "finished": "2026-11-12T20:20:02.546+08:00"
+    },
+    {
+      "pair": 14,
+      "order": "AB",
+      "started": "2026-11-12T20:20:05.138+08:00",
+      "pre": {
+        "sync_s": 0.07896723400335759,
+        "poll_s": 0.5007666559977224,
+        "timeout": false,
+        "polls": 3,
+        "wb_peak_kb": 688,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.63623046875,
+        0.7158203125,
+        0.31201171875
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8416521249964717,
+          "perf_elapsed_s": 1.776229548,
+          "task_clock_ms": 1619.44,
+          "cycles": 4545078295,
+          "instructions": 3260253503,
+          "perf_user_s": 0.571624,
+          "perf_sys_s": 1.060981,
+          "perf_cpu_s": 1.6326049999999999,
+          "cpu_us_children": 1673201,
+          "cpu_total_s_children": 1.673201,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1285869,
+              "max": 3500000,
+              "last": 3433153,
+              "n": 91
+            },
+            "3": {
+              "min": 1197058,
+              "max": 3500000,
+              "last": 3222651,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8588,
+          "dirty_peak_kb": 262948,
+          "pre": {
+            "sync_s": 0.07896723400335759,
+            "poll_s": 0.5007666559977224,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 688,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.9354350549983792,
+          "perf_elapsed_s": 1.878787884,
+          "task_clock_ms": 1665.73,
+          "cycles": 4692560089,
+          "instructions": 3404725874,
+          "perf_user_s": 0.584798,
+          "perf_sys_s": 1.095469,
+          "perf_cpu_s": 1.6802670000000002,
+          "cpu_us_children": 1722656,
+          "cpu_total_s_children": 1.722656,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3201666
+          },
+          "freq": {
+            "2": {
+              "min": 1197796,
+              "max": 3500000,
+              "last": 2342712,
+              "n": 96
+            },
+            "3": {
+              "min": 1422718,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 96
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 9072,
+          "dirty_peak_kb": 264132,
+          "pre": {
+            "sync_s": 0.07896723400335759,
+            "poll_s": 0.5007666559977224,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 688,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 96
+        }
+      },
+      "finished": "2026-11-12T20:20:10.538+08:00"
+    },
+    {
+      "pair": 15,
+      "order": "BA",
+      "started": "2026-11-12T20:20:14.915+08:00",
+      "pre": {
+        "sync_s": 2.3636890499983565,
+        "poll_s": 0.0002712109999265522,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 20,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 20
+      },
+      "freq_pre_khz": {
+        "2": 3238789,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.61181640625,
+        0.74169921875,
+        0.3251953125
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 17.264229630003683,
+          "perf_elapsed_s": 17.197269083,
+          "task_clock_ms": 1627.68,
+          "cycles": 4563502384,
+          "instructions": 3254635812,
+          "perf_user_s": 0.567407,
+          "perf_sys_s": 1.071008,
+          "perf_cpu_s": 1.638415,
+          "cpu_us_children": 1683012,
+          "cpu_total_s_children": 1.683012,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3259309,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1196675,
+              "max": 3500000,
+              "last": 3437358,
+              "n": 847
+            },
+            "3": {
+              "min": 1197100,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 847
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8772,
+          "dirty_peak_kb": 261964,
+          "pre": {
+            "sync_s": 2.3636890499983565,
+            "poll_s": 0.0002712109999265522,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 20,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 20
+          },
+          "samples": 847
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.803416955001012,
+          "perf_elapsed_s": 1.748900867,
+          "task_clock_ms": 1592.34,
+          "cycles": 4584277281,
+          "instructions": 3364926845,
+          "perf_user_s": 0.532173,
+          "perf_sys_s": 1.075005,
+          "perf_cpu_s": 1.607178,
+          "cpu_us_children": 1646828,
+          "cpu_total_s_children": 1.646828,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2455598,
+              "max": 3500000,
+              "last": 3477216,
+              "n": 89
+            },
+            "3": {
+              "min": 1528712,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8592,
+          "dirty_peak_kb": 267028,
+          "pre": {
+            "sync_s": 2.3636890499983565,
+            "poll_s": 0.0002712109999265522,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 20,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 20
+          },
+          "samples": 89
+        }
+      },
+      "finished": "2026-11-12T20:20:35.337+08:00"
+    },
+    {
+      "pair": 16,
+      "order": "AB",
+      "started": "2026-11-12T20:20:38.176+08:00",
+      "pre": {
+        "sync_s": 0.07485511399863753,
+        "poll_s": 0.7511520449988893,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 860,
+        "dirty_peak_kb": 48,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.45263671875,
+        0.7783203125,
+        0.349609375
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.7917834160034545,
+          "perf_elapsed_s": 1.732007888,
+          "task_clock_ms": 1568.25,
+          "cycles": 4509403099,
+          "instructions": 3291417617,
+          "perf_user_s": 0.553127,
+          "perf_sys_s": 1.024903,
+          "perf_cpu_s": 1.57803,
+          "cpu_us_children": 1617384,
+          "cpu_total_s_children": 1.617384,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2410860,
+              "max": 3500000,
+              "last": 3393104,
+              "n": 89
+            },
+            "3": {
+              "min": 1197612,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8480,
+          "dirty_peak_kb": 264540,
+          "pre": {
+            "sync_s": 0.07485511399863753,
+            "poll_s": 0.7511520449988893,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 860,
+            "dirty_peak_kb": 48,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 89
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 19.87512593399879,
+          "perf_elapsed_s": 19.820355924,
+          "task_clock_ms": 1636.18,
+          "cycles": 4686787606,
+          "instructions": 3400098737,
+          "perf_user_s": 0.599664,
+          "perf_sys_s": 1.053027,
+          "perf_cpu_s": 1.652691,
+          "cpu_us_children": 1692402,
+          "cpu_total_s_children": 1.692402,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197272,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 974
+            },
+            "3": {
+              "min": 1196147,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 974
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12700,
+          "dirty_peak_kb": 265752,
+          "pre": {
+            "sync_s": 0.07485511399863753,
+            "poll_s": 0.7511520449988893,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 860,
+            "dirty_peak_kb": 48,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 974
+        }
+      },
+      "finished": "2026-11-12T20:21:01.742+08:00"
+    },
+    {
+      "pair": 17,
+      "order": "BA",
+      "started": "2026-11-12T20:21:06.167+08:00",
+      "pre": {
+        "sync_s": 0.9107389010023326,
+        "poll_s": 1.501821663005103,
+        "timeout": false,
+        "polls": 7,
+        "wb_peak_kb": 260,
+        "dirty_peak_kb": 1748,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 1620
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        2.302734375,
+        1.0244140625,
+        0.4423828125
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.861135427003319,
+          "perf_elapsed_s": 1.789088748,
+          "task_clock_ms": 1606.51,
+          "cycles": 4536227944,
+          "instructions": 3300345924,
+          "perf_user_s": 0.55592,
+          "perf_sys_s": 1.061985,
+          "perf_cpu_s": 1.617905,
+          "cpu_us_children": 1659846,
+          "cpu_total_s_children": 1.659846,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2087551,
+              "max": 3500000,
+              "last": 3469939,
+              "n": 92
+            },
+            "3": {
+              "min": 1198749,
+              "max": 3500000,
+              "last": 2531526,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8252,
+          "dirty_peak_kb": 262392,
+          "pre": {
+            "sync_s": 0.9107389010023326,
+            "poll_s": 1.501821663005103,
+            "timeout": false,
+            "polls": 7,
+            "wb_peak_kb": 260,
+            "dirty_peak_kb": 1748,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 1620
+          },
+          "samples": 92
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.8526839300029678,
+          "perf_elapsed_s": 1.794565664,
+          "task_clock_ms": 1645.78,
+          "cycles": 4691143409,
+          "instructions": 3393861114,
+          "perf_user_s": 0.558802,
+          "perf_sys_s": 1.098488,
+          "perf_cpu_s": 1.65729,
+          "cpu_us_children": 1699119,
+          "cpu_total_s_children": 1.699119,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1520962,
+              "max": 3500000,
+              "last": 3193258,
+              "n": 92
+            },
+            "3": {
+              "min": 1197278,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8536,
+          "dirty_peak_kb": 263440,
+          "pre": {
+            "sync_s": 0.9107389010023326,
+            "poll_s": 1.501821663005103,
+            "timeout": false,
+            "polls": 7,
+            "wb_peak_kb": 260,
+            "dirty_peak_kb": 1748,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 1620
+          },
+          "samples": 92
+        }
+      },
+      "finished": "2026-11-12T20:21:11.242+08:00"
+    },
+    {
+      "pair": 18,
+      "order": "AB",
+      "started": "2026-11-12T20:21:13.294+08:00",
+      "pre": {
+        "sync_s": 0.03900983900530264,
+        "poll_s": 0.000129676001961343,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 256,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 256
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 2349255
+      },
+      "loadavg": [
+        2.02197265625,
+        1.0068359375,
+        0.443359375
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8691382619945216,
+          "perf_elapsed_s": 1.805330023,
+          "task_clock_ms": 1607.52,
+          "cycles": 4532230810,
+          "instructions": 3257806994,
+          "perf_user_s": 0.56767,
+          "perf_sys_s": 1.053907,
+          "perf_cpu_s": 1.6215769999999998,
+          "cpu_us_children": 1663934,
+          "cpu_total_s_children": 1.663934,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3440437
+          },
+          "freq": {
+            "2": {
+              "min": 1228596,
+              "max": 3500000,
+              "last": 3392524,
+              "n": 93
+            },
+            "3": {
+              "min": 1197390,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8584,
+          "dirty_peak_kb": 261640,
+          "pre": {
+            "sync_s": 0.03900983900530264,
+            "poll_s": 0.000129676001961343,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 256,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 256
+          },
+          "samples": 93
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 22.123313103998953,
+          "perf_elapsed_s": 22.064048241,
+          "task_clock_ms": 1741.29,
+          "cycles": 4829113004,
+          "instructions": 3472419265,
+          "perf_user_s": 0.602821,
+          "perf_sys_s": 1.150815,
+          "perf_cpu_s": 1.753636,
+          "cpu_us_children": 1796314,
+          "cpu_total_s_children": 1.796314,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1196666,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 1085
+            },
+            "3": {
+              "min": 1197145,
+              "max": 3500000,
+              "last": 3293411,
+              "n": 1085
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 16704,
+          "dirty_peak_kb": 264500,
+          "pre": {
+            "sync_s": 0.03900983900530264,
+            "poll_s": 0.000129676001961343,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 256,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 256
+          },
+          "samples": 1085
+        }
+      },
+      "finished": "2026-11-12T20:21:38.637+08:00"
+    },
+    {
+      "pair": 19,
+      "order": "BA",
+      "started": "2026-11-12T20:21:41.729+08:00",
+      "pre": {
+        "sync_s": 0.07826075400225818,
+        "poll_s": 1.0013593089970527,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 1012,
+        "dirty_peak_kb": 836,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 112
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        2.1796875,
+        1.12060546875,
+        0.49658203125
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8558566479987348,
+          "perf_elapsed_s": 1.791228848,
+          "task_clock_ms": 1610.11,
+          "cycles": 4632815358,
+          "instructions": 3324148887,
+          "perf_user_s": 0.534953,
+          "perf_sys_s": 1.084497,
+          "perf_cpu_s": 1.61945,
+          "cpu_us_children": 1664395,
+          "cpu_total_s_children": 1.664395,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197270,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 92
+            },
+            "3": {
+              "min": 1197505,
+              "max": 3500000,
+              "last": 3469438,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8440,
+          "dirty_peak_kb": 261872,
+          "pre": {
+            "sync_s": 0.07826075400225818,
+            "poll_s": 1.0013593089970527,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1012,
+            "dirty_peak_kb": 836,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 112
+          },
+          "samples": 92
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.8243205139951897,
+          "perf_elapsed_s": 1.766765816,
+          "task_clock_ms": 1600.85,
+          "cycles": 4600353426,
+          "instructions": 3311850497,
+          "perf_user_s": 0.546947,
+          "perf_sys_s": 1.066201,
+          "perf_cpu_s": 1.6131479999999998,
+          "cpu_us_children": 1653502,
+          "cpu_total_s_children": 1.653502,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2373210,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 90
+            },
+            "3": {
+              "min": 1197246,
+              "max": 3500000,
+              "last": 3077026,
+              "n": 90
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8712,
+          "dirty_peak_kb": 261660,
+          "pre": {
+            "sync_s": 0.07826075400225818,
+            "poll_s": 1.0013593089970527,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1012,
+            "dirty_peak_kb": 836,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 112
+          },
+          "samples": 90
+        }
+      },
+      "finished": "2026-11-12T20:21:46.746+08:00"
+    },
+    {
+      "pair": 20,
+      "order": "AB",
+      "started": "2026-11-12T20:21:49.044+08:00",
+      "pre": {
+        "sync_s": 0.0352794940044987,
+        "poll_s": 0.25028591999580385,
+        "timeout": false,
+        "polls": 2,
+        "wb_peak_kb": 844,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.91796875,
+        1.09912109375,
+        0.49658203125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 12.44355019199429,
+          "perf_elapsed_s": 12.381275461,
+          "task_clock_ms": 1608.88,
+          "cycles": 4590377794,
+          "instructions": 3315640027,
+          "perf_user_s": 0.581538,
+          "perf_sys_s": 1.044441,
+          "perf_cpu_s": 1.625979,
+          "cpu_us_children": 1666623,
+          "cpu_total_s_children": 1.666623,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197244,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 610
+            },
+            "3": {
+              "min": 1197206,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 610
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8532,
+          "dirty_peak_kb": 262000,
+          "pre": {
+            "sync_s": 0.0352794940044987,
+            "poll_s": 0.25028591999580385,
+            "timeout": false,
+            "polls": 2,
+            "wb_peak_kb": 844,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 610
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 25.25006864700117,
+          "perf_elapsed_s": 25.194691297,
+          "task_clock_ms": 1615.68,
+          "cycles": 4638905763,
+          "instructions": 3330575806,
+          "perf_user_s": 0.561912,
+          "perf_sys_s": 1.067388,
+          "perf_cpu_s": 1.6293,
+          "cpu_us_children": 1669090,
+          "cpu_total_s_children": 1.66909,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1151304,
+              "max": 3500000,
+              "last": 3130014,
+              "n": 1237
+            },
+            "3": {
+              "min": 1196193,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 1237
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8724,
+          "dirty_peak_kb": 263068,
+          "pre": {
+            "sync_s": 0.0352794940044987,
+            "poll_s": 0.25028591999580385,
+            "timeout": false,
+            "polls": 2,
+            "wb_peak_kb": 844,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 1237
+        }
+      },
+      "finished": "2026-11-12T20:22:28.324+08:00"
+    },
+    {
+      "pair": 21,
+      "order": "BA",
+      "started": "2026-11-12T20:22:31.127+08:00",
+      "pre": {
+        "sync_s": 0.038874924000992905,
+        "poll_s": 0.7509473550016992,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 296,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.9892578125,
+        1.2138671875,
+        0.5625
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.7019770620026975,
+          "perf_elapsed_s": 1.636391065,
+          "task_clock_ms": 1557.52,
+          "cycles": 4536183980,
+          "instructions": 3279075742,
+          "perf_user_s": 0.560745,
+          "perf_sys_s": 1.003168,
+          "perf_cpu_s": 1.563913,
+          "cpu_us_children": 1605595,
+          "cpu_total_s_children": 1.605595,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1786820,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 84
+            },
+            "3": {
+              "min": 1197600,
+              "max": 3500000,
+              "last": 3151750,
+              "n": 84
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8864,
+          "dirty_peak_kb": 261012,
+          "pre": {
+            "sync_s": 0.038874924000992905,
+            "poll_s": 0.7509473550016992,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 296,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 84
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.8299964719990385,
+          "perf_elapsed_s": 1.774422868,
+          "task_clock_ms": 1644.92,
+          "cycles": 4687809237,
+          "instructions": 3402528195,
+          "perf_user_s": 0.592002,
+          "perf_sys_s": 1.068884,
+          "perf_cpu_s": 1.660886,
+          "cpu_us_children": 1700156,
+          "cpu_total_s_children": 1.700156,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1617438,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1197649,
+              "max": 3500000,
+              "last": 3192792,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12504,
+          "dirty_peak_kb": 264472,
+          "pre": {
+            "sync_s": 0.038874924000992905,
+            "poll_s": 0.7509473550016992,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 296,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:22:35.988+08:00"
+    },
+    {
+      "pair": 22,
+      "order": "AB",
+      "started": "2026-11-12T20:22:39.295+08:00",
+      "pre": {
+        "sync_s": 0.04312321500037797,
+        "poll_s": 1.2516786490014056,
+        "timeout": false,
+        "polls": 6,
+        "wb_peak_kb": 396,
+        "dirty_peak_kb": 372,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 152
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.75634765625,
+        1.189453125,
+        0.5615234375
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8265727350008092,
+          "perf_elapsed_s": 1.762732634,
+          "task_clock_ms": 1601.85,
+          "cycles": 4610190947,
+          "instructions": 3285394401,
+          "perf_user_s": 0.559986,
+          "perf_sys_s": 1.052318,
+          "perf_cpu_s": 1.612304,
+          "cpu_us_children": 1654089,
+          "cpu_total_s_children": 1.654089,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1637886,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1714593,
+              "max": 3500000,
+              "last": 3251963,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 261308,
+          "pre": {
+            "sync_s": 0.04312321500037797,
+            "poll_s": 1.2516786490014056,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 396,
+            "dirty_peak_kb": 372,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 91
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8324950539972633,
+          "perf_elapsed_s": 1.777595239,
+          "task_clock_ms": 1620.3,
+          "cycles": 4600335298,
+          "instructions": 3304688476,
+          "perf_user_s": 0.595062,
+          "perf_sys_s": 1.036799,
+          "perf_cpu_s": 1.631861,
+          "cpu_us_children": 1672839,
+          "cpu_total_s_children": 1.672839,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197471,
+              "max": 3500000,
+              "last": 3491915,
+              "n": 91
+            },
+            "3": {
+              "min": 1875172,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8624,
+          "dirty_peak_kb": 264488,
+          "pre": {
+            "sync_s": 0.04312321500037797,
+            "poll_s": 1.2516786490014056,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 396,
+            "dirty_peak_kb": 372,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:22:44.288+08:00"
+    },
+    {
+      "pair": 23,
+      "order": "BA",
+      "started": "2026-11-12T20:22:47.082+08:00",
+      "pre": {
+        "sync_s": 0.030476690000796225,
+        "poll_s": 0.7510428309979034,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 592,
+        "dirty_peak_kb": 0,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.77587890625,
+        1.203125,
+        0.5693359375
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8784562590008136,
+          "perf_elapsed_s": 1.816624335,
+          "task_clock_ms": 1641.5,
+          "cycles": 4651974005,
+          "instructions": 3390350851,
+          "perf_user_s": 0.583628,
+          "perf_sys_s": 1.071719,
+          "perf_cpu_s": 1.6553470000000001,
+          "cpu_us_children": 1696261,
+          "cpu_total_s_children": 1.696261,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1299793,
+              "max": 3500000,
+              "last": 3247951,
+              "n": 93
+            },
+            "3": {
+              "min": 1197412,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8472,
+          "dirty_peak_kb": 260912,
+          "pre": {
+            "sync_s": 0.030476690000796225,
+            "poll_s": 0.7510428309979034,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 592,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 93
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.7907420120027382,
+          "perf_elapsed_s": 1.734935302,
+          "task_clock_ms": 1618.6,
+          "cycles": 4646481513,
+          "instructions": 3355136661,
+          "perf_user_s": 0.554362,
+          "perf_sys_s": 1.081076,
+          "perf_cpu_s": 1.635438,
+          "cpu_us_children": 1674704,
+          "cpu_total_s_children": 1.674704,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1724072,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            },
+            "3": {
+              "min": 1271370,
+              "max": 3500000,
+              "last": 3490927,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8456,
+          "dirty_peak_kb": 261884,
+          "pre": {
+            "sync_s": 0.030476690000796225,
+            "poll_s": 0.7510428309979034,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 592,
+            "dirty_peak_kb": 0,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 89
+        }
+      },
+      "finished": "2026-11-12T20:22:52.079+08:00"
+    },
+    {
+      "pair": 24,
+      "order": "AB",
+      "started": "2026-11-12T20:22:55.380+08:00",
+      "pre": {
+        "sync_s": 0.0362310369964689,
+        "poll_s": 1.251951434998773,
+        "timeout": false,
+        "polls": 6,
+        "wb_peak_kb": 164,
+        "dirty_peak_kb": 172,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 172
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.64990234375,
+        1.1962890625,
+        0.57373046875
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8382911809967482,
+          "perf_elapsed_s": 1.775388859,
+          "task_clock_ms": 1630.98,
+          "cycles": 4660511052,
+          "instructions": 3399310572,
+          "perf_user_s": 0.530339,
+          "perf_sys_s": 1.114606,
+          "perf_cpu_s": 1.6449449999999999,
+          "cpu_us_children": 1686389,
+          "cpu_total_s_children": 1.686389,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1196131,
+              "max": 3500000,
+              "last": 3192620,
+              "n": 91
+            },
+            "3": {
+              "min": 1534734,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12336,
+          "dirty_peak_kb": 262924,
+          "pre": {
+            "sync_s": 0.0362310369964689,
+            "poll_s": 1.251951434998773,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 164,
+            "dirty_peak_kb": 172,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 172
+          },
+          "samples": 91
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8851298459994723,
+          "perf_elapsed_s": 1.830236143,
+          "task_clock_ms": 1670.33,
+          "cycles": 4747162419,
+          "instructions": 3448961660,
+          "perf_user_s": 0.600156,
+          "perf_sys_s": 1.091768,
+          "perf_cpu_s": 1.6919240000000002,
+          "cpu_us_children": 1731153,
+          "cpu_total_s_children": 1.731153,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1861267,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            },
+            "3": {
+              "min": 1471387,
+              "max": 3500000,
+              "last": 3471688,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8492,
+          "dirty_peak_kb": 263244,
+          "pre": {
+            "sync_s": 0.0362310369964689,
+            "poll_s": 1.251951434998773,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 164,
+            "dirty_peak_kb": 172,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 172
+          },
+          "samples": 93
+        }
+      },
+      "finished": "2026-11-12T20:23:00.441+08:00"
+    },
+    {
+      "pair": 25,
+      "order": "BA",
+      "started": "2026-11-12T20:23:03.255+08:00",
+      "pre": {
+        "sync_s": 0.04979016300057992,
+        "poll_s": 0.7511673520057229,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 512,
+        "dirty_peak_kb": 112,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 112
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.46923828125,
+        1.1728515625,
+        0.57275390625
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.7775432729977183,
+          "perf_elapsed_s": 1.713345546,
+          "task_clock_ms": 1590.91,
+          "cycles": 4580831471,
+          "instructions": 3330347755,
+          "perf_user_s": 0.556392,
+          "perf_sys_s": 1.047383,
+          "perf_cpu_s": 1.603775,
+          "cpu_us_children": 1645433,
+          "cpu_total_s_children": 1.645433,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1479181,
+              "max": 3500000,
+              "last": 3136220,
+              "n": 88
+            },
+            "3": {
+              "min": 2475542,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8592,
+          "dirty_peak_kb": 262480,
+          "pre": {
+            "sync_s": 0.04979016300057992,
+            "poll_s": 0.7511673520057229,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 512,
+            "dirty_peak_kb": 112,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 112
+          },
+          "samples": 88
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.7647181159991305,
+          "perf_elapsed_s": 1.711492874,
+          "task_clock_ms": 1610.51,
+          "cycles": 4616861734,
+          "instructions": 3364958326,
+          "perf_user_s": 0.573747,
+          "perf_sys_s": 1.051596,
+          "perf_cpu_s": 1.625343,
+          "cpu_us_children": 1664791,
+          "cpu_total_s_children": 1.664791,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2366559,
+              "max": 3500000,
+              "last": 2997205,
+              "n": 87
+            },
+            "3": {
+              "min": 1197169,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 87
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8208,
+          "dirty_peak_kb": 261412,
+          "pre": {
+            "sync_s": 0.04979016300057992,
+            "poll_s": 0.7511673520057229,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 512,
+            "dirty_peak_kb": 112,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 112
+          },
+          "samples": 87
+        }
+      },
+      "finished": "2026-11-12T20:23:08.125+08:00"
+    },
+    {
+      "pair": 26,
+      "order": "AB",
+      "started": "2026-11-12T20:23:11.188+08:00",
+      "pre": {
+        "sync_s": 0.049393441004212946,
+        "poll_s": 1.000972649002506,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 1364,
+        "dirty_peak_kb": 152,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 152
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.431640625,
+        1.169921875,
+        0.5751953125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.817063649999909,
+          "perf_elapsed_s": 1.74932778,
+          "task_clock_ms": 1606.22,
+          "cycles": 4584758103,
+          "instructions": 3348979463,
+          "perf_user_s": 0.559121,
+          "perf_sys_s": 1.058498,
+          "perf_cpu_s": 1.617619,
+          "cpu_us_children": 1658953,
+          "cpu_total_s_children": 1.658953,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1631287,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 90
+            },
+            "3": {
+              "min": 1197292,
+              "max": 3500000,
+              "last": 3477717,
+              "n": 90
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 262592,
+          "pre": {
+            "sync_s": 0.049393441004212946,
+            "poll_s": 1.000972649002506,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1364,
+            "dirty_peak_kb": 152,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 90
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8394492549996357,
+          "perf_elapsed_s": 1.783406931,
+          "task_clock_ms": 1612.48,
+          "cycles": 4589674373,
+          "instructions": 3319996501,
+          "perf_user_s": 0.54958,
+          "perf_sys_s": 1.076938,
+          "perf_cpu_s": 1.626518,
+          "cpu_us_children": 1665321,
+          "cpu_total_s_children": 1.665321,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1891701,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            },
+            "3": {
+              "min": 1777632,
+              "max": 3500000,
+              "last": 2725106,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 2052,
+          "dirty_peak_kb": 263920,
+          "pre": {
+            "sync_s": 0.049393441004212946,
+            "poll_s": 1.000972649002506,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1364,
+            "dirty_peak_kb": 152,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:23:16.172+08:00"
+    },
+    {
+      "pair": 27,
+      "order": "BA",
+      "started": "2026-11-12T20:23:19.246+08:00",
+      "pre": {
+        "sync_s": 0.059723370999563485,
+        "poll_s": 1.0011962369972025,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 668,
+        "dirty_peak_kb": 220,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 220
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.28466796875,
+        1.1474609375,
+        0.57421875
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8825379280024208,
+          "perf_elapsed_s": 1.81947953,
+          "task_clock_ms": 1656.94,
+          "cycles": 4698777382,
+          "instructions": 3438153077,
+          "perf_user_s": 0.603449,
+          "perf_sys_s": 1.06514,
+          "perf_cpu_s": 1.6685889999999999,
+          "cpu_us_children": 1709191,
+          "cpu_total_s_children": 1.709191,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 2407338,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1256600,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            },
+            "3": {
+              "min": 1466049,
+              "max": 3500000,
+              "last": 3428084,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 263496,
+          "pre": {
+            "sync_s": 0.059723370999563485,
+            "poll_s": 1.0011962369972025,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 668,
+            "dirty_peak_kb": 220,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 220
+          },
+          "samples": 93
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.7740784699999494,
+          "perf_elapsed_s": 1.715542585,
+          "task_clock_ms": 1619.42,
+          "cycles": 4616200204,
+          "instructions": 3359394402,
+          "perf_user_s": 0.557878,
+          "perf_sys_s": 1.073762,
+          "perf_cpu_s": 1.63164,
+          "cpu_us_children": 1671430,
+          "cpu_total_s_children": 1.67143,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2618831,
+              "max": 3500000,
+              "last": 3022688,
+              "n": 88
+            },
+            "3": {
+              "min": 3192641,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8300,
+          "dirty_peak_kb": 264772,
+          "pre": {
+            "sync_s": 0.059723370999563485,
+            "poll_s": 1.0011962369972025,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 668,
+            "dirty_peak_kb": 220,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 220
+          },
+          "samples": 88
+        }
+      },
+      "finished": "2026-11-12T20:23:24.234+08:00"
+    },
+    {
+      "pair": 28,
+      "order": "AB",
+      "started": "2026-11-12T20:23:27.288+08:00",
+      "pre": {
+        "sync_s": 0.04019992399844341,
+        "poll_s": 1.0012341420006123,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 1000,
+        "dirty_peak_kb": 276,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 4
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.34228515625,
+        1.16162109375,
+        0.58203125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8266883949982002,
+          "perf_elapsed_s": 1.764235445,
+          "task_clock_ms": 1610.19,
+          "cycles": 4560560937,
+          "instructions": 3300696470,
+          "perf_user_s": 0.600708,
+          "perf_sys_s": 1.027976,
+          "perf_cpu_s": 1.628684,
+          "cpu_us_children": 1669127,
+          "cpu_total_s_children": 1.669127,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1789200,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 90
+            },
+            "3": {
+              "min": 1857473,
+              "max": 3500000,
+              "last": 3421777,
+              "n": 90
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8568,
+          "dirty_peak_kb": 261456,
+          "pre": {
+            "sync_s": 0.04019992399844341,
+            "poll_s": 1.0012341420006123,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1000,
+            "dirty_peak_kb": 276,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 4
+          },
+          "samples": 90
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.866253387001052,
+          "perf_elapsed_s": 1.811417736,
+          "task_clock_ms": 1671.02,
+          "cycles": 4686694946,
+          "instructions": 3366339506,
+          "perf_user_s": 0.585557,
+          "perf_sys_s": 1.098285,
+          "perf_cpu_s": 1.6838419999999998,
+          "cpu_us_children": 1723449,
+          "cpu_total_s_children": 1.723449,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1251776,
+              "max": 3500000,
+              "last": 3354729,
+              "n": 93
+            },
+            "3": {
+              "min": 1727280,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 9000,
+          "dirty_peak_kb": 263392,
+          "pre": {
+            "sync_s": 0.04019992399844341,
+            "poll_s": 1.0012341420006123,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1000,
+            "dirty_peak_kb": 276,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 4
+          },
+          "samples": 93
+        }
+      },
+      "finished": "2026-11-12T20:23:32.320+08:00"
+    },
+    {
+      "pair": 29,
+      "order": "BA",
+      "started": "2026-11-12T20:23:35.138+08:00",
+      "pre": {
+        "sync_s": 0.053776341999764554,
+        "poll_s": 0.7510199240059592,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 584,
+        "dirty_peak_kb": 1600,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 1252
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.2890625,
+        1.15576171875,
+        0.5869140625
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8815464580038679,
+          "perf_elapsed_s": 1.822235185,
+          "task_clock_ms": 1709.11,
+          "cycles": 4842667731,
+          "instructions": 3539048726,
+          "perf_user_s": 0.59031,
+          "perf_sys_s": 1.139277,
+          "perf_cpu_s": 1.729587,
+          "cpu_us_children": 1769444,
+          "cpu_total_s_children": 1.769444,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1730166,
+              "max": 3500000,
+              "last": 3214027,
+              "n": 93
+            },
+            "3": {
+              "min": 2186544,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8216,
+          "dirty_peak_kb": 262672,
+          "pre": {
+            "sync_s": 0.053776341999764554,
+            "poll_s": 0.7510199240059592,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 584,
+            "dirty_peak_kb": 1600,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 1252
+          },
+          "samples": 93
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.7978085510039818,
+          "perf_elapsed_s": 1.743482865,
+          "task_clock_ms": 1617.67,
+          "cycles": 4624324890,
+          "instructions": 3355794082,
+          "perf_user_s": 0.584307,
+          "perf_sys_s": 1.047586,
+          "perf_cpu_s": 1.6318929999999998,
+          "cpu_us_children": 1671744,
+          "cpu_total_s_children": 1.671744,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1340978,
+              "max": 3500000,
+              "last": 3203219,
+              "n": 89
+            },
+            "3": {
+              "min": 1197384,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 262940,
+          "pre": {
+            "sync_s": 0.053776341999764554,
+            "poll_s": 0.7510199240059592,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 584,
+            "dirty_peak_kb": 1600,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 1252
+          },
+          "samples": 89
+        }
+      },
+      "finished": "2026-11-12T20:23:40.147+08:00"
+    },
+    {
+      "pair": 30,
+      "order": "AB",
+      "started": "2026-11-12T20:23:42.262+08:00",
+      "pre": {
+        "sync_s": 0.10279182299564127,
+        "poll_s": 0.00016758000128902495,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 556,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 556
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.265625,
+        1.15283203125,
+        0.58935546875
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.782140454997716,
+          "perf_elapsed_s": 1.71734275,
+          "task_clock_ms": 1576.33,
+          "cycles": 4520736365,
+          "instructions": 3286163984,
+          "perf_user_s": 0.584462,
+          "perf_sys_s": 1.005123,
+          "perf_cpu_s": 1.589585,
+          "cpu_us_children": 1630085,
+          "cpu_total_s_children": 1.630085,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197259,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            },
+            "3": {
+              "min": 1344825,
+              "max": 3500000,
+              "last": 3428191,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8244,
+          "dirty_peak_kb": 261344,
+          "pre": {
+            "sync_s": 0.10279182299564127,
+            "poll_s": 0.00016758000128902495,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 556,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 556
+          },
+          "samples": 88
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.8086108499992406,
+          "perf_elapsed_s": 1.747951659,
+          "task_clock_ms": 1593.64,
+          "cycles": 4533937127,
+          "instructions": 3305586283,
+          "perf_user_s": 0.523409,
+          "perf_sys_s": 1.083548,
+          "perf_cpu_s": 1.606957,
+          "cpu_us_children": 1646984,
+          "cpu_total_s_children": 1.646984,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1901448,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 90
+            },
+            "3": {
+              "min": 1197287,
+              "max": 3500000,
+              "last": 3491585,
+              "n": 90
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8408,
+          "dirty_peak_kb": 262040,
+          "pre": {
+            "sync_s": 0.10279182299564127,
+            "poll_s": 0.00016758000128902495,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 556,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 556
+          },
+          "samples": 90
+        }
+      },
+      "finished": "2026-11-12T20:23:47.180+08:00"
+    },
+    {
+      "pair": 31,
+      "order": "BA",
+      "started": "2026-11-12T20:23:50.251+08:00",
+      "pre": {
+        "sync_s": 0.05731080600526184,
+        "poll_s": 1.0013824609995936,
+        "timeout": false,
+        "polls": 5,
+        "wb_peak_kb": 1060,
+        "dirty_peak_kb": 240,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 240
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.14404296875,
+        1.13037109375,
+        0.58837890625
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.8859306469967123,
+          "perf_elapsed_s": 1.821174063,
+          "task_clock_ms": 1645.82,
+          "cycles": 4665016017,
+          "instructions": 3382870395,
+          "perf_user_s": 0.576005,
+          "perf_sys_s": 1.087159,
+          "perf_cpu_s": 1.663164,
+          "cpu_us_children": 1703331,
+          "cpu_total_s_children": 1.703331,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 2966712,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1739145,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 93
+            },
+            "3": {
+              "min": 1883486,
+              "max": 3500000,
+              "last": 3431728,
+              "n": 93
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 261708,
+          "pre": {
+            "sync_s": 0.05731080600526184,
+            "poll_s": 1.0013824609995936,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1060,
+            "dirty_peak_kb": 240,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 240
+          },
+          "samples": 93
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 1.8015013820040622,
+          "perf_elapsed_s": 1.745969947,
+          "task_clock_ms": 1618.16,
+          "cycles": 4636147307,
+          "instructions": 3337978846,
+          "perf_user_s": 0.553893,
+          "perf_sys_s": 1.07905,
+          "perf_cpu_s": 1.632943,
+          "cpu_us_children": 1672712,
+          "cpu_total_s_children": 1.672712,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1495159,
+              "max": 3500000,
+              "last": 3471091,
+              "n": 89
+            },
+            "3": {
+              "min": 1241646,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8568,
+          "dirty_peak_kb": 264564,
+          "pre": {
+            "sync_s": 0.05731080600526184,
+            "poll_s": 1.0013824609995936,
+            "timeout": false,
+            "polls": 5,
+            "wb_peak_kb": 1060,
+            "dirty_peak_kb": 240,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 240
+          },
+          "samples": 89
+        }
+      },
+      "finished": "2026-11-12T20:23:55.265+08:00"
+    },
+    {
+      "pair": 32,
+      "order": "AB",
+      "started": "2026-11-12T20:23:58.059+08:00",
+      "pre": {
+        "sync_s": 0.03086466999957338,
+        "poll_s": 0.7507084479948389,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 692,
+        "dirty_peak_kb": 152,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 152
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.04150390625,
+        1.10888671875,
+        0.58740234375
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8037137890059967,
+          "perf_elapsed_s": 1.738207238,
+          "task_clock_ms": 1602.18,
+          "cycles": 4553098796,
+          "instructions": 3343146188,
+          "perf_user_s": 0.592301,
+          "perf_sys_s": 1.023141,
+          "perf_cpu_s": 1.615442,
+          "cpu_us_children": 1657918,
+          "cpu_total_s_children": 1.657918,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 3191590,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            },
+            "3": {
+              "min": 1293427,
+              "max": 3500000,
+              "last": 3210341,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12288,
+          "dirty_peak_kb": 263864,
+          "pre": {
+            "sync_s": 0.03086466999957338,
+            "poll_s": 0.7507084479948389,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 692,
+            "dirty_peak_kb": 152,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 89
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.828901398999733,
+          "perf_elapsed_s": 1.772815359,
+          "task_clock_ms": 1634.85,
+          "cycles": 4653928220,
+          "instructions": 3367754194,
+          "perf_user_s": 0.536459,
+          "perf_sys_s": 1.109662,
+          "perf_cpu_s": 1.646121,
+          "cpu_us_children": 1686122,
+          "cpu_total_s_children": 1.686122,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197214,
+              "max": 3500000,
+              "last": 3245949,
+              "n": 91
+            },
+            "3": {
+              "min": 1197446,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 91
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8472,
+          "dirty_peak_kb": 262520,
+          "pre": {
+            "sync_s": 0.03086466999957338,
+            "poll_s": 0.7507084479948389,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 692,
+            "dirty_peak_kb": 152,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 91
+        }
+      },
+      "finished": "2026-11-12T20:24:03.026+08:00"
+    },
+    {
+      "pair": 33,
+      "order": "BA",
+      "started": "2026-11-12T20:24:06.321+08:00",
+      "pre": {
+        "sync_s": 0.031090015996596776,
+        "poll_s": 1.2515815020014998,
+        "timeout": false,
+        "polls": 6,
+        "wb_peak_kb": 376,
+        "dirty_peak_kb": 152,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 152
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.27880859375,
+        1.1572265625,
+        0.60595703125
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.7891658799999277,
+          "perf_elapsed_s": 1.717265014,
+          "task_clock_ms": 1592.71,
+          "cycles": 4565785021,
+          "instructions": 3308381294,
+          "perf_user_s": 0.570891,
+          "perf_sys_s": 1.03419,
+          "perf_cpu_s": 1.605081,
+          "cpu_us_children": 1646725,
+          "cpu_total_s_children": 1.646725,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197401,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 89
+            },
+            "3": {
+              "min": 1197446,
+              "max": 3500000,
+              "last": 3192319,
+              "n": 89
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 262224,
+          "pre": {
+            "sync_s": 0.031090015996596776,
+            "poll_s": 1.2515815020014998,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 376,
+            "dirty_peak_kb": 152,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 89
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 19.471016493000207,
+          "perf_elapsed_s": 19.417384652,
+          "task_clock_ms": 1594.02,
+          "cycles": 4561360990,
+          "instructions": 3304941294,
+          "perf_user_s": 0.541504,
+          "perf_sys_s": 1.062707,
+          "perf_cpu_s": 1.604211,
+          "cpu_us_children": 1643681,
+          "cpu_total_s_children": 1.643681,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1196687,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 954
+            },
+            "3": {
+              "min": 1197310,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 954
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8352,
+          "dirty_peak_kb": 264804,
+          "pre": {
+            "sync_s": 0.031090015996596776,
+            "poll_s": 1.2515815020014998,
+            "timeout": false,
+            "polls": 6,
+            "wb_peak_kb": 376,
+            "dirty_peak_kb": 152,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 152
+          },
+          "samples": 954
+        }
+      },
+      "finished": "2026-11-12T20:24:29.366+08:00"
+    },
+    {
+      "pair": 34,
+      "order": "AB",
+      "started": "2026-11-12T20:24:32.265+08:00",
+      "pre": {
+        "sync_s": 0.8862247229990317,
+        "poll_s": 0.00011222299508517608,
+        "timeout": false,
+        "polls": 1,
+        "wb_peak_kb": 0,
+        "dirty_peak_kb": 416,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 416
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.52587890625,
+        1.22607421875,
+        0.64453125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 28.94004743500409,
+          "perf_elapsed_s": 28.8733338,
+          "task_clock_ms": 1653.81,
+          "cycles": 4725647484,
+          "instructions": 3378346956,
+          "perf_user_s": 0.597515,
+          "perf_sys_s": 1.072401,
+          "perf_cpu_s": 1.669916,
+          "cpu_us_children": 1714487,
+          "cpu_total_s_children": 1.714487,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1197249,
+              "max": 3500000,
+              "last": 3367991,
+              "n": 1418
+            },
+            "3": {
+              "min": 1163627,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 1418
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8552,
+          "dirty_peak_kb": 261932,
+          "pre": {
+            "sync_s": 0.8862247229990317,
+            "poll_s": 0.00011222299508517608,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 416,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 416
+          },
+          "samples": 1418
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.7758857689987053,
+          "perf_elapsed_s": 1.721606666,
+          "task_clock_ms": 1597.93,
+          "cycles": 4616490673,
+          "instructions": 3319870552,
+          "perf_user_s": 0.569275,
+          "perf_sys_s": 1.036453,
+          "perf_cpu_s": 1.605728,
+          "cpu_us_children": 1645457,
+          "cpu_total_s_children": 1.645457,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2092644,
+              "max": 3500000,
+              "last": 3472003,
+              "n": 88
+            },
+            "3": {
+              "min": 1287786,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8600,
+          "dirty_peak_kb": 260468,
+          "pre": {
+            "sync_s": 0.8862247229990317,
+            "poll_s": 0.00011222299508517608,
+            "timeout": false,
+            "polls": 1,
+            "wb_peak_kb": 0,
+            "dirty_peak_kb": 416,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 416
+          },
+          "samples": 88
+        }
+      },
+      "finished": "2026-11-12T20:25:04.320+08:00"
+    },
+    {
+      "pair": 35,
+      "order": "BA",
+      "started": "2026-11-12T20:25:07.150+08:00",
+      "pre": {
+        "sync_s": 0.0662221319944365,
+        "poll_s": 0.7507901749995654,
+        "timeout": false,
+        "polls": 4,
+        "wb_peak_kb": 320,
+        "dirty_peak_kb": 136,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 136
+      },
+      "freq_pre_khz": {
+        "2": 3500000,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.60693359375,
+        1.28076171875,
+        0.68505859375
+      ],
+      "arms": {
+        "B": {
+          "position": 1,
+          "wall_s": 1.780666899998323,
+          "perf_elapsed_s": 1.713700147,
+          "task_clock_ms": 1575.3,
+          "cycles": 4539722855,
+          "instructions": 3315637934,
+          "perf_user_s": 0.58239,
+          "perf_sys_s": 1.005748,
+          "perf_cpu_s": 1.588138,
+          "cpu_us_children": 1629709,
+          "cpu_total_s_children": 1.629709,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1369726,
+              "max": 3500000,
+              "last": 3131184,
+              "n": 88
+            },
+            "3": {
+              "min": 1995414,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 88
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8584,
+          "dirty_peak_kb": 260532,
+          "pre": {
+            "sync_s": 0.0662221319944365,
+            "poll_s": 0.7507901749995654,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 320,
+            "dirty_peak_kb": 136,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 136
+          },
+          "samples": 88
+        },
+        "A": {
+          "position": 2,
+          "wall_s": 21.38165294999635,
+          "perf_elapsed_s": 21.327114524,
+          "task_clock_ms": 1611.62,
+          "cycles": 4596125307,
+          "instructions": 3318685291,
+          "perf_user_s": 0.510073,
+          "perf_sys_s": 1.114007,
+          "perf_cpu_s": 1.62408,
+          "cpu_us_children": 1663953,
+          "cpu_total_s_children": 1.663953,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1196467,
+              "max": 3500000,
+              "last": 3210719,
+              "n": 1048
+            },
+            "3": {
+              "min": 1197003,
+              "max": 3500000,
+              "last": 1996164,
+              "n": 1048
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 12272,
+          "dirty_peak_kb": 262108,
+          "pre": {
+            "sync_s": 0.0662221319944365,
+            "poll_s": 0.7507901749995654,
+            "timeout": false,
+            "polls": 4,
+            "wb_peak_kb": 320,
+            "dirty_peak_kb": 136,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 136
+          },
+          "samples": 1048
+        }
+      },
+      "finished": "2026-11-12T20:25:31.646+08:00"
+    },
+    {
+      "pair": 36,
+      "order": "AB",
+      "started": "2026-11-12T20:25:34.210+08:00",
+      "pre": {
+        "sync_s": 0.050017452995234635,
+        "poll_s": 0.5006918340004631,
+        "timeout": false,
+        "polls": 3,
+        "wb_peak_kb": 80,
+        "dirty_peak_kb": 648,
+        "final_wb_kb": 0,
+        "final_dirty_kb": 0
+      },
+      "freq_pre_khz": {
+        "2": 1197422,
+        "3": 3500000
+      },
+      "loadavg": [
+        1.48095703125,
+        1.28466796875,
+        0.70703125
+      ],
+      "arms": {
+        "A": {
+          "position": 1,
+          "wall_s": 1.8573146690032445,
+          "perf_elapsed_s": 1.788129562,
+          "task_clock_ms": 1604.74,
+          "cycles": 4581607930,
+          "instructions": 3378182395,
+          "perf_user_s": 0.543494,
+          "perf_sys_s": 1.076647,
+          "perf_cpu_s": 1.6201409999999998,
+          "cpu_us_children": 1661909,
+          "cpu_total_s_children": 1.661909,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 2131108,
+              "max": 3500000,
+              "last": 2728090,
+              "n": 92
+            },
+            "3": {
+              "min": 1571469,
+              "max": 3500000,
+              "last": 3417275,
+              "n": 92
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8192,
+          "dirty_peak_kb": 264288,
+          "pre": {
+            "sync_s": 0.050017452995234635,
+            "poll_s": 0.5006918340004631,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 80,
+            "dirty_peak_kb": 648,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 92
+        },
+        "B": {
+          "position": 2,
+          "wall_s": 1.9435985629970673,
+          "perf_elapsed_s": 1.885323086,
+          "task_clock_ms": 1649.25,
+          "cycles": 4606435397,
+          "instructions": 3312335018,
+          "perf_user_s": 0.571949,
+          "perf_sys_s": 1.090485,
+          "perf_cpu_s": 1.662434,
+          "cpu_us_children": 1705207,
+          "cpu_total_s_children": 1.705207,
+          "rc": 0,
+          "oracle_ok": true,
+          "oracle_detail": "ok",
+          "read_ops": 65540,
+          "write_ops": 65536,
+          "short_writes": 0,
+          "freq_pre_khz": {
+            "2": 3500000,
+            "3": 3500000
+          },
+          "freq": {
+            "2": {
+              "min": 1400088,
+              "max": 3500000,
+              "last": 3427625,
+              "n": 96
+            },
+            "3": {
+              "min": 1197563,
+              "max": 3500000,
+              "last": 3500000,
+              "n": 96
+            }
+          },
+          "freq_eq_all": false,
+          "wb_peak_kb": 8632,
+          "dirty_peak_kb": 262964,
+          "pre": {
+            "sync_s": 0.050017452995234635,
+            "poll_s": 0.5006918340004631,
+            "timeout": false,
+            "polls": 3,
+            "wb_peak_kb": 80,
+            "dirty_peak_kb": 648,
+            "final_wb_kb": 0,
+            "final_dirty_kb": 0
+          },
+          "samples": 96
+        }
+      },
+      "finished": "2026-11-12T20:25:39.343+08:00"
+    }
+  ],
+  "pauses": [
+    {
+      "segment": "aa-4k-d4",
+      "pair": 13,
+      "arm": "B",
+      "wall_s": 33.189609875000315,
+      "cpu_total_s_children": 1.663362,
+      "perf_cpu_s": 1.622587
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 13,
+      "arm": "A",
+      "wall_s": 15.935620363998169,
+      "cpu_total_s_children": 1.696592,
+      "perf_cpu_s": 1.654592
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 15,
+      "arm": "B",
+      "wall_s": 17.264229630003683,
+      "cpu_total_s_children": 1.683012,
+      "perf_cpu_s": 1.638415
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 16,
+      "arm": "B",
+      "wall_s": 19.87512593399879,
+      "cpu_total_s_children": 1.692402,
+      "perf_cpu_s": 1.652691
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 18,
+      "arm": "B",
+      "wall_s": 22.123313103998953,
+      "cpu_total_s_children": 1.796314,
+      "perf_cpu_s": 1.753636
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 20,
+      "arm": "A",
+      "wall_s": 12.44355019199429,
+      "cpu_total_s_children": 1.666623,
+      "perf_cpu_s": 1.625979
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 20,
+      "arm": "B",
+      "wall_s": 25.25006864700117,
+      "cpu_total_s_children": 1.66909,
+      "perf_cpu_s": 1.6293
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 33,
+      "arm": "A",
+      "wall_s": 19.471016493000207,
+      "cpu_total_s_children": 1.643681,
+      "perf_cpu_s": 1.604211
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 34,
+      "arm": "A",
+      "wall_s": 28.94004743500409,
+      "cpu_total_s_children": 1.714487,
+      "perf_cpu_s": 1.669916
+    },
+    {
+      "segment": "aa-4k-d4",
+      "pair": 35,
+      "arm": "A",
+      "wall_s": 21.38165294999635,
+      "cpu_total_s_children": 1.663953,
+      "perf_cpu_s": 1.62408
+    }
+  ],
+  "meminfo_peaks": {
+    "wb_peak_kb": 20492,
+    "dirty_peak_kb": 267028,
+    "samples": 16346
+  },
+  "oracle_failures": 0,
+  "pre_run_timeouts": [],
+  "finished": "2026-11-12T20:25:39.343+08:00",
+  "tsv": "/home/jnhu/sluice-621-r2/results/session-r2r2-aa-4k-d4.tsv",
+  "src_sha256": "a1f8dd971b212ae487cad4edf8f2b742bd6b1a8feef92a4c44730bbe167547f3",
+  "src_size": 268435456,
+  "governor_set": {
+    "at": "2026-11-12T20:17:24.238+08:00",
+    "rc": 0,
+    "stdout": "",
+    "stderr": "[sudo] password for jnhu:",
+    "after": {
+      "0": "performance",
+      "1": "performance",
+      "2": "performance",
+      "3": "performance",
+      "4": "performance",
+      "5": "performance",
+      "6": "performance",
+      "7": "performance",
+      "8": "performance",
+      "9": "performance",
+      "10": "performance",
+      "11": "performance",
+      "12": "performance",
+      "13": "performance",
+      "14": "performance",
+      "15": "performance",
+      "16": "performance",
+      "17": "performance",
+      "18": "performance",
+      "19": "performance"
+    },
+    "freq_check_khz": {
+      "2": {
+        "cur": 3500000,
+        "max": 3500000
+      },
+      "3": {
+        "cur": 3500000,
+        "max": 3500000
+      }
+    }
+  },
+  "governor_restored": null,
+  "loadavg_at_end": [
+    1.60302734375,
+    1.3134765625,
+    0.7197265625
+  ]
+}

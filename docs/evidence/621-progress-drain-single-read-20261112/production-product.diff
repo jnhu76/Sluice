@@ -1,0 +1,96 @@
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..52a77f8f 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -349,6 +349,21 @@ class ProgressSource {
+             wait_domain_fail_fast_("saturate_notification_for_test", errno);
+         }
+     }
++
++    struct DrainObservation {
++        std::atomic<std::uint64_t> reads{0};
++        std::atomic<std::uint64_t> eagain{0};
++        std::atomic<std::uint64_t> eintr{0};
++    };
++
++    void set_drain_observation_for_test(DrainObservation* observation) noexcept {
++        drain_observation_.store(observation, std::memory_order_release);
++    }
++
++    // Interrupts the next `count` drain reads before they reach the kernel.
++    void inject_drain_eintr_for_test(int count) noexcept {
++        drain_eintr_injections_.store(count, std::memory_order_release);
++    }
+ #endif
+ 
+   private:
+@@ -394,16 +409,36 @@ class ProgressSource {
+     }
+ #endif
+ 
++    // mtx_ holds off every userspace writer, and a non-semaphore eventfd read
++    // takes the whole counter, so the successful read is the drained state.
+     void drain_notification_nolock_() noexcept {
+         if (notification_fd_ < 0) {
+             return;
+         }
+         std::uint64_t value = 0;
+         for (;;) {
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++            if (drain_eintr_injections_.load(std::memory_order_acquire) > 0) {
++                drain_eintr_injections_.fetch_sub(1, std::memory_order_acq_rel);
++                if (auto* observation =
++                        drain_observation_.load(std::memory_order_acquire)) {
++                    observation->eintr.fetch_add(1, std::memory_order_relaxed);
++                }
++                continue;
++            }
++#endif
+             errno = 0;
+             const ssize_t n = ::read(notification_fd_, &value, sizeof(value));
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++            if (auto* observation = drain_observation_.load(std::memory_order_acquire)) {
++                observation->reads.fetch_add(1, std::memory_order_relaxed);
++            }
++#endif
+             if (n == static_cast<ssize_t>(sizeof(value))) {
+-                continue;
++#if !defined(SLUICE_PROGRESS_SOURCE_MUTANT_DRAIN_SUCCESS_KEEPS_PENDING)
++                notification_pending_ = false;
++#endif
++                return;
+             }
+             if (n < 0) {
+                 if (errno == EINTR) {
+@@ -411,6 +446,12 @@ class ProgressSource {
+                 }
+                 if (errno == EAGAIN) {
+                     notification_pending_ = false;
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++                    if (auto* observation =
++                            drain_observation_.load(std::memory_order_acquire)) {
++                        observation->eagain.fetch_add(1, std::memory_order_relaxed);
++                    }
++#endif
+                     return;
+                 }
+             }
+@@ -421,8 +462,7 @@ class ProgressSource {
+     // Caller holds mtx_; a retired source (execution closed) has no waiter
+     // that could miss the wake, so the write is skipped instead of failing.
+     // A pending unread byte already wakes every poller, so the write is
+-    // skipped while notification_pending_ stands; the bit is only cleared on
+-    // the EAGAIN above, where the counter is provably zero.
++    // skipped while notification_pending_ stands; the drain clears that bit.
+     void wake_notification_nolock_() noexcept {
+         if (notification_fd_ < 0 || notification_pending_) {
+             return;
+@@ -472,6 +512,8 @@ class ProgressSource {
+     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
+     std::atomic<PauseGate*> prerevalidate_pause_gate_{nullptr};
+     std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
++    std::atomic<DrainObservation*> drain_observation_{nullptr};
++    std::atomic<int> drain_eintr_injections_{0};
+ #endif
+ };
+ 

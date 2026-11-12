@@ -1,0 +1,4 @@
+ M xmake/tests.lua
+?? tests/progress_source_drain_semantic_oracle_test.cpp
+ xmake/tests.lua | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)

@@ -1,0 +1,25 @@
+Sluice #621 Round 2 R2 controlled session — pre-registration record
+recorded_at=2026-11-12T20:17:18+08:00
+
+b696a39d53ee38d7ec90971007739b230c64721afdfdc0d44cab832b360929c7  session-r2r2/PROTOCOL.md
+2b79adac3200f07e82f32d4463a45f1ad0a1ad68aec481281681474254ba21c1  session-r2r2/runner_session.py
+ad23effe713084c50d2c201e2a206b2d34f0be661e913b79283d117596b3b201  session-r2r2/analyze_session.py
+ee7c4c3e90ed959ac26d48378f94bdc4ed02ef742830581d61509b0c09ed0199  b-round2.diff
+0eca1011b2ee047679a4f8dd1bfc5b21aba60f245f850cb2746f94260792b458  bin/sluice-copy.A
+db972b1946fcf2b282135ebdf600263b03492215b08846e867d856c6213fa0be  bin/sluice-copy.B
+a1f8dd971b212ae487cad4edf8f2b742bd6b1a8feef92a4c44730bbe167547f3  data/src-256m.bin
+
+BASE=3f22d2d08a53077b6377934b1895af78126de0a1
+B=a3a14a31
+candidate_branch=research/621-r2-R1-drain-eagain-read
+
+runner_command:
+  cd /home/jnhu/sluice-621-r2 && python3 -I session-r2r2/runner_session.py \
+    --src /home/jnhu/sluice-621-r2/data/src-256m.bin \
+    --binary-a /home/jnhu/sluice-621-r2/bin/sluice-copy.A \
+    --binary-b /home/jnhu/sluice-621-r2/bin/sluice-copy.B \
+    --results-dir /home/jnhu/sluice-621-r2/results \
+    --data-dir /home/jnhu/sluice-621-r2/data \
+    --session-meta /home/jnhu/sluice-621-r2/results/session-r2r2.meta.json \
+    --label-prefix session-r2r2 \
+    --protocol /home/jnhu/sluice-621-r2/session-r2r2/PROTOCOL.md

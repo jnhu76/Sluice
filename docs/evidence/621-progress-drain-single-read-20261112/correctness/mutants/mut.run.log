@@ -1,0 +1,4 @@
+FAIL [acknowledged_notification_rearms_the_next_physical_write] the post-acknowledge signal re-arms the physical write
+FAIL [coalesced_signals_are_consumed_and_the_next_signal_writes] a signal after the coalesced acknowledgement re-arms the write
+FAIL [stale_acknowledgement_cannot_suppress_the_next_wake] the post-acknowledge signal re-arms the physical write
+RUN_EXIT=1

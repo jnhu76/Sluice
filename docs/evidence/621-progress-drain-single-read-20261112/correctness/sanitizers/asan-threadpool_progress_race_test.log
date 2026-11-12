@@ -1,0 +1,44 @@
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m cache compiling.debug tests/threadpool_progress_race_test.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m cache compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m cache compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m cache compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m cache compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m cache compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<threadpool_progress_race_test>[0m [38;5;5;1mlinking.debug threadpool_progress_race_test[0m
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 0.354s[0m
+BUILD_EXIT=0
+--- instrumentation check ---
+	linux-vdso.so.1 (0x00007f560d60c000)
+	libasan.so.8 => /lib64/libasan.so.8 (0x00007f560ce00000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007f560ca00000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007f560cce9000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007f560d5b9000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007f560c807000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007f560d60e000)
+instrumented_symbols=25
+d347df87ad90d2460ca2f1122ce20b31ae049aeb113a610e56b64ca224c98cff  /home/jnhu/sluice-621-r2/wt-B/build/linux/x86_64/debug/threadpool_progress_race_test
+--- run ---
+ok r1_signal_before_wait_is_serviced_without_parking
+ok r2_signal_between_token_and_ack_is_revalidation_caught
+ok r3_signal_after_ack_wakes_poll_before_next_snapshot
+ok r4_worker_completion_signal_before_final_recheck_is_caught
+ok r4b_worker_held_past_completion_signal_is_serviced_without_parking
+ok r5_postdrain_signal_readiness_persists_into_poll
+ok r8_empty_pass_signal_immediately_before_poll_entry
+ok r9_signal_while_blocked_in_poll_wakes_owner
+ok r10_multiple_signals_coalesce_into_one_readiness
+ok r11_spurious_wake_with_zero_completions_is_harmless
+ok r11b_stale_readiness_drained_at_park_without_fabrication
+ok r12_control_wake_racing_park_boundary
+ok r13_delayed_reclaim_obligation_is_serviced_without_new_io
+ok r15_saturated_signal_between_pass_and_revalidation_is_not_drained
+ok control_exhaustion_saturates_without_alias_and_wakes_interrupted
+ok control_outer_exhaustion_is_terminal_and_never_aliases
+ok token_exhaustion_saturates_without_alias_and_closes_admission
+ok owner_parked_at_saturated_epoch_wakes_and_reparks
+ok saturated_notification_still_wakes_parked_owner
+ok coalesced_prearmed_signals_are_all_discoverable_in_one_pass
+ok f1_publication_pass_is_entry_bounded
+ok record_handoff_survives_submit_racing_owner_sweep
+all 22 threadpool progress race tests passed
+RUN_EXIT=0

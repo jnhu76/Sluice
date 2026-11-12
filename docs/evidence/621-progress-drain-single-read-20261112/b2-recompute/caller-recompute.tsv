@@ -1,0 +1,17 @@
+step	caller	sum_mean_pct_of_samples	rows	classes
+Application pipeline	sluice_copy::run_pipelined_copy_with_context(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy, sluice::async::AsyncIoContext)	0.0100	1	kernel_other=0.010
+Request construction (context submit_read)	sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)	4.4020	6	kernel_other=1.494;futex=1.070;syscall_return=0.994;sched=0.530;poll=0.291;read_io=0.023
+Reserve	sluice::async::detail::RequestCore::reserve()	0.0760	2	futex=0.065;kernel_other=0.011
+Accept	sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)	0.1100	2	futex=0.099;kernel_other=0.011
+Backend dispatch	sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)	0.3170	2	futex=0.306;kernel_other=0.011
+Physical execution	sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)	19.7520	5	kernel_other=15.928;syscall_return=1.669;read_io=1.517;libc_syscall=0.450;write_io=0.188
+Completion / terminal	sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)	0.4810	3	futex=0.424;syscall_return=0.030;kernel_other=0.027
+Execution release	sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)	0.3500	3	futex=0.291;kernel_other=0.034;syscall_return=0.025
+Publication enqueue (worker)	sluice::async::ThreadPoolBackend::worker_loop()	20.0660	8	kernel_other=9.557;syscall_return=3.979;futex=3.584;sched=1.554;poll=0.699;libc_syscall=0.371;write_io=0.180;read_io=0.142
+Publication (driver)	sluice::async::ThreadPoolBackend::poll_progress()	1.4920	3	futex=1.389;syscall_return=0.057;kernel_other=0.046
+Publication (single)	sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)	0.2250	2	futex=0.211;kernel_other=0.014
+Observation ready	sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)	0.3290	3	futex=0.276;kernel_other=0.032;syscall_return=0.021
+Observation consume	sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)	0.1580	2	futex=0.148;kernel_other=0.010
+Take	sluice::async::RequestScope::take(sluice::async::ScopeTicket<unsigned long> const&)	0.0400	1	futex=0.040
+Wait / progress pass	sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)	30.9910	7	kernel_other=15.688;syscall_return=6.666;futex=2.914;poll=1.619;sched=1.601;libc_syscall=1.382;read_io=1.121
+Wait / progress pass	sluice::async::AsyncIoContext::wait_one()	1.2060	4	futex=1.026;poll=0.084;libc_syscall=0.080;kernel_other=0.016

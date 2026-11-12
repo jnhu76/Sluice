@@ -1,0 +1,26 @@
+[0m[38;5;2;1m[ 13%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m cache compiling.debug tests/progress_source_drain_semantic_oracle_test.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m cache compiling.debug src/async/async_io_context.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m cache compiling.debug src/async/threadpool_backend.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m cache compiling.debug src/async/fail_fast.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m cache compiling.debug src/async/detail/request_core.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m cache compiling.debug src/async/detail/context_identity.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.debug src/blocking_file.cpp[0m
+[0m[38;5;2;1m[ 20%]:[0m [38;5;5;1m<sluice_core>[0m cache compiling.debug src/file_resource.cpp[0m
+[0m[38;5;2;1m[ 47%]:[0m [38;5;5;1m<sluice_core>[0m [38;5;5;1marchiving.debug libsluice_core.a[0m
+[0m[38;5;2;1m[ 81%]:[0m [38;5;5;1m<progress_source_drain_semantic_oracle_test>[0m [38;5;5;1mlinking.debug progress_source_drain_semantic_oracle_test[0m
+[0m[38;5;2;1mcreate ok![0m
+compile_commands.json updated!
+[0m[38;5;2;1m[100%]:[0m [38;5;2;1mbuild ok, spent 2.186s[0m
+BUILD_EXIT=0
+--- instrumentation check ---
+	linux-vdso.so.1 (0x00007fb1993e4000)
+	libtsan.so.2 => /lib64/libtsan.so.2 (0x00007fb198200000)
+	libstdc++.so.6 => /lib64/libstdc++.so.6 (0x00007fb197e00000)
+	libm.so.6 => /lib64/libm.so.6 (0x00007fb1992a7000)
+	libgcc_s.so.1 => /lib64/libgcc_s.so.1 (0x00007fb1981d3000)
+	libc.so.6 => /lib64/libc.so.6 (0x00007fb197c07000)
+	/lib64/ld-linux-x86-64.so.2 (0x00007fb1993e6000)
+instrumented_symbols=26
+aed04d25a7c823efccb4cd1df84fedca1db705390a61a349751cc679a2856ec7  /home/jnhu/sluice-621-r2/wt-B/build/linux/x86_64/debug/progress_source_drain_semantic_oracle_test
+--- run ---
+RUN_EXIT=0

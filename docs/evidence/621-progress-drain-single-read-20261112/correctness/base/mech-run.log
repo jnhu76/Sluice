@@ -1,0 +1,8 @@
+FAIL [successful_drain_consumes_the_counter_in_one_read] a non-empty drain issues exactly one read
+FAIL [successful_drain_consumes_the_counter_in_one_read] the successful drain does not probe the emptied counter
+FAIL [successful_drain_consumes_the_counter_in_one_read] every notification round trip stays at one read
+FAIL [empty_drain_takes_the_eagain_branch] the notification after an empty drain is consumed in one read
+FAIL [interrupted_read_retries_without_losing_the_notification] the retry issued one real read
+FAIL [interrupted_read_retries_without_losing_the_notification] the retry consumed the notification
+FAIL [interrupted_read_retries_without_losing_the_notification] the notification after an interrupted drain is consumed in one read
+RUN_EXIT=1

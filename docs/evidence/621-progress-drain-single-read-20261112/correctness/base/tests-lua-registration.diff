@@ -1,0 +1,38 @@
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index d76ad41f..8b8d70e6 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -538,6 +538,33 @@ do
+                               "SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS")
+ end
+ 
++-- BASE verification copy: semantic oracle registration only.
++do
++    local function drain_semantic_target(name, extra_define)
++        target(name)
++            set_kind("binary")
++            set_default(false)
++            set_group("test")
++            add_deps("sluice_core")
++            add_includedirs(R .. "include", R .. "src/async")
++            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
++            if extra_define ~= nil then
++                add_defines(extra_define)
++            end
++            add_files(R .. "tests/progress_source_drain_semantic_oracle_test.cpp",
++                      R .. "src/async/async_io_context.cpp",
++                      R .. "src/async/threadpool_backend.cpp",
++                      R .. "src/async/fail_fast.cpp",
++                      R .. "src/async/detail/context_identity.cpp",
++                      R .. "src/async/detail/request_core.cpp")
++            if extra_define == nil then
++                add_tests(name, {run_timeout = 120000})
++            end
++    end
++
++    drain_semantic_target("progress_source_drain_semantic_oracle_test")
++end
++
+ -- W-03 stop-order protocol: the external driver re-checks the shared stop
+ -- flag only between epoll_wait returns, so the flag must be published before
+ -- request_stop's unconditional wake. The mutant build reverts the order and

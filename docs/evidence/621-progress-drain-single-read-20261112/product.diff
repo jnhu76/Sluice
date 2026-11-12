@@ -1,0 +1,832 @@
+diff --git a/include/sluice/async/detail/progress_source.hpp b/include/sluice/async/detail/progress_source.hpp
+index 96b55f52..52a77f8f 100644
+--- a/include/sluice/async/detail/progress_source.hpp
++++ b/include/sluice/async/detail/progress_source.hpp
+@@ -349,6 +349,21 @@ class ProgressSource {
+             wait_domain_fail_fast_("saturate_notification_for_test", errno);
+         }
+     }
++
++    struct DrainObservation {
++        std::atomic<std::uint64_t> reads{0};
++        std::atomic<std::uint64_t> eagain{0};
++        std::atomic<std::uint64_t> eintr{0};
++    };
++
++    void set_drain_observation_for_test(DrainObservation* observation) noexcept {
++        drain_observation_.store(observation, std::memory_order_release);
++    }
++
++    // Interrupts the next `count` drain reads before they reach the kernel.
++    void inject_drain_eintr_for_test(int count) noexcept {
++        drain_eintr_injections_.store(count, std::memory_order_release);
++    }
+ #endif
+ 
+   private:
+@@ -394,16 +409,36 @@ class ProgressSource {
+     }
+ #endif
+ 
++    // mtx_ holds off every userspace writer, and a non-semaphore eventfd read
++    // takes the whole counter, so the successful read is the drained state.
+     void drain_notification_nolock_() noexcept {
+         if (notification_fd_ < 0) {
+             return;
+         }
+         std::uint64_t value = 0;
+         for (;;) {
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++            if (drain_eintr_injections_.load(std::memory_order_acquire) > 0) {
++                drain_eintr_injections_.fetch_sub(1, std::memory_order_acq_rel);
++                if (auto* observation =
++                        drain_observation_.load(std::memory_order_acquire)) {
++                    observation->eintr.fetch_add(1, std::memory_order_relaxed);
++                }
++                continue;
++            }
++#endif
+             errno = 0;
+             const ssize_t n = ::read(notification_fd_, &value, sizeof(value));
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++            if (auto* observation = drain_observation_.load(std::memory_order_acquire)) {
++                observation->reads.fetch_add(1, std::memory_order_relaxed);
++            }
++#endif
+             if (n == static_cast<ssize_t>(sizeof(value))) {
+-                continue;
++#if !defined(SLUICE_PROGRESS_SOURCE_MUTANT_DRAIN_SUCCESS_KEEPS_PENDING)
++                notification_pending_ = false;
++#endif
++                return;
+             }
+             if (n < 0) {
+                 if (errno == EINTR) {
+@@ -411,6 +446,12 @@ class ProgressSource {
+                 }
+                 if (errno == EAGAIN) {
+                     notification_pending_ = false;
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++                    if (auto* observation =
++                            drain_observation_.load(std::memory_order_acquire)) {
++                        observation->eagain.fetch_add(1, std::memory_order_relaxed);
++                    }
++#endif
+                     return;
+                 }
+             }
+@@ -421,8 +462,7 @@ class ProgressSource {
+     // Caller holds mtx_; a retired source (execution closed) has no waiter
+     // that could miss the wake, so the write is skipped instead of failing.
+     // A pending unread byte already wakes every poller, so the write is
+-    // skipped while notification_pending_ stands; the bit is only cleared on
+-    // the EAGAIN above, where the counter is provably zero.
++    // skipped while notification_pending_ stands; the drain clears that bit.
+     void wake_notification_nolock_() noexcept {
+         if (notification_fd_ < 0 || notification_pending_) {
+             return;
+@@ -472,6 +512,8 @@ class ProgressSource {
+     std::atomic<std::atomic<int>*> prepark_counter_{nullptr};
+     std::atomic<PauseGate*> prerevalidate_pause_gate_{nullptr};
+     std::atomic<PauseGate*> prepark_pause_gate_{nullptr};
++    std::atomic<DrainObservation*> drain_observation_{nullptr};
++    std::atomic<int> drain_eintr_injections_{0};
+ #endif
+ };
+ 
+diff --git a/tests/progress_source_drain_mechanism_test.cpp b/tests/progress_source_drain_mechanism_test.cpp
+new file mode 100644
+index 00000000..bf1c8289
+--- /dev/null
++++ b/tests/progress_source_drain_mechanism_test.cpp
+@@ -0,0 +1,129 @@
++#include <sluice/async/detail/progress_source.hpp>
++
++#include <atomic>
++#include <cstdint>
++#include <cstdio>
++
++namespace {
++
++using namespace sluice::async;
++
++using DrainObservation = detail::ProgressSource::DrainObservation;
++
++struct Tracker {
++    const char* name;
++    int failures = 0;
++
++    void check(bool ok, const char* label) {
++        if (!ok) {
++            ++failures;
++            std::fprintf(stderr, "FAIL [%s] %s\n", name, label);
++        }
++    }
++};
++
++std::uint64_t reads(const DrainObservation& observation) {
++    return observation.reads.load(std::memory_order_acquire);
++}
++
++std::uint64_t eagain_returns(const DrainObservation& observation) {
++    return observation.eagain.load(std::memory_order_acquire);
++}
++
++std::uint64_t eintr_returns(const DrainObservation& observation) {
++    return observation.eintr.load(std::memory_order_acquire);
++}
++
++bool successful_drain_consumes_the_counter_in_one_read(Tracker& t) {
++    detail::ProgressSource source;
++    DrainObservation observation;
++    source.set_drain_observation_for_test(&observation);
++
++    source.signal();
++    source.acknowledge_notification();
++    t.check(reads(observation) == 1, "a non-empty drain issues exactly one read");
++    t.check(eagain_returns(observation) == 0,
++            "the successful drain does not probe the emptied counter");
++
++    source.signal();
++    source.acknowledge_notification();
++    t.check(reads(observation) == 2 && eagain_returns(observation) == 0,
++            "every notification round trip stays at one read");
++    return t.failures == 0;
++}
++
++bool empty_drain_takes_the_eagain_branch(Tracker& t) {
++    detail::ProgressSource source;
++    DrainObservation observation;
++    source.set_drain_observation_for_test(&observation);
++
++    source.acknowledge_notification();
++    t.check(reads(observation) == 1 && eagain_returns(observation) == 1,
++            "an empty drain observes exactly one EAGAIN");
++    t.check(eintr_returns(observation) == 0, "no interruption was injected");
++
++    source.signal();
++    source.acknowledge_notification();
++    t.check(reads(observation) == 2 && eagain_returns(observation) == 1,
++            "the notification after an empty drain is consumed in one read");
++    return t.failures == 0;
++}
++
++bool interrupted_read_retries_without_losing_the_notification(Tracker& t) {
++    detail::ProgressSource source;
++    DrainObservation observation;
++    source.set_drain_observation_for_test(&observation);
++
++    source.signal();
++    source.inject_drain_eintr_for_test(1);
++    source.acknowledge_notification();
++    t.check(eintr_returns(observation) == 1, "the injected interruption took the EINTR branch");
++    t.check(reads(observation) == 1, "the retry issued one real read");
++    t.check(eagain_returns(observation) == 0, "the retry consumed the notification");
++
++    source.signal();
++    source.acknowledge_notification();
++    t.check(reads(observation) == 2 && eagain_returns(observation) == 0,
++            "the notification after an interrupted drain is consumed in one read");
++    return t.failures == 0;
++}
++
++bool retired_source_issues_no_drain_read(Tracker& t) {
++    detail::ProgressSource source;
++    DrainObservation observation;
++    source.set_drain_observation_for_test(&observation);
++
++    source.retire_notification();
++    source.acknowledge_notification();
++    source.signal();
++    t.check(reads(observation) == 0 && eagain_returns(observation) == 0 &&
++                eintr_returns(observation) == 0,
++            "a retired source issues no drain read");
++    return t.failures == 0;
++}
++
++} // namespace
++
++int main() {
++    using Fn = bool (*)(Tracker&);
++    struct Case {
++        const char* name;
++        Fn fn;
++    };
++    const Case cases[] = {
++        {"successful_drain_consumes_the_counter_in_one_read",
++         successful_drain_consumes_the_counter_in_one_read},
++        {"empty_drain_takes_the_eagain_branch", empty_drain_takes_the_eagain_branch},
++        {"interrupted_read_retries_without_losing_the_notification",
++         interrupted_read_retries_without_losing_the_notification},
++        {"retired_source_issues_no_drain_read", retired_source_issues_no_drain_read},
++    };
++
++    int failures = 0;
++    for (const auto& c : cases) {
++        Tracker tracker{c.name, 0};
++        (void)c.fn(tracker);
++        failures += tracker.failures;
++    }
++    return failures == 0 ? 0 : 1;
++}
+diff --git a/tests/progress_source_drain_semantic_oracle_test.cpp b/tests/progress_source_drain_semantic_oracle_test.cpp
+new file mode 100644
+index 00000000..547c1de8
+--- /dev/null
++++ b/tests/progress_source_drain_semantic_oracle_test.cpp
+@@ -0,0 +1,539 @@
++#include <sluice/async/async_io_context.hpp>
++#include <sluice/async/detail/progress_source.hpp>
++#include <sluice/async/detail/threadpool_backend.hpp>
++#include <sluice/async/request.hpp>
++#include <sluice/result.hpp>
++
++#include <atomic>
++#include <chrono>
++#include <cstddef>
++#include <cstdint>
++#include <cstdio>
++#include <memory>
++#include <thread>
++#include <vector>
++
++#include <dirent.h>
++#include <poll.h>
++#include <unistd.h>
++
++namespace {
++
++using namespace sluice::async;
++using sluice::IoError;
++
++using PauseGate = detail::ProgressSource::PauseGate;
++using WakeReason = detail::ProgressSource::WakeReason;
++using WaitKind = AsyncIoContext::ProgressWaitOutcome::Kind;
++
++struct Tracker {
++    const char* name;
++    int failures = 0;
++
++    void check(bool ok, const char* label) {
++        if (!ok) {
++            ++failures;
++            std::fprintf(stderr, "FAIL [%s] %s\n", name, label);
++        }
++    }
++};
++
++bool notification_readable(int fd) {
++    if (fd < 0) {
++        return false;
++    }
++    struct pollfd p;
++    p.fd = fd;
++    p.events = POLLIN;
++    p.revents = 0;
++    const int rc = ::poll(&p, 1, 0);
++    return rc > 0 && (p.revents & POLLIN) != 0;
++}
++
++template <class Gate> bool wait_gate_paused(Gate& gate) {
++    for (int i = 0; i < 50000; ++i) {
++        if (gate.paused.load(std::memory_order_acquire)) {
++            return true;
++        }
++        std::this_thread::sleep_for(std::chrono::microseconds{100});
++    }
++    return gate.paused.load(std::memory_order_acquire);
++}
++
++template <class Gate> void resume_gate(Gate& gate) noexcept {
++    gate.resume.store(true, std::memory_order_release);
++    gate.resume.notify_all();
++}
++
++std::size_t open_fd_count() {
++    ::DIR* dir = ::opendir("/proc/self/fd");
++    if (dir == nullptr) {
++        return 0;
++    }
++    std::size_t n = 0;
++    while (::readdir(dir) != nullptr) {
++        ++n;
++    }
++    ::closedir(dir);
++    return n;
++}
++
++bool acknowledged_notification_rearms_the_next_physical_write(Tracker& t) {
++    detail::ProgressSource source;
++
++    source.signal();
++    t.check(notification_readable(source.notification_fd()),
++            "the first signal asserts readiness");
++    source.acknowledge_notification();
++    t.check(!notification_readable(source.notification_fd()),
++            "the acknowledgement consumes the notification");
++
++    source.signal();
++    t.check(notification_readable(source.notification_fd()),
++            "the post-acknowledge signal re-arms the physical write");
++    source.acknowledge_notification();
++    t.check(!notification_readable(source.notification_fd()),
++            "the second acknowledgement consumes the notification");
++    return t.failures == 0;
++}
++
++bool coalesced_signals_are_consumed_and_the_next_signal_writes(Tracker& t) {
++    detail::ProgressSource source;
++
++    source.signal();
++    source.signal();
++    t.check(notification_readable(source.notification_fd()),
++            "coalesced signals assert readiness");
++    source.acknowledge_notification();
++    t.check(!notification_readable(source.notification_fd()),
++            "one acknowledgement consumes the coalesced notification");
++
++    source.signal();
++    t.check(notification_readable(source.notification_fd()),
++            "a signal after the coalesced acknowledgement re-arms the write");
++    return t.failures == 0;
++}
++
++bool progress_signal_while_the_owner_revalidates_wakes_it(Tracker& t) {
++    detail::ProgressSource source;
++    const auto token = source.snapshot();
++
++    PauseGate gate;
++    source.set_prerevalidate_pause_gate_for_test(&gate);
++    std::atomic<bool> returned{false};
++    WakeReason reason = WakeReason::failed;
++    std::thread owner([&] {
++        reason = source.wait_if_unchanged(token, std::chrono::milliseconds{3000});
++        returned.store(true, std::memory_order_release);
++    });
++
++    const bool paused = wait_gate_paused(gate);
++    t.check(paused, "the owner pauses before revalidation");
++    source.set_prerevalidate_pause_gate_for_test(nullptr);
++
++    source.signal();
++    resume_gate(gate);
++    owner.join();
++    t.check(returned.load(std::memory_order_acquire), "the owner returns after the signal");
++    t.check(reason == WakeReason::progress, "the owner reports progress, not its deadline");
++    return t.failures == 0;
++}
++
++bool stale_acknowledgement_cannot_suppress_the_next_wake(Tracker& t) {
++    detail::ProgressSource source;
++    const auto token = source.snapshot();
++
++    PauseGate gate;
++    source.set_prepark_pause_gate_for_test(&gate);
++    std::atomic<bool> returned{false};
++    WakeReason reason = WakeReason::failed;
++    std::thread owner([&] {
++        reason = source.wait_if_unchanged(token, std::chrono::milliseconds{3000});
++        returned.store(true, std::memory_order_release);
++    });
++
++    const bool paused = wait_gate_paused(gate);
++    t.check(paused, "the owner parks at the pre-poll gate");
++    source.set_prepark_pause_gate_for_test(nullptr);
++
++    source.signal();
++    source.acknowledge_notification();
++    source.signal();
++    t.check(notification_readable(source.notification_fd()),
++            "the post-acknowledge signal re-arms the physical write");
++
++    resume_gate(gate);
++    owner.join();
++    t.check(returned.load(std::memory_order_acquire), "the parked owner returns");
++    t.check(reason == WakeReason::progress, "the parked owner reports progress");
++    return t.failures == 0;
++}
++
++bool retired_source_has_no_notification_authority(Tracker& t) {
++    detail::ProgressSource source;
++
++    source.retire_notification();
++    t.check(source.notification_fd() < 0, "retirement closes the notification fd");
++    source.signal();
++    source.acknowledge_notification();
++    t.check(!notification_readable(source.notification_fd()),
++            "a retired source leaves no readiness behind");
++    return t.failures == 0;
++}
++
++struct PoolFixture {
++    struct FileCloser {
++        void operator()(::FILE* file) const noexcept {
++            if (file != nullptr) {
++                std::fclose(file);
++            }
++        }
++    };
++
++    std::unique_ptr<::FILE, FileCloser> backing;
++    std::unique_ptr<ThreadPoolBackend> backend;
++    ThreadPoolBackend* raw = nullptr;
++    std::unique_ptr<AsyncIoContext> ctx;
++
++    static PoolFixture create(std::size_t capacity, unsigned workers) {
++        PoolFixture made;
++        made.backing.reset(std::tmpfile());
++        if (made.backing == nullptr) {
++            return made;
++        }
++        std::byte payload[4096];
++        for (std::size_t i = 0; i < sizeof(payload); ++i) {
++            payload[i] = static_cast<std::byte>(i & 0x7f);
++        }
++        if (std::fwrite(payload, 1, sizeof(payload), made.backing.get()) != sizeof(payload)) {
++            return PoolFixture{};
++        }
++        std::rewind(made.backing.get());
++        made.backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{capacity, workers});
++        made.raw = made.backend.get();
++        made.ctx = std::make_unique<AsyncIoContext>(detail::make_context(std::move(made.backend)));
++        return made;
++    }
++
++    bool ok() const { return ctx != nullptr && raw != nullptr && backing != nullptr; }
++
++    ReadOp read(std::byte* buffer, std::size_t len, std::uint64_t offset) {
++        return ReadOp{NativeFileRef(::fileno(backing.get()), sluice::FileAccess::read_only), buffer,
++                      len, offset};
++    }
++};
++
++struct WorkerGateGuard {
++    ThreadPoolBackend* backend;
++    ThreadPoolBackend::WorkerClaimedPauseGate& gate;
++    bool released = false;
++
++    WorkerGateGuard(ThreadPoolBackend* b, ThreadPoolBackend::WorkerClaimedPauseGate& g)
++        : backend(b), gate(g) {}
++
++    ~WorkerGateGuard() { release(); }
++
++    void release() {
++        if (released) {
++            return;
++        }
++        released = true;
++        backend->set_worker_claimed_pause_gate(nullptr);
++        gate.resume.store(true, std::memory_order_release);
++        gate.resume.notify_all();
++        bool seen = gate.exited.load(std::memory_order_acquire);
++        while (!seen) {
++            gate.exited.wait(seen, std::memory_order_acquire);
++            seen = gate.exited.load(std::memory_order_acquire);
++        }
++    }
++};
++
++bool public_publication_is_exactly_once_across_coalesced_acknowledgements(Tracker& t) {
++    PoolFixture made = PoolFixture::create(8, 2);
++    if (!made.ok()) {
++        t.check(false, "fixture construction");
++        return false;
++    }
++    AsyncIoContext& ctx = *made.ctx;
++
++    ThreadPoolBackend::WorkerClaimedPauseGate gate;
++    WorkerGateGuard guard{made.raw, gate};
++    made.raw->set_worker_claimed_pause_gate(&gate);
++
++    std::vector<std::byte> observed_buffer(512, std::byte{0});
++    auto submitted = ctx.submit_read(made.read(observed_buffer.data(), observed_buffer.size(), 0));
++    if (!submitted.has_value()) {
++        t.check(false, "the observed read is accepted");
++        return false;
++    }
++    Request<std::size_t> observed = std::move(submitted).value();
++    t.check(wait_gate_paused(gate), "the worker pauses after its claim");
++    const auto attached = ctx.attach_observer(observed.id());
++    t.check(attached.armed(), "the observer arms on the paused request");
++    guard.release();
++
++    std::vector<Request<std::size_t>> requests;
++    requests.push_back(std::move(observed));
++    std::vector<std::vector<std::byte>> buffers(7);
++    for (std::size_t i = 0; i < buffers.size(); ++i) {
++        buffers[i].assign(512, std::byte{0});
++        auto next = ctx.submit_read(made.read(buffers[i].data(), buffers[i].size(),
++                                              static_cast<std::uint64_t>(512 * (i + 1))));
++        if (!next.has_value()) {
++            t.check(false, "the batch submit is accepted");
++            return false;
++        }
++        requests.push_back(std::move(next).value());
++    }
++
++    bool ready = false;
++    for (int attempt = 0; attempt < 20000 && !ready; ++attempt) {
++        ready = true;
++        for (const auto& request : requests) {
++            ready = ready && request.ready();
++        }
++        if (ready) {
++            break;
++        }
++        ctx.acknowledge_progress_notification();
++        const auto waited = ctx.wait_one(std::chrono::milliseconds{100});
++        if (!waited.has_value()) {
++            t.check(false, "the bounded wait is accepted");
++            break;
++        }
++        if (waited.value().kind == WaitKind::health_failure) {
++            t.check(false, "the wait reports no health failure");
++            break;
++        }
++    }
++    t.check(ready, "every request publishes");
++    t.check(ctx.delivery_retired(attached.request), "the observer delivery retired");
++    t.check(ctx.attach_observer(attached.request).status ==
++                AsyncIoContext::ObserverStatus::already_terminal,
++            "a later registration reports the terminal request");
++
++    std::size_t completed = 0;
++    for (auto& request : requests) {
++        const auto taken = request.take_result();
++        t.check(taken.result.has_value() && taken.result.value() == 512,
++                "each request yields its terminal result exactly once");
++        if (taken.result.has_value()) {
++            ++completed;
++        }
++        const auto second = request.try_result();
++        t.check(!second.result.has_value(), "a consumed request yields no second result");
++    }
++    t.check(completed == requests.size(), "one result per accepted request");
++    return t.failures == 0;
++}
++
++bool undelivered_publication_pins_the_slot(Tracker& t) {
++    PoolFixture made = PoolFixture::create(1, 1);
++    if (!made.ok()) {
++        t.check(false, "fixture construction");
++        return false;
++    }
++    AsyncIoContext& ctx = *made.ctx;
++
++    std::byte first_buffer[1];
++    std::byte second_buffer[1];
++    auto submitted = ctx.submit_read(made.read(first_buffer, 0, 0));
++    if (!submitted.has_value()) {
++        t.check(false, "the zero-op read is accepted");
++        return false;
++    }
++    Request<std::size_t> first = std::move(submitted).value();
++    const auto taken = first.take_result();
++    t.check(taken.result.has_value() && taken.result.value() == 0,
++            "the zero-op result is consumed once");
++
++    auto early = ctx.submit_read(made.read(second_buffer, 0, 4));
++    t.check(!early.has_value() && early.error().code == IoError::Code::would_block,
++            "the slot stays pinned while the delivery is owed");
++
++    ctx.acknowledge_progress_notification();
++    t.check(ctx.poll().value_or(0) == 1, "the next pass publishes and retires the delivery");
++    auto reused = ctx.submit_read(made.read(second_buffer, 0, 4));
++    t.check(reused.has_value(), "the slot admits a new request after delivery");
++    if (!reused.has_value()) {
++        return false;
++    }
++    t.check(ctx.poll().value_or(0) == 1, "the reused slot publishes");
++    const auto reused_result = reused.value().take_result();
++    t.check(reused_result.result.has_value() && reused_result.result.value() == 0,
++            "the reused slot yields its own terminal result");
++    return t.failures == 0;
++}
++
++bool notification_fd_borrow_survives_repeated_drains(Tracker& t) {
++    PoolFixture made = PoolFixture::create(2, 1);
++    if (!made.ok()) {
++        t.check(false, "fixture construction");
++        return false;
++    }
++    AsyncIoContext& ctx = *made.ctx;
++
++    struct HostBorrow {
++        AsyncIoContext& ctx;
++        const int fd;
++        explicit HostBorrow(AsyncIoContext& c) noexcept
++            : ctx(c), fd(c.progress_notification_fd()) {}
++        ~HostBorrow() { ctx.detach_progress_host(); }
++    };
++
++    int borrowed = -1;
++    {
++        HostBorrow borrow{ctx};
++        borrowed = borrow.fd;
++        t.check(borrowed >= 0, "the host borrows the notification fd");
++
++        std::vector<std::byte> buffer(4, std::byte{0});
++        std::vector<Request<std::size_t>> requests;
++        for (int i = 0; i < 2; ++i) {
++            auto request = ctx.submit_read(made.read(buffer.data(), 0, 0));
++            if (!request.has_value()) {
++                t.check(false, "the borrowed-path request is accepted");
++                return false;
++            }
++            requests.push_back(std::move(request).value());
++        }
++
++        bool ready = false;
++        for (int attempt = 0; attempt < 20000 && !ready; ++attempt) {
++            ready = true;
++            for (const auto& request : requests) {
++                ready = ready && request.ready();
++            }
++            if (ready) {
++                break;
++            }
++            ctx.acknowledge_progress_notification();
++            (void)ctx.poll();
++        }
++        t.check(ready, "the borrowed-path requests publish while the borrow lives");
++        for (auto& request : requests) {
++            const auto taken = request.take_result();
++            t.check(taken.result.has_value() && taken.result.value() == 0,
++                    "the borrowed-path result is consumable");
++        }
++    }
++
++    const int reborrowed = ctx.progress_notification_fd();
++    t.check(reborrowed >= 0, "a fresh borrow is accepted after detach");
++    if (reborrowed >= 0) {
++        ctx.detach_progress_host();
++    }
++    return t.failures == 0;
++}
++
++bool cancel_refusal_and_shutdown_still_settle(Tracker& t) {
++    PoolFixture made = PoolFixture::create(4, 1);
++    if (!made.ok()) {
++        t.check(false, "fixture construction");
++        return false;
++    }
++    AsyncIoContext& ctx = *made.ctx;
++
++    ThreadPoolBackend::WorkerClaimedPauseGate gate;
++    WorkerGateGuard guard{made.raw, gate};
++    made.raw->set_worker_claimed_pause_gate(&gate);
++
++    std::vector<std::byte> first_buffer(512, std::byte{0});
++    auto submitted = ctx.submit_read(made.read(first_buffer.data(), first_buffer.size(), 0));
++    if (!submitted.has_value()) {
++        t.check(false, "the cancelled candidate is accepted");
++        return false;
++    }
++    Request<std::size_t> request = std::move(submitted).value();
++    t.check(wait_gate_paused(gate), "the worker pauses after its claim");
++    const auto disposition = request.cancel();
++    t.check(disposition.has_value() &&
++                disposition.value() == CancelDisposition::physical_interruption_unsupported,
++            "ThreadPool cancel reports physical interruption unsupported");
++    guard.release();
++
++    bool ready = false;
++    for (int attempt = 0; attempt < 20000 && !ready; ++attempt) {
++        ready = request.ready();
++        if (ready) {
++            break;
++        }
++        ctx.acknowledge_progress_notification();
++        (void)ctx.poll();
++    }
++    t.check(ready, "the cancelled request still reaches publication");
++    const auto taken = request.take_result();
++    t.check(taken.result.has_value() && taken.result.value() == 512,
++            "the refused cancel leaves the physical result intact");
++
++    std::vector<std::byte> pending_buffer(512, std::byte{0});
++    auto pending = ctx.submit_read(made.read(pending_buffer.data(), pending_buffer.size(), 512));
++    if (!pending.has_value()) {
++        t.check(false, "the pre-shutdown request is accepted");
++        return false;
++    }
++    bool pending_ready = false;
++    for (int attempt = 0; attempt < 20000 && !pending_ready; ++attempt) {
++        pending_ready = pending.value().ready();
++        if (pending_ready) {
++            break;
++        }
++        ctx.acknowledge_progress_notification();
++        (void)ctx.poll();
++    }
++    t.check(pending_ready, "the pre-shutdown request settles");
++    const auto pending_taken = pending.value().take_result();
++    t.check(pending_taken.result.has_value() && pending_taken.result.value() == 512,
++            "the settled result is consumable");
++    ctx.close_admission();
++    t.check(!ctx.admission_open(), "admission is closed");
++    const auto closed = ctx.shutdown(ShutdownPolicy::drain);
++    t.check(closed.has_value() && closed.value() == ShutdownOutcome::completed,
++            "shutdown completes");
++    t.check(ctx.execution_closed(), "execution is closed");
++    return t.failures == 0;
++}
++
++} // namespace
++
++int main() {
++    using Fn = bool (*)(Tracker&);
++    struct Case {
++        const char* name;
++        Fn fn;
++    };
++    const Case cases[] = {
++        {"acknowledged_notification_rearms_the_next_physical_write",
++         acknowledged_notification_rearms_the_next_physical_write},
++        {"coalesced_signals_are_consumed_and_the_next_signal_writes",
++         coalesced_signals_are_consumed_and_the_next_signal_writes},
++        {"progress_signal_while_the_owner_revalidates_wakes_it",
++         progress_signal_while_the_owner_revalidates_wakes_it},
++        {"stale_acknowledgement_cannot_suppress_the_next_wake",
++         stale_acknowledgement_cannot_suppress_the_next_wake},
++        {"retired_source_has_no_notification_authority",
++         retired_source_has_no_notification_authority},
++        {"public_publication_is_exactly_once_across_coalesced_acknowledgements",
++         public_publication_is_exactly_once_across_coalesced_acknowledgements},
++        {"undelivered_publication_pins_the_slot", undelivered_publication_pins_the_slot},
++        {"notification_fd_borrow_survives_repeated_drains",
++         notification_fd_borrow_survives_repeated_drains},
++        {"cancel_refusal_and_shutdown_still_settle", cancel_refusal_and_shutdown_still_settle},
++    };
++
++    int failures = 0;
++    for (const auto& c : cases) {
++        const std::size_t fds_before = open_fd_count();
++        Tracker tracker{c.name, 0};
++        (void)c.fn(tracker);
++        const std::size_t fds_after = open_fd_count();
++        if (fds_before != fds_after) {
++            std::fprintf(stderr, "FAIL [%s] leaked descriptors (%zu -> %zu)\n", c.name, fds_before,
++                         fds_after);
++            ++tracker.failures;
++        }
++        failures += tracker.failures;
++    }
++    return failures == 0 ? 0 : 1;
++}
+diff --git a/xmake/tests.lua b/xmake/tests.lua
+index d76ad41f..69b61295 100644
+--- a/xmake/tests.lua
++++ b/xmake/tests.lua
+@@ -538,6 +538,51 @@ do
+                               "SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS")
+ end
+ 
++-- ProgressSource drain evidence. The semantic target asserts the observable
++-- wake and acknowledgement contract without counting reads; it uses only seams
++-- that predate the one-read drain and must pass against both the base header
++-- and this change. The mechanism target counts drain read(2) calls through the
++-- test-only observation seam and is expected to fail against the base header,
++-- where a non-empty drain issues two reads. The mutation build keeps the
++-- suppression bit set after a successful read and must be killed by the
++-- semantic target; it is executed and recorded manually, never run as a
++-- regular test.
++do
++    local function drain_semantic_target(name, extra_define)
++        target(name)
++            set_kind("binary")
++            set_default(false)
++            set_group("test")
++            add_deps("sluice_core")
++            add_includedirs(R .. "include", R .. "src/async")
++            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
++            if extra_define ~= nil then
++                add_defines(extra_define)
++            end
++            add_files(R .. "tests/progress_source_drain_semantic_oracle_test.cpp",
++                      R .. "src/async/async_io_context.cpp",
++                      R .. "src/async/threadpool_backend.cpp",
++                      R .. "src/async/fail_fast.cpp",
++                      R .. "src/async/detail/context_identity.cpp",
++                      R .. "src/async/detail/request_core.cpp")
++            if extra_define == nil then
++                add_tests(name, {run_timeout = 120000})
++            end
++    end
++
++    drain_semantic_target("progress_source_drain_semantic_oracle_test")
++    drain_semantic_target("progress_source_mut_drain_success_keeps_pending",
++                          "SLUICE_PROGRESS_SOURCE_MUTANT_DRAIN_SUCCESS_KEEPS_PENDING")
++
++    target("progress_source_drain_mechanism_test")
++        set_kind("binary")
++        set_default(false)
++        set_group("test")
++        add_includedirs(R .. "include")
++        add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
++        add_files(R .. "tests/progress_source_drain_mechanism_test.cpp")
++end
++
+ -- W-03 stop-order protocol: the external driver re-checks the shared stop
+ -- flag only between epoll_wait returns, so the flag must be published before
+ -- request_stop's unconditional wake. The mutant build reverts the order and
