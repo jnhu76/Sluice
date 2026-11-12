@@ -1,8 +1,9 @@
 # 621 ProgressSource drain single-read evidence (2026-11-12)
 
-> **Archival evidence PR — DO NOT MERGE.** This pull request exists so the
+> **Archival evidence PR #636 — DO NOT MERGE.** This pull request exists so the
 > measurement package is reviewable and citable; it must never be merged into
-> `master`. The production change and its tests are in PR #635.
+> `master`. The production change, tests, ledger and changelog are in PR #635;
+> this package is intentionally not part of that PR.
 
 Production change: `ProgressSource::drain_notification_nolock_()` no longer
 issues a second `read(2)` after a successful non-semaphore eventfd read. The

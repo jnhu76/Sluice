@@ -8,7 +8,7 @@
 > | `END_TO_END_VERDICT` | **GO** | R2 受控 session（session-r2r2，36 对）：instructions **−5.0180%** `[-5.7603,-4.2987]`、cycles **−5.1111%** `[-5.8111,-4.3976]`、task-clock **−5.4653%** `[-6.2955,-4.6237]`、rusage CPU **−5.3199%** `[-6.1475,-4.4848]`；四组 CI 上界全 <0；逐对负号 instructions 36/36、cycles 36/36、task-clock 35/36、rusage 35/36；A/A 36 对 **+0.7713%** `[-0.4342,+1.9748]`，宽度 **2.4090 ≤ 3.0**；p99 CPU B/A **−7.2690% ≤ +3%**；`confirmed=true`。四组最小绝对值 = instructions **5.0180%**，这是唯一可采用的保守量级。旧 session 的 −1.4%~−12% spread 未完全分解，但两个受控 session 的量级一致（−5.0~−5.5%）；不得引用旧 12%，也不得把 5.02% 外推到 wall、能效或其他后端 |
 > | `PRODUCT_READINESS` | **READY_FOR_PRODUCT_PR** | 预注册门与拆分后回执均已关闭：四配置矩阵、13+ 套件、TSAN/ASAN、mutant、纯净 BASE-green、BASE 机制红、B.2 复算、预注册原件、p99 定义、10 对 protocol 重建（§C.6、§C.7、§E.3、§F.5）。产品 PR **#635** 已从最新 `origin/master` 创建，**不 merge**，保留 Owner Merge Gate（§F.4）。披露限制：io_uring 内核重 signal 窗口无确定性注入、真实 EINTR 未测、BASE 语义 oracle 只在 release/liburing=y、旧 8 对 session 无同 session A/A；这些不阻断本机制，但限制外推 |
 >
-> **版本边界**：`BASE_SHA = HEAD_SHA = 3f22d2d08a53077b6377934b1895af78126de0a1`。BASE 即 PR #634 的 merge commit。候选实现 `R1-drain-eagain-read` 位于研究分支 `research/621-r2-R1-drain-eagain-read`、worktree `/home/jnhu/sluice-621-r2/wt-B`，最终提交 `a3a14a31`（父 `839a0164`，基线 `3f22d2d0`）。R1 受控 session `session-r2r1`（18:52–19:07）与 R2 受控 session `session-r2r2`（20:17–20:37）在同一双二进制（A `0eca1011…`、B `db972b19…`）上执行；R2 是主证据，R1 保留为历史对照。产品分支 `product/621-progress-drain-single-read` 已从最新 `origin/master` 创建并推送：代码提交 `27d907d6`、docs 提交 `8e063fab`，PR **#635**（https://github.com/jnhu76/Sluice/pull/635），**不 merge**，保留 Owner Merge Gate。主工作区 `/home/jnhu/Source/Sluice` 在本报告写入前位于 BASE 且工作树干净；写入后新增未跟踪的 `docs/evidence/621-round2-R1/REPORT.md`（历史）与产品分支的提交。同目录早期草稿的 `NO_GO / NOT_ESTABLISHED / NOT_READY` 结论来自中间状态，以本 r6 报告为准。
+> **版本边界**：`BASE_SHA = HEAD_SHA = 3f22d2d08a53077b6377934b1895af78126de0a1`。BASE 即 PR #634 的 merge commit。候选实现 `R1-drain-eagain-read` 位于研究分支 `research/621-r2-R1-drain-eagain-read`、worktree `/home/jnhu/sluice-621-r2/wt-B`，最终提交 `a3a14a31`（父 `839a0164`，基线 `3f22d2d0`）。R1 受控 session `session-r2r1`（18:52–19:07）与 R2 受控 session `session-r2r2`（20:17–20:37）在同一双二进制（A `0eca1011…`、B `db972b19…`）上执行；R2 是主证据，R1 保留为历史对照。产品分支 `product/621-progress-drain-single-read` 已从最新 `origin/master` 创建并推送：代码提交 `27d907d6`、docs 提交 `092e88cb`，PR **#635**（https://github.com/jnhu76/Sluice/pull/635），**不 merge**，保留 Owner Merge Gate。本证据包在独立归档 PR **#636**（draft，`do-not-merge`，永不 merge；https://github.com/jnhu76/Sluice/pull/636）。主工作区 `/home/jnhu/Source/Sluice` 在本报告写入前位于 BASE 且工作树干净；写入后新增未跟踪的 `docs/evidence/621-round2-R1/REPORT.md`（历史）与产品分支的提交。同目录早期草稿的 `NO_GO / NOT_ESTABLISHED / NOT_READY` 结论来自中间状态，以本 r6 报告为准。
 >
 > **修订记录（r2，2026-11-12）**：r1（17:58）在 perf stat 交叉检查与 rusage 的冲突尚未解释时给出 `INCONCLUSIVE / PENDING_AUDIT`。r2 只依据新增的 `reconciliation/` 对账证据（`README.md` 实验 1–4、`plain-reused-dst.txt`、`plain-fresh-dst.txt`、`perfstat-with-sync.txt`、`recon-provenance.txt`、结构化 `pairs=8` 结果）修订 §D.4–§D.6、§E、§F 与 Q4–Q7；r1 的历史测量、计数与收据全部保留，不追改。r1 引用的 perf stat 三行（instructions −2.42%、cycles −2.10%、task-clock −1.71%）作为历史记录保留，但已从裁决依据中移除（理由见 §D.5）。
 >
@@ -690,7 +690,7 @@ BASE 的真实机器成本以"协调"为主：系统调用边界 26.93%、futex 
 | 4. 预注册门槛无独立存档、p99 无定义 | `session-r2r2/PROTOCOL.md`（sha256 `b696a39d…`，mtime 20:17:10，早于 session start 20:17:23.811）与 `PRE-REGISTRATION.txt`；p99 定义为 rusage CPU 经验 p99、`B <= 1.03×A`，分析器已实现并输出 `p99BudgetOk=true`（§D.5.6、§F.2） |
 | 5. 旧 8 对无同 session A/A | 旧 8 对保留为历史，不再用于决策；主证据 R2 有同 session A/A。披露该项限制（§E.2） |
 | 6. 拆分后矩阵/套件/sanitizer/mutant 缺失 | `evidence-r3/`：矩阵 81/81、81/81、60/60、60/60；15 个套件 exit 0；ASAN/TSAN 3 目标均插桩并通过；mutant exit 1 恰好 3 条语义 FAIL；restored exit 0；BASE semantic exit 0；BASE 机制红 7 条 FAIL（§C.6、§C.7） |
-| 7. 无 product PR/ledger | 分支 `product/621-progress-drain-single-read` 从最新 `origin/master` 创建；ledger dated section + PROG-02 行 + CHANGELOG 条目 + evidence 目录（§F.4） |
+| 7. 无 product PR/ledger | 产品分支 `product/621-progress-drain-single-read` 从最新 `origin/master` 创建；ledger dated section + PROG-02 行 + CHANGELOG 条目。证据包在归档 PR #636（不 merge；§F.4） |
 | 8. B.2 不可复算、p99 无定义、io_uring 无注入 | B.2 已按 `agg-attrib.tsv` caller 复算并说明混合口径（`evidence-r2/B2/`）；p99 已预注册；io_uring 注入列为披露限制而非本机制的新权威（§E.1） |
 
 **披露但不阻断**：io_uring 内核重 signal 窗口无确定性注入；真实 EINTR 未测；BASE 语义 oracle 只在 release/liburing=y；旧 8 对无同 session A/A；R2 的 A/A 仍有 ±9% 的单对噪声（只是 36 对把 CI 宽度压到 2.4090）；运行中频率下探。**不 merge**：最终合并由 Owner 按仓库治理决定。
@@ -809,8 +809,9 @@ r4 把 `REPORT.md` 行更新为修订后的哈希并追加上述 13 个文件后
 ### F.4 Owning issue 与 product PR
 
 - **Owning issue**：`#621`（ThreadPool / progress 机制族），应用路径授权归 `#604`。
-- **Product branch**：`product/621-progress-drain-single-read`，从最新 `origin/master`（fetch 时 `3f22d2d0`）创建；内容为生产头文件 + 两个测试 + `xmake/tests.lua` + evidence 目录 + ledger/CHANGELOG。研究分支 `research/621-r2-R1-drain-eagain-read` 保留为实验历史。
-- **Product PR**：**#635** — https://github.com/jnhu76/Sluice/pull/635；head `product/621-progress-drain-single-read`，代码提交 `27d907d6`、docs 提交 `8e063fab`（URL 回填提交另行追加）。**不 merge**，保留 Owner Merge Gate；PR 必须通过 GitHub CI 与独立 review。
+- **Product branch**：`product/621-progress-drain-single-read`，从最新 `origin/master`（fetch 时 `3f22d2d0`）创建；产品 PR 内容为生产头文件 + 两个测试 + `xmake/tests.lua` + ledger/CHANGELOG。证据包不在产品 PR，而在归档 PR #636（draft，`do-not-merge`，永不 merge）。研究分支 `research/621-r2-R1-drain-eagain-read` 保留为实验历史。
+- **Product PR**：**#635** — https://github.com/jnhu76/Sluice/pull/635；head `product/621-progress-drain-single-read`，代码提交 `27d907d6`、docs 提交 `092e88cb`。**不 merge**，保留 Owner Merge Gate；PR 必须通过 GitHub CI 与独立 review。
+- **Evidence PR**：**#636** — https://github.com/jnhu76/Sluice/pull/636；draft，label `do-not-merge`，仅作归档/引用，**永不 merge**。
 - **Ledger**：`docs/roadmap/v2-conformance.md` 新增 dated 621 ProgressSource drain 小节（Mechanism Justification Gate、authority-contraction audit、证据清单），并在 PROG-02 行的 Evidence 单元追加本次 oracle/mutant/matrix/A-B；`CHANGELOG.md` 的 `[Unreleased] → Performance` 增加条目。引用的证据目录为 `docs/evidence/621-progress-drain-single-read-20261112/`。
 - **不进入 PR 的内容**：一次性 runner/analyzer/probe 驱动（按 AGENTS.md 留在实验目录）、`wt-*`、生成 dst、root-only perf `.data`、旧 R1 报告草稿。PR 只带可复核的结果、配置、命令与 provenance。
 
@@ -827,7 +828,7 @@ r4 把 `REPORT.md` 行更新为修订后的哈希并追加上述 13 个文件后
 | 7 | B.2 台账复算 | **CLOSED（降级为定位表）** | `evidence-r2/B2/caller-recompute.tsv` + README；精确 caller 和已列出；只有 0.93% 不可复算，2.00%/0.43% 是可复算的 inclusive 口径（§B.2） |
 | 8 | 负对照与 #634 | **RECORDED** | R2 负对照 rusage −1.4611% `[-2.7425,-0.2340]`、0.5935 µs/请求；与 #634 同 cell 的 +0.10% 方向相反但 CI 重叠，原因未解释；不作为阻断（§D.4） |
 | 9 | io_uring 窗口 | **ACCEPTED LIMITATION** | 无确定性注入；`PhysicalProbe` 与 race 测试兜底；只可能多一次冗余通知，不会压制唤醒；在 §E.1 明确披露 |
-| 10 | 生产门禁 | **DONE（PR #635，待 CI/review；不 merge）** | seam release 无符号；ledger dated section + PROG-02 行；CHANGELOG；authority-contraction audit（无既有 mechanism 因本切片可删除）；外部/证据 MANIFEST 校验 exit 0；PR #635 已创建（https://github.com/jnhu76/Sluice/pull/635） |
+| 10 | 生产门禁 | **DONE（PR #635，待 CI/review；不 merge）** | seam release 无符号；ledger dated section + PROG-02 行；CHANGELOG；authority-contraction audit（无既有 mechanism 因本切片可删除）；外部/证据 MANIFEST 校验 exit 0；产品 PR #635 与归档证据 PR #636 已创建（#636 永不 merge） |
 
 **当前状态**：`MECHANISM_VERDICT = GO`、`END_TO_END_VERDICT = GO`、`PRODUCT_READINESS = READY_FOR_PRODUCT_PR`。1–7 已关闭，8 记录，9 披露接受，10 已创建 PR #635、待 CI 与独立 review（不 merge）；#595 仍 PAUSED。
 
