@@ -73,6 +73,8 @@ class ThreadPoolBackend : public AsyncBackend {
     detail::RequestCore* request_core_for_test() const noexcept { return core_; }
     std::size_t publication_pending_size_for_test() const;
     bool event_owed_for_test(std::uint32_t slot) const noexcept;
+    std::size_t owed_count_for_test() const;
+    bool owed_scan_for_test() const;
 
     struct SubmitEntryPauseGate;
     struct PreAcceptCommitPauseGate;
@@ -84,6 +86,7 @@ class ThreadPoolBackend : public AsyncBackend {
     struct WorkerPostCompletionSignalPauseGate;
     struct PublicationEpiloguePauseGate;
     struct DeliveryClaimedPauseGate;
+    struct OwedSweepEpiloguePauseGate;
 
     struct DispatchFailureInjection;
     struct SubmitStageFailureInjection;
@@ -101,6 +104,7 @@ class ThreadPoolBackend : public AsyncBackend {
         WorkerPostCompletionSignalPauseGate* gate) noexcept;
     void set_publication_epilogue_pause_gate(PublicationEpiloguePauseGate* gate) noexcept;
     void set_delivery_claimed_pause_gate(DeliveryClaimedPauseGate* gate) noexcept;
+    void set_owed_sweep_epilogue_pause_gate(OwedSweepEpiloguePauseGate* gate) noexcept;
     void set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept;
     void set_submit_stage_failure_injection(SubmitStageFailureInjection* injection) noexcept;
 
@@ -197,6 +201,14 @@ class ThreadPoolBackend : public AsyncBackend {
 
     bool any_event_owed_locked_() const noexcept;
 
+    bool owed_visible_locked_() const noexcept {
+#if defined(SLUICE_THREADPOOL_MUTANT_OWED_EMPTY_VERDICT_ALWAYS)
+        return false;
+#else
+        return owed_count_ != 0;
+#endif
+    }
+
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     void wait_submit_entry_pause_() noexcept;
@@ -209,6 +221,7 @@ class ThreadPoolBackend : public AsyncBackend {
     void wait_worker_post_completion_signal_pause_() noexcept;
     void wait_publication_epilogue_pause_() noexcept;
     void wait_delivery_claimed_pause_() noexcept;
+    void wait_owed_sweep_epilogue_pause_() noexcept;
 
     using SubmitStage = detail::SubmitStage;
 
@@ -223,6 +236,11 @@ class ThreadPoolBackend : public AsyncBackend {
     std::size_t capacity_ = 0;
     std::vector<PreparedBlockingOp> prepared_ops_;
     std::vector<DeliveryRecord> delivery_;
+    // Derived summary of the delivery_ event_owed flags under work_mtx_:
+    // owed_count_ equals the number of records with event_owed set. It gates
+    // the per-pass owed sweep and the hot-path residue verdict; settlement
+    // paths keep the authoritative any_event_owed_locked_ scan.
+    std::size_t owed_count_ = 0;
     detail::ReferenceReadySink sink_;
 
     mutable std::mutex work_mtx_;
@@ -251,6 +269,7 @@ class ThreadPoolBackend : public AsyncBackend {
         worker_post_completion_signal_gate_{nullptr};
     std::atomic<PublicationEpiloguePauseGate*> publication_epilogue_gate_{nullptr};
     std::atomic<DeliveryClaimedPauseGate*> delivery_claimed_gate_{nullptr};
+    std::atomic<OwedSweepEpiloguePauseGate*> owed_sweep_epilogue_gate_{nullptr};
 
     std::atomic<DispatchFailureInjection*> dispatch_failure_injection_{nullptr};
 

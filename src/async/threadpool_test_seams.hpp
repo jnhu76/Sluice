@@ -71,6 +71,12 @@ struct ThreadPoolBackend::DeliveryClaimedPauseGate {
     std::atomic<bool> exited{true};
 };
 
+struct ThreadPoolBackend::OwedSweepEpiloguePauseGate {
+    std::atomic<bool> paused{false};
+    std::atomic<bool> resume{false};
+    std::atomic<bool> exited{true};
+};
+
 struct ThreadPoolBackend::DispatchFailureInjection {
     std::atomic<bool> armed{false};
     std::atomic<std::size_t> fired{0};
@@ -111,6 +117,16 @@ inline std::size_t ThreadPoolBackend::publication_pending_size_for_test() const 
 inline bool ThreadPoolBackend::event_owed_for_test(std::uint32_t slot) const noexcept {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return delivery_[slot].event_owed;
+}
+
+inline std::size_t ThreadPoolBackend::owed_count_for_test() const {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    return owed_count_;
+}
+
+inline bool ThreadPoolBackend::owed_scan_for_test() const {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    return any_event_owed_locked_();
 }
 
 inline detail::PublicCancel ThreadPoolBackend::cancel_key_for_test(detail::RequestKey key) {
@@ -154,6 +170,10 @@ inline void ThreadPoolBackend::set_publication_epilogue_pause_gate(
 inline void
 ThreadPoolBackend::set_delivery_claimed_pause_gate(DeliveryClaimedPauseGate* gate) noexcept {
     delivery_claimed_gate_.store(gate, std::memory_order_release);
+}
+inline void
+ThreadPoolBackend::set_owed_sweep_epilogue_pause_gate(OwedSweepEpiloguePauseGate* gate) noexcept {
+    owed_sweep_epilogue_gate_.store(gate, std::memory_order_release);
 }
 inline void
 ThreadPoolBackend::set_dispatch_failure_injection(DispatchFailureInjection* injection) noexcept {
