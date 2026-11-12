@@ -17,6 +17,24 @@ accumulates under `[Unreleased]`).
 
 ### Performance
 
+- **ProgressSource: one-read notification drain (#621).** A successful
+  non-semaphore eventfd read already consumes the whole counter, so the drain
+  no longer issues a second `read(2)` that is guaranteed to return `EAGAIN`;
+  the same `mtx_` critical section clears `notification_pending_` and returns.
+  The `EINTR` retry, the `EAGAIN` branch and `PhysicalProbe` are unchanged, and
+  no runtime state or authority moves. On the real-consumer path
+  (`sluice-copy`, oracle-verified 256 MiB copy, 4 KiB buffers, depth 4, one
+  worker), one pre-registered controlled session (A/A 36 pairs, A/B 36 pairs,
+  AB/BA interleaved) measured −5.0180% user-space instructions, −5.1111%
+  cycles, −5.4653% task-clock and −5.3199% CPU per task; the conservative
+  claim is the minimum absolute effect, 5.018%. The A/A gate passed (width
+  2.41 pp against a 3.0 pp budget) and the p99 CPU budget was not breached.
+  A 64 KiB/depth-1 control cell measured −1.46% CPU and is not a zero-effect
+  cell (one notification is still consumed per request). Scope: ThreadPool,
+  non-semaphore eventfd, production userspace writers holding `mtx_`, warm cache, one
+  worker; io_uring end-to-end, wall, energy, multi-worker and cold cache are
+  not established. Evidence: PR #636 (archival snapshot, not merged; the
+  product change and tests are in this PR).
 - **ThreadPool: empty owed-event sweeps skipped (#621).** The per-progress-
   pass owed-event collection sweep and the hot-path immediate-work verdict
   in `ThreadPoolBackend` no longer scan the full delivery-record table when
