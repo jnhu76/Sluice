@@ -538,6 +538,51 @@ do
                               "SLUICE_REQUEST_CORE_MUTANT_RECLAIM_IGNORES_CONTROL_REFS")
 end
 
+-- ProgressSource drain evidence. The semantic target asserts the observable
+-- wake and acknowledgement contract without counting reads; it uses only seams
+-- that predate the one-read drain and must pass against both the base header
+-- and this change. The mechanism target counts drain read(2) calls through the
+-- test-only observation seam and is expected to fail against the base header,
+-- where a non-empty drain issues two reads. The mutation build keeps the
+-- suppression bit set after a successful read and must be killed by the
+-- semantic target; it is executed and recorded manually, never run as a
+-- regular test.
+do
+    local function drain_semantic_target(name, extra_define)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            if extra_define ~= nil then
+                add_defines(extra_define)
+            end
+            add_files(R .. "tests/progress_source_drain_semantic_oracle_test.cpp",
+                      R .. "src/async/async_io_context.cpp",
+                      R .. "src/async/threadpool_backend.cpp",
+                      R .. "src/async/fail_fast.cpp",
+                      R .. "src/async/detail/context_identity.cpp",
+                      R .. "src/async/detail/request_core.cpp")
+            if extra_define == nil then
+                add_tests(name, {run_timeout = 120000})
+            end
+    end
+
+    drain_semantic_target("progress_source_drain_semantic_oracle_test")
+    drain_semantic_target("progress_source_mut_drain_success_keeps_pending",
+                          "SLUICE_PROGRESS_SOURCE_MUTANT_DRAIN_SUCCESS_KEEPS_PENDING")
+
+    target("progress_source_drain_mechanism_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_includedirs(R .. "include")
+        add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+        add_files(R .. "tests/progress_source_drain_mechanism_test.cpp")
+end
+
 -- W-03 stop-order protocol: the external driver re-checks the shared stop
 -- flag only between epoll_wait returns, so the flag must be published before
 -- request_stop's unconditional wake. The mutant build reverts the order and
