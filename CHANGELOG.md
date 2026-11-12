@@ -15,6 +15,22 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
+### Performance
+
+- **ThreadPool: empty owed-event sweeps skipped (#621).** The per-progress-
+  pass owed-event collection sweep and the hot-path immediate-work verdict
+  in `ThreadPoolBackend` no longer scan the full delivery-record table when
+  no owed event exists; both are gated by a maintained `owed_count_`
+  summary, mirroring the production io_uring mechanism (H2b, #565). The
+  full authoritative scan remains in force whenever the count is nonzero,
+  and settlement and teardown never consult the counter. Counter parity is
+  pinned by a dedicated oracle suite and four registered mutant builds. On
+  the real-consumer path (`sluice-copy`, oracle-verified 256 MiB copy, 4 KiB
+  buffers, depth 4, one worker), paired interleaved A/B measured −5.6% CPU
+  and −22% user-space instructions per task with a pre-registered negative
+  control non-inferior; no measured cell regressed. Evidence:
+  `docs/evidence/621-threadpool-owed-count-20261112/`.
+
 ## [0.0.3] - 2026-10-23
 
 **Performance and reliability maintenance release.** No public API change:

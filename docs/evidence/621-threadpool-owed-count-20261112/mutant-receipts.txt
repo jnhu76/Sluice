@@ -1,0 +1,40 @@
+# ThreadPool owed-count mutant receipts — PR head b0dc4dc0, release/liburing=y
+
+## threadpool_owed_mut_missing_increment (exit=137)
+(no stderr)
+
+## threadpool_owed_mut_missing_decrement (exit=255)
+FAIL: counter_tracks_zero_op_reads
+
+## threadpool_owed_mut_empty_verdict_always (exit=255)
+FAIL: owed_during_pass_is_counted_and_reported
+
+## threadpool_owed_mut_reclaim_ignoring_control_refs (exit=255)
+terminate called without an active exception
+
+## Notes
+
+- missing_increment: the parity assertion (counter_matches_authority) is
+  violated at submit time inside counter_tracks_zero_op_reads; the case's
+  Fixture teardown then deadlocks in AsyncIoContext::drive_settlement_
+  because the gated sweep can no longer see the owed events (settlement
+  non-convergence), so the FAIL line is never reached before the watchdog
+  kills the process. Verified by attach-gdb backtrace during the round
+  (main parked in ProgressSource::wait_if_unchanged under
+  drive_settlement_; worker parked in work_cv_). Non-green exit in all
+  3 observed executions. Identical exposure shape to the uring
+  missing-increment mutant (H2b).
+- missing_decrement: killed by the post-delivery parity check in
+  counter_tracks_zero_op_reads (quiescent_and_settled requires
+  counter == 0 == scan verdict).
+- empty_verdict_always: killed deterministically by
+  owed_during_pass_is_counted_and_reported — an owed event produced while
+  the pass sits between sweep and residue verdict must set
+  immediate_work_remains.
+- reclaim_ignoring_control_refs (shared RequestCore mutant): the
+  control-ref slot pinning that keeps the counter and delivery records in
+  lockstep is load-bearing; violation terminates via fail-fast inside
+  slot_reuse_before_delivery_keeps_parity.
+- Receipts regenerated at PR head b0dc4dc0 (tree-identical to the
+  measured arm de9b452a; release sluice-copy binary sha256
+  fb5123a1161a8293... reproduced from both).
