@@ -67,7 +67,7 @@ Evidence (SHA/config) · Missing proof or gap · Next owner.
 | Requirement IDs | C++ owner | Current state | Target | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|---|
 | OBS-01..03 (attach/deliver/retire) | core observer phases, `detail/observer_protocol.hpp` | Generation-armed at-most-once delivery; bounded nonthrowing hooks; retirement owned by the delivery owner after its hook returns (PR B review fix, below) | Root §10 | VERIFIED (carried) | C1-A..C1-H records; `ObserverCore.tla` safety floor + conditional liveness, five C++ mutation seams killed; PR B re-base: driver-owned post-hook retirement + public retirement query (`delivery_retired`), deterministic interleaving oracle `retirement_waits_for_the_delivery_hook_to_return` (RED at `e34965a5`, GREEN at `b3de9262`) | Publication happens-before visibility argued by core-mutex serialization, not formal proof (C1-B) | — |
-| PROG-02 no-lost-wake (ThreadPool) | `detail/progress_source.hpp`, `threadpool_backend.cpp` | Epoch/token park-wake handshake; suppression bit only while pending wake stands; 14-row settlement-notification matrix complete after #480/#481/#484 | Root §11 PROG-02 | VERIFIED (carried) | C2 campaign records; #481 (merge `31dc948e`), #484 (merge `51eaa8b7`) with named oracles and killed mutants; TP evidence does not extend to other backends | io_uring notification oracle: see G6 | — |
+| PROG-02 no-lost-wake (ThreadPool) | `detail/progress_source.hpp`, `threadpool_backend.cpp` | Epoch/token park-wake handshake; suppression bit only while pending wake stands; 14-row settlement-notification matrix complete after #480/#481/#484. 2026-11-12 (#621 R2): a successful drain read consumes the non-semaphore counter and clears the suppression bit in the same `mtx_` domain, removing the guaranteed-EAGAIN probe read; EINTR/EAGAIN branches and `PhysicalProbe` stay | Root §11 PROG-02 | VERIFIED (carried; TP drain single-read evidence 2026-11-12) | C2 campaign records; #481 (merge `31dc948e`), #484 (merge `51eaa8b7`) with named oracles and killed mutants. R2 at `a3a14a31`: semantic oracle 9/9 on pure BASE and candidate, named mutant killed by three semantic re-arm assertions, matrix 81/81 ×2 + 60/60 ×2, A/A 36 pairs +0.77% width 2.41, main 36 pairs instructions −5.0180%/rusage −5.3199%, p99 −7.2690%; PR #636 at `0e50612c8ad7f5112a97fa959ff71f5b3eee4d5f` (archival evidence snapshot, not merged; https://github.com/jnhu76/Sluice/pull/636) | io_uring notification oracle: see G6. The io_uring kernel re-signal window after a successful read has no deterministic injection; `PhysicalProbe` remains the safety net. TP evidence does not extend to other backends | — |
 | PROG-01 pass bound + honest residue (V28/V29) | `threadpool_backend.cpp`, `uring_backend.cpp` | TP entry-snapshot bounded pass; uring bounded phases + owed-delivery residue report (PR #543). 2026-11-12 (#621): TP empty owed sweeps and hot-path residue verdict gated by derived `owed_count_` mirroring the production uring counter; TP settlement keeps the authoritative scan | Root §11 PROG-01 | VERIFIED (live 2026-10-16; TP owed-count evidence 2026-11-12) | `xmake run threadpool_progress_pass_bound_test` PASS (exit 0); `xmake run uring_owed_residue_test` 3/3 PASS — this host, xmake debug, Linux 7.2.9 fc44, liburing present, tree `c001bb1e`; merged oracles at `dd83595d`/`b870a7c0`; TP: `threadpool_owed_counter_parity_test` 8/8 + four killed `threadpool_owed_mut_*` builds, matrix 80/80 & 59/59 × {release,debug} × {liburing y,n}, tsan/asan clean, real-consumer A/B in `docs/evidence/621-threadpool-owed-count-20261112/` | — | — |
 
 ### G5 ThreadPool execution
@@ -524,3 +524,97 @@ mechanism justification and the authority-contraction audit per AGENTS.md.
 - The io_uring backend already carries the identical mechanism in
   production (H2b); this slice removes the cross-backend asymmetry, not a
   backend-general abstraction.
+
+## Dated 621 ProgressSource drain single-read productization (2026-11-12)
+
+Evidence: [PR #636](https://github.com/jnhu76/Sluice/pull/636) at
+`0e50612c8ad7f5112a97fa959ff71f5b3eee4d5f` (archival snapshot, not merged;
+execution round under umbrella #621; application-path authority #604). The
+archived report is measurement evidence, not a product semantic authority; the
+root specification and this ledger remain authoritative.
+Production change: `ProgressSource::drain_notification_nolock_()` returns after
+one successful non-semaphore eventfd read and clears
+`notification_pending_` in the same `mtx_` critical section; the guaranteed-
+`EAGAIN` probe read is removed. Branch `product/621-progress-drain-single-read`
+(base `3f22d2d08a53077b6377934b1895af78126de0a1`, candidate tree `a3a14a31`).
+The G4 PROG-02 row carries the obligation mapping; this section records the
+mechanism justification and the authority-contraction audit per AGENTS.md.
+
+### Mechanism Justification Gate — `drain_notification_nolock_()`
+
+1. **Fact represented**: after a successful `read(2)` of a non-`EFD_SEMAPHORE`
+   eventfd, the kernel counter is zero and the notification has been
+   consumed. `notification_pending_` is the existing bit that records whether
+   a physical write is outstanding.
+2. **Semantic authority**: the kernel eventfd counter and `ProgressSource`'s
+   `mtx_` domain. The successful read's return value is the authority for
+   "counter consumed"; no second syscall adds a fact.
+3. **Why not derivable on demand**: the old code derived it on demand by
+   issuing a second read and observing `EAGAIN`. That probe is the redundant
+   work: ~0.993 calls/request on the real consumer path (EAGAIN 130,152/run
+   over 131,076 requests), read stack attribution 2.28% cycles.
+4. **Why not keep the probe**: the counter state is already proven by the
+   first read; a second read cannot observe a different state for a userspace
+   writer because every writer holds `mtx_`. A kernel writer can re-raise the
+   counter after the read; readiness then remains asserted, so the only
+   possible consequence is a redundant future write, never a suppressed wake.
+5. **Classification**: no new runtime state or authority. The change removes
+   an operation and clears the existing suppression bit from the first read's
+   result. `DrainObservation` and the EINTR injection are test-only evidence
+   under `SLUICE_ASYNC_INTERNAL_TESTING`; release preprocessing and `nm` show
+   no seam symbols.
+6. **Replaces**: the second probe read only. No other mechanism is replaced.
+7. **Migration/removal conditions**: not applicable; no runtime mechanism is
+   removed beyond the probe. `notification_pending_`, the `EAGAIN` branch, the
+   `EINTR` retry and `PhysicalProbe` all remain.
+8. **Load-bearing parity**: if the clear were wrong, a later signal could be
+   coalesced into a wake that was already consumed (lost wake). The semantic
+   oracle pins re-arm on pure BASE and on the candidate; the registered mutant
+   keeps the bit set after a successful read and is killed by exactly three
+   semantic assertions. The mechanism target additionally pins one read per
+   non-empty drain, one EAGAIN on an empty drain, and the test-only pre-read
+   interruption path; the test does not execute a real kernel `EINTR`, and the
+   production `EINTR`/`EAGAIN` branches themselves are unchanged.
+
+### Authority-contraction audit
+
+- No admission, settlement, publication, retirement or wake decision changes
+  owner. `ProgressSource` remains the drain authority; writers still hold
+  `mtx_`; the kernel still owns the eventfd counter; `PhysicalProbe` still
+  handles notifications drained by the kernel path.
+- No existing mechanism became removable: `notification_pending_` still
+  coalesces writes and is still cleared only when the counter is consumed;
+  `PhysicalProbe` is still required for the io_uring kernel-writer window; the
+  semantic oracle's pause gates are test-only seams that predate this change.
+- The removed read was termination detection, not a semantic fact source. The
+  authority-contraction conclusion is therefore "no production authority
+  moved; one redundant syscall removed".
+- io_uring behavior is unchanged. In the window where the kernel re-signals
+  after the successful read, readiness stays asserted; the cleared bit can
+  only cause one redundant user-space write. No new uring code or state is
+  introduced.
+
+### Evidence summary
+
+- Real consumer: `sluice-copy` 256 MiB, 4 KiB/depth 4/one worker, oracle-
+  verified byte-identical output; 168 formal runs + 6 warmups in one
+  pre-registered session.
+- A/A 36 pairs: +0.7713% `[-0.4342,+1.9748]`, width 2.4090 (gate ≤3.0).
+- Main 36 pairs (mean of per-pair ratios, bootstrap 95% CI, seed 5950):
+  instructions −5.0180% `[-5.7603,-4.2987]`, cycles −5.1111%
+  `[-5.8111,-4.3976]`, task-clock −5.4653% `[-6.2955,-4.6237]`, rusage CPU
+  −5.3199% `[-6.1475,-4.4848]`; per-pair signs 36/36, 36/36, 35/36, 35/36
+  negative; p99 CPU B/A −7.2690% against a +3% budget.
+- Conservative magnitude: instructions **5.0180%** (minimum absolute value of
+  the four point estimates).
+- Negative control (64 KiB/depth 1, 12 pairs): rusage −1.4611%
+  `[-2.7425,-0.2340]`; not a zero-effect cell, because one notification is
+  still consumed per request. It is not a counterexample.
+- Correctness: semantic oracle 9/9 on pure BASE and candidate; mutant killed
+  by three semantic assertions; BASE mechanism target red at two reads per
+  notification / one EAGAIN; matrix 81/81, 81/81, 60/60, 60/60; 15 targeted
+  suites exit 0; ASAN/TSAN three targets each with verified instrumentation
+  and exit 0.
+- Scope: ThreadPool, non-semaphore eventfd, all production userspace writers holding
+  `mtx_`, one host, btrfs, warm cache, one worker. Not established: wall,
+  energy, io_uring end-to-end, multi-worker, cold cache, real kernel EINTR.
