@@ -484,7 +484,10 @@ mechanism justification and the authority-contraction audit per AGENTS.md.
    task −5.58% [−6.45, −4.71]% against an A/A band of ±1.2%, wall −6.53%
    [−7.55, −5.53]%, user-space instructions −22.1%; the scan symbol family
    disappears from the candidate's profile. Negative control (64 KiB,
-   depth 1): +0.10% [−1.56, +1.77]% — non-inferior.
+   depth 1): +0.10% [−1.56, +1.77]% — no statistically resolved regression
+   in the measured negative-control cell; no non-inferiority margin was
+   pre-registered, and the +1.77% CI upper bound cannot exclude a CPU
+   regression that small.
 5. **Classification**: derived summary (BACKEND-04/TERM-01), materialized
    because the query frequency (every progress pass on the driver thread)
    is far above the update frequency (one edge per zero-length request).
@@ -497,11 +500,11 @@ mechanism justification and the authority-contraction audit per AGENTS.md.
 8. **Load-bearing parity**: drift below actual would skip a needed sweep
    and park settlement (liveness, as the uring counter); drift above only
    wastes a sweep. Pinned by `tests/threadpool_owed_counter_parity_test.cpp`
-   (counter↔scan↔sink parity at quiescent checkpoints, slot-reuse-before-
-   delivery under the control-ref pin, owed-during-pass counting and
-   residue verdict, concurrent-producer exactly-once) and four registered
-   mutant builds (`threadpool_owed_mut_*`), all killed with named
-   failure sites.
+   (counter↔exact-count-scan↔existence-scan↔sink parity at quiescent
+   checkpoints, slot-reuse-before-delivery under the control-ref pin,
+   owed-during-pass counting and residue verdict, concurrent-producer
+   exactly-once) and four registered mutant builds
+   (`threadpool_owed_mut_*`), all killed with named failure sites.
 
 ### Authority-contraction audit
 

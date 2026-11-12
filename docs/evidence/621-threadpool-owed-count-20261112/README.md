@@ -30,5 +30,8 @@ Headline (real consumer `sluice-copy`, 256 MiB, 4 KiB buffers, depth 4,
 - CPU per oracle-verified copy task −5.58% [−6.45, −4.71]% vs an A/A
   calibration band of ±1.2%; wall −6.53% [−7.55, −5.53]%; user-space
   instructions −22.1%.
-- Negative control (64 KiB buffers, depth 1): +0.10% [−1.56, +1.77]% —
-  non-inferior, as pre-registered.
+- Negative control (64 KiB buffers, depth 1): +0.10% [−1.56, +1.77]% — no
+  statistically resolved regression in the measured negative-control cell.
+  No non-inferiority margin was pre-registered for this round, so no
+  non-inferiority claim is made; the +1.77% CI upper bound cannot exclude
+  a CPU regression that small.

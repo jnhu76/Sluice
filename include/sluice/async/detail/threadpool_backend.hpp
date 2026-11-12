@@ -75,6 +75,7 @@ class ThreadPoolBackend : public AsyncBackend {
     bool event_owed_for_test(std::uint32_t slot) const noexcept;
     std::size_t owed_count_for_test() const;
     bool owed_scan_for_test() const;
+    std::size_t owed_scan_count_for_test() const;
 
     struct SubmitEntryPauseGate;
     struct PreAcceptCommitPauseGate;

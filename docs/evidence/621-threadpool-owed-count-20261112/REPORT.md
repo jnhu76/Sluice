@@ -124,11 +124,13 @@ undefined).
 
 Oracle evidence:
 
-- New `tests/threadpool_owed_counter_parity_test.cpp` (8 cases): counter/scan/sink parity at
-  quiescent checkpoints, zero-op tracking, data-op indifference, full-capacity exactly-once,
-  slot-reuse-before-delivery (control-ref pinning), cancel of already-terminal zero-op,
-  during-pass owed counting + residue verdict, 500-op concurrent producer exactly-once.
-  **BASE GREEN** (all 8).
+- New `tests/threadpool_owed_counter_parity_test.cpp` (8 cases): counter/exact-count-scan/
+  existence-scan/sink parity at quiescent checkpoints (the oracle asserts
+  `owed_count_for_test() == owed_scan_count_for_test() == expected` plus the boolean
+  production scan; strengthened in the final-repair round), zero-op tracking, data-op
+  indifference, full-capacity exactly-once, slot-reuse-before-delivery (control-ref
+  pinning), cancel of already-terminal zero-op, during-pass owed counting + residue
+  verdict, 500-op concurrent producer exactly-once. **BASE GREEN** (all 8).
 - Named mutants (builds registered in `xmake/tests.lua`, manual per house convention), each
   **RED** (non-green exit), **RESTORED GREEN** after revert:
   - `threadpool_owed_mut_missing_increment` (`SLUICE_THREADPOOL_MUTANT_OWED_COUNT_MISSING_INCREMENT`):
@@ -176,7 +178,9 @@ zero exclusions; no oracle failures.
 Tails (per-arm empirical percentiles): main cell CPU p50/p95/p99: A 1.470/1.498/1.500 →
 B 1.390/1.418/1.435 (all improved); wall p99 A 1.088 → B 1.018. Negative control: identical
 distributions. Negative control behaves as pre-registered: at 16× fewer requests per byte the
-scan work is below the noise band and B is non-inferior (no regression).
+scan work is below the noise band and the cell shows no statistically resolved regression (the
+round's frozen protocol pre-registered the cell and its directional expectation, not a
+non-inferiority margin; the CI upper bound +1.77% cannot exclude a regression that small).
 
 Mechanism metrics (profiler runs, separated from clean timing):
 - User-space instructions per task: A ≈ 898.5 M (901.9/883.8/909.8) → B ≈ 700.0 M
@@ -211,7 +215,7 @@ Reproduction entry points:
   measured cell is a real executable application (sluice-copy) — not a synthetic W-02/W-03
   shape — and the improvement is in the application's own task metric (CPU and wall per
   completed, oracle-verified 256 MiB copy), with a pre-registered negative control showing
-  non-inferiority where the mechanism shouldn't act. Scope limits: btrfs + this Xeon host +
+  no statistically resolved regression where the mechanism shouldn't act. Scope limits: btrfs + this Xeon host +
   workers=1 + warm cache; wall-time claims require the sync-discipline described above.
   This is a workload-local win, not a library-wide claim; no cell regressed.
 - Residual gaps (honest): multi-worker and zero-op-heavy shapes unmeasured (mechanism-neutral
@@ -258,7 +262,8 @@ authorized this round):
 > (production mirror of uring owed_count_). Real-consumer evidence: sluice-copy 256 MiB,
 > 4 KiB/d4/w1, btrfs, 24 interleaved AB/BA pairs — CPU/task −5.58% [−6.45, −4.71]%,
 > wall −6.53% [−7.55, −5.53]%, instructions −22.1%, A/A band ±1.2%; negative control
-> (64 KiB/d1) non-inferior. Parity suite (8 cases) + 4 mutant receipts + 278-run config
+> (64 KiB/d1) no statistically resolved regression (CI upper +1.77%).
+> Parity suite (8 cases) + 4 mutant receipts + 278-run config
 > matrix + TSAN/ASAN green. Branch research/621-tp-owed-count @ de9b452a (BASE f2c42535).
 
 Product acceptance gaps before merge: independent review of the two-counter-invariant comment

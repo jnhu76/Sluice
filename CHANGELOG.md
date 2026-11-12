@@ -27,8 +27,11 @@ accumulates under `[Unreleased]`).
   pinned by a dedicated oracle suite and four registered mutant builds. On
   the real-consumer path (`sluice-copy`, oracle-verified 256 MiB copy, 4 KiB
   buffers, depth 4, one worker), paired interleaved A/B measured −5.6% CPU
-  and −22% user-space instructions per task with a pre-registered negative
-  control non-inferior; no measured cell regressed. Evidence:
+  and −22% user-space instructions per task; the pre-registered negative
+  control cell shows no statistically resolved regression (no
+  non-inferiority margin was pre-registered; the +1.77% CI upper bound
+  cannot exclude a regression that small); no measured cell regressed.
+  Evidence:
   `docs/evidence/621-threadpool-owed-count-20261112/`.
 
 ## [0.0.3] - 2026-10-23

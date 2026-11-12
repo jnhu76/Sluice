@@ -56,11 +56,18 @@ struct Fixture {
     }
 };
 
-// The counter is a derived summary; the authoritative scan over the delivery
-// records and the externally observable sink deliveries must agree with it at
-// every quiescent checkpoint.
+// The counter is a derived summary; at every quiescent checkpoint it must
+// equal the exact number of delivery records with event_owed set, that scan
+// must equal the test's expected obligation count, and the production
+// existence scan used by settlement must agree on zero versus nonzero. The
+// reads happen only at quiescent checkpoints (inline zero-op submits, pause
+// gates, or joined producers), so no producer can mutate records between
+// them. Sink exactly-once delivery is asserted separately from this counter
+// oracle: counter precision, obligation existence and delivery are distinct
+// contracts.
 bool counter_matches_authority(std::size_t expected, ThreadPoolBackend* raw) {
     return raw->owed_count_for_test() == expected &&
+           raw->owed_scan_count_for_test() == expected &&
            raw->owed_scan_for_test() == (expected != 0);
 }
 

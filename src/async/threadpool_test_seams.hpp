@@ -129,6 +129,16 @@ inline bool ThreadPoolBackend::owed_scan_for_test() const {
     return any_event_owed_locked_();
 }
 
+inline std::size_t ThreadPoolBackend::owed_scan_count_for_test() const {
+    std::lock_guard<std::mutex> lk(work_mtx_);
+    std::size_t owed = 0;
+    for (const DeliveryRecord& record : delivery_) {
+        if (record.event_owed)
+            ++owed;
+    }
+    return owed;
+}
+
 inline detail::PublicCancel ThreadPoolBackend::cancel_key_for_test(detail::RequestKey key) {
     return cancel_key(key);
 }
