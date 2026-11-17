@@ -1,0 +1,27 @@
+# ThreadPool syscall_count_ mutant receipts (#634 format)
+# candidate: f350474dc427412c445a719dd54519465878125d, release/liburing=y, direct binary execution, 2026-11-18T05:05:34+08:00
+# both mutants are dormant test-only defines committed with the candidate; guards live inside test-macro blocks
+
+## SLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_STICKY_ZERO (exit=1)
+FAIL [last_borrow_access_precedes_final_execution_retirement] the physical syscall has completed
+FAIL [publication_visibility_waits_for_the_epilogue_and_release_reclaims] the whole episode needed exactly the one physical syscall
+FAIL [bounded_workers_execute_the_syscalls_not_the_submitter] every syscall ran on a worker
+3 of 17 threadpool core integration tests failed
+binary sha256: c61ee01121be9e64c5f33f32a0ac821875a368dd00e79a6162325481bf398d46
+kill mechanism: write suppressed under test macro -> counter reads 0; exact ==N assertions at
+  integration :380 ==1, :422 before+1, :463 ==1, :943 ==4 fail. Full log: mutants/run-sticky-zero.out
+
+## SLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_ACCESSOR_SKEW (exit=1)
+FAIL [explicit_finish_does_not_invoke_the_cleanup_cancel] both accepted operations executed; the dispatch-held read was not canceled before execution
+FAIL [destructor_cleanup_cancels_undispatched_work_before_execution] destruction canceled the dispatch-held operation before execution; only the claimed read ever ran
+FAIL [v19_timeout_preserves_responsibility_until_cleanup] the timeout cancelled nothing and no buffer access happened
+FAIL [cancel_won_before_execution_settles_as_a_canceled_terminal] the cancel-won operation never ran
+terminate called without an active exception
+4 of 25 request scope tests failed
+binary sha256: 5d30d8738a4da41bb2d9fda09b69840d0011d3cb595e24e1559faf6afd40f30d
+kill mechanism: accessor in threadpool_test_seams.hpp reports count+1 -> every exact assertion
+  mismatches (:885 ==0, :990 ==0 among others) and scope fail-fast fires. Full log: mutants/run-accessor-skew.out
+
+## notes
+- both kills are runtime oracle kills (no compile-failure substitutions)
+- normal build restored and green after the runs (mutants/post-restore-request_scope_test.out exit=0)

@@ -1,0 +1,8 @@
+  [excluded invalid obs] main-p065-21-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p066-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p094-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p103-22-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p108-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p116-21-A warm_ok=False bench_ok=True
+  uring A/A cycles/op diff: n=6 mean=32.2316 std=87.01 CI=[-37.8378,97.9377] halfwidth=67.89 halfwidth_pp=1.080pp_of_level(level=6284.2) sign(+/-)=5/1 p=0.2188
+  sigma_uring (std of A/A diffs) = 87.01 cyc/op

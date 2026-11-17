@@ -1,0 +1,8 @@
+# A/A incident records (all, consolidated)
+1) pair 65: main-p065-21-A (P1) NOTWARM dreads=2 dsectors=64 wall=11.0s — pair excluded (incomplete).
+2) pair 66: first attempt main-p066-12-A (P2) NOTWARM dreads? — loop continued after pair-65 abort; pair 66 re-attempted in the 66-72 resume block; second attempt warm; analysis uses the completing attempt; stale NOTWARM obs excluded (analyzer prints exclusion).
+3) pair 94: main-p094-12-A (P2) NOTWARM dreads=1 dsectors=32 — pair excluded.
+4) pair 103: main-p103-22-A (P2) NOTWARM dreads=1 dsectors=32 wall=10.0s — pair excluded.
+5) pair 108: main-p108-12-A (P2) NOTWARM dreads=1 dsectors=32 — pair excluded.
+6) pair 116: main-p116-21-A (P1) NOTWARM dreads=1 dsectors=32 — pair excluded.
+All NOTWARM observations excluded from analysis by warm_ok filter; excluded pairs left incomplete; no invalid observation enters any table.

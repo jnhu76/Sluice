@@ -1,0 +1,16 @@
+  [excluded invalid obs] main-p065-21-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p066-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p094-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p103-22-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p108-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p116-21-A warm_ok=False bench_ok=True
+  A/B cycles/op (B-A, P2): n=24 mean=380.478 std=573 CI=[152.575,598.706] halfwidth=223.1 halfwidth_pp=0.728pp_of_level(level=30620.2) sign(+/-)=17/7 p=0.06391
+  A/B P1 instr/op (B-A): n=24 mean=-2.09553 std=1.291 CI=[-2.5853,-1.59714] halfwidth=0.4941 sign(+/-)=1/23 p=2.98e-06
+  A/B rusage CPU/op us (B-A): n=24 mean=0.103393 std=0.3737 CI=[-0.0443129,0.245647] halfwidth=0.145 sign(+/-)=17/7 p=0.06391
+  A/B ops/s rel% (B-A): n=24 mean=-1.95321 std=2.242 CI=[-2.82096,-1.0854] halfwidth=0.8678 sign(+/-)=6/18 p=0.02266
+  A/B p99 rel% (B-A): n=24 mean=1.67997 std=2.608 CI=[0.649309,2.67281] halfwidth=1.012 sign(+/-)=19/5 p=0.006611
+  Holm: cycles/op raw_p=0.06391 adj_p=0.1278
+  Holm: CPU/op raw_p=0.06391 adj_p=0.1278
+  Holm: ops/s raw_p=0.02266 adj_p=0.06797
+  Holm: p99 raw_p=0.006611 adj_p=0.02644
+  p99(B)/p99(A) bootstrap upper bound = 1.0267 (SLO <= 1.05)

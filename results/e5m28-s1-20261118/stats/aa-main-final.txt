@@ -1,0 +1,10 @@
+# A/A main-cell record (120-pair budget, blocks of 24)
+  A/A cycles/op diff: n=115 mean=17.1953 std=556 CI=[-81.7092,119.282] halfwidth=100.5 halfwidth_pp=0.329pp_of_level(level=30517.1) sign(+/-)=59/56 p=0.8522
+  A/A P1 instr/op diff: n=116 mean=0.193469 std=1.424 CI=[-0.06621,0.449346] halfwidth=0.2578 sign(+/-)=64/52 p=0.3071
+
+# blockwise half-width trail (cumulative valid pairs):
+24 pairs: halfwidth=229.5 cyc/op (0.753pp), std=589.0, sign 12/12
+48 pairs: halfwidth=156.7 cyc/op (0.514pp), std=571.6, sign 25/23
+71 pairs: halfwidth=129.0 cyc/op (0.423pp), std=539.8, sign 40/31 (pair65 excluded)
+94 pairs: halfwidth=107.7 cyc/op (0.353pp), std=535.8, sign 47/47 (pair94 excluded)
+115 pairs: halfwidth=100.5 cyc/op (0.329pp), std=556.0, sign 59/56 (pairs 65/94/103/108/116 excluded; final)

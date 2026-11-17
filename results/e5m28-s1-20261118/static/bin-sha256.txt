@@ -1,0 +1,11 @@
+# binary sha256 registry (both arms, both profiles) — 2026-11-18T05:03:33+08:00
+arm=elim-base profile=ring bench_w02_pipeline 03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896
+arm=elim-base profile=ring libsluice_async.a 14f0951a2a8ab64b32fd02a6710cb1eaa9240f1062704ae087d2ffd73d4ec830
+arm=elim-base profile=noring bench_w02_pipeline edb76b108f01dd5c325a6ec5aab4319533d1a256b6e62af958ea09994793b426
+arm=elim-base profile=noring libsluice_async.a b31534492a5f942ee0a640f2f2d5da3882a5b179a04eaa293fbd226b47b0bd45
+arm=elim profile=ring bench_w02_pipeline 9de70ec695578e18d98f8cf40144320c0ea09d22ca30962bfd9a3a4213540d1a
+arm=elim profile=ring libsluice_async.a 5cccf12da443ded9a7c07694f426a6a24d4d3f258a71e6a96f7c2197e1c352ce
+arm=elim profile=noring bench_w02_pipeline 1485d622c8f6159a4c8701172c6613b8def7d7ca4fca160b4287c7b2696af3c1
+arm=elim profile=noring libsluice_async.a 838813b156a345cc44dfd9487548e0436fa0840390a38af7b30b19f9276cbcdb
+# note: arm=elim-base is BASE 5d94f233, arm=elim is CANDIDATE f350474d
+# reference: P1-A baseline ring bench sha 03dbef09... (p1a §0) — BASE ring bench matches exactly

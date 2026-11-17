@@ -1,0 +1,9 @@
+# e5 candidate #1 (M-28 syscall_count_ production-side macro gating) session e5m28-s1-20261118
+# frozen per docs/evidence/e5-fullpath-machine-work/experiment-protocol.md (r2)
+BASE_SHA=5d94f233967c3aef993eb19ba9e3252c532b0951
+CANDIDATE_SHA=f350474dc427412c445a719dd54519465878125d
+BASE_SHA256=b7d964e79f394a5c031c1229003d0825732b6970
+registered_before_any_timing=2026-11-18T05:02:12+08:00
+include/sluice/async/detail/threadpool_backend.hpp
+src/async/threadpool_backend.cpp
+src/async/threadpool_test_seams.hpp

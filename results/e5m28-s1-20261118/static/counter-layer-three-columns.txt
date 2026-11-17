@@ -1,0 +1,21 @@
+# 计数层三列存证（协议 §4-1）— 2026-11-18T05:11:00+08:00
+# CANDIDATE f350474d vs BASE 5d94f233, release ring profile libsluice_async.a, threadpool_backend.cpp.o
+
+## 列1 nm 符号检查
+CANDIDATE release lib threadpool_backend.cpp.o: nm syscall_count 匹配 = 0
+BASE release lib threadpool_backend.cpp.o: nm syscall_count 匹配 = 0
+备注: nm 列在两臂同为空 — 非静态数据成员在 -O3 下无 symtab 条目，release 无调试信息；该列不构成两臂判别，不作存证依据（如实登记为退化列）。
+两臂 release 测试二进制均为 xmake release strip（no symbols）——功能性保留由门1运行+mutant 对照承担。
+
+## 列2 objdump 写指令（操作性判别列）
+BASE worker_loop: 恰好 1 条 lock 写 = 2e3a: lock addq $0x1,0x198(%r15)  ← 即 P1-A ann-full-tpw8.txt:371 的 M-28 写指令（同偏移 0x198）
+CANDIDATE worker_loop: 0 条 lock 前缀指令
+CANDIDATE 全 TU（threadpool_backend.cpp.o）: 0 条 lock 前缀指令（写指令离开整个生产 TU 指令流）
+BASE 全 TU: 同上单条 lock addq（无其他 lock）
+
+## 列3 测试构建二进制（CANDIDATE debug 模式，符号未 strip）
+nm: W _ZNK6sluice5async17ThreadPoolBackend22syscall_count_for_testEv（访问器符号在）
+objdump worker_loop: 4199d1: lock xadd %rdx,(%rax)（fetch_add 写指令在；debug -O0 形态为 lock xadd）
+
+## 判定
+三列存证符合 §4-1：生产库无符号无写指令、测试构建符号与写指令均在 → 无 §4-4 违例。

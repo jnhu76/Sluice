@@ -1,0 +1,8 @@
+FAIL [explicit_finish_does_not_invoke_the_cleanup_cancel] both accepted operations executed; the dispatch-held read was not canceled before execution
+FAIL [destructor_cleanup_cancels_undispatched_work_before_execution] destruction canceled the dispatch-held operation before execution; only the claimed read ever ran
+FAIL [v19_timeout_preserves_responsibility_until_cleanup] the timeout cancelled nothing and no buffer access happened
+FAIL [cancel_won_before_execution_settles_as_a_canceled_terminal] the cancel-won operation never ran
+sluice::async::RequestScope: progress health failed while accepted scope work remains unsettled; failing fast instead of returning with live borrows
+terminate called without an active exception
+4 of 25 request scope tests failed
+ACCESSOR_SKEW-exit=1

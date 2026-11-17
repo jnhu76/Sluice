@@ -1,0 +1,18 @@
+# semantic oracle 16 counter assertions (frozen protocol §3-1 line list)
+tests/public_request_test.cpp:313:    t.check(raw->syscall_count_for_test() == 0, "no worker ever ran the operation");
+tests/public_request_test.cpp:414:    t.check(raw->syscall_count_for_test() == 0, "no physical syscall ever ran");
+tests/request_scope_test.cpp:885:        t.check(raw->syscall_count_for_test() == 0,
+tests/request_scope_test.cpp:990:        t.check(raw->syscall_count_for_test() == 0, "the cancel-won operation never ran");
+tests/request_scope_test.cpp:1133:        t.check(raw->syscall_count_for_test() == 2,
+tests/request_scope_test.cpp:1189:    t.check(raw->syscall_count_for_test() == 1,
+tests/threadpool_request_core_integration_test.cpp:265:    t.check(raw->syscall_count_for_test() == 0, "no physical syscall ever ran");
+tests/threadpool_request_core_integration_test.cpp:289:    t.check(raw->syscall_count_for_test() == 0, "no worker ever ran the operation");
+tests/threadpool_request_core_integration_test.cpp:380:    t.check(raw->syscall_count_for_test() == 1, "the physical syscall has completed");
+tests/threadpool_request_core_integration_test.cpp:422:    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+tests/threadpool_request_core_integration_test.cpp:463:    t.check(raw->syscall_count_for_test() == syscalls_before + 1,
+tests/threadpool_request_core_integration_test.cpp:487:    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+tests/threadpool_request_core_integration_test.cpp:493:    t.check(raw->syscall_count_for_test() == syscalls_before, "no data syscall is dispatched");
+tests/threadpool_request_core_integration_test.cpp:522:    const std::uint64_t syscalls_before = raw->syscall_count_for_test();
+tests/threadpool_request_core_integration_test.cpp:569:    t.check(raw->syscall_count_for_test() == syscalls_before,
+tests/threadpool_request_core_integration_test.cpp:943:    t.check(raw->syscall_count_for_test() == 4, "every syscall ran on a worker");
+# suites: request_scope_test 25/25, threadpool_request_core_integration_test 17/17, public_request_test 13/13, all exit 0 (logs/gate1-*.out)

@@ -1,0 +1,5 @@
+FAIL [last_borrow_access_precedes_final_execution_retirement] the physical syscall has completed
+FAIL [publication_visibility_waits_for_the_epilogue_and_release_reclaims] the whole episode needed exactly the one physical syscall
+FAIL [bounded_workers_execute_the_syscalls_not_the_submitter] every syscall ran on a worker
+3 of 17 threadpool core integration tests failed
+STICKY_ZERO-exit=1

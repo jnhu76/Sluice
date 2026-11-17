@@ -1,0 +1,9 @@
+  [excluded invalid obs] main-p065-21-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p066-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p094-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p103-22-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p108-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p116-21-A warm_ok=False bench_ok=True
+  64k rusage CPU/op us (B-A): n=24 mean=0.0915408 std=0.112 CI=[0.0484969,0.13504] halfwidth=0.04327 sign(+/-)=19/5 p=0.006611
+  64k cycles/op (B-A, P2): n=24 mean=133.73 std=712.1 CI=[-142.419,414.107] halfwidth=278.3 halfwidth_pp=0.508pp_of_level(level=54771.5) sign(+/-)=15/9 p=0.3075
+  64k CPU/op rel% (B-A): n=24 mean=0.612435 std=0.7491 CI=[0.324616,0.903521] halfwidth=0.2895 sign(+/-)=19/5 p=0.006611

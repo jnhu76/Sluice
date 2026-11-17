@@ -1,0 +1,18 @@
+========================================================
+G0 W-02 bounded RequestScope pipeline benchmark
+warmup=2 measured_repetitions=7 stats_wiring=off
+========================================================
+  [CAL-oracle-self-test] pattern distinct values=256; offset confusion, single-byte flip and all-zero buffers are all detected
+  [W02-threadpool-4k-d16-w8 rep=0 warmup] ops=20000 wall=0.0675s 296409 ops/s 1157.8 MiB/s cpu=0.277s util=410.6% | lat p50=42860 p95=54170 p99=60883 max=129666 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=1 warmup] ops=20000 wall=0.0635s 314723 ops/s 1229.4 MiB/s cpu=0.243s util=382.7% | lat p50=43867 p95=55593 p99=62865 max=88087 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=0] ops=20000 wall=0.0586s 341084 ops/s 1332.4 MiB/s cpu=0.248s util=423.6% | lat p50=44259 p95=55396 p99=61912 max=81415 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=1] ops=20000 wall=0.0589s 339516 ops/s 1326.2 MiB/s cpu=0.257s util=436.1% | lat p50=43069 p95=54042 p99=61287 max=87993 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=2] ops=20000 wall=0.0630s 317677 ops/s 1240.9 MiB/s cpu=0.250s util=397.7% | lat p50=44575 p95=55930 p99=65663 max=86645 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=3] ops=20000 wall=0.0572s 349903 ops/s 1366.8 MiB/s cpu=0.231s util=403.6% | lat p50=44260 p95=55403 p99=64375 max=82677 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=4] ops=20000 wall=0.0584s 342398 ops/s 1337.5 MiB/s cpu=0.248s util=425.1% | lat p50=45614 p95=57112 p99=64310 max=89735 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=5] ops=20000 wall=0.0579s 345222 ops/s 1348.5 MiB/s cpu=0.247s util=426.4% | lat p50=44360 p95=55805 p99=64740 max=87473 ns (n=20000)
+  [W02-threadpool-4k-d16-w8 rep=6] ops=20000 wall=0.0573s 349037 ops/s 1363.4 MiB/s cpu=0.233s util=405.8% | lat p50=43282 p95=53868 p99=59639 max=93196 ns (n=20000)
+
+=== W-02 complete, failing repetitions=0 ===
+
+--- stderr ---

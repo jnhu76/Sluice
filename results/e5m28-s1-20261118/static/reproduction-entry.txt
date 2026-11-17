@@ -1,0 +1,36 @@
+# 复现入口（会话命令记录）— session e5m28-s1-20261118
+# 机器：E5-2666 v3 裸机 20 CPU、kernel 7.3.3-200.fc44、/home=btrfs(compress=zstd:1)、perf_event_paranoid=2、gcc 16.2.1、xmake 3.1.2、liburing 2.13
+# 脚本不入仓库（/tmp/e5-elim-scripts/{e5harness.py,governor.sh,analyze.py}），本文件记录入口与关键命令
+
+## 构建（两臂独立 worktree，bench/build_profiles.sh release 双 profile + readelf 断言）
+git -C /home/jnhu/Source/Sluice worktree add --detach /home/jnhu/sluice-e5-elim-base 5d94f233967c3aef993eb19ba9e3252c532b0951
+git -C /home/jnhu/Source/Sluice worktree add -b research/e5-c1-m28-gate /home/jnhu/sluice-e5-elim 5d94f233967c3aef993eb19ba9e3252c532b0951
+cd /home/jnhu/sluice-e5-elim && bash bench/build_profiles.sh release   # CANDIDATE f350474d
+cd /home/jnhu/sluice-e5-elim-base && bash bench/build_profiles.sh release   # BASE 5d94f233
+
+## 正确性门（CANDIDATE worktree）
+xmake f --builddir=build -m release --liburing=y -y && xmake build -y request_scope_test threadpool_request_core_integration_test public_request_test && 跑三二进制（exit 0）
+mutant 构建：xmake f -m release --liburing=y --cxflags="-DSLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_STICKY_ZERO|-DSLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_ACCESSOR_SKEW" -y 后跑对应套件（exit 1=杀）
+conformance 矩阵：xmake f -m {release,debug} --liburing={y,n} -y && xmake test -y（81/60/81/60）
+sanitizer：xmake f -m {asan,tsan} --liburing=y -y 后构建并直跑六目标（exit 0）
+
+## 计数层
+ar x libsluice_async.a threadpool_backend.cpp.o; nm <o> | grep syscall_count; objdump -d <o> | awk '/worker_loop/,/^$/' | grep ' lock '
+测试构建（debug）：nm .../threadpool_request_core_integration_test | grep syscall_count；objdump worker_loop grep lock
+
+## 计时（governor 三列 + harness）
+bash /tmp/e5-elim-scripts/governor.sh save r1 / set r1 / restore r1（唯一文件名 original/set-verify/restore-verify-r1.txt）
+scratch：mkdir /home/jnhu/e5-elim-scratch-e5m28-s1 && chattr +C（lsattr 存证 static/scratch-lsattr.txt）
+invocation：python3 /tmp/e5-elim-scripts/e5harness.py inv <cell> <P1|P2> <A|B> <tag>
+  cell ∈ {main=W02-threadpool-4k-d16-w8(540000), uring=W02-uring-4k-d16(540000), 64k=W02-threadpool-64k-d16-w4(54000)}
+  env：SLUICE_BENCH_WARMUP=2 SLUICE_BENCH_MEASURED=7 SLUICE_BENCH_CASE_FILTER='=<case>' SLUICE_BENCH_JSONL=<tag>.jsonl SLUICE_BENCH_TMP_DIR=scratch
+  P2 = sudo -S perf stat -e cycles,instructions,task-clock,context-switches -x,（env 经 sudo env 透传）；P1 = perf stat -e instructions:u,cycles:u -x,（无 sudo）
+  warm 门：每 invocation 前后 /proc/diskstats sda Δreads==0 且 Δsectors==0；Cpus_allowed_list 与 loadavg 记录进 observations.jsonl（不 pin）
+pair：python3 /tmp/e5-elim-scripts/e5harness.py pair <cell> <i> <AA|AB|BA> <P1,P2|P2> <prefix>
+块序：A/A main 24→48→72→96→120 对（逐块查半宽）→ 拆盲前判 NOT_POWERED → A/B main 24 对 AB/BA → uring A/A 6 对 P2 → uring A/B 24 对 P2 → 64k A/B 24 对 P2
+
+## 统计
+python3 /tmp/e5-elim-scripts/analyze.py {aa,ab,aa-uring,ab-uring,64k}   # 逐对差 + sign + bootstrap(percentile,10000,seed=20261118) + Holm{cycles/op,CPU/op,ops/s,p99}
+
+## 产物索引
+observations.jsonl（706 行逐 invocation 记录）；jsonl/（逐 invocation bench JSONL）；perf/（perf -x, CSV）；logs/（bench stdout + 块驱动日志）；governor/（三列）；mutants/（回执+mutant 二进制 sha256）；static/（三列存证、sha256、incident、oracle 断言、scratch）；stats/（A/A、A/B、per-pair 表、VERDICT）

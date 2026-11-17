@@ -1,0 +1,7 @@
+  [excluded invalid obs] main-p065-21-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p066-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p094-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p103-22-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p108-12-A warm_ok=False bench_ok=True
+  [excluded invalid obs] main-p116-21-A warm_ok=False bench_ok=True
+  uring A/B cycles/op (B-A, P2): n=24 mean=-16.7985 std=45.12 CI=[-35.2585,-0.268098] halfwidth=17.5 halfwidth_pp=0.279pp_of_level(level=6268.1) sign(+/-)=6/18 p=0.02266
