@@ -255,9 +255,8 @@ class ThreadPoolBackend : public AsyncBackend {
 
     std::vector<std::thread> workers_;
 
-    std::atomic<std::uint64_t> syscall_count_{0};
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+    std::atomic<std::uint64_t> syscall_count_{0};
 
     std::atomic<SubmitEntryPauseGate*> submit_entry_gate_{nullptr};
     std::atomic<PreAcceptCommitPauseGate*> pre_accept_commit_gate_{nullptr};

@@ -106,7 +106,11 @@ inline std::size_t ThreadPoolBackend::dispatch_size_for_test() const {
 }
 
 inline std::uint64_t ThreadPoolBackend::syscall_count_for_test() const noexcept {
+#if defined(SLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_ACCESSOR_SKEW)
+    return syscall_count_.load() + 1;
+#else
     return syscall_count_.load();
+#endif
 }
 
 inline std::size_t ThreadPoolBackend::publication_pending_size_for_test() const {

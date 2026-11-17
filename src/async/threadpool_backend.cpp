@@ -431,7 +431,11 @@ void ThreadPoolBackend::worker_loop() {
                 sluice::FileInfo metadata;
                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+#if !defined(SLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_STICKY_ZERO)
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
+#endif
+#endif
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     --active_workers_;
