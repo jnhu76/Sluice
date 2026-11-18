@@ -1,0 +1,29 @@
+== date ==
+2026-11-18T20:24:54+08:00
+== loadavg ==
+0.17 0.46 0.41 1/755 54144
+== governor ==
+     20 performance
+== freq cpu2/3 ==
+3232536
+3436462
+== no_turbo ==
+0
+== thermal ==
+Package id 0:  +50.0°C  (high = +83.0°C, crit = +93.0°C)
+Core 0:        +43.0°C  (high = +83.0°C, crit = +93.0°C)
+== perf probes ==
+0
+== perf procs ==
+== git ==
+5d94f233967c3aef993eb19ba9e3252c532b0951
+?? docs/evidence/621-progress-wait-path-20261118/
+?? docs/evidence/621-round2-R1/
+?? docs/evidence/e5-fullpath-machine-work/
+== disk ==
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda3       445G   98G  346G  22% /home
+tmpfs            32G  2.3G   30G   8% /tmp
+== fincore src ==
+  RES PAGES  SIZE FILE
+ 256M 65536  256M /home/jnhu/sluice-621-r2/data/src-256m.bin

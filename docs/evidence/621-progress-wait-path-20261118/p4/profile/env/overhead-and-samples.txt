@@ -1,0 +1,62 @@
+# p4 profile sample counts, durations, lost events, measured-wall overhead
+
+## P-D-w02-tp-4k-d16-w4
+ run-01                       header duration 1977.202 ms
+ run-02                       header duration 1950.873 ms
+ run-01                       TotalLost0=yes
+ run-02                       TotalLost0=yes
+ baseline                     measured wall mean 61.8 ms median 61.6 ms n=7
+ run-01                       measured wall mean 67.7 ms median 67.7 ms n=7
+ run-02                       measured wall mean 67.1 ms median 67.0 ms n=7
+ smoke                        measured wall mean 66.9 ms median 66.9 ms n=1
+ run-01                       overhead ratio vs baseline 1.10x
+ run-02                       overhead ratio vs baseline 1.09x
+ run-01                       perf-record samples 26394
+ run-02                       perf-record samples 25902
+
+## P-C-w03-uring-4k-d16
+ run-01                       header duration 2365.557 ms
+ run-02                       header duration 2318.399 ms
+ run-01                       TotalLost0=yes
+ run-02                       TotalLost0=yes
+ baseline                     measured wall mean 82.7 ms median 83.1 ms n=7
+ run-01                       measured wall mean 84.8 ms median 85.0 ms n=7
+ run-02                       measured wall mean 83.0 ms median 83.4 ms n=7
+ run-01                       overhead ratio vs baseline 1.03x
+ run-02                       overhead ratio vs baseline 1.00x
+ run-01                       perf-record samples 29095
+ run-02                       perf-record samples 26533
+
+## P-E-sluice-copy-4k-d4-w1
+ overhead-1copy               header duration 756.138 ms
+ run-01                       header duration 3765.612 ms
+ run-02                       header duration 3883.572 ms
+ overhead-1copy               TotalLost0=yes
+ run-01                       TotalLost0=yes
+ run-02                       TotalLost0=yes
+ run-01                       perf-record samples 34755
+ run-02                       perf-record samples 35721
+
+## P-F-w02-uring-4k-d64
+ control-d16-run-01           header duration 1535.351 ms
+ run-01                       header duration 1590.308 ms
+ run-02                       header duration 1593.966 ms
+ control-d16-run-01           TotalLost0=yes
+ run-01                       TotalLost0=yes
+ run-02                       TotalLost0=yes
+ baseline                     measured wall mean 53.2 ms median 53.7 ms n=7
+ control-d16-run-01           measured wall mean 51.1 ms median 50.9 ms n=7
+ run-01                       measured wall mean 55.2 ms median 55.0 ms n=7
+ run-02                       measured wall mean 54.9 ms median 55.0 ms n=7
+ run-01                       overhead ratio vs baseline 1.04x
+ run-02                       overhead ratio vs baseline 1.03x
+ run-01                       perf-record samples 16828
+ run-02                       perf-record samples 16612
+
+## P-E copy wall timing
+ baseline.times: ['0.81', '0.85', '0.77', '0.84', '0.85']
+ baseline2.times: ['copy_ms=794', 'copy_ms=850', 'copy_ms=838', 'copy_ms=834', 'copy_ms=805']
+ 1-copy perf header: # sample duration :    756.138 ms
+ perf timed copies: ['perf_copy_ms=748', 'perf_copy_ms=738']
+ block check one copy: ['202,,block:block_rq_issue,15395544794,100.00,,', '202,,block:block_rq_complete,15395543453,100.00,,']
+ block idle 2s: ['8,,block:block_rq_issue,40038341358,100.00,,', '10,,block:block_rq_complete,40038314600,100.00,,']

@@ -1,0 +1,536 @@
+
+===== P-A-w02-uring-4k-d16 =====
+PMU per op/chunk (540000 ops):
+  cycles:u                   1440040507.0  per=  2666.742  0.48%  100.00
+  cycles:k                   6708555707.0  per= 12423.251  4.80%  100.00
+  instructions:u             2090609923.0  per=  3871.500  0.11%  100.00
+  instructions:k             3661972694.0  per=  6781.431  8.05%  100.00
+  task-clock                       2690.6  per=     0.005  1.10%  100.00
+  context-switches               182956.0  per=     0.339  25.53%  100.00
+  cache-misses                 10343426.0  per=    19.154  0.28%  100.00
+  branch-misses                13976144.0  per=    25.882  1.93%  100.00
+  cpu-migrations                      3.0  per=     0.000  22.22%  100.00
+Tracepoints per op:
+  io_uring:io_uring_submit_req                        540028  per=1.00005
+  io_uring:io_uring_complete                          540028  per=1.00005
+  io_uring:io_uring_cqring_wait                           28  per=0.00005
+  io_uring:io_uring_queue_async_work                  540028  per=1.00005
+  io_uring:io_uring_task_work_run                     421186  per=0.77997
+  io_uring:io_uring_cqe_overflow                           0  per=0.00000
+  sched:sched_switch                                  422753  per=0.78288
+  sched:sched_wakeup                                  184791  per=0.34221
+  syscalls:sys_enter_io_uring_enter                   540028  per=1.00005
+  syscalls:sys_enter_futex                                 2  per=0.00000
+  syscalls:sys_enter_read                                 25  per=0.00005
+  syscalls:sys_enter_write                                11  per=0.00002
+  block:block_rq_issue                                     0  per=0.00000
+  block:block_rq_complete                                  0  per=0.00000
+  syscalls:sys_enter_poll                                  0  per=0.00000
+  syscalls:sys_enter_pread64                               8  per=0.00001
+  syscalls:sys_enter_pwrite64                             64  per=0.00012
+Uprobes per op (window):
+  p621_wait                       0  window=540000  per=0.00000
+  p621_reserve               540000  window=540000  per=1.00000
+  p621_accept                540000  window=540000  per=1.00000
+  p621_offer                 540000  window=540000  per=1.00000
+  p621_release               540000  window=540000  per=1.00000
+  p621_begin                 540000  window=540000  per=1.00000
+  p621_complete              540000  window=540000  per=1.00000
+  p621_router_i                   0  window=540000  per=0.00000
+  p621_router_c              540000  window=540000  per=1.00000
+  p621_worker                     0  window=540000  per=0.00000
+  p621_wait_one                3751  window=60000  per=0.06252
+  p621_pass                    3755  window=60000  per=0.06258
+  p621_ctxpoll                    0  window=60000  per=0.00000
+Overhead (process ms, ratio):
+  stat-tp-uring                3065.6ms ratio=3.409
+  stat-tp-sched-syscall        2991.5ms ratio=3.326
+  stat-tp-block-io             2707.2ms ratio=3.010
+  stat-uprobe-1               98791.8ms ratio=109.854
+  stat-uprobe-2               65094.7ms ratio=72.383
+  stat-uprobe-waitpath         3977.3ms ratio=4.423
+  record-cycles                1427.2ms ratio=1.587
+  record-tp-uring              2101.1ms ratio=2.336
+  record-offcpu                 180.8ms ratio=0.201
+  tp-uring                       55.0ms ratio=1.151
+  tp-sched-syscall               53.7ms ratio=1.123
+  tp-block-io                    50.4ms ratio=1.054
+  uprobe-1                      179.3ms ratio=3.752
+  uprobe-2                      115.8ms ratio=2.423
+  uprobe-waitpath                49.9ms ratio=1.044
+Cycles samples=8369 single_frame=46 dso={'kernel': 7092, 'lib': 467, 'bench': 810}
+Top leaf:
+   11.94% kernel rep_movs_alternative
+    6.36% kernel _raw_spin_lock
+    3.81% kernel entry_SYSRETQ_unsafe_stack
+    3.04% kernel swapgs_restore_regs_and_return_to_usermode
+    2.83% kernel shmem_file_read_iter
+    2.83% kernel asm_sysvec_reschedule_ipi
+    2.53% kernel io_cq_unlock_post
+    1.88% lib    __memcmp_avx2_movbe
+    1.86% kernel __raw_spin_lock_irqsave
+    1.61% kernel __io_read
+    1.51% kernel entry_SYSCALL_64
+    1.51% kernel io_worker_handle_work
+    1.29% kernel io_wq_put_work
+    1.25% bench  (anonymous namespace)::run_pipeline_phase((anonymous namespace)::PipelineParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+    1.25% kernel syscall_return_via_sysret
+    1.24% bench  sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+    1.12% kernel filemap_get_entry
+    1.05% kernel io_wq_worker_running
+    1.04% kernel task_work_add
+    1.00% kernel get_signal
+Stage self:
+   21.35% submit
+   19.87% payload/FS
+   10.23% io-wq punt
+    8.69% scheduler/IRQ
+    5.84% dispatch
+    5.35% reap/CQE
+    5.27% progress/wait
+    5.10% shared sync
+    4.15% other
+    3.76% bench harness
+    3.43% syscall (unattributed)
+    1.97% admission
+    1.60% observation
+    1.46% publication
+    0.97% terminal/release
+    0.96% kernel syscall/FS overhead
+Off-CPU samples=15013 primitives={'thread create wait': 2, 'other': 2, 'scheduler preempt/return': 1, 'io_uring cqring wait': 4, 'io-wq worker idle': 15004}
+     15004 io-wq worker idle [kernel-only stack]
+         4 io_uring cqring wait sluice::async::UringAsyncBackend::probe_statx_support_()
+         1 thread create wait [kernel-only stack]
+         1 other          main
+         1 scheduler preempt/return sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)
+         1 other          sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+         1 thread create wait _start
+
+===== P-B-w02-uring-4k-d1 =====
+PMU per op/chunk (540000 ops):
+  cycles:u                   2833901612.0  per=  5247.966  0.48%  100.00
+  cycles:k                  12665811905.0  per= 23455.207  0.45%  100.00
+  instructions:u             3605339061.0  per=  6676.554  0.00%  100.00
+  instructions:k             9485178425.0  per= 17565.145  0.06%  100.00
+  task-clock                       6368.3  per=     0.012  0.59%  100.00
+  context-switches              1080060.0  per=     2.000  0.00%  100.00
+  cache-misses                 12592616.0  per=    23.320  0.94%  100.00
+  branch-misses                23585830.0  per=    43.677  1.30%  100.00
+  cpu-migrations                      1.0  per=     0.000  66.67%  100.00
+Tracepoints per op:
+  io_uring:io_uring_submit_req                        540028  per=1.00005
+  io_uring:io_uring_complete                          540028  per=1.00005
+  io_uring:io_uring_cqring_wait                           28  per=0.00005
+  io_uring:io_uring_queue_async_work                  540028  per=1.00005
+  io_uring:io_uring_task_work_run                     540028  per=1.00005
+  io_uring:io_uring_cqe_overflow                           0  per=0.00000
+  sched:sched_switch                                 1080001  per=2.00000
+  sched:sched_wakeup                                     110  per=0.00020
+  syscalls:sys_enter_io_uring_enter                   540028  per=1.00005
+  syscalls:sys_enter_futex                                 2  per=0.00000
+  syscalls:sys_enter_read                             539989  per=0.99998
+  syscalls:sys_enter_write                                11  per=0.00002
+  block:block_rq_issue                                     0  per=0.00000
+  block:block_rq_complete                                  0  per=0.00000
+  syscalls:sys_enter_poll                             539964  per=0.99993
+  syscalls:sys_enter_pread64                               8  per=0.00001
+  syscalls:sys_enter_pwrite64                             64  per=0.00012
+Uprobes per op (window):
+  p621_wait                       0  window=540000  per=0.00000
+  p621_reserve               540000  window=540000  per=1.00000
+  p621_accept                540000  window=540000  per=1.00000
+  p621_offer                 540000  window=540000  per=1.00000
+  p621_release               540000  window=540000  per=1.00000
+  p621_begin                 540000  window=540000  per=1.00000
+  p621_complete              540000  window=540000  per=1.00000
+  p621_router_i                   0  window=540000  per=0.00000
+  p621_router_c              540000  window=540000  per=1.00000
+  p621_worker                     0  window=540000  per=0.00000
+  p621_wait_one               60000  window=60000  per=1.00000
+  p621_pass                   60028  window=60000  per=1.00047
+  p621_ctxpoll                    0  window=60000  per=0.00000
+Overhead (process ms, ratio):
+  stat-tp-uring                5495.7ms ratio=2.291
+  stat-tp-sched-syscall        5405.3ms ratio=2.253
+  stat-tp-block-io             5115.7ms ratio=2.132
+  stat-uprobe-1              154760.4ms ratio=64.512
+  stat-uprobe-2              119865.2ms ratio=49.966
+  stat-uprobe-waitpath         7173.5ms ratio=2.990
+  record-cycles                5152.3ms ratio=2.148
+  record-tp-uring              5803.1ms ratio=2.419
+  record-offcpu                 719.2ms ratio=0.300
+  tp-uring                      190.4ms ratio=0.778
+  tp-sched-syscall              186.5ms ratio=0.763
+  tp-block-io                   170.4ms ratio=0.697
+  uprobe-1                      278.8ms ratio=1.140
+  uprobe-2                      213.4ms ratio=0.872
+  uprobe-waitpath               103.9ms ratio=0.425
+Cycles samples=24585 single_frame=1207 dso={'kernel': 22743, 'lib': 1703, 'bench': 139}
+Top leaf:
+    7.84% kernel rep_movs_alternative
+    6.22% kernel entry_SYSRETQ_unsafe_stack
+    5.41% kernel _raw_spin_lock
+    3.77% kernel __raw_spin_lock_irqsave
+    2.10% kernel __smp_call_single_queue
+    2.06% kernel syscall_return_via_sysret
+    2.05% kernel entry_SYSCALL_64
+    1.96% kernel psi_group_change
+    1.66% kernel io_wq_worker_running
+    1.63% kernel shmem_file_read_iter
+    1.54% kernel io_wq_worker
+    1.53% kernel io_cq_unlock_post
+    1.53% lib    pthread_mutex_lock@@GLIBC_2.2.5
+    1.40% kernel native_write_msr
+    1.29% kernel io_worker_handle_work
+    1.27% kernel fput
+    1.26% lib    __memcmp_avx2_movbe
+    1.26% kernel finish_task_switch.isra.0
+    1.23% lib    [vdso]
+    1.22% kernel __io_read
+Stage self:
+   25.53% progress/wait
+   13.28% payload/FS
+   12.11% scheduler/IRQ
+   10.91% submit
+    7.99% syscall (unattributed)
+    7.65% io-wq punt
+    7.43% shared sync
+    7.04% other
+    2.88% reap/CQE
+    1.95% kernel syscall/FS overhead
+    1.67% dispatch
+    1.32% bench harness
+    0.09% admission
+    0.07% publication
+    0.05% observation
+    0.03% terminal/release
+Off-CPU samples=119969 primitives={'scheduler preempt/return': 3, 'thread create wait': 2, 'other': 3, 'io_uring cqring wait': 4, 'io-wq worker idle': 60010, 'poll wait': 59947}
+     60010 io-wq worker idle [kernel-only stack]
+     59947 poll wait      sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+         4 io_uring cqring wait sluice::async::UringAsyncBackend::probe_statx_support_()
+         2 other          main
+         1 scheduler preempt/return [kernel-only stack]
+         1 thread create wait [kernel-only stack]
+         1 scheduler preempt/return sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)
+         1 other          sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+         1 scheduler preempt/return sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+         1 thread create wait _start
+
+===== P-C-w03-uring-4k-d16 =====
+PMU per op/chunk (540000 ops):
+  cycles:u                   1992229407.0  per=  3689.314  0.86%  100.00
+  cycles:k                   8983200062.0  per= 16635.556  0.95%  100.00
+  instructions:u             1737392297.0  per=  3217.393  0.06%  100.00
+  instructions:k             5116349683.0  per=  9474.722  0.45%  100.00
+  task-clock                       3706.7  per=     0.007  1.31%  100.00
+  context-switches               327004.0  per=     0.606  0.66%  100.00
+  cache-misses                 10961402.0  per=    20.299  0.26%  100.00
+  branch-misses                18904394.0  per=    35.008  0.44%  100.00
+  cpu-migrations                   2911.0  per=     0.005  27.22%  100.00
+Tracepoints per op:
+  io_uring:io_uring_submit_req                        540028  per=1.00005
+  io_uring:io_uring_complete                          540028  per=1.00005
+  io_uring:io_uring_cqring_wait                           28  per=0.00005
+  io_uring:io_uring_queue_async_work                  540028  per=1.00005
+  io_uring:io_uring_task_work_run                     421977  per=0.78144
+  io_uring:io_uring_cqe_overflow                           0  per=0.00000
+  sched:sched_switch                                  559700  per=1.03648
+  sched:sched_wakeup                                  281696  per=0.52166
+  syscalls:sys_enter_io_uring_enter                   540028  per=1.00005
+  syscalls:sys_enter_futex                            825214  per=1.52817
+  syscalls:sys_enter_read                              59923  per=0.11097
+  syscalls:sys_enter_write                                38  per=0.00007
+  block:block_rq_issue                                     0  per=0.00000
+  block:block_rq_complete                                  0  per=0.00000
+  syscalls:sys_enter_poll                                  0  per=0.00000
+  syscalls:sys_enter_pread64                               8  per=0.00001
+  syscalls:sys_enter_pwrite64                             64  per=0.00012
+  syscalls:sys_enter_epoll_wait                        59900  per=0.11093
+  syscalls:sys_enter_epoll_pwait                           0  per=0.00000
+Uprobes per op (window):
+  w3_poll_progress             4768  window=60000  per=0.07947
+  w3_ctxpoll                      0  window=60000  per=0.00000
+  w3_pass                      4772  window=60000  per=0.07953
+  w3_reserve                  60000  window=60000  per=1.00000
+  w3_accept                   60000  window=60000  per=1.00000
+  w3_offer                    60000  window=60000  per=1.00000
+  w3_release                  60000  window=60000  per=1.00000
+  w3_begin                    60000  window=60000  per=1.00000
+  w3_complete                 60000  window=60000  per=1.00000
+  w3_router_i                     0  window=60000  per=0.00000
+  w3_router_c                 60000  window=60000  per=1.00000
+  w3_worker                       0  window=60000  per=0.00000
+Overhead (process ms, ratio):
+  stat-tp-uring                4122.2ms ratio=3.578
+  stat-tp-sched-syscall        4182.5ms ratio=3.631
+  stat-tp-block-io             4233.6ms ratio=3.675
+  stat-tp-epoll                4187.2ms ratio=3.635
+  stat-uprobe-1               12609.5ms ratio=10.946
+  stat-uprobe-2               13021.8ms ratio=11.304
+  record-cycles                2370.7ms ratio=2.058
+  record-tp-uring              3012.1ms ratio=2.615
+  record-offcpu                 269.8ms ratio=0.234
+  tp-uring                       83.3ms ratio=1.150
+  tp-sched-syscall               85.3ms ratio=1.177
+  tp-block-io                    83.0ms ratio=1.146
+  uprobe-1                      195.3ms ratio=2.696
+  uprobe-2                      203.0ms ratio=2.802
+Cycles samples=16472 single_frame=173 dso={'kernel': 13645, 'lib': 1741, 'bench': 1086}
+Top leaf:
+    6.87% kernel entry_SYSRETQ_unsafe_stack
+    6.78% kernel rep_movs_alternative
+    5.15% kernel _raw_spin_lock
+    3.96% lib    __GI___pthread_mutex_unlock_usercnt
+    3.60% lib    pthread_mutex_lock@@GLIBC_2.2.5
+    3.18% kernel native_queued_spin_lock_slowpath
+    2.44% kernel entry_SYSCALL_64
+    2.22% kernel syscall_return_via_sysret
+    1.82% kernel __raw_spin_lock_irqsave
+    1.59% kernel asm_sysvec_reschedule_ipi
+    1.51% kernel shmem_file_read_iter
+    1.44% kernel psi_group_change
+    1.26% kernel native_write_msr
+    1.11% kernel swapgs_restore_regs_and_return_to_usermode
+    1.10% kernel try_to_wake_up
+    1.10% kernel task_work_add
+    1.08% kernel io_cq_unlock_post
+    1.07% lib    __memcmp_avx2_movbe
+    1.03% bench  sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+    1.00% kernel set_next_task_fair
+Stage self:
+   16.29% progress/wait
+   12.49% submit
+   11.45% payload/FS
+    8.91% admission
+    7.68% scheduler/IRQ
+    6.02% io-wq punt
+    6.02% dispatch
+    5.43% shared sync
+    4.61% startup/thread create
+    4.10% syscall (unattributed)
+    3.61% reap/CQE
+    3.59% other
+    2.82% publication
+    2.31% terminal/release
+    2.06% bench harness
+    1.77% observation
+    0.84% kernel syscall/FS overhead
+Off-CPU samples=31697 primitives={'thread create wait': 2, 'other': 3, 'scheduler preempt/return': 10, 'io_uring cqring wait': 4, 'io-wq worker idle': 14193, 'futex wait': 12829, 'epoll wait': 4645, 'mutex/condvar wait': 10, 'eventfd wait': 1}
+     14193 io-wq worker idle [kernel-only stack]
+      6433 futex wait     sluice::async::AsyncIoContext::acknowledge_progress_notification()
+      4645 epoll wait     (anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)
+      3446 futex wait     (anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+      1398 futex wait     sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+      1024 futex wait     sluice::async::AsyncIoContext::poll_progress()
+       268 futex wait     sluice::async::UringAsyncBackend::poll() [clone .part.0]
+       145 futex wait     sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+        46 futex wait     sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+        42 futex wait     sluice::async::UringAsyncBackend::poll_progress()
+        27 futex wait     sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+         9 mutex/condvar wait sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+
+===== P-D-w02-tp-4k-d16-w4 =====
+PMU per op/chunk (540000 ops):
+  cycles:u                   3093198433.0  per=  5728.145  2.58%  100.00
+  cycles:k                   7915293962.0  per= 14657.952  0.40%  100.00
+  instructions:u             2177659734.0  per=  4032.703  0.12%  100.00
+  instructions:k             4392635041.0  per=  8134.509  0.58%  100.00
+  task-clock                       3432.2  per=     0.006  0.71%  100.00
+  context-switches               360916.0  per=     0.668  0.68%  100.00
+  cache-misses                 10774616.0  per=    19.953  0.13%  100.00
+  branch-misses                14911089.0  per=    27.613  0.50%  100.00
+  cpu-migrations                   1387.0  per=     0.003  3.00%  100.00
+Tracepoints per op:
+  io_uring:io_uring_submit_req                             1  per=0.00000
+  io_uring:io_uring_complete                               1  per=0.00000
+  io_uring:io_uring_cqring_wait                            1  per=0.00000
+  io_uring:io_uring_queue_async_work                       1  per=0.00000
+  io_uring:io_uring_task_work_run                          1  per=0.00000
+  io_uring:io_uring_cqe_overflow                           0  per=0.00000
+  sched:sched_switch                                  413674  per=0.76606
+  sched:sched_wakeup                                  238490  per=0.44165
+  syscalls:sys_enter_io_uring_enter                        1  per=0.00000
+  syscalls:sys_enter_futex                           1508402  per=2.79334
+  syscalls:sys_enter_read                               9000  per=0.01667
+  syscalls:sys_enter_write                              9015  per=0.01669
+  block:block_rq_issue                                     0  per=0.00000
+  block:block_rq_complete                                  0  per=0.00000
+  syscalls:sys_enter_poll                               5763  per=0.01067
+  syscalls:sys_enter_pread64                          540008  per=1.00001
+  syscalls:sys_enter_pwrite64                             64  per=0.00012
+Uprobes per op (window):
+  p621_wait_one                5597  window=60000  per=0.09328
+  p621_reserve                60000  window=60000  per=1.00000
+  p621_accept                 60000  window=60000  per=1.00000
+  p621_offer                  60000  window=60000  per=1.00000
+  p621_release                60000  window=60000  per=1.00000
+  p621_begin                  60000  window=60000  per=1.00000
+  p621_complete               60000  window=60000  per=1.00000
+  p621_worker                    12  window=60000  per=0.00020
+  p621_router_c                   0  window=60000  per=0.00000
+  p621_pass                    5875  window=60000  per=0.09792
+Overhead (process ms, ratio):
+  stat-tp-uring                3518.0ms ratio=3.003
+  stat-tp-sched-syscall        3608.3ms ratio=3.080
+  stat-tp-block-io             3398.3ms ratio=2.901
+  stat-uprobe-1                9364.0ms ratio=7.992
+  stat-uprobe-2                6446.1ms ratio=5.502
+  record-cycles                1842.3ms ratio=1.572
+  record-tp-sched-syscall      2404.1ms ratio=2.052
+  record-offcpu                 272.4ms ratio=0.233
+  tp-uring                       66.9ms ratio=1.048
+  tp-sched-syscall               67.0ms ratio=1.051
+  tp-block-io                    62.0ms ratio=0.972
+  uprobe-1                      134.9ms ratio=2.115
+  uprobe-2                       88.4ms ratio=1.387
+Cycles samples=15182 single_frame=139 dso={'kernel': 11272, 'lib': 2883, 'bench': 1027}
+Top leaf:
+   13.29% kernel entry_SYSRETQ_unsafe_stack
+    9.04% kernel rep_movs_alternative
+    7.12% lib    __GI___pthread_mutex_unlock_usercnt
+    5.96% lib    pthread_mutex_lock@@GLIBC_2.2.5
+    4.69% kernel entry_SYSCALL_64
+    4.28% kernel syscall_return_via_sysret
+    2.50% kernel native_queued_spin_lock_slowpath
+    2.24% bench  sluice::async::ThreadPoolBackend::worker_loop()
+    1.63% kernel _raw_spin_lock
+    1.50% kernel psi_group_change
+    1.47% kernel shmem_file_read_iter
+    1.39% kernel filemap_get_entry
+    1.11% kernel native_write_msr
+    0.99% lib    __memcmp_avx2_movbe
+    0.98% kernel __schedule
+    0.86% lib    pthread_cond_wait@@GLIBC_2.3.2
+    0.86% kernel __update_load_avg_cfs_rq
+    0.83% kernel futex_wake
+    0.82% lib    __GI___lll_lock_wait
+    0.73% kernel update_curr
+Stage self:
+   13.85% payload/FS
+   13.67% startup/thread create
+   13.27% shared sync
+   12.89% scheduler/IRQ
+   12.76% admission
+    7.38% syscall (unattributed)
+    5.84% other
+    4.13% publication
+    3.52% progress/wait
+    3.49% terminal/release
+    2.38% backend exec (TP)
+    2.05% observation
+    2.04% kernel syscall/FS overhead
+    1.99% bench harness
+    0.74% dispatch
+Off-CPU samples=32283 primitives={'other': 28, 'thread create wait': 1, 'scheduler preempt/return': 1092, 'io_uring cqring wait': 1, 'io-wq worker idle': 1, 'futex wait': 24172, 'mutex/condvar wait': 6190, 'poll wait': 798}
+     22135 futex wait     sluice::async::ThreadPoolBackend::worker_loop()
+      5385 mutex/condvar wait sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)
+      1051 scheduler preempt/return sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)
+       884 futex wait     sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)
+       798 poll wait      sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+       740 mutex/condvar wait sluice::async::ThreadPoolBackend::worker_loop()
+       591 futex wait     sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+       386 futex wait     sluice::async::ThreadPoolBackend::poll_progress()
+       139 futex wait     sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+        38 scheduler preempt/return sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+        17 mutex/condvar wait sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+        17 other          sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)
+
+===== P-E-sluice-copy-4k-d4-w1 =====
+PMU per op/chunk (65536 chunks):
+  cycles:u                    712713657.0  per= 10875.147  1.57%  100.00
+  cycles:k                   2202428580.0  per= 33606.393  0.75%  100.00
+  instructions:u              568575473.0  per=  8675.773  0.02%  100.00
+  instructions:k             1457072368.0  per= 22233.160  3.26%  100.00
+  task-clock                       1060.6  per=     0.016  0.54%  100.00
+  context-switches               133724.0  per=     2.040  0.00%  100.00
+  cache-misses                  2043187.0  per=    31.177  1.12%  100.00
+  branch-misses                 4908204.0  per=    74.893  0.74%  100.00
+  cpu-migrations                      1.0  per=     0.000  0.00%  100.00
+Tracepoints per op:
+  io_uring:io_uring_submit_req                             0  per=0.00000
+  io_uring:io_uring_complete                               0  per=0.00000
+  io_uring:io_uring_cqring_wait                            0  per=0.00000
+  io_uring:io_uring_queue_async_work                       0  per=0.00000
+  io_uring:io_uring_task_work_run                          0  per=0.00000
+  io_uring:io_uring_cqe_overflow                           0  per=0.00000
+  sched:sched_switch                                  132935  per=2.02843
+  sched:sched_wakeup                                      13  per=0.00020
+  syscalls:sys_enter_io_uring_enter                        0  per=0.00000
+  syscalls:sys_enter_futex                            251489  per=3.83742
+  syscalls:sys_enter_read                              68634  per=1.04727
+  syscalls:sys_enter_write                             68624  per=1.04712
+  block:block_rq_issue                                     0  per=0.00000
+  block:block_rq_complete                                  0  per=0.00000
+  syscalls:sys_enter_poll                              86309  per=1.31697
+  syscalls:sys_enter_pread64                           65548  per=1.00018
+  syscalls:sys_enter_pwrite64                          65536  per=1.00000
+Uprobes per op (window):
+  e_runpipe                       1  window=65536  per=0.00002
+  e_reserve                  131076  window=65536  per=2.00006
+  e_accept                   131076  window=65536  per=2.00006
+  e_offer                    131076  window=65536  per=2.00006
+  e_release                  131076  window=65536  per=2.00006
+  e_begin                    131076  window=65536  per=2.00006
+  e_complete                 131076  window=65536  per=2.00006
+  e_worker                        1  window=65536  per=0.00002
+  e_wait_one                  73524  window=65536  per=1.12189
+  e_pass                     139082  window=65536  per=2.12222
+Overhead (process ms, ratio):
+  stat-tp-uring                 944.4ms ratio=2.371
+  stat-tp-sched-syscall        1043.0ms ratio=2.618
+  stat-tp-block-io             1277.5ms ratio=3.207
+  stat-uprobe-1               30969.9ms ratio=77.742
+  stat-uprobe-2               19410.8ms ratio=48.726
+  record-cycles                3850.0ms ratio=9.664
+  record-tp                    1107.0ms ratio=2.779
+  record-offcpu                1051.6ms ratio=2.640
+Cycles samples=34736 single_frame=362 dso={'kernel': 25567, 'lib': 6665, 'bench': 2504}
+Top leaf:
+   13.28% kernel entry_SYSRETQ_unsafe_stack
+    7.60% lib    __GI___pthread_mutex_unlock_usercnt
+    6.35% lib    pthread_mutex_lock@@GLIBC_2.2.5
+    4.84% kernel entry_SYSCALL_64
+    4.40% kernel syscall_return_via_sysret
+    3.73% kernel rep_movs_alternative
+    1.77% bench  sluice_copy::run_pipelined_copy_with_context(sluice::File const&, sluice::async::NativeFileRef const&, unsigned long, unsigned long, unsigned int, sluice_copy::SyncPolicy, sluice::async::AsyncIoContext)
+    1.48% kernel clear_highpages_kasan_tagged
+    1.33% kernel fput
+    1.17% bench  sluice::async::ThreadPoolBackend::worker_loop()
+    1.15% kernel psi_group_change
+    1.11% kernel __smp_call_single_queue
+    0.93% kernel fdget
+    0.87% kernel native_write_msr
+    0.85% lib    pthread_cond_wait@@GLIBC_2.3.2
+    0.84% kernel poll_schedule_timeout.constprop.0
+    0.82% kernel entry_SYSCALL_64_safe_stack
+    0.80% kernel _raw_spin_lock
+    0.79% kernel __raw_spin_lock_irqsave
+    0.74% lib    [vdso]
+Stage self:
+   25.12% progress/wait
+   13.02% syscall (unattributed)
+   10.44% payload/FS
+    8.87% startup/thread create
+    7.99% other
+    7.86% shared sync
+    7.16% admission
+    6.01% scheduler/IRQ
+    5.26% kernel syscall/FS overhead
+    3.30% publication
+    1.74% observation
+    1.35% backend exec (TP)
+    1.00% dispatch
+    0.88% terminal/release
+Off-CPU samples=166425 primitives={'poll wait': 83481, 'futex wait': 82940, 'other': 2, 'scheduler preempt/return': 1, 'mutex/condvar wait': 1}
+     83481 poll wait      sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+     80918 futex wait     sluice::async::ThreadPoolBackend::worker_loop()
+      2004 futex wait     sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+         6 futex wait     sluice::async::ThreadPoolBackend::poll_progress()
+         6 futex wait     sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)
+         2 futex wait     sluice::async::AsyncIoContext::run_progress_pass_()
+         2 other          sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)
+         1 futex wait     sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+         1 futex wait     sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+         1 futex wait     sluice::async::detail::RequestCore::outstanding_summary() const
+         1 scheduler preempt/return sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)
+         1 mutex/condvar wait sluice::async::ThreadPoolBackend::poll_progress()

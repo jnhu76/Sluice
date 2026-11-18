@@ -1,0 +1,45 @@
+# p2 profile environment snapshot
+2026-11-18T15:33:25+08:00
+Linux E5 7.3.3-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Fri Nov  6 20:34:09 UTC 2026 x86_64 GNU/Linux
+HEAD=5d94f233967c3aef993eb19ba9e3252c532b0951
+?? docs/evidence/621-progress-wait-path-20261118/
+?? docs/evidence/621-round2-R1/
+?? docs/evidence/e5-fullpath-machine-work/
+perf_event_paranoid=2
+nmi_watchdog=1
+no_turbo=0
+irqbalance=inactive
+cpu0 governor=performance min=1200000 max=3500000 cur=3194193
+cpu1 governor=performance min=1200000 max=3500000 cur=3193567
+cpu2 governor=performance min=1200000 max=3500000 cur=3500000
+cpu3 governor=performance min=1200000 max=3500000 cur=3192906
+cpu4 governor=performance min=1200000 max=3500000 cur=3500000
+cpu5 governor=performance min=1200000 max=3500000 cur=3500000
+cpu6 governor=performance min=1200000 max=3500000 cur=3500000
+cpu7 governor=performance min=1200000 max=3500000 cur=3500000
+cpu8 governor=performance min=1200000 max=3500000 cur=3500000
+cpu9 governor=performance min=1200000 max=3500000 cur=3192511
+cpu10 governor=performance min=1200000 max=3500000 cur=3192855
+cpu11 governor=performance min=1200000 max=3500000 cur=3500000
+cpu12 governor=performance min=1200000 max=3500000 cur=3193587
+cpu13 governor=performance min=1200000 max=3500000 cur=3500000
+cpu14 governor=performance min=1200000 max=3500000 cur=3193679
+cpu15 governor=performance min=1200000 max=3500000 cur=3195478
+cpu16 governor=performance min=1200000 max=3500000 cur=3407181
+cpu17 governor=performance min=1200000 max=3500000 cur=3194526
+cpu18 governor=performance min=1200000 max=3500000 cur=3500000
+cpu19 governor=performance min=1200000 max=3500000 cur=3500000
+clocksource=tsc
+loadavg=0.02 0.06 0.09 2/723 34432
+               total        used        free      shared  buff/cache   available
+Mem:           64136        4640       54628        1282        6790       59495
+thermal_zone0=47000 mC
+binaries:
+03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896  /tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline
+43054fcd59f7000553d34a2f5b2909ff7ae6dae78910d4f379a8e8b0129937c1  /tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop
+db972b1946fcf2b282135ebdf600263b03492215b08846e867d856c6213fa0be  /tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy
+twins:
+7071234f0fd1eab725b0cde36da9db7df5ebba179ca49e87ae73e1a39d354a06  /tmp/p2-621/symtwin/bench_w02_pipeline.sym
+b9d2d7371b2aa8e1f404036c325a33ec71ac0314edf695dc1673483116bb1eed  /tmp/p2-621/symtwin/bench_w03_external_loop.sym
+50d3ba7502724d64beb05ca800146666be9353937ba4737735b62e7e78b18ea3  /tmp/p2-621/symtwin/sluice-copy.sym
+section_match:

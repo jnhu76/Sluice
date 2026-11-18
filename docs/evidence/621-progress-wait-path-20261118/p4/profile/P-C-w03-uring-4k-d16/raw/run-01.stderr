@@ -1,0 +1,2 @@
+[ perf record: Woken up 585 times to write data ]
+[ perf record: Captured and wrote 146.250 MB /home/jnhu/Source/Sluice/docs/evidence/621-progress-wait-path-20261118/p4/profile/P-C-w03-uring-4k-d16/raw/run-01.data (29095 samples) ]

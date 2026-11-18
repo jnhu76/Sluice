@@ -1,0 +1,58 @@
+== date ==
+2026-11-18T19:51:00+08:00
+== uname ==
+Linux E5 7.3.3-200.fc44.x86_64 #1 SMP PREEMPT_DYNAMIC Fri Nov  6 20:34:09 UTC 2026 x86_64 GNU/Linux
+== os ==
+NAME="Fedora Linux"
+VERSION="44 (KDE Plasma Desktop Edition)"
+RELEASE_TYPE=stable
+ID=fedora
+== cpu ==
+CPU(s):                                  20
+On-line CPU(s) list:                     0-19
+Model name:                              Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+Thread(s) per core:                      2
+Core(s) per socket:                      10
+Socket(s):                               1
+CPU(s) scaling MHz:                      97%
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-19
+== perf ==
+perf version 7.3.3-200.fc44.x86_64
+== paranoid/sample ==
+2
+63000
+0
+== governor ==
+      1 /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu10/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu11/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu12/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu13/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu14/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu15/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu16/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu17/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu18/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu19/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu1/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu2/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu3/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu4/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu5/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu6/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu7/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu8/cpufreq/scaling_governor=performance
+      1 /sys/devices/system/cpu/cpu9/cpufreq/scaling_governor=performance
+== no_turbo ==
+0
+== irqbalance ==
+inactive
+== loadavg ==
+0.09 0.06 0.08 1/688 51687
+== git ==
+5d94f233967c3aef993eb19ba9e3252c532b0951
+?? docs/evidence/621-progress-wait-path-20261118/
+?? docs/evidence/621-round2-R1/
+?? docs/evidence/e5-fullpath-machine-work/
+== self-check ==

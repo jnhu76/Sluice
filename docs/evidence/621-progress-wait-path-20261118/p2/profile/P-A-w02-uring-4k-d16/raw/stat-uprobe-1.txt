@@ -1,0 +1,8 @@
+# started on Wed Nov 18 15:43:27 2026
+
+0,,probe_bench_w02_pipeline:p621_wait,98791838402,100.00,,
+540000,,probe_bench_w02_pipeline:p621_reserve,98791813521,100.00,,
+540000,,probe_bench_w02_pipeline:p621_accept,98791809433,100.00,,
+540000,,probe_bench_w02_pipeline:p621_offer,98791807761,100.00,,
+540000,,probe_bench_w02_pipeline:p621_release,98791803552,100.00,,
+540000,,probe_bench_w02_pipeline:p621_begin,98791796726,100.00,,

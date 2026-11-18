@@ -1,0 +1,41 @@
+{
+  "argv": [
+    "/usr/sbin/perf",
+    "stat",
+    "-x,",
+    "-e",
+    "task-clock,instructions,cycles",
+    "-o",
+    "/home/jnhu/Source/Sluice/docs/evidence/621-progress-wait-path-20261118/p1/aa/C1-sluice-copy-4k-d4-w1/raw/pair-14-A.perf",
+    "--",
+    "/usr/sbin/taskset",
+    "-c",
+    "2,3",
+    "/tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy",
+    "--buffer-size",
+    "4096",
+    "--pipeline-depth",
+    "4",
+    "--workers",
+    "1",
+    "--sync",
+    "none",
+    "--no-atomic",
+    "/home/jnhu/sluice-621-r2/data/src-256m.bin",
+    "/tmp/621-p1-dst-a.bin"
+  ],
+  "binary_argv": [
+    "/tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy",
+    "--buffer-size",
+    "4096",
+    "--pipeline-depth",
+    "4",
+    "--workers",
+    "1",
+    "--sync",
+    "none",
+    "--no-atomic",
+    "/home/jnhu/sluice-621-r2/data/src-256m.bin",
+    "/tmp/621-p1-dst-a.bin"
+  ]
+}

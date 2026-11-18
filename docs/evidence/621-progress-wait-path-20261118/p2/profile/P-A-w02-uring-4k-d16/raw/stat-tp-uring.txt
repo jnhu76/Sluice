@@ -1,0 +1,8 @@
+# started on Wed Nov 18 15:38:02 2026
+
+540028,,io_uring:io_uring_submit_req,3065624514,100.00,,
+540028,,io_uring:io_uring_complete,3065624514,100.00,,
+28,,io_uring:io_uring_cqring_wait,3065624514,100.00,,
+540028,,io_uring:io_uring_queue_async_work,3065624514,100.00,,
+421186,,io_uring:io_uring_task_work_run,3065624514,100.00,,
+0,,io_uring:io_uring_cqe_overflow,3065624514,100.00,,

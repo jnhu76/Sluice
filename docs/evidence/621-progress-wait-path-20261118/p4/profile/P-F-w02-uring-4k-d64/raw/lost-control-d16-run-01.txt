@@ -1,0 +1,12 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 16K of event 'cycles'
+# Event count (approx.): 9209759614
+#
+# Overhead  Command        
+# ........  ...............
+#
+

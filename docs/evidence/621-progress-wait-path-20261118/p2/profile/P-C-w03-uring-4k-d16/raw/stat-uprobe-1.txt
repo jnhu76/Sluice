@@ -1,0 +1,8 @@
+# started on Wed Nov 18 15:50:22 2026
+
+4768,,probe_bench_w03_external_loop:w3_poll_progress,12609512770,100.00,,
+0,,probe_bench_w03_external_loop:w3_ctxpoll,12609487285,100.00,,
+4772,,probe_bench_w03_external_loop:w3_pass,12609483384,100.00,,
+60000,,probe_bench_w03_external_loop:w3_reserve,12609481310,100.00,,
+60000,,probe_bench_w03_external_loop:w3_accept,12609476557,100.00,,
+60000,,probe_bench_w03_external_loop:w3_offer,12609469651,100.00,,

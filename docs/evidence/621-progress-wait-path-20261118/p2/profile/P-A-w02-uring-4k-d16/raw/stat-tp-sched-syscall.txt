@@ -1,0 +1,8 @@
+# started on Wed Nov 18 15:38:12 2026
+
+422753,,sched:sched_switch,2991518064,100.00,,
+184791,,sched:sched_wakeup,2991518064,100.00,,
+540028,,syscalls:sys_enter_io_uring_enter,2991518064,100.00,,
+2,,syscalls:sys_enter_futex,2991518064,100.00,,
+25,,syscalls:sys_enter_read,2991518064,100.00,,
+11,,syscalls:sys_enter_write,2991518064,100.00,,

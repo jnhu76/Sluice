@@ -1,0 +1,1044 @@
+{
+  "tool": "paired_session.py",
+  "tool_version": "1.0",
+  "tool_sha256": "8d6db91d2f76fcb19633acdb91cc13bbcbdd5577d021659ca5149d609c912842",
+  "cell": "C4-w03-uring-4k-d16",
+  "kind": "bench_w03",
+  "pairs": 16,
+  "cpu": "2,3",
+  "measured_cpus": [
+    2,
+    3
+  ],
+  "perf_events": [
+    "task-clock",
+    "instructions",
+    "cycles"
+  ],
+  "started": "2026-11-18T13:54:08.511+08:00",
+  "finished": "2026-11-18T13:55:20.285+08:00",
+  "runner_affinity_cpu": 0,
+  "runner_affinity_requested_cpu": 0,
+  "binaries": {
+    "A": {
+      "binary": "/tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop",
+      "sha256": "43054fcd59f7000553d34a2f5b2909ff7ae6dae78910d4f379a8e8b0129937c1",
+      "size": 200504,
+      "mtime": "2026-11-18T13:41:36+08:00",
+      "file": "ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=fc646cb3d0826e56600cda8fceeee5494715ebe2, for GNU/Linux 3.2.0, stripped",
+      "comment": [
+        "[     0]  GCC: (GNU) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+        "[    2e]  GCC: (GNU) 16.2.1 20261029 (Red Hat 16.2.1-3)"
+      ],
+      "needed": [
+        "liburing.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "liburing_linked": true,
+      "debug_info": false,
+      "dwarf": false,
+      "inferred_build_dir": null,
+      "inferred_profile": null
+    },
+    "B": {
+      "binary": "/tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop",
+      "sha256": "43054fcd59f7000553d34a2f5b2909ff7ae6dae78910d4f379a8e8b0129937c1",
+      "size": 200504,
+      "mtime": "2026-11-18T13:41:36+08:00",
+      "file": "ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=fc646cb3d0826e56600cda8fceeee5494715ebe2, for GNU/Linux 3.2.0, stripped",
+      "comment": [
+        "[     0]  GCC: (GNU) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+        "[    2e]  GCC: (GNU) 16.2.1 20261029 (Red Hat 16.2.1-3)"
+      ],
+      "needed": [
+        "liburing.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "liburing_linked": true,
+      "debug_info": false,
+      "dwarf": false,
+      "inferred_build_dir": null,
+      "inferred_profile": null
+    }
+  },
+  "git": {
+    "toplevel": "/home/jnhu/Source/Sluice",
+    "head": "5d94f233967c3aef993eb19ba9e3252c532b0951",
+    "dirty": true,
+    "status_porcelain": [
+      "?? docs/evidence/621-progress-wait-path-20261118/",
+      "?? docs/evidence/621-round2-R1/",
+      "?? docs/evidence/e5-fullpath-machine-work/"
+    ]
+  },
+  "protocol": {
+    "order_rule": "odd pair ordinal -> AB; even pair ordinal -> BA",
+    "serial": true,
+    "perf_wrap": "perf stat -x, -e <events> -o <raw perf> -- taskset -c <cpu> <binary> <binary argv>",
+    "cpu_metric": "RUSAGE_CHILDREN user+sys delta, microseconds",
+    "wall_metric": "time.monotonic around the perf/taskset child",
+    "sluice_copy_argv": null,
+    "bench_env": {
+      "SLUICE_BENCH_WARMUP": "2",
+      "SLUICE_BENCH_MEASURED": "7",
+      "SLUICE_BENCH_CASE_FILTER": "=W03-uring-4k-d16",
+      "SLUICE_BENCH_JSONL": "<per-arm jsonl>",
+      "SLUICE_BENCH_TMP_DIR": "/tmp/621-p1-aa"
+    }
+  },
+  "case": {
+    "case": "W03-uring-4k-d16",
+    "warmup": 2,
+    "measured": 7,
+    "tmp_dir": "/tmp/621-p1-aa"
+  },
+  "media": {
+    "tmp_dir": {
+      "path": "/tmp/621-p1-aa",
+      "anchor": "/tmp/621-p1-aa",
+      "realpath": "/tmp/621-p1-aa",
+      "exists": true,
+      "mount": {
+        "mount_point": "/tmp",
+        "options": "rw,nosuid,nodev",
+        "fs_type": "tmpfs",
+        "source": "tmpfs",
+        "super_options": "rw,seclabel,size=32837700k,nr_inodes=1048576,inode64,usrquota"
+      },
+      "st_dev": 52,
+      "statvfs": {
+        "f_bsize": 4096,
+        "f_blocks": 8209425,
+        "f_bfree": 8016990,
+        "f_bavail": 8016990
+      }
+    }
+  },
+  "environment": {
+    "kernel": "7.3.3-200.fc44.x86_64",
+    "machine": "x86_64",
+    "hostname": "E5",
+    "python": "3.14.10 (main, Oct 26 2026, 00:00:00) [GCC 16.2.1 20260819 (Red Hat 16.2.1-2)]",
+    "governor_before": {
+      "0": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3421099,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "1": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3332877,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "2": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "3": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "4": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "5": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "6": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "7": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "8": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "9": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "10": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "11": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "12": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "13": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "14": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "15": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "16": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "17": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "18": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "19": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      }
+    },
+    "no_turbo_before": 0,
+    "thermal_before": [
+      {
+        "zone": "thermal_zone0",
+        "type": "x86_pkg_temp",
+        "temp_mc": 55000
+      },
+      {
+        "zone": "thermal_zone1",
+        "type": "iwlwifi_1",
+        "temp_mc": 39000
+      }
+    ],
+    "proc_stat_before": {
+      "cpu": [
+        100455,
+        41428,
+        48671,
+        14325385,
+        21590,
+        3052,
+        3630,
+        0,
+        0,
+        0
+      ],
+      "cpu0": [
+        8809,
+        11821,
+        7159,
+        697766,
+        493,
+        155,
+        457,
+        0,
+        0,
+        0
+      ],
+      "cpu1": [
+        4093,
+        2,
+        1041,
+        720724,
+        749,
+        102,
+        306,
+        0,
+        0,
+        0
+      ],
+      "cpu2": [
+        7819,
+        9789,
+        9925,
+        697825,
+        1517,
+        236,
+        77,
+        0,
+        0,
+        0
+      ],
+      "cpu3": [
+        6927,
+        1,
+        5315,
+        713342,
+        1141,
+        253,
+        262,
+        0,
+        0,
+        0
+      ],
+      "cpu4": [
+        6076,
+        9781,
+        5798,
+        702685,
+        2639,
+        146,
+        51,
+        0,
+        0,
+        0
+      ],
+      "cpu5": [
+        5410,
+        5,
+        834,
+        719555,
+        1196,
+        118,
+        88,
+        0,
+        0,
+        0
+      ],
+      "cpu6": [
+        4601,
+        9813,
+        5723,
+        706041,
+        799,
+        125,
+        78,
+        0,
+        0,
+        0
+      ],
+      "cpu7": [
+        4858,
+        22,
+        769,
+        720493,
+        757,
+        134,
+        96,
+        0,
+        0,
+        0
+      ],
+      "cpu8": [
+        3928,
+        9,
+        771,
+        721720,
+        606,
+        95,
+        75,
+        0,
+        0,
+        0
+      ],
+      "cpu9": [
+        3830,
+        20,
+        708,
+        721658,
+        759,
+        125,
+        87,
+        0,
+        0,
+        0
+      ],
+      "cpu10": [
+        4371,
+        17,
+        1021,
+        720694,
+        820,
+        163,
+        227,
+        0,
+        0,
+        0
+      ],
+      "cpu11": [
+        3514,
+        3,
+        1106,
+        721584,
+        539,
+        204,
+        364,
+        0,
+        0,
+        0
+      ],
+      "cpu12": [
+        5239,
+        9,
+        971,
+        720249,
+        541,
+        111,
+        86,
+        0,
+        0,
+        0
+      ],
+      "cpu13": [
+        3190,
+        0,
+        856,
+        722271,
+        650,
+        104,
+        177,
+        0,
+        0,
+        0
+      ],
+      "cpu14": [
+        6325,
+        10,
+        1225,
+        717052,
+        2369,
+        212,
+        212,
+        0,
+        0,
+        0
+      ],
+      "cpu15": [
+        4178,
+        2,
+        1196,
+        719332,
+        2047,
+        298,
+        452,
+        0,
+        0,
+        0
+      ],
+      "cpu16": [
+        6166,
+        35,
+        1062,
+        717992,
+        1700,
+        144,
+        118,
+        0,
+        0,
+        0
+      ],
+      "cpu17": [
+        4179,
+        14,
+        847,
+        720856,
+        1101,
+        101,
+        114,
+        0,
+        0,
+        0
+      ],
+      "cpu18": [
+        3349,
+        51,
+        1001,
+        722005,
+        577,
+        104,
+        169,
+        0,
+        0,
+        0
+      ],
+      "cpu19": [
+        3582,
+        11,
+        1333,
+        721531,
+        581,
+        112,
+        125,
+        0,
+        0,
+        0
+      ]
+    },
+    "meminfo_before": {
+      "MemTotal": 65675396,
+      "MemFree": 57129132,
+      "MemAvailable": 61730228,
+      "Cached": 5923088,
+      "Dirty": 1140,
+      "Writeback": 0
+    },
+    "loadavg_before": [
+      1.3837890625,
+      0.6748046875,
+      0.53369140625
+    ],
+    "governor_after": {
+      "0": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3205374,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "1": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "2": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3192689,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "3": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3192267,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "4": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "5": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "6": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "7": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "8": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "9": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "10": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "11": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "12": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "13": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "14": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3162922,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "15": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3194658,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "16": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "17": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "18": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "19": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      }
+    },
+    "no_turbo_after": 0,
+    "thermal_after": [
+      {
+        "zone": "thermal_zone0",
+        "type": "x86_pkg_temp",
+        "temp_mc": 57000
+      },
+      {
+        "zone": "thermal_zone1",
+        "type": "iwlwifi_1",
+        "temp_mc": 38000
+      }
+    ],
+    "proc_stat_after": {
+      "cpu": [
+        103845,
+        41428,
+        57762,
+        14455867,
+        21664,
+        3187,
+        3681,
+        0,
+        0,
+        0
+      ],
+      "cpu0": [
+        8911,
+        11821,
+        7226,
+        704557,
+        505,
+        160,
+        491,
+        0,
+        0,
+        0
+      ],
+      "cpu1": [
+        4114,
+        2,
+        1046,
+        727864,
+        749,
+        103,
+        308,
+        0,
+        0,
+        0
+      ],
+      "cpu2": [
+        9379,
+        9789,
+        14500,
+        698795,
+        1517,
+        296,
+        83,
+        0,
+        0,
+        0
+      ],
+      "cpu3": [
+        8590,
+        1,
+        9741,
+        714352,
+        1141,
+        319,
+        269,
+        0,
+        0,
+        0
+      ],
+      "cpu4": [
+        6083,
+        9781,
+        5800,
+        709845,
+        2640,
+        146,
+        51,
+        0,
+        0,
+        0
+      ],
+      "cpu5": [
+        5411,
+        5,
+        835,
+        726705,
+        1212,
+        118,
+        88,
+        0,
+        0,
+        0
+      ],
+      "cpu6": [
+        4604,
+        9813,
+        5725,
+        713205,
+        799,
+        126,
+        78,
+        0,
+        0,
+        0
+      ],
+      "cpu7": [
+        4862,
+        22,
+        770,
+        727656,
+        757,
+        134,
+        96,
+        0,
+        0,
+        0
+      ],
+      "cpu8": [
+        3931,
+        9,
+        772,
+        728884,
+        606,
+        95,
+        75,
+        0,
+        0,
+        0
+      ],
+      "cpu9": [
+        3831,
+        20,
+        709,
+        728824,
+        759,
+        125,
+        87,
+        0,
+        0,
+        0
+      ],
+      "cpu10": [
+        4375,
+        17,
+        1021,
+        727859,
+        820,
+        163,
+        227,
+        0,
+        0,
+        0
+      ],
+      "cpu11": [
+        3516,
+        3,
+        1107,
+        728751,
+        539,
+        205,
+        364,
+        0,
+        0,
+        0
+      ],
+      "cpu12": [
+        5239,
+        9,
+        972,
+        727417,
+        541,
+        111,
+        86,
+        0,
+        0,
+        0
+      ],
+      "cpu13": [
+        3190,
+        0,
+        856,
+        729439,
+        650,
+        104,
+        177,
+        0,
+        0,
+        0
+      ],
+      "cpu14": [
+        6336,
+        10,
+        1227,
+        724205,
+        2371,
+        213,
+        213,
+        0,
+        0,
+        0
+      ],
+      "cpu15": [
+        4179,
+        2,
+        1198,
+        726484,
+        2059,
+        299,
+        453,
+        0,
+        0,
+        0
+      ],
+      "cpu16": [
+        6167,
+        35,
+        1062,
+        725158,
+        1700,
+        144,
+        118,
+        0,
+        0,
+        0
+      ],
+      "cpu17": [
+        4181,
+        14,
+        849,
+        728010,
+        1114,
+        101,
+        114,
+        0,
+        0,
+        0
+      ],
+      "cpu18": [
+        3350,
+        51,
+        1002,
+        729157,
+        591,
+        105,
+        169,
+        0,
+        0,
+        0
+      ],
+      "cpu19": [
+        3586,
+        11,
+        1334,
+        728691,
+        585,
+        112,
+        126,
+        0,
+        0,
+        0
+      ]
+    },
+    "meminfo_after": {
+      "MemTotal": 65675396,
+      "MemFree": 57040848,
+      "MemAvailable": 61644836,
+      "Cached": 5991424,
+      "Dirty": 308,
+      "Writeback": 0
+    },
+    "loadavg_after": [
+      2.21337890625,
+      1.09130859375,
+      0.6923828125
+    ],
+    "governor_all_performance": true,
+    "governor_all_performance_before": true
+  },
+  "frozen_ops": null,
+  "excluded_arms": [],
+  "arms_total": 32,
+  "arms_valid": 32,
+  "arms_invalid": 0,
+  "aborted": null,
+  "media_after": {
+    "tmp_dir": {
+      "path": "/tmp/621-p1-aa",
+      "anchor": "/tmp/621-p1-aa",
+      "realpath": "/tmp/621-p1-aa",
+      "exists": true,
+      "mount": {
+        "mount_point": "/tmp",
+        "options": "rw,nosuid,nodev",
+        "fs_type": "tmpfs",
+        "source": "tmpfs",
+        "super_options": "rw,seclabel,size=32837700k,nr_inodes=1048576,inode64,usrquota"
+      },
+      "st_dev": 52,
+      "statvfs": {
+        "f_bsize": 4096,
+        "f_blocks": 8209425,
+        "f_bfree": 8000606,
+        "f_bavail": 8000606
+      }
+    }
+  },
+  "environment_warnings": []
+}

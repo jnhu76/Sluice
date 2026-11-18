@@ -1,0 +1,7 @@
+# started on Wed Nov 18 15:45:47 2026
+
+0,,block:block_rq_issue,5115654343,100.00,,
+0,,block:block_rq_complete,5115654343,100.00,,
+539964,,syscalls:sys_enter_poll,5115654343,100.00,,
+8,,syscalls:sys_enter_pread64,5115654343,100.00,,
+64,,syscalls:sys_enter_pwrite64,5115654343,100.00,,

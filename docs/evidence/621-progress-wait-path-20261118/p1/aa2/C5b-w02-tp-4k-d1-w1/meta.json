@@ -1,0 +1,1810 @@
+{
+  "tool": "paired_session.py",
+  "tool_version": "1.1",
+  "tool_sha256": "153f50d6b5ede83ec4911233d8bbe918978c520fb39e40248f7777ca60199f02",
+  "cell": "C5b-w02-tp-4k-d1-w1",
+  "kind": "bench_w02",
+  "pairs": 16,
+  "cpu": "2,3",
+  "measured_cpus": [
+    2,
+    3
+  ],
+  "perf_events": [
+    "task-clock",
+    "instructions",
+    "cycles"
+  ],
+  "started": "2026-11-18T14:39:13.051+08:00",
+  "finished": "2026-11-18T14:42:40.112+08:00",
+  "runner_affinity_cpu": 0,
+  "runner_affinity_requested_cpu": 0,
+  "binaries": {
+    "A": {
+      "binary": "/tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline",
+      "sha256": "03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896",
+      "size": 225080,
+      "mtime": "2026-11-18T13:41:36+08:00",
+      "file": "ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=5502b545cce828025c5f4b75f93f86bb5bd91c85, for GNU/Linux 3.2.0, stripped",
+      "comment": [
+        "[     0]  GCC: (GNU) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+        "[    2e]  GCC: (GNU) 16.2.1 20261029 (Red Hat 16.2.1-3)"
+      ],
+      "needed": [
+        "liburing.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "liburing_linked": true,
+      "debug_info": false,
+      "dwarf": false,
+      "inferred_build_dir": null,
+      "inferred_profile": null
+    },
+    "B": {
+      "binary": "/tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline",
+      "sha256": "03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896",
+      "size": 225080,
+      "mtime": "2026-11-18T13:41:36+08:00",
+      "file": "ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=5502b545cce828025c5f4b75f93f86bb5bd91c85, for GNU/Linux 3.2.0, stripped",
+      "comment": [
+        "[     0]  GCC: (GNU) 16.2.1 20260819 (Red Hat 16.2.1-2)",
+        "[    2e]  GCC: (GNU) 16.2.1 20261029 (Red Hat 16.2.1-3)"
+      ],
+      "needed": [
+        "liburing.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "liburing_linked": true,
+      "debug_info": false,
+      "dwarf": false,
+      "inferred_build_dir": null,
+      "inferred_profile": null
+    }
+  },
+  "git": {
+    "toplevel": "/home/jnhu/Source/Sluice",
+    "head": "5d94f233967c3aef993eb19ba9e3252c532b0951",
+    "dirty": true,
+    "status_porcelain": [
+      "?? docs/evidence/621-progress-wait-path-20261118/",
+      "?? docs/evidence/621-round2-R1/",
+      "?? docs/evidence/e5-fullpath-machine-work/"
+    ]
+  },
+  "protocol": {
+    "order_rule": "odd pair ordinal -> AB; even pair ordinal -> BA",
+    "serial": true,
+    "perf_wrap": "perf stat -x, -e <events> -o <raw perf> -- taskset -c <cpu> <binary> <binary argv>",
+    "cpu_metric": "RUSAGE_CHILDREN user+sys delta, microseconds",
+    "wall_metric": "time.monotonic around the perf/taskset child",
+    "sluice_copy_argv": null,
+    "bench_env": {
+      "SLUICE_BENCH_WARMUP": "2",
+      "SLUICE_BENCH_MEASURED": "7",
+      "SLUICE_BENCH_CASE_FILTER": "=W02-threadpool-4k-d1-w1",
+      "SLUICE_BENCH_JSONL": "<per-arm jsonl>",
+      "SLUICE_BENCH_TMP_DIR": "/tmp/621-p1-aa2"
+    }
+  },
+  "case": {
+    "case": "W02-threadpool-4k-d1-w1",
+    "warmup": 2,
+    "measured": 7,
+    "tmp_dir": "/tmp/621-p1-aa2"
+  },
+  "media": {
+    "tmp_dir": {
+      "path": "/tmp/621-p1-aa2",
+      "anchor": "/tmp/621-p1-aa2",
+      "realpath": "/tmp/621-p1-aa2",
+      "exists": true,
+      "mount": {
+        "mount_point": "/tmp",
+        "options": "rw,nosuid,nodev",
+        "fs_type": "tmpfs",
+        "source": "tmpfs",
+        "super_options": "rw,seclabel,size=32837700k,nr_inodes=1048576,inode64,usrquota"
+      },
+      "st_dev": 52,
+      "statvfs": {
+        "f_bsize": 4096,
+        "f_blocks": 8209425,
+        "f_bfree": 7885336,
+        "f_bavail": 7885336
+      }
+    }
+  },
+  "environment": {
+    "kernel": "7.3.3-200.fc44.x86_64",
+    "machine": "x86_64",
+    "hostname": "E5",
+    "python": "3.14.10 (main, Oct 26 2026, 00:00:00) [GCC 16.2.1 20260819 (Red Hat 16.2.1-2)]",
+    "governor_before": {
+      "0": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3214597,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "1": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "2": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "3": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "4": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "5": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "6": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "7": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "8": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "9": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "10": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "11": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "12": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "13": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "14": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "15": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "16": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "17": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "18": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "19": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      }
+    },
+    "no_turbo_before": 0,
+    "thermal_before": [
+      {
+        "zone": "thermal_zone0",
+        "type": "x86_pkg_temp",
+        "temp_mc": 54000
+      },
+      {
+        "zone": "thermal_zone1",
+        "type": "iwlwifi_1",
+        "temp_mc": 38000
+      }
+    ],
+    "irq_affinity_before": {
+      "source": "/proc/interrupts + /proc/irq/*/smp_affinity[_list]",
+      "interrupts_readable": true,
+      "irq_total": 55,
+      "storage_irqs": [
+        {
+          "irq": 32,
+          "actions": "IR-PCI-MSI-0000:00:1f.2 0-edge ahci[0000:00:1f.2]",
+          "smp_affinity": "04000",
+          "smp_affinity_list": "14",
+          "effective_affinity_list": "14"
+        },
+        {
+          "irq": 34,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 0-edge nvme0q0",
+          "smp_affinity": "00080",
+          "smp_affinity_list": "7",
+          "effective_affinity_list": "7"
+        },
+        {
+          "irq": 35,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 1-edge nvme0q1",
+          "smp_affinity": "00403",
+          "smp_affinity_list": "0-1,10",
+          "effective_affinity_list": "10"
+        },
+        {
+          "irq": 36,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 2-edge nvme0q2",
+          "smp_affinity": "0100c",
+          "smp_affinity_list": "2-3,12",
+          "effective_affinity_list": "12"
+        },
+        {
+          "irq": 37,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 3-edge nvme0q3",
+          "smp_affinity": "04030",
+          "smp_affinity_list": "4-5,14",
+          "effective_affinity_list": "14"
+        },
+        {
+          "irq": 38,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 4-edge nvme0q4",
+          "smp_affinity": "100c0",
+          "smp_affinity_list": "6-7,16",
+          "effective_affinity_list": "16"
+        },
+        {
+          "irq": 39,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 5-edge nvme0q5",
+          "smp_affinity": "40100",
+          "smp_affinity_list": "8,18",
+          "effective_affinity_list": "18"
+        },
+        {
+          "irq": 40,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 6-edge nvme0q6",
+          "smp_affinity": "80200",
+          "smp_affinity_list": "9,19",
+          "effective_affinity_list": "19"
+        },
+        {
+          "irq": 41,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 7-edge nvme0q7",
+          "smp_affinity": "02800",
+          "smp_affinity_list": "11,13",
+          "effective_affinity_list": "13"
+        },
+        {
+          "irq": 42,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 8-edge nvme0q8",
+          "smp_affinity": "28000",
+          "smp_affinity_list": "15,17",
+          "effective_affinity_list": "17"
+        }
+      ]
+    },
+    "proc_stat_before": {
+      "cpu": [
+        162168,
+        41432,
+        84044,
+        19632513,
+        23340,
+        4606,
+        4862,
+        0,
+        0,
+        0
+      ],
+      "cpu0": [
+        9881,
+        11822,
+        7529,
+        965360,
+        669,
+        203,
+        737,
+        0,
+        0,
+        0
+      ],
+      "cpu1": [
+        6263,
+        2,
+        1117,
+        988821,
+        777,
+        124,
+        357,
+        0,
+        0,
+        0
+      ],
+      "cpu2": [
+        17098,
+        9790,
+        25972,
+        942546,
+        1589,
+        594,
+        121,
+        0,
+        0,
+        0
+      ],
+      "cpu3": [
+        17786,
+        1,
+        21424,
+        956412,
+        1162,
+        685,
+        306,
+        0,
+        0,
+        0
+      ],
+      "cpu4": [
+        8353,
+        9781,
+        6080,
+        970391,
+        2801,
+        194,
+        73,
+        0,
+        0,
+        0
+      ],
+      "cpu5": [
+        6941,
+        5,
+        977,
+        988149,
+        1341,
+        152,
+        113,
+        0,
+        0,
+        0
+      ],
+      "cpu6": [
+        5821,
+        9814,
+        5832,
+        974999,
+        923,
+        153,
+        94,
+        0,
+        0,
+        0
+      ],
+      "cpu7": [
+        6579,
+        22,
+        872,
+        989051,
+        799,
+        154,
+        120,
+        0,
+        0,
+        0
+      ],
+      "cpu8": [
+        8627,
+        10,
+        935,
+        987158,
+        713,
+        139,
+        104,
+        0,
+        0,
+        0
+      ],
+      "cpu9": [
+        10308,
+        20,
+        863,
+        985247,
+        908,
+        181,
+        124,
+        0,
+        0,
+        0
+      ],
+      "cpu10": [
+        5819,
+        18,
+        1128,
+        989515,
+        827,
+        204,
+        298,
+        0,
+        0,
+        0
+      ],
+      "cpu11": [
+        4028,
+        3,
+        1232,
+        991308,
+        545,
+        250,
+        467,
+        0,
+        0,
+        0
+      ],
+      "cpu12": [
+        5676,
+        10,
+        1070,
+        990111,
+        541,
+        140,
+        112,
+        0,
+        0,
+        0
+      ],
+      "cpu13": [
+        4116,
+        1,
+        910,
+        991707,
+        655,
+        126,
+        190,
+        0,
+        0,
+        0
+      ],
+      "cpu14": [
+        7888,
+        10,
+        1541,
+        985198,
+        2662,
+        285,
+        284,
+        0,
+        0,
+        0
+      ],
+      "cpu15": [
+        6838,
+        3,
+        1507,
+        986541,
+        2193,
+        387,
+        627,
+        0,
+        0,
+        0
+      ],
+      "cpu16": [
+        7889,
+        35,
+        1162,
+        986515,
+        1760,
+        175,
+        132,
+        0,
+        0,
+        0
+      ],
+      "cpu17": [
+        5951,
+        14,
+        1211,
+        989011,
+        1138,
+        151,
+        238,
+        0,
+        0,
+        0
+      ],
+      "cpu18": [
+        7645,
+        52,
+        1149,
+        987944,
+        618,
+        129,
+        206,
+        0,
+        0,
+        0
+      ],
+      "cpu19": [
+        8651,
+        11,
+        1526,
+        986519,
+        710,
+        174,
+        150,
+        0,
+        0,
+        0
+      ]
+    },
+    "meminfo_before": {
+      "MemTotal": 65675396,
+      "MemFree": 56194012,
+      "MemAvailable": 60986896,
+      "Cached": 6639980,
+      "Dirty": 572,
+      "Writeback": 0
+    },
+    "loadavg_before": [
+      2.70654296875,
+      0.9267578125,
+      0.50439453125
+    ],
+    "governor_after": {
+      "0": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3332165,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "1": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3195127,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "2": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3192891,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "3": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 2997187,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "4": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "5": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "6": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "7": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "8": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "9": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "10": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "11": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "12": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "13": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "14": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3294513,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "15": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "16": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "17": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "18": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      },
+      "19": {
+        "governor": "performance",
+        "min_freq_khz": 1200000,
+        "max_freq_khz": 3500000,
+        "cur_freq_khz": 3500000,
+        "driver": "intel_cpufreq",
+        "energy_performance_preference": null
+      }
+    },
+    "no_turbo_after": 0,
+    "thermal_after": [
+      {
+        "zone": "thermal_zone0",
+        "type": "x86_pkg_temp",
+        "temp_mc": 56000
+      },
+      {
+        "zone": "thermal_zone1",
+        "type": "iwlwifi_1",
+        "temp_mc": 38000
+      }
+    ],
+    "irq_affinity_after": {
+      "source": "/proc/interrupts + /proc/irq/*/smp_affinity[_list]",
+      "interrupts_readable": true,
+      "irq_total": 55,
+      "storage_irqs": [
+        {
+          "irq": 32,
+          "actions": "IR-PCI-MSI-0000:00:1f.2 0-edge ahci[0000:00:1f.2]",
+          "smp_affinity": "04000",
+          "smp_affinity_list": "14",
+          "effective_affinity_list": "14"
+        },
+        {
+          "irq": 34,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 0-edge nvme0q0",
+          "smp_affinity": "00080",
+          "smp_affinity_list": "7",
+          "effective_affinity_list": "7"
+        },
+        {
+          "irq": 35,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 1-edge nvme0q1",
+          "smp_affinity": "00403",
+          "smp_affinity_list": "0-1,10",
+          "effective_affinity_list": "10"
+        },
+        {
+          "irq": 36,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 2-edge nvme0q2",
+          "smp_affinity": "0100c",
+          "smp_affinity_list": "2-3,12",
+          "effective_affinity_list": "12"
+        },
+        {
+          "irq": 37,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 3-edge nvme0q3",
+          "smp_affinity": "04030",
+          "smp_affinity_list": "4-5,14",
+          "effective_affinity_list": "14"
+        },
+        {
+          "irq": 38,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 4-edge nvme0q4",
+          "smp_affinity": "100c0",
+          "smp_affinity_list": "6-7,16",
+          "effective_affinity_list": "16"
+        },
+        {
+          "irq": 39,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 5-edge nvme0q5",
+          "smp_affinity": "40100",
+          "smp_affinity_list": "8,18",
+          "effective_affinity_list": "18"
+        },
+        {
+          "irq": 40,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 6-edge nvme0q6",
+          "smp_affinity": "80200",
+          "smp_affinity_list": "9,19",
+          "effective_affinity_list": "19"
+        },
+        {
+          "irq": 41,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 7-edge nvme0q7",
+          "smp_affinity": "02800",
+          "smp_affinity_list": "11,13",
+          "effective_affinity_list": "13"
+        },
+        {
+          "irq": 42,
+          "actions": "IR-PCI-MSIX-0000:02:00.0 8-edge nvme0q8",
+          "smp_affinity": "28000",
+          "smp_affinity_list": "15,17",
+          "effective_affinity_list": "17"
+        }
+      ]
+    },
+    "proc_stat_after": {
+      "cpu": [
+        170229,
+        41432,
+        97866,
+        20023751,
+        23418,
+        4680,
+        4974,
+        0,
+        0,
+        0
+      ],
+      "cpu0": [
+        10055,
+        11822,
+        7644,
+        985180,
+        682,
+        215,
+        822,
+        0,
+        0,
+        0
+      ],
+      "cpu1": [
+        6263,
+        2,
+        1117,
+        1009510,
+        777,
+        124,
+        359,
+        0,
+        0,
+        0
+      ],
+      "cpu2": [
+        21013,
+        9790,
+        32787,
+        952480,
+        1589,
+        620,
+        129,
+        0,
+        0,
+        0
+      ],
+      "cpu3": [
+        21624,
+        1,
+        28279,
+        966384,
+        1162,
+        711,
+        314,
+        0,
+        0,
+        0
+      ],
+      "cpu4": [
+        8376,
+        9781,
+        6094,
+        991022,
+        2820,
+        195,
+        74,
+        0,
+        0,
+        0
+      ],
+      "cpu5": [
+        6942,
+        5,
+        977,
+        1008846,
+        1341,
+        153,
+        113,
+        0,
+        0,
+        0
+      ],
+      "cpu6": [
+        5847,
+        9814,
+        5835,
+        995667,
+        923,
+        154,
+        94,
+        0,
+        0,
+        0
+      ],
+      "cpu7": [
+        6579,
+        22,
+        872,
+        1009748,
+        799,
+        154,
+        120,
+        0,
+        0,
+        0
+      ],
+      "cpu8": [
+        8636,
+        10,
+        936,
+        1007846,
+        713,
+        139,
+        105,
+        0,
+        0,
+        0
+      ],
+      "cpu9": [
+        10309,
+        20,
+        864,
+        1005940,
+        908,
+        181,
+        125,
+        0,
+        0,
+        0
+      ],
+      "cpu10": [
+        5828,
+        18,
+        1129,
+        1010202,
+        827,
+        204,
+        298,
+        0,
+        0,
+        0
+      ],
+      "cpu11": [
+        4031,
+        3,
+        1233,
+        1012003,
+        545,
+        250,
+        467,
+        0,
+        0,
+        0
+      ],
+      "cpu12": [
+        5677,
+        10,
+        1071,
+        1010796,
+        552,
+        140,
+        112,
+        0,
+        0,
+        0
+      ],
+      "cpu13": [
+        4122,
+        1,
+        911,
+        1012398,
+        655,
+        127,
+        190,
+        0,
+        0,
+        0
+      ],
+      "cpu14": [
+        7889,
+        10,
+        1544,
+        1005767,
+        2697,
+        286,
+        286,
+        0,
+        0,
+        0
+      ],
+      "cpu15": [
+        6839,
+        3,
+        1511,
+        1007231,
+        2193,
+        389,
+        631,
+        0,
+        0,
+        0
+      ],
+      "cpu16": [
+        7899,
+        35,
+        1164,
+        1007201,
+        1760,
+        175,
+        132,
+        0,
+        0,
+        0
+      ],
+      "cpu17": [
+        5988,
+        14,
+        1214,
+        1009672,
+        1139,
+        151,
+        238,
+        0,
+        0,
+        0
+      ],
+      "cpu18": [
+        7646,
+        52,
+        1149,
+        1008641,
+        619,
+        129,
+        206,
+        0,
+        0,
+        0
+      ],
+      "cpu19": [
+        8659,
+        11,
+        1528,
+        1007207,
+        710,
+        174,
+        150,
+        0,
+        0,
+        0
+      ]
+    },
+    "meminfo_after": {
+      "MemTotal": 65675396,
+      "MemFree": 56195832,
+      "MemAvailable": 60990072,
+      "Cached": 6641264,
+      "Dirty": 372,
+      "Writeback": 0
+    },
+    "loadavg_after": [
+      1.3857421875,
+      1.15087890625,
+      0.6865234375
+    ],
+    "governor_all_performance": true,
+    "governor_all_performance_before": true
+  },
+  "background_load_per_pair": [
+    {
+      "at": "2026-11-18T14:39:13.164+08:00",
+      "loadavg": [
+        2.70654296875,
+        0.9267578125,
+        0.50439453125
+      ],
+      "loadavg_raw": "2.71 0.93 0.50 1/726 26798",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "  26766    2956 Ss   38.8  0.0 python3",
+        "   2956    2600 Ssl   5.6  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 1,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:39:26.199+08:00",
+      "loadavg": [
+        2.328125,
+        0.93115234375,
+        0.51318359375
+      ],
+      "loadavg_raw": "2.33 0.93 0.51 1/726 26863",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.6  0.7 zcode-cli",
+        "  26766    2956 Ss    1.5  0.0 python3",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-events_unbound"
+      ],
+      "ps_top_truncated": true,
+      "pair": 2,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:39:39.152+08:00",
+      "loadavg": [
+        2.20361328125,
+        0.95068359375,
+        0.5244140625
+      ],
+      "loadavg_raw": "2.20 0.95 0.52 1/726 26928",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.6  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.2  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-flush-btrfs-1",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 3,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:39:52.043+08:00",
+      "loadavg": [
+        2.0166015625,
+        0.97021484375,
+        0.53857421875
+      ],
+      "loadavg_raw": "2.02 0.97 0.54 1/726 26993",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.6  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.1  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 4,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:40:05.051+08:00",
+      "loadavg": [
+        1.71044921875,
+        0.955078125,
+        0.54150390625
+      ],
+      "loadavg_raw": "1.71 0.95 0.54 1/726 27058",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.0  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio-meta",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio"
+      ],
+      "ps_top_truncated": true,
+      "pair": 5,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:40:17.931+08:00",
+      "loadavg": [
+        1.6005859375,
+        0.95703125,
+        0.54736328125
+      ],
+      "loadavg_raw": "1.60 0.96 0.55 1/726 27125",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.0  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio-meta",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio"
+      ],
+      "ps_top_truncated": true,
+      "pair": 6,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:40:31.006+08:00",
+      "loadavg": [
+        1.541015625,
+        0.97607421875,
+        0.56005859375
+      ],
+      "loadavg_raw": "1.54 0.98 0.56 1/726 27190",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 394,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.0  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio-meta",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "  21995       2 I     0.0  0.0 kworker/u80:0-btrfs-endio"
+      ],
+      "ps_top_truncated": true,
+      "pair": 7,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:40:43.909+08:00",
+      "loadavg": [
+        1.6123046875,
+        1.01025390625,
+        0.57568359375
+      ],
+      "loadavg_raw": "1.61 1.01 0.58 1/727 27256",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.0  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio-meta",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 8,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:40:56.947+08:00",
+      "loadavg": [
+        1.62451171875,
+        1.04296875,
+        0.59375
+      ],
+      "loadavg_raw": "1.62 1.04 0.59 1/727 27321",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.0  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 9,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:41:09.886+08:00",
+      "loadavg": [
+        1.56591796875,
+        1.05712890625,
+        0.6064453125
+      ],
+      "loadavg_raw": "1.57 1.06 0.61 1/727 27387",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    1.0  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-events_unbound",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 10,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:41:22.732+08:00",
+      "loadavg": [
+        1.552734375,
+        1.07177734375,
+        0.61669921875
+      ],
+      "loadavg_raw": "1.55 1.07 0.62 1/727 27452",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    0.9  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio-meta",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-delalloc",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 11,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:41:35.668+08:00",
+      "loadavg": [
+        1.72607421875,
+        1.13427734375,
+        0.64501953125
+      ],
+      "loadavg_raw": "1.73 1.13 0.64 1/727 27518",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    0.9  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio-meta",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 12,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:41:48.550+08:00",
+      "loadavg": [
+        1.68798828125,
+        1.14599609375,
+        0.654296875
+      ],
+      "loadavg_raw": "1.69 1.15 0.65 1/727 27583",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    0.9  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-endio",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-delalloc",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 13,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:42:01.430+08:00",
+      "loadavg": [
+        1.609375,
+        1.1552734375,
+        0.66552734375
+      ],
+      "loadavg_raw": "1.61 1.16 0.67 1/727 27649",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    0.9  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-flush-btrfs-1",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 14,
+      "order": "BA"
+    },
+    {
+      "at": "2026-11-18T14:42:14.369+08:00",
+      "loadavg": [
+        1.47412109375,
+        1.146484375,
+        0.67138671875
+      ],
+      "loadavg_raw": "1.47 1.15 0.67 1/727 27714",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    0.9  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-flush-btrfs-1",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-delalloc",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 15,
+      "order": "AB"
+    },
+    {
+      "at": "2026-11-18T14:42:27.220+08:00",
+      "loadavg": [
+        1.40087890625,
+        1.1416015625,
+        0.67529296875
+      ],
+      "loadavg_raw": "1.40 1.14 0.68 1/727 27779",
+      "ps_rc": 0,
+      "ps_stderr": "",
+      "ps_header": "PID    PPID STAT %CPU %MEM COMMAND",
+      "ps_processes": 395,
+      "ps_top_by_cpu": [
+        "   2956    2600 Ssl   5.5  0.7 zcode-cli",
+        "   2600    2553 Sl    1.2  0.3 node",
+        "  26766    2956 Ss    0.9  0.0 python3",
+        "   2560    2528 S     0.1  0.0 sshd-session",
+        "   1168       1 Ss    0.1  0.0 systemd-oomd",
+        "      1       0 Ss    0.0  0.0 systemd",
+        "   1449       1 Ssl   0.0  0.0 containerd",
+        "  21852    2956 Sl    0.0  0.1 npm exec @upsta",
+        "    551       2 S     0.0  0.0 btrfs-transaction",
+        "  21864   21852 Sl    0.0  0.1 MainThread",
+        "   1953       1 Ssl   0.0  0.1 dockerd",
+        "  21834    2956 Sl    0.0  0.3 zcode-cli",
+        "   2553    2535 Ssl   0.0  0.1 node",
+        "  24740       2 I     0.0  0.0 kworker/u80:8-btrfs-delalloc",
+        "   1234       1 Ssl   0.0  0.0 NetworkManager",
+        "   4999       2 I     0.0  0.0 kworker/u80:4-btrfs-endio-write",
+        "   1076       2 S     0.0  0.0 irq/45-iwlwifi:default_queue",
+        "   1254       1 Ssl   0.0  0.0 udisksd",
+        "  15365       2 I     0.0  0.0 kworker/u80:31-btrfs-endio-meta",
+        "   1955       1 Ssl   0.0  0.0 rsyslogd"
+      ],
+      "ps_top_truncated": true,
+      "pair": 16,
+      "order": "BA"
+    }
+  ],
+  "frozen_ops": null,
+  "excluded_arms": [],
+  "arms_total": 32,
+  "arms_valid": 32,
+  "arms_invalid": 0,
+  "aborted": null,
+  "media_after": {
+    "tmp_dir": {
+      "path": "/tmp/621-p1-aa2",
+      "anchor": "/tmp/621-p1-aa2",
+      "realpath": "/tmp/621-p1-aa2",
+      "exists": true,
+      "mount": {
+        "mount_point": "/tmp",
+        "options": "rw,nosuid,nodev",
+        "fs_type": "tmpfs",
+        "source": "tmpfs",
+        "super_options": "rw,seclabel,size=32837700k,nr_inodes=1048576,inode64,usrquota"
+      },
+      "st_dev": 52,
+      "statvfs": {
+        "f_bsize": 4096,
+        "f_blocks": 8209425,
+        "f_bfree": 7885336,
+        "f_bavail": 7885336
+      }
+    }
+  },
+  "environment_warnings": [
+    "background_load_exceeds_measured_cpus"
+  ]
+}

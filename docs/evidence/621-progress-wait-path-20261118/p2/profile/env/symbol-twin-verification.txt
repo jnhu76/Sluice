@@ -1,0 +1,25 @@
+verification of symbol twins: release binary vs relinked twin
+## bench_w02_pipeline
+release=/tmp/621-p1-build/ring/linux/x86_64/release/bench_w02_pipeline sha256=03dbef098d41e6d6a5280a46d46758ca7267326925ae95d1156ad8d8c3c6a896
+twin=/tmp/p2-621/symtwin/bench_w02_pipeline.sym sha256=7071234f0fd1eab725b0cde36da9db7df5ebba179ca49e87ae73e1a39d354a06
+.text addr/size= release_sha=436f8e21fc3cffe1 twin_sha=436f8e21fc3cffe1 MATCH
+.plt addr/size= release_sha=a5befab42c5c6069 twin_sha=a5befab42c5c6069 MATCH
+.rodata addr/size=000000000042bfe0 002bc8 release_sha=5e8dfaefcb902dcc twin_sha=5e8dfaefcb902dcc MATCH
+.eh_frame addr/size=000000000042f9d0 004934 release_sha=e437632b0e7e44d7 twin_sha=e437632b0e7e44d7 MATCH
+.gcc_except_table addr/size=0000000000434304 000ddc release_sha=d17e0c19235b3857 twin_sha=d17e0c19235b3857 MATCH
+## bench_w03_external_loop
+release=/tmp/621-p1-build/ring/linux/x86_64/release/bench_w03_external_loop sha256=43054fcd59f7000553d34a2f5b2909ff7ae6dae78910d4f379a8e8b0129937c1
+twin=/tmp/p2-621/symtwin/bench_w03_external_loop.sym sha256=b9d2d7371b2aa8e1f404036c325a33ec71ac0314edf695dc1673483116bb1eed
+.text addr/size= release_sha=efbe1dd6e8afa4ed twin_sha=efbe1dd6e8afa4ed MATCH
+.plt addr/size= release_sha=e0bfd19d68947e0d twin_sha=e0bfd19d68947e0d MATCH
+.rodata addr/size=0000000000426fe0 002be8 release_sha=cce950f0bd5e102a twin_sha=cce950f0bd5e102a MATCH
+.eh_frame addr/size=000000000042a8c0 00431c release_sha=deaeb9077c9db9e9 twin_sha=deaeb9077c9db9e9 MATCH
+.gcc_except_table addr/size=000000000042ebdc 000bdc release_sha=68233374a3c4182e twin_sha=68233374a3c4182e MATCH
+## sluice-copy
+release=/tmp/621-p1-build/copy/linux/x86_64/release/sluice-copy sha256=db972b1946fcf2b282135ebdf600263b03492215b08846e867d856c6213fa0be
+twin=/tmp/p2-621/symtwin/sluice-copy.sym sha256=50d3ba7502724d64beb05ca800146666be9353937ba4737735b62e7e78b18ea3
+.text addr/size= release_sha=4b3ae86a637bc171 twin_sha=4b3ae86a637bc171 MATCH
+.plt addr/size= release_sha=6769b1a379a9b4d6 twin_sha=6769b1a379a9b4d6 MATCH
+.rodata addr/size=0000000000413640 0015b0 release_sha=5f5b1c90d8d0b5c5 twin_sha=5f5b1c90d8d0b5c5 MATCH
+.eh_frame addr/size=0000000000415690 0034e4 release_sha=44b3c9e598a4db98 twin_sha=44b3c9e598a4db98 MATCH
+.gcc_except_table addr/size=0000000000418b74 0007af release_sha=2d220faf400e4441 twin_sha=2d220faf400e4441 MATCH

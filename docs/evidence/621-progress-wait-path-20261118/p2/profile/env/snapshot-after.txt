@@ -1,0 +1,33 @@
+# p2 profile environment snapshot (after)
+2026-11-18T16:13:01+08:00
+HEAD=5d94f233967c3aef993eb19ba9e3252c532b0951
+irqbalance=inactive
+cpu0 governor=performance cur=3500000
+cpu1 governor=performance cur=3500000
+cpu2 governor=performance cur=3500000
+cpu3 governor=performance cur=3500000
+cpu4 governor=performance cur=3500000
+cpu5 governor=performance cur=3500000
+cpu6 governor=performance cur=3193830
+cpu7 governor=performance cur=3500000
+cpu8 governor=performance cur=3500000
+cpu9 governor=performance cur=3500000
+cpu10 governor=performance cur=3500000
+cpu11 governor=performance cur=3194227
+cpu12 governor=performance cur=3193649
+cpu13 governor=performance cur=3500000
+cpu14 governor=performance cur=3500000
+cpu15 governor=performance cur=3194267
+cpu16 governor=performance cur=3195349
+cpu17 governor=performance cur=3500000
+cpu18 governor=performance cur=3500000
+cpu19 governor=performance cur=3196178
+loadavg=0.45 0.45 0.42 2/731 39973
+thermal_zone0=51000 mC
+perf_running=0
+0
+uprobes=0
+git_status:
+?? docs/evidence/621-progress-wait-path-20261118/
+?? docs/evidence/621-round2-R1/
+?? docs/evidence/e5-fullpath-machine-work/

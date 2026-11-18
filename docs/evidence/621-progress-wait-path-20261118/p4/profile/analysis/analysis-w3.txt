@@ -1,0 +1,732 @@
+# W3 row-level analysis (text rendering)
+
+### P-D  (W02-threadpool-4k-d16-w4)
+
+- app samples 52243, iou-wrk 0, all 52243; binary IPs 957 (unresolved 0); no-frame app 0; single-group app 522; period est 21258.6 cyc/op app, 21258.6 cyc/op all
+- comms: bench_w02_pipel=52243, taskset=27, sh=18, mkdir=8
+
+| candidate | self app% | inlined-self app% | callsite app% | owner app% | owner all% | inclusive app% | self cyc/op | owner cyc/op |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| RequestCore::reserve | 0.04% (21) | 0.00% (0) | 0.58% (305) | 0.62% | 0.62% | 1.16% | 11.5 | 175.2 |
+| RequestCore::accept | 0.08% (43) | 0.00% (0) | 0.44% (231) | 0.52% | 0.52% | 0.78% | 23.2 | 149.5 |
+| RequestCore::offer_terminal | 0.16% (84) | 0.00% (0) | 1.63% (854) | 1.80% | 1.80% | 3.38% | 29.9 | 310.6 |
+| RequestCore::claim_execution | 0.43% (223) | 0.00% (0) | 1.13% (591) | 1.56% | 1.56% | 2.72% | 74.1 | 273.5 |
+| RequestCore::release_execution | 0.09% (48) | 0.00% (0) | 1.05% (548) | 1.14% | 1.14% | 2.47% | 15.6 | 200.1 |
+| RequestCore::begin_publication | 0.12% (63) | 0.00% (0) | 0.38% (199) | 0.50% | 0.50% | 0.66% | 31.9 | 139.7 |
+| RequestCore::complete_publication | 0.05% (27) | 0.00% (0) | 0.25% (133) | 0.31% | 0.31% | 0.45% | 15.1 | 86.7 |
+| RequestCore::consume_public_result | 0.00% (0) | 0.14% (72) | 0.84% (438) | 0.98% | 0.98% | 1.46% | 0.0 | 274.4 |
+| RequestCore::claim_observer_delivery | 0.02% (10) | 0.00% (0) | 0.22% (116) | 0.24% | 0.24% | 0.35% | 5.8 | 68.7 |
+| RequestCore::retire_observer_delivery | 0.03% (15) | 0.00% (0) | 0.28% (145) | 0.31% | 0.31% | 0.50% | 7.8 | 86.5 |
+| ThreadPoolBackend::publish_one | 0.19% (101) | 0.00% (0) | 0.00% (0) | 0.19% | 0.19% | 2.16% | 56.2 | 56.2 |
+| ThreadPoolBackend::deliver_event | 0.00% (0) | 0.07% (37) | 0.00% (0) | 0.07% | 0.07% | 0.92% | 0.0 | 20.6 |
+| ThreadPoolBackend::poll_progress | 0.13% (68) | 0.00% (0) | 0.24% (127) | 0.37% | 0.37% | 3.06% | 37.7 | 107.3 |
+| ThreadPoolBackend::worker_loop | 1.99% (1042) | 0.00% (0) | 4.72% (2468) | 6.72% | 6.72% | 67.57% | 363.5 | 1212.2 |
+| ThreadPoolBackend::run_syscall | 0.12% (64) | 0.00% (0) | 0.12% (61) | 0.24% | 0.24% | 22.81% | 20.8 | 41.4 |
+| AsyncIoContext::wait_one | 0.06% (29) | 0.00% (0) | 0.31% (162) | 0.37% | 0.37% | 5.02% | 15.5 | 104.3 |
+| AsyncIoContext::run_progress_pass_ | 0.02% (9) | 0.00% (0) | 0.08% (41) | 0.10% | 0.10% | 3.27% | 4.4 | 26.5 |
+| ProgressSource::wait_if_unchanged | 0.00% (0) | 0.02% (9) | 0.05% (25) | 0.07% | 0.07% | 1.38% | 0.0 | 18.4 |
+| RequestScope::wait_for | 0.30% (159) | 0.00% (0) | 0.03% (15) | 0.33% | 0.33% | 6.89% | 87.0 | 95.5 |
+| RequestScope::wait_for_slot_ | 0.00% (0) | 0.05% (25) | 0.03% (15) | 0.08% | 0.08% | 6.63% | 0.0 | 22.1 |
+| RequestScope::take | 0.37% (193) | 0.00% (0) | 0.00% (0) | 0.37% | 0.37% | 1.86% | 105.1 | 105.1 |
+| Request::take_result | 0.00% (0) | 0.11% (56) | 0.00% (0) | 0.11% | 0.11% | 1.60% | 0.0 | 30.5 |
+| RequestBridge::consume | 0.18% (94) | 0.00% (0) | 0.84% (438) | 1.02% | 1.02% | 1.50% | 50.6 | 286.2 |
+| run_pipeline_phase (W-02 app) | 0.70% (367) | 0.00% (0) | 0.07% (36) | 0.77% | 0.77% | 28.36% | 200.0 | 219.3 |
+
+Candidate-family union (each sample counted once per family, app denominator):
+
+| family | owner app% | owner cyc/op | inclusive app% |
+|---|---:|---:|---:|
+| backend | 6.96% (3635) | 1253.6 | 67.57% |
+| terminal | 2.94% (1534) | 510.7 | 5.85% |
+| observer | 1.94% (1011) | 546.5 | 2.72% |
+| execution | 1.56% (814) | 273.5 | 2.72% |
+| progress | 1.17% (610) | 333.6 | 6.90% |
+| admission | 1.15% (600) | 324.7 | 1.94% |
+| publication | 1.00% (523) | 282.6 | 2.16% |
+| app | 0.77% (403) | 219.3 | 28.36% |
+
+Stage container (p2 R1 classifier, app / all):
+
+| stage | app% | all% |
+|---|---:|---:|
+| startup/thread create | 13.63% (7119) | 13.63% (7119) |
+| admission | 13.49% (7047) | 13.49% (7047) |
+| shared sync | 13.46% (7030) | 13.46% (7030) |
+| payload/FS | 13.08% (6833) | 13.09% (6838) |
+| scheduler/IRQ | 12.04% (6292) | 12.04% (6292) |
+| syscall (unattributed) | 7.04% (3677) | 7.04% (3680) |
+| other | 6.62% (3461) | 6.70% (3500) |
+| progress/wait | 5.09% (2661) | 5.09% (2661) |
+| terminal/release | 4.01% (2095) | 4.01% (2095) |
+| publication | 3.73% (1948) | 3.73% (1948) |
+| observation | 2.53% (1323) | 2.53% (1323) |
+| kernel syscall/FS overhead | 1.89% (989) | 1.90% (995) |
+| bench harness | 1.49% (777) | 1.49% (777) |
+| dispatch | 0.93% (485) | 0.93% (485) |
+| backend exec (TP) | 0.87% (453) | 0.87% (453) |
+| poll boundary (libc __poll only) | 0.10% (52) | 0.10% (52) |
+| submit | 0.00% (1) | 0.00% (1) |
+
+- **RequestCore::reserve**: self lines: src/async/detail/request_core.cpp:177 0.02% (8); src/async/detail/request_core.cpp:181 0.01% (4); src/async/detail/request_core.cpp:165 0.01% (4); src/async/detail/request_core.cpp:167 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:166 0.33% (171); src/async/detail/request_core.cpp:182 0.26% (134)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.33% (171); __GI___pthread_mutex_unlock_usercnt 0.25% (132); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (2)
+  - self inner (actual sampled function:line): /usr/include/c++/16/bits/stl_vector.h:1450 [std::vector<unsigned int, std::allocator<unsigned int> >::pop_back()] 0.02% (8); src/async/detail/request_core.cpp:181 [sluice::async::detail::RequestCore::reserve()] 0.01% (4); src/async/detail/request_core.cpp:165 [sluice::async::detail::RequestCore::reserve()] 0.01% (4)
+  - roles: {'main': 326}
+- **RequestCore::accept**: self lines: src/async/detail/request_core.cpp:186 0.02% (10); src/async/detail/request_core.cpp:203 0.02% (8); src/async/detail/request_core.cpp:210 0.01% (5); src/async/detail/request_core.cpp:199 0.01% (4)
+  - callsite lines: src/async/detail/request_core.cpp:187 0.25% (130); src/async/detail/request_core.cpp:210 0.19% (101)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.25% (130); __GI___pthread_mutex_unlock_usercnt 0.19% (99); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:186 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.02% (10); src/async/detail/request_core.cpp:203 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.02% (8); src/async/detail/request_core.cpp:210 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.01% (5)
+  - roles: {'main': 274}
+- **RequestCore::offer_terminal**: self lines: src/async/detail/request_core.cpp:349 0.11% (56); src/async/detail/request_core.cpp:361 0.01% (6); src/async/detail/request_core.cpp:360 0.01% (5); src/async/detail/request_core.cpp:354 0.01% (4)
+  - callsite lines: src/async/detail/request_core.cpp:365 1.01% (528); src/async/detail/request_core.cpp:348 0.62% (326)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 1.00% (525); pthread_mutex_lock@@GLIBC_2.2.5 0.62% (326); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.08% (41); include/sluice/async/detail/request_key.hpp:12 [sluice::async::detail::operator==(sluice::async::detail::ContextIdentity const&, sluice::async::detail::ContextIdentity const&)] 0.01% (6); src/async/detail/request_core.cpp:122 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.01% (6)
+  - roles: {'worker': 938}
+- **RequestCore::claim_execution**: self lines: src/async/detail/request_core.cpp:369 0.33% (174); src/async/detail/request_core.cpp:373 0.07% (35); src/async/detail/request_core.cpp:368 0.01% (5); src/async/detail/request_core.cpp:376 0.01% (4)
+  - callsite lines: src/async/detail/request_core.cpp:378 0.71% (371); src/async/detail/request_core.cpp:368 0.42% (220)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.71% (369); pthread_mutex_lock@@GLIBC_2.2.5 0.42% (220); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.30% (158); src/async/detail/request_core.cpp:373 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.07% (35); /usr/include/c++/16/bits/stl_vector.h:1254 [std::vector<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::operator[](unsigned long)] 0.01% (6)
+  - roles: {'worker': 814}
+- **RequestCore::release_execution**: self lines: src/async/detail/request_core.cpp:395 0.05% (24); src/async/detail/request_core.cpp:393 0.01% (6); src/async/detail/request_core.cpp:409 0.01% (5); src/async/detail/request_core.cpp:402 0.01% (4)
+  - callsite lines: src/async/detail/request_core.cpp:394 0.68% (355); src/async/detail/request_core.cpp:409 0.37% (192); src/async/detail/request_core.cpp:393 0.00% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.68% (355); __GI___pthread_mutex_unlock_usercnt 0.36% (190); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (2); __switch_to_asm 0.00% (1)
+  - self inner (actual sampled function:line): include/sluice/async/detail/request_key.hpp:12 [sluice::async::detail::operator==(sluice::async::detail::ContextIdentity const&, sluice::async::detail::ContextIdentity const&)] 0.03% (14); src/async/detail/request_core.cpp:393 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.01% (6); src/async/detail/request_core.cpp:409 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.01% (4)
+  - roles: {'worker': 596}
+- **RequestCore::begin_publication**: self lines: src/async/detail/request_core.cpp:440 0.08% (41); src/async/detail/request_core.cpp:444 0.02% (10); src/async/detail/request_core.cpp:447 0.01% (4); src/async/detail/request_core.cpp:439 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:460 0.23% (120); src/async/detail/request_core.cpp:439 0.15% (79)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.22% (117); pthread_mutex_lock@@GLIBC_2.2.5 0.15% (79); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.07% (35); src/async/detail/request_core.cpp:444 [sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)] 0.02% (10); src/async/detail/request_core.cpp:447 [sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)] 0.01% (4)
+  - roles: {'main': 262}
+- **RequestCore::complete_publication**: self lines: src/async/detail/request_core.cpp:464 0.02% (8); src/async/detail/request_core.cpp:462 0.01% (4); src/async/detail/request_core.cpp:484 0.01% (4); src/async/detail/request_core.cpp:483 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:463 0.14% (72); src/async/detail/request_core.cpp:484 0.12% (61)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.14% (72); __GI___pthread_mutex_unlock_usercnt 0.11% (58); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:462 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (4); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825 [__gthread_mutex_unlock(pthread_mutex_t*)] 0.01% (4); src/async/detail/request_core.cpp:483 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (3)
+  - roles: {'main': 160}
+- **RequestCore::consume_public_result**: self lines: -
+  - inlined-body lines: src/async/detail/request_core.cpp:341 0.07% (34); src/async/detail/request_core.cpp:334 0.04% (21); src/async/detail/request_core.cpp:337 0.02% (8); src/async/detail/request_core.cpp:325 0.01% (4)
+  - callsite lines: src/async/detail/request_core.cpp:344 0.62% (325); src/async/detail/request_core.cpp:325 0.22% (113)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.61% (321); pthread_mutex_lock@@GLIBC_2.2.5 0.22% (113); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (4)
+  - roles: {'main': 510}
+- **ThreadPoolBackend::publish_one**: self lines: src/async/threadpool_backend.cpp:358 0.10% (50); src/async/threadpool_backend.cpp:373 0.07% (37); src/async/threadpool_backend.cpp:370 0.01% (7); src/async/threadpool_backend.cpp:357 0.01% (4)
+  - self inner (actual sampled function:line): src/async/threadpool_backend.cpp:358 [sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)] 0.10% (50); src/async/threadpool_backend.cpp:382 [sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)] 0.05% (28); src/async/threadpool_backend.cpp:377 [sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)] 0.01% (7)
+  - roles: {'main': 101}
+- **ThreadPoolBackend::deliver_event**: self lines: -
+  - inlined-body lines: src/async/threadpool_backend.cpp:382 0.05% (28); src/async/threadpool_backend.cpp:377 0.01% (7); src/async/threadpool_backend.cpp:383 0.00% (2)
+  - roles: {'main': 37}
+- **AsyncIoContext::wait_one**: self lines: src/async/async_io_context.cpp:663 0.02% (9); src/async/async_io_context.cpp:578 0.01% (6); src/async/async_io_context.cpp:609 0.01% (5); src/async/async_io_context.cpp:606 0.00% (2)
+  - callsite lines: src/async/async_io_context.cpp:609 0.12% (61); src/async/async_io_context.cpp:663 0.05% (25); src/async/async_io_context.cpp:595 0.04% (19); src/async/async_io_context.cpp:696 0.03% (15)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.17% (89); __GI___pthread_mutex_unlock_usercnt 0.11% (59); std::chrono::_V2::steady_clock::now() 0.01% (4); __GI___pthread_self 0.01% (3)
+  - self inner (actual sampled function:line): src/async/async_io_context.cpp:578 [sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)] 0.01% (6); include/sluice/async/detail/progress_source.hpp:93 [sluice::async::detail::ProgressSource::snapshot() const] 0.01% (4); include/sluice/async/detail/progress_source.hpp:384 [sluice::async::detail::ProgressSource::control_pending_nolock_() const] 0.00% (2)
+  - roles: {'main': 191}
+- **AsyncIoContext::run_progress_pass_**: self lines: src/async/async_io_context.cpp:434 0.00% (2); src/async/async_io_context.cpp:429 0.00% (2); src/async/async_io_context.cpp:432 0.00% (1); src/async/async_io_context.cpp:430 0.00% (1)
+  - callsite lines: src/async/async_io_context.cpp:437 0.04% (22); src/async/async_io_context.cpp:434 0.04% (19)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.05% (24); __GI___pthread_mutex_unlock_usercnt 0.03% (16); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (1)
+  - self inner (actual sampled function:line): src/async/async_io_context.cpp:429 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.00% (2); src/async/async_io_context.cpp:432 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.00% (1); src/async/async_io_context.cpp:430 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.00% (1)
+  - roles: {'main': 50}
+- **RequestScope::wait_for**: self lines: src/async/request_scope.cpp:248 0.25% (128); src/async/request_scope.cpp:252 0.05% (25); src/async/request_scope.cpp:247 0.01% (3); src/async/request_scope.cpp:253 0.01% (3)
+  - callsite lines: src/async/request_scope.cpp:252 0.03% (15)
+  - callsite leaf: std::chrono::_V2::steady_clock::now() 0.03% (15)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.11% (59); include/sluice/async/request_scope.hpp:118 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.05% (26); /usr/include/c++/16/variant:1210 [std::add_pointer<std::variant_alternative<1ul, std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> > >::type>::type std::get_if<1ul, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >*)] 0.03% (15)
+  - roles: {'main': 174}
+- **RequestScope::take**: self lines: src/async/request_scope.cpp:239 0.34% (179); src/async/request_scope.cpp:238 0.01% (7); src/async/request_scope.cpp:240 0.01% (7)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.09% (45); include/sluice/async/request_scope.hpp:118 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.04% (22); include/sluice/async/request_scope.hpp:120 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.04% (20)
+  - roles: {'main': 193}
+
+### P-C  (W03-uring-4k-d16)
+
+- app samples 35836, iou-wrk 19740, all 55576; binary IPs 997 (unresolved 0); no-frame app 0; single-group app 249; period est 17091.5 cyc/op app, 24254.6 cyc/op all
+- comms: bench_w03_exter=35836, iou-wrk-52438=11076, iou-wrk-52479=8664, taskset=26, sh=18, mkdir=8
+
+| candidate | self app% | inlined-self app% | callsite app% | owner app% | owner all% | inclusive app% | self cyc/op | owner cyc/op |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| RequestCore::reserve | 0.11% (39) | 0.00% (0) | 0.56% (200) | 0.67% | 0.43% | 1.17% | 21.0 | 128.8 |
+| RequestCore::accept | 0.07% (26) | 0.00% (0) | 0.53% (189) | 0.60% | 0.39% | 1.06% | 14.2 | 116.3 |
+| RequestCore::offer_terminal | 0.48% (173) | 0.00% (0) | 1.28% (459) | 1.76% | 1.14% | 2.03% | 65.2 | 234.4 |
+| RequestCore::claim_execution | 0.05% (19) | 0.00% (0) | 0.28% (99) | 0.33% | 0.21% | 0.66% | 10.2 | 64.0 |
+| RequestCore::release_execution | 0.10% (35) | 0.00% (0) | 0.95% (342) | 1.05% | 0.68% | 1.31% | 13.2 | 138.6 |
+| RequestCore::begin_publication | 0.09% (33) | 0.00% (0) | 0.51% (183) | 0.60% | 0.39% | 0.89% | 12.0 | 79.9 |
+| RequestCore::complete_publication | 0.10% (36) | 0.00% (0) | 0.65% (232) | 0.75% | 0.48% | 0.95% | 13.7 | 101.1 |
+| RequestCore::consume_public_result | 0.00% (0) | 0.13% (46) | 1.17% (419) | 1.30% | 0.84% | 1.81% | 0.0 | 252.1 |
+| RequestCore::claim_observer_delivery | 0.07% (25) | 0.00% (0) | 0.44% (158) | 0.51% | 0.33% | 0.69% | 9.1 | 66.6 |
+| RequestCore::retire_observer_delivery | 0.10% (35) | 0.00% (0) | 0.44% (159) | 0.54% | 0.35% | 0.84% | 13.8 | 72.8 |
+| UringAsyncBackend::publish_one | 0.38% (136) | 0.00% (0) | 0.00% (0) | 0.38% | 0.24% | 3.77% | 50.2 | 50.2 |
+| UringAsyncBackend::deliver_event | 0.00% (0) | 0.06% (22) | 0.00% (0) | 0.06% | 0.04% | 1.58% | 0.0 | 7.9 |
+| UringAsyncBackend::poll_progress | 0.07% (26) | 0.00% (0) | 0.07% (25) | 0.14% | 0.09% | 14.95% | 10.0 | 19.1 |
+| UringAsyncBackend::poll | 0.15% (55) | 0.02% (8) | 0.75% (267) | 0.92% | 0.59% | 14.50% | 19.2 | 123.3 |
+| UringAsyncBackend::reap_cqes | 0.21% (74) | 0.00% (0) | 0.24% (86) | 0.45% | 0.29% | 6.49% | 26.7 | 57.4 |
+| UringAsyncBackend::handle_one_cqe | 0.68% (243) | 0.00% (0) | 0.25% (91) | 0.93% | 0.60% | 5.85% | 88.6 | 122.1 |
+| UringAsyncBackend::find_live_router_cookie_ | 0.45% (163) | 0.00% (0) | 0.00% (0) | 0.45% | 0.29% | 0.45% | 59.2 | 59.2 |
+| UringAsyncBackend::finalize_operation_terminal_ | 0.51% (184) | 0.00% (0) | 0.00% (0) | 0.51% | 0.33% | 4.29% | 69.3 | 69.3 |
+| UringAsyncBackend::dispatch_one_locked | 1.56% (560) | 0.00% (0) | 0.42% (149) | 1.98% | 1.28% | 3.28% | 303.4 | 384.0 |
+| UringAsyncBackend::submit_transport_locked | 0.03% (10) | 0.29% (104) | 0.43% (155) | 0.75% | 0.48% | 25.86% | 3.9 | 144.0 |
+| AsyncIoContext::run_progress_pass_ | 0.08% (30) | 0.00% (0) | 0.16% (57) | 0.24% | 0.16% | 15.41% | 11.3 | 32.1 |
+| AsyncIoContext::poll_progress | 0.03% (11) | 0.00% (0) | 0.22% (80) | 0.25% | 0.16% | 18.48% | 4.2 | 32.9 |
+| Request::take_result | 0.00% (0) | 0.05% (18) | 0.01% (2) | 0.06% | 0.04% | 1.89% | 0.0 | 10.7 |
+| RequestBridge::consume | 0.16% (59) | 0.00% (0) | 1.17% (420) | 1.34% | 0.86% | 1.85% | 31.7 | 259.6 |
+| driver_thread (W-03 driver) | 0.12% (44) | 0.00% (0) | 0.63% (225) | 0.75% | 0.48% | 37.95% | 16.0 | 98.3 |
+| run_external_phase (W-03 submitter) | 1.14% (410) | 0.00% (0) | 0.50% (178) | 1.64% | 1.06% | 58.88% | 221.8 | 318.1 |
+
+Candidate-family union (each sample counted once per family, app denominator):
+
+| family | owner app% | owner cyc/op | inclusive app% |
+|---|---:|---:|---:|
+| terminal | 3.33% (1193) | 442.3 | 4.29% |
+| observer | 2.44% (876) | 409.8 | 3.45% |
+| dispatch | 1.98% (709) | 384.0 | 3.28% |
+| reap | 1.83% (657) | 238.6 | 6.49% |
+| publication | 1.73% (620) | 231.3 | 3.77% |
+| submitter | 1.64% (588) | 318.1 | 58.88% |
+| progress | 1.54% (551) | 204.4 | 18.56% |
+| admission | 1.27% (454) | 245.2 | 2.23% |
+| submit | 0.75% (269) | 144.0 | 25.86% |
+| driver | 0.75% (269) | 98.3 | 37.95% |
+| execution | 0.33% (118) | 64.0 | 0.66% |
+
+Stage container (p2 R1 classifier, app / all):
+
+| stage | app% | all% |
+|---|---:|---:|
+| progress/wait | 23.40% (8387) | 19.02% (10569) |
+| submit | 20.80% (7453) | 13.41% (7453) |
+| admission | 12.64% (4528) | 8.15% (4528) |
+| dispatch | 8.46% (3030) | 5.68% (3155) |
+| startup/thread create | 6.44% (2309) | 4.15% (2309) |
+| syscall (unattributed) | 4.21% (1510) | 2.72% (1512) |
+| publication | 4.11% (1474) | 2.65% (1474) |
+| terminal/release | 3.56% (1275) | 2.29% (1275) |
+| io-wq punt | 3.25% (1163) | 5.65% (3140) |
+| bench harness | 2.47% (885) | 1.59% (885) |
+| observation | 2.41% (863) | 1.55% (863) |
+| shared sync | 2.26% (811) | 5.12% (2847) |
+| reap/CQE | 2.15% (770) | 3.69% (2050) |
+| other | 2.01% (721) | 3.88% (2155) |
+| scheduler/IRQ | 0.84% (302) | 7.69% (4276) |
+| payload/FS | 0.81% (289) | 12.19% (6772) |
+| kernel syscall/FS overhead | 0.18% (66) | 0.66% (365) |
+
+- **RequestCore::reserve**: self lines: src/async/detail/request_core.cpp:181 0.06% (22); src/async/detail/request_core.cpp:182 0.02% (7); src/async/detail/request_core.cpp:179 0.01% (3); src/async/detail/request_core.cpp:165 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:182 0.31% (112); src/async/detail/request_core.cpp:166 0.24% (85); src/async/detail/request_core.cpp:181 0.01% (2); src/async/detail/request_core.cpp:167 0.00% (1)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.30% (108); pthread_mutex_lock@@GLIBC_2.2.5 0.24% (85); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (3); asm_sysvec_reschedule_ipi 0.01% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:181 [sluice::async::detail::RequestCore::reserve()] 0.06% (22); src/async/detail/request_core.cpp:182 [sluice::async::detail::RequestCore::reserve()] 0.02% (6); src/async/detail/request_core.cpp:179 [sluice::async::detail::RequestCore::reserve()] 0.01% (3)
+  - roles: {'main': 239}
+- **RequestCore::accept**: self lines: src/async/detail/request_core.cpp:186 0.01% (5); src/async/detail/request_core.cpp:199 0.01% (4); src/async/detail/request_core.cpp:210 0.01% (4); src/async/detail/request_core.cpp:188 0.01% (4)
+  - callsite lines: src/async/detail/request_core.cpp:210 0.33% (118); src/async/detail/request_core.cpp:187 0.18% (66); src/async/detail/request_core.cpp:203 0.01% (2); src/async/detail/request_core.cpp:188 0.00% (1)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.32% (116); pthread_mutex_lock@@GLIBC_2.2.5 0.18% (66); __irqentry_text_end 0.01% (3); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:186 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.01% (5); src/async/detail/request_core.cpp:199 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.01% (4); src/async/detail/request_core.cpp:210 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.01% (4)
+  - roles: {'main': 215}
+- **RequestCore::offer_terminal**: self lines: src/async/detail/request_core.cpp:349 0.36% (128); src/async/detail/request_core.cpp:354 0.05% (18); src/async/detail/request_core.cpp:360 0.02% (7); src/async/detail/request_core.cpp:353 0.01% (5)
+  - callsite lines: src/async/detail/request_core.cpp:365 0.96% (345); src/async/detail/request_core.cpp:348 0.32% (114)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.95% (342); pthread_mutex_lock@@GLIBC_2.2.5 0.32% (114); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.32% (115); src/async/detail/request_core.cpp:354 [sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)] 0.05% (18); /usr/include/c++/16/bits/stl_vector.h:1254 [std::vector<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::operator[](unsigned long)] 0.02% (8)
+  - roles: {'driver': 632}
+- **RequestCore::claim_execution**: self lines: src/async/detail/request_core.cpp:369 0.02% (6); src/async/detail/request_core.cpp:368 0.01% (4); src/async/detail/request_core.cpp:378 0.01% (3); src/async/detail/request_core.cpp:367 0.01% (2)
+  - callsite lines: src/async/detail/request_core.cpp:368 0.14% (51); src/async/detail/request_core.cpp:378 0.13% (48)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.14% (49); __GI___pthread_mutex_unlock_usercnt 0.13% (46); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (2); __irqentry_text_end 0.00% (1)
+  - self inner (actual sampled function:line): /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.01% (4); src/async/detail/request_core.cpp:378 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.01% (3); include/sluice/async/detail/request_key.hpp:22 [sluice::async::detail::operator==(sluice::async::detail::Generation const&, sluice::async::detail::Generation const&)] 0.01% (2)
+  - roles: {'main': 118}
+- **RequestCore::release_execution**: self lines: src/async/detail/request_core.cpp:395 0.03% (10); src/async/detail/request_core.cpp:409 0.02% (7); src/async/detail/request_core.cpp:402 0.01% (5); src/async/detail/request_core.cpp:408 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:394 0.66% (237); src/async/detail/request_core.cpp:409 0.29% (105)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.66% (237); __GI___pthread_mutex_unlock_usercnt 0.28% (101); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (4)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:402 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.01% (5); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825 [__gthread_mutex_unlock(pthread_mutex_t*)] 0.01% (5); src/async/detail/request_core.cpp:122 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.01% (5)
+  - roles: {'driver': 377}
+- **RequestCore::begin_publication**: self lines: src/async/detail/request_core.cpp:440 0.04% (15); src/async/detail/request_core.cpp:447 0.01% (5); src/async/detail/request_core.cpp:460 0.01% (4); src/async/detail/request_core.cpp:439 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:439 0.26% (94); src/async/detail/request_core.cpp:460 0.25% (89)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.26% (94); __GI___pthread_mutex_unlock_usercnt 0.24% (87); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.01% (5); src/async/detail/request_core.cpp:447 [sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)] 0.01% (5); /usr/include/c++/16/bits/stl_vector.h:1254 [std::vector<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::operator[](unsigned long)] 0.01% (4)
+  - roles: {'driver': 216}
+- **RequestCore::complete_publication**: self lines: src/async/detail/request_core.cpp:462 0.04% (15); src/async/detail/request_core.cpp:464 0.02% (8); src/async/detail/request_core.cpp:484 0.02% (6); src/async/detail/request_core.cpp:483 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:484 0.39% (139); src/async/detail/request_core.cpp:463 0.26% (93)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.38% (136); pthread_mutex_lock@@GLIBC_2.2.5 0.26% (93); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:462 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.04% (15); src/async/detail/request_core.cpp:484 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (4); src/async/detail/request_core.cpp:483 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (3)
+  - roles: {'driver': 268}
+- **RequestCore::consume_public_result**: self lines: -
+  - inlined-body lines: src/async/detail/request_core.cpp:341 0.07% (25); src/async/detail/request_core.cpp:326 0.03% (9); src/async/detail/request_core.cpp:334 0.02% (7); src/async/detail/request_core.cpp:337 0.01% (3)
+  - callsite lines: src/async/detail/request_core.cpp:344 0.97% (346); src/async/detail/request_core.cpp:325 0.20% (72); src/async/detail/request_core.cpp:334 0.00% (1)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.96% (345); pthread_mutex_lock@@GLIBC_2.2.5 0.20% (72); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (1); __irqentry_text_end 0.00% (1)
+  - roles: {'main': 465}
+- **UringAsyncBackend::publish_one**: self lines: src/async/uring_backend.cpp:584 0.13% (48); src/async/uring_backend.cpp:598 0.12% (43); src/async/uring_backend.cpp:606 0.07% (24); src/async/uring_backend.cpp:578 0.03% (12)
+  - self inner (actual sampled function:line): src/async/uring_backend.cpp:584 [sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)] 0.13% (48); src/async/uring_backend.cpp:598 [sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)] 0.12% (43); src/async/uring_backend.cpp:612 [sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)] 0.04% (13)
+  - roles: {'driver': 136}
+- **UringAsyncBackend::deliver_event**: self lines: -
+  - inlined-body lines: src/async/uring_backend.cpp:612 0.04% (13); src/async/uring_backend.cpp:611 0.01% (5); src/async/uring_backend.cpp:613 0.01% (4)
+  - roles: {'driver': 22}
+- **AsyncIoContext::run_progress_pass_**: self lines: src/async/async_io_context.cpp:432 0.03% (10); src/async/async_io_context.cpp:433 0.03% (9); src/async/async_io_context.cpp:437 0.01% (5); src/async/async_io_context.cpp:429 0.01% (3)
+  - callsite lines: src/async/async_io_context.cpp:434 0.08% (29); src/async/async_io_context.cpp:437 0.08% (28)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.08% (28); pthread_mutex_lock@@GLIBC_2.2.5 0.08% (28); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (1)
+  - self inner (actual sampled function:line): src/async/async_io_context.cpp:433 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.03% (9); src/async/async_io_context.cpp:432 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.03% (9); src/async/async_io_context.cpp:429 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.01% (3)
+  - roles: {'driver': 87}
+- **driver_thread (W-03 driver)**: self lines: bench/bench_w03_external_loop.cpp:199 0.04% (15); bench/bench_w03_external_loop.cpp:202 0.04% (14); bench/bench_w03_external_loop.cpp:204 0.01% (4); bench/bench_w03_external_loop.cpp:203 0.01% (3)
+  - callsite lines: bench/bench_w03_external_loop.cpp:204 0.17% (60); bench/bench_w03_external_loop.cpp:203 0.12% (44); bench/bench_w03_external_loop.cpp:206 0.08% (28); bench/bench_w03_external_loop.cpp:232 0.07% (26)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.28% (100); pthread_mutex_lock@@GLIBC_2.2.5 0.27% (96); epoll_wait 0.07% (24); std::condition_variable::notify_all() 0.01% (4)
+  - self inner (actual sampled function:line): bench/bench_w03_external_loop.cpp:199 [(anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)] 0.04% (15); bench/bench_w03_external_loop.cpp:202 [(anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)] 0.04% (14); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.02% (6)
+  - roles: {'driver': 269}
+- **run_external_phase (W-03 submitter)**: self lines: bench/bench_w03_external_loop.cpp:349 0.25% (89); bench/bench_w03_external_loop.cpp:355 0.23% (82); bench/bench_w03_external_loop.cpp:342 0.15% (55); bench/bench_w03_external_loop.cpp:344 0.12% (43)
+  - callsite lines: /usr/include/c++/16/condition_variable:156 0.13% (47); bench/bench_w03_external_loop.cpp:417 0.07% (25); bench/bench_w03_external_loop.cpp:369 0.06% (20); bench/bench_w03_external_loop.cpp:349 0.04% (15)
+  - callsite leaf: pthread_cond_clockwait@@GLIBC_2.34 0.13% (45); __irqentry_text_end 0.08% (28); cfree@GLIBC_2.2.5 0.06% (22); pthread_mutex_lock@@GLIBC_2.2.5 0.06% (20)
+  - self inner (actual sampled function:line): bench/bench_w03_external_loop.cpp:349 [(anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)] 0.25% (89); bench/bench_w03_external_loop.cpp:342 [(anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)] 0.15% (55); bench/bench_w03_external_loop.cpp:344 [(anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)] 0.12% (43)
+  - roles: {'main': 588}
+- **UringAsyncBackend::find_live_router_cookie_**: self lines: src/async/uring_transport.cpp:552 0.21% (76); src/async/uring_transport.cpp:553 0.20% (71); src/async/uring_transport.cpp:557 0.04% (16)
+  - self inner (actual sampled function:line): src/async/uring_transport.cpp:552 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.21% (74); src/async/uring_transport.cpp:553 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.20% (71); src/async/uring_transport.cpp:557 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.04% (16)
+  - roles: {'driver': 163}
+- **UringAsyncBackend::handle_one_cqe**: self lines: src/async/uring_completion.cpp:173 0.27% (96); src/async/uring_completion.cpp:160 0.26% (92); src/async/uring_completion.cpp:149 0.03% (11); src/async/uring_completion.cpp:151 0.03% (9)
+  - callsite lines: src/async/uring_completion.cpp:100 0.25% (91)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.25% (91)
+  - self inner (actual sampled function:line): src/async/uring_completion.cpp:160 [sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)] 0.26% (92); include/sluice/detail/file_semantics.hpp:310 [sluice::detail::IoOutcome::success(unsigned long)] 0.14% (51); src/async/uring_completion.cpp:173 [sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)] 0.13% (45)
+  - roles: {'driver': 334}
+- **UringAsyncBackend::reap_cqes**: self lines: src/async/uring_completion.cpp:229 0.13% (47); src/async/uring_completion.cpp:238 0.07% (25); src/async/uring_completion.cpp:200 0.01% (2)
+  - callsite lines: src/async/uring_completion.cpp:229 0.24% (86)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.20% (70); io_uring_peek_batch_cqe 0.04% (14); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (2)
+  - self inner (actual sampled function:line): src/async/uring_completion.cpp:238 [sluice::async::UringAsyncBackend::reap_cqes()] 0.07% (25); src/async/uring_completion.cpp:229 [sluice::async::UringAsyncBackend::reap_cqes()] 0.06% (20); /usr/include/liburing.h:428 [sluice::async::UringAsyncBackend::reap_cqes()] 0.03% (9)
+  - roles: {'driver': 160}
+
+### P-E  (sluice-copy-4k-d4-w1)
+
+- app samples 69371, iou-wrk 0, all 69371; binary IPs 897 (unresolved 0); no-frame app 0; single-group app 655; period est 44345.0 cyc/chunk app, 44345.0 cyc/chunk all
+- comms: sluice-copy=69371, rm=976, sh=104, taskset=25
+
+| candidate | self app% | inlined-self app% | callsite app% | owner app% | owner all% | inclusive app% | self cyc/chunk | owner cyc/chunk |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| RequestCore::reserve | 0.05% (35) | 0.00% (0) | 0.32% (225) | 0.37% | 0.37% | 0.38% | 18.9 | 143.4 |
+| RequestCore::accept | 0.07% (47) | 0.00% (0) | 0.31% (217) | 0.38% | 0.38% | 0.39% | 25.4 | 142.5 |
+| RequestCore::offer_terminal | 0.15% (104) | 0.00% (0) | 0.69% (482) | 0.84% | 0.84% | 0.86% | 75.5 | 427.2 |
+| RequestCore::claim_execution | 0.36% (253) | 0.00% (0) | 0.82% (572) | 1.19% | 1.19% | 1.69% | 183.8 | 603.8 |
+| RequestCore::release_execution | 0.16% (110) | 0.00% (0) | 0.24% (166) | 0.40% | 0.40% | 0.45% | 80.8 | 201.8 |
+| RequestCore::begin_publication | 0.33% (230) | 0.00% (0) | 0.61% (422) | 0.94% | 0.94% | 1.02% | 124.1 | 352.5 |
+| RequestCore::complete_publication | 0.08% (54) | 0.00% (0) | 0.34% (233) | 0.41% | 0.41% | 0.44% | 29.1 | 156.1 |
+| RequestCore::consume_public_result | 0.00% (0) | 0.19% (133) | 0.64% (442) | 0.83% | 0.83% | 0.92% | 0.0 | 309.2 |
+| RequestCore::claim_observer_delivery | 0.05% (32) | 0.00% (0) | 0.30% (205) | 0.34% | 0.34% | 0.36% | 17.2 | 129.2 |
+| RequestCore::retire_observer_delivery | 0.05% (36) | 0.00% (0) | 0.35% (245) | 0.41% | 0.41% | 0.46% | 18.8 | 151.9 |
+| ThreadPoolBackend::publish_one | 0.21% (148) | 0.00% (0) | 0.00% (0) | 0.21% | 0.21% | 2.51% | 81.9 | 81.9 |
+| ThreadPoolBackend::deliver_event | 0.00% (0) | 0.05% (33) | 0.00% (0) | 0.05% | 0.05% | 0.89% | 0.0 | 18.4 |
+| ThreadPoolBackend::poll_progress | 0.27% (190) | 0.00% (0) | 1.78% (1237) | 2.06% | 2.06% | 5.22% | 104.6 | 775.1 |
+| ThreadPoolBackend::worker_loop | 0.86% (596) | 0.00% (0) | 1.88% (1301) | 2.73% | 2.73% | 48.30% | 433.5 | 1386.7 |
+| ThreadPoolBackend::run_syscall | 0.16% (109) | 0.00% (0) | 0.13% (92) | 0.29% | 0.29% | 22.13% | 78.9 | 145.8 |
+| AsyncIoContext::wait_one | 0.28% (191) | 0.00% (0) | 3.16% (2194) | 3.44% | 3.44% | 31.29% | 103.1 | 1296.7 |
+| AsyncIoContext::run_progress_pass_ | 0.15% (107) | 0.00% (0) | 0.63% (438) | 0.79% | 0.79% | 6.37% | 57.8 | 293.1 |
+| ProgressSource::wait_if_unchanged | 0.00% (0) | 0.16% (113) | 1.91% (1328) | 2.08% | 2.08% | 23.25% | 0.0 | 785.1 |
+| RequestScope::wait_for | 0.28% (194) | 0.00% (0) | 0.03% (18) | 0.31% | 0.31% | 32.69% | 105.8 | 115.2 |
+| RequestScope::wait_for_slot_ | 0.00% (0) | 0.16% (112) | 0.03% (18) | 0.19% | 0.19% | 32.57% | 0.0 | 70.6 |
+| RequestScope::take | 0.39% (269) | 0.00% (0) | 0.00% (0) | 0.39% | 0.39% | 1.36% | 145.3 | 145.3 |
+| Request::take_result | 0.00% (0) | 0.17% (120) | 0.00% (0) | 0.17% | 0.17% | 1.15% | 0.0 | 65.2 |
+| RequestBridge::consume | 0.25% (171) | 0.00% (0) | 0.64% (442) | 0.88% | 0.88% | 0.97% | 91.8 | 329.8 |
+| PipelinedCopyTask::wait_take | 0.00% (0) | 0.08% (56) | 0.00% (0) | 0.08% | 0.08% | 34.13% | 0.0 | 31.2 |
+| sluice_copy::run_pipelined_copy_with_context | 1.81% (1254) | 0.00% (0) | 0.00% (1) | 1.81% | 1.81% | 47.18% | 682.2 | 682.8 |
+
+Candidate-family union (each sample counted once per family, app denominator):
+
+| family | owner app% | owner cyc/chunk | inclusive app% |
+|---|---:|---:|---:|
+| progress | 6.67% (4625) | 2511.2 | 34.15% |
+| backend | 3.02% (2098) | 1532.5 | 48.30% |
+| observer | 2.02% (1400) | 756.2 | 2.19% |
+| copy-main | 1.81% (1255) | 682.8 | 47.18% |
+| publication | 1.57% (1087) | 590.5 | 2.52% |
+| terminal | 1.24% (862) | 629.0 | 1.31% |
+| execution | 1.19% (825) | 603.8 | 1.69% |
+| admission | 0.76% (524) | 285.9 | 0.78% |
+
+Stage container (p2 R1 classifier, app / all):
+
+| stage | app% | all% |
+|---|---:|---:|
+| progress/wait | 26.37% (18295) | 26.38% (18299) |
+| payload/FS | 10.18% (7061) | 10.88% (7545) |
+| syscall (unattributed) | 9.60% (6659) | 9.61% (6667) |
+| startup/thread create | 8.68% (6021) | 8.68% (6022) |
+| other | 7.74% (5368) | 8.27% (5736) |
+| shared sync | 7.45% (5169) | 7.53% (5222) |
+| admission | 7.17% (4974) | 7.17% (4974) |
+| scheduler/IRQ | 5.65% (3922) | 5.71% (3961) |
+| kernel syscall/FS overhead | 4.43% (3076) | 4.65% (3224) |
+| poll boundary (libc __poll only) | 4.42% (3068) | 4.42% (3068) |
+| publication | 3.63% (2517) | 3.63% (2517) |
+| observation | 1.97% (1366) | 1.97% (1366) |
+| terminal/release | 1.29% (895) | 1.29% (895) |
+| dispatch | 0.71% (492) | 0.71% (492) |
+| backend exec (TP) | 0.70% (488) | 0.70% (488) |
+
+- **RequestCore::reserve**: self lines: src/async/detail/request_core.cpp:165 0.02% (11); src/async/detail/request_core.cpp:182 0.01% (7); src/async/detail/request_core.cpp:181 0.01% (6); src/async/detail/request_core.cpp:177 0.01% (6)
+  - callsite lines: src/async/detail/request_core.cpp:166 0.17% (119); src/async/detail/request_core.cpp:182 0.15% (106)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.17% (119); __GI___pthread_mutex_unlock_usercnt 0.15% (105); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:165 [sluice::async::detail::RequestCore::reserve()] 0.02% (11); src/async/detail/request_core.cpp:181 [sluice::async::detail::RequestCore::reserve()] 0.01% (6); /usr/include/c++/16/bits/stl_vector.h:1450 [std::vector<unsigned int, std::allocator<unsigned int> >::pop_back()] 0.01% (6)
+  - roles: {'main': 260}
+- **RequestCore::accept**: self lines: src/async/detail/request_core.cpp:186 0.02% (11); src/async/detail/request_core.cpp:199 0.01% (8); src/async/detail/request_core.cpp:210 0.01% (7); src/async/detail/request_core.cpp:188 0.01% (7)
+  - callsite lines: src/async/detail/request_core.cpp:210 0.16% (110); src/async/detail/request_core.cpp:187 0.15% (107)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.15% (107); pthread_mutex_lock@@GLIBC_2.2.5 0.15% (107); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:186 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.02% (11); src/async/detail/request_core.cpp:199 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.01% (8); src/async/detail/request_core.cpp:210 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.01% (7)
+  - roles: {'main': 264}
+- **RequestCore::offer_terminal**: self lines: src/async/detail/request_core.cpp:365 0.06% (43); src/async/detail/request_core.cpp:348 0.05% (38); src/async/detail/request_core.cpp:349 0.01% (8); src/async/detail/request_core.cpp:354 0.01% (6)
+  - callsite lines: src/async/detail/request_core.cpp:365 0.54% (378); src/async/detail/request_core.cpp:348 0.15% (104)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.54% (375); pthread_mutex_lock@@GLIBC_2.2.5 0.15% (104); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:365 [sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)] 0.06% (41); /usr/include/c++/16/bits/std_mutex.h:119 [std::mutex::lock()] 0.05% (38); src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.01% (7)
+  - roles: {'worker': 586}
+- **RequestCore::claim_execution**: self lines: src/async/detail/request_core.cpp:369 0.17% (118); src/async/detail/request_core.cpp:373 0.07% (50); src/async/detail/request_core.cpp:368 0.06% (43); src/async/detail/request_core.cpp:378 0.05% (35)
+  - callsite lines: src/async/detail/request_core.cpp:378 0.53% (368); src/async/detail/request_core.cpp:368 0.29% (204)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.52% (362); pthread_mutex_lock@@GLIBC_2.2.5 0.29% (204); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (6)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.17% (116); src/async/detail/request_core.cpp:373 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.07% (50); /usr/include/c++/16/bits/std_mutex.h:119 [std::mutex::lock()] 0.06% (39)
+  - roles: {'worker': 825}
+- **RequestCore::release_execution**: self lines: src/async/detail/request_core.cpp:409 0.06% (44); src/async/detail/request_core.cpp:394 0.06% (39); src/async/detail/request_core.cpp:395 0.01% (8); src/async/detail/request_core.cpp:403 0.01% (7)
+  - callsite lines: src/async/detail/request_core.cpp:409 0.14% (97); src/async/detail/request_core.cpp:394 0.10% (69)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.14% (94); pthread_mutex_lock@@GLIBC_2.2.5 0.10% (69); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:409 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.06% (41); /usr/include/c++/16/bits/std_mutex.h:119 [std::mutex::lock()] 0.05% (33); src/async/detail/request_core.cpp:403 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.01% (7)
+  - roles: {'worker': 276}
+- **RequestCore::begin_publication**: self lines: src/async/detail/request_core.cpp:440 0.22% (153); src/async/detail/request_core.cpp:444 0.07% (50); src/async/detail/request_core.cpp:460 0.02% (13); src/async/detail/request_core.cpp:438 0.01% (5)
+  - callsite lines: src/async/detail/request_core.cpp:460 0.43% (298); src/async/detail/request_core.cpp:439 0.18% (124)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.43% (295); pthread_mutex_lock@@GLIBC_2.2.5 0.18% (124); pthread_mutex_unlock@@GLIBC_2.2.5 0.00% (3)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.20% (137); src/async/detail/request_core.cpp:444 [sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)] 0.07% (50); src/async/detail/request_core.cpp:460 [sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)] 0.01% (7)
+  - roles: {'main': 652}
+- **RequestCore::complete_publication**: self lines: src/async/detail/request_core.cpp:464 0.02% (12); src/async/detail/request_core.cpp:462 0.02% (12); src/async/detail/request_core.cpp:484 0.01% (9); src/async/detail/request_core.cpp:483 0.01% (6)
+  - callsite lines: src/async/detail/request_core.cpp:463 0.18% (122); src/async/detail/request_core.cpp:484 0.16% (111)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.18% (122); __GI___pthread_mutex_unlock_usercnt 0.15% (106); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (5)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:462 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.02% (12); src/async/detail/request_core.cpp:483 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (6); src/async/detail/request_core.cpp:482 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (6)
+  - roles: {'main': 287}
+- **RequestCore::consume_public_result**: self lines: -
+  - inlined-body lines: src/async/detail/request_core.cpp:341 0.09% (61); src/async/detail/request_core.cpp:334 0.05% (35); src/async/detail/request_core.cpp:337 0.02% (11); src/async/detail/request_core.cpp:325 0.01% (9)
+  - callsite lines: src/async/detail/request_core.cpp:344 0.45% (315); src/async/detail/request_core.cpp:325 0.18% (127)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.45% (309); pthread_mutex_lock@@GLIBC_2.2.5 0.18% (127); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (6)
+  - roles: {'main': 575}
+- **ThreadPoolBackend::publish_one**: self lines: src/async/threadpool_backend.cpp:358 0.11% (77); src/async/threadpool_backend.cpp:373 0.05% (33); src/async/threadpool_backend.cpp:370 0.02% (14); src/async/threadpool_backend.cpp:356 0.02% (12)
+  - self inner (actual sampled function:line): src/async/threadpool_backend.cpp:358 [sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)] 0.11% (77); src/async/threadpool_backend.cpp:382 [sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)] 0.03% (23); src/async/threadpool_backend.cpp:370 [sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)] 0.02% (14)
+  - roles: {'main': 148}
+- **ThreadPoolBackend::deliver_event**: self lines: -
+  - inlined-body lines: src/async/threadpool_backend.cpp:382 0.03% (23); src/async/threadpool_backend.cpp:377 0.01% (7); src/async/threadpool_backend.cpp:383 0.00% (3)
+  - roles: {'main': 33}
+- **AsyncIoContext::wait_one**: self lines: src/async/async_io_context.cpp:655 0.16% (109); src/async/async_io_context.cpp:627 0.01% (10); src/async/async_io_context.cpp:609 0.01% (10); src/async/async_io_context.cpp:696 0.01% (9)
+  - callsite lines: src/async/async_io_context.cpp:655 1.81% (1256); src/async/async_io_context.cpp:609 0.36% (252); src/async/async_io_context.cpp:595 0.19% (133); src/async/async_io_context.cpp:696 0.18% (124)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 1.84% (1273); __GI___pthread_mutex_unlock_usercnt 1.09% (753); __poll 0.12% (86); pthread_mutex_unlock@@GLIBC_2.2.5 0.04% (30)
+  - self inner (actual sampled function:line): /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.09% (63); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825 [__gthread_mutex_unlock(pthread_mutex_t*)] 0.01% (10); include/sluice/async/detail/progress_source.hpp:437 [sluice::async::detail::ProgressSource::drain_notification_nolock_()] 0.01% (9)
+  - roles: {'main': 2385}
+- **AsyncIoContext::run_progress_pass_**: self lines: src/async/async_io_context.cpp:432 0.05% (32); src/async/async_io_context.cpp:438 0.03% (23); src/async/async_io_context.cpp:437 0.02% (13); src/async/async_io_context.cpp:433 0.02% (12)
+  - callsite lines: src/async/async_io_context.cpp:434 0.33% (232); src/async/async_io_context.cpp:437 0.30% (206)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.32% (223); __GI___pthread_mutex_unlock_usercnt 0.30% (210); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (5)
+  - self inner (actual sampled function:line): src/async/async_io_context.cpp:432 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.04% (29); src/async/async_io_context.cpp:438 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.03% (23); src/async/async_io_context.cpp:433 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.02% (12)
+  - roles: {'main': 545}
+- **RequestScope::wait_for**: self lines: src/async/request_scope.cpp:252 0.16% (112); src/async/request_scope.cpp:248 0.09% (64); src/async/request_scope.cpp:247 0.02% (11); src/async/request_scope.cpp:253 0.01% (7)
+  - callsite lines: src/async/request_scope.cpp:252 0.03% (18)
+  - callsite leaf: std::chrono::_V2::steady_clock::now() 0.03% (18)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.05% (38); include/sluice/async/request_scope.hpp:171 [sluice::Result<sluice::async::ScopeWaitStatus> sluice::async::RequestScope::wait_for_slot_<unsigned long>(sluice::async::RequestScope::Slot&, std::chrono::duration<long, std::ratio<1l, 1000000000l> >)] 0.05% (36); /usr/include/c++/16/variant:1819 [std::variant_alternative<1ul, std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> > >::type& std::get<1ul, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >&)] 0.04% (30)
+  - roles: {'main': 212}
+- **RequestScope::take**: self lines: src/async/request_scope.cpp:239 0.36% (247); src/async/request_scope.cpp:240 0.02% (12); src/async/request_scope.cpp:238 0.01% (10)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:150 [sluice::async::Request<unsigned long>::take_result()] 0.07% (52); include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.07% (46); include/sluice/async/request.hpp:205 [sluice::async::Request<unsigned long>::result_of_(sluice::async::RequestResultData const&)] 0.05% (36)
+  - roles: {'main': 269}
+- **PipelinedCopyTask::wait_take**: self lines: -
+  - inlined-body lines: apps/sluice-copy/copy_task.cpp:94 0.04% (30); apps/sluice-copy/copy_task.cpp:97 0.03% (18); apps/sluice-copy/copy_task.cpp:93 0.01% (4); apps/sluice-copy/copy_task.cpp:96 0.00% (2)
+  - roles: {'main': 56}
+- **sluice_copy::run_pipelined_copy_with_context**: self lines: apps/sluice-copy/copy_task.cpp:334 1.81% (1254)
+  - callsite lines: apps/sluice-copy/copy_task.cpp:70 0.00% (1)
+  - callsite leaf: __irqentry_text_end 0.00% (1)
+  - self inner (actual sampled function:line): apps/sluice-copy/copy_task.cpp:82 [submit_slot_write] 0.53% (370); apps/sluice-copy/copy_task.cpp:70 [submit_slot_read] 0.46% (317); apps/sluice-copy/copy_task.cpp:198 [run_body] 0.37% (258)
+  - roles: {'main': 1255}
+
+### P-F  (W02-uring-4k-d64)
+
+- app samples 15874, iou-wrk 17516, all 33390; binary IPs 1050 (unresolved 0); no-frame app 0; single-group app 77; period est 9800.8 cyc/op app, 17545.6 cyc/op all
+- comms: bench_w02_pipel=15874, iou-wrk-52773=8878, iou-wrk-52802=8638, taskset=24, sh=17, mkdir=9
+
+| candidate | self app% | inlined-self app% | callsite app% | owner app% | owner all% | inclusive app% | self cyc/op | owner cyc/op |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| RequestCore::reserve | 0.30% (48) | 0.00% (0) | 0.25% (40) | 0.55% | 0.26% | 0.73% | 29.7 | 54.4 |
+| RequestCore::accept | 0.20% (31) | 0.00% (0) | 0.20% (31) | 0.39% | 0.19% | 0.51% | 19.1 | 38.3 |
+| RequestCore::offer_terminal | 0.09% (15) | 0.00% (0) | 0.13% (21) | 0.23% | 0.11% | 0.25% | 9.3 | 22.2 |
+| RequestCore::claim_execution | 0.13% (20) | 0.00% (0) | 0.21% (33) | 0.33% | 0.16% | 0.47% | 12.4 | 32.7 |
+| RequestCore::release_execution | 0.08% (12) | 0.00% (0) | 0.18% (28) | 0.25% | 0.12% | 0.31% | 7.4 | 24.7 |
+| RequestCore::begin_publication | 0.17% (27) | 0.00% (0) | 0.16% (26) | 0.33% | 0.16% | 0.35% | 16.7 | 32.7 |
+| RequestCore::complete_publication | 0.11% (17) | 0.00% (0) | 0.14% (22) | 0.25% | 0.12% | 0.30% | 10.4 | 24.0 |
+| RequestCore::consume_public_result | 0.00% (0) | 0.36% (57) | 0.26% (41) | 0.62% | 0.29% | 1.14% | 0.0 | 60.5 |
+| RequestCore::claim_observer_delivery | 0.07% (11) | 0.00% (0) | 0.10% (16) | 0.17% | 0.08% | 0.20% | 6.8 | 16.7 |
+| RequestCore::retire_observer_delivery | 0.06% (9) | 0.00% (0) | 0.21% (33) | 0.26% | 0.13% | 0.28% | 5.6 | 25.9 |
+| UringAsyncBackend::publish_one | 0.29% (46) | 0.00% (0) | 0.00% (0) | 0.29% | 0.14% | 1.42% | 28.4 | 28.4 |
+| UringAsyncBackend::deliver_event | 0.00% (0) | 0.08% (13) | 0.00% (0) | 0.08% | 0.04% | 0.57% | 0.0 | 8.1 |
+| UringAsyncBackend::poll_progress | 0.02% (3) | 0.00% (0) | 0.01% (2) | 0.03% | 0.01% | 6.05% | 1.9 | 3.1 |
+| UringAsyncBackend::poll | 0.11% (17) | 0.00% (0) | 0.13% (21) | 0.24% | 0.11% | 6.02% | 10.5 | 23.5 |
+| UringAsyncBackend::reap_cqes | 0.16% (25) | 0.00% (0) | 0.09% (15) | 0.25% | 0.12% | 4.33% | 15.5 | 24.7 |
+| UringAsyncBackend::handle_one_cqe | 0.83% (132) | 0.00% (0) | 0.10% (16) | 0.93% | 0.44% | 4.07% | 81.7 | 91.5 |
+| UringAsyncBackend::find_live_router_cookie_ | 1.06% (168) | 0.00% (0) | 0.07% (11) | 1.13% | 0.54% | 1.22% | 104.0 | 110.8 |
+| UringAsyncBackend::finalize_operation_terminal_ | 0.77% (122) | 0.00% (0) | 0.04% (6) | 0.81% | 0.38% | 1.84% | 75.3 | 79.0 |
+| UringAsyncBackend::dispatch_one_locked | 2.15% (341) | 0.00% (0) | 0.43% (69) | 2.58% | 1.23% | 3.77% | 210.6 | 253.3 |
+| UringAsyncBackend::submit_transport_locked | 0.00% (0) | 0.45% (72) | 0.59% (94) | 1.05% | 0.50% | 59.49% | 0.0 | 102.6 |
+| AsyncIoContext::wait_one | 0.01% (2) | 0.00% (0) | 0.03% (5) | 0.04% | 0.02% | 6.17% | 1.2 | 4.4 |
+| AsyncIoContext::run_progress_pass_ | 0.03% (5) | 0.00% (0) | 0.01% (1) | 0.04% | 0.02% | 6.09% | 3.1 | 3.7 |
+| RequestScope::wait_for | 2.58% (410) | 0.00% (0) | 0.44% (70) | 3.02% | 1.44% | 11.57% | 253.0 | 296.3 |
+| RequestScope::wait_for_slot_ | 0.00% (0) | 0.20% (32) | 0.10% (16) | 0.30% | 0.14% | 8.47% | 0.0 | 29.6 |
+| RequestScope::take | 2.25% (357) | 0.00% (0) | 0.40% (64) | 2.65% | 1.26% | 4.48% | 220.6 | 260.1 |
+| Request::take_result | 0.00% (0) | 0.47% (74) | 0.08% (12) | 0.54% | 0.26% | 1.94% | 0.0 | 53.3 |
+| RequestBridge::consume | 0.50% (79) | 0.00% (0) | 0.27% (43) | 0.77% | 0.37% | 1.32% | 48.8 | 75.4 |
+| run_pipeline_phase (W-02 app) | 2.35% (373) | 0.00% (0) | 0.66% (105) | 3.01% | 1.43% | 95.11% | 230.1 | 295.1 |
+
+Candidate-family union (each sample counted once per family, app denominator):
+
+| family | owner app% | owner cyc/op | inclusive app% |
+|---|---:|---:|---:|
+| observer | 3.86% (612) | 378.1 | 4.98% |
+| progress | 3.38% (536) | 331.0 | 11.57% |
+| app | 3.01% (478) | 295.1 | 95.11% |
+| dispatch | 2.58% (410) | 253.3 | 3.77% |
+| reap | 2.31% (367) | 227.1 | 4.37% |
+| terminal | 1.29% (204) | 126.0 | 1.84% |
+| submit | 1.05% (166) | 102.6 | 59.49% |
+| admission | 0.94% (150) | 92.8 | 1.24% |
+| publication | 0.87% (138) | 85.1 | 1.42% |
+| execution | 0.33% (53) | 32.7 | 0.47% |
+
+Stage container (p2 R1 classifier, app / all):
+
+| stage | app% | all% |
+|---|---:|---:|
+| submit | 48.91% (7764) | 23.25% (7764) |
+| dispatch | 9.03% (1433) | 4.62% (1541) |
+| progress/wait | 7.12% (1131) | 5.23% (1747) |
+| io-wq punt | 6.73% (1068) | 9.40% (3139) |
+| bench harness | 4.77% (757) | 2.27% (757) |
+| admission | 4.66% (740) | 2.22% (740) |
+| observation | 4.56% (724) | 2.17% (724) |
+| other | 3.29% (523) | 6.20% (2071) |
+| reap/CQE | 2.54% (403) | 4.13% (1378) |
+| publication | 2.27% (361) | 1.08% (361) |
+| payload/FS | 1.53% (243) | 16.32% (5449) |
+| scheduler/IRQ | 1.45% (230) | 15.10% (5043) |
+| terminal/release | 1.36% (216) | 0.65% (216) |
+| syscall (unattributed) | 1.18% (187) | 0.57% (189) |
+| kernel syscall/FS overhead | 0.45% (72) | 1.12% (373) |
+| shared sync | 0.14% (22) | 5.83% (1948) |
+
+- **RequestCore::reserve**: self lines: src/async/detail/request_core.cpp:181 0.12% (19); src/async/detail/request_core.cpp:177 0.03% (5); src/async/detail/request_core.cpp:165 0.03% (5); src/async/detail/request_core.cpp:182 0.03% (5)
+  - callsite lines: src/async/detail/request_core.cpp:166 0.13% (20); src/async/detail/request_core.cpp:182 0.07% (11); src/async/detail/request_core.cpp:165 0.02% (3); src/async/detail/request_core.cpp:181 0.02% (3)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.12% (19); __GI___pthread_mutex_unlock_usercnt 0.06% (10); __irqentry_text_end 0.05% (8); entry_SYSCALL_64 0.01% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:181 [sluice::async::detail::RequestCore::reserve()] 0.12% (19); /usr/include/c++/16/bits/stl_vector.h:1450 [std::vector<unsigned int, std::allocator<unsigned int> >::pop_back()] 0.03% (5); src/async/detail/request_core.cpp:165 [sluice::async::detail::RequestCore::reserve()] 0.03% (5)
+  - roles: {'main': 88}
+- **RequestCore::accept**: self lines: src/async/detail/request_core.cpp:186 0.05% (8); src/async/detail/request_core.cpp:188 0.03% (5); src/async/detail/request_core.cpp:210 0.02% (3); src/async/detail/request_core.cpp:209 0.02% (3)
+  - callsite lines: src/async/detail/request_core.cpp:210 0.13% (20); src/async/detail/request_core.cpp:187 0.06% (10); src/async/detail/request_core.cpp:192 0.01% (1)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.09% (14); pthread_mutex_lock@@GLIBC_2.2.5 0.06% (9); pthread_mutex_unlock@@GLIBC_2.2.5 0.04% (6); __irqentry_text_end 0.01% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:186 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.05% (8); src/async/detail/request_core.cpp:210 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.02% (3); src/async/detail/request_core.cpp:209 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.02% (3)
+  - roles: {'main': 62}
+- **RequestCore::offer_terminal**: self lines: src/async/detail/request_core.cpp:348 0.03% (4); src/async/detail/request_core.cpp:356 0.03% (4); src/async/detail/request_core.cpp:349 0.02% (3); src/async/detail/request_core.cpp:365 0.01% (2)
+  - callsite lines: src/async/detail/request_core.cpp:348 0.07% (11); src/async/detail/request_core.cpp:365 0.06% (9); src/async/detail/request_core.cpp:349 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.07% (11); __GI___pthread_mutex_unlock_usercnt 0.05% (8); entry_SYSCALL_64 0.01% (1); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.03% (4); src/async/detail/request_core.cpp:356 [sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)] 0.03% (4); include/sluice/async/detail/request_key.hpp:12 [sluice::async::detail::operator==(sluice::async::detail::ContextIdentity const&, sluice::async::detail::ContextIdentity const&)] 0.01% (2)
+  - roles: {'main': 36}
+- **RequestCore::claim_execution**: self lines: src/async/detail/request_core.cpp:369 0.03% (5); src/async/detail/request_core.cpp:378 0.03% (4); src/async/detail/request_core.cpp:373 0.03% (4); src/async/detail/request_core.cpp:367 0.02% (3)
+  - callsite lines: src/async/detail/request_core.cpp:368 0.14% (23); src/async/detail/request_core.cpp:378 0.05% (8); src/async/detail/request_core.cpp:373 0.01% (1); src/async/detail/request_core.cpp:376 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.14% (22); __GI___pthread_mutex_unlock_usercnt 0.04% (7); __irqentry_text_end 0.02% (3); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825 [__gthread_mutex_unlock(pthread_mutex_t*)] 0.03% (4); src/async/detail/request_core.cpp:373 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.03% (4); src/async/detail/request_core.cpp:367 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.02% (3)
+  - roles: {'main': 53}
+- **RequestCore::release_execution**: self lines: src/async/detail/request_core.cpp:395 0.03% (4); src/async/detail/request_core.cpp:408 0.02% (3); src/async/detail/request_core.cpp:400 0.01% (2); src/async/detail/request_core.cpp:407 0.01% (1)
+  - callsite lines: src/async/detail/request_core.cpp:394 0.09% (14); src/async/detail/request_core.cpp:409 0.09% (14)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.09% (14); __GI___pthread_mutex_unlock_usercnt 0.08% (13); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:408 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.02% (3); include/sluice/async/detail/request_key.hpp:12 [sluice::async::detail::operator==(sluice::async::detail::ContextIdentity const&, sluice::async::detail::ContextIdentity const&)] 0.01% (2); src/async/detail/request_core.cpp:400 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.01% (2)
+  - roles: {'main': 40}
+- **RequestCore::begin_publication**: self lines: src/async/detail/request_core.cpp:440 0.04% (6); src/async/detail/request_core.cpp:444 0.04% (6); src/async/detail/request_core.cpp:439 0.03% (4); src/async/detail/request_core.cpp:460 0.03% (4)
+  - callsite lines: src/async/detail/request_core.cpp:460 0.11% (17); src/async/detail/request_core.cpp:439 0.06% (9)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.09% (15); pthread_mutex_lock@@GLIBC_2.2.5 0.06% (9); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (2)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:444 [sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)] 0.04% (6); include/sluice/async/detail/request_key.hpp:12 [sluice::async::detail::operator==(sluice::async::detail::ContextIdentity const&, sluice::async::detail::ContextIdentity const&)] 0.03% (4); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.02% (3)
+  - roles: {'main': 53}
+- **RequestCore::complete_publication**: self lines: src/async/detail/request_core.cpp:483 0.03% (5); src/async/detail/request_core.cpp:484 0.02% (3); src/async/detail/request_core.cpp:462 0.01% (2); src/async/detail/request_core.cpp:468 0.01% (2)
+  - callsite lines: src/async/detail/request_core.cpp:463 0.09% (14); src/async/detail/request_core.cpp:484 0.05% (8)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.09% (14); __GI___pthread_mutex_unlock_usercnt 0.05% (8)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:483 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.03% (5); src/async/detail/request_core.cpp:462 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (2); src/async/detail/request_core.cpp:484 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.01% (2)
+  - roles: {'main': 39}
+- **RequestCore::consume_public_result**: self lines: -
+  - inlined-body lines: src/async/detail/request_core.cpp:326 0.13% (20); src/async/detail/request_core.cpp:341 0.10% (16); src/async/detail/request_core.cpp:337 0.05% (8); src/async/detail/request_core.cpp:334 0.04% (6)
+  - callsite lines: src/async/detail/request_core.cpp:344 0.11% (18); src/async/detail/request_core.cpp:325 0.06% (10); src/async/detail/request_core.cpp:326 0.04% (6); src/async/detail/request_core.cpp:341 0.02% (3)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.08% (12); pthread_mutex_lock@@GLIBC_2.2.5 0.06% (10); __irqentry_text_end 0.06% (9); pthread_mutex_unlock@@GLIBC_2.2.5 0.04% (6)
+  - roles: {'main': 98}
+- **UringAsyncBackend::publish_one**: self lines: src/async/uring_backend.cpp:584 0.11% (18); src/async/uring_backend.cpp:606 0.08% (13); src/async/uring_backend.cpp:586 0.03% (4); src/async/uring_backend.cpp:598 0.03% (4)
+  - self inner (actual sampled function:line): src/async/uring_backend.cpp:584 [sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)] 0.11% (18); src/async/uring_backend.cpp:612 [sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)] 0.06% (10); src/async/uring_backend.cpp:586 [sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)] 0.03% (4)
+  - roles: {'main': 46}
+- **UringAsyncBackend::deliver_event**: self lines: -
+  - inlined-body lines: src/async/uring_backend.cpp:612 0.06% (10); src/async/uring_backend.cpp:611 0.02% (3)
+  - roles: {'main': 13}
+- **AsyncIoContext::wait_one**: self lines: src/async/async_io_context.cpp:578 0.01% (1); src/async/async_io_context.cpp:685 0.01% (1)
+  - callsite lines: src/async/async_io_context.cpp:609 0.03% (4); src/async/async_io_context.cpp:587 0.01% (1)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.02% (3); pthread_mutex_lock@@GLIBC_2.2.5 0.01% (2)
+  - self inner (actual sampled function:line): src/async/async_io_context.cpp:578 [sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)] 0.01% (1); include/sluice/result.hpp:26 [sluice::detail::result_storage<sluice::async::AsyncIoContext::ProgressWaitOutcome>::result_storage(sluice::detail::success_tag, sluice::async::AsyncIoContext::ProgressWaitOutcome&&)] 0.01% (1)
+  - roles: {'main': 7}
+- **AsyncIoContext::run_progress_pass_**: self lines: src/async/async_io_context.cpp:439 0.01% (1); src/async/async_io_context.cpp:429 0.01% (1); src/async/async_io_context.cpp:437 0.01% (1); src/async/async_io_context.cpp:434 0.01% (1)
+  - callsite lines: src/async/async_io_context.cpp:437 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.01% (2); src/async/async_io_context.cpp:439 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.01% (1); src/async/async_io_context.cpp:429 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.01% (1)
+  - roles: {'main': 6}
+- **RequestScope::wait_for**: self lines: src/async/request_scope.cpp:248 2.28% (362); src/async/request_scope.cpp:252 0.20% (32); src/async/request_scope.cpp:247 0.05% (8); src/async/request_scope.cpp:253 0.05% (8)
+  - callsite lines: src/async/request_scope.cpp:248 0.33% (53); src/async/request_scope.cpp:252 0.10% (16); src/async/request_scope.cpp:247 0.01% (1)
+  - callsite leaf: __irqentry_text_end 0.31% (49); std::chrono::_V2::steady_clock::now() 0.08% (12); error_entry 0.03% (5); asm_sysvec_reschedule_ipi 0.03% (4)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.78% (124); include/sluice/async/request_scope.hpp:118 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.47% (75); include/sluice/async/request_scope.hpp:120 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.35% (55)
+  - roles: {'main': 480}
+- **RequestScope::take**: self lines: src/async/request_scope.cpp:239 2.17% (344); src/async/request_scope.cpp:240 0.05% (8); src/async/request_scope.cpp:238 0.03% (5)
+  - callsite lines: src/async/request_scope.cpp:239 0.38% (60); src/async/request_scope.cpp:240 0.02% (3); src/async/request_scope.cpp:238 0.01% (1)
+  - callsite leaf: __irqentry_text_end 0.25% (39); asm_sysvec_reschedule_ipi 0.09% (14); entry_SYSCALL_64 0.04% (6); error_entry 0.03% (5)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.67% (106); include/sluice/async/request_scope.hpp:120 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.31% (50); include/sluice/async/request_scope.hpp:118 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.29% (46)
+  - roles: {'main': 421}
+- **UringAsyncBackend::find_live_router_cookie_**: self lines: src/async/uring_transport.cpp:552 0.53% (84); src/async/uring_transport.cpp:553 0.42% (66); src/async/uring_transport.cpp:557 0.11% (18)
+  - callsite lines: src/async/uring_transport.cpp:553 0.05% (8); src/async/uring_transport.cpp:552 0.02% (3)
+  - callsite leaf: __irqentry_text_end 0.05% (8); entry_SYSCALL_64 0.01% (2); error_entry 0.01% (1)
+  - self inner (actual sampled function:line): src/async/uring_transport.cpp:552 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.52% (83); src/async/uring_transport.cpp:553 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.42% (66); src/async/uring_transport.cpp:557 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.11% (18)
+  - roles: {'main': 179}
+- **UringAsyncBackend::handle_one_cqe**: self lines: src/async/uring_completion.cpp:173 0.43% (69); src/async/uring_completion.cpp:149 0.14% (22); src/async/uring_completion.cpp:151 0.06% (10); src/async/uring_completion.cpp:99 0.04% (7)
+  - callsite lines: src/async/uring_completion.cpp:100 0.08% (13); src/async/uring_completion.cpp:173 0.01% (2); src/async/uring_completion.cpp:149 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.08% (13); __irqentry_text_end 0.01% (2); error_entry 0.01% (1)
+  - self inner (actual sampled function:line): src/async/uring_completion.cpp:173 [sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)] 0.25% (39); include/sluice/detail/file_semantics.hpp:310 [sluice::detail::IoOutcome::success(unsigned long)] 0.19% (30); /usr/include/c++/16/bits/stl_vector.h:1109 [std::vector<sluice::async::UringAsyncBackend::RouterEntry, std::allocator<sluice::async::UringAsyncBackend::RouterEntry> >::size() const] 0.11% (18)
+  - roles: {'main': 148}
+- **UringAsyncBackend::reap_cqes**: self lines: src/async/uring_completion.cpp:229 0.14% (23); src/async/uring_completion.cpp:200 0.01% (2)
+  - callsite lines: src/async/uring_completion.cpp:229 0.07% (11); src/async/uring_completion.cpp:210 0.03% (4)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.05% (8); io_uring_peek_batch_cqe 0.03% (4); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (2); asm_sysvec_reschedule_ipi 0.01% (1)
+  - self inner (actual sampled function:line): /usr/include/liburing.h:428 [sluice::async::UringAsyncBackend::reap_cqes()] 0.05% (8); src/async/uring_completion.cpp:222 [operator()] 0.03% (4); /usr/include/liburing.h:490 [sluice::async::UringAsyncBackend::reap_cqes()] 0.03% (4)
+  - roles: {'main': 40}
+
+### P-F-d16-control  (W02-uring-4k-d16)
+
+- app samples 7654, iou-wrk 9311, all 16965; binary IPs 818 (unresolved 0); no-frame app 0; single-group app 44; period est 9430.0 cyc/op app, 17039.3 cyc/op all
+- comms: iou-wrk-53266=9311, bench_w02_pipel=7654, taskset=14, sh=8, mkdir=4
+
+| candidate | self app% | inlined-self app% | callsite app% | owner app% | owner all% | inclusive app% | self cyc/op | owner cyc/op |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| RequestCore::reserve | 0.20% (15) | 0.00% (0) | 0.25% (19) | 0.44% | 0.20% | 0.61% | 18.5 | 41.8 |
+| RequestCore::accept | 0.22% (17) | 0.00% (0) | 0.14% (11) | 0.37% | 0.17% | 0.48% | 21.0 | 34.4 |
+| RequestCore::offer_terminal | 0.16% (12) | 0.00% (0) | 0.27% (21) | 0.43% | 0.19% | 0.54% | 14.8 | 40.8 |
+| RequestCore::claim_execution | 0.07% (5) | 0.00% (0) | 0.21% (16) | 0.27% | 0.12% | 0.50% | 6.1 | 26.0 |
+| RequestCore::release_execution | 0.17% (13) | 0.00% (0) | 0.20% (15) | 0.37% | 0.17% | 0.50% | 16.0 | 34.3 |
+| RequestCore::begin_publication | 0.09% (7) | 0.00% (0) | 0.18% (14) | 0.27% | 0.12% | 0.34% | 8.6 | 26.0 |
+| RequestCore::complete_publication | 0.18% (14) | 0.00% (0) | 0.17% (13) | 0.35% | 0.16% | 0.52% | 17.2 | 33.3 |
+| RequestCore::consume_public_result | 0.00% (0) | 0.37% (28) | 0.24% (18) | 0.60% | 0.27% | 1.18% | 0.0 | 57.0 |
+| RequestCore::claim_observer_delivery | 0.10% (8) | 0.00% (0) | 0.18% (14) | 0.29% | 0.13% | 0.33% | 9.8 | 27.1 |
+| RequestCore::retire_observer_delivery | 0.09% (7) | 0.00% (0) | 0.16% (12) | 0.25% | 0.11% | 0.31% | 8.7 | 23.5 |
+| UringAsyncBackend::publish_one | 0.39% (30) | 0.00% (0) | 0.05% (4) | 0.44% | 0.20% | 2.09% | 36.7 | 41.7 |
+| UringAsyncBackend::deliver_event | 0.00% (0) | 0.13% (10) | 0.01% (1) | 0.14% | 0.06% | 0.81% | 0.0 | 13.4 |
+| UringAsyncBackend::poll_progress | 0.04% (3) | 0.00% (0) | 0.00% (0) | 0.04% | 0.02% | 8.44% | 3.7 | 3.7 |
+| UringAsyncBackend::poll | 0.10% (8) | 0.01% (1) | 0.30% (23) | 0.42% | 0.19% | 8.39% | 9.9 | 39.7 |
+| UringAsyncBackend::reap_cqes | 0.30% (23) | 0.00% (0) | 0.22% (17) | 0.52% | 0.24% | 5.76% | 28.3 | 49.2 |
+| UringAsyncBackend::handle_one_cqe | 0.73% (56) | 0.00% (0) | 0.17% (13) | 0.90% | 0.41% | 5.23% | 69.3 | 85.4 |
+| UringAsyncBackend::find_live_router_cookie_ | 0.89% (68) | 0.00% (0) | 0.09% (7) | 0.98% | 0.44% | 1.11% | 83.7 | 92.2 |
+| UringAsyncBackend::finalize_operation_terminal_ | 0.98% (75) | 0.00% (0) | 0.16% (12) | 1.14% | 0.51% | 3.03% | 92.2 | 107.1 |
+| UringAsyncBackend::dispatch_one_locked | 2.16% (165) | 0.00% (0) | 0.69% (53) | 2.85% | 1.28% | 4.17% | 204.2 | 269.5 |
+| UringAsyncBackend::submit_transport_locked | 0.00% (0) | 0.42% (32) | 0.89% (68) | 1.31% | 0.59% | 58.82% | 0.0 | 123.2 |
+| AsyncIoContext::wait_one | 0.03% (2) | 0.00% (0) | 0.04% (3) | 0.07% | 0.03% | 8.79% | 2.5 | 6.1 |
+| AsyncIoContext::run_progress_pass_ | 0.04% (3) | 0.00% (0) | 0.08% (6) | 0.12% | 0.05% | 8.57% | 3.7 | 11.3 |
+| RequestScope::wait_for | 1.08% (83) | 0.00% (0) | 0.29% (22) | 1.37% | 0.62% | 12.53% | 102.2 | 129.4 |
+| RequestScope::wait_for_slot_ | 0.00% (0) | 0.17% (13) | 0.07% (5) | 0.24% | 0.11% | 11.21% | 0.0 | 22.0 |
+| RequestScope::take | 0.91% (70) | 0.00% (0) | 0.24% (18) | 1.15% | 0.52% | 2.82% | 86.4 | 108.7 |
+| Request::take_result | 0.00% (0) | 0.35% (27) | 0.09% (7) | 0.44% | 0.20% | 1.92% | 0.0 | 41.9 |
+| RequestBridge::consume | 0.47% (36) | 0.00% (0) | 0.25% (19) | 0.72% | 0.32% | 1.32% | 44.6 | 68.1 |
+| run_pipeline_phase (W-02 app) | 2.60% (199) | 0.00% (0) | 0.76% (58) | 3.36% | 1.51% | 94.29% | 245.3 | 316.9 |
+
+Candidate-family union (each sample counted once per family, app denominator):
+
+| family | owner app% | owner cyc/op | inclusive app% |
+|---|---:|---:|---:|
+| app | 3.36% (257) | 316.9 | 94.29% |
+| dispatch | 2.85% (218) | 269.5 | 4.17% |
+| reap | 2.40% (184) | 226.8 | 5.84% |
+| observer | 2.40% (184) | 227.5 | 3.46% |
+| progress | 2.00% (153) | 188.9 | 12.54% |
+| terminal | 1.93% (148) | 182.3 | 3.03% |
+| submit | 1.31% (100) | 123.2 | 58.82% |
+| publication | 1.07% (82) | 101.0 | 2.09% |
+| admission | 0.81% (62) | 76.3 | 1.10% |
+| execution | 0.27% (21) | 26.0 | 0.50% |
+
+Stage container (p2 R1 classifier, app / all):
+
+| stage | app% | all% |
+|---|---:|---:|
+| submit | 49.29% (3773) | 22.24% (3773) |
+| dispatch | 9.71% (743) | 4.64% (787) |
+| io-wq punt | 6.05% (463) | 9.07% (1538) |
+| bench harness | 5.66% (433) | 2.55% (433) |
+| progress/wait | 5.59% (428) | 4.35% (738) |
+| admission | 4.01% (307) | 1.81% (307) |
+| other | 3.42% (262) | 6.25% (1060) |
+| observation | 3.15% (241) | 1.42% (241) |
+| publication | 2.94% (225) | 1.33% (225) |
+| reap/CQE | 2.67% (204) | 4.57% (776) |
+| terminal/release | 2.13% (163) | 0.96% (163) |
+| payload/FS | 1.74% (133) | 17.87% (3032) |
+| scheduler/IRQ | 1.71% (131) | 15.01% (2547) |
+| syscall (unattributed) | 1.31% (100) | 0.60% (101) |
+| kernel syscall/FS overhead | 0.48% (37) | 1.09% (185) |
+| shared sync | 0.14% (11) | 6.40% (1085) |
+
+- **RequestCore::reserve**: self lines: src/async/detail/request_core.cpp:181 0.09% (7); src/async/detail/request_core.cpp:178 0.03% (2); src/async/detail/request_core.cpp:165 0.03% (2); src/async/detail/request_core.cpp:167 0.01% (1)
+  - callsite lines: src/async/detail/request_core.cpp:182 0.13% (10); src/async/detail/request_core.cpp:166 0.04% (3); src/async/detail/request_core.cpp:181 0.03% (2); src/async/detail/request_core.cpp:178 0.01% (1)
+  - callsite leaf: __irqentry_text_end 0.10% (8); __GI___pthread_mutex_unlock_usercnt 0.09% (7); pthread_mutex_lock@@GLIBC_2.2.5 0.04% (3); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:181 [sluice::async::detail::RequestCore::reserve()] 0.09% (7); src/async/detail/request_core.cpp:165 [sluice::async::detail::RequestCore::reserve()] 0.03% (2); /usr/include/c++/16/bits/stl_vector.h:1254 [std::vector<sluice::async::detail::RequestCore::Slot, std::allocator<sluice::async::detail::RequestCore::Slot> >::operator[](unsigned long)] 0.01% (1)
+  - roles: {'main': 34}
+- **RequestCore::accept**: self lines: src/async/detail/request_core.cpp:188 0.05% (4); src/async/detail/request_core.cpp:209 0.03% (2); src/async/detail/request_core.cpp:202 0.03% (2); src/async/detail/request_core.cpp:195 0.03% (2)
+  - callsite lines: src/async/detail/request_core.cpp:187 0.07% (5); src/async/detail/request_core.cpp:210 0.05% (4); src/async/detail/request_core.cpp:192 0.01% (1); src/async/detail/request_core.cpp:208 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.07% (5); __GI___pthread_mutex_unlock_usercnt 0.04% (3); __irqentry_text_end 0.03% (2); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:209 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.03% (2); src/async/detail/request_core.cpp:202 [sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)] 0.03% (2); src/async/detail/request_core.cpp:111 [sluice::async::detail::RequestCore::resolve_reserved_(sluice::async::detail::RequestReservation)] 0.03% (2)
+  - roles: {'main': 28}
+- **RequestCore::offer_terminal**: self lines: src/async/detail/request_core.cpp:349 0.04% (3); src/async/detail/request_core.cpp:365 0.04% (3); src/async/detail/request_core.cpp:348 0.03% (2); src/async/detail/request_core.cpp:360 0.01% (1)
+  - callsite lines: src/async/detail/request_core.cpp:348 0.14% (11); src/async/detail/request_core.cpp:365 0.10% (8); src/async/detail/request_core.cpp:349 0.01% (1); src/async/detail/request_core.cpp:356 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.14% (11); __GI___pthread_mutex_unlock_usercnt 0.09% (7); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1); entry_SYSCALL_64 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:127 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.03% (2); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825 [__gthread_mutex_unlock(pthread_mutex_t*)] 0.03% (2); src/async/detail/request_core.cpp:360 [sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)] 0.01% (1)
+  - roles: {'main': 33}
+- **RequestCore::claim_execution**: self lines: src/async/detail/request_core.cpp:367 0.03% (2); src/async/detail/request_core.cpp:369 0.01% (1); src/async/detail/request_core.cpp:373 0.01% (1); src/async/detail/request_core.cpp:368 0.01% (1)
+  - callsite lines: src/async/detail/request_core.cpp:378 0.16% (12); src/async/detail/request_core.cpp:368 0.05% (4)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.14% (11); pthread_mutex_lock@@GLIBC_2.2.5 0.05% (4); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:367 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.03% (2); src/async/detail/request_core.cpp:122 [sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)] 0.01% (1); src/async/detail/request_core.cpp:373 [sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)] 0.01% (1)
+  - roles: {'main': 21}
+- **RequestCore::release_execution**: self lines: src/async/detail/request_core.cpp:403 0.03% (2); src/async/detail/request_core.cpp:400 0.03% (2); src/async/detail/request_core.cpp:395 0.03% (2); src/async/detail/request_core.cpp:402 0.03% (2)
+  - callsite lines: src/async/detail/request_core.cpp:394 0.12% (9); src/async/detail/request_core.cpp:409 0.07% (5); src/async/detail/request_core.cpp:395 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.10% (8); __GI___pthread_mutex_unlock_usercnt 0.05% (4); __irqentry_text_end 0.03% (2); pthread_mutex_unlock@@GLIBC_2.2.5 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:403 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.03% (2); src/async/detail/request_core.cpp:400 [sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)] 0.03% (2); include/sluice/async/detail/request_key.hpp:12 [sluice::async::detail::operator==(sluice::async::detail::ContextIdentity const&, sluice::async::detail::ContextIdentity const&)] 0.03% (2)
+  - roles: {'main': 28}
+- **RequestCore::begin_publication**: self lines: src/async/detail/request_core.cpp:439 0.03% (2); src/async/detail/request_core.cpp:440 0.03% (2); src/async/detail/request_core.cpp:460 0.01% (1); src/async/detail/request_core.cpp:444 0.01% (1)
+  - callsite lines: src/async/detail/request_core.cpp:439 0.09% (7); src/async/detail/request_core.cpp:460 0.08% (6); src/async/detail/request_core.cpp:444 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.09% (7); __GI___pthread_mutex_unlock_usercnt 0.07% (5); __irqentry_text_end 0.03% (2)
+  - self inner (actual sampled function:line): /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 [__gthread_mutex_lock(pthread_mutex_t*)] 0.03% (2); /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:825 [__gthread_mutex_unlock(pthread_mutex_t*)] 0.01% (1); include/sluice/async/detail/request_key.hpp:22 [sluice::async::detail::operator==(sluice::async::detail::Generation const&, sluice::async::detail::Generation const&)] 0.01% (1)
+  - roles: {'main': 21}
+- **RequestCore::complete_publication**: self lines: src/async/detail/request_core.cpp:483 0.05% (4); src/async/detail/request_core.cpp:462 0.05% (4); src/async/detail/request_core.cpp:479 0.03% (2); src/async/detail/request_core.cpp:464 0.03% (2)
+  - callsite lines: src/async/detail/request_core.cpp:463 0.12% (9); src/async/detail/request_core.cpp:484 0.04% (3); src/async/detail/request_core.cpp:464 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.12% (9); __GI___pthread_mutex_unlock_usercnt 0.04% (3); __irqentry_text_end 0.01% (1)
+  - self inner (actual sampled function:line): src/async/detail/request_core.cpp:483 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.05% (4); src/async/detail/request_core.cpp:462 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.05% (4); src/async/detail/request_core.cpp:479 [sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)] 0.03% (2)
+  - roles: {'main': 27}
+- **RequestCore::consume_public_result**: self lines: -
+  - inlined-body lines: src/async/detail/request_core.cpp:337 0.13% (10); src/async/detail/request_core.cpp:326 0.10% (8); src/async/detail/request_core.cpp:341 0.08% (6); src/async/detail/request_core.cpp:340 0.04% (3)
+  - callsite lines: src/async/detail/request_core.cpp:344 0.08% (6); src/async/detail/request_core.cpp:325 0.07% (5); src/async/detail/request_core.cpp:326 0.05% (4); src/async/detail/request_core.cpp:341 0.01% (1)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.08% (6); pthread_mutex_lock@@GLIBC_2.2.5 0.07% (5); __irqentry_text_end 0.05% (4); asm_sysvec_reschedule_ipi 0.01% (1)
+  - roles: {'main': 46}
+- **UringAsyncBackend::publish_one**: self lines: src/async/uring_backend.cpp:584 0.17% (13); src/async/uring_backend.cpp:606 0.13% (10); src/async/uring_backend.cpp:598 0.07% (5); src/async/uring_backend.cpp:608 0.01% (1)
+  - callsite lines: src/async/uring_backend.cpp:584 0.03% (2); src/async/uring_backend.cpp:606 0.01% (1); src/async/uring_backend.cpp:579 0.01% (1)
+  - callsite leaf: __irqentry_text_end 0.04% (3); asm_sysvec_reschedule_ipi 0.01% (1)
+  - self inner (actual sampled function:line): src/async/uring_backend.cpp:584 [sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)] 0.17% (13); src/async/uring_backend.cpp:598 [sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)] 0.07% (5); src/async/uring_backend.cpp:612 [sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)] 0.05% (4)
+  - roles: {'main': 34}
+- **UringAsyncBackend::deliver_event**: self lines: -
+  - inlined-body lines: src/async/uring_backend.cpp:612 0.05% (4); src/async/uring_backend.cpp:611 0.04% (3); src/async/uring_backend.cpp:613 0.04% (3)
+  - callsite lines: src/async/uring_backend.cpp:613 0.01% (1)
+  - callsite leaf: asm_sysvec_reschedule_ipi 0.01% (1)
+  - roles: {'main': 11}
+- **AsyncIoContext::wait_one**: self lines: src/async/async_io_context.cpp:609 0.01% (1); src/async/async_io_context.cpp:685 0.01% (1)
+  - callsite lines: src/async/async_io_context.cpp:696 0.01% (1); src/async/async_io_context.cpp:582 0.01% (1); src/async/async_io_context.cpp:609 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.04% (3)
+  - self inner (actual sampled function:line): include/sluice/async/detail/progress_source.hpp:93 [sluice::async::detail::ProgressSource::snapshot() const] 0.01% (1); include/sluice/result.hpp:26 [sluice::detail::result_storage<sluice::async::AsyncIoContext::ProgressWaitOutcome>::result_storage(sluice::detail::success_tag, sluice::async::AsyncIoContext::ProgressWaitOutcome&&)] 0.01% (1)
+  - roles: {'main': 5}
+- **AsyncIoContext::run_progress_pass_**: self lines: src/async/async_io_context.cpp:432 0.03% (2); src/async/async_io_context.cpp:434 0.01% (1)
+  - callsite lines: src/async/async_io_context.cpp:437 0.05% (4); src/async/async_io_context.cpp:434 0.03% (2)
+  - callsite leaf: __GI___pthread_mutex_unlock_usercnt 0.04% (3); pthread_mutex_lock@@GLIBC_2.2.5 0.04% (3)
+  - self inner (actual sampled function:line): src/async/async_io_context.cpp:432 [sluice::async::AsyncIoContext::run_progress_pass_()] 0.03% (2); include/sluice/async/detail/progress_source.hpp:65 [sluice::async::detail::ProgressSource::wait_health_failed() const] 0.01% (1)
+  - roles: {'main': 9}
+- **RequestScope::wait_for**: self lines: src/async/request_scope.cpp:248 0.89% (68); src/async/request_scope.cpp:252 0.17% (13); src/async/request_scope.cpp:247 0.01% (1); src/async/request_scope.cpp:253 0.01% (1)
+  - callsite lines: src/async/request_scope.cpp:248 0.20% (15); src/async/request_scope.cpp:252 0.07% (5); src/async/request_scope.cpp:253 0.01% (1); src/async/request_scope.cpp:247 0.01% (1)
+  - callsite leaf: __irqentry_text_end 0.17% (13); std::chrono::_V2::steady_clock::now() 0.05% (4); asm_sysvec_reschedule_ipi 0.03% (2); error_entry 0.03% (2)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.48% (37); /usr/include/c++/16/variant:1210 [std::add_pointer<std::variant_alternative<1ul, std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> > >::type>::type std::get_if<1ul, std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >(std::variant<std::monostate, sluice::async::Request<unsigned long>, sluice::async::Request<void> >*)] 0.13% (10); include/sluice/async/request_scope.hpp:124 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.10% (8)
+  - roles: {'main': 105}
+- **RequestScope::take**: self lines: src/async/request_scope.cpp:239 0.84% (64); src/async/request_scope.cpp:240 0.05% (4); src/async/request_scope.cpp:238 0.03% (2)
+  - callsite lines: src/async/request_scope.cpp:239 0.18% (14); src/async/request_scope.cpp:240 0.03% (2); src/async/request_scope.cpp:238 0.03% (2)
+  - callsite leaf: entry_SYSCALL_64 0.09% (7); __irqentry_text_end 0.09% (7); asm_sysvec_reschedule_ipi 0.05% (4)
+  - self inner (actual sampled function:line): include/sluice/async/request.hpp:205 [sluice::async::Request<unsigned long>::result_of_(sluice::async::RequestResultData const&)] 0.17% (13); include/sluice/async/request.hpp:35 [sluice::async::operator==(sluice::async::RequestId const&, sluice::async::RequestId const&)] 0.16% (12); include/sluice/async/request_scope.hpp:120 [sluice::async::RequestScope::Slot* sluice::async::RequestScope::resolve_<unsigned long>(sluice::async::ScopeTicket<unsigned long> const&)] 0.16% (12)
+  - roles: {'main': 88}
+- **UringAsyncBackend::find_live_router_cookie_**: self lines: src/async/uring_transport.cpp:552 0.51% (39); src/async/uring_transport.cpp:553 0.34% (26); src/async/uring_transport.cpp:557 0.04% (3)
+  - callsite lines: src/async/uring_transport.cpp:553 0.07% (5); src/async/uring_transport.cpp:552 0.03% (2)
+  - callsite leaf: __irqentry_text_end 0.05% (4); asm_sysvec_reschedule_ipi 0.01% (1); entry_SYSCALL_64 0.01% (1); error_entry 0.01% (1)
+  - self inner (actual sampled function:line): src/async/uring_transport.cpp:552 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.51% (39); src/async/uring_transport.cpp:553 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.34% (26); src/async/uring_transport.cpp:557 [sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const] 0.04% (3)
+  - roles: {'main': 75}
+- **UringAsyncBackend::handle_one_cqe**: self lines: src/async/uring_completion.cpp:173 0.54% (41); src/async/uring_completion.cpp:149 0.05% (4); src/async/uring_completion.cpp:198 0.04% (3); src/async/uring_completion.cpp:100 0.03% (2)
+  - callsite lines: src/async/uring_completion.cpp:173 0.08% (6); src/async/uring_completion.cpp:100 0.08% (6); src/async/uring_completion.cpp:149 0.01% (1)
+  - callsite leaf: pthread_mutex_lock@@GLIBC_2.2.5 0.08% (6); asm_sysvec_reschedule_ipi 0.04% (3); __irqentry_text_end 0.04% (3); entry_SYSCALL_64 0.01% (1)
+  - self inner (actual sampled function:line): src/async/uring_completion.cpp:173 [sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)] 0.29% (22); include/sluice/detail/file_semantics.hpp:310 [sluice::detail::IoOutcome::success(unsigned long)] 0.25% (19); src/async/uring_completion.cpp:198 [sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)] 0.04% (3)
+  - roles: {'main': 69}
+- **UringAsyncBackend::reap_cqes**: self lines: src/async/uring_completion.cpp:229 0.26% (20); src/async/uring_completion.cpp:200 0.03% (2); src/async/uring_completion.cpp:278 0.01% (1)
+  - callsite lines: src/async/uring_completion.cpp:210 0.10% (8); src/async/uring_completion.cpp:229 0.09% (7); /usr/include/liburing.h:428 0.01% (1); /usr/include/liburing.h:490 0.01% (1)
+  - callsite leaf: io_uring_peek_batch_cqe 0.10% (8); pthread_mutex_unlock@@GLIBC_2.2.5 0.04% (3); __GI___pthread_mutex_unlock_usercnt 0.03% (2); __x86_indirect_thunk_rax 0.01% (1)
+  - self inner (actual sampled function:line): /usr/include/liburing.h:428 [sluice::async::UringAsyncBackend::reap_cqes()] 0.13% (10); /usr/include/liburing.h:490 [sluice::async::UringAsyncBackend::reap_cqes()] 0.05% (4); src/async/uring_completion.cpp:229 [sluice::async::UringAsyncBackend::reap_cqes()] 0.03% (2)
+  - roles: {'main': 40}
+

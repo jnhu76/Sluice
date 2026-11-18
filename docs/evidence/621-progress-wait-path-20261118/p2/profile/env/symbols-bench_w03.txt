@@ -1,0 +1,585 @@
+000000000042f7f8 r __abi_tag
+0000000000431300 B __bss_start
+                 U clock_gettime@GLIBC_2.17
+                 U close@GLIBC_2.2.5
+0000000000431308 b completed.0
+                 U __cxa_allocate_exception@CXXABI_1.3
+                 U __cxa_atexit@GLIBC_2.2.5
+                 U __cxa_begin_catch@CXXABI_1.3
+                 U __cxa_call_terminate@CXXABI_1.3.15
+                 U __cxa_end_catch@CXXABI_1.3
+                 U __cxa_free_exception@CXXABI_1.3
+                 U __cxa_guard_abort@CXXABI_1.3
+                 U __cxa_guard_acquire@CXXABI_1.3
+                 U __cxa_guard_release@CXXABI_1.3
+                 U __cxa_rethrow@CXXABI_1.3
+                 U __cxa_throw@CXXABI_1.3
+00000000004312e8 D __data_start
+00000000004312e8 W data_start
+0000000000404540 t deregister_tm_clones
+0000000000404530 T _dl_relocate_static_pie
+00000000004045b0 t __do_global_dtors_aux
+0000000000430cb8 d __do_global_dtors_aux_fini_array_entry
+0000000000426fe8 R __dso_handle
+0000000000430dc8 d _DYNAMIC
+00000000004312f8 D _edata
+0000000000431348 B _end
+                 U epoll_create1@GLIBC_2.9
+                 U epoll_ctl@GLIBC_2.3.2
+                 U epoll_wait@GLIBC_2.3.2
+                 U __errno_location@GLIBC_2.2.5
+                 U eventfd@GLIBC_2.7
+                 U fclose@GLIBC_2.2.5
+                 U fdatasync@GLIBC_2.2.5
+                 U fflush@GLIBC_2.2.5
+0000000000424470 T _fini
+                 U fopen@GLIBC_2.2.5
+                 U fprintf@GLIBC_2.2.5
+00000000004045e0 t frame_dummy
+0000000000430cb0 d __frame_dummy_init_array_entry
+000000000042ebd8 r __FRAME_END__
+                 U fstat@GLIBC_2.33
+                 U fsync@GLIBC_2.2.5
+                 U ftruncate@GLIBC_2.2.5
+                 U fwrite@GLIBC_2.2.5
+                 U getenv@GLIBC_2.2.5
+                 U getrusage@GLIBC_2.2.5
+0000000000430fe8 d _GLOBAL_OFFSET_TABLE_
+                 w __gmon_start__
+0000000000429bc8 r __GNU_EH_FRAME_HDR
+                 U __gxx_personality_v0@CXXABI_1.3
+000000000040033c T _init
+0000000000426fe0 R _IO_stdin_used
+                 U io_uring_free_probe@LIBURING_2.0
+                 U __io_uring_get_cqe@LIBURING_2.0
+                 U io_uring_get_events@LIBURING_2.3
+                 U io_uring_get_probe_ring@LIBURING_2.0
+                 U io_uring_peek_batch_cqe@LIBURING_2.0
+                 U io_uring_queue_exit@LIBURING_2.0
+                 U io_uring_queue_init@LIBURING_2.0
+                 U io_uring_register_eventfd@LIBURING_2.0
+                 U io_uring_submit_and_wait@LIBURING_2.0
+                 U io_uring_submit@LIBURING_2.0
+                 U io_uring_unregister_eventfd@LIBURING_2.0
+                 U __isoc23_fscanf@GLIBC_2.38
+                 U __isoc23_strtoul@GLIBC_2.38
+                 U __libc_start_main@GLIBC_2.34
+0000000000402700 T main
+00000000004014c5 t main.cold
+                 U memchr@GLIBC_2.2.5
+                 U memcmp@GLIBC_2.2.5
+                 U memcpy@GLIBC_2.14
+                 U memmove@GLIBC_2.2.5
+                 U memset@GLIBC_2.2.5
+                 U open@GLIBC_2.2.5
+                 U poll@GLIBC_2.2.5
+                 U pread@GLIBC_2.2.5
+                 U printf@GLIBC_2.2.5
+                 U pthread_cond_clockwait@GLIBC_2.34
+                 U pthread_mutex_lock@GLIBC_2.2.5
+                 U pthread_mutex_unlock@GLIBC_2.2.5
+                 U pthread_self@GLIBC_2.2.5
+                 U puts@GLIBC_2.2.5
+                 U pwrite@GLIBC_2.2.5
+                 U read@GLIBC_2.2.5
+0000000000404570 t register_tm_clones
+                 U round@GLIBC_2.2.5
+                 U snprintf@GLIBC_2.2.5
+                 U sqrt@GLIBC_2.2.5
+0000000000404500 T _start
+0000000000431300 B stderr@GLIBC_2.2.5
+                 U strlen@GLIBC_2.2.5
+                 U sysconf@GLIBC_2.2.5
+                 U system@GLIBC_2.2.5
+00000000004312f8 D __TMC_END__
+                 U _Unwind_Resume@GCC_3.0
+                 U write@GLIBC_2.2.5
+                 U operator delete(void*, unsigned long)@CXXABI_1.3.9
+0000000000431310 u guard variable for bench::jsonl_stream()::stream
+0000000000431320 u guard variable for bench::pattern_table()::table
+0000000000400940 t (anonymous namespace)::PhaseResult::~PhaseResult()
+0000000000400940 t (anonymous namespace)::PhaseResult::~PhaseResult()
+0000000000406110 t (anonymous namespace)::make_context((anonymous namespace)::BackendChoice const&, unsigned long, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, sluice::AsyncStats*) [clone .constprop.0]
+0000000000400a64 t (anonymous namespace)::make_context((anonymous namespace)::BackendChoice const&, unsigned long, unsigned long, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&, sluice::AsyncStats*) [clone .constprop.0] [clone .cold]
+0000000000406380 t (anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&)
+0000000000400b43 t (anonymous namespace)::driver_thread(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&) [clone .cold]
+00000000004085b0 t (anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool)
+0000000000400e57 t (anonymous namespace)::run_external_phase((anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, bool, bool) [clone .cold]
+000000000040b390 t (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool)
+0000000000401437 t (anonymous namespace)::run_one_repetition(bench::EnvConfig const&, (anonymous namespace)::LoopParams const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, unsigned long, unsigned long, bool) [clone .cold]
+0000000000405280 t (anonymous namespace)::describe(sluice::IoError const&)
+00000000004009ba t (anonymous namespace)::describe(sluice::IoError const&) [clone .cold]
+0000000000406ba0 t (anonymous namespace)::make_meta((anonymous namespace)::LoopParams const&)
+0000000000400c2c t (anonymous namespace)::make_meta((anonymous namespace)::LoopParams const&) [clone .cold]
+000000000040ffd0 W bench::emit_record(bench::Record const&)
+000000000040f430 W bench::json_escape(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+000000000040e340 W bench::verify_pattern(std::byte const*, unsigned long, unsigned long)
+000000000040e600 W bench::oracle_self_test()
+0000000000410a40 W bench::oracle_self_test_case(bench::EnvConfig const&)
+0000000000410830 W bench::Record::~Record()
+0000000000410830 W bench::Record::~Record()
+0000000000410940 W bench::CaseMeta::~CaseMeta()
+0000000000410940 W bench::CaseMeta::~CaseMeta()
+0000000000424090 T sluice::File::open(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, sluice::FileOpen)
+00000000004243a0 T sluice::File::close()
+0000000000424310 T sluice::File::operator=(sluice::File&&)
+00000000004242f0 T sluice::File::File(sluice::File&&)
+00000000004242f0 T sluice::File::File(sluice::File&&)
+0000000000424370 T sluice::File::~File()
+0000000000424370 T sluice::File::~File()
+0000000000415fe0 W sluice::async::AsyncBackend::poll_progress()
+0000000000416030 W sluice::async::AsyncBackend::stop_execution()
+0000000000416070 W sluice::async::AsyncBackend::progress_port_attached()
+0000000000416040 W sluice::async::AsyncBackend::retire_execution_resources()
+0000000000416250 t sluice::async::(anonymous namespace)::threadpool_publication_invariant_fail_fast()
+0000000000412860 T sluice::async::ProgressOwner::operator=(sluice::async::ProgressOwner&&)
+00000000004016fe t sluice::async::ProgressOwner::operator=(sluice::async::ProgressOwner&&) [clone .cold]
+0000000000412850 T sluice::async::ProgressOwner::ProgressOwner(sluice::async::ProgressOwner&&)
+0000000000412850 T sluice::async::ProgressOwner::ProgressOwner(sluice::async::ProgressOwner&&)
+00000000004128e0 T sluice::async::ProgressOwner::~ProgressOwner()
+00000000004128e0 T sluice::async::ProgressOwner::~ProgressOwner()
+0000000000401706 t sluice::async::ProgressOwner::~ProgressOwner() [clone .cold]
+0000000000412b70 T sluice::async::AsyncIoContext::drive_exit_()
+0000000000401738 t sluice::async::AsyncIoContext::drive_exit_() [clone .cold]
+0000000000412cb0 T sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp)
+0000000000401758 t sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp) [clone .cold]
+0000000000413490 T sluice::async::AsyncIoContext::submit_size(sluice::async::SizeOp)
+00000000004017d0 t sluice::async::AsyncIoContext::submit_size(sluice::async::SizeOp) [clone .cold]
+0000000000415880 T sluice::async::AsyncIoContext::request_stop(sluice::async::ShutdownPolicy)
+00000000004019d0 t sluice::async::AsyncIoContext::request_stop(sluice::async::ShutdownPolicy) [clone .cold]
+0000000000412e60 T sluice::async::AsyncIoContext::submit_write(sluice::async::WriteOp)
+0000000000401770 t sluice::async::AsyncIoContext::submit_write(sluice::async::WriteOp) [clone .cold]
+0000000000414370 T sluice::async::AsyncIoContext::poll_progress()
+00000000004018b8 t sluice::async::AsyncIoContext::poll_progress() [clone .cold]
+0000000000415350 T sluice::async::AsyncIoContext::attach_observer(sluice::async::RequestId const&)
+00000000004019a2 t sluice::async::AsyncIoContext::attach_observer(sluice::async::RequestId const&) [clone .cold]
+00000000004154f0 T sluice::async::AsyncIoContext::cancel_observer(sluice::async::RequestId const&)
+00000000004019aa t sluice::async::AsyncIoContext::cancel_observer(sluice::async::RequestId const&) [clone .cold]
+0000000000415770 T sluice::async::AsyncIoContext::close_admission()
+00000000004019c2 t sluice::async::AsyncIoContext::close_admission() [clone .cold]
+0000000000413190 T sluice::async::AsyncIoContext::submit_sync_all(sluice::async::SyncAllOp)
+00000000004017a0 t sluice::async::AsyncIoContext::submit_sync_all(sluice::async::SyncAllOp) [clone .cold]
+0000000000413310 T sluice::async::AsyncIoContext::submit_file_info(sluice::async::FileInfoOp)
+00000000004017b8 t sluice::async::AsyncIoContext::submit_file_info(sluice::async::FileInfoOp) [clone .cold]
+0000000000413010 T sluice::async::AsyncIoContext::submit_sync_data(sluice::async::SyncDataOp)
+0000000000401788 t sluice::async::AsyncIoContext::submit_sync_data(sluice::async::SyncDataOp) [clone .cold]
+00000000004145f0 T sluice::async::AsyncIoContext::drive_settlement_()
+0000000000413980 t sluice::async::AsyncIoContext::drive_settlement_() [clone .part.0]
+0000000000401816 t sluice::async::AsyncIoContext::drive_settlement_() [clone .part.0] [clone .cold]
+0000000000413800 T sluice::async::AsyncIoContext::run_progress_pass_()
+0000000000401808 t sluice::async::AsyncIoContext::run_progress_pass_() [clone .cold]
+0000000000412c10 T sluice::async::AsyncIoContext::claim_progress_owner()
+000000000040174c t sluice::async::AsyncIoContext::claim_progress_owner() [clone .cold]
+0000000000415310 T sluice::async::AsyncIoContext::detach_progress_host()
+0000000000401996 t sluice::async::AsyncIoContext::detach_progress_host() [clone .cold]
+0000000000414560 T sluice::async::AsyncIoContext::upgrade_stop_policy_(sluice::async::ShutdownPolicy)
+0000000000412ae0 T sluice::async::AsyncIoContext::drive_entry_admitted_()
+0000000000401726 t sluice::async::AsyncIoContext::drive_entry_admitted_() [clone .cold]
+0000000000412bb0 T sluice::async::AsyncIoContext::release_progress_owner_()
+0000000000401744 t sluice::async::AsyncIoContext::release_progress_owner_() [clone .cold]
+0000000000415200 T sluice::async::AsyncIoContext::progress_notification_fd()
+0000000000401980 t sluice::async::AsyncIoContext::progress_notification_fd() [clone .cold]
+0000000000415060 T sluice::async::AsyncIoContext::interrupt_progress_waiters()
+000000000040196a t sluice::async::AsyncIoContext::interrupt_progress_waiters() [clone .cold]
+0000000000415140 T sluice::async::AsyncIoContext::acknowledge_progress_control()
+0000000000401972 t sluice::async::AsyncIoContext::acknowledge_progress_control() [clone .cold]
+00000000004144c0 T sluice::async::AsyncIoContext::cancel_outstanding_for_stop_()
+0000000000415260 T sluice::async::AsyncIoContext::acknowledge_progress_notification()
+0000000000401988 t sluice::async::AsyncIoContext::acknowledge_progress_notification() [clone .cold]
+0000000000412bf0 T sluice::async::AsyncIoContext::fail_fast_if_progress_binding_live_()
+0000000000414610 T sluice::async::AsyncIoContext::backend_has_immediate_physical_work_()
+0000000000414450 T sluice::async::AsyncIoContext::close_admission_on_progress_exhaustion_()
+00000000004018ea t sluice::async::AsyncIoContext::close_admission_on_progress_exhaustion_() [clone .cold]
+0000000000414280 T sluice::async::AsyncIoContext::poll()
+0000000000401882 t sluice::async::AsyncIoContext::poll() [clone .cold]
+0000000000413610 T sluice::async::AsyncIoContext::cancel(sluice::async::RequestId const&)
+00000000004017e8 t sluice::async::AsyncIoContext::cancel(sluice::async::RequestId const&) [clone .cold]
+0000000000415a90 T sluice::async::AsyncIoContext::shutdown(sluice::async::ShutdownPolicy)
+00000000004019f4 t sluice::async::AsyncIoContext::shutdown(sluice::async::ShutdownPolicy) [clone .cold]
+0000000000414640 T sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)
+00000000004018f2 t sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >) [clone .cold]
+0000000000415040 T sluice::async::AsyncIoContext::wait_one()
+0000000000414070 T sluice::async::AsyncIoContext::operator=(sluice::async::AsyncIoContext&&)
+000000000040185e t sluice::async::AsyncIoContext::operator=(sluice::async::AsyncIoContext&&) [clone .cold]
+0000000000412930 T sluice::async::AsyncIoContext::AsyncIoContext(sluice::async::AsyncIoContext&&)
+0000000000415c50 T sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*)
+0000000000412930 T sluice::async::AsyncIoContext::AsyncIoContext(sluice::async::AsyncIoContext&&)
+000000000040170e t sluice::async::AsyncIoContext::AsyncIoContext(sluice::async::AsyncIoContext&&) [clone .cold]
+0000000000415c50 T sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*)
+0000000000401a3e t sluice::async::AsyncIoContext::AsyncIoContext(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) [clone .cold]
+0000000000413f40 T sluice::async::AsyncIoContext::~AsyncIoContext()
+0000000000413f40 T sluice::async::AsyncIoContext::~AsyncIoContext()
+0000000000401856 t sluice::async::AsyncIoContext::~AsyncIoContext() [clone .cold]
+0000000000419520 T sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey)
+0000000000402020 t sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]
+0000000000418450 T sluice::async::ThreadPoolBackend::publish_one(sluice::async::detail::RequestReservation)
+0000000000418aa0 T sluice::async::ThreadPoolBackend::run_syscall(sluice::async::ThreadPoolBackend::PreparedBlockingOp const&, sluice::FileInfo*)
+0000000000417310 T sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp)
+0000000000401f28 t sluice::async::ThreadPoolBackend::submit_read(sluice::async::ReadOp) [clone .cold]
+0000000000417a10 T sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp)
+0000000000401f38 t sluice::async::ThreadPoolBackend::submit_size(sluice::async::SizeOp) [clone .cold]
+0000000000418e30 T sluice::async::ThreadPoolBackend::worker_loop()
+0000000000401f90 t sluice::async::ThreadPoolBackend::worker_loop() [clone .cold]
+0000000000417690 T sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp)
+0000000000401f30 t sluice::async::ThreadPoolBackend::submit_write(sluice::async::WriteOp) [clone .cold]
+0000000000418a00 T sluice::async::ThreadPoolBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)
+00000000004185b0 T sluice::async::ThreadPoolBackend::poll_progress()
+0000000000401f58 t sluice::async::ThreadPoolBackend::poll_progress() [clone .cold]
+0000000000416df0 T sluice::async::ThreadPoolBackend::validate_read(sluice::async::ReadOp)
+0000000000417010 T sluice::async::ThreadPoolBackend::validate_size(sluice::async::SizeOp)
+0000000000416f20 T sluice::async::ThreadPoolBackend::validate_sync(sluice::async::SyncDataOp)
+0000000000416f70 T sluice::async::ThreadPoolBackend::validate_sync(sluice::async::SyncAllOp)
+00000000004162e0 T sluice::async::ThreadPoolBackend::stop_execution()
+0000000000401c18 t sluice::async::ThreadPoolBackend::stop_execution() [clone .cold]
+0000000000416e80 T sluice::async::ThreadPoolBackend::validate_write(sluice::async::WriteOp)
+0000000000419970 T sluice::async::ThreadPoolBackend::cancel_identity(sluice::async::detail::RequestKey)
+0000000000419a00 T sluice::async::ThreadPoolBackend::close_admission()
+000000000040204e t sluice::async::ThreadPoolBackend::close_admission() [clone .cold]
+0000000000417f30 T sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp)
+0000000000401f48 t sluice::async::ThreadPoolBackend::submit_sync_all(sluice::async::SyncAllOp) [clone .cold]
+0000000000417ca0 T sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp)
+0000000000401f40 t sluice::async::ThreadPoolBackend::submit_file_info(sluice::async::FileInfoOp) [clone .cold]
+00000000004181c0 T sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp)
+0000000000401f50 t sluice::async::ThreadPoolBackend::submit_sync_data(sluice::async::SyncDataOp) [clone .cold]
+00000000004166e0 T sluice::async::ThreadPoolBackend::BoundedHandleRing::remove_exact(sluice::async::detail::RequestReservation)
+00000000004166a0 T sluice::async::ThreadPoolBackend::BoundedHandleRing::pop_front(sluice::async::detail::RequestReservation&)
+0000000000416630 T sluice::async::ThreadPoolBackend::BoundedHandleRing::push_back(sluice::async::detail::RequestReservation)
+0000000000416fc0 T sluice::async::ThreadPoolBackend::validate_file_info(sluice::async::FileInfoOp)
+0000000000417060 T sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+0000000000401f08 t sluice::async::ThreadPoolBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]
+0000000000419420 T sluice::async::ThreadPoolBackend::signal_ready_progress()
+0000000000402018 t sluice::async::ThreadPoolBackend::signal_ready_progress() [clone .cold]
+0000000000417120 T sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)
+0000000000401f10 t sluice::async::ThreadPoolBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation) [clone .cold]
+00000000004163b0 T sluice::async::ThreadPoolBackend::retire_execution_resources()
+0000000000401c28 t sluice::async::ThreadPoolBackend::retire_execution_resources() [clone .cold]
+0000000000416240 T sluice::async::ThreadPoolBackend::poll()
+0000000000416820 T sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)
+0000000000416820 T sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)
+0000000000401c3c t sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig) [clone .cold]
+0000000000416600 T sluice::async::ThreadPoolBackend::~ThreadPoolBackend()
+00000000004164c0 T sluice::async::ThreadPoolBackend::~ThreadPoolBackend()
+00000000004164c0 T sluice::async::ThreadPoolBackend::~ThreadPoolBackend()
+0000000000401c30 t sluice::async::ThreadPoolBackend::~ThreadPoolBackend() [clone .cold]
+000000000041fae0 T sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey)
+00000000004024b8 t sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) [clone .cold]
+000000000041c9b0 T sluice::async::UringAsyncBackend::publish_one(sluice::async::detail::RequestReservation)
+000000000041b3b0 T sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp)
+00000000004023c0 t sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp) [clone .cold]
+000000000041bbf0 T sluice::async::UringAsyncBackend::submit_size(sluice::async::SizeOp)
+00000000004023d0 t sluice::async::UringAsyncBackend::submit_size(sluice::async::SizeOp) [clone .cold]
+000000000041b7d0 T sluice::async::UringAsyncBackend::submit_write(sluice::async::WriteOp)
+00000000004023c8 t sluice::async::UringAsyncBackend::submit_write(sluice::async::WriteOp) [clone .cold]
+000000000041d0a0 T sluice::async::UringAsyncBackend::deliver_event(sluice::async::detail::RequestKey, sluice::async::detail::OperationKind)
+000000000041ced0 T sluice::async::UringAsyncBackend::poll_progress()
+0000000000402476 t sluice::async::UringAsyncBackend::poll_progress() [clone .cold]
+000000000041a280 T sluice::async::UringAsyncBackend::validate_read(sluice::async::ReadOp)
+000000000041a4a0 T sluice::async::UringAsyncBackend::validate_size(sluice::async::SizeOp)
+000000000041a3b0 T sluice::async::UringAsyncBackend::validate_sync(sluice::async::SyncDataOp)
+000000000041a400 T sluice::async::UringAsyncBackend::validate_sync(sluice::async::SyncAllOp)
+000000000041d6c0 T sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int)
+0000000000402486 t sluice::async::UringAsyncBackend::handle_one_cqe(unsigned long, int) [clone .cold]
+000000000041a310 T sluice::async::UringAsyncBackend::validate_write(sluice::async::WriteOp)
+0000000000419c20 T sluice::async::UringAsyncBackend::cancel_identity(sluice::async::detail::RequestKey)
+000000000041d140 T sluice::async::UringAsyncBackend::close_admission()
+000000000040247e t sluice::async::UringAsyncBackend::close_admission() [clone .cold]
+000000000041c2d0 T sluice::async::UringAsyncBackend::submit_sync_all(sluice::async::SyncAllOp)
+00000000004023e0 t sluice::async::UringAsyncBackend::submit_sync_all(sluice::async::SyncAllOp) [clone .cold]
+000000000041dd60 t sluice::async::UringAsyncBackend::TransportLedger::append(sluice::async::UringAsyncBackend::TransportLedger::Kind, unsigned int, unsigned long, sluice::async::detail::RequestReservation) [clone .part.0]
+000000000041dd90 t sluice::async::UringAsyncBackend::TransportLedger::pop_front() [clone .part.0]
+000000000041e330 T sluice::async::UringAsyncBackend::allocate_cookie_()
+000000000041dd00 t sluice::async::UringAsyncBackend::allocate_cookie_() [clone .part.0]
+000000000041bf60 T sluice::async::UringAsyncBackend::submit_file_info(sluice::async::FileInfoOp)
+00000000004023d8 t sluice::async::UringAsyncBackend::submit_file_info(sluice::async::FileInfoOp) [clone .cold]
+000000000041c640 T sluice::async::UringAsyncBackend::submit_sync_data(sluice::async::SyncDataOp)
+00000000004023e8 t sluice::async::UringAsyncBackend::submit_sync_data(sluice::async::SyncDataOp) [clone .cold]
+000000000041a4f0 T sluice::async::UringAsyncBackend::validate_config_(sluice::async::UringConfig)
+00000000004020a0 t sluice::async::UringAsyncBackend::validate_config_(sluice::async::UringConfig) [clone .cold]
+000000000041a450 T sluice::async::UringAsyncBackend::validate_file_info(sluice::async::FileInfoOp)
+000000000041eff0 T sluice::async::UringAsyncBackend::dispatch_one_locked(sluice::async::detail::RequestReservation)
+000000000041dd30 t sluice::async::UringAsyncBackend::BoundedDispatchQueue::push_back(sluice::async::detail::RequestReservation) [clone .part.0]
+000000000041a590 T sluice::async::UringAsyncBackend::probe_statx_support_()
+000000000041e410 T sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long)
+000000000040249e t sluice::async::UringAsyncBackend::retire_router_entry_(unsigned long) [clone .cold]
+000000000041fed0 T sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation)
+00000000004024ce t sluice::async::UringAsyncBackend::dispatch_after_accept(sluice::async::detail::RequestReservation) [clone .cold]
+0000000000419c30 T sluice::async::UringAsyncBackend::progress_port_attached()
+000000000041b1c0 T sluice::async::UringAsyncBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation)
+00000000004023a8 t sluice::async::UringAsyncBackend::publish_zero_op_inline(sluice::async::detail::RequestKey, sluice::async::detail::RequestReservation) [clone .cold]
+000000000041a520 T sluice::async::UringAsyncBackend::probe_required_opcodes_()
+000000000041ef90 T sluice::async::UringAsyncBackend::submit_transport_locked()
+000000000041e640 T sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError)
+00000000004024a8 t sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError) [clone .cold]
+0000000000419d00 T sluice::async::UringAsyncBackend::retire_execution_resources()
+0000000000419cd0 t sluice::async::UringAsyncBackend::retire_execution_resources() [clone .part.0]
+000000000041d2c0 T sluice::async::UringAsyncBackend::finalize_operation_terminal_(sluice::async::UringAsyncBackend::RouterEntry&, unsigned long, sluice::detail::IoOutcome const&, sluice::FileInfo const*)
+000000000041f6a0 T sluice::async::UringAsyncBackend::issue_running_cancel_locked_(sluice::async::detail::RequestReservation)
+000000000041e070 T sluice::async::UringAsyncBackend::mark_consumed_control_locked_(unsigned long, sluice::async::detail::RequestReservation)
+000000000041ed90 T sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool)
+0000000000420220 T sluice::async::UringAsyncBackend::service_pending_controls_locked_()
+000000000041e300 T sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_()
+000000000041e120 t sluice::async::UringAsyncBackend::reconcile_ledger_with_kernel_locked_() [clone .part.0]
+000000000041ddc0 T sluice::async::UringAsyncBackend::retire_undispatched_after_poison_locked_()
+000000000041ceb0 T sluice::async::UringAsyncBackend::poll()
+000000000041cb10 t sluice::async::UringAsyncBackend::poll() [clone .part.0]
+00000000004023f0 t sluice::async::UringAsyncBackend::poll() [clone .part.0] [clone .cold]
+000000000041dae0 T sluice::async::UringAsyncBackend::reap_cqes()
+0000000000402496 t sluice::async::UringAsyncBackend::reap_cqes() [clone .cold]
+000000000041b060 T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+000000000041b040 T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)
+000000000041a7c0 T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag)
+000000000041b060 T sluice::async::UringAsyncBackend::UringAsyncBackend(unsigned int)
+000000000041b040 T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig)
+00000000004022ec t sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig) [clone .cold]
+000000000041a7c0 T sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag)
+00000000004020f2 t sluice::async::UringAsyncBackend::UringAsyncBackend(sluice::async::UringConfig, sluice::async::UringAsyncBackend::ValidatedConfigTag) [clone .cold]
+000000000041a250 T sluice::async::UringAsyncBackend::~UringAsyncBackend()
+0000000000419eb0 T sluice::async::UringAsyncBackend::~UringAsyncBackend()
+0000000000419eb0 T sluice::async::UringAsyncBackend::~UringAsyncBackend()
+000000000040208a t sluice::async::UringAsyncBackend::~UringAsyncBackend() [clone .cold]
+000000000041b090 T sluice::async::make_uring_context(sluice::async::UringConfig, sluice::AsyncStats*)
+000000000040233e t sluice::async::make_uring_context(sluice::async::UringConfig, sluice::AsyncStats*) [clone .cold]
+0000000000416d40 T sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*)
+0000000000401eda t sluice::async::make_threadpool_context(sluice::async::ThreadPoolConfig, sluice::AsyncStats*) [clone .cold]
+0000000000421770 T sluice::async::detail::RequestCore::try_reclaim_(sluice::async::detail::RequestCore::Slot&, unsigned long)
+0000000000402644 t sluice::async::detail::RequestCore::try_reclaim_(sluice::async::detail::RequestCore::Slot&, unsigned long) [clone .cold]
+0000000000421e60 T sluice::async::detail::RequestCore::release_slot_(sluice::async::detail::RequestCore::Slot&, unsigned long)
+00000000004026a2 t sluice::async::detail::RequestCore::release_slot_(sluice::async::detail::RequestCore::Slot&, unsigned long) [clone .cold]
+00000000004211a0 T sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&)
+0000000000402604 t sluice::async::detail::RequestCore::offer_terminal(sluice::async::detail::RequestKey, sluice::async::detail::TerminalCandidate const&) [clone .cold]
+00000000004213a0 T sluice::async::detail::RequestCore::acquire_control(sluice::async::detail::RequestKey)
+000000000040261c t sluice::async::detail::RequestCore::acquire_control(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421d10 T sluice::async::detail::RequestCore::cancel_observer(sluice::async::detail::RequestKey)
+000000000040268a t sluice::async::detail::RequestCore::cancel_observer(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421290 T sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey)
+000000000040260c t sluice::async::detail::RequestCore::claim_execution(sluice::async::detail::RequestKey) [clone .cold]
+0000000000420e90 T sluice::async::detail::RequestCore::close_admission()
+00000000004025b6 t sluice::async::detail::RequestCore::close_admission() [clone .cold]
+0000000000421be0 T sluice::async::detail::RequestCore::release_control(sluice::async::detail::RequestKey)
+0000000000402672 t sluice::async::detail::RequestCore::release_control(sluice::async::detail::RequestKey) [clone .cold]
+0000000000420bd0 T sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey)
+0000000000421320 T sluice::async::detail::RequestCore::acquire_execution(sluice::async::detail::RequestKey)
+0000000000402614 t sluice::async::detail::RequestCore::acquire_execution(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421440 T sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*)
+0000000000402624 t sluice::async::detail::RequestCore::begin_publication(sluice::async::detail::RequestKey, sluice::async::detail::PublicationPayload*) [clone .cold]
+0000000000421560 T sluice::async::detail::RequestCore::register_observer(sluice::async::detail::RequestKey)
+000000000040262c t sluice::async::detail::RequestCore::register_observer(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421b20 T sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey)
+0000000000402666 t sluice::async::detail::RequestCore::release_execution(sluice::async::detail::RequestKey) [clone .cold]
+0000000000420b50 T sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey)
+0000000000420b10 T sluice::async::detail::RequestCore::resolve_reserved_(sluice::async::detail::RequestReservation)
+0000000000420f20 T sluice::async::detail::RequestCore::note_health_failure()
+00000000004025d4 t sluice::async::detail::RequestCore::note_health_failure() [clone .cold]
+0000000000421c70 T sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey)
+000000000040267e t sluice::async::detail::RequestCore::complete_publication(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421a20 T sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*)
+000000000040265a t sluice::async::detail::RequestCore::consume_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) [clone .cold]
+0000000000421980 T sluice::async::detail::RequestCore::discard_public_result(sluice::async::detail::RequestKey)
+000000000040264e t sluice::async::detail::RequestCore::discard_public_result(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421620 T sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey)
+0000000000402634 t sluice::async::detail::RequestCore::claim_observer_delivery(sluice::async::detail::RequestKey) [clone .cold]
+0000000000421dc0 T sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey)
+0000000000402696 t sluice::async::detail::RequestCore::retire_observer_delivery(sluice::async::detail::RequestKey) [clone .cold]
+0000000000420d50 T sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts)
+00000000004025aa t sluice::async::detail::RequestCore::accept(sluice::async::detail::RequestReservation, sluice::async::detail::RequestDescriptor const&, sluice::async::detail::BorrowFacts) [clone .cold]
+0000000000421020 T sluice::async::detail::RequestCore::cancel(sluice::async::detail::RequestKey)
+00000000004025f4 t sluice::async::detail::RequestCore::cancel(sluice::async::detail::RequestKey) [clone .cold]
+0000000000420c70 T sluice::async::detail::RequestCore::reserve()
+000000000040259e t sluice::async::detail::RequestCore::reserve() [clone .cold]
+0000000000422030 T sluice::async::detail::RequestCore::rollback(sluice::async::detail::RequestReservation)
+00000000004026ac t sluice::async::detail::RequestCore::rollback(sluice::async::detail::RequestReservation) [clone .cold]
+00000000004203c0 T sluice::async::detail::RequestCore::RequestCore(sluice::async::detail::ContextIdentity, unsigned long)
+00000000004203c0 T sluice::async::detail::RequestCore::RequestCore(sluice::async::detail::ContextIdentity, unsigned long)
+00000000004024dc t sluice::async::detail::RequestCore::RequestCore(sluice::async::detail::ContextIdentity, unsigned long) [clone .cold]
+0000000000420640 T sluice::async::detail::RequestCore::~RequestCore()
+0000000000420640 T sluice::async::detail::RequestCore::~RequestCore()
+0000000000402542 t sluice::async::detail::RequestCore::~RequestCore() [clone .cold]
+00000000004312f0 d sluice::async::detail::(anonymous namespace)::g_context_identity_cursor
+0000000000415df0 T sluice::async::detail::make_context(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*)
+0000000000401b04 t sluice::async::detail::make_context(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) [clone .cold]
+00000000004220c0 T sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&)
+00000000004026b4 t sluice::async::detail::RequestBridge::ready(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&) [clone .cold]
+00000000004224a0 T sluice::async::detail::RequestBridge::cancel(sluice::async::AsyncBackend*, sluice::async::RequestId const&)
+00000000004220a0 T sluice::async::detail::RequestBridge::key_of(sluice::async::RequestId const&)
+0000000000422290 T sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+00000000004026c8 t sluice::async::detail::RequestBridge::consume(sluice::async::detail::RequestCore*, sluice::async::RequestId const&, sluice::async::RequestResultData*) [clone .cold]
+00000000004223d0 T sluice::async::detail::RequestBridge::discard(sluice::async::detail::RequestCore*, sluice::async::RequestId const&)
+00000000004026d0 t sluice::async::detail::RequestBridge::discard(sluice::async::detail::RequestCore*, sluice::async::RequestId const&) [clone .cold]
+0000000000422160 T sluice::async::detail::RequestBridge::observe(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&, sluice::async::RequestResultData*)
+00000000004026c0 t sluice::async::detail::RequestBridge::observe(sluice::async::detail::RequestCore const*, sluice::async::RequestId const&, sluice::async::RequestResultData*) [clone .cold]
+0000000000415e40 T sluice::async::detail::ContextFactory::make(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*)
+0000000000401b1c t sluice::async::detail::ContextFactory::make(std::unique_ptr<sluice::async::AsyncBackend, std::default_delete<sluice::async::AsyncBackend> >, sluice::AsyncStats*) [clone .cold]
+00000000004127c0 t sluice::async::detail::ProgressSource::wait_if_unchanged(sluice::async::detail::ProgressSource::Token, std::chrono::duration<long, std::ratio<1l, 1000000000l> >, bool (*)(void*) noexcept, void*) [clone .part.0]
+00000000004160a0 W sluice::async::detail::ProgressSource::wait_domain_fail_fast_(char const*, int)
+0000000000419b80 W sluice::async::detail::ReferenceReadySink::on_ready(sluice::async::detail::ReadyEvent)
+0000000000419bc0 W sluice::async::detail::ReferenceReadySink::~ReferenceReadySink()
+0000000000419bb0 W sluice::async::detail::ReferenceReadySink::~ReferenceReadySink()
+0000000000419bb0 W sluice::async::detail::ReferenceReadySink::~ReferenceReadySink()
+00000000004202d0 T sluice::async::detail::claim_context_identity(std::atomic<unsigned long>&)
+0000000000420310 T sluice::async::detail::allocate_context_identity()
+0000000000416200 T sluice::async::detail::uring_core_handoff_fail_fast()
+0000000000401c0b T sluice::async::detail::threadpool_core_handoff_fail_fast()
+0000000000416140 T sluice::async::detail::async_context_settlement_fail_fast()
+0000000000416110 T sluice::async::detail::async_context_outstanding_fail_fast()
+0000000000420390 T sluice::async::detail::request_binding_invariant_fail_fast()
+0000000000401bff T sluice::async::detail::context_identity_exhausted_fail_fast()
+0000000000420360 T sluice::async::detail::request_nonterminal_release_fail_fast()
+0000000000416170 T sluice::async::detail::async_context_progress_binding_fail_fast()
+00000000004161a0 T sluice::async::detail::request_scope_settlement_driver_fail_fast()
+00000000004161d0 T sluice::async::detail::request_scope_settlement_health_fail_fast()
+0000000000401c11 T sluice::async::detail::uring_non_quiescent_destruction_fail_fast()
+0000000000401c05 T sluice::async::detail::threadpool_non_quiescent_destruction_fail_fast()
+0000000000429a60 u sluice::detail::kNativeErrorMappings
+0000000000423a80 T sluice::blocking::read_exact(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)
+0000000000423710 T sluice::blocking::write_all_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)
+0000000000423420 T sluice::blocking::read_exact_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)
+0000000000422930 T sluice::blocking::read(sluice::File const&, std::span<std::byte, 18446744073709551615ul>)
+0000000000423010 T sluice::blocking::size(sluice::File const&)
+0000000000422b20 T sluice::blocking::write(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)
+00000000004231a0 T sluice::blocking::resize(sluice::File const&, unsigned long)
+00000000004224f0 T sluice::blocking::read_at(sluice::File const&, unsigned long, std::span<std::byte, 18446744073709551615ul>)
+0000000000423310 T sluice::blocking::sync_all(sluice::File const&)
+0000000000422710 T sluice::blocking::write_at(sluice::File const&, unsigned long, std::span<std::byte const, 18446744073709551615ul>)
+0000000000422e20 T sluice::blocking::file_info(sluice::File const&)
+0000000000422d10 T sluice::blocking::sync_data(sluice::File const&)
+0000000000423d50 T sluice::blocking::write_all(sluice::File const&, std::span<std::byte const, 18446744073709551615ul>)
+0000000000416050 W sluice::async::AsyncBackend::signals_physical_progress() const
+0000000000416060 W sluice::async::AsyncBackend::has_immediate_physical_work() const
+0000000000415720 T sluice::async::AsyncIoContext::outstanding() const
+00000000004019ba t sluice::async::AsyncIoContext::outstanding() const [clone .cold]
+0000000000415bd0 T sluice::async::AsyncIoContext::admission_open() const
+0000000000401a2a t sluice::async::AsyncIoContext::admission_open() const [clone .cold]
+0000000000415690 T sluice::async::AsyncIoContext::delivery_retired(sluice::async::RequestId const&) const
+00000000004019b2 t sluice::async::AsyncIoContext::delivery_retired(sluice::async::RequestId const&) const [clone .cold]
+0000000000415c10 T sluice::async::AsyncIoContext::execution_closed() const
+0000000000401a32 t sluice::async::AsyncIoContext::execution_closed() const [clone .cold]
+0000000000414580 T sluice::async::AsyncIoContext::settlement_converged_() const
+00000000004151a0 T sluice::async::AsyncIoContext::has_split_wait_capability() const
+00000000004151d0 T sluice::async::AsyncIoContext::has_bounded_split_wait_capability() const
+0000000000413750 T sluice::async::AsyncIoContext::lookup(sluice::async::RequestId const&) const
+0000000000401800 t sluice::async::AsyncIoContext::lookup(sluice::async::RequestId const&) const [clone .cold]
+00000000004162c0 T sluice::async::ThreadPoolBackend::outstanding() const
+0000000000419ba0 W sluice::async::ThreadPoolBackend::slot_capacity() const
+00000000004199c0 T sluice::async::ThreadPoolBackend::active_workers() const
+0000000000402042 t sluice::async::ThreadPoolBackend::active_workers() const [clone .cold]
+0000000000419980 T sluice::async::ThreadPoolBackend::dispatch_occupancy() const
+0000000000402036 t sluice::async::ThreadPoolBackend::dispatch_occupancy() const [clone .cold]
+0000000000416320 T sluice::async::ThreadPoolBackend::internal_work_retired() const
+0000000000401c20 t sluice::async::ThreadPoolBackend::internal_work_retired() const [clone .cold]
+0000000000419b40 T sluice::async::ThreadPoolBackend::any_event_owed_locked_() const
+0000000000419b90 W sluice::async::ThreadPoolBackend::signals_physical_progress() const
+0000000000419c00 T sluice::async::UringAsyncBackend::outstanding() const
+000000000041d2b0 W sluice::async::UringAsyncBackend::slot_capacity() const
+0000000000419d50 T sluice::async::UringAsyncBackend::internal_work_retired() const
+0000000000402082 t sluice::async::UringAsyncBackend::internal_work_retired() const [clone .cold]
+000000000041b180 T sluice::async::UringAsyncBackend::any_event_owed_locked_() const
+000000000041e350 T sluice::async::UringAsyncBackend::find_live_router_index_(sluice::async::detail::RequestReservation) const
+000000000041e3b0 T sluice::async::UringAsyncBackend::find_live_router_cookie_(unsigned long) const
+000000000041d2a0 W sluice::async::UringAsyncBackend::signals_physical_progress() const
+0000000000419c90 T sluice::async::UringAsyncBackend::has_immediate_physical_work() const
+000000000041dfe0 T sluice::async::UringAsyncBackend::dispatch_retry_remains_locked_() const
+000000000041d290 T sluice::async::UringAsyncBackend::available() const
+0000000000421720 T sluice::async::detail::RequestCore::reclaimable_(sluice::async::detail::RequestCore::Slot const&) const
+0000000000420f60 T sluice::async::detail::RequestCore::health_failed() const
+00000000004025e0 t sluice::async::detail::RequestCore::health_failed() const [clone .cold]
+0000000000420ee0 T sluice::async::detail::RequestCore::admission_open() const
+00000000004025c8 t sluice::async::detail::RequestCore::admission_open() const [clone .cold]
+0000000000420c20 T sluice::async::detail::RequestCore::resolve_public_(sluice::async::detail::RequestKey) const
+0000000000420b90 T sluice::async::detail::RequestCore::resolve_internal_(sluice::async::detail::RequestKey) const
+00000000004208d0 T sluice::async::detail::RequestCore::collect_outstanding(std::vector<sluice::async::detail::RequestKey, std::allocator<sluice::async::detail::RequestKey> >&) const
+000000000040256a t sluice::async::detail::RequestCore::collect_outstanding(std::vector<sluice::async::detail::RequestKey, std::allocator<sluice::async::detail::RequestKey> >&) const [clone .cold]
+0000000000420890 T sluice::async::detail::RequestCore::outstanding_summary() const
+000000000040255e t sluice::async::detail::RequestCore::outstanding_summary() const [clone .cold]
+00000000004210d0 T sluice::async::detail::RequestCore::observe_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) const
+00000000004025fc t sluice::async::detail::RequestCore::observe_public_result(sluice::async::detail::RequestKey, sluice::detail::IoOutcome*, sluice::FileInfo*) const [clone .cold]
+00000000004216a0 T sluice::async::detail::RequestCore::observer_retirement_acquired(sluice::async::detail::RequestKey) const
+000000000040263c t sluice::async::detail::RequestCore::observer_retirement_acquired(sluice::async::detail::RequestKey) const [clone .cold]
+0000000000420fa0 T sluice::async::detail::RequestCore::lookup(sluice::async::detail::RequestKey) const
+00000000004025ec t sluice::async::detail::RequestCore::lookup(sluice::async::detail::RequestKey) const [clone .cold]
+00000000004206d0 T sluice::async::detail::RequestCore::context() const
+00000000004206c0 T sluice::async::detail::RequestCore::capacity() const
+00000000004206e0 T sluice::async::detail::RequestCore::occupancy() const
+0000000000402548 t sluice::async::detail::RequestCore::occupancy() const [clone .cold]
+0000000000402056 t std::default_delete<sluice::async::UringAsyncBackend::BoundedDispatchQueue>::operator()(sluice::async::UringAsyncBackend::BoundedDispatchQueue*) const [clone .isra.0]
+00000000004016da t std::default_delete<sluice::async::detail::ProgressSource>::operator()(sluice::async::detail::ProgressSource*) const [clone .isra.0]
+00000000004160d0 W std::unique_ptr<sluice::async::detail::RequestCore, std::default_delete<sluice::async::detail::RequestCore> >::~unique_ptr()
+00000000004160d0 W std::unique_ptr<sluice::async::detail::RequestCore, std::default_delete<sluice::async::detail::RequestCore> >::~unique_ptr()
+                 U std::runtime_error::runtime_error(char const*)@GLIBCXX_3.4.21
+                 U std::runtime_error::~runtime_error()@GLIBCXX_3.4
+                 U std::invalid_argument::invalid_argument(char const*)@GLIBCXX_3.4.21
+                 U std::invalid_argument::~invalid_argument()@GLIBCXX_3.4
+                 U std::condition_variable::notify_all()@GLIBCXX_3.4.11
+                 U std::condition_variable::notify_one()@GLIBCXX_3.4.11
+                 U std::condition_variable::wait(std::unique_lock<std::mutex>&)@GLIBCXX_3.4.30
+                 U std::condition_variable::condition_variable()@GLIBCXX_3.4.11
+                 U std::condition_variable::~condition_variable()@GLIBCXX_3.4.11
+0000000000416080 W std::mutex::lock()
+                 U std::chrono::_V2::steady_clock::now()@GLIBCXX_3.4.19
+0000000000404600 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >::_M_run()
+0000000000404630 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >::~_State_impl()
+0000000000404620 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >::~_State_impl()
+0000000000404620 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >::~_State_impl()
+0000000000419410 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::_M_run()
+0000000000416290 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()
+0000000000416280 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()
+0000000000416280 t std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >::~_State_impl()
+                 U std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)())@GLIBCXX_3.4.22
+000000000040e030 W std::thread::_M_thread_deps_never_run()
+                 U std::thread::join()@GLIBCXX_3.4.11
+                 U std::thread::_State::~_State()@GLIBCXX_3.4.22
+00000000004069f0 t std::vector<(anonymous namespace)::LoopParams, std::allocator<(anonymous namespace)::LoopParams> >::push_back((anonymous namespace)::LoopParams const&) [clone .constprop.0]
+0000000000400c22 t std::vector<(anonymous namespace)::LoopParams, std::allocator<(anonymous namespace)::LoopParams> >::push_back((anonymous namespace)::LoopParams const&) [clone .constprop.0] [clone .cold]
+000000000040e040 W std::vector<std::byte, std::allocator<std::byte> >::~vector()
+000000000040e040 W std::vector<std::byte, std::allocator<std::byte> >::~vector()
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_dispose()@GLIBCXX_3.4.21
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace_cold(char*, unsigned long, char const*, unsigned long, unsigned long)@GLIBCXX_3.4.31
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::append(char const*)@GLIBCXX_3.4.21
+0000000000404bc0 t std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::assign(char const*) [clone .isra.0]
+0000000000400976 t std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::assign(char const*) [clone .isra.0] [clone .cold]
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::insert(unsigned long, char const*)@GLIBCXX_3.4.21
+0000000000404660 t std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_S_copy(char*, char const*, unsigned long) [clone .part.0]
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_assign(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)@GLIBCXX_3.4.21
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_mutate(unsigned long, unsigned long, char const*, unsigned long)@GLIBCXX_3.4.21
+0000000000404670 t std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::operator=(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&) [clone .isra.0]
+                 U std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&)@GLIBCXX_3.4.21
+0000000000410790 W std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string<std::allocator<char> >(char const*, std::allocator<char> const&)
+0000000000410790 W std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::basic_string<std::allocator<char> >(char const*, std::allocator<char> const&)
+000000000040e070 W std::__cxx11::to_string(unsigned long)
+                 U operator new(unsigned long)@GLIBCXX_3.4
+0000000000404780 t void std::__introsort_loop<__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void> >(__gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, __gnu_cxx::__normal_iterator<double*, std::vector<double, std::allocator<double> > >, long, std::less<void>) [clone .isra.0]
+                 U std::__throw_logic_error(char const*)@GLIBCXX_3.4
+                 U std::__throw_length_error(char const*)@GLIBCXX_3.4
+                 U std::__throw_system_error(int)@GLIBCXX_3.4.11
+                 U std::terminate()@GLIBCXX_3.4
+0000000000412170 W std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > std::operator+<char, std::char_traits<char>, std::allocator<char> >(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >&&)
+0000000000404f20 t std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > std::operator+<char, std::char_traits<char>, std::allocator<char> >(char const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) [clone .isra.0]
+0000000000400993 t std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > std::operator+<char, std::char_traits<char>, std::allocator<char> >(char const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) [clone .isra.0] [clone .cold]
+00000000004298c0 V typeinfo for sluice::async::AsyncBackend
+0000000000429968 V typeinfo for sluice::async::ThreadPoolBackend
+0000000000429ac8 V typeinfo for sluice::async::UringAsyncBackend
+0000000000429910 V typeinfo for sluice::async::detail::ReferenceReadySink
+0000000000429890 V typeinfo for sluice::async::detail::SynchronousReadySink
+0000000000427458 r typeinfo for std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >
+0000000000429770 r typeinfo for std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >
+0000000000430cc0 V typeinfo for std::thread::_State@GLIBCXX_3.4.22
+0000000000430db0 V typeinfo for std::runtime_error@GLIBCXX_3.4
+0000000000430d88 V typeinfo for std::invalid_argument@GLIBCXX_3.4
+0000000000430da0 V typeinfo for std::exception@GLIBCXX_3.4
+00000000004298a0 V typeinfo name for sluice::async::AsyncBackend
+0000000000429940 V typeinfo name for sluice::async::ThreadPoolBackend
+0000000000429aa0 V typeinfo name for sluice::async::UringAsyncBackend
+00000000004298e0 V typeinfo name for sluice::async::detail::ReferenceReadySink
+0000000000429860 V typeinfo name for sluice::async::detail::SynchronousReadySink
+0000000000427480 r typeinfo name for std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >
+00000000004297a0 r typeinfo name for std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >
+0000000000430cd0 V vtable for __cxxabiv1::__class_type_info@CXXABI_1.3
+0000000000430d30 V vtable for __cxxabiv1::__si_class_type_info@CXXABI_1.3
+00000000004299a8 V vtable for sluice::async::ThreadPoolBackend
+0000000000429ae0 V vtable for sluice::async::UringAsyncBackend
+0000000000429980 V vtable for sluice::async::detail::ReferenceReadySink
+0000000000427520 r vtable for std::thread::_State_impl<std::thread::_Invoker<std::tuple<void (*)(sluice::async::AsyncIoContext&, int, int, (anonymous namespace)::SharedLoop&), std::reference_wrapper<sluice::async::AsyncIoContext>, int, int, std::reference_wrapper<(anonymous namespace)::SharedLoop> > > >
+0000000000429820 r vtable for std::thread::_State_impl<std::thread::_Invoker<std::tuple<sluice::async::ThreadPoolBackend::ThreadPoolBackend(sluice::async::ThreadPoolConfig)::{lambda()#1}> > >
+0000000000431318 u bench::jsonl_stream()::stream
+0000000000431330 u bench::pattern_table()::table
+00000000004127f0 t sluice::async::AsyncIoContext::drive_settlement_()::{lambda(void*)#1}::_FUN(void*)
+0000000000412820 t sluice::async::AsyncIoContext::wait_one(std::chrono::duration<long, std::ratio<1l, 1000000000l> >)::{lambda(void*)#1}::_FUN(void*)

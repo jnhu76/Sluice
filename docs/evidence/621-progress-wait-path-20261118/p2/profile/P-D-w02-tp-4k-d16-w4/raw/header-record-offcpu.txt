@@ -1,0 +1,97 @@
+# ========
+# captured on    : Wed Nov 18 15:52:14 2026
+# header version : 1
+# data offset    : 424
+# data size      : 277184840
+# feat offset    : 277185264
+# hostname : E5
+# os release : 7.3.3-200.fc44.x86_64
+# perf version : 7.3.3-200.fc44.x86_64
+# arch : x86_64
+# nrcpus online : 20
+# nrcpus avail : 20
+# cpudesc : Intel(R) Xeon(R) CPU E5-2666 v3 @ 2.90GHz
+# cpuid : GenuineIntel,6,63,2
+# total memory : 65675396 kB
+# cmdline : /usr/bin/perf 
+# event : name = sched:sched_switch, , id = { 94772, 94773, 94774, 94775, 94776, 94777, 94778, 94779, 94780, 94781, 94782, 94783, 94784, 94785, 94786, 94787, 94788, 94789, 94790, 94791 }, type = 2 (PERF_TYPE_TRACEPOINT), size = 144, config = 0x135 (sched:sched_switch), { sample_period, sample_freq } = 1, sample_type = IP|TID|TIME|CALLCHAIN|CPU|PERIOD|RAW|REGS_USER|STACK_USER, read_format = ID|LOST, disabled = 1, inherit = 1, mmap = 1, comm = 1, enable_on_exec = 1, task = 1, mmap_data = 1, sample_id_all = 1, exclude_callchain_user = 1, mmap2 = 1, comm_exec = 1, ksymbol = 1, bpf_event = 1, build_id = 1, sample_regs_user = 0xff0fff, sample_stack_user = 8192
+# CPU_TOPOLOGY info available, use -I to display
+# NUMA_TOPOLOGY info available, use -I to display
+# pmu mappings: cpu = 4, breakpoint = 5, cstate_core = 36, cstate_pkg = 37, drm_amdgpu = 4294836224, hwmon_amdgpu = 4294901761, hwmon_coretemp = 4294901762, hwmon_iwlwifi_1 = 4294901763, hwmon_nvme = 4294901760, kprobe = 8, msr = 10, power = 38, software = 1, tool = 4294967294, tracepoint = 2, uncore_cbox_0 = 21, uncore_cbox_1 = 22, uncore_cbox_2 = 23, uncore_cbox_3 = 24, uncore_cbox_4 = 25, uncore_cbox_5 = 26, uncore_cbox_6 = 27, uncore_cbox_7 = 28, uncore_cbox_8 = 29, uncore_cbox_9 = 30, uncore_ha_0 = 14, uncore_ha_1 = 15, uncore_imc_0 = 16, uncore_imc_1 = 17, uncore_imc_4 = 18, uncore_imc_5 = 19, uncore_pcu = 35, uncore_r2pcie = 13, uncore_r3qpi_0 = 11, uncore_r3qpi_1 = 12, uncore_sbox_0 = 31, uncore_sbox_1 = 32, uncore_sbox_2 = 33, uncore_sbox_3 = 34, uncore_ubox = 20, uprobe = 9
+# CACHE info available, use -I to display
+# time of first sample : 14357.687464
+# time of last sample : 14357.959891
+# sample duration :    272.427 ms
+# MEM_TOPOLOGY info available, use -I to display
+# bpf_prog_info 41: bpf_prog_1b080e5cc215cba6_restrict_filesystems addr 0xffffffffc0200acc size 294
+# bpf_prog_info 48: bpf_prog_feaab199760324c9_sd_devices addr 0xffffffffc020094c size 319
+# bpf_prog_info 49: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc020066c size 64
+# bpf_prog_info 50: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0200c34 size 64
+# bpf_prog_info 51: bpf_prog_a97c143260cd9940_sd_devices addr 0xffffffffc0203764 size 268
+# bpf_prog_info 52: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0203890 size 64
+# bpf_prog_info 53: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0203938 size 64
+# bpf_prog_info 54: bpf_prog_c1591dae5f5bcd9f_sd_devices addr 0xffffffffc0206630 size 298
+# bpf_prog_info 55: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc02095ec size 64
+# bpf_prog_info 56: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0209658 size 64
+# bpf_prog_info 57: bpf_prog_c1591dae5f5bcd9f_sd_devices addr 0xffffffffc020b9dc size 298
+# bpf_prog_info 58: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc020bb68 size 64
+# bpf_prog_info 59: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc020bbfc size 64
+# bpf_prog_info 60: bpf_prog_a97c143260cd9940_sd_devices addr 0xffffffffc020f120 size 268
+# bpf_prog_info 61: bpf_prog_c1591dae5f5bcd9f_sd_devices addr 0xffffffffc020f2e0 size 298
+# bpf_prog_info 62: bpf_prog_c1591dae5f5bcd9f_sd_devices addr 0xffffffffc020f468 size 298
+# bpf_prog_info 65: bpf_prog_2faeafd5e3cce185_sd_devices addr 0xffffffffc020f6d0 size 361
+# bpf_prog_info 66: bpf_prog_98b7b6f166b26c8a_sd_devices addr 0xffffffffc0210fb0 size 111
+# bpf_prog_info 67: bpf_prog_101587efea831d9c_sd_devices addr 0xffffffffc0214e24 size 430
+# bpf_prog_info 68: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0215014 size 64
+# bpf_prog_info 69: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0215094 size 64
+# bpf_prog_info 70: bpf_prog_a97c143260cd9940_sd_devices addr 0xffffffffc0217d54 size 268
+# bpf_prog_info 71: bpf_prog_858f17d96476585f_sd_devices addr 0xffffffffc0217ea8 size 490
+# bpf_prog_info 72: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc02180f8 size 64
+# bpf_prog_info 73: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc021814c size 64
+# bpf_prog_info 78: bpf_prog_f05928da80322892 addr 0xffffffffc0227cc8 size 461
+# bpf_prog_info 137: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0223290 size 64
+# bpf_prog_info 138: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0223328 size 64
+# bpf_prog_info 149: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc022962c size 64
+# bpf_prog_info 150: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0229694 size 64
+# bpf_prog_info 152: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc02298bc size 64
+# bpf_prog_info 153: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0229930 size 64
+# bpf_prog_info 158: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc023cffc size 64
+# bpf_prog_info 159: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc023d070 size 64
+# bpf_prog_info 164: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0223e7c size 64
+# bpf_prog_info 165: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0223ef8 size 64
+# bpf_prog_info 173: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc02243e0 size 64
+# bpf_prog_info 174: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0224478 size 64
+# bpf_prog_info 176: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc022a734 size 64
+# bpf_prog_info 177: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc022a794 size 64
+# bpf_prog_info 182: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0239f50 size 64
+# bpf_prog_info 183: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0239fe8 size 64
+# bpf_prog_info 188: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0251110 size 64
+# bpf_prog_info 189: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0251198 size 64
+# bpf_prog_info 194: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc023a1f8 size 64
+# bpf_prog_info 195: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc023a27c size 64
+# bpf_prog_info 203: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0237f68 size 64
+# bpf_prog_info 204: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0237fd4 size 64
+# bpf_prog_info 206: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc02381cc size 64
+# bpf_prog_info 207: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0238260 size 64
+# bpf_prog_info 212: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc023a698 size 64
+# bpf_prog_info 213: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc023e8e0 size 64
+# bpf_prog_info 218: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0251de4 size 64
+# bpf_prog_info 219: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0251e5c size 64
+# bpf_prog_info 224: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc024d8d8 size 64
+# bpf_prog_info 225: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc024d96c size 64
+# bpf_prog_info 230: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc024db5c size 64
+# bpf_prog_info 231: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc024dbf4 size 64
+# bpf_prog_info 256: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc0214998 size 64
+# bpf_prog_info 257: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0214a30 size 64
+# bpf_prog_info 263: bpf_prog_772db7720b2728e9_sd_fw_egress addr 0xffffffffc02148f8 size 64
+# bpf_prog_info 264: bpf_prog_772db7720b2728e9_sd_fw_ingress addr 0xffffffffc0214bf4 size 64
+# bpf_prog_info 291: bpf_prog_3bf5a0154894345b_sd_devices addr 0xffffffffc0212078 size 361
+# btf info of id 50
+# cpu pmu capabilities: branches=16, max_precise=3, pmu_name=haswell
+# CPU_DOMAIN_INFO info available, use -I to display
+# e_machine : 62
+#   e_flags : 0
+# cacheline size: 64
+# missing features: BUILD_ID BRANCH_STACK GROUP_DESC AUXTRACE STAT CLOCKID DIR_FORMAT COMPRESSED CLOCK_DATA HYBRID_TOPOLOGY 
+# ========
+#
