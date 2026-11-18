@@ -1,0 +1,47 @@
+diff --git a/include/sluice/async/detail/threadpool_backend.hpp b/include/sluice/async/detail/threadpool_backend.hpp
+index 54c1ca04..de23d735 100644
+--- a/include/sluice/async/detail/threadpool_backend.hpp
++++ b/include/sluice/async/detail/threadpool_backend.hpp
+@@ -255,9 +255,8 @@ class ThreadPoolBackend : public AsyncBackend {
+ 
+     std::vector<std::thread> workers_;
+ 
+-    std::atomic<std::uint64_t> syscall_count_{0};
+-
+ #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++    std::atomic<std::uint64_t> syscall_count_{0};
+ 
+     std::atomic<SubmitEntryPauseGate*> submit_entry_gate_{nullptr};
+     std::atomic<PreAcceptCommitPauseGate*> pre_accept_commit_gate_{nullptr};
+diff --git a/src/async/threadpool_backend.cpp b/src/async/threadpool_backend.cpp
+index 5024b83f..dbf371bd 100644
+--- a/src/async/threadpool_backend.cpp
++++ b/src/async/threadpool_backend.cpp
+@@ -431,7 +431,11 @@ void ThreadPoolBackend::worker_loop() {
+                 sluice::FileInfo metadata;
+                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
+ 
++#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
++#if !defined(SLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_STICKY_ZERO)
+                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
++#endif
++#endif
+                 {
+                     std::lock_guard<std::mutex> wl(work_mtx_);
+                     --active_workers_;
+diff --git a/src/async/threadpool_test_seams.hpp b/src/async/threadpool_test_seams.hpp
+index 67145575..d58e7edf 100644
+--- a/src/async/threadpool_test_seams.hpp
++++ b/src/async/threadpool_test_seams.hpp
+@@ -106,7 +106,11 @@ inline std::size_t ThreadPoolBackend::dispatch_size_for_test() const {
+ }
+ 
+ inline std::uint64_t ThreadPoolBackend::syscall_count_for_test() const noexcept {
++#if defined(SLUICE_THREADPOOL_MUTANT_SYSCALL_COUNT_ACCESSOR_SKEW)
++    return syscall_count_.load() + 1;
++#else
+     return syscall_count_.load();
++#endif
+ }
+ 
+ inline std::size_t ThreadPoolBackend::publication_pending_size_for_test() const {
