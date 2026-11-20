@@ -794,6 +794,7 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
                 detail::threadpool_core_handoff_fail_fast();
             }
             publication_pending_.push_back(detail::RequestReservation{key.slot, key.generation});
+            tally_canceled();
         } else if (disposition == detail::PublicCancel::requested) {
 #if defined(SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_REPORTS_REQUESTED)
             disposition = detail::PublicCancel::requested;
@@ -803,7 +804,6 @@ detail::PublicCancel ThreadPoolBackend::cancel_key(detail::RequestKey key) {
         }
     }
     if (disposition == detail::PublicCancel::won_before_execution) {
-        tally_canceled();
         signal_ready_progress();
     } else if (removed_entry) {
         // Removing a queued entry of a non-won cancel retires dispatch work

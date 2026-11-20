@@ -1,0 +1,86 @@
+==================
+WARNING: ThreadSanitizer: data race (pid=103333)
+  Read of size 8 at 0x7fff0885a6f8 by thread T3:
+    #0 sluice::async::ThreadPoolBackend::tally_canceled() /home/jnhu/Source/Sluice/include/sluice/async/detail/threadpool_backend.hpp:234 (cancel_stats_race_uring_test+0x41d741) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #1 sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) src/async/threadpool_backend.cpp:806 (cancel_stats_race_uring_test+0x41b1aa) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #2 sluice::async::ThreadPoolBackend::cancel_key_for_test(sluice::async::detail::RequestKey) /home/jnhu/Source/Sluice/src/async/threadpool_test_seams.hpp:143 (cancel_stats_race_uring_test+0x405204) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 operator() tests/cancel_stats_race_test.cpp:122 (cancel_stats_race_uring_test+0x400cf2) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #4 __invoke_impl<void, (anonymous namespace)::threadpool_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (cancel_stats_race_uring_test+0x404a47) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #5 __invoke<(anonymous namespace)::threadpool_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (cancel_stats_race_uring_test+0x404862) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #6 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (cancel_stats_race_uring_test+0x4046a2) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #7 operator() /usr/include/c++/16/bits/std_thread.h:310 (cancel_stats_race_uring_test+0x40455a) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #8 _M_run /usr/include/c++/16/bits/std_thread.h:255 (cancel_stats_race_uring_test+0x40443e) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #9 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Previous write of size 8 at 0x7fff0885a6f8 by thread T2:
+    #0 sluice::async::ThreadPoolBackend::tally_canceled() /home/jnhu/Source/Sluice/include/sluice/async/detail/threadpool_backend.hpp:234 (cancel_stats_race_uring_test+0x41d755) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #1 sluice::async::ThreadPoolBackend::cancel_key(sluice::async::detail::RequestKey) src/async/threadpool_backend.cpp:806 (cancel_stats_race_uring_test+0x41b1aa) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #2 sluice::async::ThreadPoolBackend::cancel_key_for_test(sluice::async::detail::RequestKey) /home/jnhu/Source/Sluice/src/async/threadpool_test_seams.hpp:143 (cancel_stats_race_uring_test+0x405204) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 operator() tests/cancel_stats_race_test.cpp:121 (cancel_stats_race_uring_test+0x400bf4) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #4 __invoke_impl<void, (anonymous namespace)::threadpool_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (cancel_stats_race_uring_test+0x404acc) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #5 __invoke<(anonymous namespace)::threadpool_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (cancel_stats_race_uring_test+0x4048ec) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #6 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (cancel_stats_race_uring_test+0x4046f8) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #7 operator() /usr/include/c++/16/bits/std_thread.h:310 (cancel_stats_race_uring_test+0x4045a0) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #8 _M_run /usr/include/c++/16/bits/std_thread.h:255 (cancel_stats_race_uring_test+0x404488) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #9 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Location is stack of main thread.
+
+  Thread T3 (tid=103337, running) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 threadpool_cancel_cancel_race tests/cancel_stats_race_test.cpp:122 (cancel_stats_race_uring_test+0x401680) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 main tests/cancel_stats_race_test.cpp:285 (cancel_stats_race_uring_test+0x403611) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+
+  Thread T2 (tid=103336, finished) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 threadpool_cancel_cancel_race tests/cancel_stats_race_test.cpp:121 (cancel_stats_race_uring_test+0x40161d) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 main tests/cancel_stats_race_test.cpp:285 (cancel_stats_race_uring_test+0x403611) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+
+SUMMARY: ThreadSanitizer: data race /home/jnhu/Source/Sluice/include/sluice/async/detail/threadpool_backend.hpp:234 in sluice::async::ThreadPoolBackend::tally_canceled()
+==================
+==================
+WARNING: ThreadSanitizer: data race (pid=103333)
+  Read of size 8 at 0x7fff0885a5f8 by thread T5:
+    #0 sluice::async::bump(sluice::AsyncStats*, unsigned long sluice::AsyncStats::*) src/async/uring_internal.hpp:62 (cancel_stats_race_uring_test+0x440be5) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #1 sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) src/async/uring_transport.cpp:602 (cancel_stats_race_uring_test+0x440396) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #2 sluice::async::UringAsyncBackend::cancel_key_for_test(sluice::async::detail::RequestKey) <null> (cancel_stats_race_uring_test+0x405388) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 operator() tests/cancel_stats_race_test.cpp:235 (cancel_stats_race_uring_test+0x401fb0) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #4 __invoke_impl<void, (anonymous namespace)::uring_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (cancel_stats_race_uring_test+0x404970) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #5 __invoke<(anonymous namespace)::uring_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (cancel_stats_race_uring_test+0x404781) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #6 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (cancel_stats_race_uring_test+0x4045f6) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #7 operator() /usr/include/c++/16/bits/std_thread.h:310 (cancel_stats_race_uring_test+0x4044ce) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #8 _M_run /usr/include/c++/16/bits/std_thread.h:255 (cancel_stats_race_uring_test+0x4043aa) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #9 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Previous write of size 8 at 0x7fff0885a5f8 by thread T4:
+    #0 sluice::async::bump(sluice::AsyncStats*, unsigned long sluice::AsyncStats::*) src/async/uring_internal.hpp:62 (cancel_stats_race_uring_test+0x440bf4) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #1 sluice::async::UringAsyncBackend::cancel_key(sluice::async::detail::RequestKey) src/async/uring_transport.cpp:602 (cancel_stats_race_uring_test+0x440396) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #2 sluice::async::UringAsyncBackend::cancel_key_for_test(sluice::async::detail::RequestKey) <null> (cancel_stats_race_uring_test+0x405388) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 operator() tests/cancel_stats_race_test.cpp:234 (cancel_stats_race_uring_test+0x401ec6) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #4 __invoke_impl<void, (anonymous namespace)::uring_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (cancel_stats_race_uring_test+0x4049db) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #5 __invoke<(anonymous namespace)::uring_cancel_cancel_race()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (cancel_stats_race_uring_test+0x4047f1) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #6 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (cancel_stats_race_uring_test+0x40464c) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #7 operator() /usr/include/c++/16/bits/std_thread.h:310 (cancel_stats_race_uring_test+0x404514) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #8 _M_run /usr/include/c++/16/bits/std_thread.h:255 (cancel_stats_race_uring_test+0x4043f4) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #9 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Location is stack of main thread.
+
+  Thread T5 (tid=103340, running) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 uring_cancel_cancel_race tests/cancel_stats_race_test.cpp:235 (cancel_stats_race_uring_test+0x402bec) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 main tests/cancel_stats_race_test.cpp:287 (cancel_stats_race_uring_test+0x403616) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+
+  Thread T4 (tid=103339, finished) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 uring_cancel_cancel_race tests/cancel_stats_race_test.cpp:234 (cancel_stats_race_uring_test+0x402b74) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+    #3 main tests/cancel_stats_race_test.cpp:287 (cancel_stats_race_uring_test+0x403616) (BuildId: 90e9f93642ccb0a090df89871939aa5aee6ed6a0)
+
+SUMMARY: ThreadSanitizer: data race src/async/uring_internal.hpp:62 in sluice::async::bump(sluice::AsyncStats*, unsigned long sluice::AsyncStats::*)
+==================
+PASS: canceled_ops cancel-path synchronization
+ThreadSanitizer: reported 2 warnings

@@ -1107,6 +1107,44 @@ do
                               "SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED")
 end
 
+-- AUD-001 (#643): cancel-path canceled_ops increments. Requests are held
+-- accepted-unclaimed on each backend so two concurrently winning cancels take
+-- the not-under-mutex increment path; the TSan build is the write-write race
+-- oracle and the counted wins are the semantic oracle.
+do
+    local function cancel_stats_target(name, with_liburing)
+        target(name)
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice_core")
+            add_includedirs(R .. "include", R .. "src/async")
+            add_defines("SLUICE_ASYNC_INTERNAL_TESTING")
+            local files = {
+                R .. "tests/cancel_stats_race_test.cpp",
+                R .. "src/async/async_io_context.cpp",
+                R .. "src/async/threadpool_backend.cpp",
+                R .. "src/async/fail_fast.cpp",
+                R .. "src/async/detail/context_identity.cpp",
+                R .. "src/async/detail/request_core.cpp",
+            }
+            if with_liburing then
+                add_defines("SLUICE_HAS_LIBURING")
+                add_links("uring")
+                for _, tu in ipairs(uring_backend_sources) do
+                    table.insert(files, tu)
+                end
+            end
+            add_files(files)
+            add_tests(name, {run_timeout = 120000})
+    end
+
+    cancel_stats_target("cancel_stats_race_test", false)
+    if has_config("liburing") then
+        cancel_stats_target("cancel_stats_race_uring_test", true)
+    end
+end
+
 -- RequestScope evidence. Same self-contained seam-build shape as the
 -- public request target: the target compiles its own copies of the async TUs it
 -- observes and links neither sluice_async nor the other seam builds.
