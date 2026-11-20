@@ -398,7 +398,10 @@ void UringAsyncBackend::retire_execution_resources() noexcept {
         eventfd_registered_ = false;
     }
     ::io_uring_queue_exit(&ring_state_->ring);
-    have_ring_ = false;
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        have_ring_ = false;
+    }
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
@@ -430,11 +433,14 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
     if (auto v = validate_op(op); !v.has_value()) {
         return make_unexpected<detail::RequestKey>(v.error());
     }
-    if (!have_ring_) {
-        return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
-    }
-    if (fatal_error_.has_value()) {
-        return make_unexpected<detail::RequestKey>(*fatal_error_);
+    {
+        std::lock_guard<std::mutex> lk(dispatch_mtx_);
+        if (!have_ring_) {
+            return make_unexpected<detail::RequestKey>(IoError{IoError::Code::backend_error});
+        }
+        if (fatal_error_.has_value()) {
+            return make_unexpected<detail::RequestKey>(*fatal_error_);
+        }
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
