@@ -1,5 +1,6 @@
 #include <sluice/file_resource.hpp>
 
+#include <cerrno>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -31,13 +32,16 @@ bool open_exposes_live_descriptor_and_close_releases_it() {
     File file = std::move(opened).value();
     if (!file.is_open())
         return false;
-    if (::fcntl(file.native_handle(), F_GETFD) < 0)
+    const int fd = file.native_handle();
+    if (::fcntl(fd, F_GETFD) < 0)
         return false;
     if (!file.close().has_value())
         return false;
     if (file.is_open())
         return false;
-    if (::fcntl(file.native_handle(), F_GETFD) == 0)
+    if (file.native_handle() >= 0)
+        return false;
+    if (::fcntl(fd, F_GETFD) != -1 || errno != EBADF)
         return false;
     return file.close().has_value();
 }

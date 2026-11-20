@@ -1,0 +1,25 @@
+# FIXED strace: close(3) present; saved-fd fcntl returns EBADF after close
+openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libm.so.6", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/tmp/sluice_file_resource_WiRIbZ", O_RDWR|O_CREAT|O_EXCL, 0600) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/tmp/sluice_file_resource_WiRIbZ", O_RDONLY|O_CLOEXEC) = 3
+fcntl(3, F_GETFD)                       = 0x1 (flags FD_CLOEXEC)
+close(3)                                = 0
+fcntl(3, F_GETFD)                       = -1 EBADF (Bad file descriptor)
+openat(AT_FDCWD, "/tmp/sluice_file_resource_7wJ59w", O_RDWR|O_CREAT|O_EXCL, 0600) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/tmp/sluice_file_resource_7wJ59w", O_RDONLY|O_CLOEXEC) = 3
+fcntl(3, F_GETFD)                       = 0x1 (flags FD_CLOEXEC)
+close(3)                                = 0
+openat(AT_FDCWD, "/tmp/sluice_file_resource_missing_entry", O_RDONLY|O_CLOEXEC) = -1 ENOENT (No such file or directory)
+all 3 file resource tests passed
++++ exited with 0 +++

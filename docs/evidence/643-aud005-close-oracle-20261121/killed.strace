@@ -1,0 +1,18 @@
+# KILLED strace: no close(3) after File::open; saved-fd fcntl returns FD_CLOEXEC, not EBADF
+openat(AT_FDCWD, "/etc/ld.so.cache", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libstdc++.so.6", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libm.so.6", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libgcc_s.so.1", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/lib64/libc.so.6", O_RDONLY|O_CLOEXEC) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/tmp/sluice_file_resource_UZuNrB", O_RDWR|O_CREAT|O_EXCL, 0600) = 3
+close(3)                                = 0
+openat(AT_FDCWD, "/tmp/sluice_file_resource_UZuNrB", O_RDONLY|O_CLOEXEC) = 3
+fcntl(3, F_GETFD)                       = 0x1 (flags FD_CLOEXEC)
+fcntl(3, F_GETFD)                       = 0x1 (flags FD_CLOEXEC)
+FAIL: open_exposes_live_descriptor_and_close_releases_it
++++ exited with 1 +++

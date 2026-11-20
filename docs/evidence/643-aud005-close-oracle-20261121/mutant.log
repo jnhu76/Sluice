@@ -1,0 +1,5 @@
+# MUTANT: OLD test (as of e16960ff) under close-skipping mutation — demonstrates blindness
+# tree: /tmp/sluice-aud005-mutant @ e16960ff + mutation.diff (src only)
+# command: build/linux/x86_64/release/file_resource_test
+all 3 file resource tests passed
+exit=0

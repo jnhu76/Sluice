@@ -1,0 +1,6 @@
+# FIXED: repaired test on clean worktree /tmp/sluice-643-aud005 (branch test/643-fd-close-oracle)
+# commands: xmake build file_resource_test file_close_semantics_test && xmake run <target>
+all 3 file resource tests passed
+file_resource_test exit=0
+all 8 canonical File close-semantics tests passed
+file_close_semantics_test exit=0

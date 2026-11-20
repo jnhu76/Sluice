@@ -1,0 +1,5 @@
+# BASE: OLD test (as of e16960ff) on unmodified base
+# tree: /tmp/sluice-aud005-mutant @ e16960ff fully clean (git status empty)
+# command: build/linux/x86_64/release/file_resource_test
+all 3 file resource tests passed
+exit=0
