@@ -1,0 +1,7 @@
+MISMATCH [selfcheck-wrong] selfcheck_expected_rejection: table requires reject_closed(invalid_state), path observed accepted
+DIVERGENCE SET CHANGED [selfcheck]: 1 observed, 1 recorded
+  observed: zero_length_legal_offset
+  recorded: zero_length_legal_offset
+SELF-CHECK FAIL [matches_recorded_divergences] same_text_distinct_address: expected match
+FAIL: the semantic-oracle comparison harness failed its self-check
+EXIT=1

@@ -1,0 +1,9 @@
+=== semantic_validation_precedence_test (exit 1) ===
+SELF-CHECK FAIL [run_path] a known wrong observation produced 0 mismatches and 1 names
+FAIL: the semantic-oracle comparison harness failed its self-check
+=== semantic_backend_conformance_test (exit 1) ===
+SELF-CHECK FAIL [run_path] a known wrong observation produced 0 mismatches and 1 names
+FAIL: the semantic-oracle comparison harness failed its self-check
+=== direct_composition_fault_test (exit 1) ===
+SELF-CHECK FAIL [run_path] a known wrong observation produced 0 mismatches and 1 names
+FAIL: the semantic-oracle comparison harness failed its self-check

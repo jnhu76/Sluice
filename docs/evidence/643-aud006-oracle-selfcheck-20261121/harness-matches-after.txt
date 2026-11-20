@@ -1,0 +1,20 @@
+inline bool matches_recorded_divergences(const char* path_name, std::vector<const char*> observed,
+                                        std::vector<const char*> recorded) {
+    std::sort(observed.begin(), observed.end(), name_less);
+    std::sort(recorded.begin(), recorded.end(), name_less);
+    // The two vectors hold pointers from different origins (the scenario
+    // table and a separately spelled recorded set), so identity is the name
+    // text, never the pointer value.
+    const bool same =
+        observed.size() == recorded.size() &&
+        std::equal(observed.begin(), observed.end(), recorded.begin(),
+                   [](const char* a, const char* b) { return std::strcmp(a, b) == 0; });
+    if (same)
+        return true;
+    std::fprintf(stderr, "DIVERGENCE SET CHANGED [%s]: %zu observed, %zu recorded\n", path_name,
+                 observed.size(), recorded.size());
+    for (const char* name : observed)
+        std::fprintf(stderr, "  observed: %s\n", name);
+    for (const char* name : recorded)
+        std::fprintf(stderr, "  recorded: %s\n", name);
+    return false;

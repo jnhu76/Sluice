@@ -1,0 +1,9 @@
+=== semantic_validation_precedence_test (exit 1) ===
+SELF-CHECK FAIL [agree] B_success_vs_rejection: expected disagreement
+FAIL: the semantic-oracle comparison harness failed its self-check
+=== semantic_backend_conformance_test (exit 1) ===
+SELF-CHECK FAIL [agree] B_success_vs_rejection: expected disagreement
+FAIL: the semantic-oracle comparison harness failed its self-check
+=== direct_composition_fault_test (exit 1) ===
+SELF-CHECK FAIL [agree] B_success_vs_rejection: expected disagreement
+FAIL: the semantic-oracle comparison harness failed its self-check
