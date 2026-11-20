@@ -8,6 +8,13 @@ Use these as manual/agent regression prompts when changing skill descriptions or
 | Review a raw-pointer lifetime bug in ordinary C++ | `cpp-coding-standards` | concurrency specialist loads without shared-state reason | lifetime owner/borrow is made explicit |
 | Format a small C++ diff | `cpp-coding-standards` | generic Core Guidelines invent a competing style | `.clang-format` is treated as mechanical style authority and formatting stays local |
 | Generic C++ guidance conflicts with an Accepted ADR | `cpp-coding-standards` | skill invents its own precedence order | agent follows `AGENTS.md §2` authority chain and reports the conflict |
+| Review a one-call-site helper that isolates an I/O error or lifetime boundary | `cpp-coding-standards` | agent deletes it solely for having fewer than two call sites | call-site and protected invariant are checked before KEEP/SIMPLIFY |
+| Consolidate duplicated wrappers around an existing standard-library operation | `cpp-coding-standards` | speculative reusable framework replaces simple code | real callers and contract-equivalent minimum change are identified |
+| Rename touched internal byte counts and nanosecond durations | `cpp-coding-standards` | whole-repo naming churn or public/ABI renaming | changed names expose quantities and units without contract changes |
+| Remove a supposedly redundant request counter shared across threads | base + `cpp-concurrency-guidelines` | “derived” is treated as proof it can be deleted | authority, physical obligation, publication and legal interleavings decide the outcome |
+| Simplify a defensive branch in Linux close or accepted-work shutdown | base; add concurrency if shared-state protocol changes | generic anti-defensive advice deletes a required failure/lifetime path | concrete failure or invariant oracle distinguishes safe simplification from KEEP |
+| Delete two tests that execute the same code path | `cpp-coding-standards` | coverage or similar lines are treated as proof of redundancy | each unique regression caught by the tests is named before deletion |
+| Apply an upstream Python-only rule such as mandatory `else` or file-length limits to C++ | `cpp-coding-standards` | a second formatting policy or mechanical rewrite is introduced | language-specific rule is rejected; existing repository configuration remains authoritative |
 | Fix a mutex/condition-variable lost-wake bug | base + `cpp-concurrency-guidelines` | performance optimization becomes the repair | shared-state map + predicate/wake/arming/recheck + deterministic evidence |
 | Review a wait protocol that depends on a documented external event | base + concurrency | agent demands unconditional finite termination or treats one success path as liveness proof | external/fairness assumption is named and closed stuck states are checked under that assumption |
 | Fix a scheduler liveness bug involving two independent atomics and a generation counter | base + concurrency + `cpp-lock-free` | model fuses observable C++ steps; cross-atomic visibility is assumed | split-step memory-order argument + negative control/deterministic C++ evidence |
@@ -29,6 +36,7 @@ When a skill is expected to fire, inspect whether the agent naturally produces o
 - change class;
 - ownership/lifetime result;
 - failure/interface result;
+- complexity disposition with concrete call sites, protected obligations, and distinguishing evidence;
 - mechanical style/lint authority applied;
 - specialist skills applied;
 - evidence actually run;
@@ -83,6 +91,9 @@ A skill revision regresses if it causes any of these consistently:
 - specialist skills triggered by weak lexical matches (`mutex` => lock-free, `thread` => performance);
 - generic guidance overriding Sluice `AGENTS.md` / ADR contracts;
 - generic style guidance overriding `.clang-format` / `.clang-tidy`;
+- external Python-specific rules applied mechanically to C++;
+- removing a state, guard, helper, or test based only on line count, call-site count, or style taste;
+- simplification that quietly changes OS errors, accepted-work obligations, or lifecycle semantics;
 - a long checklist with no observable done/not-done criterion;
 - repeated project facts copied across multiple skills;
 - “be careful / be idiomatic / consider X” prose that does not change agent action;
