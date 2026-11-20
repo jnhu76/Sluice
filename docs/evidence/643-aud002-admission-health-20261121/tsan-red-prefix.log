@@ -1,0 +1,135 @@
+==================
+WARNING: ThreadSanitizer: data race (pid=39994)
+  Read of size 1 at 0x724c00000104 by thread T2 (mutexes: write M0):
+    #0 std::_Optional_base<sluice::IoError, true, true>::_M_is_engaged() const /usr/include/c++/16/optional:586 (uring_submit_poison_race_test+0x406232) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #1 std::optional<sluice::IoError>::has_value() const /usr/include/c++/16/optional:1273 (uring_submit_poison_race_test+0x404632) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) src/async/uring_backend.cpp:436 (uring_submit_poison_race_test+0x423f08) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp) src/async/uring_backend.cpp:533 (uring_submit_poison_race_test+0x41ff85) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp) src/async/async_io_context.cpp:259 (uring_submit_poison_race_test+0x40a29a) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 operator() tests/uring_submit_poison_race_test.cpp:178 (uring_submit_poison_race_test+0x401359) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 __invoke_impl<void, (anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (uring_submit_poison_race_test+0x4033a8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #7 __invoke<(anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (uring_submit_poison_race_test+0x403214) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #8 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (uring_submit_poison_race_test+0x4030aa) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #9 operator() /usr/include/c++/16/bits/std_thread.h:310 (uring_submit_poison_race_test+0x402fb8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #10 _M_run /usr/include/c++/16/bits/std_thread.h:255 (uring_submit_poison_race_test+0x402ee2) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #11 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Previous write of size 1 at 0x724c00000104 by thread T1 (mutexes: write M1):
+    #0 void std::_Optional_payload_base<sluice::IoError>::_M_construct<sluice::IoError&>(sluice::IoError&) /usr/include/c++/16/optional:318 (uring_submit_poison_race_test+0x41afc2) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #1 void std::_Optional_base<sluice::IoError, true, true>::_M_construct<sluice::IoError&>(sluice::IoError&) /usr/include/c++/16/optional:573 (uring_submit_poison_race_test+0x41ad70) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 std::optional<sluice::IoError>& std::optional<sluice::IoError>::operator=<sluice::IoError&>(sluice::IoError&) /usr/include/c++/16/optional:1075 (uring_submit_poison_race_test+0x41a8a1) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 sluice::async::UringAsyncBackend::poison_and_recover_locked(sluice::IoError) src/async/uring_transport.cpp:340 (uring_submit_poison_race_test+0x417114) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 sluice::async::UringAsyncBackend::account_transport_result_locked(int, bool) src/async/uring_transport.cpp:278 (uring_submit_poison_race_test+0x416d09) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 sluice::async::UringAsyncBackend::submit_transport_locked() src/async/uring_transport.cpp:233 (uring_submit_poison_race_test+0x416b8f) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 sluice::async::UringAsyncBackend::poll() src/async/uring_backend.cpp:631 (uring_submit_poison_race_test+0x4208bb) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #7 sluice::async::UringAsyncBackend::poll_progress() src/async/uring_backend.cpp:306 (uring_submit_poison_race_test+0x41f1a9) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #8 sluice::async::AsyncIoContext::run_progress_pass_() src/async/async_io_context.cpp:432 (uring_submit_poison_race_test+0x40bdc3) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #9 sluice::async::AsyncIoContext::drive_settlement_() src/async/async_io_context.cpp:511 (uring_submit_poison_race_test+0x40c474) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #10 sluice::async::AsyncIoContext::shutdown(sluice::async::ShutdownPolicy) src/async/async_io_context.cpp:881 (uring_submit_poison_race_test+0x40e27e) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #11 operator() tests/uring_submit_poison_race_test.cpp:171 (uring_submit_poison_race_test+0x401213) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #12 __invoke_impl<void, (anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (uring_submit_poison_race_test+0x40342d) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #13 __invoke<(anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (uring_submit_poison_race_test+0x40329e) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #14 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (uring_submit_poison_race_test+0x403100) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #15 operator() /usr/include/c++/16/bits/std_thread.h:310 (uring_submit_poison_race_test+0x402ffe) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #16 _M_run /usr/include/c++/16/bits/std_thread.h:255 (uring_submit_poison_race_test+0x402f2c) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #17 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Location is heap block of size 416 at 0x724c00000000 allocated by main thread:
+    #0 operator new(unsigned long) <null> (libtsan.so.2+0x6ae55) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105 (uring_submit_poison_race_test+0x404bc4) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 create tests/uring_submit_poison_race_test.cpp:107 (uring_submit_poison_race_test+0x400e8a) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:145 (uring_submit_poison_race_test+0x40147f) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Mutex M0 (0x721800000020) created at:
+    #0 pthread_mutex_lock <null> (libtsan.so.2+0x1f371) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 (uring_submit_poison_race_test+0x40e8ea) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 std::mutex::lock() /usr/include/c++/16/bits/std_mutex.h:116 (uring_submit_poison_race_test+0x40e8ea)
+    #3 std::lock_guard<std::mutex>::lock_guard(std::mutex&) /usr/include/c++/16/bits/std_mutex.h:276 (uring_submit_poison_race_test+0x410f84) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp) src/async/async_io_context.cpp:255 (uring_submit_poison_race_test+0x40a1fb) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:153 (uring_submit_poison_race_test+0x401665) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Mutex M1 (0x724c00000108) created at:
+    #0 pthread_mutex_lock <null> (libtsan.so.2+0x1f371) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 (uring_submit_poison_race_test+0x40e8ea) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 std::mutex::lock() /usr/include/c++/16/bits/std_mutex.h:116 (uring_submit_poison_race_test+0x40e8ea)
+    #3 std::lock_guard<std::mutex>::lock_guard(std::mutex&) /usr/include/c++/16/bits/std_mutex.h:276 (uring_submit_poison_race_test+0x410f84) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) src/async/uring_backend.cpp:489 (uring_submit_poison_race_test+0x424291) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp) src/async/uring_backend.cpp:533 (uring_submit_poison_race_test+0x41ff85) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp) src/async/async_io_context.cpp:259 (uring_submit_poison_race_test+0x40a29a) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #7 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:153 (uring_submit_poison_race_test+0x401665) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #8 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Thread T2 (tid=39998, running) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:181 (uring_submit_poison_race_test+0x40197e) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Thread T1 (tid=39997, running) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:173 (uring_submit_poison_race_test+0x4018b8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+SUMMARY: ThreadSanitizer: data race src/async/uring_backend.cpp:436 in sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp)
+==================
+==================
+WARNING: ThreadSanitizer: data race (pid=39994)
+  Write of size 1 at 0x724c000000f8 by thread T1:
+    #0 sluice::async::UringAsyncBackend::retire_execution_resources() src/async/uring_backend.cpp:401 (uring_submit_poison_race_test+0x41fe39) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #1 sluice::async::AsyncIoContext::drive_settlement_() src/async/async_io_context.cpp:555 (uring_submit_poison_race_test+0x40c5f8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 sluice::async::AsyncIoContext::shutdown(sluice::async::ShutdownPolicy) src/async/async_io_context.cpp:881 (uring_submit_poison_race_test+0x40e27e) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 operator() tests/uring_submit_poison_race_test.cpp:171 (uring_submit_poison_race_test+0x401213) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 __invoke_impl<void, (anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (uring_submit_poison_race_test+0x40342d) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 __invoke<(anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (uring_submit_poison_race_test+0x40329e) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (uring_submit_poison_race_test+0x403100) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #7 operator() /usr/include/c++/16/bits/std_thread.h:310 (uring_submit_poison_race_test+0x402ffe) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #8 _M_run /usr/include/c++/16/bits/std_thread.h:255 (uring_submit_poison_race_test+0x402f2c) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #9 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Previous read of size 1 at 0x724c000000f8 by thread T2 (mutexes: write M0):
+    #0 sluice::Result<sluice::async::detail::RequestKey> sluice::async::UringAsyncBackend::submit_request<sluice::async::ReadOp>(sluice::async::ReadOp, sluice::async::detail::OperationKind, sluice::async::detail::RequestOp) src/async/uring_backend.cpp:433 (uring_submit_poison_race_test+0x423ebe) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #1 sluice::async::UringAsyncBackend::submit_read(sluice::async::ReadOp) src/async/uring_backend.cpp:533 (uring_submit_poison_race_test+0x41ff85) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp) src/async/async_io_context.cpp:259 (uring_submit_poison_race_test+0x40a29a) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 operator() tests/uring_submit_poison_race_test.cpp:178 (uring_submit_poison_race_test+0x401359) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 __invoke_impl<void, (anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:63 (uring_submit_poison_race_test+0x4033a8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 __invoke<(anonymous namespace)::admission_probe_unordered_with_owner_poison()::<lambda()> > /usr/include/c++/16/bits/invoke.h:98 (uring_submit_poison_race_test+0x403214) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 _M_invoke<0> /usr/include/c++/16/bits/std_thread.h:303 (uring_submit_poison_race_test+0x4030aa) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #7 operator() /usr/include/c++/16/bits/std_thread.h:310 (uring_submit_poison_race_test+0x402fb8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #8 _M_run /usr/include/c++/16/bits/std_thread.h:255 (uring_submit_poison_race_test+0x402ee2) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #9 execute_native_thread_routine <null> (libstdc++.so.6+0x51435) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+
+  Location is heap block of size 416 at 0x724c00000000 allocated by main thread:
+    #0 operator new(unsigned long) <null> (libtsan.so.2+0x6ae55) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::__detail::_MakeUniq<sluice::async::UringAsyncBackend>::__single_object std::make_unique<sluice::async::UringAsyncBackend, sluice::async::UringConfig, sluice::async::UringBackendSubmitTestHooks&>(sluice::async::UringConfig&&, sluice::async::UringBackendSubmitTestHooks&) /usr/include/c++/16/bits/unique_ptr.h:1105 (uring_submit_poison_race_test+0x404bc4) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 create tests/uring_submit_poison_race_test.cpp:107 (uring_submit_poison_race_test+0x400e8a) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:145 (uring_submit_poison_race_test+0x40147f) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Mutex M0 (0x721800000020) created at:
+    #0 pthread_mutex_lock <null> (libtsan.so.2+0x1f371) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 __gthread_mutex_lock(pthread_mutex_t*) /usr/include/c++/16/x86_64-redhat-linux/bits/gthr-default.h:795 (uring_submit_poison_race_test+0x40e8ea) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #2 std::mutex::lock() /usr/include/c++/16/bits/std_mutex.h:116 (uring_submit_poison_race_test+0x40e8ea)
+    #3 std::lock_guard<std::mutex>::lock_guard(std::mutex&) /usr/include/c++/16/bits/std_mutex.h:276 (uring_submit_poison_race_test+0x410f84) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #4 sluice::async::AsyncIoContext::submit_read(sluice::async::ReadOp) src/async/async_io_context.cpp:255 (uring_submit_poison_race_test+0x40a1fb) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #5 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:153 (uring_submit_poison_race_test+0x401665) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #6 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Thread T1 (tid=39997, running) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:173 (uring_submit_poison_race_test+0x4018b8) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+  Thread T2 (tid=39998, running) created by main thread at:
+    #0 pthread_create <null> (libtsan.so.2+0x1fd86) (BuildId: 1754b10fbdfd610a79c2b529f58f93d6ccd22664)
+    #1 std::thread::_M_start_thread(std::unique_ptr<std::thread::_State, std::default_delete<std::thread::_State> >, void (*)()) <null> (libstdc++.so.6+0x51508) (BuildId: 1acb19d34793ce46d919b6e25693a5592ba8fbd4)
+    #2 admission_probe_unordered_with_owner_poison tests/uring_submit_poison_race_test.cpp:181 (uring_submit_poison_race_test+0x40197e) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+    #3 main tests/uring_submit_poison_race_test.cpp:264 (uring_submit_poison_race_test+0x4024cc) (BuildId: d9528a9d4e9a36044dc11b329d2f078accdfbbf2)
+
+SUMMARY: ThreadSanitizer: data race src/async/uring_backend.cpp:401 in sluice::async::UringAsyncBackend::retire_execution_resources()
+==================
+PASS: uring submit/poison admission probe
+ThreadSanitizer: reported 2 warnings

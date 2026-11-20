@@ -1242,6 +1242,28 @@ if has_config("liburing") then
 
     uring_core_integration_target("uring_request_core_integration_test", nil)
 
+    -- AUD-002 (#643): admission probe versus owner poison. The submit-entry
+    -- gate plus a sequenced transport failure force the unordered
+    -- read/write pair; the TSan build is the race oracle and the sequenced
+    -- case pins the public poison-error semantics on every build.
+    target("uring_submit_poison_race_test")
+        set_kind("binary")
+        set_default(false)
+        set_group("test")
+        add_deps("sluice_core")
+        add_includedirs(R .. "include", R .. "src/async")
+        add_defines("SLUICE_ASYNC_INTERNAL_TESTING", "SLUICE_HAS_LIBURING")
+        add_links("uring")
+        add_files(R .. "tests/uring_submit_poison_race_test.cpp",
+                  R .. "src/async/async_io_context.cpp",
+                  R .. "src/async/uring_transport.cpp",
+                  R .. "src/async/uring_completion.cpp",
+                  R .. "src/async/uring_backend.cpp",
+                  R .. "src/async/fail_fast.cpp",
+                  R .. "src/async/detail/context_identity.cpp",
+                  R .. "src/async/detail/request_core.cpp")
+        add_tests("uring_submit_poison_race_test")
+
     -- Named mutation builds. Each flips one load-bearing mechanism and
     -- must be killed by the named failing assertion of the same suite; they
     -- are executed and recorded manually, never run as regular tests.
