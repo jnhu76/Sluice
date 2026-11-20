@@ -594,12 +594,12 @@ detail::PublicCancel UringAsyncBackend::cancel_key(detail::RequestKey key) noexc
                 detail::uring_core_handoff_fail_fast();
             }
             publication_pending_->push_back(detail::RequestReservation{key.slot, key.generation});
+            bump(stats_, &AsyncStats::canceled_ops);
         } else if (disposition == detail::PublicCancel::requested) {
             issue_running_cancel_locked_(detail::RequestReservation{key.slot, key.generation});
         }
     }
     if (disposition == detail::PublicCancel::won_before_execution) {
-        bump(stats_, &AsyncStats::canceled_ops);
         signal_ready_progress();
     } else if (
 #if defined(SLUICE_BACKEND_CONTRACT_MUTANT_CANCEL_PROGRESS_SIGNAL_DROPPED)

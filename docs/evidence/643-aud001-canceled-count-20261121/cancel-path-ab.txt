@@ -1,0 +1,15 @@
+AUD-001 cancel-path focused A/B (ThreadPool cancel wins)
+workload: deterministic unclaimed requests (worker parked at the claimed pause gate),
+          one public Request::cancel per submitted request, single-threaded caller,
+          stats attached; 200000 iterations per run; taskset -c 2; 25 interleaved pairs
+arms: base = master src/async/threadpool_backend.cpp; fixed = in-lock tally
+pairs=25
+base_median_ns_per_iter=606.7
+fixed_median_ns_per_iter=608.9
+base_range=[599.9, 654.2]
+fixed_range=[601.1, 620.4]
+median_ratio_fixed_over_base=1.0036
+bootstrap95_ratio=[0.9965, 1.0079]
+verdict: no resolved regression or improvement; the increment moved inside the
+already-held backend mutex, adding no synchronization operation. No runtime
+improvement is claimed for this correctness fix.
