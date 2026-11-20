@@ -1,0 +1,15 @@
+=== semantic_validation_precedence_test ===
+  observed: closed_zero_length
+  recorded: closed_zero_length
+21 precedence scenarios: direct 21 compared, 0 not expressible; ThreadPool 19 compared, 2 not drivable; io_uring 19 compared, 2 not drivable; 0 recorded request-side divergences
+exit 0
+=== semantic_backend_conformance_test ===
+  observed: closed_zero_length
+  recorded: closed_zero_length
+21 precedence scenarios: io_uring 19 compared, 2 not drivable; 0 recorded request-side divergences
+exit 0
+=== direct_composition_fault_test ===
+composition read_exact_at/write_all_at: 16 scenarios compared, 5 not drivable, 0 divergences
+composition read_exact/write_all: 11 scenarios compared, 10 not drivable (verdicts needing a caller-supplied offset), 0 divergences
+all 15 direct composition fault-injection tests passed
+exit 0

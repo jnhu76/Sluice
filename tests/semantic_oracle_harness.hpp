@@ -244,7 +244,14 @@ inline bool matches_recorded_divergences(const char* path_name, std::vector<cons
                                         std::vector<const char*> recorded) {
     std::sort(observed.begin(), observed.end(), name_less);
     std::sort(recorded.begin(), recorded.end(), name_less);
-    if (observed == recorded)
+    // The two vectors hold pointers from different origins (the scenario
+    // table and a separately spelled recorded set), so identity is the name
+    // text, never the pointer value.
+    const bool same =
+        observed.size() == recorded.size() &&
+        std::equal(observed.begin(), observed.end(), recorded.begin(),
+                   [](const char* a, const char* b) { return std::strcmp(a, b) == 0; });
+    if (same)
         return true;
     std::fprintf(stderr, "DIVERGENCE SET CHANGED [%s]: %zu observed, %zu recorded\n", path_name,
                  observed.size(), recorded.size());
@@ -253,6 +260,137 @@ inline bool matches_recorded_divergences(const char* path_name, std::vector<cons
     for (const char* name : recorded)
         std::fprintf(stderr, "  recorded: %s\n", name);
     return false;
+}
+
+// Probe-liveness self-check for the acceptance comparators. Every expected
+// value is a hand-authored constant; deriving one from agree, run_path or
+// matches_recorded_divergences would make this tautological.
+inline bool comparison_oracle_selfcheck() {
+    struct AgreeCase {
+        const char* case_name;
+        Scenario scenario;
+        Observation observed;
+        bool expected;
+    };
+    const AgreeCase agree_cases[] = {
+        {"A_success_vs_success",
+         {"agree_A", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+          DataOpVerdict::execute, std::nullopt},
+         observe_accepted(), true},
+        {"B_success_vs_rejection",
+         {"agree_B", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+          DataOpVerdict::execute, std::nullopt},
+         observe_rejection(IoError{.code = IoError::Code::invalid_argument}), false},
+        {"B_complete_empty_vs_rejection",
+         {"agree_B2", {false, FileAccess::read_only, FileOperation::read, 0, 0},
+          DataOpVerdict::complete_empty, std::nullopt},
+         observe_rejection(IoError{.code = IoError::Code::invalid_state}), false},
+        {"C_rejection_vs_success",
+         {"agree_C", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+          DataOpVerdict::reject_range, IoError::Code::invalid_argument},
+         observe_accepted(), false},
+        {"D_rejection_wrong_code",
+         {"agree_D", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+          DataOpVerdict::reject_range, IoError::Code::invalid_argument},
+         observe_rejection(IoError{.code = IoError::Code::invalid_state}), false},
+        {"D_rejection_exact_code",
+         {"agree_D2", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+          DataOpVerdict::reject_range, IoError::Code::invalid_argument},
+         observe_rejection(IoError{.code = IoError::Code::invalid_argument}), true},
+        {"E_complete_empty_vs_dispatched",
+         {"agree_E", {false, FileAccess::read_only, FileOperation::read, 0, 0},
+          DataOpVerdict::complete_empty, std::nullopt},
+         observe_accepted(false), false},
+        {"E_complete_empty_vs_noop",
+         {"agree_E2", {false, FileAccess::read_only, FileOperation::read, 0, 0},
+          DataOpVerdict::complete_empty, std::nullopt},
+         observe_accepted(true), true},
+        {"E_complete_empty_unobservable",
+         {"agree_E3", {false, FileAccess::read_only, FileOperation::read, 0, 0},
+          DataOpVerdict::complete_empty, std::nullopt},
+         observe_accepted(), true},
+        {"noop_observation_ignored_for_execute",
+         {"agree_F", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+          DataOpVerdict::execute, std::nullopt},
+         observe_accepted(false), true},
+    };
+    for (const AgreeCase& entry : agree_cases) {
+        if (agree(entry.scenario, entry.observed) == entry.expected)
+            continue;
+        std::fprintf(stderr, "SELF-CHECK FAIL [agree] %s: expected %s\n", entry.case_name,
+                     entry.expected ? "agreement" : "disagreement");
+        return false;
+    }
+
+    const Scenario synthetic_scenarios[] = {
+        {"selfcheck_expected_execute", {false, FileAccess::read_only, FileOperation::read, 0, 4},
+         DataOpVerdict::execute, std::nullopt},
+        {"selfcheck_expected_rejection", {true, FileAccess::read_only, FileOperation::read, 0, 4},
+         DataOpVerdict::reject_closed, IoError::Code::invalid_state},
+    };
+    std::vector<const char*> honest_names;
+    const std::size_t honest_mismatches = run_path(
+        "selfcheck-honest", synthetic_scenarios, 2,
+        [](const Input& input) {
+            return input.closed
+                       ? observe_rejection(IoError{.code = IoError::Code::invalid_state})
+                       : observe_accepted();
+        },
+        &honest_names);
+    if (honest_mismatches != 0 || !honest_names.empty()) {
+        std::fprintf(stderr,
+                     "SELF-CHECK FAIL [run_path] honest observations reported %zu mismatches\n",
+                     honest_mismatches);
+        return false;
+    }
+    std::vector<const char*> wrong_names;
+    const std::size_t wrong_mismatches = run_path(
+        "selfcheck-wrong", synthetic_scenarios, 2,
+        [](const Input&) { return observe_accepted(); }, &wrong_names);
+    if (wrong_mismatches != 1 || wrong_names.size() != 1 ||
+        std::strcmp(wrong_names[0], "selfcheck_expected_rejection") != 0) {
+        std::fprintf(stderr,
+                     "SELF-CHECK FAIL [run_path] a known wrong observation produced %zu "
+                     "mismatches and %zu names\n",
+                     wrong_mismatches, wrong_names.size());
+        return false;
+    }
+
+    const char* const name_a = "closed_zero_length";
+    const char* const name_b = "access_illegal_zero_length";
+    const char* const name_c = "range_unrepresentable_offset";
+    // Two arrays, not two literals: literal pooling may give equal text one
+    // address, which would silently stop this case from discriminating
+    // pointer identity from content identity.
+    char observed_name[] = "zero_length_legal_offset";
+    char recorded_name[] = "zero_length_legal_offset";
+    struct DivergenceCase {
+        const char* case_name;
+        std::vector<const char*> observed;
+        std::vector<const char*> recorded;
+        bool expected;
+    };
+    const DivergenceCase divergence_cases[] = {
+        {"F_both_empty", {}, {}, true},
+        {"F_identical", {name_a, name_b}, {name_a, name_b}, true},
+        {"same_text_distinct_address", {observed_name}, {recorded_name}, true},
+        {"H_reorder", {name_b, name_a}, {name_a, name_b}, true},
+        {"G_extra_observed", {name_a}, {}, false},
+        {"G_missing_observed", {}, {name_a}, false},
+        {"G_different_name", {name_a}, {name_c}, false},
+        {"I_duplicate_observed", {name_a, name_a}, {name_a}, false},
+        {"I_duplicate_recorded", {name_a}, {name_a, name_a}, false},
+        {"I_partial_overlap", {name_a, name_b}, {name_a}, false},
+    };
+    for (const DivergenceCase& entry : divergence_cases) {
+        if (matches_recorded_divergences("selfcheck", entry.observed, entry.recorded) ==
+            entry.expected)
+            continue;
+        std::fprintf(stderr, "SELF-CHECK FAIL [matches_recorded_divergences] %s: expected %s\n",
+                     entry.case_name, entry.expected ? "match" : "mismatch");
+        return false;
+    }
+    return true;
 }
 
 }
