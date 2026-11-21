@@ -87,9 +87,10 @@ int main(int argc, char** argv) {
             const FileHash& r = results[gi++];
             if (r.error.has_value()) {
                 bool canceled = r.error->code == sluice::IoError::Code::canceled;
-                std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0], r.path.c_str(),
+                std::fprintf(stderr, "%s: %s: %s%s%s%s\n", argv[0], r.path.c_str(),
                              canceled ? "canceled" : "read error", r.error->os_errno ? " (" : "",
-                             r.error->os_errno ? errno_msg(r.error->os_errno) : "");
+                             r.error->os_errno ? errno_msg(r.error->os_errno) : "",
+                             r.error->os_errno ? ")" : "");
                 any_error = true;
                 if (canceled)
                     any_canceled = true;

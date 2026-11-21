@@ -262,6 +262,28 @@ do
     end
 end
 
+-- App CLI errno-message bracket oracle: on a post-open read failure with an
+-- errno, each binary's failure-path stderr line keeps the parenthesized
+-- errno tail closed.
+do
+    local bins = { "sluice-copy", "sluice-grep", "sluice-hash", "sluice-tail" }
+    local have_all = true
+    for _, name in ipairs(bins) do
+        if not os.isfile(R .. "apps/" .. name .. "/main.cpp") then
+            have_all = false
+        end
+    end
+    if have_all then
+        target("app_cli_errno_bracket_test")
+            set_kind("binary")
+            set_default(false)
+            set_group("test")
+            add_deps("sluice-copy", "sluice-grep", "sluice-hash", "sluice-tail")
+            add_files(R .. "tests/app_cli_errno_bracket_test.cpp")
+            add_tests("app_cli_errno_bracket_test", {run_timeout = 60000})
+    end
+end
+
 -- Pipelined-copy contract oracles: the scripted-backend suite driving
 -- run_pipelined_copy_with_backend through controlled submission, completion,
 -- and failure ordering (read-ahead window, write ordering, short I/O, error
