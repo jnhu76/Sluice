@@ -620,3 +620,20 @@ mechanism justification and the authority-contraction audit per AGENTS.md.
 - Scope: ThreadPool, non-semaphore eventfd, all production userspace writers holding
   `mtx_`, one host, btrfs, warm cache, one worker. Not established: wall,
   energy, io_uring end-to-end, multi-worker, cold cache, real kernel EINTR.
+
+## Dated 2026-11-21 AUD-009 adjudication: backend close_admission() is a test seam (BACKEND-04, VERIFY-06, #643)
+
+Owner decision B on the AUD-009 Gate: the two backends' `close_admission()`
+implementations (`ThreadPoolBackend::close_admission`,
+`UringAsyncBackend::close_admission`) are classified as test seams and now sit
+under `SLUICE_ASYNC_INTERNAL_TESTING`; production admission closure remains
+owned by the context and runs through `AsyncIoContext::close_admission()` /
+`request_stop()` / the exhaustion paths, each calling `core_->close_admission()`
+and signalling progress only on the open→closed transition. No virtual backend
+boundary was introduced (option A not taken). The
+`SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS` mutation
+therefore mutates the seam implementation only: its kill claim is scoped to the
+seam-transition cases in `progress_source_ownership_test`, while the production
+path has its own context-level transition oracle in the same suite
+(`context_close_admission_signals_only_the_open_to_closed_transition`). Release
+builds export no backend close_admission symbol; both profiles build.

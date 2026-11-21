@@ -831,6 +831,7 @@ std::size_t ThreadPoolBackend::active_workers() const {
     return active_workers_;
 }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void ThreadPoolBackend::close_admission() {
 #if defined(SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
     if (core_ != nullptr) {
@@ -843,6 +844,7 @@ void ThreadPoolBackend::close_admission() {
     }
 #endif
 }
+#endif
 
 bool ThreadPoolBackend::any_event_owed_locked_() const noexcept {
     for (const DeliveryRecord& record : delivery_) {

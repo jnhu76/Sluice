@@ -69,7 +69,9 @@ Result<detail::RequestKey> UringAsyncBackend::submit_size(SizeOp) {
 std::size_t UringAsyncBackend::poll() {
     return 0;
 }
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void UringAsyncBackend::close_admission() {}
+#endif
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return 0;
 }
@@ -694,6 +696,7 @@ std::size_t UringAsyncBackend::poll() {
     return published;
 }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void UringAsyncBackend::close_admission() {
     if (!have_ring_)
         return;
@@ -708,6 +711,7 @@ void UringAsyncBackend::close_admission() {
     }
 #endif
 }
+#endif
 
 std::size_t UringAsyncBackend::outstanding() const noexcept {
     return core_ != nullptr ? core_->outstanding_summary() : 0;

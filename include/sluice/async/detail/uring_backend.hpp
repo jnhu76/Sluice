@@ -84,7 +84,9 @@ class UringAsyncBackend : public AsyncBackend {
 
     void retire_execution_resources() noexcept override;
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
     void close_admission();
+#endif
 
 #if defined(SLUICE_HAS_LIBURING)
 

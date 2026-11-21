@@ -469,9 +469,11 @@ do
     end
 
     -- Corrective-round mutation builds. Each restores the pre-fix
-    -- unconditional close_admission progress signal and must be killed by the
-    -- transition-regression tests of the ownership suite; they are executed
-    -- and recorded manually, never run as regular tests.
+    -- unconditional close_admission progress signal in the backend test seam
+    -- (SLUICE_ASYNC_INTERNAL_TESTING); production closes admission through
+    -- AsyncIoContext and is pinned by the context-level transition case in the
+    -- same suite. The mutant binaries are executed and recorded manually,
+    -- never run as regular tests.
     progress_source_target("progress_source_mut_close_admission_always_signals", false,
                            "SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS")
     if has_config("liburing") then
