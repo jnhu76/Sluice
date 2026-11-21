@@ -1,0 +1,14 @@
+head: 9d5c96236ad9de449ac3429522ef886cfbe05c80
+branch: test/643-oracle-validation
+date: 2026-11-21T11:47:18+08:00
+host: Linux 7.3.3-200.fc44.x86_64 (20 logical cores)
+xmake: [0m[1mxmake v3.1.2+HEAD.5d21e9d, A cross-platform build utility based on Lua[0m[0m
+gcc: gcc (GCC) 16.2.1 20261029 (Red Hat 16.2.1-3)
+clang: clang version 22.1.8 (Fedora 22.1.8-4.fc44)
+liburing: liburing-2.13-2.fc44.x86_64
+# restore plain release profile (default builddir) after the cells
+[0mchecking for platform ... [38;5;2;1mlinux (x86_64)[0m
+checking for liburing capability ... ok (/usr/include/liburing.h + /usr/lib/gcc/x86_64-redhat-linux/16/../../../../lib64/liburing.so)
+[0mchecking for sluice_liburing_capability ... [38;5;2;1mok[0m
+[0m[1;38;5;3;1mwarning: [38;5;3;1mAscend SDK not found[0m
+RESTORE_EXIT=0
