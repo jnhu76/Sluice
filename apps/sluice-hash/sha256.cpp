@@ -21,7 +21,7 @@ constexpr std::uint32_t rotr(std::uint32_t x, unsigned n) noexcept {
 
 }
 
-Sha256::Sha256() : total_bytes_{0}, buf_len_{0}, finalized_{false} {
+Sha256::Sha256() : total_bytes_{0}, buf_len_{0} {
     h_[0] = 0x6a09e667;
     h_[1] = 0xbb67ae85;
     h_[2] = 0x3c6ef372;
@@ -120,7 +120,6 @@ void Sha256::final(std::uint8_t out_digest[32]) noexcept {
         buf_[56 + i] = len_be[i];
     compress_block(buf_);
     buf_len_ = 0;
-    finalized_ = true;
 
     for (int i = 0; i < 8; ++i) {
         out_digest[4 * i] = static_cast<std::uint8_t>(h_[i] >> 24);
