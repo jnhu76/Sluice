@@ -250,7 +250,6 @@ class AsyncIoContext {
     struct ObserverCancelResult {
         ObserverCancelStatus status = ObserverCancelStatus::not_found;
         RequestId request{};
-        bool retired() const noexcept { return status == ObserverCancelStatus::retired; }
         bool in_progress() const noexcept {
             return status == ObserverCancelStatus::delivery_in_progress;
         }
@@ -271,7 +270,6 @@ class AsyncIoContext {
     bool delivery_retired(const RequestId& id) const;
 
     std::size_t outstanding() const noexcept;
-    const AsyncStats* stats() const noexcept { return stats_; }
 
   private:
     friend struct detail::ContextFactory;
@@ -286,6 +284,10 @@ class AsyncIoContext {
     std::unique_ptr<detail::ProgressSource> progress_;
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
+
+    template <class T, class Op>
+    Result<Request<T>> submit_op_(Op op,
+                                  Result<detail::RequestKey> (AsyncBackend::*accept)(Op));
 
     // Exhaustion closes admission before the epoch domain can wrap; the
     // source is a leaf and cannot reach the core itself.

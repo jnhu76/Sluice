@@ -1,6 +1,6 @@
 -- xmake build for the sluice C++ core (Zig std.Io inspired).
 -- Zig source under ./zig is design reference only; never built here.
-add_rules("mode.debug", "mode.release", "mode.valgrind")
+add_rules("mode.debug", "mode.release")
 add_rules("plugin.compile_commands.autoupdate")
 
 -- Sanitizer modes: use set_policy instead of deprecated built-in modes.

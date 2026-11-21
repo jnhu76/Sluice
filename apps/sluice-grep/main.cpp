@@ -104,11 +104,12 @@ int main(int argc, char** argv) {
                              "skipped (not matched)\n",
                              argv[0], r.path.c_str());
             if (r.error.has_value()) {
-                std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0], r.path.c_str(),
+                std::fprintf(stderr, "%s: %s: %s%s%s%s\n", argv[0], r.path.c_str(),
                              r.error->code == sluice::IoError::Code::canceled ? "canceled"
                                                                               : "read error",
                              r.error->os_errno ? " (" : "",
-                             r.error->os_errno ? std::strerror(r.error->os_errno) : "");
+                             r.error->os_errno ? std::strerror(r.error->os_errno) : "",
+                             r.error->os_errno ? ")" : "");
                 any_error = true;
             }
         }

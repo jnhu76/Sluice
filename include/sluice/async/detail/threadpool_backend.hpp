@@ -211,17 +211,18 @@ class ThreadPoolBackend : public AsyncBackend {
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    void wait_submit_entry_pause_() noexcept;
-    void wait_pre_accept_commit_pause_() noexcept;
-    void wait_accepted_pre_dispatch_pause_() noexcept;
-    void wait_before_dequeue_pause_() noexcept;
-    void wait_worker_claimed_pause_() noexcept;
-    void wait_unclaimed_retirement_pause_() noexcept;
-    void wait_worker_outcome_pre_terminal_pause_() noexcept;
-    void wait_worker_post_completion_signal_pause_() noexcept;
-    void wait_publication_epilogue_pause_() noexcept;
-    void wait_delivery_claimed_pause_() noexcept;
-    void wait_owed_sweep_epilogue_pause_() noexcept;
+    template <class Gate>
+    static void pause_at_gate_(std::atomic<Gate*>& gate) noexcept {
+        Gate* g = gate.load(std::memory_order_acquire);
+        if (g == nullptr)
+            return;
+        g->exited.store(false, std::memory_order_release);
+        g->paused.store(true, std::memory_order_release);
+        g->paused.notify_all();
+        g->resume.wait(false, std::memory_order_acquire);
+        g->exited.store(true, std::memory_order_release);
+        g->exited.notify_all();
+    }
 
     using SubmitStage = detail::SubmitStage;
 

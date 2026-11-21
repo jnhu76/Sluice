@@ -109,7 +109,7 @@ execution evidence.
 | Requirement IDs | C++ owner | Current state | Status | Evidence (SHA/config) | Missing proof or gap | Next owner |
 |---|---|---|---|---|---|---|
 | RequestCore model (REQ/VERIFY-02 S1–S3, S6; L1/L5) | `src/async/detail/request_core.cpp` | Safety: 20 invariants incl. `InvBindImpliesPublished`; liveness L1+L5 per identity; #524 convergence removed the retired `ReleaseBind` flavor and migrated mutation gates | VERIFIED (carried, model) | `formal/tla/RequestCore.tla`; safety PASS 31,289,609 gen / 5,359,732 distinct / depth 53; liveness PASS (12 branches = 2 slots × generations 0..2 × {L1,L5}); frozen `28f0fe33` (`docs/evidence/issue-524-requestcore-convergence-20261015/`) | Bounded instances (2 slots, gens 0..2); not C++ memory ordering; no unbounded identity domain | — |
-| ObserverCore model (OBS, L3) | core observer phases | Safety floor (at-most-once per generation, cancel isolation, retirement finality) + conditional liveness; 5 mirrored mutation seams killed | VERIFIED (carried, model) | `formal/tla/ObserverCore.tla` (C1-H, #433); cfgs with `PROPERTY` liveness + liveness mutants | Host callback internals and kernel timing unmodeled | — |
+| ObserverCore model (OBS, L3) | core observer phases | Safety floor (at-most-once per generation, cancel isolation, retirement finality) + conditional liveness; 5 mirrored mutation seams killed | VERIFIED (carried, model) | `formal/tla/ObserverCore.tla` (C1-H, #433); cfgs with `PROPERTY` liveness + liveness mutants | Host callback internals and kernel timing unmodeled. Scope (2026-11-21): the model's host-waiter layer (`waiter_state`, `host_record_free`, the WaiterRefused `no_space` disposition, RouteDelivery/ProcessDelivery, `InvWaiterBacking`, liveness L2) is a dated image of the removed scheduler host adapter (`scheduler_park_wake.cpp`/`scheduler.cpp`/`RuntimeTaskContext`); the live wake obligation is `ProgressSource.tla` `LParkWakes`, delivery retirement the backends' `retire_observer_delivery`. Divergence: the model has no admission fact, so the attach-after-admission-close rejection (SHUT-02 item 3, `ObserverRegistration::admission_closed`) is unmodeled (the model over-approximates by allowing the arm C++ rejects); until an ObserverCore slice adds it, SHUT-02 item 3 must not cite ObserverCore as evidence | — |
 | ProgressSource model (PROG-02, V24) | `detail/progress_source.hpp` | Epoch/token park-wake handshake; reachable-state obligations re-proved on corrected close semantics; `MutRepeatCloseSignals` discriminator | VERIFIED (carried, model) | `formal/tla/ProgressSource.tla` (C2-E campaign + re-closure records); gated by `scripts/verify_progress_source_model.sh` | Model predates the C1 suppression mechanism: no suppression action exists in the model; the suppression rule's coverage is the PROG-02 equivalence argument, not a model action; single-boolean readiness | — |
 | ShutdownCore model (SHUT, L4) | `async_io_context.cpp` | Five-state lifecycle, `InvCanceledRequiresTargeting`, LiveOpsSettle/LiveShutdownCloses under explicit fairness; per-property negative controls | VERIFIED (carried, model) | `formal/tla/ShutdownCore.tla` (E2); part of the 171-gate run `VERIFY_TLA: PASS` | Host teardown/application consumption timing unmodeled | — |
 | Mutation mirrors / correspondence (VERIFY-01/06) | test seams `SLUICE_*_MUTANT_*` | Compile-time protocol mutations killed by named invariants/oracles; in-tree C++ mutation builds recorded across B2/E1/E2/#531/#532 | VERIFIED (carried, campaign-scoped) | 71/72 campaign record (survivor: documented F2 path-dependent case, guard-caught — recorded in `docs/evidence/f2-authority-contraction-20261013/` and the PR #536 receipt, not restated in this ledger); per-slice kills named in carried records | Full campaign is campaign-scale, not per-commit; re-run obligations follow VERIFY-06 on model/transition change | — |
@@ -681,3 +681,18 @@ family. Chartering a conversion slice would create mechanism churn for a
 classification question, and the audit row's "all are seam tests" premise is
 already recorded as false for these callers. This is the final disposition of
 AUD-020.
+
+### VERIFY-06 correspondence note: drain single-read vs the modeled OL4a image (2026-11-21)
+
+The drain change does not alter any modeled `ProgressSource` transition:
+`OL4a` models the stale-readiness drain as one step under the fused mutex
+hold that consumes readiness (`fd' = FALSE`), and the one-read +
+`notification_pending_`-clear `mtx_` critical section satisfies exactly
+that image — the change removed only the guaranteed-`EAGAIN` probe read,
+a syscall count below the model's abstraction line. The kernel-writer
+re-signal window stays covered by the untouched probe step (`OProbe`;
+C++ `PhysicalProbe`), whose blind-probe mutant `MutNoProbe` is killed by
+the standing gate (`scripts/verify_progress_source_model.sh`). Recorded
+per VERIFY-06's correspondence-preservation clause ("naming the untouched
+transitions") instead of a model re-run; the next planned gate run
+re-asserts the unchanged verdicts.
