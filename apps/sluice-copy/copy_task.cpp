@@ -283,11 +283,6 @@ struct PipelinedCopyTask {
 
 }
 
-Result<CopyStats> run_sequential_copy(const File& src_file, const NativeFileRef& dst,
-                                      std::size_t buffer_size, unsigned workers, SyncPolicy sync) {
-    return run_pipelined_copy(src_file, dst, buffer_size, 1, workers, sync);
-}
-
 Result<CopyStats> run_pipelined_copy(const File& src_file, const NativeFileRef& dst,
                                      std::size_t buffer_size, std::size_t pipeline_depth,
                                      unsigned workers, SyncPolicy sync) {
@@ -343,13 +338,6 @@ Result<CopyStats> run_pipelined_copy_with_context(const File& src_file, const Na
     } catch (...) {
         return copy_exception();
     }
-}
-
-Result<CopyStats> run_sequential_copy_with_context(const File& src_file, const NativeFileRef& dst,
-                                                   std::size_t buffer_size, unsigned workers,
-                                                   SyncPolicy sync, AsyncIoContext ctx) {
-    return run_pipelined_copy_with_context(src_file, dst, buffer_size, 1, workers, sync,
-                                           std::move(ctx));
 }
 
 }
