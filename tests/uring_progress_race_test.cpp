@@ -512,7 +512,7 @@ bool k10a_control_signal_racing_kernel_cq_before_revalidation() {
     wait_gate_paused(gate);
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     read.release_bytes(1);
     if (!wait_notification_readable(interest)) {
         release_parked_owner(ctx, gate, owner, &prepark);
@@ -560,7 +560,7 @@ bool k10b_control_signal_racing_kernel_cq_before_poll() {
     wait_gate_paused(gate);
     detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     read.release_bytes(1);
     if (!wait_notification_readable(interest)) {
         release_parked_owner(ctx, gate, owner, &prepark);

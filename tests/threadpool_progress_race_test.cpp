@@ -450,7 +450,7 @@ bool r4b_worker_held_past_completion_signal_is_serviced_without_parking() {
     if (!owner_parked && !owner_returned) {
         std::fprintf(stderr, "r4b: owner neither parked nor returned after signal "
                              "(harness failure)\n");
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
         driver.join();
         detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         raw->set_worker_post_completion_signal_pause_gate(nullptr);
@@ -472,7 +472,7 @@ bool r4b_worker_held_past_completion_signal_is_serviced_without_parking() {
                      static_cast<unsigned long long>(token_before_release.progress_exhaustion),
                      static_cast<unsigned long long>(token_now.progress),
                      static_cast<unsigned long long>(token_now.progress_exhaustion));
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
         driver.join();
         detail::TestAccess::context_set_progress_prepark_counter(ctx, nullptr);
         raw->set_worker_post_completion_signal_pause_gate(nullptr);
@@ -678,7 +678,7 @@ bool r11_spurious_wake_with_zero_completions_is_harmless() {
     wait_gate_paused(gate);
     detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     resume_gate(gate);
     driver.join();
 
@@ -760,7 +760,7 @@ bool r12_control_wake_racing_park_boundary() {
     std::thread driver1([&] { DriverClaim owner{ctx}; first = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(pre_gate);
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     resume_gate(pre_gate);
     driver1.join();
     const bool pre_revalidate = is_control(first) && !read.request.ready();
@@ -776,7 +776,7 @@ bool r12_control_wake_racing_park_boundary() {
     std::thread driver2([&] { DriverClaim owner{ctx}; second = wait_one_value(ctx, std::chrono::milliseconds{8000}); });
     wait_gate_paused(park_gate);
     detail::TestAccess::context_set_prepark_pause_gate(ctx, nullptr);
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     resume_gate(park_gate);
     driver2.join();
 
@@ -926,7 +926,7 @@ bool control_exhaustion_saturates_without_alias_and_wakes_interrupted() {
     wait_gate_paused(gate);
     detail::TestAccess::context_set_prerevalidate_pause_gate(ctx, nullptr);
 
-    ctx.interrupt_progress_waiters();
+    detail::TestAccess::context_progress_source(ctx)->interrupt();
     const bool readable = notification_fd_readable(interest.fd);
 
     resume_gate(gate);
@@ -963,12 +963,12 @@ bool control_outer_exhaustion_is_terminal_and_never_aliases() {
     detail::TestAccess::context_set_control_exhaustion(ctx, kMax - 1);
 
     const bool ok = [&] {
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
         if (!notification_fd_readable(interest.fd))
             return false;
 
         for (int round = 0; round < 3; ++round) {
-            ctx.interrupt_progress_waiters();
+            detail::TestAccess::context_progress_source(ctx)->interrupt();
             if (!notification_fd_readable(interest.fd))
                 return false;
 

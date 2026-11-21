@@ -695,12 +695,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     }
 }
 
-void AsyncIoContext::interrupt_progress_waiters() noexcept {
-    if (progress_) {
-        progress_->interrupt();
-    }
-}
-
 void AsyncIoContext::acknowledge_progress_control() {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (progress_ != nullptr) {
