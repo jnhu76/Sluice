@@ -1,0 +1,9 @@
+== positive: clean-room consumer including measurement.hpp, using AsyncStats ==
+submit_calls=3 completed_ops=5 sizeof=88
+== negative: each retired type must fail to compile from the installed prefix ==
+PASS: sluice::SyscallStats rejected (/tmp/aud003-probes/neg_SyscallStats.cpp: In function ‘int main()’:)
+PASS: sluice::BufferStats rejected (/tmp/aud003-probes/neg_BufferStats.cpp: In function ‘int main()’:)
+PASS: sluice::CopyStats rejected (/tmp/aud003-probes/neg_CopyStats.cpp: In function ‘int main()’:)
+PASS: sluice::SyncStats rejected (/tmp/aud003-probes/neg_SyncStats.cpp: In function ‘int main()’:)
+PASS: sluice::UringStats rejected (/tmp/aud003-probes/neg_UringStats.cpp: In function ‘int main()’:)
+PASS: sluice::VectorStats rejected (/tmp/aud003-probes/neg_VectorStats.cpp: In function ‘int main()’:)

@@ -1,0 +1,16 @@
+AUD-003 pre/post installed-package surface comparison (release mode, gcc 16.2.1)
+pre  = BASE 0601e1034eebab1853395f556a7fa4ff90a27bb0 (clean worktree verifier run)
+post = PR head f4f8dece058d1c2eb53e84c98be20efac7f99720 (clean worktree verifier run)
+
+== profile noliburing ==
+  lib/libsluice_async.a: bytes 198266 -> 198266  archive sha256 identical=True  per-object sha256 identical=True  defined symbols identical=True
+  lib/libsluice_core.a: bytes 19000 -> 19000  archive sha256 identical=True  per-object sha256 identical=True  defined symbols identical=True
+  EXTERNAL_UNDEFINED_SYMBOLS identical=True
+  verdict: BYTE-IDENTICAL ARCHIVES — no symbol or object change
+
+== profile liburing ==
+  lib/libsluice_async.a: bytes 271794 -> 271794  archive sha256 identical=True  per-object sha256 identical=True  defined symbols identical=True
+  lib/libsluice_core.a: bytes 19000 -> 19000  archive sha256 identical=True  per-object sha256 identical=True  defined symbols identical=True
+  EXTERNAL_UNDEFINED_SYMBOLS identical=True
+  verdict: BYTE-IDENTICAL ARCHIVES — no symbol or object change
+
