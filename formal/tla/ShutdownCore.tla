@@ -15,8 +15,10 @@
 (*     not complete),                                                      *)
 (*   include/sluice/async/detail/request_core.hpp (CoreOccupancy:          *)
 (*     outstanding / execution_refs / control_refs / publication_inflight  *)
-(*     / observer_registrations; collect_outstanding;                      *)
-(*     retire_delivered_episodes; reclaimable_),                           *)
+(*     / observer_registrations; collect_outstanding; reclaimable_),       *)
+(*   src/async/uring_backend.cpp / threadpool_backend.cpp (deliver_event   *)
+(*     tail retire_observer_delivery: the delivered-episode retirement     *)
+(*     that replaced the removed retire_delivered_episodes sweep),         *)
 (*   src/async/detail/request_core.cpp (accept claims the execution        *)
 (*     borrow; publish completes the public result; consume/discard        *)
 (*     release the binding; the pin outlives the binding),                 *)
@@ -323,7 +325,11 @@ RetireEpisode(o) ==
 
 (* The convergence predicate: settlement_converged_ -- the backend internal
    retirement witness (all controls retired; the dispatch/publication facts
-   are below the model's abstraction line) plus the occupancy facts. *)
+   are below the model's abstraction line) plus the occupancy facts.  C++
+   additionally requires publication_inflight == 0 (observer_registrations
+   == 0 is already the episode_refs = 0 conjunct); the model absorbs the
+   inflight conjunct into atomic publication -- an operation arrives
+   published with no inflight window. *)
 Converged ==
     /\ \A o \in OpSet:
             /\ borrow_refs[o] = 0
