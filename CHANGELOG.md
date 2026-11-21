@@ -15,6 +15,33 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
+### Removed
+
+- **measurement.hpp: six retired public diagnostic types (#643, AUD-003).**
+  Removed `sluice::SyscallStats`, `sluice::BufferStats`, `sluice::CopyStats`,
+  `sluice::SyncStats`, `sluice::UringStats` and `sluice::VectorStats` from
+  `include/sluice/measurement.hpp`. This is an intentional source-breaking
+  public API contraction under owner decisions D2/D3 (v2 root §23.4): these
+  legacy diagnostic value types lost their last in-tree consumers when the
+  v1-era File/Reader/Writer pipeline was retired (#505-B) and have had zero
+  readers, writers or includers since — ownerless diagnostic vocabulary that
+  the v2 root's steady-state rule (§20) classifies as a defect to keep.
+  `sluice::AsyncStats` remains supported and unchanged: same fields, same
+  layout, same copy semantics, same counter behavior, still populated by the
+  async backends and still borrowed through the public async API. The header
+  `sluice/measurement.hpp` remains one of the 11 installed public headers
+  (install surface unchanged). No runtime or diagnostic behavior changes: no
+  production, test, benchmark or package-consumer code names any removed type
+  (verified by repository-wide search and the package verifier, both
+  liburing profiles). `sluice::CopyStats` (removed) is unrelated to
+  `sluice_copy::CopyStats` in the `sluice-copy` application, which is
+  unaffected. No migration is needed for any repository-supported use; there
+  is none. External consumers of the removed types, if any exist, cannot be
+  enumerated by this repository (disclosed per D3, not assumed absent) — such
+  code will fail to compile and must pin a prior release or migrate to
+  `AsyncStats`-based diagnostics. No compatibility alias, shim or replacement
+  struct is provided (D3: no v1 compatibility obligations).
+
 ### Performance
 
 - **ProgressSource: one-read notification drain (#621).** A successful
