@@ -96,6 +96,10 @@ class RequestScope {
 
     bool reserve_slot_(std::size_t& index) noexcept;
 
+    template <class T, class Op>
+    Result<ScopeTicket<T>> submit_ticket_(Op op,
+                                          Result<Request<T>> (AsyncIoContext::*accept)(Op));
+
     template <class T>
     void commit_(std::size_t index, Request<T>&& request) noexcept {
         static_assert(std::is_nothrow_move_constructible_v<Request<T>>);

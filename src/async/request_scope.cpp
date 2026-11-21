@@ -134,104 +134,46 @@ Result<void> RequestScope::settle_and_release_(bool cancel_for_cleanup) noexcept
     return {};
 }
 
-Result<ScopeTicket<std::size_t>> RequestScope::submit_read(ReadOp op) {
+template <class T, class Op>
+Result<ScopeTicket<T>> RequestScope::submit_ticket_(Op op,
+                                                    Result<Request<T>> (AsyncIoContext::*accept)(Op)) {
     if (finished_) {
-        return make_unexpected<ScopeTicket<std::size_t>>(
-            IoError{IoError::Code::invalid_state});
+        return make_unexpected<ScopeTicket<T>>(IoError{IoError::Code::invalid_state});
     }
     std::size_t index = 0;
     if (!reserve_slot_(index)) {
-        return make_unexpected<ScopeTicket<std::size_t>>(
-            IoError{IoError::Code::would_block});
+        return make_unexpected<ScopeTicket<T>>(IoError{IoError::Code::would_block});
     }
 #if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
-    auto accepted = ctx_.submit_read(op);
+    auto accepted = (ctx_.*accept)(std::move(op));
     Reservation guard{this, index};
 #else
     Reservation guard{this, index};
-    auto accepted = ctx_.submit_read(op);
+    auto accepted = (ctx_.*accept)(std::move(op));
 #endif
     if (!accepted.has_value()) {
-        return make_unexpected<ScopeTicket<std::size_t>>(accepted.error());
+        return make_unexpected<ScopeTicket<T>>(accepted.error());
     }
     const RequestId id = accepted.value().id();
-    commit_<std::size_t>(index, std::move(accepted).value());
+    commit_<T>(index, std::move(accepted).value());
     guard.committed = true;
-    return ScopeTicket<std::size_t>{id};
+    return ScopeTicket<T>{id};
+}
+
+Result<ScopeTicket<std::size_t>> RequestScope::submit_read(ReadOp op) {
+    return submit_ticket_(std::move(op), &AsyncIoContext::submit_read);
 }
 
 Result<ScopeTicket<std::size_t>> RequestScope::submit_write(WriteOp op) {
-    if (finished_) {
-        return make_unexpected<ScopeTicket<std::size_t>>(
-            IoError{IoError::Code::invalid_state});
-    }
-    std::size_t index = 0;
-    if (!reserve_slot_(index)) {
-        return make_unexpected<ScopeTicket<std::size_t>>(
-            IoError{IoError::Code::would_block});
-    }
-#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
-    auto accepted = ctx_.submit_write(op);
-    Reservation guard{this, index};
-#else
-    Reservation guard{this, index};
-    auto accepted = ctx_.submit_write(op);
-#endif
-    if (!accepted.has_value()) {
-        return make_unexpected<ScopeTicket<std::size_t>>(accepted.error());
-    }
-    const RequestId id = accepted.value().id();
-    commit_<std::size_t>(index, std::move(accepted).value());
-    guard.committed = true;
-    return ScopeTicket<std::size_t>{id};
+    return submit_ticket_(std::move(op), &AsyncIoContext::submit_write);
 }
 
 Result<ScopeTicket<void>> RequestScope::submit_sync_data(SyncDataOp op) {
-    if (finished_) {
-        return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::invalid_state});
-    }
-    std::size_t index = 0;
-    if (!reserve_slot_(index)) {
-        return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::would_block});
-    }
-#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
-    auto accepted = ctx_.submit_sync_data(op);
-    Reservation guard{this, index};
-#else
-    Reservation guard{this, index};
-    auto accepted = ctx_.submit_sync_data(op);
-#endif
-    if (!accepted.has_value()) {
-        return make_unexpected<ScopeTicket<void>>(accepted.error());
-    }
-    const RequestId id = accepted.value().id();
-    commit_<void>(index, std::move(accepted).value());
-    guard.committed = true;
-    return ScopeTicket<void>{id};
+    return submit_ticket_(std::move(op), &AsyncIoContext::submit_sync_data);
 }
 
 Result<ScopeTicket<void>> RequestScope::submit_sync_all(SyncAllOp op) {
-    if (finished_) {
-        return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::invalid_state});
-    }
-    std::size_t index = 0;
-    if (!reserve_slot_(index)) {
-        return make_unexpected<ScopeTicket<void>>(IoError{IoError::Code::would_block});
-    }
-#if defined(SLUICE_REQUEST_SCOPE_MUTANT_RESERVE_AFTER_ACCEPT)
-    auto accepted = ctx_.submit_sync_all(op);
-    Reservation guard{this, index};
-#else
-    Reservation guard{this, index};
-    auto accepted = ctx_.submit_sync_all(op);
-#endif
-    if (!accepted.has_value()) {
-        return make_unexpected<ScopeTicket<void>>(accepted.error());
-    }
-    const RequestId id = accepted.value().id();
-    commit_<void>(index, std::move(accepted).value());
-    guard.committed = true;
-    return ScopeTicket<void>{id};
+    return submit_ticket_(std::move(op), &AsyncIoContext::submit_sync_all);
 }
 
 RequestObservation<std::size_t> RequestScope::take(
