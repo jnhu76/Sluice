@@ -159,8 +159,6 @@ class AsyncIoContext {
 
     bool has_split_wait_capability() const noexcept;
 
-    void interrupt_progress_waiters() noexcept;
-
     // Retires the control the owner last observed; control that arrived after
     // that observation stays pending and keeps interrupting later waits. The
     // caller must be the context's attached progress owner: control
