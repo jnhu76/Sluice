@@ -203,8 +203,6 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
         return false;
     if (ctx.has_split_wait_capability())
         return false;
-    if (ctx.has_bounded_split_wait_capability())
-        return false;
     const auto r = ctx.wait_one(std::chrono::milliseconds{1});
     const bool refused = !r.has_value() && r.error().code == IoError::Code::not_supported;
     ctx.detach_progress_host();
@@ -214,7 +212,7 @@ bool non_progress_backend_stays_out_of_the_wait_protocol() {
 bool thread_pool_context_declares_physical_progress() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     AsyncIoContext ctx = detail::make_context(std::move(backend));
-    return ctx.has_split_wait_capability() && ctx.has_bounded_split_wait_capability();
+    return ctx.has_split_wait_capability();
 }
 
 bool move_construction_preserves_progress_responsibility() {

@@ -42,6 +42,22 @@ accumulates under `[Unreleased]`).
   `AsyncStats`-based diagnostics. No compatibility alias, shim or replacement
   struct is provided (D3: no v1 compatibility obligations).
 
+- **async_io_context.hpp: `has_bounded_split_wait_capability()` removed
+  (#643, AUD-012).** Removed
+  `sluice::async::AsyncIoContext::has_bounded_split_wait_capability()` from
+  `include/sluice/async/async_io_context.hpp`. This is an intentional
+  source-breaking public API contraction under owner decisions D2/D3 (v2 root
+  §23.4) and PROD-01: the method was a verbatim forwarding alias of
+  `has_split_wait_capability()`, the surviving public name from the v1
+  dual-capability world, with zero production, application or package
+  consumers — the only in-tree callers were two test assertions, now using
+  `has_split_wait_capability()` directly. `has_split_wait_capability()` and
+  `wait_one(max_park)` are unchanged; no new seam or state is introduced. No
+  compatibility alias or shim is provided (D3: no v1 compatibility
+  obligations); external consumers of the removed alias, if any exist, cannot
+  be enumerated by this repository (disclosed per D3, not assumed absent) —
+  such code will fail to compile and must pin a prior release or call
+  `has_split_wait_capability()`.
 - **async_io_context.hpp: two zero-consumer public accessors removed
   (#643, AUD-013/AUD-014).** Removed
   `sluice::async::AsyncIoContext::stats()` (the `const AsyncStats*` accessor)
