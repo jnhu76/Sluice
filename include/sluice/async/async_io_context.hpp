@@ -250,7 +250,6 @@ class AsyncIoContext {
     struct ObserverCancelResult {
         ObserverCancelStatus status = ObserverCancelStatus::not_found;
         RequestId request{};
-        bool retired() const noexcept { return status == ObserverCancelStatus::retired; }
         bool in_progress() const noexcept {
             return status == ObserverCancelStatus::delivery_in_progress;
         }
@@ -271,7 +270,6 @@ class AsyncIoContext {
     bool delivery_retired(const RequestId& id) const;
 
     std::size_t outstanding() const noexcept;
-    const AsyncStats* stats() const noexcept { return stats_; }
 
   private:
     friend struct detail::ContextFactory;
