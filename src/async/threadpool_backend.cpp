@@ -213,7 +213,7 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::Oper
                                                              detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    wait_submit_entry_pause_();
+    pause_at_gate_(submit_entry_gate_);
 #endif
     if (auto v = validate_op(op); !v.has_value()) {
         return make_unexpected<detail::RequestKey>(v.error());
@@ -273,7 +273,7 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::Oper
         return make_unexpected<detail::RequestKey>(*inj);
     }
 
-    wait_pre_accept_commit_pause_();
+    pause_at_gate_(pre_accept_commit_gate_);
 #endif
 
     const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
@@ -289,7 +289,7 @@ Result<detail::RequestKey> ThreadPoolBackend::submit_request(Op op, detail::Oper
     } else {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-        wait_accepted_pre_dispatch_pause_();
+        pause_at_gate_(accepted_pre_dispatch_gate_);
 #endif
         dispatch_after_accept(h);
     }
@@ -365,7 +365,7 @@ void ThreadPoolBackend::publish_one(detail::RequestReservation h) {
     const detail::OperationKind kind = record.kind;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    wait_publication_epilogue_pause_();
+    pause_at_gate_(publication_epilogue_gate_);
 #endif
     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
         threadpool_publication_invariant_fail_fast();
@@ -377,7 +377,7 @@ void ThreadPoolBackend::deliver_event(detail::RequestKey key, detail::OperationK
     (void)core_->claim_observer_delivery(key);
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    wait_delivery_claimed_pause_();
+    pause_at_gate_(delivery_claimed_gate_);
 #endif
     (routing_sink_ ? *routing_sink_ : sink_).on_ready(detail::ReadyEvent{key, kind});
     (void)core_->retire_observer_delivery(key);
@@ -397,7 +397,7 @@ void ThreadPoolBackend::worker_loop() {
                     return;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-                wait_before_dequeue_pause_();
+                pause_at_gate_(before_dequeue_gate_);
 #endif
                 if (!dispatch_.pop_front(h))
                     continue;
@@ -418,7 +418,7 @@ void ThreadPoolBackend::worker_loop() {
                 signal_ready_progress();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-                wait_unclaimed_retirement_pause_();
+                pause_at_gate_(unclaimed_retirement_gate_);
 #endif
                 continue;
             }
@@ -426,19 +426,22 @@ void ThreadPoolBackend::worker_loop() {
             if (have_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-                wait_worker_claimed_pause_();
+                pause_at_gate_(worker_claimed_gate_);
 #endif
                 sluice::FileInfo metadata;
                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
+#endif
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     --active_workers_;
                 }
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-                wait_worker_outcome_pre_terminal_pause_();
+                pause_at_gate_(worker_outcome_pre_terminal_gate_);
 #endif
 
                 const detail::RequestKey key{core_->context(), h.slot, h.generation};
@@ -466,7 +469,7 @@ void ThreadPoolBackend::worker_loop() {
                 signal_ready_progress();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-                wait_worker_post_completion_signal_pause_();
+                pause_at_gate_(worker_post_completion_signal_gate_);
 #endif
             }
         }
@@ -598,7 +601,7 @@ ProgressPass ThreadPoolBackend::poll_progress() {
     }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    wait_owed_sweep_epilogue_pause_();
+    pause_at_gate_(owed_sweep_epilogue_gate_);
 #endif
 
     ProgressPass pass;
@@ -616,138 +619,6 @@ void ThreadPoolBackend::signal_ready_progress() noexcept {
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-void ThreadPoolBackend::wait_submit_entry_pause_() noexcept {
-    auto* g = submit_entry_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_pre_accept_commit_pause_() noexcept {
-    auto* g = pre_accept_commit_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_accepted_pre_dispatch_pause_() noexcept {
-    auto* g = accepted_pre_dispatch_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_before_dequeue_pause_() noexcept {
-    auto* g = before_dequeue_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_worker_claimed_pause_() noexcept {
-    auto* g = worker_claimed_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_unclaimed_retirement_pause_() noexcept {
-    auto* g = unclaimed_retirement_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_worker_outcome_pre_terminal_pause_() noexcept {
-    auto* g = worker_outcome_pre_terminal_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_worker_post_completion_signal_pause_() noexcept {
-    auto* g = worker_post_completion_signal_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_publication_epilogue_pause_() noexcept {
-    auto* g = publication_epilogue_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_delivery_claimed_pause_() noexcept {
-    auto* g = delivery_claimed_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void ThreadPoolBackend::wait_owed_sweep_epilogue_pause_() noexcept {
-    auto* g = owed_sweep_epilogue_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
 
 std::optional<IoError>
 ThreadPoolBackend::injected_precommit_stage_failure_(SubmitStage stage) noexcept {
@@ -821,6 +692,8 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
     return core_ != nullptr ? core_->outstanding_summary() : 0;
 }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return dispatch_.size();
@@ -830,6 +703,7 @@ std::size_t ThreadPoolBackend::active_workers() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return active_workers_;
 }
+#endif
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 void ThreadPoolBackend::close_admission() {

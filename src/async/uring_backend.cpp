@@ -307,7 +307,7 @@ ProgressPass UringAsyncBackend::poll_progress() {
     ProgressPass pass;
     pass.completed = poll();
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-    wait_delivery_sweep_epilogue_pause_();
+    pause_at_gate_(delivery_sweep_epilogue_gate_);
 #endif
     {
         std::lock_guard<std::mutex> lk(dispatch_mtx_);
@@ -430,7 +430,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
                                                              detail::RequestOp core_op) {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    wait_submit_entry_pause_();
+    pause_at_gate_(submit_entry_gate_);
 #endif
     if (auto v = validate_op(op); !v.has_value()) {
         return make_unexpected<detail::RequestKey>(v.error());
@@ -514,7 +514,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
         return make_unexpected<detail::RequestKey>(*inj);
     }
 
-    wait_pre_accept_commit_pause_();
+    pause_at_gate_(pre_accept_commit_gate_);
 #endif
 
     const detail::RequestDescriptor descriptor{core_op, offset, length, zero_op};
@@ -530,7 +530,7 @@ Result<detail::RequestKey> UringAsyncBackend::submit_request(Op op, detail::Oper
     } else {
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-        wait_accepted_pre_dispatch_pause_();
+        pause_at_gate_(accepted_pre_dispatch_gate_);
 #endif
         dispatch_after_accept(h);
     }
@@ -601,7 +601,7 @@ void UringAsyncBackend::publish_one(detail::RequestReservation h) {
     const detail::OperationKind kind = record.kind;
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
-    wait_publication_epilogue_pause_();
+    pause_at_gate_(publication_epilogue_gate_);
 #endif
     if (core_->complete_publication(key) != detail::PublicationCompletion::completed) {
         detail::uring_core_handoff_fail_fast();
@@ -726,66 +726,6 @@ detail::PublicCancel UringAsyncBackend::cancel_identity(detail::RequestKey key) 
 }
 
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
-
-void UringAsyncBackend::wait_submit_entry_pause_() noexcept {
-    auto* g = submit_entry_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void UringAsyncBackend::wait_pre_accept_commit_pause_() noexcept {
-    auto* g = pre_accept_commit_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void UringAsyncBackend::wait_accepted_pre_dispatch_pause_() noexcept {
-    auto* g = accepted_pre_dispatch_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void UringAsyncBackend::wait_publication_epilogue_pause_() noexcept {
-    auto* g = publication_epilogue_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
-
-void UringAsyncBackend::wait_delivery_sweep_epilogue_pause_() noexcept {
-    auto* g = delivery_sweep_epilogue_gate_.load(std::memory_order_acquire);
-    if (g == nullptr)
-        return;
-    g->exited.store(false, std::memory_order_release);
-    g->paused.store(true, std::memory_order_release);
-    g->paused.notify_all();
-    g->resume.wait(false, std::memory_order_acquire);
-    g->exited.store(true, std::memory_order_release);
-    g->exited.notify_all();
-}
 
 std::optional<IoError>
 UringAsyncBackend::injected_precommit_stage_failure_(SubmitStage stage) noexcept {

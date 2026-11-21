@@ -1,4 +1,4 @@
-/* e4 (#474) test-only LD_PRELOAD interposer for the real sluice-tail child.
+/* Test-only LD_PRELOAD interposer for the real sluice-tail child.
  *
  * Active only when every SLUICE_TAIL_SHIM_* variable is present; the parent
  * harness gates it to one target file (dev/ino) and one fifo pair. PRE /

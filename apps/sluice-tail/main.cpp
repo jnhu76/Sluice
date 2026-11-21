@@ -130,10 +130,11 @@ int main(int argc, char** argv) {
     }
     const auto& r = result.value();
     if (r.error.has_value()) {
-        std::fprintf(stderr, "%s: %s: %s%s%s\n", argv[0], args.file.c_str(),
+        std::fprintf(stderr, "%s: %s: %s%s%s%s\n", argv[0], args.file.c_str(),
                      r.error->code == sluice::IoError::Code::canceled ? "canceled" : "read error",
                      r.error->os_errno ? " (" : "",
-                     r.error->os_errno ? std::strerror(r.error->os_errno) : "");
+                     r.error->os_errno ? std::strerror(r.error->os_errno) : "",
+                     r.error->os_errno ? ")" : "");
         return 2;
     }
 

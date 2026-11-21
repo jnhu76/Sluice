@@ -67,15 +67,10 @@ bool success_is_exact_progress() {
            scalar.effect.confirmed_bytes == 0;
 }
 
-bool failed_dispatched_attempt_is_unknown_in_both_directions() {
-    const IoOutcome write_failure = failed_dispatched_attempt(kEio, 2);
-    if (write_failure.effect.remaining != EffectCertainty::unknown)
-        return false;
-    if (write_failure.effect.confirmed_bytes != 2)
-        return false;
-    const IoOutcome read_failure = failed_dispatched_attempt(kEio, 2);
-    return read_failure.effect.remaining == EffectCertainty::unknown &&
-           read_failure.effect.confirmed_bytes == 2;
+bool failed_dispatched_attempt_is_unknown_with_confirmed_prefix() {
+    const IoOutcome failure = failed_dispatched_attempt(kEio, 2);
+    return failure.effect.remaining == EffectCertainty::unknown &&
+           failure.effect.confirmed_bytes == 2;
 }
 
 bool prefix_only_terminal_cannot_carry_v15() {
@@ -135,8 +130,8 @@ int main() {
         {"case_d_unknown_remaining_effect", case_d_unknown_remaining_effect},
         {"pre_execution_cancel_reports_known_zero", pre_execution_cancel_reports_known_zero},
         {"success_is_exact_progress", success_is_exact_progress},
-        {"failed_dispatched_attempt_is_unknown_in_both_directions",
-         failed_dispatched_attempt_is_unknown_in_both_directions},
+        {"failed_dispatched_attempt_is_unknown_with_confirmed_prefix",
+         failed_dispatched_attempt_is_unknown_with_confirmed_prefix},
         {"prefix_only_terminal_cannot_carry_v15", prefix_only_terminal_cannot_carry_v15},
     };
 
