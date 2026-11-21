@@ -1,14 +1,24 @@
 # clang-tidy configuration for sluice.
 #
-# Philosophy: enable genuinely useful, low-controversy checks. Deliberately
-# DISABLE the famously-opinionated checks that would force a codebase-wide
-# style rewrite diverging from sluice's established conventions:
+# Philosophy: enable genuinely useful, low-controversy checks. `Checks` lists
+# the effective enable set; the trailing negations are the complete deliberate
+# exclusion set, and no enable earlier in the list is cancelled by one (the
+# effective set is unchanged by this cleanup).
+#
+# Specific rationale:
 #   - modernize-use-trailing-return-type: demands `auto f() -> T` for every
 #     function; sluice uses leading return types throughout. Enabling this would
 #     churn every header for zero correctness/robustness gain.
 #   - bugprone-easily-swappable-parameters: fires on any two adjacent params of
 #     the same type; noisy, rarely actionable (renaming doesn't add safety).
 #   - performance-enum-size: micro-optimization; enum storage is not hot here.
+#
+# The remaining negations preserve the previously reviewed effective set:
+# the misc-* subset, readability-magic-numbers / -function-cognitive-complexity
+# / -simplify-boolean-expr, the two cppcoreguidelines-pro-bounds-* checks,
+# cert-err58-cpp / cert-err33-c, bugprone-empty-catch,
+# modernize-use-designated-initializers and
+# performance-unnecessary-copy-initialization.
 Checks: >
   -*,
   bugprone-assert-side-effect,
@@ -17,7 +27,6 @@ Checks: >
   bugprone-bool-pointer-implicit-conversion,
   bugprone-copy-constructor-init,
   bugprone-dangling-handle,
-  bugprone-empty-catch,
   bugprone-exception-escape,
   bugprone-fold-init-type,
   bugprone-forwarding-reference-overload,
@@ -72,8 +81,6 @@ Checks: >
   cppcoreguidelines-pro-type-cstyle-cast,
   cppcoreguidelines-pro-type-static-cast-downcast,
   cppcoreguidelines-slicing,
-  cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-  cppcoreguidelines-pro-bounds-constant-array-index,
   misc-*,
   modernize-avoid-bind,
   modernize-avoid-c-arrays,
@@ -92,7 +99,6 @@ Checks: >
   modernize-unary-static-assert,
   modernize-use-bool-literals,
   modernize-use-default-member-init,
-  modernize-use-designated-initializers,
   modernize-use-emplace,
   modernize-use-equals-default,
   modernize-use-equals-delete,
@@ -108,26 +114,20 @@ Checks: >
   readability-container-size-empty,
   readability-delete-null-pointer,
   readability-else-after-return,
-  readability-function-cognitive-complexity,
   readability-implicit-bool-conversion,
   readability-isolate-declaration,
-  readability-magic-numbers,
   readability-make-member-function-const,
   readability-non-const-parameter,
   readability-qualified-auto,
   readability-redundant-control-flow,
   readability-redundant-string-cstr,
   readability-redundant-string-init,
-  readability-simplify-boolean-expr,
   readability-static-definition-in-anonymous-namespace,
   readability-string-compare,
   readability-uniqueptr-delete-release,
   readability-uppercase-literal-suffix,
   readability-use-anyofallof,
-  -bugprone-easily-swappable-parameters,
-  -modernize-use-trailing-return-type,
   -performance-enum-size,
-  -readability-identifier-naming,
   -misc-include-cleaner,
   -misc-non-private-member-variables-in-classes,
   -misc-const-correctness,
@@ -137,26 +137,17 @@ Checks: >
   -cert-err58-cpp,
   -misc-use-anonymous-namespace,
   -misc-unused-using-decls,
-  -cppcoreguidelines-avoid-non-const-global-variables,
   -readability-function-cognitive-complexity,
   -bugprone-empty-catch,
   -performance-unnecessary-copy-initialization,
   -modernize-use-designated-initializers,
-  -bugprone-narrowing-conversions,
-  -cppcoreguidelines-narrowing-conversions,
   -readability-simplify-boolean-expr,
   -cert-err33-c
 WarningsAsErrors: ''
 HeaderFilterRegex: 'include/sluice/.*'
 FormatStyle: file
 CheckOptions:
-  - key:   readability-magic-numbers.IgnoredIntegerValues
-    value: '0;1;2;3;4;5;8;16;-1;-1'
-  - key:   readability-magic-numbers.IgnoredFloatingPointValues
-    value: '1.0;0.0'
   - key:   readability-implicit-bool-conversion.AllowIntegerConditions
     value: 'true'
   - key:   readability-implicit-bool-conversion.AllowPointerConditions
     value: 'true'
-  - key:   readability-function-cognitive-complexity.Threshold
-    value: '40'

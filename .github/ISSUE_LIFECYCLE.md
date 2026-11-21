@@ -143,7 +143,7 @@ Implementation semantics remain governed by:
 
 1. explicit current task / approved issue scope;
 2. accepted ADRs and active design/closeout documents;
-3. architecture constitution;
+3. the v2 root (`docs/explicit-io-contract.md`);
 4. `AGENTS.md`;
 5. public API and production implementation;
 6. tests and formal evidence.

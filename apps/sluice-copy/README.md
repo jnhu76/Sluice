@@ -65,21 +65,23 @@ and the TOTAL pipeline allocation is the primary constraint:
 | `kMaxPipelineDepth`      | 64     | number of pipeline slots                     |
 | `kMaxPipelineBytes`      | 512 MiB | total `buffer_size * pipeline_depth` budget |
 
-Values beyond a limit are rejected **before any allocation**, but the exit code
-depends on which limit and which layer rejects it (measured on the current
-tree, see "Rejections" below):
+Values beyond a limit are rejected **before any allocation**. The CLI parser
+applies the same `valid_config` limits as the engine (`cli_parse.cpp`), so every
+over-cap flag value is a usage error before any file access:
 
 | rejected value                     | rejected by        | CLI result        |
 | ---------------------------------- | ------------------ | ----------------- |
 | `--workers` > 64                   | CLI parser         | usage error, exit 1 |
 | any of the three flags = 0         | CLI parser         | usage error, exit 1 |
-| `--buffer-size` > 64 MiB           | engine validation  | `invalid_state`, exit 2 |
-| `--pipeline-depth` > 64            | engine validation  | `invalid_state`, exit 2 |
-| `buffer_size * pipeline_depth` > 512 MiB | engine validation | `invalid_state`, exit 2 |
+| `--buffer-size` > 64 MiB           | CLI parser         | usage error, exit 1 |
+| `--pipeline-depth` > 64            | CLI parser         | usage error, exit 1 |
+| `buffer_size * pipeline_depth` > 512 MiB | CLI parser   | usage error, exit 1 |
 
-The three engine-rejected rows print `copy failed: invalid_state` on stderr, not
-the usage text. `--buffer-size 8388608 --pipeline-depth 64` (exactly 512 MiB) is
-accepted. This is a reference copy app, not an arbitrary thread/allocator factory.
+The engine still rejects the same values with `invalid_state` for direct
+`run_pipelined_copy*` callers; that path is covered by
+`app_copy_pipeline_oracle_test` and is not reachable through this CLI.
+`--buffer-size 8388608 --pipeline-depth 64` (exactly 512 MiB) is accepted. This
+is a reference copy app, not an arbitrary thread/allocator factory.
 
 ### Input domain: regular files only
 
@@ -134,9 +136,11 @@ above. Integer parsing is strict: negative numbers, signs, trailing junk
 (`123abc`, `1MiB`), and values that overflow `size_t` are usage errors — no
 silent narrowing or truncation.
 
-The CLI parser does **not** range-check `--buffer-size` or `--pipeline-depth`;
-those limits are enforced by `run_pipelined_copy*`, so an over-cap value
-surfaces as exit 2 with `copy failed: invalid_state` rather than a usage error.
+The CLI parser range-checks `--buffer-size`, `--pipeline-depth` and their
+product through the same `valid_config` limits as the engine, so an over-cap
+value is a usage error (exit 1), not an engine failure. The engine's
+`invalid_state` rejection remains reachable only for direct
+`run_pipelined_copy*` consumers.
 
 ## Algorithm and lifetime
 
@@ -200,7 +204,7 @@ NOT guaranteed (documented scope):
 - with `--sync data|all`, a *directory* fsync failure is reported as exit 2
   **after** the rename already happened: the destination holds the new
   content; only the crash-durability of the rename is missing. An interrupted
-  (`EINTR`) directory fsync is retried through Sluice's POSIX retry authority
+  (`EINTR`) directory fsync is retried by the application's local retry loop
   before any durability failure is reported; a real fsync error is reported
   verbatim. This does not broaden the application's documented
   platform-support or durability guarantees;

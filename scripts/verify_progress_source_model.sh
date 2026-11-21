@@ -76,45 +76,15 @@
 #        InvSafePark: the same defect class as the ExhTermProgress
 #        certificate, staged from normal Init through the restored pump.
 #
-# TLC retrieval is pinned and checksummed exactly as scripts/verify_tla.sh;
+# TLC retrieval is pinned and checksummed by scripts/tlc_bootstrap.sh;
 # the jar is never committed.
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 tla="$repo/formal/tla"
 
-TLA2TOOLS_VERSION="1.7.4"
-TLA2TOOLS_SHA256="936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
-TLA2TOOLS_URL="https://github.com/tlaplus/tlaplus/releases/download/v${TLA2TOOLS_VERSION}/tla2tools.jar"
-jar="$tla/tla2tools.jar"
-
-jar_sha() { sha256sum "$1" | cut -d' ' -f1; }
-
-if [[ -n "${SLUICE_TLA2TOOLS_JAR:-}" ]]; then
-    if [[ "$(jar_sha "$SLUICE_TLA2TOOLS_JAR")" != "$TLA2TOOLS_SHA256" ]]; then
-        echo "SLUICE_TLA2TOOLS_JAR checksum mismatch: refusing to verify" >&2
-        exit 1
-    fi
-    jar="$SLUICE_TLA2TOOLS_JAR"
-    echo "== TLC jar (SLUICE_TLA2TOOLS_JAR override, checksum ok): $jar =="
-elif [[ -f "$jar" && "$(jar_sha "$jar")" == "$TLA2TOOLS_SHA256" ]]; then
-    echo "== TLC jar (cached, checksum ok): v$TLA2TOOLS_VERSION =="
-elif [[ -f "$jar" ]]; then
-    echo "formal/tla/tla2tools.jar exists but its SHA-256 does not match pinned" >&2
-    exit 1
-else
-    echo "== TLC jar absent: bootstrapping pinned v$TLA2TOOLS_VERSION =="
-    curl -fSL --retry 3 -o "$jar" "$TLA2TOOLS_URL" || {
-        rm -f "$jar"
-        echo "needs: java, curl and network; or pre-provision SLUICE_TLA2TOOLS_JAR" >&2
-        exit 1
-    }
-    if [[ "$(jar_sha "$jar")" != "$TLA2TOOLS_SHA256" ]]; then
-        rm -f "$jar"
-        echo "tla2tools SHA-256 mismatch: refusing to verify" >&2
-        exit 1
-    fi
-fi
+# TLC retrieval is pinned and checksummed by the shared bootstrap.
+source "$repo/scripts/tlc_bootstrap.sh"
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
