@@ -1,0 +1,90 @@
+name: Sluice v0.0.4 source release (one-shot)
+
+on:
+  push:
+    branches:
+      - release/v0.0.4-publish-20261122
+    paths:
+      - .github/workflows/release-v0.0.4-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sluice-v0.0.4-source-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'jnhu76/Sluice'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out the exact reviewed source commit
+        uses: actions/checkout@v6
+        with:
+          ref: 93778617c91363c1fdbf279d8a60b20e9c08927b
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fail closed on source/branch drift and release-note mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected='93778617c91363c1fdbf279d8a60b20e9c08927b'
+          test "$(git rev-parse HEAD)" = "$expected"
+          test "$(git ls-remote origin refs/heads/master | cut -f1)" = "$expected"
+          test "$(git diff --name-only 8832df687d248d0c7ee49fe291fc694d3141f279 HEAD)" = 'CHANGELOG.md'
+          test -z "$(git status --porcelain)"
+          grep -Fxq '## [0.0.4] - 2026-11-22' CHANGELOG.md
+          grep -Fq 'Source compatibility:' CHANGELOG.md
+          grep -Fq 'No new TLC 55-configuration run' CHANGELOG.md
+
+      - name: Install liburing headers
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq liburing-dev
+
+      - name: Set up Xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: '3.0.9'
+
+      - name: Verify release SDK in both liburing profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/verify_v2_package.py --mode release --liburing --manifest-out "$RUNNER_TEMP/v0.0.4-liburing.json"
+          python3 scripts/verify_v2_package.py --mode release --manifest-out "$RUNNER_TEMP/v0.0.4-noliburing.json"
+
+      - name: Create immutable annotated tag and publish GitHub source release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          expected='93778617c91363c1fdbf279d8a60b20e9c08927b'
+          tag='v0.0.4'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin --tags
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            actual="$(git rev-parse "$tag^{}")"
+            test "$actual" = "$expected" || { echo 'Existing tag targets wrong commit' >&2; exit 1; }
+            test "$(git cat-file -t "$tag")" = 'tag' || { echo 'Expected an annotated tag' >&2; exit 1; }
+          else
+            git tag -a "$tag" "$expected" -m 'Sluice v0.0.4'
+            git push origin "refs/tags/$tag"
+          fi
+          notes="$RUNNER_TEMP/sluice-v0.0.4-release-notes.md"
+          awk '/^## \[0\.0\.4\]/{p=1} /^## \[0\.0\.3\]/{p=0} p' CHANGELOG.md > "$notes"
+          test -s "$notes"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'Release already exists; leaving it untouched'
+          else
+            gh release create "$tag" --verify-tag --title 'Sluice v0.0.4' --notes-file "$notes" --latest
+          fi
+          actual="$(git ls-remote origin "refs/tags/$tag^{}" | cut -f1)"
+          test "$actual" = "$expected"
+          gh release view "$tag" --json tagName,isDraft,isPrerelease,url --jq '.tagName + " " + .url'
