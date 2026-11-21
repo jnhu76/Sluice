@@ -59,12 +59,11 @@ class ThreadPoolBackend : public AsyncBackend {
 
     std::size_t slot_capacity() const noexcept override { return capacity_; }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
     std::size_t dispatch_occupancy() const;
 
-
     std::size_t active_workers() const;
-
-#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
 
     std::size_t workers_spawned_for_test() const noexcept;
     std::size_t active_workers_for_test() const;
@@ -255,9 +254,9 @@ class ThreadPoolBackend : public AsyncBackend {
 
     std::vector<std::thread> workers_;
 
-    std::atomic<std::uint64_t> syscall_count_{0};
-
 #if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
+    std::atomic<std::uint64_t> syscall_count_{0};
 
     std::atomic<SubmitEntryPauseGate*> submit_entry_gate_{nullptr};
     std::atomic<PreAcceptCommitPauseGate*> pre_accept_commit_gate_{nullptr};
