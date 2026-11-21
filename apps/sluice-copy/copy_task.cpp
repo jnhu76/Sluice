@@ -153,17 +153,18 @@ struct PipelinedCopyTask {
         stats.sync = sync;
 
         bool eof_seen = false;
+        bool stop_submissions = false;
 
         std::optional<IoError> primary_error;
 
         auto fail = [&](IoError e) {
             if (!primary_error.has_value())
                 primary_error = e;
-            eof_seen = true;
+            stop_submissions = true;
         };
 
         for (std::size_t i = 0; i < pipeline_depth; ++i) {
-            if (eof_seen)
+            if (stop_submissions)
                 break;
             auto& s = slots[i];
             auto rsr = submit_slot_read(scope, *s);
@@ -218,7 +219,7 @@ struct PipelinedCopyTask {
                     break;
                 }
 
-                if (ws->eof || eof_seen) {
+                if (ws->eof || eof_seen || stop_submissions) {
                     ws->state = SlotState::done;
                 } else {
                     if (add_would_overflow(ws->chunk_offset, buffer_size * pipeline_depth)) {
@@ -232,7 +233,6 @@ struct PipelinedCopyTask {
                     ws->state = SlotState::idle;
                     auto rsr = submit_slot_read(scope, *ws);
                     if (!rsr.has_value()) {
-                        eof_seen = true;
                         ws->state = SlotState::done;
                         fail(rsr.error());
                         break;
