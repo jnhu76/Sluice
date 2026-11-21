@@ -15,6 +15,41 @@ accumulates under `[Unreleased]`).
 
 ## [Unreleased]
 
+## [0.0.4] - 2026-11-22
+
+**Explicit-I/O correctness and simplicity maintenance release.** This is a
+source-only release of the v2-r1 implementation (no prebuilt binaries). It
+includes direct-I/O cost reductions, bounded progress improvements and the
+repo-wide #643 audit closeout. The supported installed-header *set* remains
+11 headers; the *contents* of two public headers intentionally contract.
+
+**Source compatibility:** unlike v0.0.3, v0.0.4 removes several previously
+installed public declarations. Code using the retired types or methods will
+not compile without migration or pinning an earlier version; in-tree
+zero-consumer scans do not establish that out-of-tree users do not exist.
+See Removed below and v2 root D3. This release makes no ABI-stability claim.
+
+### Changed
+
+- **Direct path (#600/#608).** The blocking path avoids a temporary
+  precheck-verdict object in admission and uses prevalidated,
+  register-resident steps for short-I/O read compositions. Shared File
+  semantics, EINTR/short-I/O behavior and the single entry admission remain
+  governed by the v2 root; evidence and deliberately limited performance
+  claims are in the linked PRs (#602 and #612).
+- **Audit #643: less test-only and duplicate machinery in release builds.**
+  Removed unconsumed internal helpers and aliases, gated ThreadPool
+  diagnostic counters and backend admission-control seams to test builds,
+  consolidated duplicate submit/scope code and test pause gates, and
+  corrected dated TLA+ correspondence notes. A production-reachable
+  io_uring capability probe remains deliberately available. These are
+  implementation and evidence refinements, not new v2 contract promises.
+- **Reference applications and tools.** The copy application shares its
+  own file-descriptor guard/source validation, uses canonical IoError names,
+  makes its request-capacity bound explicit and describes modes by
+  behavior (sequential/pipelined/atomic output). TLC jar bootstrap and
+  package verifier documentation/configuration have been deduplicated.
+
 ### Removed
 
 - **measurement.hpp: six retired public diagnostic types (#643, AUD-003).**
@@ -102,6 +137,22 @@ accumulates under `[Unreleased]`).
   assumed absent) — such code will fail to compile and must pin a prior
   release or compare `ObserverCancelStatus::retired` directly.
 
+### Fixed
+
+- **Two high-priority concurrency defects (#643, AUD-001/002).** io_uring
+  admission-health probes now use the correct lock domain; won-cancel
+  diagnostic counting is synchronized with the owning backend lock.
+  Both fixes preserve the existing authority and do not introduce new
+  independent runtime state (#644/#645).
+- **Oracle and application correctness (#643).** File-close validation now
+  observes the actual native descriptor state; semantic comparison oracles
+  carry independent negative controls (#646). Five CLI errno failure
+  messages close their optional parenthesized native-error suffix (#648).
+- **Progress test coverage.** The production `AsyncIoContext::close_admission()`
+  path has an independent open-to-closed, signal-once transition oracle;
+  backend-only admission closure is explicitly test instrumentation
+  (#660), not claimed as production-path mutation coverage.
+
 ### Performance
 
 - **ProgressSource: one-read notification drain (#621).** A successful
@@ -139,6 +190,22 @@ accumulates under `[Unreleased]`).
   cannot exclude a regression that small); no measured cell regressed.
   Evidence:
   `docs/evidence/621-threadpool-owed-count-20261112/`.
+
+### Verification and limitations
+
+- #643 records 60/60 findings with explicit code changes or justified
+  KEEP/NO_GO/MEASURE_FIRST dispositions; all 19 audit PRs were merged before
+  this release-preparation commit. The joint-branch debug/liburing=y run
+  recorded 85/85 tests passing; release package verifier profiles with and
+  without liburing passed according to the #643 evidence.
+- The last code-equivalent master `221c260a` passed GitHub CI; final
+  `8832df68` added only a conformance-ledger note and did not trigger
+  a separate CI workflow. The v0.0.2 release's full eight-cell acceptance
+  matrix is **historical**, not a fresh v0.0.4 matrix.
+- No new TLC 55-configuration run was performed for this audit round.
+  Correspondence-only documentation changes do not extend the historical
+  bounded model claims. No new all-workloads throughput, latency or
+  kernel-backend performance guarantee is made.
 
 ## [0.0.3] - 2026-10-23
 
