@@ -42,6 +42,25 @@ accumulates under `[Unreleased]`).
   `AsyncStats`-based diagnostics. No compatibility alias, shim or replacement
   struct is provided (D3: no v1 compatibility obligations).
 
+- **async_io_context.hpp: `interrupt_progress_waiters()` removed (#643,
+  AUD-011).** Removed
+  `sluice::async::AsyncIoContext::interrupt_progress_waiters()` from
+  `include/sluice/async/async_io_context.hpp`. This is an intentional
+  source-breaking public API contraction under owner decisions D2/D3
+  (v2 root §23.4) and PROG-04 (the control vocabulary is
+  `request_stop`/`close_admission` only): the bare public interrupt was a
+  test instrument on the installed surface with zero production callers —
+  the 22 in-tree test call sites now use the existing
+  `TestAccess::context_progress_source(ctx)->interrupt()` seam, and
+  production wake injection stays on `request_stop()`'s internal
+  `progress_->interrupt()` and `close_admission()`.
+  `ProgressSource::interrupt()` itself is unchanged, and no new seam, state,
+  flag or lock is introduced. No compatibility alias or shim is provided
+  (D3: no v1 compatibility obligations); external consumers of the removed
+  method, if any exist, cannot be enumerated by this repository (disclosed
+  per D3, not assumed absent) — such code will fail to compile and must pin
+  a prior release or migrate to `request_stop()`.
+
 ### Performance
 
 - **ProgressSource: one-read notification drain (#621).** A successful
