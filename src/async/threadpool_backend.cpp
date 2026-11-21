@@ -431,7 +431,10 @@ void ThreadPoolBackend::worker_loop() {
                 sluice::FileInfo metadata;
                 const sluice::detail::IoOutcome outcome = run_syscall(op, &metadata);
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
                 syscall_count_.fetch_add(1, std::memory_order_relaxed);
+#endif
                 {
                     std::lock_guard<std::mutex> wl(work_mtx_);
                     --active_workers_;
@@ -821,6 +824,8 @@ std::size_t ThreadPoolBackend::outstanding() const noexcept {
     return core_ != nullptr ? core_->outstanding_summary() : 0;
 }
 
+#if defined(SLUICE_ASYNC_INTERNAL_TESTING)
+
 std::size_t ThreadPoolBackend::dispatch_occupancy() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return dispatch_.size();
@@ -830,6 +835,7 @@ std::size_t ThreadPoolBackend::active_workers() const {
     std::lock_guard<std::mutex> lk(work_mtx_);
     return active_workers_;
 }
+#endif
 
 void ThreadPoolBackend::close_admission() {
 #if defined(SLUICE_PROGRESS_SOURCE_MUTANT_CLOSE_ADMISSION_ALWAYS_SIGNALS)
