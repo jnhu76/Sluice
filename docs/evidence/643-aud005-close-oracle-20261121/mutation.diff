@@ -1,0 +1,14 @@
+diff --git a/src/file_resource.cpp b/src/file_resource.cpp
+index 62e1a678..2c896baf 100644
+--- a/src/file_resource.cpp
++++ b/src/file_resource.cpp
+@@ -108,7 +108,8 @@ Result<void> File::close() noexcept {
+     // An EINTR retry of close is unsafe on Linux, so the first attempt is
+     // terminal.
+     const int fd = std::exchange(fd_, -1);
+-    if (close_native(fd) != 0) {
++    // AUD-005 one-shot mutation: skip the kernel close, keep the success path.
++    if (fd < 0 && close_native(fd) != 0) {
+         return make_unexpected<void>(from_errno_value(errno));
+     }
+     return {};

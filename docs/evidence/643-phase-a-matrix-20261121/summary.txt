@@ -1,0 +1,6 @@
+cell=release-y mode=release liburing=y toolchain=gcc configure=0 build=0 test=0
+cell=debug-y mode=debug liburing=y toolchain=gcc configure=0 build=0 test=0
+cell=release-n mode=release liburing=n toolchain=gcc configure=0 build=0 test=0
+cell=debug-n mode=debug liburing=n toolchain=gcc configure=0 build=0 test=0
+cell=asanubsan-y mode=asanubsan liburing=y toolchain=clang configure=0 build=0 test=0
+cell=tsan-y mode=tsan liburing=y toolchain=gcc configure=0 build=0 test=0

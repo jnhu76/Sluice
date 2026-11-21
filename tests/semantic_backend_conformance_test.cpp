@@ -20,6 +20,11 @@ using sluice::async::UringAsyncBackend;
 
 // A kernel that refuses io_uring setup must produce NOT RUN, never a vacuous pass.
 int main() {
+    if (!sluice_semantic::comparison_oracle_selfcheck()) {
+        std::fprintf(stderr, "FAIL: the semantic-oracle comparison harness failed its self-check\n");
+        return 1;
+    }
+
     bool ring_available = false;
     try {
         ring_available = UringAsyncBackend().available();

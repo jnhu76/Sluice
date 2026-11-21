@@ -1,0 +1,5 @@
+# KILLED: repaired test (worktree tests/file_resource_test.cpp as of this evidence) under close-skipping mutation
+# tree: /tmp/sluice-aud005-mutant @ e16960ff + mutation.diff + repaired test copied in
+# command: $MB (direct binary run after 'xmake build file_resource_test')
+FAIL: open_exposes_live_descriptor_and_close_releases_it
+exit=1

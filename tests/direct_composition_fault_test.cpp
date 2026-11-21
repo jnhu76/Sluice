@@ -660,6 +660,11 @@ bool composition_surfaces_obey_the_precedence_table() {
 }
 
 int main() {
+    if (!sluice_semantic::comparison_oracle_selfcheck()) {
+        std::fprintf(stderr, "FAIL: the semantic-oracle comparison harness failed its self-check\n");
+        return 1;
+    }
+
     if (sluice_semantic::check_oracle_against_table(
             sluice_semantic::kPrecedenceScenarios,
             sluice_semantic::kPrecedenceScenarioCount) != 0) {
