@@ -626,6 +626,28 @@ mechanism justification and the authority-contraction audit per AGENTS.md.
   `mtx_`, one host, btrfs, warm cache, one worker. Not established: wall,
   energy, io_uring end-to-end, multi-worker, cold cache, real kernel EINTR.
 
+## Dated 2026-11-21 construction-chain and Slot-fill cleanup (AUD-018/019, #643)
+
+AUD-018 — adjudicated retained: the proposed resolution (delete
+`detail::ContextFactory`, make the free function `detail::make_context` the
+friend) is infeasible under the installed-surface seam gate
+(`scripts/verify_v2_package.py::run_seam_negative_probes` fails
+`NEGATIVE_V2_SEAM_UNAVAILABLE` when any installed header mentions
+`make_context`). The friend must be named in `async_io_context.hpp`, and the
+only non-forbidden name there is the existing `ContextFactory` access struct,
+so the struct-plus-forwarder remains the minimum mechanism compatible with the
+seam policy. Attempting the free-function friend was reverted after the gate
+reported `sluice/async/async_io_context.hpp declares detail::make_context`.
+No code change for AUD-018; the residual is one internal forwarder, not a
+contract or authority.
+
+AUD-019: three zero-reader `*_layout_pad` fields in `RequestCore::Slot`
+(`accepted_layout_pad`, `cancel_intent_layout_pad`, `zero_op_layout_pad`) and
+their three dead reset stores are removed. No reader, offsetof, sizeof
+assertion or snapshot consumer names them; alignment is left to the compiler.
+No modeled transition changes (the fields are storage, not protocol), so the
+RequestCore/ProgressSource models are untouched; TLC was not rerun (owner
+directive for this campaign).
 ## Dated 2026-11-21 AUD-009 adjudication: backend close_admission() is a test seam (BACKEND-04, VERIFY-06, #643)
 
 Owner decision B on the AUD-009 Gate: the two backends' `close_admission()`
