@@ -626,6 +626,20 @@ mechanism justification and the authority-contraction audit per AGENTS.md.
   `mtx_`, one host, btrfs, warm cache, one worker. Not established: wall,
   energy, io_uring end-to-end, multi-worker, cold cache, real kernel EINTR.
 
+## Dated 2026-11-21 AUD-021 re-adjudication: caller-precondition guard, no behavioral oracle (#643)
+
+Review disposition (Owner review on PR #651, 2026-11-21): the eight
+`data() == nullptr` checks in `src/blocking_file.cpp` (read_at :95,
+write_at :116, read :135, write :153, read_exact_at :344, write_all_at :360,
+read_exact :374, write_all :387) are **retained as caller-precondition
+diagnostics (KEEP)**. Under C++20 `std::span(ptr, count)` the range
+`[ptr, ptr + count)` must be valid, so a non-empty span built from `nullptr`
+cannot be produced by a conforming caller: any test that fabricates one
+already invokes undefined behavior before Sluice executes, and passing CI on
+such an input proves nothing about a supported contract. The slice's
+`std::span(nullptr, 4)` case is therefore withdrawn, and no behavioral oracle
+is claimed for the guard. The legal empty span (`nullptr, 0`) is handled by
+the size-zero path and is unaffected. Production code is unchanged.
 ## Dated 2026-11-21 construction-chain and Slot-fill cleanup (AUD-018/019, #643)
 
 AUD-018 — adjudicated retained: the proposed resolution (delete
