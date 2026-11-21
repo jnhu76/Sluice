@@ -183,8 +183,6 @@ class AsyncIoContext {
 
     bool has_split_wait_capability() const noexcept;
 
-    bool has_bounded_split_wait_capability() const noexcept;
-
     void interrupt_progress_waiters() noexcept;
 
     // Retires the control the owner last observed; control that arrived after

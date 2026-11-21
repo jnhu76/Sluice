@@ -713,10 +713,6 @@ bool AsyncIoContext::has_split_wait_capability() const noexcept {
     return backend_ && backend_->signals_physical_progress();
 }
 
-bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
-    return has_split_wait_capability();
-}
-
 int AsyncIoContext::progress_notification_fd() noexcept {
     std::lock_guard<std::mutex> lk(access_mtx_);
 #if defined(SLUICE_SHUTDOWN_MUTANT_M11_ALLOW_NOTIFICATION_BORROW_DURING_SHUTDOWN)
