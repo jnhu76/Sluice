@@ -201,14 +201,8 @@ class RequestCore {
     BindingRelease discard_public_result(RequestKey id) noexcept;
     PublicObservation observe_public_result(RequestKey id, IoOutcome* out,
                                             sluice::FileInfo* metadata_out) const noexcept;
-    PublicObservation observe_public_result(RequestKey id, IoOutcome* out) const noexcept {
-        return observe_public_result(id, out, nullptr);
-    }
     PublicConsumption consume_public_result(RequestKey id, IoOutcome* out,
                                             sluice::FileInfo* metadata_out) noexcept;
-    PublicConsumption consume_public_result(RequestKey id, IoOutcome* out) noexcept {
-        return consume_public_result(id, out, nullptr);
-    }
 
     TerminalVerdict offer_terminal(RequestKey id, const TerminalCandidate& candidate) noexcept;
     ExecutionClaim claim_execution(RequestKey id) noexcept;
@@ -257,14 +251,11 @@ class RequestCore {
     struct Slot {
         SlotPhase phase = SlotPhase::free;
         Generation generation{0};
-        std::uint8_t accepted_layout_pad = 0;
         bool binding_live = false;
         bool terminal_chosen = false;
         bool published = false;
         bool publication_inflight = false;
         bool execution_claimed = false;
-        std::uint8_t cancel_intent_layout_pad = 0;
-        std::uint8_t zero_op_layout_pad = 0;
         ObserverPhase observer_phase = ObserverPhase::unattached;
         std::uint32_t execution_refs = 0;
         std::uint32_t control_refs = 0;

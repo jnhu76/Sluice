@@ -24,6 +24,7 @@ constexpr std::size_t kMaxBufferSize = 64 * 1024 * 1024;
 constexpr std::size_t kMaxPipelineDepth = 64;
 constexpr std::size_t kMaxPipelineBytes = 512 * 1024 * 1024;
 constexpr unsigned kMaxWorkers = 64;
+constexpr std::size_t kRequestCapacity = kMaxPipelineDepth;
 
 inline bool valid_config(std::size_t buffer_size, std::size_t pipeline_depth, unsigned workers) {
     return buffer_size != 0 && pipeline_depth != 0 && workers != 0 &&
@@ -40,15 +41,6 @@ struct CopyStats {
     std::uint64_t short_writes = 0;
     SyncPolicy sync = SyncPolicy::none;
 };
-
-sluice::Result<CopyStats> run_sequential_copy(const sluice::File& src_file,
-                                              const sluice::async::NativeFileRef& dst,
-                                              std::size_t buffer_size, unsigned workers,
-                                              SyncPolicy sync);
-
-sluice::Result<CopyStats> run_sequential_copy_with_context(
-    const sluice::File& src_file, const sluice::async::NativeFileRef& dst, std::size_t buffer_size,
-    unsigned workers, SyncPolicy sync, sluice::async::AsyncIoContext ctx);
 
 sluice::Result<CopyStats> run_pipelined_copy(const sluice::File& src_file,
                                              const sluice::async::NativeFileRef& dst,

@@ -22,7 +22,6 @@ class Sha256 {
     std::uint64_t total_bytes_;
     std::uint8_t buf_[kBlockBytes];
     std::size_t buf_len_;
-    bool finalized_;
 };
 
 void sha256_hex(const std::uint8_t digest[32], char out[65]);

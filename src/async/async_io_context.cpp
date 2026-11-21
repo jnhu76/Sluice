@@ -246,26 +246,32 @@ void update_max_outstanding(AsyncStats* s, std::size_t cur) {
 }
 
 
-Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
-    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
-        rejection.has_value()) {
-        return make_unexpected<Request<std::size_t>>(*rejection);
-    }
+template <class T, class Op>
+Result<Request<T>> AsyncIoContext::submit_op_(Op op,
+                                              Result<detail::RequestKey> (AsyncBackend::*accept)(Op)) {
 #if !defined(SLUICE_THREAD01_MUTANT_SUBMIT_UNSERIALIZED)
     std::lock_guard<std::mutex> lk(access_mtx_);
 #endif
     if (!backend_)
-        return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_read(op);
+        return make_unexpected<Request<T>>(IoError{IoError::Code::invalid_state});
+    auto r = (*backend_.*accept)(std::move(op));
     if (stats_) {
         tally_submit(stats_, r);
         update_max_outstanding(stats_, backend_->outstanding());
     }
     if (!r.has_value())
-        return make_unexpected<Request<std::size_t>>(r.error());
-    return Request<std::size_t>{core_.get(), backend_.get(),
-                          RequestId{r.value().context.value, r.value().slot.value,
-                                    r.value().generation.value}};
+        return make_unexpected<Request<T>>(r.error());
+    return Request<T>{core_.get(), backend_.get(),
+                      RequestId{r.value().context.value, r.value().slot.value,
+                                r.value().generation.value}};
+}
+
+Result<Request<std::size_t>> AsyncIoContext::submit_read(ReadOp op) {
+    if (auto rejection = initiation_rejection(op.file, sluice::detail::FileOperation::read);
+        rejection.has_value()) {
+        return make_unexpected<Request<std::size_t>>(*rejection);
+    }
+    return submit_op_<std::size_t>(std::move(op), &AsyncBackend::submit_read);
 }
 
 Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
@@ -273,19 +279,7 @@ Result<Request<std::size_t>> AsyncIoContext::submit_write(WriteOp op) {
         rejection.has_value()) {
         return make_unexpected<Request<std::size_t>>(*rejection);
     }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_)
-        return make_unexpected<Request<std::size_t>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_write(op);
-    if (stats_) {
-        tally_submit(stats_, r);
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
-    if (!r.has_value())
-        return make_unexpected<Request<std::size_t>>(r.error());
-    return Request<std::size_t>{core_.get(), backend_.get(),
-                          RequestId{r.value().context.value, r.value().slot.value,
-                                    r.value().generation.value}};
+    return submit_op_<std::size_t>(std::move(op), &AsyncBackend::submit_write);
 }
 
 Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
@@ -293,19 +287,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_data(SyncDataOp op) {
         rejection.has_value()) {
         return make_unexpected<Request<void>>(*rejection);
     }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_)
-        return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_sync_data(op);
-    if (stats_) {
-        tally_submit(stats_, r);
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
-    if (!r.has_value())
-        return make_unexpected<Request<void>>(r.error());
-    return Request<void>{core_.get(), backend_.get(),
-                          RequestId{r.value().context.value, r.value().slot.value,
-                                    r.value().generation.value}};
+    return submit_op_<void>(std::move(op), &AsyncBackend::submit_sync_data);
 }
 
 Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
@@ -313,19 +295,7 @@ Result<Request<void>> AsyncIoContext::submit_sync_all(SyncAllOp op) {
         rejection.has_value()) {
         return make_unexpected<Request<void>>(*rejection);
     }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_)
-        return make_unexpected<Request<void>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_sync_all(op);
-    if (stats_) {
-        tally_submit(stats_, r);
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
-    if (!r.has_value())
-        return make_unexpected<Request<void>>(r.error());
-    return Request<void>{core_.get(), backend_.get(),
-                          RequestId{r.value().context.value, r.value().slot.value,
-                                    r.value().generation.value}};
+    return submit_op_<void>(std::move(op), &AsyncBackend::submit_sync_all);
 }
 
 Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
@@ -333,19 +303,7 @@ Result<Request<FileInfo>> AsyncIoContext::submit_file_info(FileInfoOp op) {
         rejection.has_value()) {
         return make_unexpected<Request<FileInfo>>(*rejection);
     }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_)
-        return make_unexpected<Request<FileInfo>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_file_info(op);
-    if (stats_) {
-        tally_submit(stats_, r);
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
-    if (!r.has_value())
-        return make_unexpected<Request<FileInfo>>(r.error());
-    return Request<FileInfo>{core_.get(), backend_.get(),
-                          RequestId{r.value().context.value, r.value().slot.value,
-                                    r.value().generation.value}};
+    return submit_op_<FileInfo>(std::move(op), &AsyncBackend::submit_file_info);
 }
 
 Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
@@ -353,19 +311,7 @@ Result<Request<FileSize>> AsyncIoContext::submit_size(SizeOp op) {
         rejection.has_value()) {
         return make_unexpected<Request<FileSize>>(*rejection);
     }
-    std::lock_guard<std::mutex> lk(access_mtx_);
-    if (!backend_)
-        return make_unexpected<Request<FileSize>>(IoError{IoError::Code::invalid_state});
-    auto r = backend_->submit_size(op);
-    if (stats_) {
-        tally_submit(stats_, r);
-        update_max_outstanding(stats_, backend_->outstanding());
-    }
-    if (!r.has_value())
-        return make_unexpected<Request<FileSize>>(r.error());
-    return Request<FileSize>{core_.get(), backend_.get(),
-                          RequestId{r.value().context.value, r.value().slot.value,
-                                    r.value().generation.value}};
+    return submit_op_<FileSize>(std::move(op), &AsyncBackend::submit_size);
 }
 
 
@@ -377,22 +323,7 @@ Result<CancelDisposition> AsyncIoContext::cancel(const RequestId& id) {
     if (!backend_) {
         return make_unexpected<CancelDisposition>(IoError{IoError::Code::invalid_state});
     }
-    const detail::RequestKey key{detail::ContextIdentity{id.context_},
-                                 detail::SlotIndex{id.slot_},
-                                 detail::Generation{id.generation_}};
-    switch (backend_->cancel_identity(key)) {
-    case detail::PublicCancel::won_before_execution:
-        return CancelDisposition::won_before_execution;
-    case detail::PublicCancel::requested:
-        return CancelDisposition::requested;
-    case detail::PublicCancel::already_terminal:
-        return CancelDisposition::already_terminal;
-    case detail::PublicCancel::not_found:
-        return CancelDisposition::not_found;
-    case detail::PublicCancel::physical_interruption_unsupported:
-        return CancelDisposition::physical_interruption_unsupported;
-    }
-    return CancelDisposition::not_found;
+    return detail::RequestBridge::cancel(backend_.get(), id);
 }
 
 RequestReadiness AsyncIoContext::lookup(const RequestId& id) const {
@@ -584,10 +515,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
             return make_unexpected<ProgressWaitOutcome>(
                 IoError{IoError::Code::invalid_state});
         }
-    }
-
-    {
-        std::lock_guard<std::mutex> lk(access_mtx_);
         if (stats_)
             ++stats_->wait_calls;
     }
@@ -695,12 +622,6 @@ Result<AsyncIoContext::ProgressWaitOutcome> AsyncIoContext::wait_one(
     }
 }
 
-void AsyncIoContext::interrupt_progress_waiters() noexcept {
-    if (progress_) {
-        progress_->interrupt();
-    }
-}
-
 void AsyncIoContext::acknowledge_progress_control() {
     std::lock_guard<std::mutex> lk(access_mtx_);
     if (progress_ != nullptr) {
@@ -711,10 +632,6 @@ void AsyncIoContext::acknowledge_progress_control() {
 
 bool AsyncIoContext::has_split_wait_capability() const noexcept {
     return backend_ && backend_->signals_physical_progress();
-}
-
-bool AsyncIoContext::has_bounded_split_wait_capability() const noexcept {
-    return has_split_wait_capability();
 }
 
 int AsyncIoContext::progress_notification_fd() noexcept {

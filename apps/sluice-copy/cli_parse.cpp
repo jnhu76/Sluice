@@ -33,15 +33,16 @@ int usage(const char* prog) {
                  "usage: %s [options] <source> <destination>\n"
                  "  --buffer-size <bytes>   per-chunk buffer (default 1 MiB;\n"
                  "                          <= %zu bytes)\n"
-                 "  --pipeline-depth <n>    read-ahead slots (default 1; >1 enables the\n"
-                 "                          bounded reusable-buffer pipeline, Version B;\n"
+                 "  --pipeline-depth <n>    read-ahead slots (default 1; >1 enables\n"
+                 "                          the bounded reusable-buffer pipelined mode;\n"
                  "                          <= %zu, buffer_size*depth <= %zu bytes)\n"
                  "  --workers <count>       I/O backend workers (default 1; <= %u)\n"
                  "  --sync none|data|all    durability after copy (default none)\n"
-                 "  --no-atomic             write the destination directly (old Version A/B\n"
-                 "                          behavior; a failure may leave a partial file).\n"
-                 "                          The default is Version C: copy to a temp file in\n"
-                 "                          the destination directory, then rename atomically\n"
+                 "  --no-atomic             write the destination directly (no temp file;\n"
+                 "                          a failure may leave a partial file). The\n"
+                 "                          default is atomic output: copy to a temp file\n"
+                 "                          in the destination directory, then rename\n"
+                 "                          atomically\n"
                  "  --help                  show this help\n",
                  prog, static_cast<std::size_t>(kMaxBufferSize),
                  static_cast<std::size_t>(kMaxPipelineDepth),
@@ -136,25 +137,6 @@ int parse_args(int argc, char** argv, CliArgs& args) {
     if (positionals != 2 || !valid_config(args.buffer_size, args.pipeline_depth, args.workers))
         return usage(argv[0]);
     return 0;
-}
-
-const char* code_name(sluice::IoError::Code c) {
-    switch (c) {
-    case sluice::IoError::Code::eof:
-        return "eof";
-    case sluice::IoError::Code::canceled:
-        return "canceled";
-    case sluice::IoError::Code::no_space:
-        return "no_space";
-    case sluice::IoError::Code::permission_denied:
-        return "permission_denied";
-    case sluice::IoError::Code::invalid_state:
-        return "invalid_state";
-    case sluice::IoError::Code::backend_error:
-        return "backend_error";
-    default:
-        return "io_error";
-    }
 }
 
 }

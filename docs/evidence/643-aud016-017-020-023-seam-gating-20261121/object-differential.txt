@@ -1,0 +1,15 @@
+== nm tp_master.o ==
+00000000000021b0 T sluice::async::ThreadPoolBackend::active_workers() const
+0000000000000142 t sluice::async::ThreadPoolBackend::active_workers() const [clone .cold]
+0000000000002170 T sluice::async::ThreadPoolBackend::dispatch_occupancy() const
+0000000000000136 t sluice::async::ThreadPoolBackend::dispatch_occupancy() const [clone .cold]
+== preprocess counts master ==
+syscall_count: 2
+dispatch_occupancy: 2
+active_workers: 8
+== nm tp_slice.o ==
+(no match)
+== preprocess counts slice ==
+syscall_count: 0
+dispatch_occupancy: 0
+active_workers: 5

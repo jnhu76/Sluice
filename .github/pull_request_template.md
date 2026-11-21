@@ -56,7 +56,7 @@ Examples: async I/O ownership, RequestCore slot lifecycle and identity, terminal
 ### Architecture gate (required only if Yes)
 
 - Design / ADR / compliance gate: <!-- link -->
-- Applicable AC-N rules: <!-- list -->
+- Applicable v2 requirement IDs: <!-- list -->
 - [ ] Capability/layer/authority is identified.
 - [ ] State machine and ownership transitions are documented.
 - [ ] Lock/atomic authority and observable intermediate states are documented.
