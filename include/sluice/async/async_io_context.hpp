@@ -134,21 +134,6 @@ class AsyncIoContext {
 
     Result<std::size_t> poll();
 
-    // One bounded nonblocking progress pass with the post-pass state report;
-    // the drive operation for external event-loop hosts: acknowledge
-    // notification, then bounded passes. Keep passing
-    // while immediate_work_remains holds; when dispatch_retry_remains holds,
-    // schedule a future progress pass — that accepted transport produces no
-    // completion and no notification until a pass submits it, so an fd-only
-    // wait strands it. accepted_work_remains alone parks normally: that work
-    // waits for its kernel completion notification.
-    //
-    // Driving belongs to the context's fixed progress owner: the first drive
-    // or claim_progress_owner() on this thread attaches it, and a call fails
-    // with invalid_state from any other thread while attached, while another
-    // drive is active on this context, or when the context is inert
-    // (moved-from). A ProgressOwner release detaches so a later driver may
-    // attach.
     Result<ProgressPass> poll_progress();
 
     // Records this thread as the context's fixed progress owner and returns
@@ -157,15 +142,6 @@ class AsyncIoContext {
     // the context is inert.
     Result<ProgressOwner> claim_progress_owner();
 
-    // Owner-visible wait report. `progress` covers both a pass with
-    // completions and the quiescent observation (completed == 0, no accepted
-    // work, nothing immediate, no retry owed). `control_interrupted` reports
-    // sticky owner control, which stays pending until
-    // acknowledge_progress_control() retires it. `deadline_expired` is only
-    // the elapsed wait bound — accepted I/O is untouched and never cancelled
-    // or settled by it. `health_failure` means the progress/wait machinery
-    // cannot continue safely and is never reported as a zero-completion
-    // result.
     struct ProgressWaitOutcome {
         enum class Kind : std::uint8_t {
             progress,
@@ -194,30 +170,12 @@ class AsyncIoContext {
     // (THREAD-01), retiring control that owner's own wait outcome observed.
     void acknowledge_progress_control();
 
-    // Borrows the context notification fd for external event-loop
-    // registration. The borrow starts the context's external-notification
-    // interest: the host must not close, independently drain, or repurpose
-    // the fd; acknowledgement runs through acknowledge_progress_notification();
-    // and the interest must be retired through detach_progress_host() before
-    // the notification source is torn down. A retired borrow may be followed
-    // by a new one. Returns -1 without starting an interest while the owner
-    // is inside a drive callback or once execution has closed; a host that
-    // needs the fd registers it before the owner starts driving or after a
-    // drive callback returns.
     int progress_notification_fd() noexcept;
 
     void acknowledge_progress_notification() noexcept;
 
-    // Retires the external-notification interest. The host must call this
-    // only after it has already unregistered the fd from its event loop and
-    // retired every callback that might use the context: this operation
-    // acknowledges that the external registration authority is already gone,
-    // so the context never believes no binding exists while a loop still
-    // owns one. Idempotent; a retired interest may be followed by a new
-    // borrow.
     void detach_progress_host() noexcept;
 
-    // shutdown is blocking; see ADR-0004 for the caller contract.
     void close_admission() noexcept;
     void request_stop(ShutdownPolicy policy) noexcept;
     Result<ShutdownOutcome> shutdown(ShutdownPolicy policy);
@@ -250,7 +208,6 @@ class AsyncIoContext {
     struct ObserverCancelResult {
         ObserverCancelStatus status = ObserverCancelStatus::not_found;
         RequestId request{};
-        bool retired() const noexcept { return status == ObserverCancelStatus::retired; }
         bool in_progress() const noexcept {
             return status == ObserverCancelStatus::delivery_in_progress;
         }
@@ -260,18 +217,9 @@ class AsyncIoContext {
 
     ObserverCancelResult cancel_observer(const RequestId& id);
 
-    // Retirement query: reports whether the registration's delivery
-    // retirement has been acquired. The driver retires a delivered
-    // registration once its terminal hook has returned; a cancellation
-    // retires an armed or queued one. While a delivery is in progress this
-    // reports false and the caller must retain its observer state. Query it
-    // while the Request binding is retained; once the released slot
-    // reclaims, the identity stops resolving and this reports false, so the
-    // answer is only authoritative before the binding is released.
     bool delivery_retired(const RequestId& id) const;
 
     std::size_t outstanding() const noexcept;
-    const AsyncStats* stats() const noexcept { return stats_; }
 
   private:
     friend struct detail::ContextFactory;
@@ -286,6 +234,10 @@ class AsyncIoContext {
     std::unique_ptr<detail::ProgressSource> progress_;
     std::unique_ptr<AsyncBackend> backend_;
     AsyncStats* stats_;
+
+    template <class T, class Op>
+    Result<Request<T>> submit_op_(Op op,
+                                  Result<detail::RequestKey> (AsyncBackend::*accept)(Op));
 
     // Exhaustion closes admission before the epoch domain can wrap; the
     // source is a leaf and cannot reach the core itself.

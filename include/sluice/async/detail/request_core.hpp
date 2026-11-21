@@ -201,14 +201,8 @@ class RequestCore {
     BindingRelease discard_public_result(RequestKey id) noexcept;
     PublicObservation observe_public_result(RequestKey id, IoOutcome* out,
                                             sluice::FileInfo* metadata_out) const noexcept;
-    PublicObservation observe_public_result(RequestKey id, IoOutcome* out) const noexcept {
-        return observe_public_result(id, out, nullptr);
-    }
     PublicConsumption consume_public_result(RequestKey id, IoOutcome* out,
                                             sluice::FileInfo* metadata_out) noexcept;
-    PublicConsumption consume_public_result(RequestKey id, IoOutcome* out) noexcept {
-        return consume_public_result(id, out, nullptr);
-    }
 
     TerminalVerdict offer_terminal(RequestKey id, const TerminalCandidate& candidate) noexcept;
     ExecutionClaim claim_execution(RequestKey id) noexcept;

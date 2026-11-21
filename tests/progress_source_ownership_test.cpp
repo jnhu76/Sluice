@@ -473,12 +473,11 @@ bool unattached_backend_control_ops_are_absent() {
     return true;
 }
 
-template <class Backend>
-bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
-                                                            AsyncIoContext& ctx) {
+template <class Close>
+bool close_admission_signal_tracks_the_admission_transition(AsyncIoContext& ctx, Close close) {
     const auto before = detail::TestAccess::context_progress_token(ctx);
 
-    raw->close_admission();
+    close();
     const auto first = detail::TestAccess::context_progress_token(ctx);
     if (first.progress != before.progress + 1 ||
         first.progress_exhaustion != before.progress_exhaustion) {
@@ -492,8 +491,8 @@ bool close_admission_signal_tracks_the_admission_transition(Backend* raw,
         return false;
     }
 
-    raw->close_admission();
-    raw->close_admission();
+    close();
+    close();
     const auto repeated = detail::TestAccess::context_progress_token(ctx);
     if (repeated.progress != first.progress ||
         repeated.progress_exhaustion != first.progress_exhaustion) {
@@ -514,7 +513,17 @@ bool threadpool_close_admission_signals_only_the_open_to_closed_transition() {
     auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
     ThreadPoolBackend* raw = backend.get();
     AsyncIoContext ctx = detail::make_context(std::move(backend));
-    const bool ok = close_admission_signal_tracks_the_admission_transition(raw, ctx);
+    const bool ok =
+        close_admission_signal_tracks_the_admission_transition(ctx, [raw] { raw->close_admission(); });
+    ctx.detach_progress_host();
+    return ok;
+}
+
+bool context_close_admission_signals_only_the_open_to_closed_transition() {
+    auto backend = std::make_unique<ThreadPoolBackend>(ThreadPoolConfig{4, 1});
+    AsyncIoContext ctx = detail::make_context(std::move(backend));
+    const bool ok =
+        close_admission_signal_tracks_the_admission_transition(ctx, [&ctx] { ctx.close_admission(); });
     ctx.detach_progress_host();
     return ok;
 }
@@ -535,7 +544,8 @@ bool uring_close_admission_signals_only_the_open_to_closed_transition() {
     auto backend = std::make_unique<UringAsyncBackend>();
     UringAsyncBackend* raw = backend.get();
     AsyncIoContext ctx = detail::make_context(std::move(backend));
-    const bool ok = close_admission_signal_tracks_the_admission_transition(raw, ctx);
+    const bool ok =
+        close_admission_signal_tracks_the_admission_transition(ctx, [raw] { raw->close_admission(); });
     ctx.detach_progress_host();
     return ok;
 }
@@ -635,6 +645,8 @@ int main() {
         {"unattached_backend_control_ops_are_absent", unattached_backend_control_ops_are_absent},
         {"threadpool_close_admission_signals_only_the_open_to_closed_transition",
          threadpool_close_admission_signals_only_the_open_to_closed_transition},
+        {"context_close_admission_signals_only_the_open_to_closed_transition",
+         context_close_admission_signals_only_the_open_to_closed_transition},
 #if defined(SLUICE_HAS_LIBURING)
         {"uring_close_admission_signals_only_the_open_to_closed_transition",
          uring_close_admission_signals_only_the_open_to_closed_transition},

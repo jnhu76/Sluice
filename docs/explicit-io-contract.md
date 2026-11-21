@@ -1448,7 +1448,7 @@ TLA+ model with an explicit correspondence map:
 | Model | Covers | Does not cover |
 |---|---|---|
 | `RequestCore` | Accept/terminal/publication/reclaim protocol, identity/generation discipline, cancel arbitration; safety invariants plus conditional liveness L1/L5 within the modeled identity domain | Backend physical behavior, C++ memory ordering, unbounded identity domains, wall-clock progress |
-| `ObserverCore` | Attach/deliver/retire/cancel protocol, at-most-once delivery, registration liveness floor | Host callback internals, kernel notification timing |
+| `ObserverCore` | Attach/deliver/retire/cancel protocol, at-most-once delivery, registration liveness floor; the host-waiter half (waiter_state, host_record_free, WaiterRefused `no_space`, RouteDelivery/ProcessDelivery, InvWaiterBacking, L2) is a dated image of the removed scheduler host adapter — the live wake obligation is `ProgressSource` `LParkWakes` | Host callback internals, kernel notification timing |
 | `ProgressSource` | Epoch/token park-wake handshake, saturation, and coalescing: the model's readiness is a single boolean with documented write-saturation and read-drain semantics, so a suppressed physical write is observationally equivalent to a written one *because the modeled counter stays non-zero* — the equivalence argument, not a modeled suppression action | Physical eventfd failure modes beyond modeled verdicts; the model text predates the C1 mechanism, so it contains no suppression-specific action and must not be cited as if it did |
 | `ShutdownCore` | Five-state lifecycle, cancel/drain policy, execution-closed vs destroyable | Host-specific teardown, application consumption timing |
 
