@@ -11,9 +11,10 @@
 (*     release_slot_),                                                     *)
 (*   src/async/uring_backend.cpp / threadpool_backend.cpp (deliver_event:  *)
 (*     the driver's claim before the ready event),                         *)
-(*   src/async/scheduler_park_wake.cpp + scheduler.cpp (the host adapter:  *)
-(*     await_completion reserve-before-arm, cancel_waiter, on_ready        *)
-(*     routing, drain retirement and wake).                                *)
+(*   src/async/uring_backend.cpp / threadpool_backend.cpp (deliver_event   *)
+(*     tail retire_observer_delivery: the delivery-owner retirement; the   *)
+(*     removed scheduler host adapter has no successor -- the live wake    *)
+(*     obligation is modeled in ProgressSource.tla LParkWakes).            *)
 (* One model action per protocol transition; every guard is the guard of   *)
 (* the C++ operation it names.  The model is deliberately free of          *)
 (* io_uring/threadpool internals, mutexes, Scheduler/Fiber structure and   *)
@@ -25,7 +26,7 @@
 (*   ReleaseBinding -- the request owner), Driver (BeginPublish/           *)
 (*   CompletePublish/ClaimDelivery -- the fixed progress owner), Host      *)
 (*   waiter (WaiterArrive/WaiterRefused/CancelRegistration/                *)
-(*   RouteDelivery/ProcessDelivery -- the RuntimeTaskContext adapter),     *)
+(*   RouteDelivery/ProcessDelivery -- the dated host adapter),             *)
 (*   RequestCore (the phase facts every action reads and writes).         *)
 (* Atomicity: every action is one core-mutex critical section (or one     *)
 (*   adapter step outside the core, as marked); two concurrent actors     *)
@@ -59,7 +60,7 @@
 (*     the same reachable observer facts (the factoring only adds        *)
 (*     interleaving).                                                     *)
 (*   - Single host consumer: every arm is issued by the waiter path      *)
-(*     (the merged RuntimeTaskContext adapter, C1-D).  The duplicate      *)
+(*     (the dated host adapter).  The duplicate                           *)
 (*     disposition covers any second attach; an attach without a waiter  *)
 (*     differs only by lacking wake obligations, which the core-side     *)
 (*     invariants do not distinguish.                                     *)
@@ -361,7 +362,7 @@ ClaimDelivery(s) ==
                  arms_per_id, rearmed, waiter_left>>
 
 (*******************************************************************)
-(* Host adapter: the RuntimeTaskContext waiter path                *)
+(* Host waiter path: dated image of the removed host adapter       *)
 (*******************************************************************)
 
 WaiterArrive(s) ==

@@ -1,11 +1,11 @@
-// #575 research oracle: the internal submit-flush counter must count real
-// transport submit attempts. The existing suite only asserts its zero value
-// (no-flush paths); in a deterministic fake-submit fixture (fresh backend,
-// non-full ring, no cancels) this test pins the positive semantics — an
-// accepted data submission produces exactly one transport flush attempt,
-// sequential submissions are monotonic, and zero-length requests never
-// flush — so a mutant that suppresses the increment after a real submission
-// is killed by a counter assertion, not by an unrelated failure.
+// The internal submit-flush counter must count real transport submit
+// attempts. The existing suite only asserts its zero value (no-flush paths);
+// in a deterministic fake-submit fixture (fresh backend, non-full ring, no
+// cancels) this test pins the positive semantics — an accepted data
+// submission produces exactly one transport flush attempt, sequential
+// submissions are monotonic, and zero-length requests never flush — so a
+// mutant that suppresses the increment after a real submission is killed by a
+// counter assertion, not by an unrelated failure.
 
 #include <sluice/async/async_io_context.hpp>
 #include <sluice/async/detail/test_access.hpp>
@@ -55,7 +55,7 @@ struct Tracker {
 };
 
 std::string make_temp_file(const std::string& content) {
-    char path[] = "/tmp/sluice_575_flush_XXXXXX";
+    char path[] = "/tmp/sluice_flush_count_XXXXXX";
     const int fd = ::mkstemp(path);
     if (fd < 0)
         return {};

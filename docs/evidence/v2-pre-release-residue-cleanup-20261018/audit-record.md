@@ -133,6 +133,11 @@ justified keeps, verified against current citations:
   assert byte-exactly; renaming would change CLI-visible output or desync
   the README from the binary. Kept (each already carries a descriptive
   gloss).
+  - *Superseded 2026-11-21 (#643, AUD-053).* The owner re-adjudicated this
+    keep. The byte-exact premise was verified false (`tests/app_direct_cli_oracle.py`
+    asserts only that `usage:` appears), and the labels were renamed to
+    behavior descriptions in `apps/sluice-copy/cli_parse.cpp`,
+    `apps/sluice-copy/README.md` and `xmake/apps.lua`.
 - `.github/workflows/open-code-review.yml` "legacy machinery" prompt line:
   instructs the reviewer to distinguish historical evidence from current
   claims; `.claude/skills/*` "legacy" hits concern skill-file mechanics, not
