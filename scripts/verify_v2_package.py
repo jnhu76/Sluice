@@ -22,11 +22,13 @@ Gates evaluated:
   CLEAN_ROOM_NO_SOURCE_OR_BUILD_TREE_DEPENDENCY
   P0_W01_CORE_ONLY_CLEAN_ROOM
   P1_<consumer>                           (workloads + micro-contracts)
+  P1_W03_EXTERNAL_LOOP_THREADPOOL
   V2_P1_URING_EXPLICIT_NOT_SUPPORTED      (liburing=n runtime selection)
   V2_P2_URING_RUNTIME                     (liburing=y runtime selection)
   V2_E_ODR_PUBLIC_LAYOUT_MACRO_INDEPENDENT
   NEGATIVE_V2_REMOVED_HEADERS_UNAVAILABLE
   NEGATIVE_V2_SEAM_UNAVAILABLE
+  NEGATIVE_V2_MUTANT_DEFINES_NOT_INSTALLED
   NEGATIVE_ASYNC_SYMBOLS_NOT_IN_CORE
 
 Usage:
@@ -231,7 +233,7 @@ def compile_consumer(build_dir, prefix, sources, out, extra_cxxflags, extra_ldfl
 
 
 def expect_link_failure(build_dir, prefix, source, command_log):
-    cxx = os.environ.get("CXX", "g++")
+    cxx = "g++"
     obj = build_dir / (Path(source).stem + ".o")
     cmd = [cxx, "-std=c++20", f"-I{prefix}/include", "-c", source, "-o", obj]
     command_log.append(" ".join(str(c) for c in cmd))

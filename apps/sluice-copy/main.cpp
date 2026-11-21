@@ -28,8 +28,9 @@ using sluice_copy::cli::parse_args;
 void print_copy_result(const char* prog, const Result<CopyStats>& result) {
     IoError e = result.error();
     const std::string_view name = sluice::to_string(e.code);
-    std::fprintf(stderr, "%s: copy failed: %.*s%s%s\n", prog, static_cast<int>(name.size()),
-                 name.data(), e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "");
+    std::fprintf(stderr, "%s: copy failed: %.*s%s%s%s\n", prog, static_cast<int>(name.size()),
+                 name.data(), e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "",
+                 e.os_errno ? ")" : "");
 }
 
 }
@@ -74,12 +75,13 @@ int main(int argc, char** argv) {
                                           "guaranteed"
                                         : "destination untouched";
             const std::string_view code = sluice::to_string(e.code);
-            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %.*s%s%s\n", argv[0],
+            std::fprintf(stderr, "%s: atomic commit failed at %s (%s): %.*s%s%s%s\n", argv[0],
                          stage == sluice_copy::SafeCommitStage::close    ? "close"
                          : stage == sluice_copy::SafeCommitStage::rename ? "rename"
                                                                          : "directory fsync",
                          dst_state, static_cast<int>(code.size()), code.data(),
-                         e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "");
+                         e.os_errno ? " (" : "", e.os_errno ? std::strerror(e.os_errno) : "",
+                         e.os_errno ? ")" : "");
             return 2;
         }
 

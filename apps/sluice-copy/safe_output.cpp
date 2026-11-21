@@ -126,8 +126,6 @@ const char* safe_open_failure_message(SafeOpenFailure f) {
         return "destination is not a regular file";
     case SafeOpenFailure::same_file:
         return "source and destination refer to the same file";
-    case SafeOpenFailure::temp_dir:
-        return "destination directory is not usable";
     case SafeOpenFailure::temp_create:
         return "cannot create temporary file in destination directory";
     case SafeOpenFailure::temp_chmod:

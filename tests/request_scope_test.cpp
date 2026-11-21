@@ -924,7 +924,7 @@ bool wait_for_reports_sticky_control_interruption(Tracker& t) {
             return false;
         }
         wait_threadpool_gate_paused(gate);
-        ctx.interrupt_progress_waiters();
+        detail::TestAccess::context_progress_source(ctx)->interrupt();
 
         auto first = scope.wait_for(ticket.value(), std::chrono::seconds(10));
         t.check(first.has_value() && first.value() == ScopeWaitStatus::interrupted,

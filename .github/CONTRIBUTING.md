@@ -1,6 +1,6 @@
 # Contributing to Sluice
 
-Sluice is an experimental C++20 I/O/control-flow library with deliberately strict architecture, correctness, and evidence requirements. Contributions are welcome, but correctness-sensitive work should be narrow, reviewable, and tied to an explicit issue or accepted design authority.
+Sluice is an experimental C++20 explicit file-I/O library with deliberately strict architecture, correctness, and evidence requirements. Contributions are welcome, but correctness-sensitive work should be narrow, reviewable, and tied to an explicit issue or accepted design authority.
 
 ## Before opening an issue
 

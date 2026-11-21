@@ -1,0 +1,5 @@
+== release liburing=y: nm libsluice_async.a, filter syscall_count|dispatch_occupancy|active_workers ==
+(no match)
+
+== control: the deliberately ungated capability probe remains (deviation record) ==
+00000000000035c0 T sluice::async::UringAsyncBackend::available() const
