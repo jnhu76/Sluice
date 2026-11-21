@@ -7,14 +7,14 @@ using installed/public headers only.
 
 Two copy modes share one implementation:
 
-- **Version A** (`--pipeline-depth 1`, the default): one read outstanding at a
-  time. Sequential async positional copy.
-- **Version B** (`--pipeline-depth N`, N > 1): a bounded reusable-buffer
+- **Sequential mode** (`--pipeline-depth 1`, the default): one read outstanding
+  at a time — sequential async positional copy.
+- **Pipelined mode** (`--pipeline-depth N`, N > 1): a bounded reusable-buffer
   pipeline — up to N reads outstanding at once with a single ordered writer.
 
 Two output modes:
 
-- **Version C** (the default): safe atomic output — the copy lands in a
+- **Atomic output mode** (the default): safe atomic output — the copy lands in a
   uniquely-named temp file in the destination's directory and the destination
   is replaced by a single `rename()`. A failure anywhere before the rename
   leaves an existing destination completely untouched.
@@ -35,14 +35,15 @@ sluice-copy [options] <source> <destination>
 
   --buffer-size <bytes>    per-chunk read/write buffer (default 1 MiB)
   --pipeline-depth <n>     read-ahead slots (default 1)
-                           1   = Version A (sequential)
-                           >1  = Version B bounded pipeline (multiple
+                           1   = sequential (one outstanding read)
+                           >1  = pipelined (bounded read-ahead; multiple
                                  outstanding reads, ordered single writer)
   --workers <count>        ThreadPoolBackend I/O worker count (default 1)
   --sync none|data|all     durability policy applied after copy (default none)
-  --no-atomic              direct destination write (old Version A/B output);
-                           default is the Version C temp+rename safe path
-  --atomic                 explicitly select the default Version C safe path
+  --no-atomic              direct destination write (no temp file; a mid-copy
+                           failure may leave a partial destination);
+                           default is the atomic temp+rename path
+  --atomic                 explicitly select the default atomic temp+rename path
   --help                   show this help
 ```
 
@@ -83,7 +84,7 @@ accepted. This is a reference copy app, not an arbitrary thread/allocator factor
 
 ### Input domain: regular files only
 
-Both source and destination must be **regular files**. The Version B pipeline
+Both source and destination must be **regular files**. The pipelined mode
 needs a seekable, finite-length source that eventually reaches EOF and a
 truncatable, positional destination; FIFOs, sockets, and character devices
 (e.g. `/dev/zero`) do not fit that domain. The source's type is checked via
@@ -162,7 +163,7 @@ The value flows into the context through the public
 not caller-injectable on the v2 surface. The default path retains a
 64-request backend bound and a tracking capacity equal to pipeline depth.
 
-## Version C — atomicity and durability scope (default output mode)
+## Atomic output — atomicity and durability scope (default output mode)
 
 Destination lifecycle (`safe_output.{hpp,cpp}`):
 
@@ -171,7 +172,7 @@ validate source (regular file) + destination (if it exists: regular file,
     not the same inode as the source)
 mkstemp("<dst_dir>/.sluice-copy.tmp.XXXXXX")      # same filesystem
 fchmod(temp, src_mode & 0777)
-pipelined copy src -> temp fd                     # Version A/B engine
+pipelined copy src -> temp fd                     # sequential/pipelined engine
 sync policy (data/all) applies to the TEMP fd     # copy task, before rename
 close(temp)
 rename(temp, dst)                                 # the atomic replacement
@@ -208,7 +209,7 @@ NOT guaranteed (documented scope):
 
 ## Durability scope (`--sync`)
 
-In the default (Version C) output mode, `sync=data` / `sync=all` apply
+In the default (atomic) output mode, `sync=data` / `sync=all` apply
 `fdatasync` / `fsync` to the **temp file** before the rename and `fsync` the
 **parent directory** after it, so both the copied data and the replacement
 itself survive a crash. With `--no-atomic` the sync applies to the destination
@@ -230,12 +231,12 @@ Three registered targets run under `xmake test` (group `test`), and therefore
 under CI's `xmake test -v` in both the debug and release profiles:
 
 - `app_copy_consumption_test` (10 cases) — engine/domain entry points against the
-  real `ThreadPoolBackend`: a Version A path round-trip through
+  real `ThreadPoolBackend`: a sequential-mode round-trip through
   `open_copy_files` + `run_pipelined_copy`, outcome move semantics, the
   `src_open` / `src_not_regular` / `dst_open` / `same_file` rejections, the
   atomic round-trip through `open_atomic_copy` + `commit_atomic_copy` (including
   "no temp file left behind"), and `discard_atomic_copy` cleanup.
-- `app_copy_pipeline_oracle_test` (24 cases) — the Version B pipeline against a
+- `app_copy_pipeline_oracle_test` (24 cases) — the pipelined engine against a
   scripted backend, driving controlled submission/completion/failure ordering.
   Covers the depth-1 single outstanding read, the full depth-4 read window,
   out-of-order read completion with in-order writes, short-read retry in the same
@@ -262,8 +263,8 @@ There is no automated test for a symlink destination, for the
 `--no-atomic` `O_NOFOLLOW` rejection, or CLI `--sync data|all` subprocess behavior. The liburing profile exercises
 engine sync-all against a real ring and filesystem.
 
-There is no mutation matrix in CI, and no nightly gate. When the Version B
-pipeline was made an oracle (`app_copy_pipeline_oracle_test`), five mutations of
+There is no mutation matrix in CI, and no nightly gate. When the pipelined
+engine was made an oracle (`app_copy_pipeline_oracle_test`), five mutations of
 `copy_task.cpp` were injected by hand as a one-off discriminating check —
 serialize reads, scramble write order, skip the post-failure drain, reuse a slot
 buffer prematurely, and treat a short read as a full read. Each was detected by
